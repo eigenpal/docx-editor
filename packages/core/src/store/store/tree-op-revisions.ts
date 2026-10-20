@@ -536,6 +536,8 @@ interface RebuildPlan {
   readonly relocate: ReadonlyMap<string, readonly OoxmlNode[]>;
   /** Nodes to drop outright: resolved paragraph marks and spent move-range markers. */
   readonly dropMarks: ReadonlySet<string>;
+  /** Inserted marks accepted for good: a container left holding nothing goes with them. */
+  readonly acceptedMarks: ReadonlySet<string>;
   /** Property-change wrappers, node id → restore the recorded properties into the parent. */
   readonly restoreProperties: ReadonlySet<string>;
   /**
@@ -609,7 +611,11 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         : null;
     if ((child.kind === 'fldSimple' || child.kind === 'hyperlink') && hollow?.children.length === 0)
       continue;
-    if (hollow?.children.length === 0 && heldOnlyResolvedMarks(child, plan.dropMarks)) continue;
+    if (
+      hollow?.children.length === 0 &&
+      heldOnlyResolvedMarks(child, plan.dropMarks, plan.acceptedMarks)
+    )
+      continue;
     // A revision wrapper the resolution emptied goes the same way. Accepting one author's
     // deletion of another author's insertion removes the deleted runs and leaves the `w:ins`
     // holding no characters to decide about — yet it carded as a blank entry and kept the
@@ -815,6 +821,7 @@ export function resolveRevisions(
   const orphanDestinations = orphanMoveDestinationSites(scopeRoot, sites);
   const actions = new Map<string, Resolution>();
   const dropMarks = new Set(movePlan.markers);
+  const acceptedMarks = new Set<string>();
   if (action === 'reject')
     for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
@@ -899,6 +906,7 @@ export function resolveRevisions(
         (action === 'reject' &&
           (site.node.localName === 'ins' || site.node.localName === 'moveTo'));
       dropMarks.add(site.node.id);
+      if (action === 'accept' && !removesMark) acceptedMarks.add(site.node.id);
       if (removesMark && !orphanDestinations.has(site.node.id)) {
         const paragraph = paragraphOwning(part, site.node.id);
         if (paragraph === null) return { ok: false, reason: 'unsupported-revision' };
@@ -929,6 +937,7 @@ export function resolveRevisions(
     actions,
     relocate: movePlan.relocate,
     dropMarks,
+    acceptedMarks,
     restoreProperties,
     mergeForward,
     removeStructures,

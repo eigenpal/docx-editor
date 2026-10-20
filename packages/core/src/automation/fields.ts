@@ -84,11 +84,11 @@ export function fieldOffset(
   );
 }
 
-/** A schema-valid simple field, marked `w:dirty`, with an empty result run for inline splicing. */
+/** A schema-valid simple field with an editable empty result run, ready for inline splicing. */
 export function fieldInsertionParagraph(code: string): OoxmlParagraphNode {
   const instruction = escapeXmlAttribute(code);
   const read = readOoxmlPart(
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:fldSimple w:instr="${instruction}" w:dirty="true"><w:r><w:t/></w:r></w:fldSimple></w:p></w:body></w:document>`,
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:fldSimple w:instr="${instruction}"><w:r><w:t/></w:r></w:fldSimple></w:p></w:body></w:document>`,
     {
       name: '/word/document.xml',
       contentType:

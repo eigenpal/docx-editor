@@ -35,3 +35,11 @@ test('a part name that contains the family marker does not count', () => {
   const crafted = properties('/word/a#mark:b.xml', '0.0.');
   expect(heldOnlyResolvedMarks(crafted.node, new Set([crafted.mark]))).toBe(false);
 });
+
+test('a source container emptied by accepting an inserted mark is removed too', () => {
+  const source = properties('/word/document.xml', '0.0.');
+  expect(heldOnlyResolvedMarks(source.node, new Set([source.mark]), new Set([source.mark]))).toBe(
+    true
+  );
+  expect(heldOnlyResolvedMarks(source.node, new Set([source.mark]), new Set())).toBe(false);
+});

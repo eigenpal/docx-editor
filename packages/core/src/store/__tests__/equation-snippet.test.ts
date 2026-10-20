@@ -1,7 +1,7 @@
 // The equation snippet reader and the insertEquation op: the accepted shape, the canonical
 // nodes it answers, every refusal, and the tracked and untracked tree shapes.
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { readEquationSnippet, MAX_EQUATION_SNIPPET_BYTES } from '../store/equation-snippet.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
@@ -180,6 +180,68 @@ describe('insertEquation', () => {
     expect(validateTreeOp(part, { ...base, offset: 9 })).toBe('offset-out-of-range');
     expect(validateTreeOp(part, { ...base, revision: { author: ' ' } })).toBe(
       'invalid-property-value'
+    );
+  });
+});
+
+describe('snippet limits and the op shape check', () => {
+  const nested = (count: number) =>
+    '<m:oMath>' +
+    '<m:d><m:e>'.repeat(count) +
+    '<m:r><m:t>x</m:t></m:r>' +
+    '</m:e></m:d>'.repeat(count) +
+    '</m:oMath>';
+
+  test('a long text value and deep nesting refuse as resource limits', () => {
+    expect(
+      readEquationSnippet(
+        equationPackage(`<m:oMath><m:r><m:t>${'a'.repeat(5000)}</m:t></m:r></m:oMath>`)
+      )
+    ).toEqual({ ok: false, reason: 'resource-limit' });
+    expect(readEquationSnippet(equationPackage(nested(70)))).toEqual({
+      ok: false,
+      reason: 'resource-limit',
+    });
+    expect(readEquationSnippet(equationPackage(nested(20))).ok).toBe(true);
+  });
+
+  test('many plain runs are accepted by the reader and the op alike', () => {
+    const runs = '<w:r><w:t>a</w:t></w:r>'.repeat(200);
+    const read = readEquationSnippet(equationPackage(runs + X_SQUARED));
+    if (!read.ok) throw new Error(read.reason);
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const op = {
+      op: 'insertEquation' as const,
+      paragraphId: firstParagraphId(part),
+      offset: 1,
+      nodes: read.snippet.nodes,
+      length: read.snippet.length,
+    };
+    expect(validateTreeOp(part, op)).toBeNull();
+  });
+
+  test('the op refuses math outside the allowlist and malformed nodes without throwing', () => {
+    const read = readEquationSnippet(equationPackage());
+    if (!read.ok) throw new Error(read.reason);
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const equation = read.snippet.nodes[0]!;
+    if (equation.kind === 'textValue') throw new Error('fixture');
+    const foreign = {
+      ...equation,
+      children: [{ ...equation.children[0]!, localName: 'script' } as OoxmlNode],
+    } as OoxmlNode;
+    const base = { op: 'insertEquation' as const, paragraphId: firstParagraphId(part), offset: 1 };
+    expect(validateTreeOp(part, { ...base, nodes: [foreign], length: 1 })).toBe(
+      'fragment-invalid-block'
+    );
+    const hollowRun = {
+      id: 'r',
+      kind: 'run',
+      namespaceUri: W,
+      localName: 'r',
+    } as unknown as OoxmlNode;
+    expect(validateTreeOp(part, { ...base, nodes: [hollowRun, equation], length: 1 })).toBe(
+      'fragment-invalid-block'
     );
   });
 });

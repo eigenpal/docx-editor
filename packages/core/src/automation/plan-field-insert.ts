@@ -2,10 +2,11 @@
 //
 // The instruction is caller data. It is checked against the bounded allowlist in
 // `inert-field-instruction.ts`, written as text, and never evaluated, so the cached result is
-// empty. Both arms write one complex field whose runs take the formatting of the text beside
-// the insertion point. Tracked insertion puts its runs in ONE `w:ins` by the runtime author,
-// so Accept keeps the field and Reject removes all of it. Only an untracked TOC keeps its
-// simple-field form, and a simple field is never written inside a revision.
+// empty. Untracked PAGE, NUMPAGES, and TOC keep their simple-field form. Every other field,
+// and every tracked field, is one complex field whose runs take the formatting of the text
+// beside the insertion point. Tracked insertion puts its runs in ONE `w:ins` by the runtime
+// author, so Accept keeps the field and Reject removes all of it. A simple field is never
+// written inside a revision.
 
 import { inertFieldInstruction } from '../store/store/inert-field-instruction.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -96,23 +97,24 @@ export function planFieldInsert(
   if ('ok' in placement) return placement;
   const { paragraphId, at, revision } = placement;
   const before = new Set(fieldsInParagraph(story.part, paragraphId).map((f) => f.fieldNodeId));
-  // An untracked TOC keeps its simple-field form; every other field is one complex field.
-  const insert: TreeDocOp =
-    operation.fieldType === 'TOC'
-      ? {
-          op: 'insertFragment',
-          paragraphId,
-          offset: at,
-          blocks: [fieldInsertionParagraph(instruction)],
-          lastMarkCovered: false,
-        }
-      : {
-          op: 'insertComplexField',
-          paragraphId,
-          offset: at,
-          instruction,
-          ...(revision ? { revision } : {}),
-        };
+  // Untracked PAGE, NUMPAGES, and TOC keep the simple-field form they always had; every other
+  // field, and every tracked field, is one complex field.
+  const simple = !revision && ['PAGE', 'NUMPAGES', 'TOC'].includes(instruction.split(' ')[0]!);
+  const insert: TreeDocOp = simple
+    ? {
+        op: 'insertFragment',
+        paragraphId,
+        offset: at,
+        blocks: [fieldInsertionParagraph(instruction)],
+        lastMarkCovered: false,
+      }
+    : {
+        op: 'insertComplexField',
+        paragraphId,
+        offset: at,
+        instruction,
+        ...(revision ? { revision } : {}),
+      };
   const ops: TreeDocOp[] = [...placement.ops, insert];
   return {
     ok: true,

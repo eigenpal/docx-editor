@@ -812,7 +812,7 @@ function applyTrackedInsertion(
 }
 
 /** Split a run at a local offset, keeping its `w:rPr` on both halves. */
-function splitRun(
+export function splitRun(
   mint: () => string,
   offsets: ParagraphOffsetIndex,
   run: OoxmlNode,

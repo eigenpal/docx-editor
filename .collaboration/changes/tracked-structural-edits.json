@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "Body, paragraph, and range insertText refuse \\n and \\r. The editing API inserts page and TOC fields as simple fields, refuses tracked field insertion, has no way to write a cached field result, and inserts no equations.",
-  "after": "insertText splits the paragraph at each \\n, \\r, or \\r\\n with the splitParagraphMany operation that a multi-line paste uses; with TrackMineOnly, each new paragraph mark gets w:rPr/w:ins. insertField writes one complex field (an untracked TOC stays a simple field) whose runs take the formatting beside the insertion point and whose begin marker carries w:dirty; with TrackMineOnly, its runs sit in one w:ins by the runtime author. Field.result writes plain cached result text through a new setFieldResult tree operation, inside the author's own pending w:ins when tracked. Range.insertOoxml inserts one inline m:oMath from a Flat OPC package through a new insertEquation tree operation; with TrackMineOnly, it writes w:ins > m:oMath. A new insertComplexField tree operation writes complex fields, and field reads list fields inside pending insertions.",
+  "after": "insertText splits the paragraph at each \\n, \\r, or \\r\\n with the splitParagraphMany operation that a multi-line paste uses; with TrackMineOnly, each new paragraph mark gets w:rPr/w:ins. insertField writes one complex field with an empty result run (untracked PAGE, NUMPAGES, and TOC stay simple fields) whose runs take the formatting beside the insertion point; new REF, PAGEREF, NOTEREF, SEQ, STYLEREF, DATE, and TIME fields carry w:dirty; with TrackMineOnly, its runs sit in one w:ins by the runtime author. Field.result writes plain cached result text through a new setFieldResult tree operation, inside the author's own pending w:ins when tracked. Range.insertOoxml inserts one inline m:oMath from a Flat OPC package through a new insertEquation tree operation; with TrackMineOnly, it writes w:ins > m:oMath. A new insertComplexField tree operation writes complex fields, and field reads list fields inside pending insertions. Content inserted after a field that ends its paragraph lands after the field's end marker, and a split keeps the original paragraph mark's revisions on its last piece only.",
   "reason": "Every new shape uses existing OOXML nodes that documents already hold and peers already read: w:ins, w:r, w:fldChar (with its w:dirty attribute), w:instrText, w:t, w:tab, and m:oMath inside w:ins, the mirror of the w:del > m:oMath shape a tracked equation deletion writes. The three new tree operations replay through the canonical primitive journal like insertPageField, and replicas exchange the resulting tree content, so no shared field, operation shape, or protocol message changes. Two peers converge on concurrent edits beside the new content, reject and accept on the other peer, deletion around pending content, undo and redo, reconnect, and save and reopen.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-paragraph-break-automation.test.ts",
@@ -12,11 +12,13 @@
     "packages/editor-api/src/runtime/__tests__/runtime-tracked-field-insert.test.ts",
     "packages/editor-api/src/runtime/__tests__/runtime-field-result.test.ts",
     "packages/editor-api/src/runtime/__tests__/runtime-insert-ooxml-equation.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-insert-after-field.test.ts",
     "packages/core/src/automation/__tests__/automation-story-writes.test.ts",
     "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
     "packages/core/src/store/__tests__/insert-complex-field.test.ts",
     "packages/core/src/store/__tests__/field-result-write.test.ts",
-    "packages/core/src/store/__tests__/equation-snippet.test.ts"
+    "packages/core/src/store/__tests__/equation-snippet.test.ts",
+    "packages/core/src/store/__tests__/split-mark-revisions.test.ts"
   ],
   "changeset": "tracked-structural-edits",
   "migration": null

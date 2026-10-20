@@ -304,3 +304,90 @@ describe('refused paragraph breaks', () => {
     expect(await texts(r)).toEqual(['Hello world']);
   });
 });
+
+describe('new paragraph marks never take the original mark revision', () => {
+  const OTHER_DELETED_MARK =
+    '<w:p><w:pPr><w:rPr><w:del w:id="9" w:author="Other" w:date="2026-01-01T00:00:00Z"/>' +
+    '</w:rPr></w:pPr><w:r><w:t>Hello world</w:t></w:r></w:p>' +
+    p('Next');
+
+  // Each paragraph mark revision has an id no other revision uses. The halves of one text
+  // insertion that a split divides keep that insertion's id on purpose.
+  const markIdsUnique = (xml: string): void => {
+    const marks = [
+      ...xml.matchAll(/<w:pPr>(?:(?!<\/w:pPr>).)*?<w:rPr>(?:(?!<\/w:rPr>).)*?w:id="([^"]+)"/g),
+    ].map((match) => match[1]!);
+    const all = [...xml.matchAll(/<w:(?:ins|del) [^>]*w:id="([^"]+)"/g)].map((match) => match[1]!);
+    for (const id of marks) expect(all.filter((other) => other === id)).toHaveLength(1);
+  };
+
+  test('a tracked replacement across a mark splits again; accept and reject both resolve', async () => {
+    for (const decision of ['accept', 'reject'] as const) {
+      const r = await open(p('Hello world') + p('Second line'));
+      try {
+        await r.run(async (c) => {
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          const from = c.document.body.search('world').getFirst();
+          const to = c.document.body.search('Second').getFirst();
+          from.expandTo(to).insertText('x\ny', 'Replace');
+          await c.sync();
+        });
+        const xml = await markup(r);
+        markIdsUnique(xml);
+        await decideAll(r, decision);
+        expect(await texts(r)).toEqual(
+          decision === 'accept' ? ['Hello x', 'y line'] : ['Hello world', 'Second line']
+        );
+      } finally {
+        r.dispose();
+      }
+    }
+  });
+
+  for (const tracked of [false, true]) {
+    test(`a split before text whose mark another author deleted, ${tracked ? 'tracked' : 'untracked'}`, async () => {
+      const r = await open(OTHER_DELETED_MARK);
+      try {
+        await r.run(async (c) => {
+          if (tracked) c.document.changeTrackingMode = 'TrackMineOnly';
+          c.document.body.search('world').getFirst().insertText('x\ny', 'Before');
+          await c.sync();
+        });
+        const xml = await markup(r);
+        // Only the last piece keeps the other author's deleted mark, under its own id.
+        expect(xml.match(/w:author="Other"/g)).toHaveLength(1);
+        markIdsUnique(xml);
+        await decideAll(r, 'accept');
+        expect(await texts(r)).toEqual(['Hello x', 'yworldNext']);
+      } finally {
+        r.dispose();
+      }
+    });
+  }
+
+  for (const shape of [
+    p('Hello world'),
+    '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Hello world</w:t></w:r></w:p>',
+  ])
+    test(`accepting a tracked split leaves no empty mark properties behind ${shape.length}`, async () => {
+      const r = await open(shape);
+      try {
+        await r.run(async (c) => {
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          c.document.body.search('world').getFirst().insertText('\n', 'Before');
+          await c.sync();
+        });
+        for (const runtime of [r, await reopen(r)]) {
+          await decideAll(runtime, 'accept');
+          expect(await texts(runtime)).toEqual(['Hello ', 'world']);
+          const xml = await markup(runtime);
+          expect(xml).not.toContain('<w:rPr/>');
+          expect(xml).not.toContain('<w:pPr/>');
+          expect(xml).not.toContain('<w:pPr></w:pPr>');
+          if (runtime !== r) runtime.dispose();
+        }
+      } finally {
+        r.dispose();
+      }
+    });
+});

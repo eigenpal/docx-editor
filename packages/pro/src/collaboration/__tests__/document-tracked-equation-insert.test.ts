@@ -3,7 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// An equation proposed through insertOoxml, across two live peers.
+// An equation proposed through insertOoxml, and a tracked split beside another author's
+// deleted paragraph mark, across two live peers.
 import { strFromU8, unzipSync } from 'fflate';
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -22,7 +23,7 @@ afterAll(() => {
   if (registered) GlobalRegistrator.unregister();
 });
 
-const OBJECT = '￼';
+const OBJECT = '\uFFFC';
 const EQUATION =
   '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">' +
   '<pkg:part pkg:name="/word/document.xml" pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">' +
@@ -37,9 +38,9 @@ const SAMPLE = () =>
       '<w:p><w:r><w:t>Second paragraph.</w:t></w:r></w:p>'
   );
 
-async function room() {
+async function room(bytes = SAMPLE()) {
   const harness = createPeerHarness('tracked-equation', { offlineEditing: true });
-  const pair = await harness.pair(SAMPLE());
+  const pair = await harness.pair(bytes);
   const peers = [pair.alice, pair.bob].map((peer, index) => {
     peer.detach();
     const container = document.createElement('div');
@@ -215,6 +216,63 @@ test('undo and redo of a tracked equation replicate', async () => {
     for (const peer of r.peers)
       await peer.runtime.run(async (c) => {
         expect(await bodyText(c)).toBe(`Let x${OBJECT} be real.\rSecond paragraph.`);
+      });
+  } finally {
+    r.close();
+  }
+});
+
+test('an equation inside a hyperlink converges and rejects on the other peer', async () => {
+  const r = await room(
+    zipDocument(
+      '<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r><w:hyperlink w:anchor="a"><w:r>' +
+        '<w:t>linked x words</w:t></w:r></w:hyperlink></w:p>'
+    )
+  );
+  try {
+    await proposeEquation(r.peers[0]!.runtime);
+    r.sync();
+    const read = await Promise.all(r.peers.map((peer) => peer.runtime.run(bodyText)));
+    expect(read).toEqual([`See linked x${OBJECT} words`, `See linked x${OBJECT} words`]);
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.revisions.rejectAll();
+      await c.sync();
+    });
+    r.sync();
+    for (const peer of r.peers) expect(await peer.runtime.run(bodyText)).toBe('See linked x words');
+  } finally {
+    r.close();
+  }
+});
+
+test("a tracked split beside another author's deleted mark accepts the same on both peers", async () => {
+  const r = await room(
+    zipDocument(
+      '<w:p><w:pPr><w:rPr><w:del w:id="9" w:author="Other" w:date="2026-01-01T00:00:00Z"/>' +
+        '</w:rPr></w:pPr><w:r><w:t>Hello world</w:t></w:r></w:p><w:p><w:r><w:t>Next</w:t></w:r></w:p>'
+    )
+  );
+  try {
+    await r.peers[0]!.runtime.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      c.document.body.search('world').getFirst().insertText('x\ny', 'Before');
+      await c.sync();
+    });
+    r.sync();
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.revisions.acceptAll();
+      await c.sync();
+    });
+    r.sync();
+    for (const peer of r.peers)
+      await peer.runtime.run(async (c) => {
+        const paragraphs = c.document.body.paragraphs;
+        paragraphs.load('items/text');
+        await c.sync();
+        expect(paragraphs.items.map((paragraph) => paragraph.text)).toEqual([
+          'Hello x',
+          'yworldNext',
+        ]);
       });
   } finally {
     r.close();

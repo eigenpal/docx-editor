@@ -168,7 +168,8 @@ function textOf(node: Named): string {
     if (child.type !== 'text') refuse();
     else text += child.value;
   }
-  if (text.length > MAX_VALUE_CHARS || !isValidXmlText(text)) refuse('ooxml-invalid');
+  if (text.length > MAX_VALUE_CHARS) refuse('resource-limit');
+  if (!isValidXmlText(text)) refuse('ooxml-invalid');
   return text;
 }
 
@@ -293,8 +294,30 @@ function xmlDataOf(part: Named): Named {
   return roots[0]!;
 }
 
+/** Package wrappers above the equation: package, part, xmlData, document, body, p. */
+const WRAPPER_DEPTH = 6;
+
+/**
+ * Whether the markup nests deeper than a snippet may, counted before the parser runs: the
+ * parser reports very deep input as a parse error, and it is a size limit, not malformed XML.
+ * A tag count, bounded by the input length, so it never recurses.
+ */
+function nestsTooDeep(ooxml: string): boolean {
+  let depth = 0;
+  for (const match of ooxml.matchAll(/<(\/?)[^\s>/!?][^>]*?(\/?)>/g)) {
+    if (match[1]) depth -= 1;
+    else if (!match[2]) {
+      depth += 1;
+      if (depth > WRAPPER_DEPTH + MAX_EQUATION_SNIPPET_DEPTH + 1) return true;
+    }
+  }
+  return false;
+}
+
 /** The checked inline content of the package's one document paragraph. */
 function documentContent(ooxml: string): string {
+  if (ooxml.length > MAX_EQUATION_SNIPPET_BYTES) refuse('resource-limit');
+  if (nestsTooDeep(ooxml)) refuse('resource-limit');
   const read = readXml(ooxml, {
     maxBytes: MAX_EQUATION_SNIPPET_BYTES,
     maxElements: MAX_EQUATION_SNIPPET_ELEMENTS,
@@ -382,22 +405,127 @@ export function readEquationSnippet(ooxml: unknown): EquationSnippetResult {
   };
 }
 
+/** Budget for one shape check: nodes left to visit. */
+interface ShapeBudget {
+  nodes: number;
+}
+
+function isElementNode(node: unknown): node is Exclude<OoxmlNode, { kind: 'textValue' }> {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    (node as OoxmlNode).kind !== 'textValue' &&
+    Array.isArray((node as { children?: unknown }).children) &&
+    Array.isArray((node as { attributes?: unknown }).attributes)
+  );
+}
+
+const hasName = (node: OoxmlNode, namespace: string, local: string): boolean =>
+  node.kind !== 'textValue' && node.namespaceUri === namespace && node.localName === local;
+
+/** Text values only, as `w:t` and `m:t` hold. */
+function holdsOnlyText(
+  node: Exclude<OoxmlNode, { kind: 'textValue' }>,
+  budget: ShapeBudget
+): boolean {
+  return node.children.every((child) => {
+    budget.nodes -= 1;
+    return (
+      budget.nodes > 0 &&
+      !!child &&
+      child.kind === 'textValue' &&
+      typeof child.value === 'string' &&
+      child.value.length <= MAX_VALUE_CHARS
+    );
+  });
+}
+
+/** Attributes from `namespace` (or `xml:space`) that `allowed` admits. */
+function attributesAllowed(
+  node: Exclude<OoxmlNode, { kind: 'textValue' }>,
+  namespace: string,
+  allowed: (local: string) => boolean
+): boolean {
+  return node.attributes.every(
+    (attribute) =>
+      (attribute.namespaceUri === XML && attribute.localName === 'space') ||
+      (attribute.namespaceUri === namespace &&
+        allowed(attribute.localName) &&
+        typeof attribute.value === 'string' &&
+        attribute.value.length <= MAX_VALUE_CHARS)
+  );
+}
+
+/** A `w:rPr` with allowlisted, childless formatting elements. */
+function isRunPropertiesShape(node: OoxmlNode, budget: ShapeBudget): boolean {
+  if (
+    !isElementNode(node) ||
+    !hasName(node, WML_NAMESPACE_URI, 'rPr') ||
+    node.attributes.length > 0
+  )
+    return false;
+  return node.children.every((child) => {
+    budget.nodes -= 1;
+    return (
+      budget.nodes > 0 &&
+      isElementNode(child) &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      RUN_PROPERTIES.has(child.localName) &&
+      child.children.length === 0 &&
+      attributesAllowed(child, WML_NAMESPACE_URI, () => true)
+    );
+  });
+}
+
+function isPlainRunShape(node: OoxmlNode, budget: ShapeBudget): boolean {
+  if (!isElementNode(node) || node.kind !== 'run' || node.attributes.length > 0) return false;
+  return node.children.every((child) => {
+    budget.nodes -= 1;
+    if (budget.nodes <= 0 || !isElementNode(child)) return false;
+    if (hasName(child, WML_NAMESPACE_URI, 'rPr')) return isRunPropertiesShape(child, budget);
+    if (hasName(child, WML_NAMESPACE_URI, 'tab'))
+      return child.children.length === 0 && child.attributes.length === 0;
+    return (
+      hasName(child, WML_NAMESPACE_URI, 't') &&
+      attributesAllowed(child, WML_NAMESPACE_URI, () => false) &&
+      holdsOnlyText(child, budget)
+    );
+  });
+}
+
+/** One OMML subtree against the allowlist the reader applied. */
+function isMathShape(node: OoxmlNode, depth: number, budget: ShapeBudget): boolean {
+  budget.nodes -= 1;
+  if (budget.nodes <= 0 || depth > MAX_EQUATION_SNIPPET_DEPTH || !isElementNode(node)) return false;
+  if (node.namespaceUri !== OFFICE_MATH_NAMESPACE_URI || !MATH_ELEMENTS.has(node.localName))
+    return false;
+  if (!attributesAllowed(node, OFFICE_MATH_NAMESPACE_URI, (local) => local === 'val')) return false;
+  if (node.localName === 't') return holdsOnlyText(node, budget);
+  return node.children.every((child) =>
+    hasName(child, WML_NAMESPACE_URI, 'rPr') &&
+    (node.localName === 'r' || node.localName === 'ctrlPr')
+      ? isRunPropertiesShape(child, budget)
+      : isMathShape(child, depth + 1, budget)
+  );
+}
+
 /**
  * Whether `nodes` is a shape {@link readEquationSnippet} answers: plain runs and exactly one
- * inline `m:oMath`. The tree op checks it again, because an op is a trust boundary too.
+ * inline `m:oMath`, every element on the reader's allowlists. The tree op checks it again,
+ * because an op is a trust boundary too. The budget is the reader's element budget, so any
+ * snippet the reader admits passes here.
  */
 export function isEquationSnippetShape(nodes: unknown): nodes is readonly OoxmlNode[] {
-  if (!Array.isArray(nodes) || nodes.length === 0 || nodes.length > 64) return false;
+  if (!Array.isArray(nodes) || nodes.length === 0) return false;
+  const budget: ShapeBudget = { nodes: MAX_EQUATION_SNIPPET_ELEMENTS + 1 };
   let equations = 0;
-  for (const node of nodes as readonly OoxmlNode[]) {
-    if (!node || typeof node !== 'object' || node.kind === 'textValue') return false;
-    if (isOmmlEquationAtom(node) && node.localName === 'oMath') equations += 1;
-    else if (node.kind === 'run') {
-      const plain = node.children.every(
-        (child) => child.kind === 'runProperties' || child.kind === 'text' || child.kind === 'tab'
-      );
-      if (!plain) return false;
-    } else return false;
+  for (const node of nodes as readonly unknown[]) {
+    budget.nodes -= 1;
+    if (budget.nodes <= 0 || !isElementNode(node)) return false;
+    if (hasName(node, OFFICE_MATH_NAMESPACE_URI, 'oMath')) {
+      equations += 1;
+      if (!isMathShape(node, 0, budget)) return false;
+    } else if (!isPlainRunShape(node, budget)) return false;
   }
   return equations === 1;
 }

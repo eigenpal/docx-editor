@@ -18,6 +18,10 @@ Each new kind has a successful canonical journal replay fixture.
 Replay compares independent replicas and their saved/reopened packages.
 The base inventory below remains historical.
 
+Tracked structural edits add `insertComplexField`, `insertEquation`, and `setFieldResult`.
+The JSON inventory now has 92 kinds, including 78 single-part apply operations.
+Each of the three has a canonical journal replay fixture.
+
 ## Base
 
 | Field                      | Value                                         |

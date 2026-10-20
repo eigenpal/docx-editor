@@ -132,7 +132,6 @@ import {
 import {
   applySetListLevel,
   applySetParagraphMarkProperties,
-  withoutSectionMark,
   applySetListNumbering,
   applySetParagraphTabStops,
   applySetSectionMark,
@@ -141,6 +140,7 @@ import {
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
 import { applyInsertComplexField } from './tree-op-field-insert.ts';
 import { applySetFieldResult } from './tree-op-field-result-write.ts';
+import { withoutOriginalMark } from './tree-op-split-mark.ts';
 import { applyInsertEquation } from './tree-op-equation-insert.ts';
 import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
@@ -2572,8 +2572,9 @@ function applySplit(
   // inserting a fresh mark before the existing one, so the original mark — and the
   // section boundary it carries — stays after ALL the paragraph's content. Cloning it
   // onto both halves minted a phantom section (and a spurious page break) on every
-  // Enter in a section's last paragraph.
-  const headPPr = pPr ? withoutSectionMark(pPr) : undefined;
+  // Enter in a section's last paragraph. The mark's own revisions stay on the tail too
+  // (`tree-op-split-mark.ts`).
+  const headPPr = pPr ? withoutOriginalMark(pPr) : undefined;
   // The HEAD keeps the original paragraph's `w14:paraId` (it is spread below); the tail
   // is the new paragraph and gets a fresh deterministic mint, exactly as Word assigns a
   // new id to the paragraph an Enter creates. Seeded by (head id, offset) so one
@@ -2915,8 +2916,9 @@ function applySplitMany(
 
   // A `w:sectPr` in the mark belongs to the LAST piece only — the original mark ends up
   // after all the paragraph's content, exactly as the single-split rule keeps it on the
-  // tail. Duplicating it minted one phantom section per pasted line.
-  const strippedPPr = pPr ? withoutSectionMark(pPr) : undefined;
+  // tail. Duplicating it minted one phantom section per pasted line. The mark's own
+  // revisions stay on the last piece for the same reason (`tree-op-split-mark.ts`).
+  const strippedPPr = pPr ? withoutOriginalMark(pPr) : undefined;
   // Tail `w14:paraId`s, minted in DESCENDING piece order: the equivalent sequence of
   // single splits runs last-offset-first, so its used-set grows from the last tail
   // backwards. Mirroring that order (including how a repeated offset's seed collision

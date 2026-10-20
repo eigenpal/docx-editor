@@ -37,6 +37,7 @@ import {
   inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
+import { afterTrailingFieldEnd, directParentOf } from './tree-op-field-end-site.ts';
 import {
   besideRestrictedControl,
   holdsContentControl,
@@ -720,6 +721,8 @@ function rawInsertionSite(
   if (owner === null) {
     const trailing = segments[segments.length - 1];
     if (trailing?.end === offset) {
+      const afterField = afterTrailingFieldEnd(paragraph, trailing, offset);
+      if (afterField) return afterField;
       const containers = inlineContainersOf(paragraph, segmentAncestryNodeId(trailing));
       let outermostWrapper = -1;
       for (let index = 0; index < containers.length; index += 1) {
@@ -865,17 +868,6 @@ function containsNode(node: OoxmlNode, id: string): boolean {
   if (node.id === id) return true;
   if (node.kind === 'textValue') return false;
   return node.children.some((child) => containsNode(child, id));
-}
-
-/** Direct element parent of one descendant within a paragraph. */
-function directParentOf(parent: OoxmlElement, id: string): OoxmlElement | null {
-  for (const child of parent.children) {
-    if (child.id === id) return parent;
-    if (child.kind === 'textValue') continue;
-    const found = directParentOf(child, id);
-    if (found) return found;
-  }
-  return null;
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */

@@ -118,13 +118,19 @@ describe('tracked field insertion', () => {
       }
     });
 
-    test(`${type} inserts untracked as one complex field`, async () => {
+    const simple = type === 'Page' || type === 'NumPages';
+    test(`${type} inserts untracked as ${simple ? 'a simple' : 'one complex'} field`, async () => {
       const runtime = await DocxEditor.createServer(SAMPLE);
       try {
         expect(await insertAfterFigure(runtime, type, text, false)).toBe(code);
         const xml = await documentXml(runtime);
-        expect(xml).not.toContain('fldSimple');
-        expect(xml).toContain('w:fldCharType="begin"');
+        if (simple) {
+          expect(xml).toContain(`<w:fldSimple w:instr="${code}"><w:r><w:t/></w:r></w:fldSimple>`);
+          expect(xml).not.toContain('w:dirty');
+        } else {
+          expect(xml).not.toContain('fldSimple');
+          expect(xml).toContain('<w:fldChar w:dirty="true" w:fldCharType="begin"/>');
+        }
         expect(xml).not.toMatch(/<w:ins[ >]/);
         const reopened = await DocxEditor.createServer(await runtime.save());
         try {

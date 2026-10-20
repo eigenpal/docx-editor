@@ -111,3 +111,45 @@ describe('insertComplexField', () => {
     });
   }
 });
+
+describe('typing after a field that ends its paragraph', () => {
+  const field = (result: string) =>
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> REF a </w:instrText></w:r>' +
+    `<w:r><w:fldChar w:fldCharType="separate"/></w:r>${result}` +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const shapes: readonly [string, string, boolean][] = [
+    ['no result run', '', false],
+    ['an empty result run', '<w:r><w:t/></w:r>', false],
+    ['a result', '<w:r><w:t>R</w:t></w:r>', false],
+    ['a pending insertion', '<w:r><w:t/></w:r>', true],
+  ];
+  for (const [name, result, pending] of shapes) {
+    for (const tracked of [false, true]) {
+      test(`${name}, ${tracked ? 'tracked' : 'untracked'}: the text lands after the end marker`, () => {
+        const content = pending
+          ? `<w:ins w:id="1" w:author="Ada" w:date="2026-01-01T00:00:00Z">${field(result)}</w:ins>`
+          : field(result);
+        const read = readOoxmlPart(
+          `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>a</w:t></w:r>${content}</w:p></w:body></w:document>`,
+          { name: '/word/document.xml', contentType: 'application/xml' }
+        );
+        if (!read.ok) throw new Error('fixture');
+        const body = read.part.root.children.find((node) => node.kind === 'body')!;
+        const paragraphId = storyParagraphs(body)[0]!.id;
+        const typed = applyTreeOp(read.part, {
+          op: 'insertText',
+          paragraphId,
+          offset: 2,
+          text: 'X',
+          ...(tracked ? { revision: { author: 'Bob', date: '2026-01-02T00:00:00Z' } } : {}),
+        });
+        if (!typed.ok) throw new Error(typed.reason);
+        const xml = serializeOoxmlPart(typed.part);
+        expect(xml).toContain('<w:r><w:fldChar w:fldCharType="end"/></w:r>');
+        expect(xml.indexOf('>X<')).toBeGreaterThan(xml.indexOf('w:fldCharType="end"'));
+        // Untracked text never joins a pending insertion it follows.
+        if (pending && !tracked) expect(xml).toMatch(/<\/w:ins><w:r><w:t>X<\/w:t><\/w:r>/);
+      });
+    }
+  }
+});

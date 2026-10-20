@@ -19,7 +19,7 @@ import { docx, p } from './support/docx.ts';
 
 const AUTHOR = 'Math agent';
 const SAMPLE = docx(p('Let x be real.') + p('Second paragraph.'));
-const OBJECT = '￼';
+const OBJECT = '\uFFFC';
 
 async function documentXml(runtime: DocxEditorServerRuntime): Promise<string> {
   return strFromU8(unzipSync(await runtime.save())['word/document.xml']!);
@@ -162,6 +162,103 @@ describe('insertOoxml inserts one equation', () => {
         ).rejects.toMatchObject({ code: 'InvalidArgument' });
       }
       expect(await documentXml(runtime)).toBe(before);
+    } finally {
+      runtime.dispose();
+    }
+  });
+});
+
+describe('insertOoxml inside inline containers', () => {
+  const LINKED = docx(
+    '<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r><w:hyperlink w:anchor="a">' +
+      '<w:r><w:t>linked x words</w:t></w:r></w:hyperlink><w:r><w:t xml:space="preserve"> end.</w:t></w:r></w:p>'
+  );
+  const CONTROL = (lock = '') =>
+    docx(
+      '<w:p><w:r><w:t xml:space="preserve">Before </w:t></w:r><w:sdt><w:sdtPr>' +
+        `${lock}<w:richText/></w:sdtPr><w:sdtContent><w:r><w:t>control x text</w:t></w:r>` +
+        '</w:sdtContent></w:sdt><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+
+  for (const tracked of [false, true]) {
+    const mode = tracked ? 'tracked' : 'untracked';
+    test(`${mode}: mid-hyperlink`, async () => {
+      const runtime = await DocxEditor.createServer(LINKED, { author: AUTHOR });
+      try {
+        expect(await insertAtX(runtime, 'After', tracked)).toBe(OBJECT);
+        await runtime.run(async (c) => {
+          expect(await bodyText(c)).toBe(`See linked x${OBJECT} words end.`);
+        });
+        const reopened = await DocxEditor.createServer(await runtime.save(), { author: 'R' });
+        try {
+          await reopened.run(async (c) => {
+            if (tracked) c.document.body.revisions.rejectAll();
+            await c.sync();
+            expect(await bodyText(c)).toBe(
+              tracked ? 'See linked x words end.' : `See linked x${OBJECT} words end.`
+            );
+          });
+        } finally {
+          reopened.dispose();
+        }
+      } finally {
+        runtime.dispose();
+      }
+    });
+
+    test(`${mode}: inside a rich text content control`, async () => {
+      const runtime = await DocxEditor.createServer(CONTROL(), { author: AUTHOR });
+      try {
+        expect(await insertAtX(runtime, 'After', tracked)).toBe(OBJECT);
+        await runtime.run(async (c) => {
+          expect(await bodyText(c)).toBe(`Before control x${OBJECT} text after`);
+          const controls = c.document.body.contentControls;
+          controls.load('items');
+          await c.sync();
+          expect(controls.items).toHaveLength(1);
+        });
+        // The equation is inside the one control.
+        expect(await documentXml(runtime)).toMatch(
+          /<w:sdtContent>(?:(?!<\/w:sdtContent>).)*<m:oMath>(?:(?!<\/w:sdtContent>).)*control x(?:(?!<\/w:sdtContent>).)*<\/w:sdtContent>|<w:sdtContent>(?:(?!<\/w:sdtContent>).)*control x(?:(?!<\/w:sdtContent>).)*<m:oMath>/
+        );
+      } finally {
+        runtime.dispose();
+      }
+    });
+
+    test(`${mode}: inside a content-locked control refuses`, async () => {
+      const runtime = await DocxEditor.createServer(CONTROL('<w:lock w:val="contentLocked"/>'), {
+        author: AUTHOR,
+      });
+      try {
+        const before = await documentXml(runtime);
+        await expect(insertAtX(runtime, 'After', tracked)).rejects.toMatchObject({
+          code: 'InvalidArgument',
+          debugInfo: { innerError: { code: 'edit.protected-content' } },
+        });
+        expect(await documentXml(runtime)).toBe(before);
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }
+
+  test("tracked: right after the author's own pending insertion joins it", async () => {
+    const runtime = await DocxEditor.createServer(SAMPLE, { author: AUTHOR });
+    try {
+      await runtime.run(async (c) => {
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const typed = c.document.body.search('x').getFirst().insertText(' and y', 'After');
+        await c.sync();
+        typed.insertOoxml(equationPackage(), 'After');
+        await c.sync();
+        expect(await bodyText(c)).toBe(`Let x and y${OBJECT} be real.\rSecond paragraph.`);
+        c.document.body.revisions.load('items');
+        await c.sync();
+        c.document.body.revisions.rejectAll();
+        await c.sync();
+        expect(await bodyText(c)).toBe('Let x be real.\rSecond paragraph.');
+      });
     } finally {
       runtime.dispose();
     }

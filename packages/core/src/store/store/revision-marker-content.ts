@@ -33,9 +33,19 @@ export function isInertMarker(node: OoxmlNode): boolean {
  * keeps its id and stays, even when empty. In a document reopened from saved bytes, ids carry
  * no history, and on another collaboration replica the container has a replica-scoped id, so
  * there an emptied container stays as an empty element.
+ *
+ * An inserted mark that is ACCEPTED is the exception: the paragraph it made is permanent and
+ * no reject can restore an earlier state, so a container that held nothing but accepted
+ * marks goes whatever its id. Without that, accepting a split in a reopened document left
+ * `<w:pPr><w:rPr/></w:pPr>` on the paragraph.
  */
-export function heldOnlyResolvedMarks(node: OoxmlNode, dropped: ReadonlySet<string>): boolean {
+export function heldOnlyResolvedMarks(
+  node: OoxmlNode,
+  dropped: ReadonlySet<string>,
+  accepted: ReadonlySet<string> = new Set()
+): boolean {
   if (node.kind === 'textValue' || node.children.length === 0) return false;
+  if (acceptedOnly(node, accepted)) return true;
   // Only a container a mark stamp created; a source container stays, empty or not.
   if (!node.id.slice(node.id.lastIndexOf('#') + 1).startsWith('mark:')) return false;
   const markProperties =
@@ -47,4 +57,16 @@ export function heldOnlyResolvedMarks(node: OoxmlNode, dropped: ReadonlySet<stri
   return node.children.every((child) =>
     markProperties ? dropped.has(child.id) : heldOnlyResolvedMarks(child, dropped)
   );
+}
+
+/** A `w:pPr`, or its `w:rPr`, that held nothing but marks accepted for good. */
+function acceptedOnly(node: OoxmlNode, accepted: ReadonlySet<string>): boolean {
+  if (node.kind === 'textValue' || node.children.length === 0 || accepted.size === 0) return false;
+  if (
+    node.kind === 'runProperties' ||
+    (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'rPr')
+  )
+    return node.children.every((child) => accepted.has(child.id));
+  if (node.kind !== 'paragraphProperties') return false;
+  return node.children.every((child) => acceptedOnly(child, accepted));
 }

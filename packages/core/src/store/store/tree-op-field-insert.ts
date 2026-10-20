@@ -6,18 +6,10 @@
 // a `begin` without its `end`. A `w:fldSimple` is never written into a revision.
 
 import type { EditOptions } from '../package/ooxml-edit.ts';
-import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
-import {
-  readOoxmlPart,
-  type OoxmlNode,
-  type OoxmlParagraphNode,
-  type OoxmlPart,
-} from '../package/ooxml-tree.ts';
-import { escapeXml } from '../package/sinks.ts';
-import { storyParagraphs } from '../package/story-blocks.ts';
+import type { OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { inertFieldInstruction, inertFieldKeyword } from './inert-field-instruction.ts';
 import { insertionRunPropertiesAt } from './tree-op-field-formatting.ts';
-import { applyInsertFragment } from './tree-op-fragment.ts';
+import { applyPlaceRunNodes } from './tree-op-run-placement.ts';
 import { complexFieldRuns } from './tree-op-fields.ts';
 import { applyInsertTrackedRun } from './tree-op-tracked.ts';
 import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
@@ -100,7 +92,8 @@ function insertableInstruction(op: InsertComplexFieldOp): boolean {
 /**
  * Write the field as five runs: `begin`, instruction, `separate`, an empty result, `end`. With a revision the
  * runs go into ONE `w:ins` through the placement typed text follows. Without one they land
- * as a one-paragraph fragment, so the field shape is the same in both arms.
+ * where typed text would (`tree-op-run-placement.ts`), so the field shape is the same in both
+ * arms.
  *
  * Every run takes the formatting a word typed at the offset would take. The begin marker
  * carries `w:dirty="true"` unless the field is PAGE or NUMPAGES, whose result `updateResult`
@@ -128,60 +121,13 @@ export function applyInsertComplexField(
       options
     );
   }
+  // Placed where typed text lands, so a field inside a content control or a link stays there.
+  // `applyPlaceRunNodes` gives the runs fresh ids of the part's own family.
   let counter = 0;
-  const properties = insertionRunPropertiesAt(part, paragraph, op.offset, () => `f${counter++}`);
-  const block = complexFieldParagraph(op.instruction, dirty, properties);
-  if (!block) return { ok: false, reason: 'invalidArgs' };
-  return applyInsertFragment(
-    part,
-    {
-      op: 'insertFragment',
-      paragraphId: op.paragraphId,
-      offset: op.offset,
-      blocks: [block],
-      lastMarkCovered: false,
-    },
-    options
-  );
-}
-
-/**
- * A one-paragraph fragment holding the field's five runs, read through the bounded parser.
- * Each run gets `properties`; the fragment insertion gives every node a fresh id.
- */
-function complexFieldParagraph(
-  instruction: string,
-  dirty: boolean,
-  properties: readonly OoxmlNode[]
-): OoxmlParagraphNode | null {
-  const run = (content: string) => `<w:r>${content}</w:r>`;
-  const marker = (type: string) =>
-    run(
-      `<w:fldChar w:fldCharType="${type}"${type === 'begin' && dirty ? ' w:dirty="true"' : ''}/>`
-    );
-  const content =
-    marker('begin') +
-    run(`<w:instrText xml:space="preserve"> ${escapeXml(instruction)} </w:instrText>`) +
-    marker('separate') +
-    run('<w:t/>') +
-    marker('end');
-  const read = readOoxmlPart(
-    `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p>${content}</w:p></w:body></w:document>`,
-    {
-      name: '/word/document.xml',
-      contentType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-    }
-  );
-  if (!read.ok) return null;
-  const body = read.part.root.children.find((node) => node.kind === 'body');
-  const paragraph = body && storyParagraphs(body)[0];
-  if (!paragraph || paragraph.kind !== 'paragraph') return null;
-  if (properties.length === 0) return paragraph;
-  return {
-    ...paragraph,
-    children: paragraph.children.map((child) =>
-      child.kind === 'run' ? { ...child, children: [...properties, ...child.children] } : child
-    ),
-  } as OoxmlParagraphNode;
+  const draft = () => `field-draft:${counter++}`;
+  const runs = complexFieldRuns(draft, op.instruction, {
+    dirty,
+    properties: () => insertionRunPropertiesAt(part, paragraph, op.offset, draft),
+  });
+  return applyPlaceRunNodes(part, paragraph, op.offset, runs, options);
 }

@@ -115,7 +115,7 @@ To propose the split as a tracked change, set `TrackMineOnly` first. For an exam
 
 ## Insert an equation
 
-`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation reads as U+FFFC, as other equations do, and the editor paints it as math.
+`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation lands where a typed character would, also inside a link, a content control, or your own pending insertion, and it reads as U+FFFC, as other equations do. The editor paints it as math. Content-locked and data-bound content refuses with `InvalidArgument` and `edit.protected-content`.
 
 The runtime accepts only this OOXML shape:
 
@@ -136,7 +136,7 @@ The runtime reads the OOXML with a bounded parser and never fetches or evaluates
 | Fields, pictures, hyperlinks, revisions, or any other element or attribute outside the allowlist | `NotSupported` | `edit.ooxml-unsupported` |
 | A document part without a package, such as a bare `w:document` | `NotSupported` | `edit.ooxml-unsupported` |
 | Malformed XML, a DTD, or an entity declaration or reference | `InvalidArgument` | `edit.ooxml-unsupported` |
-| More than 256 KiB, more than 8,192 elements, or math nested more than 64 levels deep | `InvalidArgument` | `edit.resource-limit` |
+| More than 256 KiB, more than 8,192 elements, a text or attribute value over 4,096 characters, or math nested more than 64 levels deep | `InvalidArgument` | `edit.resource-limit` |
 
 ## Address existing content
 

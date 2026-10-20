@@ -2,8 +2,9 @@
 //
 // The nodes come from `readEquationSnippet` (`equation-snippet.ts`), which read caller OOXML
 // through the bounded reader and an allowlist. The op checks their shape again, because an op
-// is a trust boundary of its own. Without a revision the nodes land as a one-paragraph
-// fragment, the path a paste of an equation takes. With one, they go into ONE `w:ins` by the
+// is a trust boundary of its own. Both arms place the nodes where typed text would land,
+// inside a link, a content control, or a pending insertion. Without a revision they go beside
+// the runs there (`tree-op-run-placement.ts`). With one, they go into ONE `w:ins` by the
 // author through the placement typed text follows: `w:ins > m:oMath` is the shape
 // `EG_RunLevelElements` allows and the mirror of how a tracked deletion strikes an equation,
 // so Accept keeps the equation and Reject removes it whole.
@@ -12,10 +13,11 @@ import { findNode, type EditOptions } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { isEquationSnippetShape } from './equation-snippet.ts';
-import { applyInsertFragment, withRequiredNamespaceBindings } from './tree-op-fragment.ts';
+import { withRequiredNamespaceBindings } from './tree-op-fragment.ts';
+import { applyPlaceRunNodes } from './tree-op-run-placement.ts';
 import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
 import type { RevisionAttributionInput } from './tree-op-revision-attribution.ts';
-import { indivisibleAt, paragraphLength, splitsSurrogate } from './tree-op-segments.ts';
+import { paragraphLength, splitsSurrogate } from './tree-op-segments.ts';
 import { applyInsertTrackedRun, copy } from './tree-op-tracked.ts';
 import type { TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 import { rejectContentEdit } from './tree-op-validate-controls.ts';
@@ -45,7 +47,9 @@ export function validateInsertEquation(
     return 'offset-out-of-range';
   }
   if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-  if (indivisibleAt(paragraph, op.offset)) return 'indivisible-content';
+  // An offset inside a link, a control, or a revision wrapper is a place, as it is for a
+  // field: the fragment path splits the wrapper around the equation, and the tracked path
+  // places it inside the wrapper the way typed text goes.
   if (!isEquationSnippetShape(op.nodes)) return 'fragment-invalid-block';
   const measured = paragraphLength(snippetParagraph(op.nodes));
   if (!Number.isInteger(op.length) || op.length !== measured) return 'invalidArgs';
@@ -56,7 +60,7 @@ export function validateInsertEquation(
   return rejectContentEdit(part, paragraph, op.offset, op.offset);
 }
 
-/** The nodes as a detached paragraph: what a fragment insertion and a length read take. */
+/** The nodes as a detached paragraph, for the length read. */
 function snippetParagraph(nodes: readonly OoxmlNode[]): OoxmlParagraphNode {
   return {
     id: 'equation-snippet',
@@ -75,24 +79,12 @@ export function applyInsertEquation(
   op: InsertEquationOp,
   options?: EditOptions
 ): TreeOpResult {
-  if (!op.revision) {
-    return applyInsertFragment(
-      part,
-      {
-        op: 'insertFragment',
-        paragraphId: op.paragraphId,
-        offset: op.offset,
-        blocks: [snippetParagraph(op.nodes)],
-        lastMarkCovered: false,
-      },
-      options
-    );
-  }
   // The `m:` prefix must be bound at the root before the commit validator sees it.
   const bound = withRequiredNamespaceBindings(part, op.nodes);
   const paragraph = findNode(bound, op.paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph')
     return { ok: false, reason: 'unknown-paragraph' };
+  if (!op.revision) return applyPlaceRunNodes(bound, paragraph, op.offset, op.nodes, options);
   return applyInsertTrackedRun(
     bound,
     paragraph,

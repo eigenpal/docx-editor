@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 89,
-    "singlePartApply": 75,
+    "treeDocOpKinds": 92,
+    "singlePartApply": 78,
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -64,6 +64,8 @@
       "insertHardBreak",
       "insertPageBreak",
       "insertPageField",
+      "insertComplexField",
+      "insertEquation",
       "setFieldCode",
       "setListLevel",
       "setListNumbering",
@@ -117,6 +119,7 @@
       "replaceTocResult",
       "rewriteTocPageNumbers",
       "refreshFieldResults",
+      "setFieldResult",
       "setTextFormFieldDefault",
       "commitTextFormField",
       "setLegacyCheckbox",
@@ -159,6 +162,8 @@
     "insertHardBreak",
     "insertPageBreak",
     "insertPageField",
+    "insertComplexField",
+    "insertEquation",
     "setFieldCode",
     "setListLevel",
     "setListNumbering",
@@ -226,6 +231,7 @@
     "replaceTocResult",
     "rewriteTocPageNumbers",
     "refreshFieldResults",
+    "setFieldResult",
     "setTextFormFieldDefault",
     "commitTextFormField",
     "setLegacyCheckbox",
@@ -471,6 +477,24 @@
       ],
       "packageIntents": [],
       "openSpec": ["scoped-header-footer-editing", "word-like-field-rendering"]
+    },
+    {
+      "kind": "insertComplexField",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
+    },
+    {
+      "kind": "insertEquation",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setFieldCode",
@@ -1143,6 +1167,15 @@
       "commandExposure": ["refreshRefFieldResults"],
       "packageIntents": [],
       "openSpec": []
+    },
+    {
+      "kind": "setFieldResult",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setTextFormFieldDefault",

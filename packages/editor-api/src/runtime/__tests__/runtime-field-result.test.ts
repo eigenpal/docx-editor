@@ -347,7 +347,7 @@ describe('Field.result refusals', () => {
 });
 
 describe('w:dirty and formatting on inserted fields', () => {
-  test('fields with an empty result are dirty, page fields are not, and runs take the left formatting', async () => {
+  test('new field types are dirty, page fields keep their simple form, and runs take the left formatting', async () => {
     const runtime = await DocxEditor.createServer(SAMPLE);
     try {
       await runtime.run(async (c) => {
@@ -362,9 +362,7 @@ describe('w:dirty and formatting on inserted fields', () => {
       expect(xml).toMatch(
         /<w:rPr><w:b\/><\/w:rPr><w:fldChar w:dirty="true" w:fldCharType="begin"\/>/
       );
-      expect(xml).toMatch(
-        /<w:r><w:fldChar w:fldCharType="begin"\/><\/w:r><w:r><w:instrText[^>]*> PAGE /
-      );
+      expect(xml).toContain('<w:fldSimple w:instr="PAGE"><w:r><w:t/></w:r></w:fldSimple>');
       void W;
     } finally {
       runtime.dispose();

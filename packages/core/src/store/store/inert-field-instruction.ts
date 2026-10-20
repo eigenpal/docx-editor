@@ -1,13 +1,15 @@
 // The bounded field instructions an authoring lane may write.
 //
 // An instruction is caller data. It is written as `w:instrText` or `w:instr` text and never
-// evaluated: the cached result stays empty until a host computes one it supports. The first
-// word names the field type, and only types that read the document itself are admitted:
-// page numbers, references to bookmarks, notes and styles, sequence numbers, and dates.
-// Every other type refuses by omission. That includes types that fetch, embed, link, run or
-// prompt: DDE, DDEAUTO, INCLUDETEXT, INCLUDEPICTURE, IMPORT, LINK, MACROBUTTON, AUTOTEXT.
-// Those names also refuse anywhere among the arguments, so a later reader that is less
-// strict about the first word cannot find one there.
+// evaluated: the cached result stays empty until a host or the caller writes one. Only the
+// first word names the field type, and only types that read the document itself are
+// admitted: page numbers, references to bookmarks, notes and styles, sequence numbers, and
+// dates. Every other type refuses by omission. That includes types that fetch, embed, link,
+// run or prompt: DDE, DDEAUTO, INCLUDETEXT, INCLUDEPICTURE, IMPORT, LINK, MACROBUTTON,
+// AUTOTEXT. Those names also refuse as any bare-word argument, so a later reader that is less
+// strict about the first word cannot find one there. A quoted argument refuses when its whole
+// trimmed text is one of those names, or when it holds a URL scheme (`scheme://`); a quoted
+// argument that only contains such a name among other words is admitted, as plain text.
 
 /** Field types an authoring lane may write. Each reads only the document. */
 export const INERT_FIELD_KEYWORDS = [
