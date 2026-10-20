@@ -1,17 +1,49 @@
 ---
 title: 'Fields and pagination'
-description: 'Insert inert TOC fields, and update PAGE and NUMPAGES fields with measured pagination and registered fonts.'
+description: 'Insert inert reference, sequence, date, page, and TOC fields, propose them as tracked insertions, and update PAGE and NUMPAGES fields with measured pagination.'
 category: 'Editing API'
 order: 59
 ---
 
-A field stores an instruction and cached result text. Reading a field does not execute its instruction. You can insert and evaluate plain `PAGE` and `NUMPAGES` fields without switches. You can also insert an inert `TOC` field. The runtime does not calculate its entries.
+A field stores an instruction and cached result text. Reading or inserting a field does not execute its instruction. You can insert page, reference, sequence, style reference, date, and time fields, and an inert `TOC` field. You can evaluate plain `PAGE` and `NUMPAGES` fields without switches. The runtime does not calculate other results.
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
-## Insert a page field
+## Insert a field
 
-`Range.insertField(location, fieldType?, text?, removeFormatting?)` returns `Field`. It accepts `Before`, `After`, `Start`, `End`, or `Replace`. Use `Page` or `NumPages`, or `Empty` with the text `PAGE` or `NUMPAGES`. Omitting the type also requires supported instruction text. The runtime rejects `removeFormatting: true`.
+`Range.insertField(location, fieldType?, text?, removeFormatting?)` returns `Field`. It accepts `Before`, `After`, `Start`, `End`, or `Replace`. The runtime rejects `removeFormatting: true`.
+
+The following table lists the field types that the runtime inserts. For a typed field, `text` holds the arguments after the field name. For `Empty`, or when you omit the type, `text` holds the whole instruction, and its first word must name one of these types.
+
+| Field type | Instruction | Required arguments |
+| --- | --- | --- |
+| `Page`, `NumPages` | `PAGE`, `NUMPAGES` | None. Switches refuse. |
+| `Ref`, `PageRef`, `NoteRef` | `REF`, `PAGEREF`, `NOTEREF` | A bookmark name, then optional switches |
+| `Seq` | `SEQ` | A sequence name, then optional switches |
+| `StyleRef` | `STYLEREF` | A style name, quoted when it contains a space |
+| `Date`, `Time` | `DATE`, `TIME` | None. Optional switches, such as `\@ "d MMMM yyyy"` |
+| `TOC` | `TOC` | Optional `\o "1-3"`, `\h`, `\z`, and `\u` |
+
+Arguments are switches such as `\h`, quoted strings, and bare words, separated by spaces. A quoted string cannot contain a quotation mark or a backslash. An instruction is 255 characters or fewer, with no tabs, line breaks, or other control characters.
+
+The runtime writes the instruction as text and never evaluates it. Field types that fetch, embed, link, run, or prompt always refuse. For example, `DDE`, `DDEAUTO`, `IncludeText`, `IncludePicture`, `Import`, `Link`, `MacroButton`, `AutoText`, `Hyperlink`, and `FillIn` refuse. Those names also refuse anywhere in the arguments. A refused type or instruction fails with `InvalidArgument`, and `debugInfo.innerError.code` is `edit.field-unsupported`. The document does not change.
+
+This example inserts a cross-reference to a bookmark after a search hit:
+
+```ts
+await runtime.run(async (context) => {
+  const hit = context.document.body.search('see section').getFirst();
+  const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+  field.load('code');
+  await context.sync();
+  console.log(field.code.trim()); // REF _Ref123456 \h
+});
+```
+
+A complex field's `code` keeps the spaces around its instruction, so trim it before you compare.
+
+## Insert a page field
 
 Resolve an anchor, insert the field, then update its result in a separate sync:
 
@@ -29,9 +61,46 @@ await runtime.run(async (context) => {
 });
 ```
 
-New fields start with an empty cached result. Insertion does not calculate pagination. `Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint. `Replace` requires an eligible span in one paragraph.
+New fields start with an empty cached result. Insertion does not calculate pagination. `Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint. `Replace` requires an eligible span in one paragraph. Insertion inside locked or data-bound content refuses with `edit.protected-content`.
 
-`FieldType` exports the Office.js-compatible field vocabulary. `FieldTypeLiteral` provides corresponding string literals. The presence of an enum value does not mean its instruction can run. For example, `FieldType.page` is supported. Creation supports the `PAGE`, `NUMPAGES`, and bounded `TOC` subset.
+`FieldType` exports the Office.js-compatible field vocabulary. `FieldTypeLiteral` provides corresponding string literals. The presence of an enum value does not mean that the runtime inserts it. Creation supports only the types in the table in [Insert a field](#insert-a-field).
+
+## Propose a field as a tracked change
+
+Set `document.changeTrackingMode` to `TrackMineOnly`, then call `insertField`. The runtime writes the field as one complex field. Its begin, instruction, separator, and end runs sit inside one `w:ins` element by the runtime author. A simple field is never written inside a revision. Accepting the change keeps the field, and rejecting it removes the whole field.
+
+This example proposes a figure number in place of the word "figure":
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('figure').getFirst();
+  hit.insertField('Replace', 'Seq', 'Figure \\* ARABIC');
+  await context.sync();
+});
+```
+
+A tracked `Replace` strikes the range as a tracked deletion and proposes the field after it. A reviewer sees one replacement. The saved markup has this shape:
+
+```xml
+<w:del w:author="Agent" w:date="…" w:id="0">
+  <w:r><w:delText>figure</w:delText></w:r>
+</w:del>
+<w:ins w:author="Agent" w:date="…" w:id="1">
+  <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+  <w:r><w:instrText xml:space="preserve"> SEQ Figure \* ARABIC </w:instrText></w:r>
+  <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+  <w:r><w:fldChar w:fldCharType="end"/></w:r>
+</w:ins>
+```
+
+Tracked insertion follows the same rules as tracked text. It refuses with `NotImplemented` inside another author's pending structural change, such as an inserted table row. It refuses with `InvalidArgument` when `Replace` spans more than one paragraph. Tracked `TOC` creation refuses with `NotSupported` and `edit.tracked-operation-unsupported`.
+
+A pending field appears in `fields`, and its `code` reads normally. Code writes and `updateResult()` refuse until a reviewer accepts the insertion.
+
+### Cached results
+
+Office.js has no parameter for the cached result of a new field. The runtime does not compute results for reference, sequence, style reference, date, or time fields, and `Field` does not expose `result`. A new field shows no text until an application that evaluates fields updates it. After a reviewer accepts a `PAGE` or `NUMPAGES` field, `updateResult()` computes its result.
 
 ## Read and change instructions
 
@@ -97,7 +166,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-The runtime accepts `\o` with ascending levels 1 through 9, plus `\h`, `\z`, and `\u`. It rejects duplicate switches, unknown switches, TOC code writes, and tracked field creation.
+The runtime accepts `\o` with ascending levels 1 through 9, plus `\h`, `\z`, and `\u`. It rejects duplicate switches, unknown switches, TOC code writes, and tracked TOC creation.
 
 ## Next steps
 

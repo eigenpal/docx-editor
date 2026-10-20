@@ -266,6 +266,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
           (!stagedTracking.author &&
             [
               'insertContentControl',
+              'insertField',
               'setContentControlProperties',
               'startNewList',
               'setListLevelFormat',

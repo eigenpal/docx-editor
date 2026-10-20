@@ -308,6 +308,13 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       offset: 5,
       field: 'PAGE',
     })),
+    story('insertComplexField', plainDoc(), (store) => ({
+      op: 'insertComplexField',
+      paragraphId: firstParagraphId(store),
+      offset: 5,
+      instruction: 'REF _Ref1 \\h',
+      revision: { author: 'Ada', date: '2026-01-01T00:00:00Z' },
+    })),
     story('setListLevel', listDoc(), (store) => ({
       op: 'setListLevel',
       paragraphId: firstParagraphId(store),

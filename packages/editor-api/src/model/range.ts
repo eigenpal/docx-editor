@@ -689,8 +689,12 @@ export class Range extends ModelObject implements PromisedItem {
     ));
   }
   /**
-   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
-   * TOC entries are not calculated. Tracked field insertion refuses.
+   * Insert an inert field: Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time,
+   * Empty with a whole instruction of one of those types, or TOC with supported switches.
+   * `text` holds the field arguments. The instruction is never evaluated, and the cached
+   * result is empty. Fields that fetch, embed, link, run, or prompt refuse with
+   * `InvalidArgument` (`edit.field-unsupported`). With `TrackMineOnly`, the field is one tracked
+   * insertion; tracked TOC creation refuses.
    */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
@@ -699,8 +703,12 @@ export class Range extends ModelObject implements PromisedItem {
     removeFormatting?: boolean
   ): Field;
   /**
-   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
-   * TOC entries are not calculated. Tracked field insertion refuses.
+   * Insert an inert field: Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time,
+   * Empty with a whole instruction of one of those types, or TOC with supported switches.
+   * `text` holds the field arguments. The instruction is never evaluated, and the cached
+   * result is empty. Fields that fetch, embed, link, run, or prompt refuse with
+   * `InvalidArgument` (`edit.field-unsupported`). With `TrackMineOnly`, the field is one tracked
+   * insertion; tracked TOC creation refuses.
    */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
@@ -709,8 +717,12 @@ export class Range extends ModelObject implements PromisedItem {
     removeFormatting?: boolean
   ): Field;
   /**
-   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
-   * TOC entries are not calculated. Tracked field insertion refuses.
+   * Insert an inert field: Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time,
+   * Empty with a whole instruction of one of those types, or TOC with supported switches.
+   * `text` holds the field arguments. The instruction is never evaluated, and the cached
+   * result is empty. Fields that fetch, embed, link, run, or prompt refuse with
+   * `InvalidArgument` (`edit.field-unsupported`). With `TrackMineOnly`, the field is one tracked
+   * insertion; tracked TOC creation refuses.
    */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',

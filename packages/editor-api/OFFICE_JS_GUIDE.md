@@ -281,6 +281,7 @@ await runtime.run(async (context) => {
 | Replace a range | `range.insertText(text, 'Replace')` |
 | Delete range content | `range.delete()` or `range.clear()` |
 | Propose removing a paragraph | `paragraph.delete()` |
+| Propose a field | `range.insertField('After', 'Ref', '_Ref123456 \\h')` |
 | Read the current mode | `document.load('changeTrackingMode')`, then sync and read the property |
 | Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'` |
 
@@ -296,6 +297,7 @@ await runtime.run(async (context) => {
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
+| Fields | Insert an inert field as one complex field in one tracked insertion; reject removes the whole field |
 
 Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that contains a complex field boundary whose matching boundary is in another paragraph, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph has your own pending change or another author's pending paragraph mark, formatting, move, or structural change, and when the start of the next paragraph has any pending change. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after any deleted text, and new text inside their insertion splits it into two halves. The returned range names the new text where it lands, and each author's change stays a separate decision. For more information, see [Edit another author's pending text](#edit-another-authors-pending-text). Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it.
 
@@ -548,21 +550,23 @@ await runtime.run(async (context) => {
 });
 ```
 
-## Pictures and page fields
+## Pictures and fields
 
 Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E. `insertText()` on a body, paragraph, or range writes `\n`, `\r`, and `\r\n` as paragraph breaks. Other paragraph separators refuse. Do not flatten these characters before sending read text back to the document.
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 
+Insert an inert field with `range.insertField(location, type, text)`. The runtime inserts `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and `TOC`. `text` holds the arguments, such as a bookmark name and switches: `range.insertField('After', 'Ref', '_Ref123456 \\h')`. With `Empty`, `text` holds the whole instruction. The runtime never evaluates an instruction, and a new field has an empty cached result. Office.js has no cached-result parameter, and `Field` does not expose `result`. Field types that fetch, embed, link, run, or prompt, such as `DDE`, `IncludeText`, `IncludePicture`, `Link`, and `MacroButton`, fail with `InvalidArgument` and `edit.field-unsupported`. With `TrackMineOnly`, the field is one complex field inside one tracked insertion. Accept keeps it, and reject removes all of it. Tracked TOC creation refuses.
+
 Use `range.insertField('Before', 'TOC', '\\o "1-3" \\h')` to insert an inert TOC instruction. This call saves no calculated entries. TOC evaluation and code writes refuse.
 
 Insert a page field with `range.insertField('After', 'Page')` or `'NumPages'`. Sync before using the returned field. `field.code = 'NUMPAGES'` changes its instruction; `field.updateResult()` computes and stores its result. These calls use separate syncs. Field updates can share a sync with other field updates. They cannot share a sync with layout-changing writes.
 
-Headless field calculation requires an explicit `pagination.measurer` when creating the server runtime. Use measurements from the document's fonts. Browser runtimes use the editor's measured layout. Without pagination, `updateResult()` fails with `NotSupported`. Other field instructions remain inert. The authoring subset refuses unsupported field codes and formatting switches.
+Headless field calculation requires an explicit `pagination.measurer` when creating the server runtime. Use measurements from the document's fonts. Browser runtimes use the editor's measured layout. Without pagination, `updateResult()` fails with `NotSupported`. Other field instructions remain inert. The authoring subset refuses unsupported field codes and page-field switches. A field inside a pending tracked insertion refuses `updateResult()` and code writes until a reviewer accepts it.
 
 Character formatting also supports underline, strikethrough, exact Word-palette highlighting, subscript, and superscript. `font.underline = 'None'` removes an underline. Setting one script mode to `true` clears the other mode. The highlight setter keeps Office's pinned `string` type, although Microsoft documents runtime `null` for clearing. The runtime accepts this clearing value. The runtime rejects unsupported highlight colors.
 
-The workflow tests cover both hosts and save/reopen: `model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, and `model-picture-field-parity.test.ts`. The final test includes primary footer creation and a saved `NUMPAGES` result.
+The workflow tests cover both hosts and save/reopen: `model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, `model-picture-field-parity.test.ts`, and `runtime-tracked-field-insert.test.ts`. The final test includes primary footer creation and a saved `NUMPAGES` result.
 
 ## Set document metadata
 

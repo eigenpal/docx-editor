@@ -88,7 +88,7 @@ export function trackedProposalOf(
 }
 
 /** A deletion that starts right after the author's own pending mark deletion refuses. */
-function ownMarkDeletionRefusal(
+export function ownMarkDeletionRefusal(
   part: OoxmlPart,
   paragraphId: string,
   author: string

@@ -85,6 +85,7 @@ type HostRejectionToken =
   | 'no-document'
   | 'table-insert-refused'
   | 'table-of-contents-refused'
+  | 'field-unsupported'
   | 'refresh-in-progress'
   | 'preview-active'
   | 'preview-operation-unsupported'
@@ -116,6 +117,7 @@ const STORE_EDIT_CODES: Readonly<
   'indivisible-content': 'edit.indivisible-content',
   'field-structure': 'edit.field-structure',
   'field-result-unsupported': 'edit.field-structure',
+  'field-unsupported': 'edit.field-unsupported',
   'carries-section-mark': 'edit.section-mark',
   'table-has-merge': 'edit.table-structure-unsupported',
   'row-hides-cell': 'edit.table-structure-unsupported',

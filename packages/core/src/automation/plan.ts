@@ -1613,7 +1613,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const plan = planFor(story);
             return pinWrite(plan) ?? (resultOnly ? null : claim(plan, paragraphId));
           },
-          host.fieldPageContext
+          host.fieldPageContext,
+          trackingAuthor
         );
       case 'getShapes':
       case 'getShape':

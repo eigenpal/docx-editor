@@ -23,6 +23,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertHardBreak',
   'insertPageBreak',
   'insertPageField',
+  'insertComplexField',
   'setFieldCode',
   'setListLevel',
   'setListNumbering',

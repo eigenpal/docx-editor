@@ -1,4 +1,4 @@
-import { tocFieldCode } from './toc-field-code.ts';
+import { planFieldInsert } from './plan-field-insert.ts';
 import { TARGET_REMOVED } from './target-removed.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
@@ -10,7 +10,6 @@ import type { AutomationStoryId } from './stories.ts';
 import { resolveSpanRef, spanOffsets, storyOfSpanRef } from './spans.ts';
 import {
   fieldsInParagraph,
-  fieldInsertionParagraph,
   supportedPageFieldCode,
   type AutomationFieldPageContext,
 } from './fields.ts';
@@ -49,7 +48,8 @@ export function planFields(
     story: AutomationStoryId,
     paragraphId: string,
     fieldNodeId: string
-  ) => AutomationFieldPageContext | null
+  ) => AutomationFieldPageContext | null,
+  trackingAuthor?: string
 ): PlannedOperation {
   if (operation.op === 'getFields' || operation.op === 'insertField') {
     const range = resolveSpanRef(operation.span, handles, reads);
@@ -79,62 +79,14 @@ export function planFields(
       };
     }
     if (!range.value) return refuse('insert a paragraph before inserting a field');
-    if (operation.removeFormatting !== undefined && operation.removeFormatting !== false)
-      return refuse('removeFormatting is not supported');
-    if (operation.text !== undefined && typeof operation.text !== 'string')
-      return refuse('field text must be a string');
-    if (operation.fieldType !== undefined && typeof operation.fieldType !== 'string')
-      return refuse('field type must be a string');
-    const type = operation.fieldType ?? 'Empty';
-    let field: string | null = null;
-    if (type === 'Page' || type === 'NumPages') {
-      if (operation.text !== undefined && operation.text.trim() !== '')
-        return refuse('field switches are not supported');
-      field = type === 'Page' ? 'PAGE' : 'NUMPAGES';
-    } else if (type === 'TOC') field = tocFieldCode(operation.text ?? '');
-    else if (type === 'Empty') field = supportedPageFieldCode(operation.text ?? '');
-    if (!field)
-      return refuse('only PAGE, NUMPAGES, and TOC with supported switches can be inserted');
-    const { start, end } = range.value;
-    if (!['Before', 'After', 'Start', 'End', 'Replace'].includes(operation.location))
-      return refuse('unsupported field insert location');
-    if (operation.location === 'Replace' && start.paragraphId !== end.paragraphId)
-      return refuse('field replacement requires one paragraph');
-    const point = operation.location === 'After' || operation.location === 'End' ? end : start;
-    const conflict = claim(story, point.paragraphId);
-    if (conflict) return conflict;
-    const ops: TreeDocOp[] = [];
-    if (operation.location === 'Replace' && end.offset > start.offset)
-      ops.push({
-        op: 'deleteText',
-        paragraphId: start.paragraphId,
-        start: start.offset,
-        end: end.offset,
-      });
-    ops.push({
-      op: 'insertFragment',
-      paragraphId: point.paragraphId,
-      offset: point.offset,
-      blocks: [fieldInsertionParagraph(field)],
-      lastMarkCovered: false,
-    });
-    return {
-      ok: true,
-      kind: 'command',
-      story: story.story,
-      ops,
-      answer: (post) => {
-        const part = post.story(story.story)?.part;
-        const inserted =
-          part &&
-          fieldsInParagraph(part, point.paragraphId).find((field) => field.start === point.offset);
-        if (!inserted) throw new Error('inserted field was not committed');
-        return {
-          kind: 'handle',
-          handle: handles.field(point.paragraphId, inserted.fieldNodeId, story.story),
-        };
-      },
-    };
+    return planFieldInsert(
+      operation,
+      range.value,
+      story,
+      handles,
+      (reads, paragraphId) => claim(reads, paragraphId),
+      trackingAuthor
+    );
   }
   const target = handles.resolve(operation.field, 'field');
   if (!target || target.kind !== 'field')

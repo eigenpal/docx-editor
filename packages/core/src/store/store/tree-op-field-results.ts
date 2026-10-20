@@ -299,11 +299,16 @@ function locateFieldsInContainer(
   depth: number,
   budget: LocateBudget,
   out: LocatedField[],
-  allowInstructionBookmarks = false
+  allowInstructionBookmarks = false,
+  insertions: 'skip' | 'enter' | 'inside' = 'skip'
 ): void {
   if (allowInstructionBookmarks ? depth >= MAX_INLINE_CONTAINER_DEPTH : depth > MAX_LOCATE_DEPTH)
     return;
   const children = container.children;
+  // A field inside a pending insertion is read, never refreshed: its result belongs to the
+  // proposal, so a rewrite would change what a reviewer accepts or rejects.
+  const found = (field: LocatedField): LocatedField =>
+    insertions === 'inside' ? { ...field, rewritable: false } : field;
   let index = 0;
   while (index < children.length) {
     budget.nodes -= 1;
@@ -315,7 +320,7 @@ function locateFieldsInContainer(
     }
     if (isFldSimple(node)) {
       // The OUTER field only — content nested in a cached result is never live-refreshed.
-      out.push(locateSimpleField(node));
+      out.push(found(locateSimpleField(node)));
       index += 1;
       continue;
     }
@@ -328,20 +333,22 @@ function locateFieldsInContainer(
           budget,
           allowInstructionBookmarks
         );
-        if (consumed.field) out.push(consumed.field);
+        if (consumed.field) out.push(found(consumed.field));
         index = consumed.nextIndex;
         continue;
       }
       index += 1;
       continue;
     }
-    if (!isDrawingContainer(node) && !isRevisionContainer(node)) {
+    const insertion = insertions !== 'skip' && node.localName === 'ins';
+    if (!isDrawingContainer(node) && (!isRevisionContainer(node) || insertion)) {
       locateFieldsInContainer(
         node,
         allowInstructionBookmarks ? nextInlineContainerDepth(node, depth) : depth + 1,
         budget,
         out,
-        allowInstructionBookmarks
+        allowInstructionBookmarks,
+        insertion ? 'inside' : insertions
       );
     }
     index += 1;
@@ -350,18 +357,21 @@ function locateFieldsInContainer(
 
 /**
  * The fields inside one paragraph whose cached results this op could address, in document
- * order. Bounded walk; a paragraph past the budget answers what it found so far.
+ * order. Bounded walk; a paragraph past the budget answers what it found so far. With
+ * `pendingInsertions`, fields inside a `w:ins` are listed too, as not rewritable.
  */
 export function locateFieldResults(
   paragraph: OoxmlElement,
-  allowInstructionBookmarks = false
+  allowInstructionBookmarks = false,
+  pendingInsertions = false
 ): readonly LocatedFieldResult[] {
-  return locatePlainFields(paragraph, allowInstructionBookmarks);
+  return locatePlainFields(paragraph, allowInstructionBookmarks, pendingInsertions);
 }
 
 function locatePlainFields(
   paragraph: OoxmlElement,
-  allowInstructionBookmarks = false
+  allowInstructionBookmarks = false,
+  pendingInsertions = false
 ): LocatedField[] {
   const out: LocatedField[] = [];
   locateFieldsInContainer(
@@ -369,7 +379,8 @@ function locatePlainFields(
     0,
     { nodes: MAX_LOCATE_NODES },
     out,
-    allowInstructionBookmarks
+    allowInstructionBookmarks,
+    pendingInsertions ? 'enter' : 'skip'
   );
   return out;
 }

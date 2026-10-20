@@ -3,6 +3,7 @@ import { validateSetLegacyDropdown } from './legacy-dropdown-fields.ts';
 import { validateBookmarkOp } from './tree-op-bookmarks.ts';
 import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
+import { validateFieldInsertion } from './tree-op-field-insert.ts';
 import { validateTableAuthoring } from './tree-op-table-batch.ts';
 import { validateTableProperties } from './tree-op-table-authoring.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
@@ -765,26 +766,9 @@ export function validateTreeOp(
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
-    case 'insertPageField': {
-      if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
-        return 'offset-out-of-range';
-      }
-      if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-      if (
-        op.field !== 'PAGE' &&
-        op.field !== 'NUMPAGES' &&
-        op.field !== 'SECTIONPAGES' &&
-        op.field !== 'PAGE_X_OF_Y'
-      ) {
-        return 'invalidArgs';
-      }
-      // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
-      // would serialize a proposal no reader can attribute or resolve.
-      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
-        return 'invalid-property-value';
-      }
-      return rejectContentEdit(part, paragraph, op.offset, op.offset);
-    }
+    case 'insertPageField':
+    case 'insertComplexField':
+      return validateFieldInsertion(part, paragraph, length, op);
     case 'splitParagraph': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';

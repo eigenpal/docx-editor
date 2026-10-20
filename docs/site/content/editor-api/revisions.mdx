@@ -103,6 +103,7 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
+| Fields | Insert an inert field as one complex field in one tracked insertion; reject removes the whole field |
 
 Tracked ranges refuse table and wrapper boundaries. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
@@ -130,6 +131,23 @@ Accept keeps a proposed content control. Reject restores the original formatted 
 Established list definitions, pictures, page setup, and unsupported structural edits refuse. Comments and supported revision decisions remain available.
 
 Never turn tracking off automatically to make an unsupported operation succeed. Report the limit or ask your application to choose a separately authorized permanent edit. For a multi-stage review, each successful sync becomes a separately committed suggestion. A later refusal does not roll back earlier suggestions.
+
+## Propose a field
+
+To propose a cross-reference, a sequence number, or another inert field, enable `TrackMineOnly` and call `Range.insertField()`:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('the figure below').getFirst();
+  hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+});
+```
+
+The begin, instruction, separator, and end runs of the field sit in one `w:ins` element by the runtime author. **Accept** keeps the field, and **Reject** removes all of it. A `Replace` location strikes the range and proposes the field after it, so a reviewer sees one replacement. The field has an empty cached result, because the runtime never evaluates its instruction.
+
+Field types that fetch, embed, link, run, or prompt refuse with `edit.field-unsupported`, tracked or not. Tracked `TOC` creation refuses. For the supported types and their limits, see [Fields and pagination](/docs/2.x/editor-api/fields#propose-a-field-as-a-tracked-change).
 
 ## Propose removing paragraphs
 
