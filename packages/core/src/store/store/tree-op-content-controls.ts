@@ -66,6 +66,7 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
+import { strikesWholeControl } from './tree-op-control-strike.ts';
 import { holdsRevisionContainer, REVISION_LOCAL_NAMES } from './revision-container-presence.ts';
 import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
@@ -841,27 +842,6 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
   }
   return { touches, unprotected };
-}
-
-/**
- * Whether a tracked deletion over `range` strikes this control WHOLE: the range covers all of
- * it, and its lock forbids editing what it holds but allows removing it (`contentLocked`).
- * The tracked-delete applier writes such a control inside one `w:del`; every other control is
- * struck from inside, as before.
- */
-export function strikesWholeControl(
-  span: OffsetSpan | null,
-  range: { readonly start: number; readonly end: number },
-  lock: ContentControlLock
-): boolean {
-  return (
-    span !== null &&
-    span.start < span.end &&
-    range.start <= span.start &&
-    span.end <= range.end &&
-    lockForbidsEdit(lock) &&
-    !lockForbidsRemoval(lock)
-  );
 }
 
 /**

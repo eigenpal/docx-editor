@@ -23,7 +23,7 @@ import {
   contentControlPropertiesOf,
   resolveContentControlLock,
 } from '../package/content-control-nodes.ts';
-import { strikesWholeControl } from './tree-op-content-controls.ts';
+import { strikesWholeControl } from './tree-op-control-strike.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';

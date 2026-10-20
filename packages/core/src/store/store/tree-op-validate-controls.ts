@@ -15,8 +15,8 @@ import {
   enclosingContentControls,
   INSERTABLE_CONTENT_CONTROL_TYPES,
   isWritableContentControlMetadata,
-  strikesWholeControl,
 } from './tree-op-content-controls.ts';
+import { strikesWholeControl } from './tree-op-control-strike.ts';
 import { invalidRevisionAttribution, type TreeDocOp } from './tree-op-types.ts';
 import {
   isParagraph,
