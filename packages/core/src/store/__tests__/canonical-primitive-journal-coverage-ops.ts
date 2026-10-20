@@ -763,6 +763,19 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         updates: [{ paragraphId: paragraphIds(store)[1]!, fieldNodeId: beginId, text: 'new' }],
       };
     }),
+    story('setFieldResult', zipDoc({ body: REF_FIELD_BODY }), (store) => {
+      let beginId: string | undefined;
+      walkNodes(store.bodyStore().part.root, (node) => {
+        if (beginId === undefined && node.kind === 'fldChar') beginId = node.id;
+      });
+      if (beginId === undefined) throw new Error('missing field begin fldChar');
+      return {
+        op: 'setFieldResult',
+        paragraphId: paragraphIds(store)[1]!,
+        fieldNodeId: beginId,
+        text: 'written',
+      };
+    }),
     story(
       'setTextFormFieldDefault',
       zipDoc({

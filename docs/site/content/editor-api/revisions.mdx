@@ -103,7 +103,7 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
-| Fields | Insert an inert field as one complex field in one tracked insertion; reject removes the whole field |
+| Fields | Insert an inert field as one complex field in one tracked insertion, and write the cached result of your own pending field into that insertion; reject removes the whole field |
 
 Tracked ranges refuse table and wrapper boundaries. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
@@ -145,9 +145,24 @@ await runtime.run(async (context) => {
 });
 ```
 
-The begin, instruction, separator, and end runs of the field sit in one `w:ins` element by the runtime author. **Accept** keeps the field, and **Reject** removes all of it. A `Replace` location strikes the range and proposes the field after it, so a reviewer sees one replacement. The field has an empty cached result, because the runtime never evaluates its instruction.
+The begin, instruction, separator, empty result, and end runs of the field sit in one `w:ins` element by the runtime author. **Accept** keeps the field, and **Reject** removes all of it. A `Replace` location strikes the range and proposes the field after it, so a reviewer sees one replacement. The field runs take the formatting of the text before the insertion point.
 
-Field types that fetch, embed, link, run, or prompt refuse with `edit.field-unsupported`, tracked or not. Tracked `TOC` creation refuses. For the supported types and their limits, see [Fields and pagination](/docs/2.x/editor-api/fields#propose-a-field-as-a-tracked-change).
+The field starts with an empty cached result, because the runtime never evaluates its instruction. To show text in the proposal, sync, then write the result with `field.result.insertText(text, 'Replace')`. The result joins the same insertion, so one **Reject** still removes the whole field:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('the figure below').getFirst();
+  const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+  field.result.insertText('Figure 3', 'Replace');
+  await context.sync();
+});
+```
+
+The saved field carries `w:dirty="true"`, so an application that evaluates fields recomputes the result when it opens the file. With `TrackMineOnly`, a result write to a field that is not your own pending insertion refuses with `NotSupported` and `edit.tracked-operation-unsupported`.
+
+Field types that fetch, embed, link, run, or prompt refuse with `edit.field-unsupported`, tracked or not. Tracked `TOC` creation refuses. For the supported types and their limits, see [Fields and pagination](/docs/2.x/editor-api/fields#propose-a-field-as-a-tracked-change). For the result members, see [Read and write the cached result](/docs/2.x/editor-api/fields#read-and-write-the-cached-result).
 
 ## Propose removing paragraphs
 

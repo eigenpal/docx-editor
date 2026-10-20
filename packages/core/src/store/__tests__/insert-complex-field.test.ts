@@ -62,7 +62,7 @@ describe('inertFieldInstruction', () => {
 });
 
 describe('insertComplexField', () => {
-  test('writes four runs into one tracked insertion', () => {
+  test('writes five runs, the result run empty, into one tracked insertion', () => {
     const { part: before, paragraphId } = part();
     const result = applyTreeOp(before, {
       op: 'insertComplexField',
@@ -75,9 +75,10 @@ describe('insertComplexField', () => {
     if (!result.ok) return;
     const xml = serializeOoxmlPart(result.part);
     expect(xml).toContain(
-      '<w:ins w:author="Ada" w:date="2026-01-01T00:00:00Z" w:id="0"><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:ins w:author="Ada" w:date="2026-01-01T00:00:00Z" w:id="0"><w:r><w:fldChar w:dirty="true" w:fldCharType="begin"/></w:r>' +
         '<w:r><w:instrText xml:space="preserve"> REF _Ref1 \\h </w:instrText></w:r>' +
-        '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:ins>'
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t/></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:ins>'
     );
     expect(xml).not.toContain('fldSimple');
   });

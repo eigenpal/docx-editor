@@ -85,7 +85,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
-| `Field`, `FieldCollection` | Field `code`, `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| `Field`, `FieldCollection` | Field `code`, `result` (a `Range` that reads `text` and takes `insertText(text, 'Replace')`), `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `FieldType`, `FieldTypeLiteral` | Office.js-compatible field vocabulary; authoring supports `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and the documented inert `TOC` subset, untracked or as tracked insertions | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `Section`, `SectionCollection` | Section `body`, `pageSetup`, `getHeader`, `getFooter`, `getNext`; collection `getFirst` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `PageSetup` | `pageWidth`, `pageHeight`, `orientation`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |

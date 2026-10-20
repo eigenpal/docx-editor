@@ -32,7 +32,12 @@ export {
   hydratedText,
 } from './hydrate.ts';
 export { internalsOf, type ContextInternals, type RootHandles } from './internals.ts';
-export { ObjectPath, type ObjectAddress, type ObjectPathState } from './object-path.ts';
+export {
+  ObjectPath,
+  refuseFieldResultMember,
+  type ObjectAddress,
+  type ObjectPathState,
+} from './object-path.ts';
 export {
   resolveLoadOption,
   type LoadOption,

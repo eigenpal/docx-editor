@@ -107,5 +107,6 @@ describe('the checked-in compat/ fixtures', () => {
     expect(manifest.divergences.some((entry) => entry.uid === 'Word.InlinePicture#delete')).toBe(
       true
     );
+    expect(manifest.divergences.some((entry) => entry.uid === 'Word.Field#result')).toBe(true);
   });
 });

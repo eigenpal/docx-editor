@@ -1,4 +1,4 @@
-import type { AutomationSpanRef } from './operations.ts';
+import type { AutomationSpanRef, AutomationTextProjection } from './operations.ts';
 import type { AutomationHandle } from './protocol.ts';
 
 /** Table, picture, field, break, and list authoring transport operations. */
@@ -9,6 +9,14 @@ export type AutomationAuthoringOperation =
       readonly field: AutomationHandle;
     }
   | { readonly op: 'setFieldCode'; readonly field: AutomationHandle; readonly code: string }
+  /** The text of a field's cached result, read as a range over the field reads it. */
+  | {
+      readonly op: 'getFieldResult';
+      readonly field: AutomationHandle;
+      readonly projection?: AutomationTextProjection;
+    }
+  /** Replace a field's cached result with plain text. The instruction never changes. */
+  | { readonly op: 'setFieldResult'; readonly field: AutomationHandle; readonly text: string }
   | {
       readonly op: 'insertField';
       readonly span: AutomationSpanRef;

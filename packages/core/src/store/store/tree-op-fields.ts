@@ -10,7 +10,11 @@ import type { OoxmlNode } from '../package/ooxml-tree.ts';
 
 export type PageFieldKind = 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
 
-function fldChar(nextId: () => string, type: 'begin' | 'separate' | 'end'): OoxmlNode {
+function fldChar(
+  nextId: () => string,
+  type: 'begin' | 'separate' | 'end',
+  dirty = false
+): OoxmlNode {
   return {
     id: nextId(),
     kind: 'fldChar',
@@ -26,9 +30,32 @@ function fldChar(nextId: () => string, type: 'begin' | 'separate' | 'end'): Ooxm
         prefix: 'w',
         value: type,
       },
+      ...(dirty ? [dirtyAttribute()] : []),
     ],
     children: [],
   } as unknown as OoxmlNode;
+}
+
+/**
+ * `w:dirty="true"` (§17.16.18): the cached result is not the field's computed value, so the
+ * next reader that evaluates fields recomputes it. Never read by this engine's layout.
+ */
+export function dirtyAttribute(): FieldAttribute {
+  return {
+    kind: 'genericExtension',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'dirty',
+    prefix: 'w',
+    value: 'true',
+  };
+}
+
+export interface FieldAttribute {
+  readonly kind: 'genericExtension';
+  readonly namespaceUri: string;
+  readonly localName: string;
+  readonly prefix: string;
+  readonly value: string;
 }
 
 function instrText(nextId: () => string, instruction: string): OoxmlNode {
@@ -67,6 +94,11 @@ function textElement(nextId: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
+/** An empty `w:t`, the text of an empty cached result. */
+function emptyText(nextId: () => string): OoxmlNode {
+  return { ...textElement(nextId, ''), children: [] } as unknown as OoxmlNode;
+}
+
 /** The literal between the two fields of the PAGE_X_OF_Y composition. */
 const PAGE_X_OF_Y_SEPARATOR = ' of ';
 
@@ -88,13 +120,15 @@ export function pageFieldContentBuilders(
 /**
  * Run-child builders for one complex field with an empty cached result: `begin`, the
  * instruction, `separate`, `end`. The caller has already checked the instruction (see
- * `inert-field-instruction.ts`); it is written as text and never evaluated.
+ * `inert-field-instruction.ts`); it is written as text and never evaluated. With `dirty`, the
+ * begin marker carries `w:dirty="true"`.
  */
 export function complexFieldContentBuilders(
-  instruction: string
+  instruction: string,
+  dirty = false
 ): readonly ((mint: () => string) => OoxmlNode)[] {
   return [
-    (mint) => fldChar(mint, 'begin'),
+    (mint) => fldChar(mint, 'begin', dirty),
     (mint) => instrText(mint, instruction),
     (mint) => fldChar(mint, 'separate'),
     (mint) => fldChar(mint, 'end'),
@@ -102,11 +136,21 @@ export function complexFieldContentBuilders(
 }
 
 /**
- * The same field as four complete runs — `begin`, instruction, `separate`, `end` — the shape
- * the field readers list, refresh, and delete as one field.
+ * The same field as complete runs — `begin`, instruction, `separate`, one empty result run,
+ * `end` — the shape the field readers list, refresh, and delete as one field. The empty result
+ * run is what a result write or `updateResult` rewrites. Each run carries its own copy of
+ * `properties` (fresh `w:rPr` nodes), so the field takes the formatting of the text beside it.
  */
-export function complexFieldRuns(mint: () => string, instruction: string): OoxmlNode[] {
-  return complexFieldContentBuilders(instruction).map(
+export function complexFieldRuns(
+  mint: () => string,
+  instruction: string,
+  options: { readonly dirty?: boolean; readonly properties?: () => readonly OoxmlNode[] } = {}
+): OoxmlNode[] {
+  const [begin, code, separate, end] = complexFieldContentBuilders(
+    instruction,
+    options.dirty === true
+  );
+  return [begin!, code!, separate!, emptyText, end!].map(
     (build) =>
       ({
         id: mint(),
@@ -116,11 +160,10 @@ export function complexFieldRuns(mint: () => string, instruction: string): Ooxml
         prefix: 'w',
         namespaceBindings: [],
         attributes: [],
-        children: [build(mint)],
+        children: [...(options.properties?.() ?? []), build(mint)],
       }) as unknown as OoxmlNode
   );
 }
-
 /**
  * The field's size in MODEL units, on `segmentsOf`'s terms.
  *

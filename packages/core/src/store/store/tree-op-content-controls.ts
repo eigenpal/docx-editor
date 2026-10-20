@@ -562,6 +562,7 @@ const TREE_OP_REACH: {
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
   setFieldCode: (op) => whole(op.fieldNodeId),
+  setFieldResult: (op) => whole(op.fieldNodeId),
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   commitTextFormField: (op) => whole(op.fieldNodeId),
   setLegacyCheckbox: (op) => whole(op.fieldNodeId),

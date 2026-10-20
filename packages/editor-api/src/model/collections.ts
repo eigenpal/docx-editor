@@ -15,6 +15,7 @@ import {
   ObjectPath,
   hydratedHandles,
   hydratedSpans,
+  refuseFieldResultMember,
   type AutomationOperation,
   type AutomationValue,
   type ObjectAddress,
@@ -97,6 +98,7 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
   protected listing(): AutomationOperation {
     if (this.#plan) return this.#plan();
     const address = this.path.address();
+    if (address.kind === 'fieldResult') refuseFieldResultMember(this.path.label);
     return address.kind === 'handle'
       ? { op: 'getParagraphs', body: address.handle }
       : { op: 'getSpanParagraphs', span: address.span };

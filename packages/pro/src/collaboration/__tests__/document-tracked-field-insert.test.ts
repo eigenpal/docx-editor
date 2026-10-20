@@ -100,7 +100,7 @@ test('a tracked field converges with concurrent edits, survives reopen and recon
       const bytes = new Uint8Array(await peer.editor.save());
       const xml = strFromU8(unzipSync(bytes)['word/document.xml']!);
       expect(xml).toMatch(
-        /<w:ins [^>]*w:author="Field agent"[^>]*><w:r><w:fldChar w:fldCharType="begin"\/>/
+        /<w:ins [^>]*w:author="Field agent"[^>]*><w:r><w:fldChar w:dirty="true" w:fldCharType="begin"\/>/
       );
       expect(xml).not.toContain('fldSimple');
       const reopened = await DocxEditor.createServer(bytes);
@@ -225,6 +225,56 @@ test('undo and redo of a tracked field replicate', async () => {
         c.document.body.revisions.load('items');
         await c.sync();
         expect(c.document.body.revisions.items).toHaveLength(1);
+      });
+  } finally {
+    r.close();
+  }
+});
+
+test('a field result written on one peer converges, tracked inside its own insertion', async () => {
+  const r = await room();
+  try {
+    await r.peers[0]!.runtime.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const field = c.document.body.search('figure').getFirst().insertField('After', 'Seq', 'Eq');
+      await c.sync();
+      field.result.insertText('(1)', 'Replace');
+      await c.sync();
+    });
+    r.sync();
+    for (const peer of r.peers) {
+      await peer.runtime.run(async (c) => {
+        const fields = c.document.body.fields;
+        fields.load('items');
+        await c.sync();
+        expect(fields.items).toHaveLength(1);
+        fields.items[0]!.load('result');
+        await c.sync();
+        expect(fields.items[0]!.result.text).toBe('(1)');
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.text).toBe('See figure(1) here.\rSecond paragraph.');
+      });
+      const xml = strFromU8(
+        unzipSync(new Uint8Array(await peer.editor.save()))['word/document.xml']!
+      );
+      expect(xml).toMatch(
+        /<w:ins [^>]*>(?:(?!<\/w:ins>).)*<w:t>\(1\)<\/w:t>(?:(?!<\/w:ins>).)*<\/w:ins>/
+      );
+      expect(xml).toContain('w:dirty="true"');
+    }
+    // The other peer rejects: the field leaves with its result.
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.revisions.rejectAll();
+      await c.sync();
+    });
+    r.sync();
+    for (const peer of r.peers)
+      await peer.runtime.run(async (c) => {
+        expect(await fieldCodes(c)).toEqual([]);
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.text).toBe('See figure here.\rSecond paragraph.');
       });
   } finally {
     r.close();

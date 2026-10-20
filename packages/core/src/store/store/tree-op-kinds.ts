@@ -91,6 +91,7 @@ export const TREE_DOC_OP_KINDS = [
   'replaceTocResult',
   'rewriteTocPageNumbers',
   'refreshFieldResults',
+  'setFieldResult',
   'setTextFormFieldDefault',
   'commitTextFormField',
   'setLegacyCheckbox',

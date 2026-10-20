@@ -7,10 +7,16 @@
 
 import type { EditOptions } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
-import { readOoxmlPart, type OoxmlParagraphNode, type OoxmlPart } from '../package/ooxml-tree.ts';
+import {
+  readOoxmlPart,
+  type OoxmlNode,
+  type OoxmlParagraphNode,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { escapeXml } from '../package/sinks.ts';
 import { storyParagraphs } from '../package/story-blocks.ts';
-import { inertFieldInstruction } from './inert-field-instruction.ts';
+import { inertFieldInstruction, inertFieldKeyword } from './inert-field-instruction.ts';
+import { insertionRunPropertiesAt } from './tree-op-field-formatting.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 import { complexFieldRuns } from './tree-op-fields.ts';
 import { applyInsertTrackedRun } from './tree-op-tracked.ts';
@@ -92,9 +98,13 @@ function insertableInstruction(op: InsertComplexFieldOp): boolean {
 }
 
 /**
- * Write the field as four runs: `begin`, instruction, `separate`, `end`. With a revision the
+ * Write the field as five runs: `begin`, instruction, `separate`, an empty result, `end`. With a revision the
  * runs go into ONE `w:ins` through the placement typed text follows. Without one they land
  * as a one-paragraph fragment, so the field shape is the same in both arms.
+ *
+ * Every run takes the formatting a word typed at the offset would take. The begin marker
+ * carries `w:dirty="true"` unless the field is PAGE or NUMPAGES, whose result `updateResult`
+ * computes: the cached result is empty, so a reader that evaluates fields recomputes it.
  */
 export function applyInsertComplexField(
   part: OoxmlPart,
@@ -102,17 +112,25 @@ export function applyInsertComplexField(
   op: InsertComplexFieldOp,
   options?: EditOptions
 ): TreeOpResult {
+  const keyword = inertFieldKeyword(op.instruction);
+  const dirty = keyword !== 'PAGE' && keyword !== 'NUMPAGES';
   if (op.revision) {
     return applyInsertTrackedRun(
       part,
       paragraph,
       op.offset,
-      (mint) => complexFieldRuns(mint, op.instruction),
+      (mint) =>
+        complexFieldRuns(mint, op.instruction, {
+          dirty,
+          properties: () => insertionRunPropertiesAt(part, paragraph, op.offset, mint),
+        }),
       op.revision,
       options
     );
   }
-  const block = complexFieldParagraph(op.instruction);
+  let counter = 0;
+  const properties = insertionRunPropertiesAt(part, paragraph, op.offset, () => `f${counter++}`);
+  const block = complexFieldParagraph(op.instruction, dirty, properties);
   if (!block) return { ok: false, reason: 'invalidArgs' };
   return applyInsertFragment(
     part,
@@ -127,14 +145,25 @@ export function applyInsertComplexField(
   );
 }
 
-/** A one-paragraph fragment holding the field's four runs, read through the bounded parser. */
-function complexFieldParagraph(instruction: string): OoxmlParagraphNode | null {
+/**
+ * A one-paragraph fragment holding the field's five runs, read through the bounded parser.
+ * Each run gets `properties`; the fragment insertion gives every node a fresh id.
+ */
+function complexFieldParagraph(
+  instruction: string,
+  dirty: boolean,
+  properties: readonly OoxmlNode[]
+): OoxmlParagraphNode | null {
   const run = (content: string) => `<w:r>${content}</w:r>`;
-  const marker = (type: string) => run(`<w:fldChar w:fldCharType="${type}"/>`);
+  const marker = (type: string) =>
+    run(
+      `<w:fldChar w:fldCharType="${type}"${type === 'begin' && dirty ? ' w:dirty="true"' : ''}/>`
+    );
   const content =
     marker('begin') +
     run(`<w:instrText xml:space="preserve"> ${escapeXml(instruction)} </w:instrText>`) +
     marker('separate') +
+    run('<w:t/>') +
     marker('end');
   const read = readOoxmlPart(
     `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p>${content}</w:p></w:body></w:document>`,
@@ -147,5 +176,12 @@ function complexFieldParagraph(instruction: string): OoxmlParagraphNode | null {
   if (!read.ok) return null;
   const body = read.part.root.children.find((node) => node.kind === 'body');
   const paragraph = body && storyParagraphs(body)[0];
-  return paragraph && paragraph.kind === 'paragraph' ? paragraph : null;
+  if (!paragraph || paragraph.kind !== 'paragraph') return null;
+  if (properties.length === 0) return paragraph;
+  return {
+    ...paragraph,
+    children: paragraph.children.map((child) =>
+      child.kind === 'run' ? { ...child, children: [...properties, ...child.children] } : child
+    ),
+  } as OoxmlParagraphNode;
 }

@@ -2,17 +2,14 @@
 //
 // The instruction is caller data. It is checked against the bounded allowlist in
 // `inert-field-instruction.ts`, written as text, and never evaluated, so the cached result is
-// empty. Untracked insertion keeps its simple-field form. Tracked insertion writes a complex
-// field whose runs sit in ONE `w:ins` by the runtime author, so Accept keeps the field and
-// Reject removes all of it. A simple field is never written inside a revision.
+// empty. Both arms write one complex field whose runs take the formatting of the text beside
+// the insertion point. Tracked insertion puts its runs in ONE `w:ins` by the runtime author,
+// so Accept keeps the field and Reject removes all of it. Only an untracked TOC keeps its
+// simple-field form, and a simple field is never written inside a revision.
 
 import { inertFieldInstruction } from '../store/store/inert-field-instruction.ts';
-import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
-import { findNode } from '../store/package/ooxml-edit.ts';
-import { segmentsOf } from '../store/store/tree-op-segments.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { tocFieldCode } from './toc-field-code.ts';
-import { revisionDateNow } from './revision-date.ts';
 import { fieldsInParagraph, fieldInsertionParagraph } from './fields.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
@@ -20,9 +17,7 @@ import type { PlannedOperation } from './plan.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationStoryReads } from './reads.ts';
 import type { ResolvedRange } from './spans.ts';
-import { proposalRevisionError } from './proposals.ts';
-import { landsInForeignInsertionContainer } from './proposal-foreign-revisions.ts';
-import { ownMarkDeletionRefusal } from './plan-proposal.ts';
+import { planInlineInsertPlacement } from './plan-inline-insert.ts';
 
 type InsertFieldOperation = Extract<AutomationOperation, { op: 'insertField' }>;
 
@@ -66,27 +61,6 @@ function instructionOf(operation: InsertFieldOperation): string | PlannedOperati
   );
 }
 
-/** Whether `offset` or the replaced range touches a locked or bound inline control. */
-function touchesProtectedContent(
-  story: AutomationStoryReads,
-  paragraphId: string,
-  start: number,
-  end: number
-): boolean {
-  if (effectiveContentLockAt(story.part, paragraphId).content) return true;
-  if (isBoundAt(story.part, paragraphId)) return true;
-  const paragraph = findNode(story.part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return false;
-  return segmentsOf(paragraph).some(
-    (segment) =>
-      (start === end
-        ? segment.start < start && segment.end > start
-        : segment.start < end && segment.end > start) &&
-      (effectiveContentLockAt(story.part, segment.node.id).content ||
-        isBoundAt(story.part, segment.node.id))
-  );
-}
-
 export function planFieldInsert(
   operation: InsertFieldOperation,
   range: ResolvedRange,
@@ -111,66 +85,35 @@ export function planFieldInsert(
     );
   const instruction = instructionOf(operation);
   if (typeof instruction !== 'string') return instruction;
-  const { start, end } = range;
-  if (!['Before', 'After', 'Start', 'End', 'Replace'].includes(operation.location))
-    return refuse('unsupported-content', 'unsupported field insert location', 'invalidArgs');
-  const replace = operation.location === 'Replace';
-  if (replace && start.paragraphId !== end.paragraphId)
-    return refuse(
-      'unsupported-content',
-      'field replacement requires one paragraph',
-      'invalid-range'
-    );
-  const point = operation.location === 'After' || operation.location === 'End' ? end : start;
-  const paragraphId = point.paragraphId;
-  const struck = replace && end.offset > start.offset;
-  const from = struck ? start.offset : point.offset;
-  const to = struck ? end.offset : point.offset;
-  if (touchesProtectedContent(story, paragraphId, from, to))
-    return refuse('unsupported-content', 'field insertion touches protected content', 'locked');
+  const placement = planInlineInsertPlacement(
+    'field',
+    operation.location,
+    range,
+    story,
+    claim,
+    trackingAuthor
+  );
+  if ('ok' in placement) return placement;
+  const { paragraphId, at, revision } = placement;
   const before = new Set(fieldsInParagraph(story.part, paragraphId).map((f) => f.fieldNodeId));
-  const ops: TreeDocOp[] = [];
-  if (!tracked) {
-    const conflict = claim(story, paragraphId);
-    if (conflict) return conflict;
-    if (struck) ops.push({ op: 'deleteText', paragraphId, start: from, end: to });
-    ops.push({
-      op: 'insertFragment',
-      paragraphId,
-      offset: point.offset,
-      blocks: [fieldInsertionParagraph(instruction)],
-      lastMarkCovered: false,
-    });
-  } else {
-    const author = trackingAuthor.trim();
-    if (struck && from === 0) {
-      const adjacent = ownMarkDeletionRefusal(story.part, paragraphId, author);
-      if (adjacent) return adjacent;
-    }
-    // The same pending-revision rules a tracked text insertion or replacement follows.
-    const revisionError = proposalRevisionError(
-      story,
-      paragraphId,
-      from,
-      to,
-      struck ? undefined : author,
-      !struck && to === (story.rawText(paragraphId) ?? '').length,
-      struck ? author : undefined,
-      { author }
-    );
-    if (revisionError) return { ok: false, error: revisionError };
-    if (landsInForeignInsertionContainer(story, paragraphId, to, author))
-      return refuse(
-        'unsupported-revision',
-        "the field would land inside a container within another author's pending insertion",
-        'edit.tracked-foreign-revision-unsupported'
-      );
-    const conflict = claim(story, paragraphId);
-    if (conflict) return conflict;
-    const revision = { author, date: revisionDateNow() };
-    if (struck) ops.push({ op: 'deleteText', paragraphId, start: from, end: to, revision });
-    ops.push({ op: 'insertComplexField', paragraphId, offset: to, instruction, revision });
-  }
+  // An untracked TOC keeps its simple-field form; every other field is one complex field.
+  const insert: TreeDocOp =
+    operation.fieldType === 'TOC'
+      ? {
+          op: 'insertFragment',
+          paragraphId,
+          offset: at,
+          blocks: [fieldInsertionParagraph(instruction)],
+          lastMarkCovered: false,
+        }
+      : {
+          op: 'insertComplexField',
+          paragraphId,
+          offset: at,
+          instruction,
+          ...(revision ? { revision } : {}),
+        };
+  const ops: TreeDocOp[] = [...placement.ops, insert];
   return {
     ok: true,
     kind: 'command',

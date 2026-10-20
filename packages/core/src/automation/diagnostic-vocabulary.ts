@@ -61,6 +61,7 @@ export type EditDiagnosticCode =
   | 'edit.indivisible-content'
   | 'edit.field-structure'
   | 'edit.field-unsupported'
+  | 'edit.field-result-unsupported'
   | 'edit.section-mark'
   | 'edit.table-structure-unsupported'
   | 'edit.table-merge-not-rectangle'

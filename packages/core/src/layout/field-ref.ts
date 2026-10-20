@@ -27,8 +27,9 @@
 // (a mixed ordinalText/letter/decimal chain whose level texts never chain concatenates every
 // ancestor into garbage). So each field is gated ONCE: when its authored cache is non-empty,
 // the computed value must reproduce it (whitespace-collapsed, NBSP = space) or the field stays
-// on its cache permanently. The verdict is sticky per field — keyed by the begin / `w:fldSimple`
-// node id, which survives edits, and carried across passes on the story's first/last block —
+// on its cache permanently. The verdict is sticky per field and cache — keyed by the begin /
+// `w:fldSimple` node id, which survives edits, and the cached text, which only a result write
+// changes — and carried across passes on the story's first/last block —
 // because after a renumbering edit the live value DIVERGES from the cache by design, and
 // re-comparing would flip every calibrated field back to stale. A field with an empty cache
 // has nothing to regress against and stays eligible. Net: live updating everywhere composition
@@ -782,14 +783,17 @@ function buildRefFieldContext(
         continue;
       }
       const computed = computedOf(field.spec);
-      let verdict = verdicts.get(field.anchorId);
+      // Keyed by the cache as well: a result written through the editing API is a new authored
+      // cache, so it calibrates afresh and paints when the computed value does not reproduce it.
+      const verdictKey = `${field.anchorId}\u0000${field.cached}`;
+      let verdict = verdicts.get(verdictKey);
       if (verdict === undefined) {
         verdict =
           field.cached.length === 0 ||
           (computed !== null && normalizeResultText(computed) === field.cached);
         // An empty cache needs no sticky entry: it re-derives to "eligible" on every pass.
         if (field.cached.length > 0 && verdicts.size < MAX_REF_VERDICTS) {
-          verdicts.set(field.anchorId, verdict);
+          verdicts.set(verdictKey, verdict);
         }
       }
       const live = verdict ? computed : null;

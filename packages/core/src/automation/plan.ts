@@ -29,7 +29,7 @@ export type { PlannedOperation } from './plan-types.ts';
 import { delimitedText, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
 import { planContentControlInsertion } from './plan-content-control-insert.ts';
 import { ownsInsertedControl } from './tracked-content-controls.ts';
-import { planFields } from './plan-fields.ts';
+import { isInlineAtomOperation, planInlineAtoms } from './plan-fields.ts';
 import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
 import { isAutomationCommand } from './operations.ts';
@@ -1598,24 +1598,19 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     }
     if (isSpanControlOperation(operation))
       return planSpanControls(operation, handles, packageReads);
+    if (isInlineAtomOperation(operation))
+      return planInlineAtoms(
+        operation,
+        handles,
+        packageReads,
+        (story, paragraphId, resultOnly) => {
+          const plan = planFor(story);
+          return pinWrite(plan) ?? (resultOnly ? null : claim(plan, paragraphId));
+        },
+        host.fieldPageContext,
+        trackingAuthor
+      );
     switch (operation.op) {
-      case 'getFields':
-      case 'getField':
-      case 'setFieldCode':
-      case 'deleteField':
-      case 'updateFieldResult':
-      case 'insertField':
-        return planFields(
-          operation,
-          handles,
-          packageReads,
-          (story, paragraphId, resultOnly) => {
-            const plan = planFor(story);
-            return pinWrite(plan) ?? (resultOnly ? null : claim(plan, paragraphId));
-          },
-          host.fieldPageContext,
-          trackingAuthor
-        );
       case 'getShapes':
       case 'getShape':
       case 'getShapeBody':

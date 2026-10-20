@@ -31,7 +31,21 @@ import { fail } from './errors.ts';
  */
 export type ObjectAddress =
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
-  | { readonly kind: 'span'; readonly span: AutomationSpan };
+  | { readonly kind: 'span'; readonly span: AutomationSpan }
+  /**
+   * A field's cached result (`Field.result`). The field is one model character, so its result
+   * has no addressable position of its own: only the field's handle names it, and only the
+   * members a result supports read or write through it. Every other use refuses.
+   */
+  | { readonly kind: 'fieldResult'; readonly field: AutomationHandle };
+
+/**
+ * The refusal for a range member that a field result does not support: `NotImplemented`, with
+ * `debugInfo.innerError.code` `edit.field-result-unsupported`.
+ */
+export function refuseFieldResultMember(target: string): never {
+  fail({ code: 'NotImplemented', target, diagnostic: 'edit.field-result-unsupported' });
+}
 
 export type ObjectPathState =
   /** Promised: created by a queued read that has not answered yet. */
@@ -55,11 +69,27 @@ export class ObjectPath {
    * that the same batch is still resolving must not have captured "pending" forever.
    */
   readonly #parent: ObjectPath | null;
+  /** Whether this path names the cached result of the field its parent names. */
+  readonly isFieldResult: boolean;
 
-  private constructor(label: string, state: ObjectPathState, parent: ObjectPath | null = null) {
+  private constructor(
+    label: string,
+    state: ObjectPathState,
+    parent: ObjectPath | null = null,
+    fieldResult = false
+  ) {
     this.label = label;
     this.#state = state;
     this.#parent = parent;
+    this.isFieldResult = fieldResult;
+  }
+
+  /**
+   * The cached result of the field `field` names. It shares the field's fate, and resolves when
+   * the field does.
+   */
+  static fieldResult(label: string, field: ObjectPath): ObjectPath {
+    return new ObjectPath(label, { status: 'pending' }, field, true);
   }
 
   /** A path that is addressable from the moment it exists — a root, or an item just hydrated. */
@@ -83,7 +113,11 @@ export class ObjectPath {
   }
 
   get state(): ObjectPathState {
-    return this.#parent ? this.#parent.state : this.#state;
+    if (!this.#parent) return this.#state;
+    const state = this.#parent.state;
+    if (!this.isFieldResult || state.status !== 'resolved' || state.address.kind !== 'handle')
+      return state;
+    return { status: 'resolved', address: { kind: 'fieldResult', field: state.address.handle } };
   }
 
   get isAddressable(): boolean {
@@ -123,6 +157,7 @@ export class ObjectPath {
   /** The handle to address this object with. Refused for anything that is not handle-shaped. */
   handle(): AutomationHandle {
     const address = this.address();
+    if (address.kind === 'fieldResult') refuseFieldResultMember(this.label);
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: this.label });
     return address.handle;
   }
@@ -130,6 +165,7 @@ export class ObjectPath {
   /** The span this object stands for. Refused for anything that is not span-shaped. */
   span(): AutomationSpan {
     const address = this.address();
+    if (address.kind === 'fieldResult') refuseFieldResultMember(this.label);
     if (address.kind !== 'span') fail({ code: 'InvalidObjectPath', target: this.label });
     return address.span;
   }

@@ -267,6 +267,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
             [
               'insertContentControl',
               'insertField',
+              'setFieldResult',
               'setContentControlProperties',
               'startNewList',
               'setListLevelFormat',

@@ -10,7 +10,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // place that translation happens — a second copy of it in each class is how one of them ends up
 // addressing a whole story where the caller meant a range.
 
-import { fail, type AutomationSpanRef, type ObjectPath } from '../runtime/model-support.ts';
+import {
+  fail,
+  refuseFieldResultMember,
+  type AutomationSpanRef,
+  type ObjectPath,
+} from '../runtime/model-support.ts';
 
 /** What the object is, which is what decides how its characters are named. */
 export type SpanOwner = 'body' | 'paragraph' | 'span';
@@ -23,6 +28,7 @@ export type SpanOwner = 'body' | 'paragraph' | 'span';
  */
 export function spanRefOf(path: ObjectPath, owner: SpanOwner): AutomationSpanRef {
   const address = path.address();
+  if (address.kind === 'fieldResult') refuseFieldResultMember(path.label);
   if (owner === 'span') {
     if (address.kind !== 'span') fail({ code: 'InvalidObjectPath', target: path.label });
     return { start: address.span.start, end: address.span.end };

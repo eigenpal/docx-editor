@@ -17,16 +17,19 @@ import {
 } from '../runtime/model-support.ts';
 import { spanRefOf, type SpanOwner } from './addressing.ts';
 import { ModelObject } from './model-object.ts';
+import { Range } from './range.ts';
 import { ItemCollection, type PromisedItem } from './item-collection.ts';
 
 /**
  * An inert Word field. Code writes and evaluation support PAGE and NUMPAGES. A field inside a
  * pending tracked insertion reads, but refuses code writes and `updateResult` until accepted.
+ * Its cached result reads and writes through {@link Field.result}.
  *
  * @public
  */
 export class Field extends ModelObject implements PromisedItem {
   #pendingCode: { code: string } | undefined;
+  #result: Range | undefined;
   /** @internal */
   static at(context: RequestContext, label: string, address: ObjectAddress): Field {
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: label });
@@ -50,6 +53,24 @@ export class Field extends ModelObject implements PromisedItem {
   }
   get code(): string {
     return this.loadedProperty<string>('code');
+  }
+  /**
+   * The field's cached result, as a range. Two members work on it: `text` (with
+   * `load('text')`, or `field.load('result')`) reads the result, and
+   * `insertText(text, 'Replace')` replaces it with plain text and marks the field `w:dirty`, so
+   * a reader that evaluates fields recomputes it. The instruction never changes and is never
+   * evaluated. Untracked, the field must sit outside every revision. With `TrackMineOnly`, the
+   * field must be your own pending insertion, and the result joins it. Every other range
+   * member, and every other insert location, refuses with `NotImplemented` and
+   * `edit.field-result-unsupported`.
+   */
+  get result(): Range {
+    this.requireUsablePath();
+    return (this.#result ??= Range.ofFieldResult(
+      this.context,
+      `${this.path.label}.result`,
+      this.path
+    ));
   }
   set code(value: string) {
     this.requireUsablePath();
@@ -89,7 +110,11 @@ export class Field extends ModelObject implements PromisedItem {
     );
   }
   protected override onLoad(request: ResolvedLoadOptions): void {
-    if (this.selection(request, ['code']).length === 0) return;
+    // `result` is a navigation property: only an explicit `load('result')` reads it.
+    const selected =
+      request.select.length === 0 ? ['code'] : this.selection(request, ['code', 'result']);
+    if (selected.includes('result')) this.result.load('text');
+    if (!selected.includes('code')) return;
     this.read(
       this.path.label,
       () => ({ op: 'getField', field: this.#handle() }),
