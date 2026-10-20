@@ -401,6 +401,9 @@ Do not split the paragraph again after tracked edits to plan more edits. A range
 Catch a refused word-range edit and read its rule from `debugInfo`:
 
 ```ts
+import { DocxEditor, isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+const runtime = await DocxEditor.createServer(bytes, { author: 'Review agent' });
 await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
   const words = context.document.body.paragraphs.getFirst().getTextRanges([' ']);
