@@ -22,7 +22,8 @@ for (const [name, atom] of [
     const saved = xml(store.part);
     // One proposal holds the struck text and the equation.
     expect(saved.match(/<w:del /g)).toHaveLength(1);
-    expect(saved).toMatch(new RegExp(`<w:del [^>]*>.*${atom.replace(/[()]/g, '\\$&')}.*</w:del>`));
+    const struck = saved.slice(saved.indexOf('<w:del '), saved.lastIndexOf('</w:del>'));
+    expect(struck).toContain(atom);
     const revisionId = /<w:del [^>]*w:id="(\d+)"/.exec(saved)![1]!;
     const revision = { id: revisionId, author: ADA.author, date: ADA.date };
 
