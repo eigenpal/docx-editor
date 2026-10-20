@@ -16,6 +16,7 @@ import {
   fitZoom,
   isFitMode,
   resolveZoomMode,
+  reviewPaneEntitledZoom,
   sameZoomMode,
 } from '../zoom-fit.ts';
 
@@ -159,6 +160,34 @@ describe('resolveZoomMode', () => {
     expect(resolveZoomMode('page-width' as never)).toBeNull();
     expect(resolveZoomMode({ type: 'fit', fit: 'fullPage' } as never)).toBeNull();
     expect(resolveZoomMode(null as never)).toBeNull();
+  });
+});
+
+describe('reviewPaneEntitledZoom', () => {
+  test('a fixed mode is entitled to the scale in force', () => {
+    expect(reviewPaneEntitledZoom(FIXED_ZOOM_MODE, 1.25)).toBe(1.25);
+    expect(reviewPaneEntitledZoom(undefined, 0.8)).toBe(0.8);
+  });
+
+  test('a capped fit is entitled to its cap, an uncapped one to nothing', () => {
+    expect(reviewPaneEntitledZoom(AUTO_ZOOM_MODE, 0.7)).toBe(1);
+    expect(reviewPaneEntitledZoom({ type: 'fit', fit: 'pageWidth' }, 1.4)).toBeNull();
+  });
+
+  test("under overflow 'shrinkPage' a fit is entitled to its floor, never to the live zoom", () => {
+    const mode = { type: 'fit', fit: 'pageWidth', minZoom: 0.35, maxZoom: 1 } as const;
+    expect(reviewPaneEntitledZoom(mode, 0.9, 'shrinkPage')).toBe(0.35);
+    expect(reviewPaneEntitledZoom(mode, 0.4, 'shrinkPage')).toBe(0.35);
+    // No floor stated: the contract floor. An out-of-range floor clamps into the contract.
+    expect(reviewPaneEntitledZoom({ type: 'fit', fit: 'pageWidth' }, 1, 'shrinkPage')).toBe(
+      ZOOM_MIN
+    );
+    expect(
+      reviewPaneEntitledZoom({ type: 'fit', fit: 'pageWidth', minZoom: 0.01 }, 1, 'shrinkPage')
+    ).toBe(ZOOM_MIN);
+    // 'float' is the default rule, and a fixed mode ignores the setting.
+    expect(reviewPaneEntitledZoom(mode, 0.5, 'float')).toBe(1);
+    expect(reviewPaneEntitledZoom(FIXED_ZOOM_MODE, 1.25, 'shrinkPage')).toBe(1.25);
   });
 });
 

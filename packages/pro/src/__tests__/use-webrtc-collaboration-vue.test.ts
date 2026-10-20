@@ -77,6 +77,7 @@ const CONNECT: UseWebrtcCollaborationConnectOptions = {
   roomId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
   identity: { actorId: 'alex', name: 'Alex' },
   bootstrap: { kind: 'join' },
+  signaling: ['wss://signaling.example'],
 };
 
 function mountHook(
@@ -306,6 +307,34 @@ describe('useWebrtcCollaboration (Vue)', () => {
     expect(mounted?.latest()?.session.value).toBeNull();
     expect(rejections).toEqual([]);
     mounted?.unmount();
+  });
+
+  test('connect without signaling fails before the room opens', async () => {
+    let latest: UseWebrtcCollaborationReturn | null = null;
+    const app = createApp(
+      defineComponent({
+        setup() {
+          latest = useWebrtcCollaboration({});
+          return () => h('div');
+        },
+      })
+    );
+    const el = document.createElement('div');
+    document.body.append(el);
+    app.mount(el);
+    try {
+      const { signaling: _omitted, ...withoutSignaling } = CONNECT;
+      const failure = await latest!.connect(
+        withoutSignaling as unknown as UseWebrtcCollaborationConnectOptions
+      );
+      expect(failure?.code).toBe('transport');
+      expect(failure?.detail).toContain('DEMO_SIGNALING_ENDPOINTS');
+      expect(latest!.session.value).toBeNull();
+      expect(latest!.provider.value).toBeNull();
+    } finally {
+      app.unmount();
+      el.remove();
+    }
   });
 
   test('connect resolves with the failure code from a schema error', async () => {

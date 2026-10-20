@@ -289,7 +289,16 @@ describe('DocxEditor.createBrowser', () => {
     await expect(replyToFirstComment(runtime)).rejects.toMatchObject({
       code: 'NotSupported',
       target: 'document.comments.items[0].reply',
+      // The refusal names the browser path that needs no author option.
+      debugInfo: { innerError: { code: 'edit.comment-author-required' } },
     });
+    const refusal = await replyToFirstComment(runtime).catch(
+      (error: { debugInfo?: { innerError?: { message?: string } } }) => error
+    );
+    expect(
+      (refusal as { debugInfo?: { innerError?: { message?: string } } }).debugInfo?.innerError
+        ?.message
+    ).toContain('useReview().reply');
 
     runtime.dispose();
     editor.destroy();
@@ -512,15 +521,28 @@ describe('DocxEditor.createBrowser', () => {
       context.trackedObjects.add(first);
       return first;
     });
+    // A detached editor keeps its document (it can be attached again, even in another window),
+    // so a script still edits it; a destroyed one has no document left.
     detached.editor.detach();
+    await detachedRuntime.run(comment, async (context) => {
+      comment.delete();
+      await context.sync();
+    });
+    const remaining = await detachedRuntime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      return comments.items.length;
+    });
+    expect(remaining).toBe(0);
+    detached.editor.destroy();
     await expect(
-      detachedRuntime.run(comment, async (context) => {
-        comment.delete();
+      detachedRuntime.run(async (context) => {
+        context.document.comments.load('items');
         await context.sync();
       })
     ).rejects.toMatchObject({ code: 'DocumentUnavailable' });
     detachedRuntime.dispose();
-    detached.editor.destroy();
   });
 
   test('server and browser delete resolved comments with the same public script', async () => {

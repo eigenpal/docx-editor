@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Math letters used ordinary glyphs and ignored mathematical style.",
+  "after": "Local measurement and paint use the mathematical variant. Canonical text and room operations stay unchanged.",
+  "reason": "The change derives display text from preserved OMML. It does not change tree node identities, atomic equation ranges, or collaboration data.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-math-style.test.ts",
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-source-editors.test.ts"
+  ],
+  "changeset": "math-default-italic",
+  "migration": null
+}

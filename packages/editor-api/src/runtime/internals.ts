@@ -30,6 +30,22 @@ export const INTERNALS: unique symbol = Symbol('docx-editor.runtime.internals');
 export const RELEASE: unique symbol = Symbol('docx-editor.runtime.release');
 export const REBIND: unique symbol = Symbol('docx-editor.runtime.rebind');
 
+/**
+ * The key of a request context's author hook: a non-enumerable getter that answers the runtime's
+ * author. `@docx-editor.dev/editor-api/agent` reads it so a caller never passes the author twice.
+ *
+ * A registered symbol, unlike the keys above, because the agent entry is its own bundle: a
+ * module-local symbol in this bundle is not the one that bundle would create.
+ */
+export const AUTHOR_HOOK: unique symbol = Symbol.for('@docx-editor.dev/editor-api/author');
+
+/**
+ * The key of a request context's queue hook: a non-enumerable `{ writes, discard }` over the
+ * commands queued and not yet synced: how many of them write, and a way to drop them all. The agent entry reads it so its own first sync never sends
+ * commands that a caller or a model callback queued, and discards those a callback queued.
+ */
+export const QUEUE_HOOK: unique symbol = Symbol.for('@docx-editor.dev/editor-api/queue');
+
 /** The handles every object model starts from. Resolved once per runtime. */
 export interface RootHandles {
   readonly document: AutomationHandle;

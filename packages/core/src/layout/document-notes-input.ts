@@ -20,7 +20,7 @@ import { collectNoteReferences, resolveNotesPart } from '../store/package/note-r
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
-import { enumerateDocumentSectionsBounded } from './section-properties.ts';
+import { enumerateDocumentSectionsBounded, sectionLineGridPt } from './section-properties.ts';
 import type { NotesLayoutInput } from './note-pagination.ts';
 import { paragraphSectionNode } from './section-properties.ts';
 import { storyBlocks } from './story-roots.ts';
@@ -38,6 +38,7 @@ export interface CreateDocumentNotesInputOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => InlineDrawingLayoutContext | undefined;
@@ -46,6 +47,8 @@ export interface CreateDocumentNotesInputOptions {
   /** Link/property projection and its inseparable cache identities. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }
@@ -147,7 +150,11 @@ export function createDocumentNotesInput(
     cache: options.cache,
     styleCascade: options.styleCascade?.(),
     numberingIndex: options.numberingIndex?.(),
+    lineGridPitchBySection: enumeration.sections.map((section) =>
+      sectionLineGridPt(section.properties)
+    ),
     defaultTabStopPt: options.defaultTabStopPt,
+    compatibilityMode: options.compatibilityMode,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
     projectLinkForPart: options.linkProjectors.projectLinkForPart,
@@ -155,6 +162,7 @@ export function createDocumentNotesInput(
       .map((part) => (part ? options.linkProjectors.epochForPart(part.name) : ''))
       .join('\0'),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    showFieldCodes: options.showFieldCodes,
     projectionTokenForParagraphForPart: options.linkProjectors.tokenForParagraphForPart,
     projectionTokenForTableForPart: options.linkProjectors.tokenForTableForPart,
     projectionEpoch: noteParts

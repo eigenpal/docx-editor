@@ -1,8 +1,9 @@
 import { computed, inject, ref, shallowRef, watch, type ComputedRef, type InjectionKey } from 'vue';
+import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 import { scopeDispose } from './scope-dispose';
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
 import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { useDocxEditor } from './context';
+import { useDocxEditor, useEditorContentElement } from './context';
 import { useEditorState } from './useEditorState';
 
 /** @public */
@@ -59,21 +60,20 @@ const CLOSED: HyperlinkPopupState = Object.freeze({
 
 const selectTick = (snapshot: EditorSnapshot) => snapshot;
 
-function caretViewportAnchor(): HyperlinkPopupAnchor | null {
+function caretViewportAnchor(doc: Document | null): HyperlinkPopupAnchor | null {
   const usable = (rect: DOMRect | undefined): rect is DOMRect =>
     !!rect && (rect.width > 0 || rect.height > 0);
-  if (typeof document !== 'undefined') {
-    const painted = document.querySelector('[data-docx-caret]');
-    const rect = painted?.getBoundingClientRect();
-    if (usable(rect)) return { left: rect.left, top: rect.bottom };
-  }
-  const selection = typeof window === 'undefined' ? null : window.getSelection();
+  if (!doc) return null;
+  const painted = doc.querySelector('[data-docx-caret]');
+  const rect = painted?.getBoundingClientRect();
+  if (usable(rect)) return { left: rect.left, top: rect.bottom };
+  const selection = doc.getSelection();
   if (selection && selection.rangeCount > 0) {
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     if (usable(rect)) return { left: rect.left, top: rect.bottom };
     const node = range.startContainer;
-    const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+    const element = node.nodeType === 1 ? (node as Element) : node.parentElement;
     const fallback = element?.getBoundingClientRect();
     if (usable(fallback)) return { left: fallback.left, top: fallback.bottom };
   }
@@ -94,6 +94,7 @@ export function useHyperlinkPopup(): UseHyperlinkPopupResult {
 /** @public */
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
   const editorRef = useDocxEditor();
+  const contentElement = useEditorContentElement();
   const state = ref<HyperlinkPopupState>(CLOSED);
   const selectionRetainer = shallowRef<{ editor: Editor; pin: SelectionPin } | null>(null);
   const snapshot = useEditorState(selectTick);
@@ -131,7 +132,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   const openAtCaret = () => {
     const editor = editorRef.value;
-    const anchor = caretViewportAnchor();
+    const anchor = caretViewportAnchor(hostDocumentOf(contentElement.value) ?? null);
     releaseSelectionPin();
     const link =
       editor?.surface?.hyperlinks.linkAtCaret() ??
@@ -207,7 +208,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const href = state.value.link?.href;
     if (!href) return false;
     try {
-      await navigator.clipboard.writeText(href);
+      await hostWindowOf(contentElement.value).navigator.clipboard.writeText(href);
     } catch {
       return false;
     }

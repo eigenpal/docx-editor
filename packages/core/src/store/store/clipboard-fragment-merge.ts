@@ -1,3 +1,4 @@
+import { containsClipboardObject } from './clipboard-object-policy.ts';
 // Clipboard fragment merge: a read-back fragment package lands in a target package
 // (rich-clipboard-fidelity tasks 2.2-2.4).
 //
@@ -17,6 +18,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import { partNumberCandidates, resolveAllocationActor } from '../package/actor-scoped-ids.ts';
 import { withPart } from '../package/ooxml-package.ts';
 import {
   relationshipsOf,
@@ -27,6 +29,7 @@ import {
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import { withBinaryParts, validateEmbeddedImageBytes } from '../package/drawing-package-edit.ts';
+import { standardImageType } from '../package/content-types.ts';
 import { sniffImageMime, type SupportedImageMime } from '../package/image-resources.ts';
 import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
 import { ensureNotesPart } from '../package/note-lifecycle.ts';
@@ -44,7 +47,6 @@ import {
   isElementNode,
   isWml,
   materializeDefaults,
-  nodeSignature,
   styleSignature,
   stylesInfoOf,
   walkAll,
@@ -60,10 +62,12 @@ import {
 } from './clipboard-fragment-identifiers.ts';
 import {
   canonicalNoteId,
+  relationshipIdsIn,
   noteReferenceClosure,
   withoutDanglingNoteReferences,
 } from './clipboard-fragment-closure.ts';
 import { mintFragmentUniqueIds } from './clipboard-fragment-unique-ids.ts';
+import { planNumberingImport } from './clipboard-fragment-numbering.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const HYPERLINK_REL = `${R_NS}/hyperlink`;
@@ -73,7 +77,11 @@ const STYLES_REL = `${R_NS}/styles`;
 const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
 const STYLES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
 
-export type FragmentMergeRejection = 'no-fragment-document' | 'no-target-part' | 'merge-refused';
+export type FragmentMergeRejection =
+  | 'no-fragment-document'
+  | 'no-target-part'
+  | 'merge-refused'
+  | 'unsupported-content';
 
 export type FragmentMergeResult =
   | {
@@ -134,20 +142,6 @@ function appendToPart(
   return withPart(pkg, inserted.part);
 }
 
-/** Collect every `r:*` relationship id referenced under the nodes. */
-function relationshipIdsIn(nodes: readonly OoxmlNode[]): Set<string> {
-  const ids = new Set<string>();
-  walkAll(nodes, (node) => {
-    if (node.kind === 'textValue') return;
-    for (const attribute of node.attributes) {
-      if (attribute.namespaceUri === R_NS && attribute.value.length > 0) {
-        ids.add(attribute.value);
-      }
-    }
-  });
-  return ids;
-}
-
 /**
  * Resolve references to relationships that could not merge: a drawing whose media rel was
  * dropped is removed; a `w:hyperlink` whose `r:id` was dropped (a refused `javascript:`
@@ -161,7 +155,7 @@ function withoutDanglingDrawings(
   if (dropRelIds.size === 0) return [...nodes];
   const rewrite = (node: OoxmlNode): OoxmlNode | OoxmlNode[] | null => {
     if (node.kind === 'textValue') return node;
-    if (node.kind === 'drawing') {
+    if (node.kind === 'drawing' || isWml(node, 'pict') || isWml(node, 'object')) {
       let dangling = false;
       walkAll([node], (inner) => {
         if (inner.kind === 'textValue') return;
@@ -224,9 +218,10 @@ const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
 function admittedMediaMime(bytes: Uint8Array, declaredType: string): string | null {
   const sniffed = sniffImageMime(bytes);
   if (sniffed === 'unknown') return null;
-  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declaredType)
-    ? DECLARED_MIME_ALIASES[declaredType]!
-    : declaredType;
+  const declared = standardImageType(declaredType);
+  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declared)
+    ? DECLARED_MIME_ALIASES[declared]!
+    : declared;
   if (normalizedDeclared !== sniffed) return null;
   if (SUPPORTED_RASTER_MIMES.has(sniffed)) {
     if (!validateEmbeddedImageBytes(bytes, sniffed as SupportedImageMime)) return null;
@@ -248,6 +243,9 @@ export function mergeFragmentIntoPackage(
   fragment: OoxmlPackage,
   ownerPartName: string
 ): FragmentMergeResult {
+  for (const part of fragment.parts.values()) {
+    if (containsClipboardObject([part.root])) return { ok: false, reason: 'unsupported-content' };
+  }
   const fragmentDoc = fragment.parts.get(fragment.mainDocumentPart);
   if (!fragmentDoc) return { ok: false, reason: 'no-fragment-document' };
   if (!target.parts.has(ownerPartName)) return { ok: false, reason: 'no-target-part' };
@@ -278,124 +276,12 @@ export function mergeFragmentIntoPackage(
   // pass below compares definitions AFTER applying this map, so a repeated paste of the
   // same payload recognizes its own earlier imports instead of minting `…Pasted` copies.
   // ------------------------------------------------------------------
-  const fragmentNumberingPart = relatedPart(
-    fragment,
-    fragment.mainDocumentPart,
-    NUMBERING_REL,
-    '/word/numbering.xml'
+  const numbering = planNumberingImport(
+    relatedPart(fragment, fragment.mainDocumentPart, NUMBERING_REL, '/word/numbering.xml'),
+    relatedPart(pkg, pkg.mainDocumentPart, NUMBERING_REL, '/word/numbering.xml')
   );
-  const numIdMap = new Map<string, string>();
-  const numsToImport: OoxmlElement[] = [];
-  const abstractsToImport: OoxmlElement[] = [];
-
-  if (fragmentNumberingPart && isElementNode(fragmentNumberingPart.root)) {
-    const fragmentAbstracts = new Map<string, OoxmlElement>();
-    const fragmentNums: OoxmlElement[] = [];
-    for (const child of fragmentNumberingPart.root.children) {
-      if (!isElementNode(child)) continue;
-      if (isWml(child, 'abstractNum')) {
-        const id = attributeValueOf(child, 'abstractNumId');
-        if (id) fragmentAbstracts.set(id, child);
-      } else if (isWml(child, 'num')) {
-        fragmentNums.push(child);
-      }
-    }
-
-    const targetNumberingPart = relatedPart(
-      pkg,
-      pkg.mainDocumentPart,
-      NUMBERING_REL,
-      '/word/numbering.xml'
-    );
-
-    const targetNumSignatures = new Map<string, string>();
-    const targetAbstractById = new Map<string, OoxmlElement>();
-    if (targetNumberingPart && isElementNode(targetNumberingPart.root)) {
-      for (const child of targetNumberingPart.root.children) {
-        if (!isElementNode(child)) continue;
-        if (isWml(child, 'abstractNum')) {
-          const id = attributeValueOf(child, 'abstractNumId');
-          if (id) targetAbstractById.set(id, child);
-        }
-      }
-      for (const child of targetNumberingPart.root.children) {
-        if (!isElementNode(child) || !isWml(child, 'num')) continue;
-        const numId = attributeValueOf(child, 'numId');
-        if (!numId) continue;
-        const abstractRef = child.children.find((inner) => isWml(inner, 'abstractNumId'));
-        const abstractId = abstractRef ? attributeValueOf(abstractRef, 'val') : undefined;
-        const abstract = abstractId ? targetAbstractById.get(abstractId) : undefined;
-        targetNumSignatures.set(
-          `${abstract ? styleSignature(abstract) : 'none'}::${child.children
-            .filter((inner) => isWml(inner, 'lvlOverride'))
-            .map(nodeSignature)
-            .join('')}`,
-          numId
-        );
-      }
-    }
-
-    let nextAbstractId =
-      (targetNumberingPart
-        ? maxNumericAttribute(targetNumberingPart.root, (node) =>
-            node.kind !== 'textValue' && isWml(node, 'abstractNum')
-              ? attributeValueOf(node, 'abstractNumId')
-              : undefined
-          )
-        : 0) + 1;
-    let nextNumId =
-      (targetNumberingPart
-        ? maxNumericAttribute(targetNumberingPart.root, (node) =>
-            node.kind !== 'textValue' && isWml(node, 'num')
-              ? attributeValueOf(node, 'numId')
-              : undefined
-          )
-        : 0) + 1;
-
-    const abstractIdMap = new Map<string, string>();
-    for (const num of fragmentNums) {
-      const numId = attributeValueOf(num, 'numId');
-      if (!numId) continue;
-      const abstractRef = num.children.find((inner) => isWml(inner, 'abstractNumId'));
-      const abstractId = abstractRef ? attributeValueOf(abstractRef, 'val') : undefined;
-      const abstract = abstractId ? fragmentAbstracts.get(abstractId) : undefined;
-      const signature = `${abstract ? styleSignature(abstract) : 'none'}::${num.children
-        .filter((inner) => isWml(inner, 'lvlOverride'))
-        .map(nodeSignature)
-        .join('')}`;
-      const reusable = targetNumSignatures.get(signature);
-      if (reusable !== undefined) {
-        numIdMap.set(numId, reusable);
-        continue;
-      }
-      let mappedAbstract = abstractId ? abstractIdMap.get(abstractId) : undefined;
-      if (mappedAbstract === undefined && abstract && abstractId) {
-        mappedAbstract = String(nextAbstractId++);
-        abstractIdMap.set(abstractId, mappedAbstract);
-        abstractsToImport.push(
-          withRewrittenAttribute(abstract, WML_NAMESPACE_URI, 'abstractNumId', mappedAbstract)
-        );
-      }
-      const freshNumId = String(nextNumId++);
-      numIdMap.set(numId, freshNumId);
-      let imported = withRewrittenAttribute(num, WML_NAMESPACE_URI, 'numId', freshNumId);
-      if (mappedAbstract !== undefined) {
-        const children = imported.children.map((inner) =>
-          isWml(inner, 'abstractNumId')
-            ? withRewrittenAttribute(
-                inner as OoxmlElement,
-                WML_NAMESPACE_URI,
-                'val',
-                mappedAbstract!
-              )
-            : inner
-        );
-        imported = { ...imported, children } as OoxmlElement;
-      }
-      numsToImport.push(imported);
-      targetNumSignatures.set(signature, freshNumId);
-    }
-  }
+  if (!numbering) return { ok: false, reason: 'merge-refused' };
+  const { numIdMap, numsToImport, abstractsToImport } = numbering;
 
   // ------------------------------------------------------------------
   // Styles: reuse by fingerprint, else import under fresh id + unique name.
@@ -495,6 +381,8 @@ export function mergeFragmentIntoPackage(
   // bytes — expensive on an image-heavy host, useless when nothing dedupes against it).
   let targetMediaByHash: Map<string, string> | null = null;
   let nextMediaIndex = 1;
+  const stripedMedia =
+    resolveAllocationActor() === undefined ? null : partNumberCandidates(Number.MAX_SAFE_INTEGER);
   const mediaHashIndex = (): Map<string, string> => {
     if (targetMediaByHash) return targetMediaByHash;
     const index = new Map<string, string>();
@@ -604,12 +492,20 @@ export function mergeFragmentIntoPackage(
           pkg.partBytes.has(candidate.slice(1)) ||
           pkg.parts.has(candidate) ||
           pendingPartNames.has(candidate);
-        let candidate = `/word/media/image${nextMediaIndex}.${ext}`;
-        while (isPendingOrPresent(candidate)) {
-          nextMediaIndex += 1;
+        let candidate: string;
+        if (stripedMedia) {
+          // A collaborator takes numbers from its own stripe, so two people pasting images
+          // from one snapshot do not both name a part `image3`.
+          do candidate = `/word/media/image${stripedMedia.next().value}.${ext}`;
+          while (isPendingOrPresent(candidate));
+        } else {
           candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+          while (isPendingOrPresent(candidate)) {
+            nextMediaIndex += 1;
+            candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+          }
+          nextMediaIndex += 1;
         }
-        nextMediaIndex += 1;
         mediaPart = candidate;
         pendingBinary.push({ partName: mediaPart, bytes, contentType });
         pendingPartNames.add(mediaPart);

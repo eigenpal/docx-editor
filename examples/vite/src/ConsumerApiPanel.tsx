@@ -1,3 +1,4 @@
+import { exampleText } from '../../shared/example-text';
 import { useCallback, useState } from 'react';
 import {
   useDocxEditor,
@@ -52,8 +53,9 @@ export function ConsumerApiPanel() {
   useEditorEvent(
     'change',
     useCallback(
-      (change) => recordEvent(t('consumerApi.eventChange', { revision: change.revision })),
-      [recordEvent, t]
+      (change) =>
+        recordEvent(exampleText('consumerApi.eventChange', { revision: change.revision })),
+      [recordEvent]
     )
   );
   useEditorEvent(
@@ -61,19 +63,19 @@ export function ConsumerApiPanel() {
     useCallback(
       (next) =>
         recordEvent(
-          t('consumerApi.eventSelection', {
+          exampleText('consumerApi.eventSelection', {
             current: next.page.current,
             total: next.page.total,
           })
         ),
-      [recordEvent, t]
+      [recordEvent]
     )
   );
   useEditorEvent(
     'error',
     useCallback(
-      (error) => recordEvent(t('consumerApi.eventError', { message: error.message })),
-      [recordEvent, t]
+      (error) => recordEvent(exampleText('consumerApi.eventError', { message: error.message })),
+      [recordEvent]
     )
   );
 
@@ -101,8 +103,8 @@ export function ConsumerApiPanel() {
         type="button"
         className="consumer-api__toggle"
         aria-expanded={open}
-        aria-label={open ? t('consumerApi.hide') : t('consumerApi.show')}
-        title={open ? t('consumerApi.hide') : t('consumerApi.show')}
+        aria-label={open ? exampleText('consumerApi.hide') : exampleText('consumerApi.show')}
+        title={open ? exampleText('consumerApi.hide') : exampleText('consumerApi.show')}
         onMouseDown={keepCaret}
         onClick={() => setOpen((current) => !current)}
       >
@@ -113,13 +115,13 @@ export function ConsumerApiPanel() {
         <div className="consumer-api__card" data-testid="consumer-api-panel">
           <div className="consumer-api__heading">
             <div>
-              <strong>{t('consumerApi.title')}</strong>
-              <span>{t('consumerApi.subtitle')}</span>
+              <strong>{exampleText('consumerApi.title')}</strong>
+              <span>{exampleText('consumerApi.subtitle')}</span>
             </div>
             <button
               type="button"
               className="consumer-api__close"
-              aria-label={t('consumerApi.hide')}
+              aria-label={exampleText('consumerApi.hide')}
               onMouseDown={keepCaret}
               onClick={() => setOpen(false)}
             >
@@ -128,56 +130,62 @@ export function ConsumerApiPanel() {
           </div>
 
           <section className="consumer-api__section">
-            <h3>{t('consumerApi.liveState')}</h3>
+            <h3>{exampleText('consumerApi.liveState')}</h3>
             <dl className="consumer-api__grid">
               <div>
-                <dt>{t('consumerApi.page')}</dt>
+                <dt>{exampleText('consumerApi.page')}</dt>
                 <dd>{`${snapshot.page.current}/${snapshot.page.total}`}</dd>
               </div>
               <div>
-                <dt>{t('consumerApi.zoom')}</dt>
+                <dt>{exampleText('consumerApi.zoom')}</dt>
                 <dd>{`${Math.round(snapshot.zoom * 100)}%`}</dd>
               </div>
               <div>
-                <dt>{t('consumerApi.mode')}</dt>
+                <dt>{exampleText('consumerApi.mode')}</dt>
                 <dd>{snapshot.editingMode ?? 'editing'}</dd>
               </div>
               <div>
-                <dt>{t('consumerApi.selection')}</dt>
+                <dt>{exampleText('consumerApi.selection')}</dt>
                 <dd>
-                  {snapshot.selectionCollapsed ? t('consumerApi.caret') : t('consumerApi.range')}
+                  {snapshot.selectionCollapsed
+                    ? exampleText('consumerApi.caret')
+                    : exampleText('consumerApi.range')}
                 </dd>
               </div>
             </dl>
             <p className="consumer-api__detail">
               {formatting
-                ? t('consumerApi.formatting', {
-                    bold: formatting.bold ? t('consumerApi.on') : t('consumerApi.off'),
-                    italic: formatting.italic ? t('consumerApi.on') : t('consumerApi.off'),
+                ? exampleText('consumerApi.formatting', {
+                    bold: formatting.bold
+                      ? exampleText('consumerApi.on')
+                      : exampleText('consumerApi.off'),
+                    italic: formatting.italic
+                      ? exampleText('consumerApi.on')
+                      : exampleText('consumerApi.off'),
                     style: formatting.styleId ?? '—',
                   })
-                : t('consumerApi.noFormatting')}
+                : exampleText('consumerApi.noFormatting')}
             </p>
             <div className="consumer-api__actions">
               <button
                 type="button"
                 data-active={bold.isActive || undefined}
                 disabled={!bold.isEnabled}
-                title={boldReason ?? t('consumerApi.toggleBold')}
+                title={boldReason ?? exampleText('consumerApi.toggleBold')}
                 onMouseDown={keepCaret}
                 onClick={bold.execute}
               >
-                {t('consumerApi.toggleBold')}
+                {exampleText('consumerApi.toggleBold')}
               </button>
               <button
                 type="button"
                 data-active={suggesting.isActive || undefined}
                 disabled={!suggesting.isEnabled}
-                title={suggestingReason ?? t('consumerApi.useSuggesting')}
+                title={suggestingReason ?? exampleText('consumerApi.useSuggesting')}
                 onMouseDown={keepCaret}
                 onClick={suggesting.execute}
               >
-                {t('consumerApi.useSuggesting')}
+                {exampleText('consumerApi.useSuggesting')}
               </button>
             </div>
             {boldReason || suggestingReason ? (
@@ -188,7 +196,7 @@ export function ConsumerApiPanel() {
           </section>
 
           <section className="consumer-api__section">
-            <h3>{t('consumerApi.navigation')}</h3>
+            <h3>{exampleText('consumerApi.navigation')}</h3>
             <div className="consumer-api__search">
               <input
                 value={search.query}
@@ -201,19 +209,21 @@ export function ConsumerApiPanel() {
                 disabled={search.matches.length === 0}
                 title={
                   search.matches.length === 0
-                    ? t('consumerApi.noSearchResults')
+                    ? exampleText('consumerApi.noSearchResults')
                     : t('navigation.find.nextAriaLabel')
                 }
                 onMouseDown={keepCaret}
                 onClick={search.next}
               >
-                {t('consumerApi.next')}
+                {exampleText('consumerApi.next')}
               </button>
             </div>
             <p className="consumer-api__detail">
-              {t('consumerApi.searchState', {
+              {exampleText('consumerApi.searchState', {
                 count: search.matches.length,
-                pending: search.isPending ? t('consumerApi.pending') : t('consumerApi.ready'),
+                pending: search.isPending
+                  ? exampleText('consumerApi.pending')
+                  : exampleText('consumerApi.ready'),
               })}
             </p>
             <div className="consumer-api__actions">
@@ -222,8 +232,8 @@ export function ConsumerApiPanel() {
                 disabled={outline.headings.length === 0}
                 title={
                   outline.headings.length === 0
-                    ? t('consumerApi.noHeadings')
-                    : t('consumerApi.firstHeading')
+                    ? exampleText('consumerApi.noHeadings')
+                    : exampleText('consumerApi.firstHeading')
                 }
                 onMouseDown={keepCaret}
                 onClick={() => {
@@ -231,49 +241,51 @@ export function ConsumerApiPanel() {
                   if (first) outline.goTo(first.blockId);
                 }}
               >
-                {t('consumerApi.firstHeading')}
+                {exampleText('consumerApi.firstHeading')}
               </button>
               <span>
-                {t('consumerApi.outlineState', {
+                {exampleText('consumerApi.outlineState', {
                   count: outline.headings.length,
-                  selected: outline.selectedBlockId ? t('consumerApi.yes') : t('consumerApi.no'),
+                  selected: outline.selectedBlockId
+                    ? exampleText('consumerApi.yes')
+                    : exampleText('consumerApi.no'),
                 })}
               </span>
             </div>
           </section>
 
           <section className="consumer-api__section">
-            <h3>{t('consumerApi.context')}</h3>
+            <h3>{exampleText('consumerApi.context')}</h3>
             <p className="consumer-api__detail">
               {table
-                ? t('consumerApi.tableState', {
+                ? exampleText('consumerApi.tableState', {
                     rows: table.rows,
                     columns: table.columns,
                     row: table.rowIndex + 1,
                     column: table.columnIndex + 1,
                   })
-                : t('consumerApi.noTable')}
+                : exampleText('consumerApi.noTable')}
             </p>
             <p className="consumer-api__detail">
               {image
-                ? t('consumerApi.imageState', {
+                ? exampleText('consumerApi.imageState', {
                     name: image.name || image.id,
                     width: Math.round(image.widthEmu / 9525),
                     height: Math.round(image.heightEmu / 9525),
                   })
-                : t('consumerApi.noImage')}
+                : exampleText('consumerApi.noImage')}
             </p>
             <label className="consumer-api__field">
-              <span>{t('consumerApi.imageWrap')}</span>
+              <span>{exampleText('consumerApi.imageWrap')}</span>
               <select
                 value={imageWrap.value ?? ''}
                 disabled={!imageWrap.isEnabled}
-                title={wrapReason ?? t('consumerApi.imageWrap')}
+                title={wrapReason ?? exampleText('consumerApi.imageWrap')}
                 onChange={(event) =>
                   imageWrap.execute(event.target.value as (typeof imageWrap.options)[number])
                 }
               >
-                <option value="">{t('consumerApi.notAvailable')}</option>
+                <option value="">{exampleText('consumerApi.notAvailable')}</option>
                 {imageWrap.options.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -289,21 +301,21 @@ export function ConsumerApiPanel() {
           </section>
 
           <section className="consumer-api__section">
-            <h3>{t('consumerApi.facade')}</h3>
+            <h3>{exampleText('consumerApi.facade')}</h3>
             <button type="button" onMouseDown={keepCaret} onClick={captureSnapshot}>
-              {t('consumerApi.capture')}
+              {exampleText('consumerApi.capture')}
             </button>
             <p className="consumer-api__detail">
               {captured
-                ? t('consumerApi.captured', {
+                ? exampleText('consumerApi.captured', {
                     page: captured.page,
                     zoom: captured.zoom,
                     mode: captured.mode,
                     scope: captured.scope,
                   })
-                : t('consumerApi.captureHint')}
+                : exampleText('consumerApi.captureHint')}
             </p>
-            <h3>{t('consumerApi.events')}</h3>
+            <h3>{exampleText('consumerApi.events')}</h3>
             {events.length > 0 ? (
               <ol className="consumer-api__events" aria-live="polite">
                 {events.map((event) => (
@@ -311,7 +323,7 @@ export function ConsumerApiPanel() {
                 ))}
               </ol>
             ) : (
-              <p className="consumer-api__detail">{t('consumerApi.noEvents')}</p>
+              <p className="consumer-api__detail">{exampleText('consumerApi.noEvents')}</p>
             )}
           </section>
         </div>

@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Journal move collection can copy child arrays before enforcing existing limits.",
+  "after": "Journal move collection enforces existing child and node limits before allocating additional projection state.",
+  "reason": "Accepted edits retain the same representation and behavior. The change rejects oversized input earlier through existing error codes.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-projected-journal.test.ts"],
+  "changeset": "tame-projection-moves",
+  "migration": null
+}

@@ -83,8 +83,7 @@ Use compact content, scrolling, or an external panel.
 Use application state keyed by `nodeId` for annotations that must survive unmounting.
 The library does not persist component state into document source automatically.
 
-The full Vue editor emits a default-slot warning from its Help menu.
-That warning does not identify the custom unsupported-content slot.
+The final trial after merging main reports no browser warnings in either framework.
 No feature-specific defect remains in the final consumer trial.
 
 ## Setup and limits

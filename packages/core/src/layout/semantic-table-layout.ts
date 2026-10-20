@@ -1,3 +1,15 @@
+import { withStoryLineGrid } from './line-grid.ts';
+import { listLayoutToken } from './list-marker-reuse.ts';
+import { reuseSingleLineAtWidth } from './paragraph-cache-width-reuse.ts';
+import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
+import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
+import { emitNestedTable } from './nested-table-layout.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { paragraphBoxOutdent } from './paragraph-indent.ts';
+import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
+import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
 //
 // Row, cell, and nested-table flow operate on typed tree nodes with the injected
@@ -10,16 +22,17 @@
 //     vAlign shifts content, and collapsed borders resolve onto layout-owned edges;
 //   - top-level table rows paginate with a real-height preflight: an unsplit row that does
 //     not fit moves to the next page; a row taller than a fresh page fragments at
-//     paragraph/line boundaries when splittable, or fails closed under w:cantSplit /
-//     unsupported nested cuts;
-//   - a NESTED table lays out with its own geometry inside the cell box, no pagination.
+//     paragraph/line boundaries (a w:cantSplit row first moves to a fresh page), or fails
+//     closed under hRule=exact / unsupported nested cuts;
+//   - nested tables retain their own geometry and may continue at ordinary row boundaries;
+//     cuts through nested rows, vertical merges and repeated headers remain atomic.
 //
 // All coordinates are points, relative to the page content box — exactly the space body
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
-import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { measuringFlowDeps, withoutAnchorSinks } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
@@ -28,29 +41,42 @@ import {
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
 import {
-  exclusionLayoutToken,
-  filterExclusionZonesForParagraphOrder,
-  localizeExclusionZones,
-  topAndBottomSkipBeforeLine,
-} from './drawing-exclusion.ts';
+  cellSpacingGapPt,
+  cellSpacingGeometry,
+  closingCellSpacingPt,
+  sumCols,
+} from './table-cell-spacing.ts';
+import { cellLineFits, clipsExactCellRow } from './table-cell-paragraph-options.ts';
+import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
   FieldPageContext,
   HyperlinkProjector,
 } from './field-projection.ts';
+import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import { cellBreakKeyInputs, cellBreakKeyParts } from './cell-break-key.ts';
+import { rememberCellLine } from './table-row-geometry-reuse.ts';
+import { alignCellLine } from './cell-line-alignment.ts';
 import {
-  paragraphLayoutKey,
-  withDrawingContext,
-  type ParagraphLayoutCache,
-} from './layout-cache.ts';
-import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
+  cellParagraphLines,
+  zonesReachingCellParagraph,
+  type HeldCellBreak,
+} from './cell-continuation-lines.ts';
+import {
+  continuedCellCursor,
+  initialCellCursor,
+  initialCellCursors,
+  placesOversizedLine,
+  unplacedHeldBreak,
+  type CellPlaceCursor,
+} from './table-cell-cursor.ts';
+export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts';
+import { type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
-import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
-import {
-  publishDeferredRowAnchors,
-  rowDepsForAnchors,
-  type DeferredRowAnchor,
-} from './table-anchor-republish.ts';
+import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
+import { paragraphMergeGroupOf } from './story-roots.ts';
+import { cellTerminatorCollapses } from './table-cell-terminator.ts';
+import { rowDepsForAnchors, type DeferredRowAnchor } from './table-anchor-republish.ts';
 import {
   markRevisionFields,
   paragraphMarkMarkupVisible,
@@ -63,25 +89,18 @@ import {
   paragraphBorderExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
-import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
+import { cellEdgeAutoSpacing } from './table-cell-edge-spacing.ts';
+import {
+  positionedParagraphExclusionToken,
+  breakPreparedParagraphLazily,
+} from './paragraph-break-request.ts';
+import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
+import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
-import {
-  resolveParagraphLayoutInputs,
-  cascadeRunProperties,
-  type StyleCascadeTable,
-  type TableCellStyleFormatting,
-} from './style-cascade.ts';
-import {
-  neighbourBorderGroupKey,
-  paragraphBorderGroupKey,
-  rememberCellBorderGroupKey,
-  type CellBorderGroupContext,
-} from './cell-border-groups.ts';
+import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
+import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
-  MAX_TABLE_NESTING,
-  readTableStructure,
-  tableOriginX,
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,
@@ -98,69 +117,41 @@ import type {
   TextMeasurer,
   LayoutBox,
 } from './semantic-records.ts';
-import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
-import { publishListMarker } from './list-marker.ts';
+import { type ResolvedListItem } from './list-resolve.ts';
+import {
+  directionalListFirstLineShift,
+  listMarkerFirstLineMetrics,
+  publishListMarker,
+} from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
-import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
+import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
-import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
-import { contentInsets } from './table-cell-geometry.ts';
-import { blockInlineRight } from './table-cell-text-direction.ts';
+import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
+import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
+import {
+  cellFlowBox,
+  layOutWaitingBottomToTopCells,
+  rememberBottomToTopRelayouts,
+  waitsForRowHeight,
+} from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
+import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
-export { rowWithSplitBorders } from './table-cell-geometry.ts';
-import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { inlineDrawingFlow } from './inline-textbox-flow.ts';
+import {
+  cellAlignmentRoom,
+  cellAlignmentShift,
+  cellParagraphFirstTop,
+} from './table-row-vertical.ts';
 
 export {
   createTableBorderOwnershipBudget,
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-borders.ts';
 
-/** Walk top-level prepared blocks and table cell paragraphs in document order. */
-export function paragraphDocumentOrderOf(
-  prepared: readonly {
-    readonly kind: 'paragraph' | 'table';
-    readonly paragraph?: OoxmlElement;
-    readonly table?: OoxmlElement;
-  }[],
-  contentWidth: number,
-  styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
-): ReadonlyMap<string, number> {
-  const order = new Map<string, number>();
-  let index = 0;
-  const walkTable = (table: OoxmlElement): void => {
-    const structure = readTableStructure(
-      table,
-      contentWidth,
-      0,
-      styleCascade,
-      displayMode,
-      authorFilter
-    );
-    if (!structure) return;
-    for (const row of structure.rows) {
-      for (const cell of row.cells) {
-        for (const block of cell.blocks) {
-          if (block.localName === 'p') {
-            order.set(block.id, index++);
-          } else if (block.localName === 'tbl') {
-            walkTable(block);
-          }
-        }
-      }
-    }
-  };
-  for (const block of prepared) {
-    if (block.kind === 'paragraph' && block.paragraph) {
-      order.set(block.paragraph.id, index++);
-    } else if (block.kind === 'table' && block.table) {
-      walkTable(block.table);
-    }
-  }
-  return order;
-}
+export { paragraphDocumentOrderOf } from './paragraph-document-order.ts';
 
 export {
   createTableVMergeResolveBudget,
@@ -172,7 +163,7 @@ export {
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
-const MIN_CELL_BOX_PT = 1;
+export const MIN_CELL_BOX_PT = 1;
 
 /**
  * Why a table could not be paginated as authored.
@@ -198,8 +189,25 @@ export class TablePaginationError extends Error {
   }
 }
 
+/** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
+export interface HostedStoryFlowDeps {
+  readonly layoutTextboxStoryFor: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
+  readonly hostedListTokenForParagraph: ((paragraph: OoxmlNode) => string) | null;
+}
+
 export interface TableFlowDeps {
+  /** The current row already has the full page band (possibly below repeated headers). */
+  readonly rowAtPageStart?: boolean;
+  readonly paragraphLineUnitPt?: number;
+  /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
+  readonly snapsStoryLines?: true;
+  /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
+  readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
+  /** Layout-only insets for one repeated-header/body occurrence. */
+  readonly cellContentInsets?: ReadonlyMap<string, CellContentInsets>;
+  /** Occurrence-specific row-minimum clearance, separate from a vMerge content span. */
+  readonly cellMinimumContentInsets?: RowMinimumInsetMap;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]> | undefined;
   readonly producer: string;
   /** Produces a stable id from the paragraph-local line identity. */
@@ -221,18 +229,21 @@ export interface TableFlowDeps {
    * stories that do not share the body counter stream.
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-  /**
-   * The hosted text-box list state a cell paragraph's break key folds — the cell twin of
-   * the `hostedTextboxListToken` fold in `prepareBlock`, built with `hostedListTokenDeps`
-   * and provided only by lanes that lay hosted stories out
-   * ({@link layoutTextboxStoryFor}): where no story renders, the fold would be key churn.
-   */
-  readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** Text-box story layout and its host break-key invalidation, structurally inseparable. */
+  readonly hostedStory?: HostedStoryFlowDeps;
   /**
    * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
+  /** False in a header or footer before mode 15; see `CellAnchorScope.anchorsWrapText`. */
+  readonly anchorsWrapText?: boolean;
+  readonly outOfCellFloatParagraphs?: ReadonlySet<string>; // see table-out-of-cell-floats.ts
+  /** Story boxes start their first table at traversal depth one. */
+  readonly tableNestingOffset?: 1;
+  /** The story is a text box's content. */
+  readonly textBoxStory?: true;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -240,6 +251,12 @@ export interface TableFlowDeps {
   readonly projectLink?: HyperlinkProjector;
   /** Same seam for HYPERLINK fields: a field in a table cell is an ordinary field. */
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
+  /** @internal */
+  readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
+  /** @internal Word TOC character-style suppression. */
+  readonly tocLinkStyleRanges?: import('./toc-link-formatting.ts').TocLinkRanges;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -284,6 +301,8 @@ export interface TableFlowDeps {
    * page it was admitted onto.
    */
   readonly measuringOnly?: boolean;
+  /** A kept row's successor opens with its whole `w:keepLines` paragraphs (`table-row-keeps.ts`). */
+  readonly keepLinesOpening?: boolean;
   /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
@@ -295,10 +314,6 @@ export interface TableFlowDeps {
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
   >;
-  /** Lays out a textbox drawing's story; absent hosts degrade to the placeholder path. */
-  readonly layoutTextboxStoryFor?: (
-    projection: import('../store/package/drawing-projection.ts').DrawingProjection
-  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly pageContentClip?: () => import('./semantic-records.ts').LayoutBox;
   readonly collectAnchoredDrawings?: (drawings: readonly AnchoredDrawingRecord[]) => void;
   /** Root anchor sink — preserved when row defer strips {@link collectAnchoredDrawings}. */
@@ -332,41 +347,7 @@ export interface TableFlowDeps {
   readonly onCellBreakKey?: (key: string) => void;
 }
 
-/**
- * Per-cell progress through a row that may span pages. Indices are into the authored
- * cell.blocks list and the paragraph's broken lines — never DOM geometry.
- */
-export interface CellPlaceCursor {
-  readonly blockIndex: number;
-  readonly lineIndex: number;
-  readonly previousSpaceAfter: number;
-  readonly paragraphFragmentIndex: number;
-  /**
-   * Did the block before `blockIndex` actually PUT a table on the page?
-   *
-   * Carried rather than re-derived, because the only thing left to re-derive it from is the
-   * source node's kind — and a `w:tbl` past the nesting ceiling, or one with no `w:tr` at
-   * all, is a table that emits nothing. Reading the kind on a continuation would let the
-   * terminator collapse behind a table that never appeared on that page.
-   */
-  readonly precededByEmittedTable: boolean;
-}
-
-export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
-  return row.cells.map(() => ({
-    blockIndex: 0,
-    lineIndex: 0,
-    previousSpaceAfter: 0,
-    paragraphFragmentIndex: 0,
-    precededByEmittedTable: false,
-  }));
-}
-
-function sumCols(cols: readonly number[], from: number, to: number): number {
-  let sum = 0;
-  for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
-  return sum;
-}
+export { sumCols } from './table-cell-spacing.ts';
 
 /**
  * Place one paragraph's broken lines sequentially from `top`, producing a single fragment.
@@ -385,65 +366,31 @@ function placeCellParagraph(
   top: number,
   deps: TableFlowDeps,
   previousSpaceAfter: number,
-  options?: {
-    readonly lineStart?: number;
-    readonly fragmentIndex?: number;
-    readonly maxBottom?: number;
-    /** When false, omit trailing paragraph spacing (more content follows on a later page). */
-    readonly includeAfter?: boolean;
-    /** When false, omit the bottom border (paragraph continues). */
-    readonly includeBottomBorder?: boolean;
-    /**
-     * The empty `w:p` a cell must end with when its content ends with a `w:tbl`: placed at
-     * `top` so it stays addressable, but charged nothing — no spacing, no rules, no line
-     * box. Word and LibreOffice both draw it that way.
-     */
-    readonly collapseHeight?: boolean;
-    /**
-     * How much flowed content sits above the collapse point inside this cell.
-     *
-     * The caret for a collapsed terminator is drawn upward from the collapse point, sized off
-     * the line's published `baseline`. That ascent comes from the paragraph MARK's own
-     * `w:rPr` and has nothing to do with the rows above it, so a 36 pt mark over a 6 pt
-     * nested row — or any terminator in a cell shorter than its own ascent — drew a caret
-     * that started above the page. Only the caller knows the band, so it passes it and the
-     * published baseline is clamped into it.
-     */
-    readonly collapseBandAbove?: number;
-    /** What the table style says about this cell's paragraphs (17.7.6.6). */
-    readonly tableCellStyle?: TableCellStyleFormatting;
-    /**
-     * The blocks either side of this one, for the `w:between` group rule (§17.3.1.24).
-     *
-     * Passed as NODES rather than resolved keys: a paragraph with no borders of its own is in
-     * no group, so it never asks either neighbour anything, and that is nearly every
-     * paragraph in a document. Reading them from the block list rather than tracking a
-     * running key also keeps the answer right when a row splits across a page and the
-     * neighbour was placed on the previous one.
-     */
-    readonly borderNeighbours?: {
-      readonly previous: OoxmlElement | undefined;
-      readonly next: OoxmlElement | undefined;
-    };
-  }
+  options?: CellParagraphPlacementOptions
 ): {
   readonly fragment: ParagraphFragmentRecord | null;
   readonly bottom: number;
   readonly spaceAfter: number;
   readonly nextLineIndex: number;
+  readonly nextStartOffset: number;
+  /** The break the page that continues this paragraph indexes; see `cellParagraphLines`. */
+  readonly heldBreak?: HeldCellBreak;
   readonly complete: boolean;
   readonly fitted: boolean;
 } {
   const paragraphId = paragraph.id;
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
   const listItem = deps.listItems?.get(paragraphId);
-  const layoutInputs = resolveParagraphLayoutInputs(
-    paragraph,
-    cellContentWidth,
-    deps.styleCascade,
-    listItem,
-    options?.tableCellStyle,
-    true
+  const layoutInputs = withStoryLineGrid(
+    cellParagraphInputs(
+      paragraph,
+      cellContentWidth,
+      deps.styleCascade,
+      listItem,
+      options?.tableCellStyle,
+      deps.paragraphLineUnitPt
+    ),
+    deps.snapsStoryLines && options?.inTableCell === false ? deps.paragraphLineUnitPt : undefined
   );
   const {
     props,
@@ -452,57 +399,83 @@ function placeCellParagraph(
     alignment,
     styleId,
     outlineLevel,
-    spacing,
-    lineSpacing,
+    spacing: authoredSpacing,
     bottomBorder,
     borders,
     shading,
-    inheritedRunProperties,
-    markRunProperties,
-    tabStops: cascadedTabStops,
-    tabStopsCacheToken: cascadedTabStopsCacheToken,
   } = layoutInputs;
+  const edgeSpacing = cellEdgeAutoSpacing(
+    authoredSpacing,
+    props,
+    options?.firstInCell === true,
+    options?.lastInCell === true
+  );
+  const spacing = cellContextualSpacing(
+    edgeSpacing,
+    layoutInputs.contextualSpacing,
+    styleId,
+    contextualCellNeighbours(paragraph, options?.borderNeighbours),
+    deps.styleCascade,
+    options?.tableCellStyle
+  );
+  const rtl = paragraphIsRtl(props);
   // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
   // bordered block — the box opens above the first and closes below the last, and each
   // interior boundary carries `w:between` or nothing. This is the cell twin of the body
   // flow's rule, so one document cannot draw the same callout two ways depending on whether
   // it sits in a `w:tc`.
-  const borderGroupContext: CellBorderGroupContext = {
-    styleCascade: deps.styleCascade,
-    tableCellStyle: options?.tableCellStyle,
-    listItems: deps.listItems,
-  };
-  const borderGroupKey = paragraphBorderGroupKey(layoutInputs);
-  rememberCellBorderGroupKey(paragraph, borderGroupContext, borderGroupKey);
-  const inSameBorderGroup = (block: OoxmlElement | undefined): boolean =>
-    borderGroupKey !== '' && neighbourBorderGroupKey(block, borderGroupContext) === borderGroupKey;
-  const continuesAbove = inSameBorderGroup(options?.borderNeighbours?.previous);
-  const continuesBelow = inSameBorderGroup(options?.borderNeighbours?.next);
+  const { continuesAbove, continuesBelow } = cellBorderContinuation(
+    paragraph,
+    paragraphBorderGroupKey(layoutInputs),
+    {
+      styleCascade: deps.styleCascade,
+      tableCellStyle: options?.tableCellStyle,
+      listItems: deps.listItems,
+    },
+    options?.borderNeighbours
+  );
   const topEdge = continuesAbove ? undefined : borders.top;
   // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
   const closingEdge = continuesBelow ? borders.between : bottomBorder;
-  // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
-  const tabStops = withDefaultTabInterval(cascadedTabStops, deps.defaultTabStopPt);
-  const tabStopsCacheToken =
-    tabStops === cascadedTabStops ? cascadedTabStopsCacheToken : tabStopsFingerprint(tabStops);
+  const { tabStops, properties: breakProperties } = cellParagraphBreakInputs(
+    paragraph,
+    layoutInputs,
+    deps.defaultTabStopPt,
+    {
+      listToken: listItem && listLayoutToken(listItem),
+      hostedListToken: deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '',
+      refToken: deps.refFields?.tokenForParagraph(paragraphId) ?? '',
+    }
+  );
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
-  // offset. Contextual spacing is a body-flow question (it compares document neighbours),
-  // so it is not applied per cell.
+  // offset. Contextual spacing compares neighbours within this cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
   // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
   // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
   // the next tab stop past an overflowing one (§17.9.30).
-  const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
-  const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
-  const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
-  const filtered = deps.paragraphOrderIndex
-    ? filterExclusionZonesForParagraphOrder(rawZones, paragraphOrder, (id) =>
-        deps.paragraphOrderIndex?.(id)
-      )
-    : rawZones;
-  const pageZones = localizeExclusionZones(filtered, originX, 0, {
-    left: 0,
-    right: indent.left + available + indent.right,
+  const startOffset = options?.startOffset ?? 0;
+  const startsParagraph = startOffset === 0 && (options?.lineStart ?? 0) === 0;
+  // A legacy line-index cursor still breaks the full paragraph before slicing it.
+  // Only a model-offset continuation removes the first-line indent from the break.
+  const firstLineOffset =
+    startOffset === 0
+      ? directionalListFirstLineShift(listItem, indent, deps.measurer, tabStops, available, rtl)
+      : 0;
+  const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
+  const storyFrame = !anchorScope.inTableCell ? deps.anchorFrameBase?.() : undefined;
+  const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
+  // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
+  const cellBoxWidth = indent.left + available + indent.right;
+  // Only zones that can reach this paragraph: one above it or beside its lines changes nothing.
+  const pageZones = zonesReachingCellParagraph(rawZones, {
+    paragraphOrderIndex: deps.paragraphOrderIndex,
+    originX,
+    width: cellBoxWidth,
+    paragraphId,
+    top,
+    // Where the breaker places the lines: its first-line origin is `left + firstLineOffset`.
+    linesLeft: indent.left + Math.min(0, firstLineOffset),
+    linesRight: cellBoxWidth - indent.right,
   });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
@@ -510,87 +483,87 @@ function placeCellParagraph(
   // otherwise share a cache entry and the one that sits clear of the picture would inherit
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
-  const positionedExclusionToken = exclusionToken ? `${top.toFixed(3)}|${exclusionToken}` : '';
-  // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
-  // renumbering edit moves the painted reference while the cell's subtree stays identical.
-  const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
-  // The list state of any hosted text-box story, keyed as the body flow keys it: its own
-  // `txbxList` property. A numbering edit moves only this property while the host's
-  // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
-  const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
-  const key = keyFor({
+  const positionedExclusionToken = positionedParagraphExclusionToken(exclusionToken, top);
+  // `positioned` false names the break apart from where the paragraph sits, for a held break.
+  const keyParts = cellBreakKeyParts(
     paragraph,
-    properties: [
-      ...props,
-      ...inheritedRunProperties,
-      ...markRunProperties,
-      { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-      ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
-      ...(hostedListToken
-        ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-        : []),
-      ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
-    ],
-    width: available,
-    producer: deps.producer,
-    // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
-    // context changes how a paragraph breaks (drawings become measured atoms), so a
-    // token-less pass with the context may not share cell entries with one without it.
-    // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
-    // document-wide token, as it always has.
-    drawingToken: withDrawingContext(
-      deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
-      deps.inlineDrawingLayout !== undefined
-    ),
-    projectionToken: deps.projectionTokenForParagraph?.(paragraph) ?? '',
-    ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
-  });
-  if (deps.cache) deps.onCellBreakKey?.(key);
-  const lines = breakParagraph(
-    paragraph,
-    paragraphId,
-    indent.left,
-    available,
-    deps.measurer,
-    deps.cache,
-    deps.cache ? key : null,
-    inheritedRunProperties,
-    tabStops,
-    deps.pageContext,
-    deps.styleCascade
-      ? (inherited, direct) => cascadeRunProperties(inherited, direct, deps.styleCascade)
-      : undefined,
-    {
-      lineSpacing,
-      equationCacheToken: deps.producer,
-      firstLineOffset,
-      // A cell's own content box is the column a positional tab measures against.
-      marginExtent: { left: 0, right: indent.left + available + indent.right },
-      ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
-      ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
-      ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-      ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
-      ...(deps.refFields ? { refFields: deps.refFields } : {}),
-      displayMode: deps.displayMode,
-      ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
-      ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-      ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
-      contentLeft: 0,
-      contentRight: indent.left + available + indent.right,
-      paragraphStartY: top,
-      anchorCellBox: Object.freeze({
-        x: 0,
-        y: 0,
-        width: indent.left + available + indent.right,
-        height: Math.max(1, available),
-      }),
-      ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
-      ...(deps.styleCascade ? { themeFonts: deps.styleCascade.themeFonts } : {}),
-      markRunProperties,
-    }
+    deps,
+    options?.inTableCell === true,
+    options?.cellEndMark === true,
+    anchorScope.rowsClearOutOfCellFloats
   );
-
-  const lineStart = options?.lineStart ?? 0;
+  const keyFrom = (offset: number, positioned = true): string =>
+    keyFor({
+      ...cellBreakKeyInputs(paragraph, breakProperties, available, keyParts, offset),
+      ...(positioned && positionedExclusionToken
+        ? { exclusionToken: positionedExclusionToken }
+        : {}),
+    });
+  let reportedKey: string | undefined;
+  const breakRemainder = (): readonly PendingLine[] => {
+    const key = (reportedKey = keyFrom(startOffset));
+    if (deps.cache) deps.onCellBreakKey?.(key);
+    return breakPreparedParagraphLazily(
+      deps.cache,
+      deps.cache ? key : null,
+      () => ({
+        compatibilityMode: deps.compatibilityMode,
+        paragraph,
+        paragraphId,
+        indentLeft: indent.left,
+        available,
+        measurer: deps.measurer,
+        formatting: layoutInputs,
+        producer: deps.producer,
+        styleCascade: deps.styleCascade,
+        tabStops,
+        ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
+        flow: {
+          firstLineOffset,
+          ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
+          startOffset,
+          marginExtent: { left: 0, right: cellBoxWidth },
+          ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+          ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
+          showFieldCodes: deps.showFieldCodes,
+          fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
+          tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
+          suppressEmptyPlaceholderLine: deps.fieldCodeRanges
+            ?.get(paragraphId)
+            ?.some((range) => range.suppressParagraph),
+          ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
+          ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+          ...(deps.refFields ? { refFields: deps.refFields } : {}),
+          displayMode: deps.displayMode,
+          ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
+          ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
+          ...inlineDrawingFlow(deps.inlineDrawingLayout, deps.hostedStory),
+          contentLeft: 0,
+          contentRight: cellBoxWidth,
+          paragraphStartY: top,
+          ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
+          ...(storyFrame?.storyKind === 'header' ? { anchorFrameBase: storyFrame } : {}),
+          ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+        },
+      }),
+      () =>
+        deps.cache && !rtl && startOffset === 0 && pageZones.length === 0 && !listItem
+          ? reuseSingleLineAtWidth(deps.cache, paragraph, key, available)
+          : undefined
+    );
+  };
+  const placement = cellParagraphLines({
+    paragraph,
+    startOffset,
+    continuedAfter: options?.startOffset !== undefined ? (options?.lineStart ?? 0) : undefined,
+    legacyLineStart: options?.lineStart ?? 0,
+    held: options?.heldBreak,
+    zones: pageZones,
+    inlineDrawingLayout: deps.inlineDrawingLayout,
+    heldKey: () => keyFrom(0, false),
+    breakRemainder,
+  });
+  const { lines: brokenLines, lineStart, priorLineCount } = placement;
   const fragmentIndex = options?.fragmentIndex ?? 0;
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
@@ -613,18 +586,18 @@ function placeCellParagraph(
   // tracked-INSERTED publishes neither, so blocking there would keep a line Word's accept-all
   // output does not have. (A tracked DELETE is a different case and never reaches here: the
   // resolved view merges that paragraph away upstream.)
-  // Called behind the position gate: every paragraph is scanned on every placement pass,
-  // including trial rows and continuations; `||` cannot skip the `w:pPr`/`w:rPr` scan because
-  // `listItem` is undefined for the non-list paragraphs that are the overwhelming majority.
-  // The same pair of calls further down is gated on `showsMarkup` for exactly this reason.
+  // Check intrinsic glyphs only behind the collapse or hideMark placement gates.
   const publishesPlacedGlyphs = (): boolean =>
     listItem !== undefined ||
     (deps.displayMode === 'all-markup' &&
       paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
+  // An empty cell keeps its line box. An empty final paragraph after other content in a
+  // `w:hideMark` cell collapses instead (`cellTerminatorCollapses`).
+  const lines = brokenLines;
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
   const appliedBefore =
-    lineStart === 0 && !collapseHeight
+    startsParagraph && !collapseHeight
       ? collapsedSpaceBefore(spacing.before, previousSpaceAfter)
       : 0;
   const fragmentX = originX + indent.left;
@@ -632,12 +605,16 @@ function placeCellParagraph(
   // is flow height below the last — so the cell's content band has to reserve it or a boxed
   // paragraph's frame paints over the cell's own top border. Reserved on the FIRST fragment
   // only: a paragraph continued onto the next page opens once, the way it closes once.
-  const topExtent = lineStart === 0 && !collapseHeight ? paragraphBorderExtentPt(topEdge) : 0;
+  const topExtent = startsParagraph && !collapseHeight ? paragraphBorderExtentPt(topEdge) : 0;
   const rawRecords: LineRecord[] = [];
-  let y = top + appliedBefore + topExtent;
+  let y = cellParagraphFirstTop(top, appliedBefore, topExtent);
   let nextLineIndex = lineStart;
   let fitted = false;
 
+  // Decide the cut before publishing line ids or drawings. A widow retreat must not
+  // leave side effects from a line that will actually be placed on the following page.
+  const lineTops: number[] = [];
+  let probeY = y;
   for (let lineIndex = lineStart; lineIndex < lines.length; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
@@ -648,63 +625,83 @@ function placeCellParagraph(
     const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
     const skipBefore = collapseHeight
       ? 0
-      : pageZones.length > 0
-        ? topAndBottomSkipBeforeLine(y, pendingLine.height, pageZones)
-        : (pendingLine.exclusionSkipBefore ?? 0);
+      : pendingLineExclusionSkipAtPlacement(pendingLine, probeY, pageZones);
     const lineBottom = collapseHeight
-      ? y
-      : y + skipBefore + pendingLine.height + borderExtra + afterExtra;
-    if (lineBottom > maxBottom + 0.001) {
+      ? probeY
+      : probeY + skipBefore + pendingLine.height + borderExtra + afterExtra;
+    const requiredBottom =
+      isLastLine && !collapseHeight
+        ? Math.max(lineBottom, options?.cellEndMarkMinBottom ?? lineBottom)
+        : lineBottom;
+    if (!cellLineFits(requiredBottom, maxBottom, probeY + skipBefore, collapseHeight, options)) {
+      if (placesOversizedLine(options, deps, lineTops.length, skipBefore)) lineTops.push(probeY);
       break;
     }
-    y += skipBefore;
-    const lineIndent = originX + indent.left + (lineIndex === 0 ? firstLineOffset : 0);
-    const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
-    const placedSpans = pendingLine.spans.map((span) => ({
-      ...span,
-      range: { ...span.range, paragraphId },
-      box: { ...span.box, x: span.box.x + originX, y },
-    }));
-    const alignedSpans = alignSpans(
-      placedSpans,
-      deps.measurer,
-      lineIndent,
-      lineAvailableWidth,
-      alignment,
-      isLastLine,
-      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+    lineTops.push(probeY + skipBefore);
+    if (!collapseHeight) probeY += skipBefore + pendingLine.height;
+  }
+  let lineEnd = lineStart + lineTops.length;
+  // Legacy table flow ignores widow control even when the paragraph enables it.
+  if (
+    lineEnd < lines.length &&
+    hasCompatibilityRule(deps.compatibilityMode, 'tableParagraphWidowControl') &&
+    options?.applyWidowControl !== false
+  ) {
+    lineEnd = adjustedBreakIndex(
+      lineEnd,
+      lineStart,
+      lines.length,
+      // Cross-paragraph keeps remain a row-level decision. This cut only controls
+      // how many lines of this paragraph remain on either side of the page edge.
+      {
+        ...paragraphKeeps(props),
+        keepLines: !!deps.keepLinesOpening && paragraphKeeps(props).keepLines,
+      },
+      options?.aloneOnPage ?? true
     );
-    // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
-    const alignOffset =
-      placedSpans.length > 0 && alignedSpans.length > 0
-        ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-        : alignment !== 'left' && alignment !== 'both'
-          ? (() => {
-              const slack = lineAvailableWidth - pendingLine.width;
-              if (slack <= 0) return 0;
-              return alignment === 'center' ? slack / 2 : slack;
-            })()
-          : 0;
+  }
+  const lineAlignment = {
+    measurer: deps.measurer,
+    styleCascade: deps.styleCascade,
+    props,
+    alignment,
+    rtl,
+    inTableCell: options?.inTableCell === true,
+  };
+  for (let lineIndex = lineStart; lineIndex < lineEnd; lineIndex += 1) {
+    const pendingLine = lines[lineIndex]!;
+    const isLastLine = lineIndex === lines.length - 1;
+    y = lineTops[lineIndex - lineStart]!;
+    const lineIndent = originX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
+    const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+    // Spans and inline drawings come from one pen, so they share one origin.
+    const penX = originX - (rtl && lineIndex === 0 ? firstLineOffset : 0);
     const cellClip = Object.freeze({
       x: originX,
       y: top,
       width: cellContentWidth,
       height: Math.max(0, maxBottom - top),
     });
-    const alignedDrawings = alignDrawings(
-      pendingLine.drawings.map((drawing) =>
-        clipInlineDrawingRecordToRegion(
-          Object.freeze({
-            ...shiftInlineDrawingRecord(drawing, originX, y),
-            paragraphId,
-          }),
-          cellClip
-        )
-      ),
-      alignOffset
+    const placedDrawings = pendingLine.drawings.map((drawing) =>
+      Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId })
+    );
+    const content = alignCellLine(
+      pendingLine,
+      paragraphId,
+      penX,
+      y,
+      placedDrawings,
+      lineIndent,
+      lineAvailableWidth,
+      isLastLine,
+      lineAlignment
+    );
+    const { spans: alignedSpans, offset: alignOffset } = content;
+    const alignedDrawings = content.drawings.map((drawing) =>
+      clipInlineDrawingRecordToRegion(drawing, cellClip)
     );
     rawRecords.push({
-      id: deps.nextLineId(paragraphId, pendingLine.start, lineIndex),
+      id: deps.nextLineId(paragraphId, pendingLine.start, priorLineCount + lineIndex),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
       spans: alignedSpans,
       ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
@@ -718,14 +715,16 @@ function placeCellParagraph(
         // caret until something is typed into it, which un-collapses it.
         height: collapseHeight ? 0 : pendingLine.height,
       },
-      contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
+      contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
       baseline: collapseHeight
         ? Math.max(0, Math.min(pendingLine.baseline, options?.collapseBandAbove ?? 0))
         : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
+      ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
+      ...(pendingLine.changeSites ? { changeSites: pendingLine.changeSites } : {}),
     });
     if (!collapseHeight) y += pendingLine.height;
     nextLineIndex = lineIndex + 1;
@@ -737,7 +736,8 @@ function placeCellParagraph(
       fragment: null,
       bottom: top,
       spaceAfter: previousSpaceAfter,
-      nextLineIndex: lineStart,
+      nextLineIndex: priorLineCount + lineStart,
+      nextStartOffset: startOffset,
       complete: false,
       fitted: false,
     };
@@ -759,10 +759,11 @@ function placeCellParagraph(
   // Stroke thickness uses the inflated compound band for `double`/etc. (shared with body).
   const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
   const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
-  const boxLeft = borders.left ? fragmentX - borders.left.spacePt - leftStroke : fragmentX;
-  const boxRight = borders.right
-    ? fragmentX + available + borders.right.spacePt + rightStroke
-    : fragmentX + available;
+  const outdent = paragraphBoxOutdent(indent, rtl);
+  const columnLeft = fragmentX - outdent.left;
+  const columnRight = fragmentX + available + outdent.right;
+  const boxLeft = borders.left ? columnLeft - borders.left.spacePt - leftStroke : columnLeft;
+  const boxRight = borders.right ? columnRight + borders.right.spacePt + rightStroke : columnRight;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && topEdge) {
     const topStroke = paragraphBorderStrokeWidthPt(topEdge);
@@ -801,7 +802,7 @@ function placeCellParagraph(
   //
   // Inside a `w:between` group they run THROUGH the inter-paragraph gap instead, so the box
   // reads as one outline rather than a ladder — the body flow's rule, in the cell lane.
-  const sideTop = continuesAbove && lineStart === 0 ? top : contentTop;
+  const sideTop = continuesAbove && startsParagraph ? top : contentTop;
   const sideBottom = continuesBelow && complete ? contentBottom + appliedAfter : contentBottom;
   const sideHeight = Math.max(sideBottom - sideTop, 0);
   if (borders.left) {
@@ -809,7 +810,7 @@ function placeCellParagraph(
       side: 'left',
       edge: borders.left,
       box: {
-        x: fragmentX - borders.left.spacePt - leftStroke,
+        x: boxLeft,
         y: sideTop,
         width: leftStroke,
         height: sideHeight,
@@ -821,7 +822,7 @@ function placeCellParagraph(
       side: 'right',
       edge: borders.right,
       box: {
-        x: fragmentX + available + borders.right.spacePt,
+        x: columnRight + borders.right.spacePt,
         y: sideTop,
         width: rightStroke,
         height: sideHeight,
@@ -874,25 +875,38 @@ function placeCellParagraph(
     : null;
   const markRevisions = markProjection?.revisions ?? [];
   const markFormatRevision = markProjection?.formatRevision ?? null;
-  const marker =
-    lineStart === 0
-      ? publishListMarker(
-          listItem,
-          deps.measurer,
-          rawRecords[0] ? { y: rawRecords[0].box.y, height: rawRecords[0].box.height } : undefined,
-          originX
-        )
-      : undefined;
+  // The resolved lanes (no mode, or a resolved one) still report the mark decisions they
+  // answered, for the Simple Markup change bar.
+  const resolvedMode = deps.displayMode ?? 'proposed';
+  const markChangeSites = complete
+    ? resolvedParagraphMarkChangeSites(paragraph, resolvedMode, deps.revisionAuthorFilter)
+    : [];
+  const marker = startsParagraph
+    ? publishListMarker(
+        listItem,
+        deps.measurer,
+        rawRecords[0],
+        originX,
+        rtl ? indent.left + available + indent.right : undefined,
+        deps.inlineDrawingLayout?.pictureBulletResource
+      )
+    : undefined;
 
   // A cell is a story, so a resolved view merges inside it too — and the identity of the
   // merged half has to come back the same way it does in the body flow.
   const mergeGroup = paragraphMergeGroupOf(paragraph);
   const records = mergeGroup
-    ? remapMergedLines(rawRecords, mergeBoundariesOf(mergeGroup))
+    ? remapMergedLines(
+        rawRecords,
+        mergeBoundariesOf(mergeGroup, resolvedMode, deps.revisionAuthorFilter)
+      )
     : rawRecords;
+  const clipToBox = options?.clipOverflow === true && bottom > maxBottom + 0.001;
+  const placedBottom = clipToBox ? Math.max(top, Math.min(maxBottom, bottom)) : bottom;
   const fragment = {
     kind: 'paragraph' as const,
     id: `${paragraphId}#f${fragmentIndex}`,
+    ...(complete ? { paragraphEnd: true as const } : {}),
     paragraphId,
     fragmentIndex,
     range: {
@@ -913,12 +927,20 @@ function placeCellParagraph(
     ...(shadingBox === undefined ? {} : { shadingBox }),
     ...(marker ? { marker } : {}),
     ...markRevisionFields(markRevisions, markFormatRevision),
+    ...(markChangeSites.length > 0 ? { markChangeSites } : {}),
     lines: records,
+    ...(clipToBox ? { clipToBox: true as const } : {}),
+    ...emptyParagraphStyleFields(
+      records,
+      layoutInputs.markRunProperties,
+      deps.styleCascade?.themeFonts,
+      complete
+    ),
     box: {
-      x: fragmentX,
+      x: clipToBox ? originX : fragmentX,
       y: top,
-      width: available,
-      height: bottom - top,
+      width: clipToBox ? cellContentWidth : available,
+      height: placedBottom - top,
     },
   };
 
@@ -953,9 +975,13 @@ function placeCellParagraph(
           frameBase: deps.anchorFrameBase(),
           columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
           cellBox,
+          cellContentBox: cellBox,
           pageClip: deps.pageContentClip(),
+          cellAnchorScope: anchorScope,
           measurer: deps.measurer,
-          ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+          ...(deps.hostedStory
+            ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor }
+            : {}),
           ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
           ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
         })
@@ -963,11 +989,25 @@ function placeCellParagraph(
     }
   }
 
+  if (complete && startsParagraph && !collapseHeight && !pageZones.length && !rtl && !listItem)
+    rememberCellLine(
+      fragment,
+      paragraph,
+      lines,
+      layoutInputs,
+      breakProperties,
+      keyParts,
+      deps,
+      reportedKey,
+      { appliedBefore, topExtent, appliedAfter }
+    );
   return {
     fragment,
-    bottom,
-    spaceAfter: appliedAfter,
-    nextLineIndex,
+    bottom: placedBottom,
+    spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
+    nextLineIndex: priorLineCount + nextLineIndex,
+    nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
+    ...(complete ? {} : { heldBreak: placement.carry() }),
     complete,
     fitted: true,
   };
@@ -1016,7 +1056,11 @@ function flowBlocksInBoxBounded(
   cursor: CellPlaceCursor,
   tableCellStyle?: TableCellStyleFormatting,
   /** True for a `w:tc`: its last block may be the empty terminator a nested table forces. */
-  inTableCell = false
+  inTableCell = false,
+  cellEndMarkMinBottom?: number,
+  hideEndMark = false,
+  applyWidowControl = true,
+  clipOverflow = false
 ): {
   readonly blocks: BlockFragmentRecord[];
   readonly bottom: number;
@@ -1030,6 +1074,9 @@ function flowBlocksInBoxBounded(
   let previousSpaceAfter = cursor.previousSpaceAfter;
   let blockIndex = cursor.blockIndex;
   let lineIndex = cursor.lineIndex;
+  let startOffset = cursor.startOffset;
+  const heldBreak = cursor.heldBreak;
+  let nestedTable = cursor.nestedTable;
   let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
   let fitted = false;
   let nestedSplitBlocked = false;
@@ -1040,20 +1087,27 @@ function flowBlocksInBoxBounded(
     const block = blocks[blockIndex]!;
     if (block.kind === 'table') {
       if (lineIndex !== 0) {
-        // Should not happen — tables are whole blocks.
+        // Nested table progress has its own row cursor, never a paragraph line index.
         lineIndex = 0;
       }
       previousSpaceAfter = 0;
-      // Nested tables are atomic across row splits: place wholly or stop before them.
-      const nested = emitNestedTable(block, left, right, y, depth + 1, deps);
+      const nested = emitNestedTable(
+        block,
+        left,
+        right,
+        y,
+        depth + 1,
+        deps,
+        maxBottom,
+        nestedTable,
+        !fitted && deps.rowAtPageStart === true
+      );
       if (!nested) {
         lastEmittedTable = false;
         blockIndex += 1;
         continue;
       }
-      if (nested.bottom > maxBottom + 0.001) {
-        // Stop before the nested table. If nothing fitted yet on a fresh band, the caller
-        // treats this as an unsplittable overheight once page moves are exhausted.
+      if (!nested.fragment) {
         nestedSplitBlocked = !fitted;
         break;
       }
@@ -1061,32 +1115,28 @@ function flowBlocksInBoxBounded(
       y = nested.bottom;
       fitted = true;
       lastEmittedTable = true;
+      nestedTable = nested.remainder;
+      if (nestedTable) break;
       blockIndex += 1;
       lineIndex = 0;
+      startOffset = undefined;
       continue;
     }
     if (block.kind !== 'paragraph') {
       lastEmittedTable = false;
       blockIndex += 1;
       lineIndex = 0;
+      startOffset = undefined;
       continue;
     }
 
-    // POSITION only. Whether this paragraph may actually collapse is one question about what
-    // it would publish, and `placeCellParagraph` is where every answer to it already lives —
-    // see `publishesPlacedGlyphs` there. Deciding it in two places is how the list marker and
-    // the tracked paragraph mark each arrived as their own late special case.
-    //
-    // `lastEmittedTable` rather than the source node's kind: `emitNestedTable` returns null
-    // for a `w:tbl` past the nesting ceiling and for one with no `w:tr` at all (schema-valid,
-    // `EG_ContentRowContent` is minOccurs=0), and the walk simply steps over it. Collapsing
-    // behind a table that produced nothing leaves the row with no content and no terminator,
-    // which paints as a hairline.
-    const collapsible =
-      inTableCell &&
-      blockIndex === blocks.length - 1 &&
-      lastEmittedTable &&
-      isEmptyCellTerminator(block);
+    const collapsible = cellTerminatorCollapses(block, {
+      inTableCell,
+      last: blockIndex === blocks.length - 1,
+      afterEmittedTable: lastEmittedTable,
+      hideEndMark,
+      afterPlacedContent: fragments.length > 0,
+    });
     const placed = placeCellParagraph(
       block,
       left,
@@ -1095,11 +1145,24 @@ function flowBlocksInBoxBounded(
       deps,
       previousSpaceAfter,
       {
+        inTableCell,
         lineStart: lineIndex,
+        startOffset,
+        // Only the cursor's own paragraph continues; every later block starts fresh.
+        heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
+        applyWidowControl,
+        aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
         maxBottom,
+        clipOverflow,
         includeAfter: true,
         includeBottomBorder: true,
+        firstInCell: blockIndex === 0,
+        lastInCell: blockIndex === blocks.length - 1,
+        cellEndMark:
+          (hideEndMark || cellEndMarkMinBottom !== undefined) && blockIndex === blocks.length - 1,
+        hideEndMark: hideEndMark && blockIndex === blocks.length - 1,
+        cellEndMarkMinBottom: blockIndex === blocks.length - 1 ? cellEndMarkMinBottom : undefined,
         collapseHeight: collapsible,
         collapseBandAbove: y - top,
         ...(tableCellStyle ? { tableCellStyle } : {}),
@@ -1120,19 +1183,14 @@ function flowBlocksInBoxBounded(
       lastEmittedTable = false;
       blockIndex += 1;
       lineIndex = 0;
+      startOffset = undefined;
       paragraphFragmentIndex = 0;
     } else {
       // Paragraph continues on the next page.
       return {
         blocks: fragments,
         bottom: y,
-        cursor: {
-          blockIndex,
-          lineIndex: placed.nextLineIndex,
-          previousSpaceAfter: 0,
-          paragraphFragmentIndex: paragraphFragmentIndex + 1,
-          precededByEmittedTable: lastEmittedTable,
-        },
+        cursor: continuedCellCursor(blockIndex, placed, paragraphFragmentIndex, lastEmittedTable),
         complete: false,
         fitted: true,
         nestedSplitBlocked: false,
@@ -1146,6 +1204,9 @@ function flowBlocksInBoxBounded(
     cursor: {
       blockIndex,
       lineIndex,
+      startOffset,
+      ...unplacedHeldBreak(cursor, blockIndex, startOffset),
+      ...(nestedTable ? { nestedTable } : {}),
       previousSpaceAfter,
       paragraphFragmentIndex,
       precededByEmittedTable: lastEmittedTable,
@@ -1241,16 +1302,17 @@ export function layoutRowFragmentBounded(
 ): LayoutRowBoundedResult {
   const detachedSpans = vMerge?.detachedSpanHeightPtByCellId;
   const total = sumCols(cols, 0, cols.length);
-  // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
-  // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
-  // sharing a gap gives up half of it. Applied inside the grid slot rather than by widening
-  // the table, which keeps every column boundary, border interval and hit box where the
-  // resolved grid put it.
-  const gap = Number.isFinite(cellSpacingPt) && cellSpacingPt > 0 ? cellSpacingPt / 2 : 0;
+  // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring
+  // cells, and a cell and the table edge, sit twice that apart. The gaps come out of the
+  // table's own width, and every column gives up its share in proportion to its width.
+  const gap = cellSpacingGeometry(cols, cellSpacingPt);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  // The same spacing opens a gap above each row's cells: content starts that much lower and
+  // the table closes the gap below its last row. An exact row keeps its authored height.
+  const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
   const flowDeps: TableFlowDeps =
@@ -1281,41 +1343,35 @@ export function layoutRowFragmentBounded(
     readonly complete: boolean;
     readonly fitted: boolean;
     readonly nestedSplitBlocked: boolean;
+    readonly flowTo?: (
+      right: number,
+      relayout?: boolean
+    ) => ReturnType<typeof flowBlocksInBoxBounded>;
   }
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Grow from the row top. Empty / vMerge-continue cells contribute one default line plus
-  // THEIR authored insets below; fitted cells contribute measured content only. Seeding with
-  // `defaultLineHeight + 2 * pad` used to force ~20pt rows even when tcMar was tighter
-  // and the cell's own line was shorter — nested tables picked that up as blank bottom pad.
+  // Continuation and waiting `btLr` cells size no row; alone, their end marks do.
+  const waits = waitsForRowHeight;
+  const markSizedRow =
+    row.cells.length > 0 && row.cells.every((cell) => cell.vMergeContinue || waits(cell));
   let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
-    // Keep this typed: otherwise TypeScript can hide a missing cursor member.
-    // a `boolean`, and the collapse would silently never fire for that cell.
-    const cursor: CellPlaceCursor = cursors[cellIndex] ?? {
-      blockIndex: 0,
-      lineIndex: 0,
-      previousSpaceAfter: 0,
-      paragraphFragmentIndex: 0,
-      precededByEmittedTable: false,
-    };
-    // The grid column is decided once, at read time, where `w:gridBefore` is known and the
-    // row's TOTAL span is bounded (a row of maximum-span cells would otherwise walk millions
-    // of grid intervals in the border pass). Never re-derived by accumulating spans here.
-    const span = cell.gridSpan;
-    const gridColumn = cell.gridColumn;
+    const cursor: CellPlaceCursor = cursors[cellIndex] ?? initialCellCursor();
+    // The reader resolves gridBefore and bounds the total span before border-grid walks.
+    const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    // Never let the gap consume the cell: a spacing wider than the column keeps a hairline.
-    const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
-    const cellX = slotX + inset;
-    const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
-    const insets = contentInsets(cell.margins, cell.borders);
-    const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
-    // Always reserve bottom inset so the fragment never paints into the margin/border band.
+    const spaced = gap && gridColumn < cols.length ? gap : null;
+    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
+    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
+    const ownInsets =
+      deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
+    const insets = rowGapPt > 0 ? { ...ownInsets, top: ownInsets.top + rowGapPt } : ownInsets;
+    // Each page fragment retains the cell padding, even when its paragraph continues.
+    const topInset = insets.top;
     // A detached head answers to the page and to its own SPAN, and to nothing about this
     // row: `hRule="exact"` fixes the height of the ROW (17.18.37) while the merged content
     // goes on through the rows below it. The span arrives as a HEIGHT and becomes a bottom
@@ -1323,42 +1379,61 @@ export function layoutRowFragmentBounded(
     // and a head that outruns either bound hands back a remainder rather than losing a line.
     const spanHeightPt = detachedSpans?.get(cell.id);
     const isDetached = spanHeightPt !== undefined;
+    // A fixed-row span shorter than its head clips it at the span bottom.
+    const clipsSpan = isDetached && vMerge?.clippedSpanCellIds?.has(cell.id) === true;
     const cellMaxBottom = isDetached
       ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
       : flowMaxBottom;
     const vertical = cell.textDirection === 'btLr';
-    const flowLeft = vertical ? cellX + insets.bottom : cellX + insets.left;
-    const flowRight = vertical
-      ? cellX + Math.max(0, cellMaxBottom - rowTop) - topInset
-      : cellX + cellW - insets.right;
-    const contentTop = vertical ? rowTop + insets.left : rowTop + topInset;
-    const contentMaxBottom = vertical
-      ? rowTop + cellW - insets.right
-      : cellMaxBottom - insets.bottom;
+    const box = cellFlowBox(vertical, cellX, cellW, rowTop, cellMaxBottom, insets);
+    const { flowLeft, flowRight, contentTop, contentMaxBottom } = box;
 
+    const { markFloor, continuation: continuationPt } = cellReservedMarkHeights(
+      cell,
+      flowRight - flowLeft,
+      flowDeps,
+      { vertical, markSizedRow }
+    );
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
     let nextCursor = cursor;
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
+    const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
+      flowBlocksInBoxBounded(
+        cell.blocks,
+        flowLeft,
+        right,
+        contentTop,
+        contentMaxBottom,
+        depth,
+        relayout ? withoutAnchorSinks(flowDeps) : flowDeps,
+        cursor,
+        cell.styleFormatting,
+        true,
+        vertical
+          ? undefined
+          : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
+        cell.hideEndMark,
+        // Fixed cell boxes clip; their bottom is not a paragraph page break.
+        !vertical && ((isDetached && !clipsSpan) || exactHeightPt === undefined),
+        clipsSpan ||
+          clipsExactCellRow(
+            vertical,
+            exactHeightPt,
+            isDetached,
+            cell.headsVerticalMerge === true,
+            rowTop,
+            maxBottom
+          )
+      );
 
-    if (!cell.vMergeContinue) {
-      if (contentMaxBottom < contentTop + 0.001) {
+    if (!cell.vMergeContinue && !waits(cell)) {
+      if (contentMaxBottom < contentTop - 0.001) {
         complete = cursor.blockIndex >= cell.blocks.length;
       } else {
-        const flow = flowBlocksInBoxBounded(
-          cell.blocks,
-          flowLeft,
-          flowRight,
-          contentTop,
-          contentMaxBottom,
-          depth,
-          flowDeps,
-          cursor,
-          cell.styleFormatting,
-          true
-        );
+        const flow = flowTo(flowRight);
         blocks = flow.blocks;
         contentBottom = flow.bottom;
         nextCursor = flow.cursor;
@@ -1372,14 +1447,22 @@ export function layoutRowFragmentBounded(
 
     // Fitted content owns the height (including its final paragraph's spaceAfter). Do not
     // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
-    // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
+    // shorter than the DEFAULT_RUN_STYLE line. Continuations contribute no phantom line.
+    const lastBlock = blocks.at(-1);
+    const appliedMarkFloor =
+      complete && lastBlock?.kind === 'paragraph' && lastBlock.box.height > 0 ? markFloor : 0;
     const cellBottom = Math.min(
       cellMaxBottom,
-      vertical && fitted
-        ? rowTop + topInset + (blockInlineRight(blocks, flowLeft) - flowLeft) + insets.bottom
-        : fitted
-          ? contentBottom + insets.bottom
-          : rowTop + topInset + defaultLineHeight + insets.bottom
+      Math.max(
+        rowTop + appliedMarkFloor,
+        cell.vMergeContinue || waits(cell)
+          ? continuationPt > 0
+            ? rowTop + topInset + continuationPt + insets.bottom
+            : rowTop
+          : fitted
+            ? contentBottom + insets.bottom
+            : rowTop + topInset + defaultLineHeight + insets.bottom
+      )
     );
     if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
 
@@ -1397,6 +1480,7 @@ export function layoutRowFragmentBounded(
       complete: cell.vMergeContinue ? true : complete,
       fitted,
       nestedSplitBlocked,
+      ...(waits(cell) ? { flowTo } : {}),
     });
   }
 
@@ -1409,12 +1493,16 @@ export function layoutRowFragmentBounded(
     }
   }
   // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
-  // above skip detached cells on purpose, and a head row has no continuation cell to
-  // contribute the empty-cell line the way a covered row does. Word still draws that row a
-  // line tall, so floor it there rather than collapsing it onto the row below.
-  if (rowBottom <= rowTop + 0.001 && flowed.length > 0) {
+  // above skip detached cells on purpose. Keep its paragraph-line floor, but do not
+  // apply that floor to rows consisting entirely of continuation cells: the merged
+  // head and authored row heights already supply their required span geometry.
+  if (
+    rowBottom <= rowTop + 0.001 &&
+    flowed.some((entry) => !entry.cell.vMergeContinue && !entry.cell.hideEndMark)
+  ) {
     let lineBottom = rowTop;
     for (const entry of flowed) {
+      if (entry.cell.hideEndMark) continue;
       const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
       if (line > lineBottom) lineBottom = line;
     }
@@ -1423,7 +1511,7 @@ export function layoutRowFragmentBounded(
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 
   // Exact: force the authored height (clamped to the page budget) and clip leftover content.
-  // atLeast: floor a finished fragment when the minimum fits; never push past maxBottom.
+  // atLeast: a complete row fills its minimum, bounded by the available page band.
   let clipExact = false;
   if (exactHeightPt !== undefined) {
     const exactBottom = rowTop + exactHeightPt;
@@ -1435,16 +1523,29 @@ export function layoutRowFragmentBounded(
       rowBottom = Math.min(maxBottom, rowBottom);
     }
   } else {
-    // Two floors, same rule: the authored `atLeast` minimum and the height a vMerge span
+    // Two floors: the authored `atLeast` CONTENT minimum and the height a vMerge span
     // assigned this row. Neither applies to a continuation fragment — a mid-row split is
     // content-driven, and flooring both halves counts the span twice — or past the budget.
+    // A span floor already includes the row's insets through its height probe. Pad only
+    // the authored minimum, then take the maximum, or merged rows count the padding twice.
+    const authoredFloorPt =
+      isContinuation || atLeastHeightPt === undefined
+        ? 0
+        : authoredRowMinimumFloorPt(
+            atLeastHeightPt,
+            flowed,
+            deps.cellMinimumContentInsets,
+            rowGapPt
+          );
     const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
-    const minBottom = rowTop + Math.max(atLeastHeightPt ?? 0, spanFloorPt);
+    const minBottom = rowTop + Math.max(Math.min(authoredFloorPt, maxBottom - rowTop), spanFloorPt);
     const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;
     if (floors && flowed.every((entry) => entry.complete)) rowBottom = minBottom;
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
+  const cellHeight = Math.max(0, rowHeight - rowGapPt);
+  if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;
@@ -1460,15 +1561,22 @@ export function layoutRowFragmentBounded(
       const available =
         entry.cell.textDirection === 'btLr'
           ? entry.width - entry.insets.left - entry.insets.right - contentHeight
-          : rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
-      if (available > 0) {
-        const dy = entry.cell.vAlign === 'center' ? available / 2 : available;
-        blocks = shiftBlocks(blocks, dy);
-      }
+          : cellAlignmentRoom(rowHeight, entry.insets.top, entry.insets.bottom, contentHeight);
+      if (available > 0)
+        blocks = shiftBlocks(blocks, cellAlignmentShift(entry.cell.vAlign, available));
     }
     return {
       id: entry.cell.id,
+      ...(entry.cell.revisionShading
+        ? {
+            revisionShading: entry.cell.revisionShading,
+            revisionShadingAuthor: entry.cell.revisionShadingAuthor,
+          }
+        : {}),
       gridColumn: entry.gridColumn,
+      ...(entry.cell.logicalGridColumn === undefined
+        ? {}
+        : { logicalGridColumn: entry.cell.logicalGridColumn }),
       ...(entry.cell.gridColumnId ? { gridColumnId: entry.cell.gridColumnId } : {}),
       gridSpan: entry.cell.gridSpan,
       vMergeContinue: entry.cell.vMergeContinue,
@@ -1477,7 +1585,7 @@ export function layoutRowFragmentBounded(
       ...(entry.cell.shading === undefined ? {} : { shading: entry.cell.shading }),
       ...(entry.cell.textDirection === 'btLr' ? { textDirection: 'btLr' as const } : {}),
       blocks,
-      box: { x: entry.x, y: rowTop, width: entry.width, height: rowHeight },
+      box: { x: entry.x, y: rowTop + rowGapPt, width: entry.width, height: cellHeight },
     };
   });
 
@@ -1489,6 +1597,7 @@ export function layoutRowFragmentBounded(
       : flowed.map((entry) => entry.nextCursor);
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
+  rememberBottomToTopRelayouts(flowed, cells);
   flushDeferred(cells, rowTop, rowHeight);
 
   return {
@@ -1498,10 +1607,12 @@ export function layoutRowFragmentBounded(
       ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
       ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
       ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
+      ...(row.changeSites ? { changeSites: row.changeSites } : {}),
       rowIndex: 0,
       isHeaderRow: row.isHeader,
       isHeaderRepeat,
       ...(isContinuation ? { isContinuation: true as const } : {}),
+      ...(row.cantSplit || row.height.rule === 'exact' ? { placesWhole: true as const } : {}),
       cells,
       box: { x: left, y: rowTop, width: total, height: rowHeight },
     },
@@ -1533,16 +1644,10 @@ export function measureRowHeight(
   vMerge?: RowVMergeLayoutOptions,
   atYPt?: number
 ): number {
-  let lineCounter = 0;
   // `atYPt` measures the row WHERE IT IS GOING, wrap bands included — the one thing the
   // position-free probe above cannot do. A merge deciding how tall its span must be passes
   // it; everyone else keeps the position-free probe and the bands it must not see.
-  const positioned = atYPt !== undefined;
-  const probeDeps: TableFlowDeps = {
-    ...stripAnchorSinksForProbe(deps),
-    ...(positioned ? {} : { pageExclusionZones: undefined }),
-    nextLineId: () => `probe-${lineCounter++}`,
-  };
+  const probeDeps = measuringFlowDeps(deps, atYPt !== undefined);
   // `vMerge` reaches the probe so a detached head is detached HERE too. Emptying its blocks
   // instead still charged the row the empty-cell line below, and that phantom line became a
   // floor the placement never asked for.
@@ -1576,10 +1681,12 @@ export function measureRowHeight(
  * a float positioned by a layout that never happened. The second matters just as much —
  * un-planning the ROW alone leaves the span accepted, so the surplus it put below is still
  * handed out while the head sizes its own row again, reserving the merged height twice.
+ * It returns the row's options after the withdrawal: none, or the floor an enclosing merge
+ * still needs when the row is a nested head.
  *
  * A caller with no sink it can undo must not pass a `vMerge` at all.
  */
-function layoutOnePassRow(
+export function layoutOnePassRow(
   row: SemanticTableRow,
   structure: SemanticTableStructure,
   left: number,
@@ -1588,7 +1695,7 @@ function layoutOnePassRow(
   deps: TableFlowDeps,
   isHeaderRepeat: boolean,
   vMerge: RowVMergeLayoutOptions | undefined,
-  rollback: () => void
+  rollback: () => RowVMergeLayoutOptions | undefined
 ): LayoutRowBoundedResult {
   const place = (options: RowVMergeLayoutOptions | undefined): LayoutRowBoundedResult =>
     layoutRowFragment(
@@ -1604,133 +1711,7 @@ function layoutOnePassRow(
     );
   const placed = place(vMerge);
   if (placed.remainder === null || vMerge === undefined) return placed;
-  rollback();
-  return place(undefined);
-}
-
-/**
- * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
- * caller actually places — the paginator plans over the BODY rows, so a merge is never
- * planned against a repeated header copy.
- */
-export const vMergePlanFor = (
-  structure: SemanticTableStructure,
-  left: number | (() => number),
-  depth: number,
-  deps: TableFlowDeps,
-  rows?: readonly SemanticTableRow[]
-): VMergeRowHeights | null =>
-  deps.measuringOnly === true
-    ? null
-    : planTableVMergeHeights(
-        rows ? { ...structure, rows } : structure,
-        left,
-        depth,
-        deps,
-        measureRowHeight
-      );
-
-/**
- * A nested table inside a cell: laid out with its own geometry, no pagination, one
- * fragment. Returns null past the nesting ceiling — the cell renders empty rather than
- * recursing without bound.
- */
-function emitNestedTable(
-  table: OoxmlElement,
-  left: number,
-  right: number,
-  top: number,
-  depth: number,
-  deps: TableFlowDeps
-): { readonly fragment: TableFragmentRecord; readonly bottom: number } | null {
-  if (depth >= MAX_TABLE_NESTING) return null;
-  const containerWidth = Math.max(1, right - left);
-  const structure = readTableStructure(
-    table,
-    containerWidth,
-    depth,
-    deps.styleCascade,
-    deps.displayMode,
-    deps.revisionAuthorFilter
-  );
-  if (!structure || structure.rows.length === 0) return null;
-  const nestedDeferred: DeferredRowAnchor[] = [];
-  const nestedFlowDeps: TableFlowDeps = {
-    ...deps,
-    publishAnchoredDrawings: undefined,
-    collectAnchoredDrawings: undefined,
-    anchorDeferOnly: true,
-    deferAnchoredDrawings: (pending) => {
-      nestedDeferred.push(pending);
-    },
-  };
-  // A nested table is placed inside its CELL's content box by the same rules a top-level one
-  // is placed inside the text column.
-  const tableLeft = left + tableOriginX(structure, containerWidth);
-  const vMergePlan = vMergePlanFor(structure, tableLeft, depth, nestedFlowDeps);
-  const rawRows: TableRowFragmentRecord[] = [];
-  let y = top;
-  for (const [rowIndex, row] of structure.rows.entries()) {
-    // Anchors this row defers are taken back if its placement is discarded, so a retry
-    // cannot publish a drawing twice.
-    const deferredBefore = nestedDeferred.length;
-    const placed = layoutOnePassRow(
-      row,
-      structure,
-      tableLeft,
-      y,
-      depth,
-      nestedFlowDeps,
-      false,
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y),
-      () => {
-        nestedDeferred.length = deferredBefore;
-        vMergePlan?.withdrawAt(rowIndex);
-      }
-    );
-    rawRows.push(placed.record);
-    y = placed.bottom;
-  }
-  const rows = finalizeTableRows(
-    rawRows,
-    structure,
-    structure.rows,
-    deps.borderOwnershipBudget,
-    deps.vMergeResolveBudget,
-    undefined,
-    undefined,
-    undefined
-  );
-  for (const pending of nestedDeferred) {
-    for (const row of rows) {
-      const hostsParagraph = row.cells.some((cell) =>
-        cell.blocks.some(
-          (block) => block.kind === 'paragraph' && block.paragraphId === pending.paragraphId
-        )
-      );
-      if (!hostsParagraph) continue;
-      publishDeferredRowAnchors([pending], row.cells, row.box.y, row.box.height, deps);
-      break;
-    }
-  }
-  const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
-  const rowOrdinals = new Map<string, number>();
-  return {
-    fragment: annotateTableFragmentGeometry(
-      {
-        kind: 'table',
-        id: `${table.id}#f0`,
-        tableId: table.id,
-        fragmentIndex: 0,
-        rows,
-        box: { x: tableLeft, y: top, width, height: y - top },
-      },
-      structure.columnWidthsPt,
-      depth,
-      rowOrdinals
-    ),
-    bottom: y,
-  };
+  return place(rollback());
 }
 
 /** Lay out every row of a structure (no pagination) and finalize merges/borders. */
@@ -1751,8 +1732,13 @@ export function layoutTableFragment(
   // sizes merged heads the way this file did before it planned anything. A caller that wants
   // the planning has to bring a rollback-able sink with it, as `emitNestedTable` does.
   const rawRows: TableRowFragmentRecord[] = [];
+  const occurrenceInsets = new Map<
+    TableRowFragmentRecord,
+    ReadonlyMap<string, CellContentInsets>
+  >();
   let y = top;
-  for (const row of structure.rows) {
+  for (const [index, row] of structure.rows.entries()) {
+    const rowDeps = index === 0 ? firstRowContentDeps(structure, row, deps) : deps;
     const placed = layoutRowFragment(
       row,
       structure.columnWidthsPt,
@@ -1760,18 +1746,24 @@ export function layoutTableFragment(
       y,
       isHeaderRepeat(row),
       depth,
-      deps,
+      rowDeps,
       structure.cellSpacingPt
     );
     rawRows.push(placed.record);
+    if (rowDeps.cellContentInsets) occurrenceInsets.set(placed.record, rowDeps.cellContentInsets);
     y = placed.bottom;
   }
+  y += closingCellSpacingPt(structure);
   const rows = finalizeTableRows(
     rawRows,
     structure,
     structure.rows,
     deps.borderOwnershipBudget,
-    deps.vMergeResolveBudget
+    deps.vMergeResolveBudget,
+    undefined,
+    undefined,
+    undefined,
+    occurrenceInsets
   );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
   const rowOrdinals = new Map<string, number>();

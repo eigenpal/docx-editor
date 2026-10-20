@@ -2,7 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -83,11 +83,11 @@ describe('atomic equation editing', () => {
     expect(editor.surface!.equations.equationById(equation.id)?.linear).toBe('x');
   });
 
-  test('refuses replace and remove while suggesting without an untracked edit', () => {
+  test('while suggesting, refuses replace and proposes remove as a tracked deletion', async () => {
     const { editor } = mounted('Revision Author');
     const surface = editor.surface!;
     const equation = surface.equations.equationAtCaret()!;
-    const reason = 'equation replacement and removal are not supported in suggesting mode';
+    const reason = 'equation replacement is not supported in suggesting mode';
     const revision = surface.session.packageRevision();
     surface.setEditingMode('suggest');
 
@@ -96,18 +96,31 @@ describe('atomic equation editing', () => {
       code: 'unsupported',
       reason,
     });
-    expect(surface.equations.can(equation.id, 'remove')).toEqual({
-      ok: false,
-      code: 'unsupported',
-      reason,
-    });
     expect(surface.equations.applyEquation(equation.id, 'x^2')).toBe(false);
-    expect(surface.equations.removeEquation(equation.id)).toBe(false);
-
     expect(surface.session.packageRevision()).toBe(revision);
-    expect(surface.equations.equationById(equation.id)?.linear).toBe('x');
-    expect(surface.session.bodyText()).toBe('A\uFFFCZ');
     expect(surface.state().lastRejection).toBe(reason);
+
+    expect(surface.equations.can(equation.id, 'remove')).toEqual({ ok: true });
+    expect(surface.equations.removeEquation(equation.id)).toBe(true);
+    // The equation stays until the proposal is decided.
+    expect(surface.session.bodyText()).toBe('A\uFFFCZ');
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(xml).toMatch(/<w:del w:author="Revision Author"[^>]*>.*<m:oMath>.*<\/w:del>/);
+  });
+
+  test('while suggesting, Backspace over a selected equation proposes deleting it', async () => {
+    const { editor, paragraphId } = mounted('Revision Author');
+    const surface = editor.surface!;
+    surface.setEditingMode('suggest');
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 3 },
+    });
+    surface.deleteBackward();
+    expect(surface.state().lastRejection ?? null).toBeNull();
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    expect(xml).toMatch(/<w:del w:author="Revision Author"[^>]*>.*<m:oMath>.*<\/w:del>/);
+    expect(xml).not.toContain('<w:t>A</w:t>');
   });
 
   test('does not invalidate layout for unchanged supported math', () => {
@@ -144,6 +157,22 @@ describe('atomic equation editing', () => {
       anchor: { paragraphId, offset: 1 },
       head: { paragraphId, offset: 2 },
     });
+  });
+
+  test('a painted equation click in viewing requests chrome and selects nothing', () => {
+    const { editor, container } = mounted();
+    const seen: string[] = [];
+    editor.setEquationChrome({
+      onPopover: (activation) => seen.push(activation.equation.id),
+    });
+    expect(editor.exec({ type: 'setEditingMode', mode: 'viewing' }).ok).toBe(true);
+    const before = editor.surface!.state().selection;
+    const painted = container.querySelector<HTMLElement>('[data-docx-equation]')!;
+    painted.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    painted.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(seen).toHaveLength(1);
+    expect(editor.surface!.state().selection).toEqual(before);
   });
 
   test('a press survives the selection repaint before click activation', () => {

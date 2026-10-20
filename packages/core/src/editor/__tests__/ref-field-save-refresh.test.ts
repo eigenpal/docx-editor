@@ -86,8 +86,9 @@ function editTarget(editor: DocxEditorInstance): void {
     {
       op: 'insertText',
       paragraphId: firstParagraphId(editor),
-      offset: 'Closing Date'.length,
-      text: 's',
+      // At the bookmark's start, so the typed text joins the bookmark.
+      offset: 0,
+      text: 'The ',
     },
   ]);
   expect(result.committed).toBe(true);
@@ -99,6 +100,29 @@ async function savedDocumentXml(editor: DocxEditorInstance): Promise<string> {
 }
 
 describe('save() refreshes stale REF results', () => {
+  test('Original view does not save PAGEREF results from the original pagination', async () => {
+    const editor = mount(
+      `<w:p>${refField(' PAGEREF target ', '<w:r><w:t>2</w:t></w:r>')}</w:p>` +
+        '<w:p><w:pPr><w:pageBreakBefore/><w:pPrChange w:id="20" w:author="Ada">' +
+        '<w:pPr/></w:pPrChange></w:pPr>' +
+        bookmarked('target', 'Target') +
+        '</w:p>'
+    );
+    try {
+      const surface = editor.surface!;
+      expect(surface.layout().pages).toHaveLength(2);
+      const before = new Uint8Array(await editor.save());
+      const revision = editor.getDocumentHandle().revision;
+      surface.setRevisionDisplayMode('original');
+      expect(surface.layout().pages).toHaveLength(1);
+      expect(new Uint8Array(await editor.save())).toEqual(before);
+      expect(editor.getDocumentHandle().revision).toBe(revision);
+      expect(surface.session.canUndo()).toBe(false);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   test('after an edit the exported bytes carry the live value; the instruction survives', async () => {
     const editor = mount(FRESH_BODY);
     editTarget(editor);
@@ -106,9 +130,9 @@ describe('save() refreshes stale REF results', () => {
     expect(xml).toContain(' REF term \\h ');
     // BOTH result caches now read the edited text (the target run serializes as two w:t).
     expect(xml).toContain(
-      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Closing Dates</w:t></w:r>'
+      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>The Closing Date</w:t></w:r>'
     );
-    expect(xml).toContain('<w:fldSimple w:instr=" REF term "><w:r><w:t>Closing Dates</w:t>');
+    expect(xml).toContain('<w:fldSimple w:instr=" REF term "><w:r><w:t>The Closing Date</w:t>');
     editor.destroy();
   });
 
@@ -152,7 +176,7 @@ describe('save() refreshes stale REF results', () => {
     // transaction ran for a document whose only REF result is revision content.
     expect(xml).toContain('<w:ins');
     expect(xml).toContain('<w:t>Closing Date</w:t>');
-    expect(xml).toContain('<w:t>s</w:t>');
+    expect(xml).toContain('<w:t>The Closing Date</w:t>');
     expect(editor.getDocumentHandle().revision).toBe(revisionAfterEdit);
     editor.destroy();
   });

@@ -29,6 +29,20 @@ import type {
   Extent,
   RunFormatting,
 } from './types';
+// Declared in the store lane; `types.ts` re-exports them for the contract.
+export type {
+  ReviewPosition,
+  ReviewRange,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+  RevisionAddress,
+  RevisionAuthorEntry,
+  RevisionAuthorSkipReason,
+  RevisionBatchEntry,
+  RevisionBatchSkipDetail,
+  RevisionBatchSkipReason,
+  RevisionSiteRefusal,
+} from './types';
 
 // Re-exported because the signatures below hand every one of them to a caller. This entry
 // point is meant to be usable on its own — an automation host or a tool layer names it
@@ -53,19 +67,28 @@ export type {
   ExecResult,
   Extent,
   HeaderFooterSet,
+  HistoryGroupOutcome,
   IndentFormatting,
   InsertableContentControlType,
+  NumberingRef,
+  PageMargins,
   Paragraph,
+  ParagraphDisagreements,
   ParagraphFlags,
   ParagraphTabStop,
   Revision,
+  RevisionAuthorResult,
+  RevisionBatchResult,
   RevisionType,
+  Run,
   RunFormatting,
   Section,
   SectionProperties,
   StyleDefinition,
   StyleDefinitions,
   Table,
+  TableCell,
+  TableRow,
   Theme,
   ThemeColorScheme,
 } from './types';

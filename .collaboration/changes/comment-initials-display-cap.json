@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Comment initials for avatars and markers show the full w:initials value.",
+  "after": "Comment initials for avatars and markers show at most three characters of w:initials.",
+  "reason": "Only the display read changes. The stored w:initials attribute, shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/comment-initials.test.ts",
+    "packages/pro/src/__tests__/review-balloons.test.tsx"
+  ],
+  "changeset": "review-balloons-and-initials-markers",
+  "migration": null
+}

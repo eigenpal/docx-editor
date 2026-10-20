@@ -15,22 +15,25 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { fail } from '../runtime/model-support.ts';
 
 /** Every place this API can insert at. Individual members accept a subset. */
-export type InsertLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+export { InsertLocation } from './editing-enums.ts';
 
 /** Where a story accepts text: over all of it, or at either edge. */
-export type BodyInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type BodyInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 /** Where a story accepts a paragraph. `Start`/`End` mean "before the first"/"after the last". */
-export type BodyInsertParagraphLocation = Extract<InsertLocation, 'Start' | 'End'>;
+export type BodyInsertParagraphLocation = Extract<RangeInsertTextLocation, 'Start' | 'End'>;
 
 /** Where a paragraph accepts text: over all of it, or at either edge of it. */
-export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type ParagraphInsertTextLocation = Extract<
+  RangeInsertTextLocation,
+  'Replace' | 'Start' | 'End'
+>;
 
 /** Which side of a paragraph or a range a new paragraph goes on. */
-export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
+export type BesideLocation = Extract<RangeInsertTextLocation, 'Before' | 'After'>;
 
 /** Where a range accepts text. See `Range#insertText` for what `Before`/`Start` mean here. */
-export type RangeInsertTextLocation = InsertLocation;
+export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
 
 /** Where a selection lands: over the range, or collapsed to one of its edges. */
 export type SelectionMode = 'Select' | 'Start' | 'End';
@@ -85,9 +88,12 @@ export const selectionMode = (value: unknown, target: string): SelectionMode =>
  * habit of splitting paragraphs on an embedded newline is a different operation
  * (`insertParagraph`). Accepting the character and writing it into a run would produce a document
  * whose text reads back with a break that the layout does not honour.
+ *
+ * `\v` is not a paragraph mark: it is a manual line break (`w:br`) inside the paragraph, which
+ * the host writes as one. A control that holds one line refuses it at sync.
  */
 export function insertableText(value: unknown, target: string): string {
   if (typeof value !== 'string') fail({ code: 'InvalidArgument', target });
-  if (/[\r\n\v\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
+  if (/[\r\n\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
   return value;
 }

@@ -13,19 +13,21 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  hostWindowOf,
   sameOverflow,
-  toolbarOverflowGroups,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  toolbarOverflowGroups,
   type ToolbarFitInput,
-} from './toolbar-overflow';
+} from '@docx-editor.dev/core/editor';
 import {
   collapsibleGroupCost,
+  controlsOverflow,
   readAvailableWidth,
   readColumnGap,
   readInlineMargins,
   separatorLeadingCost,
   trailingGapCost,
-} from './toolbar-measure';
+} from '@docx-editor.dev/core/editor';
 
 /** Marks a collapsible group wrapper; the value is the group id. */
 export const GROUP_ATTRIBUTE = 'data-toolbar-group';
@@ -41,7 +43,7 @@ const NONE: ReadonlySet<string> = new Set<string>();
 
 export interface UseToolbarOverflowResult {
   /** Attach to the bar element. */
-  readonly attach: (element: HTMLFieldSetElement | null) => void;
+  readonly attach: (element: HTMLElement | null) => void;
   /** Group ids that must render in the "⋯" menu instead of the bar. */
   readonly overflow: ReadonlySet<string>;
 }
@@ -57,7 +59,7 @@ export function useToolbarOverflow(
   groups: readonly string[],
   order: readonly string[]
 ): UseToolbarOverflowResult {
-  const barRef = useRef<HTMLFieldSetElement | null>(null);
+  const barRef = useRef<HTMLElement | null>(null);
   // Widths SURVIVE a group leaving the bar. A group in the overflow menu renders nothing to
   // measure, and forgetting its width would mean never knowing whether it could come back.
   const widths = useRef(new Map<string, number>());
@@ -76,7 +78,8 @@ export function useToolbarOverflow(
   const measure = useCallback(() => {
     const bar = barRef.current;
     if (!bar || !enabled) return;
-    const style = getComputedStyle(bar);
+    const view = hostWindowOf(bar);
+    const style = view.getComputedStyle(bar);
     const gap = readColumnGap(style);
     const available = readAvailableWidth(bar, style);
     // Every collapsible group is costed WITH a leading separator slot — width, inline
@@ -86,7 +89,7 @@ export function useToolbarOverflow(
     const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
     let separatorLeading = gap * 2;
     if (separator) {
-      const sepStyle = getComputedStyle(separator);
+      const sepStyle = view.getComputedStyle(separator);
       const margins = readInlineMargins(sepStyle);
       separatorLeading = separatorLeadingCost(
         separator.offsetWidth,
@@ -124,14 +127,20 @@ export function useToolbarOverflow(
       previous: overflowRef.current,
       hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
     };
-    const next = toolbarOverflowGroups(input);
+    // The arithmetic charges every group a few px of gap and separator it may not use, so on
+    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one group
+    // then shrinks that bar and the next measurement collapses another, until every group is
+    // in "⋯". So the first collapse waits for a control that really runs past the bar's box.
+    // Without layout to read (null), the arithmetic decides alone.
+    const fits = overflowRef.current.size === 0 && controlsOverflow(bar, style) === false;
+    const next = fits ? NONE : toolbarOverflowGroups(input);
     if (!sameOverflow(next, overflowRef.current)) {
       overflowRef.current = next;
       setOverflow(next);
     }
   }, [enabled]);
 
-  const attach = useCallback((element: HTMLFieldSetElement | null) => {
+  const attach = useCallback((element: HTMLElement | null) => {
     barRef.current = element;
   }, []);
 
@@ -155,25 +164,30 @@ export function useToolbarOverflow(
   // locale with longer labels, a host restyling a control).
   useEffect(() => {
     const bar = barRef.current;
-    if (!enabled || !bar || typeof ResizeObserver === 'undefined') return undefined;
+    // The bar's own window: its frames keep running while a hidden opener's stop.
+    const view = bar ? hostWindowOf(bar) : null;
+    if (!enabled || !bar || !view || typeof view.ResizeObserver === 'undefined') return undefined;
     let frame = 0;
-    const observer = new ResizeObserver(() => {
+    const observer = new view.ResizeObserver(() => {
       // Coalesced: a window drag delivers a callback per frame per observed element, and
       // the answer only ever depends on the final geometry of the frame.
       if (frame !== 0) return;
-      frame = requestAnimationFrame(() => {
+      frame = view.requestAnimationFrame(() => {
         frame = 0;
         measure();
       });
     });
     observer.observe(bar);
+    // The parent too: a bar as wide as its content does not resize when the room around
+    // it grows, so only the parent reports the space a collapsed group can come back into.
+    if (bar.parentElement) observer.observe(bar.parentElement);
     for (const element of bar.querySelectorAll<HTMLElement>(
       `[${GROUP_ATTRIBUTE}], [${FIXED_ATTRIBUTE}]`
     )) {
       observer.observe(element);
     }
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
+      if (frame !== 0) view.cancelAnimationFrame(frame);
       observer.disconnect();
     };
     // Re-observes when the composition changes: a group that just came back into the bar is

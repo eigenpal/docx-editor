@@ -132,4 +132,32 @@ describe('hostile shared shapes on the receive path', () => {
     ).not.toThrow();
     expect(() => harness.packageOf(bob)).not.toThrow();
   });
+
+  test('an embed that names a listed node shows nowhere, the same on every replica', async () => {
+    const { alice, bob } = await harness.pair(collaborationDocx());
+    const attack = (doc: Y.Doc): void => {
+      // Two paragraphs with shared text: the first embeds the second, which a child array
+      // already lists. Showing it in both places gives it two parents.
+      const texts: [string, Y.Text][] = [];
+      doc.getMap<Y.Map<unknown>>(NODES).forEach((record, id) => {
+        const text = record instanceof Y.Map ? record.get('inline') : null;
+        if (text instanceof Y.Text && text.length > 3) texts.push([id, text]);
+      });
+      const [[, host], [target]] = texts as [[string, Y.Text], [string, Y.Text]];
+      host.insertEmbed(3, { n: target, r: 1 }, { r: '{"i":"^re"}' });
+    };
+    const attacker = new Y.Doc();
+    Y.applyUpdate(attacker, Y.encodeStateAsUpdate(alice.ydoc));
+    attack(attacker);
+    const update = Y.encodeStateAsUpdate(attacker, Y.encodeStateVector(alice.ydoc));
+    Y.applyUpdate(alice.ydoc, update, 'relay');
+    Y.applyUpdate(bob.ydoc, update, 'relay');
+    harness.expectConverged(alice, bob);
+    // The text each replica shows is the text the room held before the embed.
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 0, text: 'ok ' },
+    ]);
+    harness.expectConverged(alice, bob);
+    attacker.destroy();
+  });
 });

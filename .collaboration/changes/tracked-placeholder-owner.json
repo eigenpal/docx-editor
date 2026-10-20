@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text inserted at a tracked placeholder boundary could land outside the control.",
+  "after": "Placeholder replacement retains the control as the insertion owner.",
+  "reason": "The writer uses the existing inside operation field and canonical nodes. Released readers already interpret the resulting journals and control content.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-control-ops.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-placeholder.test.ts"
+  ],
+  "changeset": "release-tracked-options",
+  "migration": null
+}

@@ -162,6 +162,101 @@ describe('the viewport’s review gutter', () => {
     ).not.toBeNull();
   });
 
+  test("overflow: 'scroll' keeps the full column on a narrow viewport, switchable live", async () => {
+    scrollerWidth = 1000;
+    let editor: DocxEditorInstance | null = null;
+    const { container } = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <RailStub />
+      </DocxEditorRoot>
+    );
+    await settle();
+    act(() => {
+      editor!.setReviewPaneOptions({ overflow: 'scroll' });
+      editor!.exec({ type: 'toggleReviewPane' });
+    });
+    await settle();
+    const scroller = container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
+    act(() => {
+      editor!.setReviewPaneOptions({ overflow: 'float' });
+    });
+    await settle();
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
+  });
+
+  test("overflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
+    // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
+    const style = document.createElement('style');
+    style.textContent =
+      '.docx-editor__scroll-container { padding-right: var(--docx-review-gutter); ' +
+      'padding-left: var(--docx-review-gutter-start); }';
+    document.head.append(style);
+    scrollerWidth = 800;
+    let editor: DocxEditorInstance | null = null;
+    try {
+      render(
+        <DocxEditorRoot
+          document={SOURCE}
+          modules={[REVIEW_MODULE]}
+          onReady={(ready) => {
+            editor = ready as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+          <RailStub />
+        </DocxEditorRoot>
+      );
+      await settle();
+      act(() => {
+        editor!.setReviewPaneOptions({ overflow: 'scroll' });
+        if (editor!.snapshot().reviewPaneOpen) editor!.exec({ type: 'toggleReviewPane' });
+      });
+      await settle();
+      // Leave the fit and come back, so it measures the settled paddings now.
+      act(() => {
+        editor!.setZoomMode({ type: 'fixed' });
+      });
+      act(() => {
+        editor!.setZoomMode('auto');
+      });
+      await settle();
+      expect(editor!.snapshot().reviewPaneOpen).toBe(false);
+      expect(editor!.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+      // One page size: opening and closing the pane leaves the fit where it was.
+      const closed = editor!.getZoom();
+      for (let toggle = 0; toggle < 2; toggle += 1) {
+        act(() => {
+          editor!.exec({ type: 'toggleReviewPane' });
+        });
+        await settle();
+        act(() => {
+          editor!.setZoomMode({ type: 'fixed' });
+        });
+        act(() => {
+          editor!.setZoomMode('auto');
+        });
+        await settle();
+        expect(editor!.getZoom()).toBe(closed);
+      }
+    } finally {
+      style.remove();
+    }
+  });
+
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
     scrollerWidth = 1728;
     let editor: DocxEditorInstance | null = null;
@@ -193,5 +288,50 @@ describe('the viewport’s review gutter', () => {
     expect(
       loading.querySelector('.docx-paginated-surface > .docx-pages > .docx-page')
     ).not.toBeNull();
+  });
+
+  test("overflow 'shrinkPage' keeps the full column on a narrow viewport, and switches live", async () => {
+    // The same 1000px scroller that mirrors the strip under a capped fit. With the setting,
+    // the page may shrink to its 35% floor, so the full column stands.
+    scrollerWidth = 1000;
+    let editor: DocxEditorInstance | null = null;
+    const { container } = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[
+          {
+            ...REVIEW_MODULE,
+            review: { ...REVIEW_MODULE.review!, pane: { overflow: 'shrinkPage' } },
+          },
+        ]}
+        zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35, maxZoom: 1 }}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <RailStub />
+        <DocxEditorLoading when overlay />
+      </DocxEditorRoot>
+    );
+    await settle();
+    act(() => {
+      editor!.exec({ type: 'toggleReviewPane' });
+    });
+    await settle();
+    const scroller = container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    expect(scroller.getAttribute('data-review-pane')).toBe('open');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
+    // Back to 'float' at runtime: the page keeps its cap and the strip mirrors.
+    act(() => {
+      editor!.setReviewPaneOptions({ overflow: 'float' });
+    });
+    await settle();
+    expect(editor!.snapshot().reviewPane).toMatchObject({ opening: 'auto', overflow: 'float' });
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });
 });

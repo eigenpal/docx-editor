@@ -159,27 +159,34 @@ function packPackage(packagePath) {
   return path.join(packDir, packed.filename);
 }
 
+function assertNoConverters(appDir) {
+  const lock = JSON.parse(readFileSync(path.join(appDir, 'package-lock.json'), 'utf8'));
+  const installed = Object.keys(lock.packages ?? {}).filter((name) =>
+    /node_modules\/@docx-editor\.dev\/docx-to-(markdown|pdf)$/.test(name)
+  );
+  if (installed.length)
+    throw new Error(`Editor installation includes converters: ${installed.join(', ')}`);
+  console.log('Editor installation contains no Markdown or PDF converter.');
+}
+
 try {
   if (process.env.SKIP_CONSUMER_INSTALL_BUILD !== '1') {
-    run('bun', ['run', 'build'], {
-      env: { NODE_OPTIONS: process.env.NODE_OPTIONS ?? '--max-old-space-size=8192' },
-    });
+    run('bun', ['run', 'build']);
+    run('bun', ['run', '--filter', '@docx-editor.dev/telemetry', 'build']);
   }
 
   mkdirSync(packDir, { recursive: true });
 
-  // Every published package, including the ones the app below only imports for their
-  // types: an unpublished version of any of them turns into a registry lookup during
-  // install, and the registry has nothing to give.
+  // Install the editors without converters. Conversion packages require a separate opt-in.
   const tarballs = [
     packPackage('packages/i18n'),
     packPackage('packages/core'),
     packPackage('packages/react'),
     packPackage('packages/vue'),
     packPackage('packages/fonts'),
-    packPackage('packages/docx-to-markdown'),
     packPackage('packages/editor-api'),
     packPackage('packages/pro'),
+    packPackage('packages/telemetry'),
   ];
 
   mkdirSync(path.join(reactAppDir, 'src'), { recursive: true });
@@ -206,7 +213,7 @@ try {
   );
   // The imports are the contract: the packaged editor, the engine the adapter holds as a
   // peer, the stylesheet (which ships from the engine, not the adapter), the fonts, and
-  // the two licensed packages. A subpath that stops being exported fails here.
+  // the licensed packages. A subpath that stops being exported fails here.
   writeFileSync(
     path.join(reactAppDir, 'src/main.tsx'),
     `import { createRoot } from 'react-dom/client';
@@ -220,7 +227,14 @@ import * as CollaborationWebrtc from '@docx-editor.dev/pro/collaboration/webrtc'
 import * as CollaborationHocuspocus from '@docx-editor.dev/pro/collaboration/hocuspocus';
 import * as Pro from '@docx-editor.dev/pro';
 import * as ProReact from '@docx-editor.dev/pro/react';
+import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
+import * as TelemetryOtel from '@docx-editor.dev/telemetry/otel';
+import * as TelemetrySentry from '@docx-editor.dev/telemetry/sentry';
 import '@docx-editor.dev/core/styles/editor.css';
+
+const telemetry = createTelemetry({ exporters: [memoryExporter()] });
+console.assert(typeof TelemetryOtel.otelExporter === 'function');
+console.assert(typeof TelemetrySentry.sentryExporter === 'function');
 
 const exportedSurfaceChecks = [
   Engine,
@@ -236,7 +250,7 @@ const exportedSurfaceChecks = [
 console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
 void exportedSurfaceChecks;
 
-createRoot(document.getElementById('root')!).render(<DocxEditor />);
+createRoot(document.getElementById('root')!).render(<DocxEditor modules={[telemetry.module]} />);
 `
   );
   writeFileSync(
@@ -280,6 +294,7 @@ export default defineConfig({ plugins: [react()] });
       'y-protocols',
       'y-webrtc',
       '@hocuspocus/provider',
+      '@opentelemetry/api',
       '@types/react',
       '@types/react-dom',
       '@vitejs/plugin-react',
@@ -289,9 +304,53 @@ export default defineConfig({ plugins: [react()] });
     ],
     { cwd: reactAppDir }
   );
+  assertNoConverters(reactAppDir);
   run('npm', ['run', 'build'], { cwd: reactAppDir });
-  // The Markdown package is deliberately server-only. Exercise a shaped conversion through
-  // both installed runtime entries so missing fonts, WASM, assets, or CJS interop fail here.
+  // Server integrations must resolve from the same tarball without entering the browser bundle.
+  run('npm', ['install', '--ignore-scripts', '@hocuspocus/server', '@types/node'], {
+    cwd: reactAppDir,
+  });
+  writeFileSync(
+    path.join(reactAppDir, 'src/telemetry-server.ts'),
+    `import { withCollaborationTelemetry, serveMetrics } from '@docx-editor.dev/telemetry/hocuspocus';
+import { telemetryRoute, validateTelemetryEvents } from '@docx-editor.dev/telemetry/ingest';
+import { prometheusRegistry, metricsHandler } from '@docx-editor.dev/telemetry/prometheus';
+import { roomTelemetry } from '@docx-editor.dev/telemetry/server';
+
+const metrics = prometheusRegistry();
+export const rooms = roomTelemetry({ exporters: [metrics] });
+export const wrapped = withCollaborationTelemetry({}, { exporters: [metrics] });
+export const handlers = [metricsHandler(metrics), serveMetrics(metrics)];
+export const POST = telemetryRoute({ forward: async (events) => { validateTelemetryEvents(events); } });
+`
+  );
+  run('npm', ['run', 'typecheck'], { cwd: reactAppDir });
+  run(
+    'node',
+    [
+      '--input-type=module',
+      '--eval',
+      `const entries = {
+        '': 'createTelemetry', otel: 'otelExporter', sentry: 'sentryExporter',
+        prometheus: 'prometheusRegistry', server: 'roomTelemetry',
+        hocuspocus: 'withCollaborationTelemetry', ingest: 'telemetryRoute',
+      };
+      for (const [entry, name] of Object.entries(entries)) {
+        const pkg = await import('@docx-editor.dev/telemetry' + (entry ? '/' + entry : ''));
+        if (typeof pkg[name] !== 'function') throw new Error('Missing telemetry export: ' + name);
+      }
+      const { createTelemetry, memoryExporter } = await import('@docx-editor.dev/telemetry');
+      const telemetry = createTelemetry({ exporters: [memoryExporter()] });
+      await telemetry.shutdown();`,
+    ],
+    { cwd: reactAppDir }
+  );
+  console.log('Packed telemetry browser, server, and declaration checks passed.');
+  // Install Markdown only after the editor builds without either converter.
+  run('npm', ['install', '--ignore-scripts', packPackage('packages/docx-to-markdown')], {
+    cwd: reactAppDir,
+  });
+  // Exercise both installed runtime entries and their conversion assets.
   run(
     'node',
     [
@@ -310,6 +369,8 @@ export default defineConfig({ plugins: [react()] });
     ],
     { cwd: reactAppDir }
   );
+
+  run('node', [path.join(ROOT, 'scripts/check-markdown-consumer.mjs'), reactAppDir]);
 
   // The consumer has NO Tailwind and no PostCSS — exactly the host the shipped
   // stylesheet must carry on its own. Assert the CSS vite emitted is the compiled,
@@ -374,13 +435,20 @@ import * as Fonts from '@docx-editor.dev/fonts';
 import * as EditorApi from '@docx-editor.dev/editor-api';
 import * as Pro from '@docx-editor.dev/pro';
 import * as ProVue from '@docx-editor.dev/pro/vue';
+import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
+import * as TelemetryOtel from '@docx-editor.dev/telemetry/otel';
+import * as TelemetrySentry from '@docx-editor.dev/telemetry/sentry';
 import '@docx-editor.dev/core/styles/editor.css';
+
+const telemetry = createTelemetry({ exporters: [memoryExporter()] });
+console.assert(typeof TelemetryOtel.otelExporter === 'function');
+console.assert(typeof TelemetrySentry.sentryExporter === 'function');
 
 const exportedSurfaceChecks = [Engine, EngineEditor, Fonts, EditorApi, Pro, ProVue];
 console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
 void exportedSurfaceChecks;
 
-createApp({ render: () => h(DocxEditor) }).mount('#app');
+createApp({ render: () => h(DocxEditor, { modules: [telemetry.module] }) }).mount('#app');
 `
   );
   writeFileSync(
@@ -414,12 +482,14 @@ createApp({ render: () => h(DocxEditor) }).mount('#app');
       'y-protocols',
       'y-webrtc',
       '@hocuspocus/provider',
+      '@opentelemetry/api',
       'vite',
       'typescript',
       ...tarballs,
     ],
     { cwd: vueAppDir }
   );
+  assertNoConverters(vueAppDir);
   run('npm', ['run', 'build'], { cwd: vueAppDir });
   console.log('Fresh Vue consumer install/build passed.');
 } finally {

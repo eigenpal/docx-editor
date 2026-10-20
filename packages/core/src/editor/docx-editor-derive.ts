@@ -1,3 +1,13 @@
+import { textboxInsertionRefusal } from './textbox-commands.ts';
+import { tocAtPosition } from './surface-toc-ranges.ts';
+import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import {
+  commandProtectionRefusal,
+  contentLockPolicyFor,
+  FORMS_WRITE_REASON,
+} from './command-protection.ts';
+import { contentLockFormatRefusal } from './content-lock-format-refusal.ts';
 // Snapshot derivations for `createDocxEditor` (editor seam).
 //
 // The reads that turn a mounted surface into contract values: run formatting, page setup,
@@ -20,13 +30,16 @@ import type { ContainerRef } from '../contracts/types.ts';
 import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
-import { gateImageCommand } from './docx-editor-images.ts';
+import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
   | { ok: true; tablePlan?: import('./table-command-plan.ts').TableCommandPlan }
   | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
 import { tableContextAt } from '@docx-editor.dev/core/layout';
+import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
+import { splitCellLimits } from '../store/store/tree-op-table-split.ts';
+import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.ts';
 import {
   isTableEditorCommand,
   planTableCommand,
@@ -37,6 +50,7 @@ import { findNode, paragraphTextOf, parentNodeOf } from '@docx-editor.dev/core/s
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { bookmarkCommandRefusal } from './docx-editor-bookmarks.ts';
 
 /**
  * THE unified formatting derivation — the one place surface formatting becomes the
@@ -61,6 +75,7 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
       ? { fontSizePt: formatting.fontSizeHalfPoints / 2 }
       : {}),
     ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
+    ...(formatting.direction ? { direction: formatting.direction } : {}),
     ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
     ...(formatting.lineSpacing ? { lineSpacing: formatting.lineSpacing } : {}),
     ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),
@@ -73,6 +88,25 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
     disagrees: formatting.disagrees,
     ...(formatting.tabStops !== null ? { tabStops: formatting.tabStops } : {}),
   };
+}
+
+/** The last page setup each editor published, keyed by the editor's open scheduler. */
+const lastPageSetups = new WeakMap<object, PageSetup>();
+
+/**
+ * {@link pageSetupOf}, but while a replacement document opens with no surface mounted, the
+ * previous document's setup. The rulers and the loading page keep that page's geometry
+ * until the new document mounts, instead of the ruler vanishing for the open.
+ */
+export function pageSetupWhileOpening(
+  owner: { isScheduled(): boolean },
+  surface: PaginatedSurface | null
+): PageSetup | null {
+  const opening = owner.isScheduled();
+  const setup = pageSetupOf(surface);
+  if (setup) lastPageSetups.set(owner, setup);
+  else if (!opening) lastPageSetups.delete(owner);
+  return setup ?? (opening ? (lastPageSetups.get(owner) ?? null) : null);
 }
 
 /**
@@ -236,7 +270,20 @@ export function tableCommandState(
   command: EditorCommand,
   surface: PaginatedSurface
 ): { readonly can: CanResult; readonly plan: TableCommandPlan } {
-  const plan = planTableCommand(buildTableCommandPlannerInput(command, surface));
+  const input = buildTableCommandPlannerInput(command, surface);
+  let plan = planTableCommand(input);
+  const settings = settingsPartOf(surface.session.currentPackage());
+  if (plan.ok && plan.ops.some((op) => formsProtectionRefusal(input.part, settings, op))) {
+    plan = { ok: false, code: 'locked', reason: FORMS_WRITE_REASON };
+  }
+  // Asked here too, so chrome greys out instead of offering a press the surface refuses.
+  if (
+    plan.ok &&
+    surface.editingMode() === 'suggest' &&
+    (command.type === 'mergeCells' || command.type === 'splitCell')
+  ) {
+    plan = { ok: false, code: 'unsupported', reason: SUGGESTING_CELL_STRUCTURE_REFUSAL };
+  }
   return plan.ok
     ? { can: { ok: true }, plan }
     : { can: { ok: false, code: plan.code, reason: plan.reason }, plan };
@@ -301,6 +348,14 @@ export function gateCommand(
       refusal: { ok: false, code: 'locked', reason: 'the document is read-only' },
     };
   }
+  const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
+  if (protection) return { ok: false, refusal: protection };
+  const locked = contentLockFormatRefusal(command, surface, contentLockPolicyFor(surface));
+  if (locked) return { ok: false, refusal: locked };
+  if (command.type === 'insertTextBox') {
+    const refusal = textboxInsertionRefusal(surface);
+    return refusal ? { ok: false, refusal } : { ok: true };
+  }
   // History commands are gated on the HISTORY, not just the mode: `can` drives the
   // toolbar's enabled state, and an undo button that stays live over an empty stack
   // silently no-ops — Word greys it out.
@@ -330,6 +385,10 @@ export function gateCommand(
   // builds the entire selected string to answer one bit, and `can` is asked from host
   // selectors that re-run on every tick — the exact cost `EditorSnapshot.selectionCollapsed`
   // exists to avoid, which it would be absurd to reintroduce here.
+  if (command.type === 'deleteText' && resolveSelectedDrawingRecord(surface)) {
+    const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
+    return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+  }
   if (command.type === 'copy' || command.type === 'cut' || command.type === 'deleteText') {
     const { anchor, head } = surface.state().selection;
     if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) {
@@ -386,6 +445,8 @@ export function gateCommand(
       },
     };
   }
+  const bookmarkRefusal = bookmarkCommandRefusal(surface, command);
+  if (bookmarkRefusal) return { ok: false, refusal: bookmarkRefusal };
   if (command.type === 'insertToc' && !surface.canInsertToc()) {
     return {
       ok: false,
@@ -396,6 +457,11 @@ export function gateCommand(
       },
     };
   }
+  if (command.type === 'editTextFormField' && !surface.canEditTextFormField())
+    return {
+      ok: false,
+      refusal: { ok: false, code: 'unsupported', reason: 'field options are unavailable' },
+    };
   if (command.type === 'refreshToc' && !surface.canRefreshToc(command.tocId)) {
     return {
       ok: false,
@@ -587,6 +653,18 @@ export function tableContextOf(surface: PaginatedSurface | null): TableContext |
   };
 }
 
+/** How far the cell at the caret splits, for a split dialog; null when it does not split. */
+export function splitCellConfigOf(
+  surface: PaginatedSurface | null
+): { maxRows: number; maxCols: number } | null {
+  if (!surface) return null;
+  const input = buildTableCommandPlannerInput({ type: 'splitCell', rows: 1, cols: 2 }, surface);
+  const anchor = tableAnchorAt(input.layout, input.selection.head.paragraphId, input.cellSelection);
+  if (!anchor || anchor.cellIds.length > 1) return null;
+  const limits = splitCellLimits(input.part, anchor.tableId, anchor.cellId);
+  return limits ? { ...limits } : null;
+}
+
 /** Half-point reshape of `snapshot().formatting` for `getSelectionFormatting`. */
 export function selectionFormattingHalfPoints(formatting: RunFormatting | null): {
   bold?: boolean;
@@ -609,4 +687,10 @@ export function selectionFormattingHalfPoints(formatting: RunFormatting | null):
     ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
     ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
   };
+}
+
+export function isInsideTocOf(surface: PaginatedSurface | null): boolean {
+  return (
+    !!surface && tocAtPosition(surface.session.part(), surface.state().selection.head) !== undefined
+  );
 }

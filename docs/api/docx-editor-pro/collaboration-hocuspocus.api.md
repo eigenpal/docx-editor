@@ -15,32 +15,22 @@ export function createHocuspocusCollaboration(options: CreateHocuspocusCollabora
 
 // @public
 export interface CreateHocuspocusCollaborationOptions {
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
-    // (undocumented)
     readonly roomId: string;
     readonly syncedTimeoutMs?: number;
     readonly token?: string | (() => string | Promise<string>);
     readonly url: string;
 }
 
-// @internal
-export const HOCUSPOCUS_PROVIDER_FOR_TESTS: unique symbol;
-
 // @public
 export interface HocuspocusCollaborationRoom extends DocumentCollaborationHandle {
-    // (undocumented)
     readonly provider: HocuspocusProvider;
-    // (undocumented)
     readonly ydoc: Y.Doc;
 }
 
 // @public
 export function validateRoomId(value: string): string;
-
-// (No @packageDocumentation comment for this package)
 
 ```

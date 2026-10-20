@@ -8,7 +8,7 @@ import { h } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { DocxEditorReview } from '../vue/index.ts';
-import { reviewModule } from '../index.ts';
+import { reviewModule, type ReviewPaneOptions } from '../index.ts';
 import { trackVueWarnings, assertNoRefOwnerWarnings } from './vue-runtime-audit.ts';
 
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -113,13 +113,14 @@ export async function selectAllWithPlacement(editor: DocxEditorInstance): Promis
 export function mountReview(
   source: Uint8Array = SOURCE,
   reviewProps: Record<string, unknown> = {},
-  rootProps: Record<string, unknown> = {}
+  rootProps: Record<string, unknown> = {},
+  pane?: ReviewPaneOptions
 ) {
   const mounted = mountEditorTree(
     () => [],
     source,
     () => [h(DocxEditorReview, reviewProps)],
-    [reviewModule()],
+    [reviewModule(pane ? { pane } : {})],
     rootProps
   );
   const warnings = trackVueWarnings(mounted.app);

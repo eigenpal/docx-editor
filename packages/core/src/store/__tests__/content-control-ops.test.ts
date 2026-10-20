@@ -160,7 +160,7 @@ describe('setContentControlValue writes the value each type accepts', () => {
       value: { kind: 'checkbox', checked: true },
     });
     expect(contentControlPropertiesOf(controlOf(next)).checkbox?.checked).toBe(true);
-    expect(contentControlTextOf(controlOf(next))).toBe('\u2612');
+    expect(serializeOoxmlPart(next)).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
   });
 
   test('a date validates ISO input and writes fullDate beside the formatted content', () => {
@@ -270,7 +270,7 @@ describe('a bare string is read in the vocabulary the control type declares', ()
   test('a checkbox reads it as a state and writes the declared glyph', () => {
     const next = written(CHECKBOX, 'true');
     expect(contentControlPropertiesOf(controlOf(next)).checkbox?.checked).toBe(true);
-    expect(contentControlTextOf(controlOf(next))).toBe('\u2612');
+    expect(serializeOoxmlPart(next)).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
   });
 
   test('a string that is neither state is a type mismatch, not an unchecked box', () => {
@@ -305,26 +305,30 @@ describe('placeholder and temporary state are transitions, not text', () => {
     expect(serializeOoxmlPart(next)).not.toContain('showingPlcHdr');
   });
 
-  test('a block placeholder replace reports the paragraph swap it performs', () => {
-    // A BLOCK control's prompt lives in its own paragraph, and the replace deletes it and
-    // mints a new one. Publishing that as 'text-local' with empty created/deleted told
-    // paragraph-keyed caches (the retained review order index) the paragraph set was intact,
-    // so the minted paragraph was invisible to them until the next structural commit.
+  test('a block placeholder replace keeps the prompt paragraph and reports it dirty', () => {
+    // A BLOCK control's prompt lives in its own paragraph. The replace keeps that paragraph,
+    // with its properties, and swaps its runs, so paragraph-keyed caches (the retained review
+    // order index) hear about it through `dirty`; a paragraph that does go is reported deleted
+    // and a minted one created, so the paragraph set is never silently wrong.
     const block = parseDoc(
       `<w:sdt><w:sdtPr><w:tag w:val="blockPrompt"/><w:showingPlcHdr/><w:text/></w:sdtPr>` +
-        `<w:sdtContent><w:p><w:r><w:t>Click here to enter text.</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+        `<w:sdtContent><w:p><w:pPr><w:pStyle w:val="Prompt"/></w:pPr><w:r><w:t>Click here to enter text.</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:t>Second prompt line.</w:t></w:r></w:p></w:sdtContent></w:sdt>`
     );
-    const promptParagraph = paragraphs(block)[0]!;
+    const [promptParagraph, secondParagraph] = paragraphs(block);
     const result = applyTreeOp(block, {
       op: 'insertHardBreak',
-      paragraphId: promptParagraph.id,
+      paragraphId: promptParagraph!.id,
       offset: 0,
     });
     if (!result.ok) throw new Error(`refused: ${result.reason}`);
-    const nextParagraph = paragraphs(result.part)[0]!;
-    expect(nextParagraph.id).not.toBe(promptParagraph.id);
-    expect(result.effect.deleted).toContain(promptParagraph.id);
-    expect(result.effect.created).toContain(nextParagraph.id);
+    const after = paragraphs(result.part);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.id).toBe(promptParagraph!.id);
+    expect(serializeOoxmlPart(result.part)).toContain('<w:pStyle w:val="Prompt"/>');
+    expect(result.effect.dirty).toContain(promptParagraph!.id);
+    expect(result.effect.deleted).toEqual([secondParagraph!.id]);
+    expect(result.effect.created).toEqual([]);
     expect(result.effect.impact).toBe('flow-structural');
   });
 
@@ -626,7 +630,7 @@ describe('an insertion can name the control it belongs to', () => {
     });
     // One bold run holding both, rather than the content rebuilt as plain text.
     expect(serializeOoxmlPart(next)).toContain('<w:b/>');
-    expect(serializeOoxmlPart(next)).toMatch(/<w:b\/><\/w:rPr><w:t>MID<\/w:t><w:t>#<\/w:t>/);
+    expect(serializeOoxmlPart(next)).toMatch(/<w:b\/><\/w:rPr><w:t>MID#<\/w:t>/);
   });
 
   test('the leading edge lands where it already landed', () => {
@@ -991,6 +995,22 @@ describe('setContentControlValue', () => {
     expect(attributeOfV2(list, 'lastValue')).toBe('custom');
   });
 
+  test('combo keeps four-digit hexadecimal text unchanged', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>old</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: '2612',
+    });
+    expect(collectTextV2(childNamedV2(findContentControl(next, control.id)!, 'sdtContent')!)).toBe(
+      '2612'
+    );
+  });
+
   test('checkbox toggles w14:checked and rewrites the glyph', () => {
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +
@@ -1224,6 +1244,26 @@ function collectTextV2(node: OoxmlNode): string {
 }
 
 describe('showingPlcHdr first-input replacement', () => {
+  test('typing at the end of a tracked placeholder stays inside the control', () => {
+    const part = loadV2(
+      '<w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+        '<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Click to enter text</w:t></w:r></w:sdtContent>' +
+        '</w:sdt></w:ins><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 19,
+      text: '#',
+    });
+    const updated = findContentControl(next, control.id)!;
+    expect(collectTextV2(childNamedV2(updated, 'sdtContent')!)).toBe('#');
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('# after');
+    expect(isShowingPlaceholder(updated)).toBe(false);
+  });
+
   test('insertText replaces the entire literal prompt and clears showingPlcHdr', () => {
     const part = loadV2(
       '<w:p><w:r><w:t>x</w:t></w:r>' +
@@ -1291,8 +1331,9 @@ describe('showingPlcHdr first-input replacement', () => {
     expect(collectTextV2(childNamedV2(after, 'sdtContent')!)).toBe('Apollo');
   });
 
-  test('emptying after a placeholder replace does not restore showingPlcHdr (no glossary)', () => {
-    // Honest limitation: without a durable glossary source this lane cannot restore a prompt.
+  test('emptying a filled control shows the prompt again, as Word does (no glossary)', () => {
+    // The wrapper stays and the type's own prompt returns under `w:showingPlcHdr`, so the
+    // control never becomes a zero-width gap the caret cannot enter.
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
         '<w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
@@ -1312,11 +1353,20 @@ describe('showingPlcHdr first-input replacement', () => {
       end: 2,
     });
     const after = findContentControl(emptied, control.id)!;
-    expect(isShowingPlaceholder(after)).toBe(false);
-    expect(paragraphTextOf(emptied, V2_PARAGRAPH)).toBe('');
+    expect(isShowingPlaceholder(after)).toBe(true);
+    expect(paragraphTextOf(emptied, V2_PARAGRAPH)).toBe('Click here to enter text.');
+    // The restored prompt is a prompt: the next keystroke replaces it whole.
+    const again = applyV2(emptied, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 0,
+      text: 'Yo',
+    });
+    expect(paragraphTextOf(again, V2_PARAGRAPH)).toBe('Yo');
+    expect(isShowingPlaceholder(findContentControl(again, control.id)!)).toBe(false);
   });
 
-  test('glossary docPart is preserved and still cannot invent a restore', () => {
+  test('glossary docPart is preserved across the fill and the restore', () => {
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr>' +
         '<w:placeholder><w:docPart w:val="DefaultPlaceholder"/></w:placeholder>' +
@@ -1340,8 +1390,11 @@ describe('showingPlcHdr first-input replacement', () => {
       start: 0,
       end: 4,
     });
-    // Still no restore: glossary is not resolved in this lane.
-    expect(isShowingPlaceholder(findContentControl(emptied, control.id)!)).toBe(false);
+    // The store lane cannot read the glossary, so the type's prompt stands in for the
+    // block's text; the reference itself survives for Word and for the next open.
+    const restored = findContentControl(emptied, control.id)!;
+    expect(isShowingPlaceholder(restored)).toBe(true);
+    expect(hasGlossaryPlaceholderRef(restored)).toBe(true);
   });
 
   test('bound refuses before a placeholder transition', () => {
@@ -1352,8 +1405,9 @@ describe('showingPlcHdr first-input replacement', () => {
         '<w:text/>' +
         '</w:sdtPr><w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
+    // Inside the prompt: at an outer edge the insert lands beside a bound control instead.
     expect(
-      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 0, text: 'x' })
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 2, text: 'x' })
     ).toBe('bound');
     expect(isShowingPlaceholder(firstSdtV2(part))).toBe(true);
   });
@@ -1449,30 +1503,29 @@ describe('boundary carets beside locked controls', () => {
     '<w:sdtContent><w:r><w:t>LOCK</w:t></w:r></w:sdtContent></w:sdt>' +
     '<w:r><w:t>zz</w:t></w:r></w:p>';
 
-  test('bias-right insert at the locked chip LEFT edge is refused, matching apply', () => {
-    // Apply honors bias: 'right' by joining the run AFTER the caret — the chip's own run.
-    // Validation must attribute the caret the same way, or the keystroke lands INSIDE the
-    // locked control (the exact bypass the shared leavesInlineContainer rule exists to
-    // prevent).
-    const part = loadV2(LOCKED);
-    expect(
-      rejectV2(part, {
+  test('an insert at the locked chip LEFT edge lands beside it, with either bias', () => {
+    // Entering a content-locked chip can only be refused, so the leading edge resolves beside
+    // the chip for both biases. Validation reads the same landing, so the write is allowed and
+    // the chip keeps its text. Before this, a chip at a paragraph start had no position before
+    // it that accepted a keystroke.
+    for (const bias of [undefined, 'right'] as const) {
+      const part = loadV2(LOCKED);
+      const next = applyV2(part, {
         op: 'insertText',
         paragraphId: V2_PARAGRAPH,
         offset: 2,
         text: 'X',
-        bias: 'right',
-      })
-    ).toBe('locked');
+        ...(bias ? { bias } : {}),
+      });
+      expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('aaXLOCKzz');
+      expect(collectTextV2(firstSdtV2(next))).toBe('LOCK');
+    }
   });
 
-  test('bias-left insert at the chip LEFT edge ENTERS the control, so a locked one refuses', () => {
-    // Word's rule: at a control's leading edge the run STARTING at the caret owns the
-    // insertion, so typing enters the control — and a content-locked chip refuses the
-    // keystroke rather than letting it in. Apply and validate agree.
+  test('an insert strictly inside the locked chip is still refused', () => {
     const part = loadV2(LOCKED);
     expect(
-      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 2, text: 'X' })
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 4, text: 'X' })
     ).toBe('locked');
   });
 

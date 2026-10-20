@@ -19,6 +19,24 @@ import {
 const PAGE: RulerPageMetrics = { pageWidth: 12240, leftMargin: 1440, rightMargin: 1440 };
 const FLUSH: RulerIndent = { left: 0, right: 0, firstLine: 0 };
 
+describe('a right-to-left paragraph', () => {
+  // `left` is the LEADING indent, on the right margin, and the first line counts from it.
+  const PAGE_RTL: RulerPageMetrics = { pageWidth: 12240, leftMargin: 1800, rightMargin: 1440 };
+  const indent: RulerIndent = { left: 720, right: 360, firstLine: -360, rtl: true };
+
+  test('the handles sit on the mirrored axis', () => {
+    expect(handlePosition('left', indent, PAGE_RTL)).toBe(12240 - 1440 - 720);
+    expect(handlePosition('firstLine', indent, PAGE_RTL)).toBe(12240 - 1440 - 360);
+    expect(handlePosition('right', indent, PAGE_RTL)).toBe(1800 + 360);
+  });
+
+  test('a drag reads its position on the same axis and keeps the flag', () => {
+    const next = dragIndent('left', 12240 - 1440 - 1080, indent, PAGE_RTL);
+    expect(next).toEqual({ left: 1080, right: 360, firstLine: -360, rtl: true });
+    expect(dragIndent('right', 1800 + 720, indent, PAGE_RTL).right).toBe(720);
+  });
+});
+
 describe('handle positions', () => {
   test('the hanging triangle and the left box are coincident, as in Word', () => {
     const indent: RulerIndent = { left: 720, right: 0, firstLine: -360 };

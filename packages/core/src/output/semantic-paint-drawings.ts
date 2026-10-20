@@ -11,22 +11,33 @@ import type {
   ValidatedImageBytesHandle,
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import { applyDrawingBilevelFilter } from './drawing-bilevel-filter.ts';
+import { drawingFilterStyle } from './drawing-lum-filter.ts';
 import type { DrawingPoint } from '../layout/drawing-geometry.ts';
 import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
+import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
 import type {
   LayoutBox,
   PageRecord,
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
-import { forEachPageStory, forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
+import {
+  forEachPageStory,
+  forEachStoryDrawing,
+  forEachStoryParagraphFragment,
+} from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
+import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
+import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
+import { paintTextArt } from './semantic-paint-text-art.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   revisionPresentationOf,
   type RevisionStyleContext,
 } from './revision-presentation.ts';
+import { blockContentSummary } from './block-content-summary.ts';
 
 /** Host port for safe blob URLs — only called for {@link ImageResourceState.kind} `ready`. */
 export interface PaintImageUrlPort {
@@ -66,8 +77,12 @@ export interface DrawingPaintContext {
    */
   readonly paintStoryFragment?: (
     document: Document,
-    fragment: ParagraphFragmentRecord | TableFragmentRecord
+    fragment: ParagraphFragmentRecord | TableFragmentRecord,
+    /** `readOnly` paints without selection and editing bindings. */
+    options?: { readonly readOnly?: boolean }
   ) => HTMLElement;
+  /** Paint drawings without their node binding, inside a story no command may reach. */
+  readonly unbound?: boolean;
   /** Resolved author colouring, so a tracked drawing's cue follows the span scheme. */
   readonly revisionStyles?: RevisionStyleContext;
 }
@@ -238,21 +253,6 @@ function imagePaintTransformStyle(
   });
 }
 
-function filterStyleOf(drawing: InlineDrawingRecord | AnchoredDrawingRecord): string | undefined {
-  const { effects } = drawing;
-  const parts: string[] = [];
-  if (effects.grayscale) parts.push('grayscale(1)');
-  if (effects.brightness !== 0 && Number.isFinite(effects.brightness)) {
-    const factor = 1 + effects.brightness / 100;
-    if (Number.isFinite(factor)) parts.push(`brightness(${finiteStyle(Math.max(0, factor))})`);
-  }
-  if (effects.contrast !== 0 && Number.isFinite(effects.contrast)) {
-    const factor = 1 + effects.contrast / 100;
-    if (Number.isFinite(factor)) parts.push(`contrast(${finiteStyle(Math.max(0, factor))})`);
-  }
-  return parts.length > 0 ? parts.join(' ') : undefined;
-}
-
 function cropImageStyles(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   resource: Extract<InlineDrawingRecord['resource'], { kind: 'ready' }>
@@ -345,6 +345,23 @@ function positionedBox(
   element.style.pointerEvents = 'auto';
 }
 
+/** The box the image fills: a group picture's member frame, else the drawing's content box. */
+function imageFrameBounds(drawing: InlineDrawingRecord | AnchoredDrawingRecord): LayoutBox {
+  const corners = drawing.groupPicture ? drawing.geometry.imageTransformCorners : undefined;
+  if (!corners || corners.length === 0) return drawing.geometry.contentBounds;
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const point of corners) {
+    left = Math.min(left, point.x);
+    top = Math.min(top, point.y);
+    right = Math.max(right, point.x);
+    bottom = Math.max(bottom, point.y);
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 function readyImagePaintSignature(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   resource: Extract<InlineDrawingRecord['resource'], { kind: 'ready' }>,
@@ -353,7 +370,7 @@ function readyImagePaintSignature(
   origin?: LayoutBox
 ): string {
   const paint = drawing.paintBounds;
-  const content = drawing.geometry.contentBounds;
+  const content = imageFrameBounds(drawing);
   const crop = cropImageStyles(drawing, resource);
   return [
     url,
@@ -369,7 +386,8 @@ function readyImagePaintSignature(
     content.width,
     content.height,
     cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], paint) ?? '',
-    filterStyleOf(drawing) ?? '',
+    drawingFilterStyle(drawing.effects) ?? '',
+    drawing.effects.bilevel ?? '',
     imagePaintTransformStyle(drawing) ?? '',
     crop.width,
     crop.height,
@@ -388,7 +406,7 @@ function paintPlaceholderCard(
 ): HTMLElement {
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-placeholder';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
   const card = document.createElement('div');
@@ -445,10 +463,12 @@ function paintReadyImage(
   const elementKey = drawingElementKey(drawing, ctx);
   const outer = urlRegistry?.readyElementFor?.(elementKey) ?? document.createElement('div');
   const paintSignature = readyImagePaintSignature(drawing, resource, ctx, url, origin);
-  if (readyImagePaintSignatures.get(outer) === paintSignature) return outer;
+  // A group's vector members are rebuilt on every paint; only a lone image is reused.
+  const reusable = !drawing.vectorShape;
+  if (reusable && readyImagePaintSignatures.get(outer) === paintSignature) return outer;
   outer.className = 'docx-drawing docx-drawing-ready';
   outer.style.cssText = '';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   delete outer.dataset.docxDrawingLink;
   delete outer.dataset.docxDrawingLinkKind;
   delete outer.dataset.docxDrawingLinkHref;
@@ -458,21 +478,25 @@ function paintReadyImage(
   outer.removeAttribute('tabindex');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
-  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon.
-  const clipPath = cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], drawing.paintBounds);
-  if (clipPath) outer.style.clipPath = clipPath;
-
   const inner = document.createElement('div');
   inner.className = 'docx-drawing-image-frame';
   inner.style.position = 'absolute';
-  const content = drawing.geometry.contentBounds;
+  const content = imageFrameBounds(drawing);
   const paint = drawing.paintBounds;
+  // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon. A
+  // group clips only its picture there: the vector members share the outer box, which
+  // clips at the paint bounds so strokes can use the effect extent, as a lone shape does.
+  const clipPath = cssClipPathFromPolygon(
+    drawing.geometry.clipPolygon ?? [],
+    drawing.groupPicture ? content : paint
+  );
+  if (clipPath) (drawing.groupPicture ? inner : outer).style.clipPath = clipPath;
   inner.style.left = `${(content.x - paint.x) * ctx.scale}px`;
   inner.style.top = `${(content.y - paint.y) * ctx.scale}px`;
   inner.style.width = `${content.width * ctx.scale}px`;
   inner.style.height = `${content.height * ctx.scale}px`;
 
-  const filter = filterStyleOf(drawing);
+  const filter = drawingFilterStyle(drawing.effects);
   if (filter) inner.style.filter = filter;
 
   const transformStage = document.createElement('div');
@@ -516,6 +540,19 @@ function paintReadyImage(
   transformStage.append(cropViewport);
   inner.append(transformStage);
   outer.replaceChildren(inner);
+  if (drawing.vectorShape) {
+    const frame = vectorShapeFrame(document, drawing, ctx.scale);
+    const paintBounds = drawing.paintBounds;
+    applyVectorInkReach(
+      outer,
+      frame,
+      paintBounds,
+      vectorShapeInkClip(drawing, paintBounds),
+      ctx.scale
+    );
+    outer.append(frame);
+  }
+  applyDrawingBilevelFilter(document, outer, inner, drawing.effects.bilevel);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
     outer.dataset.docxDrawingLink = drawing.drawingNodeId;
@@ -527,11 +564,10 @@ function paintReadyImage(
     applyAccessibility(outer, drawing, false);
   }
   urlRegistry?.rememberReadyElement?.(elementKey, outer);
-  readyImagePaintSignatures.set(outer, paintSignature);
+  if (reusable) readyImagePaintSignatures.set(outer, paintSignature);
+  else readyImagePaintSignatures.delete(outer);
   return outer;
 }
-
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
  * Paint a typed `wps:wsp` solid-geometry shape as inline SVG. Coordinates stay in the
@@ -542,61 +578,16 @@ function paintVectorShape(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   ctx: DrawingPaintContext,
+  ink: LayoutBox,
   origin?: LayoutBox
 ): HTMLElement {
-  const shape = drawing.vectorShape!;
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-shape';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
-  positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
-
-  const content = drawing.geometry.contentBounds;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   const paint = drawing.paintBounds;
-  const frame = document.createElement('div');
-  frame.className = 'docx-drawing-image-frame';
-  frame.style.position = 'absolute';
-  frame.style.left = `${(content.x - paint.x) * ctx.scale}px`;
-  frame.style.top = `${(content.y - paint.y) * ctx.scale}px`;
-  frame.style.width = `${content.width * ctx.scale}px`;
-  frame.style.height = `${content.height * ctx.scale}px`;
-
-  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-  svg.setAttribute(
-    'viewBox',
-    `0 0 ${finiteStyle(Math.max(1, shape.extentEmu.cx))} ${finiteStyle(Math.max(1, shape.extentEmu.cy))}`
-  );
-  svg.setAttribute('preserveAspectRatio', 'none');
-  svg.setAttribute('width', '100%');
-  svg.setAttribute('height', '100%');
-  svg.style.display = 'block';
-
-  // `components` is the paint authority and is always non-empty; the top-level `fillHex`
-  // and `strokeHex` describe a one-component shape only.
-  for (const component of shape.components) {
-    const path = document.createElementNS(SVG_NAMESPACE, 'path');
-    const d = component.subpathsEmu
-      .map(
-        (points) =>
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
-      )
-      .join('');
-    path.setAttribute('d', d);
-    // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
-    path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
-    path.setAttribute('fill-rule', 'evenodd');
-    if (component.fillAlpha < 1) {
-      path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
-    }
-    if (component.strokeHex !== null) {
-      path.setAttribute('stroke', `#${component.strokeHex}`);
-      path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
-      if (component.strokeAlpha < 1) {
-        path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
-      }
-    }
-    svg.append(path);
-  }
-  frame.append(svg);
+  positionedBox(outer, paint, ctx.scale, origin);
+  const frame = vectorShapeFrame(document, drawing, ctx.scale);
+  applyVectorInkReach(outer, frame, paint, ink, ctx.scale);
   outer.append(frame);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
@@ -618,15 +609,15 @@ function paintVectorShape(
  */
 function paintTextboxStory(
   document: Document,
-  drawing: AnchoredDrawingRecord,
-  story: NonNullable<AnchoredDrawingRecord['textboxStory']>,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  story: NonNullable<InlineDrawingRecord['textboxStory']>,
   ctx: DrawingPaintContext,
   origin?: LayoutBox
 ): HTMLElement {
   const scale = ctx.scale;
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-textbox';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   outer.setAttribute('contenteditable', 'false');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
   outer.style.overflow = 'hidden';
@@ -663,9 +654,9 @@ function paintTextboxStory(
   for (const fragment of story.fragments) {
     content.append(ctx.paintStoryFragment!(document, fragment));
   }
-  // Story text is furniture: strip selection/editing bindings so pointer mapping never
-  // resolves into a story the surface cannot edit.
+  // Keep story bindings inert until the surface enters this textbox for editing.
   for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {
+    bound.dataset.textboxParagraphId = bound.dataset.paragraphId;
     delete bound.dataset.paragraphId;
   }
   outer.append(content);
@@ -676,11 +667,9 @@ function paintTextboxStory(
 /**
  * The tracked-change cue on a painted drawing (#479).
  *
- * The same statement `applyRevisionPresentation` makes for text, translated to a box: the
- * stylesheet draws an insertion- or deletion-coloured outline under
- * `docx-drawing--revision-*` and dims a pending removal, and the element carries the same
- * `data-revision-*` datasets spans do, so review chrome resolves a hovered picture to its
- * decision exactly like a hovered word.
+ * Drawings share the page-margin change bars with text. The stylesheet dims a pending
+ * removal, while the `data-revision-*` datasets let review chrome resolve a hovered
+ * picture to its decision exactly like a hovered word.
  *
  * Applied on EVERY paint — including the ready-image path's signature-matched reuse, whose
  * cached element would otherwise keep the marking of a decision the document no longer
@@ -709,7 +698,6 @@ function applyDrawingRevisionPresentation(
     delete element.dataset.reviewAuthor;
     delete element.dataset.revisionDate;
     delete element.dataset.reviewAuthorSlot;
-    element.style.outlineColor = '';
     return;
   }
   const { attribution } = presentation;
@@ -726,13 +714,7 @@ function applyDrawingRevisionPresentation(
   else delete element.dataset.reviewAuthor;
   if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
   else delete element.dataset.revisionDate;
-  // The spans' selective ink rule: the outline follows the author under author colouring
-  // (inline style beats the stylesheet's kind colour), and stays on the kind tokens
-  // otherwise. `spanClassName` tokens are NOT mirrored here — they are documented as span
-  // classes, and a reused image element would accumulate stale host tokens no scrub knows.
-  const authorStyle = colors?.styles.get(attribution.author);
-  const byAuthor =
-    colors !== undefined && (authorStyle?.color !== undefined || colors.others === 'author');
+  // Keep author attribution available to review chrome without painting a colored frame.
   if (colors) {
     element.dataset.reviewAuthorSlot = String(
       (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
@@ -740,7 +722,6 @@ function applyDrawingRevisionPresentation(
   } else {
     delete element.dataset.reviewAuthorSlot;
   }
-  element.style.outlineColor = byAuthor ? presentation.authorColor : '';
 }
 
 export function paintDrawingRecord(
@@ -763,27 +744,55 @@ function paintDrawingRecordElement(
   origin?: LayoutBox
 ): HTMLElement | null {
   if (drawing.accessibility.hidden) return null;
-  if (drawing.paintBounds.width <= 0 || drawing.paintBounds.height <= 0) return null;
+  // A straight line's paint box can have no width; its stroke still paints.
+  const painted = drawing.vectorShape
+    ? vectorShapeInkClip(drawing, drawing.paintBounds)
+    : drawing.paintBounds;
+  if (painted.width <= 0 || painted.height <= 0) return null;
 
-  if (
-    drawing.kind === 'anchoredDrawing' &&
-    drawing.textboxStory !== undefined &&
-    ctx.paintStoryFragment !== undefined
-  ) {
+  if (drawing.textboxStory !== undefined && ctx.paintStoryFragment !== undefined) {
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
+  if (drawing.kind === 'anchoredDrawing' && drawing.textArt) {
+    return paintTextArt(
+      document,
+      { ...drawing, textArt: drawing.textArt },
+      ctx.scale,
+      !!ctx.unbound,
+      origin
+    );
+  }
 
-  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) {
-    return paintVectorShape(document, drawing, ctx, origin);
+  // A group made only of text box members paints its text in its own layer. Its frame here is
+  // empty, but it keeps the group selectable and labelled like any other drawing.
+  if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) {
+    const frame = document.createElement('div');
+    frame.className = 'docx-drawing docx-drawing-group-frame';
+    if (!ctx.unbound) frame.dataset.drawingNodeId = drawing.drawingNodeId;
+    positionedBox(frame, drawing.paintBounds, ctx.scale, origin);
+    applyAccessibility(frame, drawing, false);
+    return frame;
   }
 
   const { resource } = drawing;
+  const url =
+    resource.kind === 'ready' && ctx.imageUrlPort && urlRegistry
+      ? urlRegistry.urlForReady(resource.validatedHandle, resource.mime)
+      : null;
+  // A group paints whole or not at all. Its vector members paint alone only while the
+  // picture is pending. A picture that cannot paint turns the whole group into the refusal
+  // card of an unsupported group. Layout drops an MC-wrapped group whose resource fails, so
+  // that group never reaches this card.
+  if (drawing.groupPicture && resource.kind !== 'pending' && !url) {
+    return paintPlaceholderCard(document, drawing, ctx, origin);
+  }
+  const groupImageReady = drawing.groupPicture !== undefined && url !== null;
+  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0 && !groupImageReady) {
+    return paintVectorShape(document, drawing, ctx, painted, origin);
+  }
+
   if (resource.kind === 'ready') {
-    if (!ctx.imageUrlPort || !urlRegistry) {
-      return paintPlaceholderCard(document, drawing, ctx, origin);
-    }
-    const url = urlRegistry.urlForReady(resource.validatedHandle, resource.mime);
-    if (!url) return paintPlaceholderCard(document, drawing, ctx, origin);
+    if (!url || !urlRegistry) return paintPlaceholderCard(document, drawing, ctx, origin);
     return paintReadyImage(document, drawing, ctx, url, urlRegistry, origin);
   }
 
@@ -795,7 +804,7 @@ function paintDrawingRecordElement(
         ?.closest<HTMLElement>('.docx-drawing-ready');
     if (retained) {
       readyImagePaintSignatures.delete(retained);
-      retained.dataset.drawingNodeId = drawing.drawingNodeId;
+      if (!ctx.unbound) retained.dataset.drawingNodeId = drawing.drawingNodeId;
       positionedBox(retained, drawing.paintBounds, ctx.scale, origin);
       return retained;
     }
@@ -816,6 +825,8 @@ export function paintInlineDrawingsOnLine(
   for (const drawing of line.drawings ?? []) {
     const element = paintDrawingRecord(document, drawing, ctx, urlRegistry, lineOrigin);
     if (element) painted.push(element);
+    const text = paintGroupTextboxStories(document, drawing, ctx, lineOrigin);
+    if (text) painted.push(text);
   }
   return Object.freeze(painted);
 }
@@ -836,28 +847,13 @@ export function paintAnchoredDrawingsLayer(
       element.dataset.drawingLayer = layer;
       painted.push(element);
     }
+    const text = paintGroupTextboxStories(document, drawing, ctx, pageOrigin);
+    if (text) {
+      text.dataset.drawingLayer = layer;
+      painted.push(text);
+    }
   }
   return Object.freeze(painted);
-}
-
-/**
- * Every drawing one page paints, whatever story it is in.
- *
- * `paintPageNoteAreas` paints note fragments through the same `paintFragment` the body uses, so
- * a picture in a footnote gets a cached element and a blob URL like any other. Walking only the
- * body and the furniture stories meant the reconcile pass never saw those keys and treated them
- * as unused — so every repaint revoked the note image's resource and stripped its `src`. Typing
- * one character in the body blanked a picture in a footnote.
- *
- * Each story walks with {@link forEachStoryDrawing} — the SAME bounded walk the furniture
- * invalidation token uses, so what layout invalidates and what paint keeps alive cannot
- * drift apart.
- */
-function forEachPageDrawing(
-  page: PageRecord,
-  visitDrawing: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
-): void {
-  forEachPageStory(page, ({ host }) => forEachStoryDrawing(host, visitDrawing));
 }
 
 interface PageDrawingKeys {
@@ -873,6 +869,15 @@ interface PageDrawingKeys {
  * Page records are reused by identity across incremental passes, and everything a key reads
  * (fragments, resource state, the page index the element key embeds) lives inside the record,
  * so the record's identity is the complete cache key.
+ *
+ * Every story the page paints is covered, notes included: `paintPageNoteAreas` paints note
+ * fragments through the same `paintFragment` the body uses, so a picture in a footnote gets a
+ * cached element and a blob URL like any other, and a reconcile that missed it would revoke
+ * the resource and strip its `src`. Each story walks with {@link forEachStoryDrawing} — the
+ * SAME bounded walk the furniture invalidation token uses, so what layout invalidates and what
+ * paint keeps alive cannot drift apart. A story that provably holds no drawing source skips
+ * both walks: no anchored drawing, and no inline drawing or picture bullet in any paragraph
+ * (`blockContentSummary`). Every drawing either walk can reach hangs off one of those.
  */
 const drawingKeysByPage = new WeakMap<PageRecord, PageDrawingKeys>();
 
@@ -881,9 +886,23 @@ function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
   if (cached) return cached;
   const resourceKeys: string[] = [];
   const elementKeys: string[] = [];
-  forEachPageDrawing(page, (drawing) => {
-    if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
-    elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
+  forEachPageStory(page, ({ host }) => {
+    if (
+      (!('anchoredDrawings' in host) || (host.anchoredDrawings?.length ?? 0) === 0) &&
+      blockContentSummary(host.fragments).drawingFree
+    )
+      return;
+    forEachStoryDrawing(host, (drawing) => {
+      if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
+      elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
+    });
+    // A picture-bullet marker mints a blob URL from the same registry, so its resource has to
+    // be reported used here too. Left out, the next reconcile revoked the URL and every list
+    // image went blank on the following repaint.
+    forEachStoryParagraphFragment(host, (fragment) => {
+      const picture = fragment.marker?.picture;
+      if (picture?.resource.kind === 'ready') resourceKeys.push(picture.resource.resourceKey);
+    });
   });
   const keys: PageDrawingKeys = Object.freeze({
     resourceKeys: Object.freeze(resourceKeys),
@@ -893,20 +912,42 @@ function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
   return keys;
 }
 
-export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
+interface LayoutDrawingKeys {
+  readonly resourceKeys: ReadonlySet<string>;
+  readonly elementKeys: ReadonlySet<string>;
+}
+
+/**
+ * Aggregate both key sets for the supplied immutable layout. The painter passes only
+ * materialized pages so reconciliation releases resources from offscreen pages.
+ * Each supplied layout reuses unchanged page extraction. Weak ownership releases the
+ * aggregate with the layout; it retains no DOM or bytes.
+ */
+const drawingKeysByLayout = new WeakMap<SemanticLayout, LayoutDrawingKeys>();
+
+function layoutDrawingKeys(layout: SemanticLayout): LayoutDrawingKeys {
+  const cached = drawingKeysByLayout.get(layout);
+  if (cached) return cached;
+  const resourceKeys = new Set<string>();
+  const elementKeys = new Set<string>();
   for (const page of layout.pages) {
-    for (const key of pageDrawingKeys(page).resourceKeys) keys.add(key);
+    const keys = pageDrawingKeys(page);
+    for (const key of keys.resourceKeys) resourceKeys.add(key);
+    for (const key of keys.elementKeys) elementKeys.add(key);
   }
+  const keys: LayoutDrawingKeys = Object.freeze({ resourceKeys, elementKeys });
+  drawingKeysByLayout.set(layout, keys);
   return keys;
 }
 
+/** Shared read-only membership for this immutable layout. */
+export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
+  return layoutDrawingKeys(layout).resourceKeys;
+}
+
+/** Shared read-only membership for this immutable layout. */
 export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
-  for (const page of layout.pages) {
-    for (const key of pageDrawingKeys(page).elementKeys) keys.add(key);
-  }
-  return keys;
+  return layoutDrawingKeys(layout).elementKeys;
 }
 
 export function drawingPaintStringsCacheToken(strings: DrawingPaintStrings): string {

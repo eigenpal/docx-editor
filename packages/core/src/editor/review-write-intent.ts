@@ -10,6 +10,7 @@
  */
 export type ReviewWriteIntent =
   | 'revision-resolve'
+  | 'revision-attribution'
   | 'comment-add'
   | 'comment-reply'
   | 'comment-resolve'

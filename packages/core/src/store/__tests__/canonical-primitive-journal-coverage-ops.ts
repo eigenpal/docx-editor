@@ -1,5 +1,6 @@
 // Journal coverage fixtures for every authorable TreeDocOp kind (task 3.8).
 
+import { planRevisionAuthorChange } from '../store/revision-author-change.ts';
 import { contentControlsIn } from '../package/content-control-nodes.ts';
 import { storyRootsOf } from '../package/story-blocks.ts';
 import { detectBodyTocs } from '../package/toc-detect.ts';
@@ -19,10 +20,12 @@ import {
   tableIds,
   transactBody,
   W,
+  W14,
   walkNodes,
   zipDoc,
   type JournalCoverageFixture,
 } from './canonical-primitive-journal-coverage-support.ts';
+import { readOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
 
 const TWO_P =
   '<w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>World</w:t></w:r></w:p><w:sectPr/>';
@@ -279,6 +282,11 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
     })),
     story('acceptAllRevisions', zipDoc({ body: INS_P }), () => ({ op: 'acceptAllRevisions' })),
     story('rejectAllRevisions', zipDoc({ body: INS_P }), () => ({ op: 'rejectAllRevisions' })),
+    story(
+      'setRevisionAttribution',
+      zipDoc({ body: INS_P }),
+      (store) => planRevisionAuthorChange(store.bodyStore().part, { author: 'Ada' }).ops[0]!
+    ),
     story('insertTab', plainDoc(), (store) => ({
       op: 'insertTab',
       paragraphId: firstParagraphId(store),
@@ -408,6 +416,38 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       op: 'deleteBlock',
       blockId: firstParagraphId(store),
     })),
+    story('authorTable', plainDoc(), (store) => ({
+      op: 'authorTable',
+      action: {
+        kind: 'insert',
+        paragraphId: firstParagraphId(store),
+        offset: 5,
+        rowCount: 2,
+        columnCount: 2,
+        values: [
+          ['Metric', 'Value'],
+          ['Coverage', '81'],
+        ],
+      },
+    })),
+    story('setTableProperties', zipDoc({ body: TABLE }), (store) => ({
+      op: 'setTableProperties',
+      tableId: tableIds(store).tableId,
+      headerRowCount: 1,
+      columnWidthsTwips: [1800, 3200],
+    })),
+    story(
+      'setFieldCode',
+      plainDoc(
+        '<w:p><w:fldSimple w:instr="PAGE"><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:fldSimple></w:p><w:sectPr/>'
+      ),
+      (store) => ({
+        op: 'setFieldCode',
+        paragraphId: firstParagraphId(store),
+        fieldNodeId: findKind(store.bodyStore().part, 'fldSimple').id,
+        code: 'NUMPAGES',
+      })
+    ),
     story('insertTable', plainDoc(), (store) => ({
       op: 'insertTable',
       beforeParagraphId: paragraphIds(store)[1]!,
@@ -440,6 +480,20 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
     story('deleteTableColumn', zipDoc({ body: TABLE }), (store) => {
       const ids = tableIds(store);
       return { op: 'deleteTableColumn', tableId: ids.tableId, gridColumnId: ids.gridColIds[1]! };
+    }),
+    story('mergeTableCells', zipDoc({ body: TABLE }), (store) => {
+      const ids = tableIds(store);
+      return { op: 'mergeTableCells', tableId: ids.tableId, cellIds: ids.cellIds };
+    }),
+    story('splitTableCell', zipDoc({ body: TABLE }), (store) => {
+      const ids = tableIds(store);
+      return {
+        op: 'splitTableCell',
+        tableId: ids.tableId,
+        cellId: ids.cellIds[0]!,
+        rows: 2,
+        columns: 2,
+      };
     }),
     story('setTableColumnWidths', zipDoc({ body: TABLE }), (store) => {
       const ids = tableIds(store);
@@ -527,6 +581,28 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       op: 'setSectionFurnitureOptions',
       sectionIndex: 0,
       titlePage: true,
+    })),
+    lifecycle('setDocumentProtection', plainDoc(), () => ({
+      op: 'setDocumentProtection',
+      enforce: true,
+    })),
+    // A text watermark in a document with no header: a new header part, its relationship and
+    // content type, and the watermark run, replayed as one package edit.
+    lifecycle('setWatermark', plainDoc(), () => ({
+      op: 'setWatermark',
+      watermark: {
+        kind: 'text',
+        text: 'DRAFT',
+        fontFamily: 'Calibri',
+        fontSizePt: null,
+        bold: false,
+        italic: false,
+        colorHex: 'C0C0C0',
+        opacity: 0.5,
+        diagonal: true,
+        widthPt: 400,
+        heightPt: 200,
+      },
     })),
     lifecycle('insertNote', plainDoc(), (store) => ({
       op: 'insertNote',
@@ -680,5 +756,127 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         updates: [{ paragraphId: paragraphIds(store)[1]!, fieldNodeId: beginId, text: 'new' }],
       };
     }),
+    story(
+      'setTextFormFieldDefault',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="InputA"/><w:textInput><w:default w:val="Old"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Old</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing text form');
+        return {
+          op: 'setTextFormFieldDefault',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+          text: 'New',
+        };
+      }
+    ),
+    story(
+      'commitTextFormField',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="InputA"/><w:textInput><w:default w:val="Old"/><w:format w:val="Uppercase"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Old</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing text form');
+        return {
+          op: 'commitTextFormField',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+        };
+      }
+    ),
+    story(
+      'setLegacyCheckbox',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Box"/><w:checkBox><w:size w:val="24"/><w:default w:val="0"/></w:checkBox></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMCHECKBOX </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing checkbox form');
+        return {
+          op: 'setLegacyCheckbox',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+          checked: true,
+        };
+      }
+    ),
+    story(
+      'setLegacyDropdown',
+      zipDoc({
+        body: '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Box"/><w:ddList><w:result w:val="0"/><w:listEntry w:val="Red"/><w:listEntry w:val="Green"/></w:ddList></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMDROPDOWN </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => {
+        let fieldNodeId: string | undefined;
+        walkNodes(store.bodyStore().part.root, (node) => {
+          if (fieldNodeId === undefined && node.kind === 'fldChar') fieldNodeId = node.id;
+        });
+        if (!fieldNodeId) throw new Error('missing checkbox form');
+        return {
+          op: 'setLegacyDropdown',
+          paragraphId: firstParagraphId(store),
+          fieldNodeId,
+          selectedIndex: 1,
+        };
+      }
+    ),
+    story(
+      'insertBookmark',
+      zipDoc({ body: '<w:p><w:r><w:t>Hello world</w:t></w:r></w:p><w:sectPr/>' }),
+      (store) => {
+        const paragraphId = firstParagraphId(store);
+        return {
+          op: 'insertBookmark',
+          name: 'Greeting',
+          start: { paragraphId, offset: 6 },
+          end: { paragraphId, offset: 11 },
+        };
+      }
+    ),
+    story(
+      'deleteBookmark',
+      zipDoc({
+        body: '<w:p><w:bookmarkStart w:id="1" w:name="Greeting"/><w:r><w:t>Hello</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p><w:sectPr/>',
+      }),
+      () => ({ op: 'deleteBookmark', name: 'greeting' })
+    ),
+    story(
+      'insertBuildingBlock',
+      zipDoc({
+        body:
+          '<w:sdt><w:sdtPr><w:id w:val="7"/><w:showingPlcHdr/><w:docPartList><w:docPartGallery w:val="Quick Parts"/></w:docPartList></w:sdtPr>' +
+          '<w:sdtContent><w:p><w:r><w:t>Choose a building block.</w:t></w:r></w:p></w:sdtContent></w:sdt>' +
+          '<w:p><w:r><w:t>after</w:t></w:r></w:p><w:sectPr/>',
+      }),
+      (store) => ({
+        op: 'insertBuildingBlock',
+        controlId: findKind(store.bodyStore().part, 'contentControl').id,
+        name: 'Approval',
+        blocks: [
+          findKind(parseBodyPart('<w:p><w:r><w:t>Approved by</w:t></w:r></w:p>'), 'paragraph'),
+        ],
+      })
+    ),
   ];
+}
+
+/** A throwaway part whose body holds `xml`, for op payloads that carry foreign blocks. */
+function parseBodyPart(xml: string): OoxmlPart {
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${xml}</w:body></w:document>`,
+    { name: '/word/payload.xml', contentType: 'application/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  return parsed.part;
 }

@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A justified line that contained a tab never shrank its spaces, so its last word moved to the next line and the remaining spaces stretched.",
+  "after": "Spaces after the line's last tab can shrink to keep the last word on the line. The tab and the text before it keep their positions.",
+  "reason": "Layout reads the same shared tree on every replica. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-space-shrink.test.ts"
+  ],
+  "changeset": "justified-tab-line-shrink",
+  "migration": null
+}

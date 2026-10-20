@@ -16,8 +16,8 @@ import {
   joinReplica,
   loadPackage,
   packageOf,
-  parentOf,
   seedReplica,
+  shownParentOf,
   syncOne,
 } from './document-support.ts';
 
@@ -27,8 +27,8 @@ describe('materializer node-cache eviction', () => {
     const receiver = joinReplica(author);
     try {
       const text = findText(packageOf(author), 'Alpha paragraph');
-      const runId = parentOf(author.registry, text.id, 'run');
-      const paragraphId = parentOf(author.registry, runId, 'paragraph');
+      // Runs and text live inside the paragraph's cached tree, so the paragraph is the entry.
+      const paragraphId = shownParentOf(author, text.id, 'paragraph');
       const bodyId = author.registry.parentOf(paragraphId);
       expect(bodyId).not.toBeNull();
       const record = author.registry.record(bodyId!);
@@ -39,8 +39,6 @@ describe('materializer node-cache eviction', () => {
       for (const replica of [author, receiver]) {
         const retained = new Set(replica.materializer.retainedNodeIds());
         expect(retained.has(paragraphId)).toBe(true);
-        expect(retained.has(runId)).toBe(true);
-        expect(retained.has(text.id)).toBe(true);
       }
 
       applyJournal(author, {
@@ -60,8 +58,6 @@ describe('materializer node-cache eviction', () => {
         expect(replica.registry.isTombstoned(paragraphId)).toBe(true);
         const retained = new Set(replica.materializer.retainedNodeIds());
         expect(retained.has(paragraphId)).toBe(false);
-        expect(retained.has(runId)).toBe(false);
-        expect(retained.has(text.id)).toBe(false);
       }
       expectConverged(author, receiver);
     } finally {

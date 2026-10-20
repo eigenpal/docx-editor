@@ -17,7 +17,7 @@
 // a new document: `styles.xml` does not define them, and Word writes the definition the
 // first time one is used. Nothing here can materialize a latent style, so a template that
 // omits them gives a New document a style picker holding one entry, and no way to make a
-// heading. Shipping the definitions is what makes the gallery match Word's.
+// heading. Shipping the definitions is what fills the gallery.
 //
 // List Paragraph is the one with a visible second job: it carries `w:contextualSpacing`,
 // which is what drops the 8pt gap BETWEEN consecutive list items while keeping it around
@@ -211,11 +211,10 @@ const DOCUMENT =
   `</w:document>`;
 
 /**
- * A Word-faithful blank document, freshly zipped per call (the caller may hand the
+ * A blank document, freshly zipped per call (the caller may hand the
  * bytes to a loader that takes ownership). Calibri 11pt and Word's Normal paragraph
  * spacing are authored in `w:docDefaults`, Word's built-in style gallery in `styles.xml`,
- * US Letter geometry in the section — a New document behaves like Word's, and saving it
- * produces a file Word opens identically.
+ * and US Letter geometry in the section. Word opens the saved file.
  *
  * @public
  */

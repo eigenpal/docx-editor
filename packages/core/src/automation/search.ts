@@ -1,6 +1,7 @@
 // Projected text search with model-offset results.
 
-import { findOccurrences, SEARCH_MATCH_LIMIT } from '../store/store/text-match.ts';
+import { searchableLineBreaks } from './line-break-text.ts';
+import { SEARCH_MATCH_LIMIT } from '../store/store/text-match.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationSearchOptions } from './operations.ts';
 import type { AutomationSpan } from './protocol.ts';
@@ -27,21 +28,20 @@ export function projectedSearchSpans(
     if (budget <= 0) break;
     const projected = reads.projectedText(paragraphId, options?.projection ?? 'allMarkup');
     if (!projected) continue;
-    const found = findOccurrences(projected.text, text, budget, {
+    // Text reads report a line break as `\v`. A query that still spells it `\n` finds it too.
+    const found = projected.findOccurrences(searchableLineBreaks(text), budget, {
       matchCase: options?.matchCase === true,
       wholeWord: options?.matchWholeWord === true,
       ...(position === 0 && scope ? { from: projected.projectedOffset(scope.start.offset) } : {}),
       ...(position === last && scope ? { to: projected.projectedOffset(scope.end.offset) } : {}),
     });
     for (const occurrence of found.matches) {
-      const mapped = projected.rawRange(occurrence.start, occurrence.start + occurrence.length);
-      if (!mapped) return { ok: false, paragraphId };
-      if (position === 0 && scope && mapped.start < scope.start.offset) continue;
-      if (position === last && scope && mapped.end > scope.end.offset) continue;
+      if (position === 0 && scope && occurrence.rawStart < scope.start.offset) continue;
+      if (position === last && scope && occurrence.rawEnd > scope.end.offset) continue;
       const paragraph = handles.paragraph(paragraphId, reads.story);
       spans.push({
-        start: { paragraph, offset: mapped.start },
-        end: { paragraph, offset: mapped.end },
+        start: { paragraph, offset: occurrence.rawStart },
+        end: { paragraph, offset: occurrence.rawEnd },
       });
       budget -= 1;
     }

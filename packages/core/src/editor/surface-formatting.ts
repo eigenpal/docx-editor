@@ -1,3 +1,6 @@
+import { revisionMarkupStyleForEditing } from '../layout/revision-markup-style.ts';
+import { layoutDerivedSpacingStyleForEditing } from '../layout/layout-derived-spacing.ts';
+import { formattingRunAt } from '../store/store/direct-properties.ts';
 // Formatting queries over the published layout (paginated-surface seam).
 //
 // This module owns what a toolbar reads and what a formatting command merges against:
@@ -12,9 +15,6 @@ import {
   paragraphsInCells,
   spansInCells,
   spansInSelection,
-  type BlockFragmentRecord,
-  type PageRecord,
-  type ParagraphFragmentRecord,
   type ParagraphIndent,
   type ResolvedRunStyle,
   type SemanticPosition,
@@ -30,21 +30,20 @@ import {
   directParagraphMarkProperties,
   findNode,
   propertyContainer,
+  readTwipsMeasure,
   runAddressRanges,
   type FormattingDisplayMode,
   type FormattingRevisionAuthorFilter,
-  type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 // By path, not through the store's public entry: the walk and its clip are the engine's own
 // answer to "which runs does this range cover", not surface a consumer builds on.
-import {
-  clippedFormattableRuns,
-  formattableRunsOfParagraph,
-} from '../store/store/formattable-runs.ts';
+import { clippedFormattableRuns } from '../store/store/formattable-runs.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { paragraphFormattingEntry } from './surface-formatting-index.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
+import { paragraphLineSpacing } from '../layout/paragraph-style.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
   cascadedParagraphAttributes,
   paragraphBreaksBefore,
@@ -52,175 +51,48 @@ import {
 } from '../layout/paragraph-style.ts';
 import { paragraphKeeps, type ParagraphKeeps } from '../layout/pagination-keeps.ts';
 
+const paragraphDirectionOf = (properties: readonly SurfaceProperty[]): 'ltr' | 'rtl' =>
+  paragraphIsRtl(properties) ? 'rtl' : 'ltr';
+
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
   readonly localName: string;
   readonly attributes?: Record<string, string>;
 }
 
-/**
- * Every paragraph fragment the layout publishes, in EVERY story the caret can reach.
- *
- * `layout.pages[].fragments` is the BODY. Headers, footers, footnotes and endnotes are
- * editable scopes of their own (`enterHeaderFooter`, `enterNote`), and a paragraph index
- * built from the body alone answers nothing for a caret inside one — so the toolbar read
- * defaults over a centred header and Increase Indent stepped from an indent of zero,
- * moving header text BACKWARDS. `paragraphLinesIndex` already walks the same four stories
- * for exactly this reason; these two indexes did not.
- *
- * Header-repeat rows are skipped: a repeated row is the SAME paragraph drawn again, and it
- * carries the header row's properties rather than its own.
- *
- * `inTable` rides along because it is the ruler's gate and this is the walk that knows it.
- */
-function eachParagraphFragmentOnPage(
-  page: PageRecord,
-  visit: (fragment: ParagraphFragmentRecord, inTable: boolean) => void
-): void {
-  const walk = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph') {
-        visit(block, inTable);
-        continue;
-      }
-      for (const row of block.rows) {
-        if (row.isHeaderRepeat) continue;
-        for (const cell of row.cells) walk(cell.blocks, true);
-      }
-    }
-  };
-  walk(page.fragments, false);
-  if (page.header) walk(page.header.fragments, false);
-  if (page.footer) walk(page.footer.fragments, false);
-  for (const area of [page.footnotes, page.endnotes]) {
-    if (!area) continue;
-    for (const note of area.notes) walk(note.fragments, false);
-  }
+/** A paragraph's first published empty-line style, including editable furniture. */
+function emptyParagraphStyleOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ResolvedRunStyle | undefined {
+  return paragraphFormattingEntry(layout, paragraphId, true)?.emptyStyle;
 }
 
 /**
- * Record one paragraph under EVERY id it is drawn for: its own, and every member of a
- * merged run laid out under it.
- *
- * A resolved view draws a run of paragraphs as one fragment under the survivor's name, and
- * each member is being shown with that fragment's properties — so each has to be reachable
- * by them. First-wins, so a continuation fragment on a later page never displaces the one
- * that opened the paragraph.
+ * What `paragraphPropertiesOf` answers for a paragraph the layout publishes no fragment
+ * for. Empty like any other unstated cascade, but by identity, so a read that resolves a
+ * default (line spacing) can tell "states nothing" from "was never laid out".
  */
-function recordFragment<T>(
-  index: Map<string, T>,
-  fragment: ParagraphFragmentRecord,
-  value: T
-): void {
-  if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, value);
-  for (const line of fragment.lines) {
-    for (const segment of lineSegments(line)) {
-      if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, value);
-    }
-  }
-}
+const UNPUBLISHED_PARAGRAPH_PROPERTIES: readonly SurfaceProperty[] = Object.freeze([]);
 
-/**
- * Paragraph properties by paragraph id, one map per published layout.
- *
- * Weakly keyed on the layout because a layout is immutable: a new revision is a new
- * object, and superseded revisions release their index with the records.
- */
-const fragmentPropsByLayout = new WeakMap<
-  SemanticLayout,
-  Map<string, readonly SurfaceProperty[]>
->();
-
-/**
- * One page's contribution to that index, remembered on the PAGE record.
- *
- * A page that layout does not touch keeps its record identity across revisions, so a
- * keystroke walks the lines of one page instead of every page in the document. The map above
- * is still rebuilt per layout, because a paragraph can move between pages.
- */
-const fragmentPropsByPage = new WeakMap<
-  PageRecord,
-  ReadonlyMap<string, readonly SurfaceProperty[]>
->();
-
-function pageProps(page: PageRecord): ReadonlyMap<string, readonly SurfaceProperty[]> {
-  const cached = fragmentPropsByPage.get(page);
-  if (cached) return cached;
-  const props = new Map<string, readonly SurfaceProperty[]>();
-  eachParagraphFragmentOnPage(page, (fragment) => recordFragment(props, fragment, fragment.props));
-  fragmentPropsByPage.set(page, props);
-  return props;
-}
-
-/**
- * A paragraph's CASCADED properties, read back from the layout records.
- *
- * `w:docDefaults` + the style chain + direct formatting, flattened: what the paragraph
- * LOOKS like, which is the right answer for a toolbar and the wrong one for an op —
- * `directParagraphProperties` is what a write merges against.
- */
+/** Cascaded paragraph properties from its first published fragment. */
 export function paragraphPropertiesOf(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly SurfaceProperty[] {
-  // Indexed per layout: the host reads formatting after every commit, and scanning all
-  // pages for one paragraph's `w:pPr` projection made that read O(document).
-  let index = fragmentPropsByLayout.get(layout);
-  if (!index) {
-    index = new Map();
-    for (const page of layout.pages) {
-      for (const [id, props] of pageProps(page)) {
-        if (!index.has(id)) index.set(id, props);
-      }
-    }
-    fragmentPropsByLayout.set(layout, index);
-  }
-  return index.get(paragraphId) ?? [];
-}
-
-const fragmentTabStopsByPage = new WeakMap<PageRecord, ReadonlyMap<string, ResolvedTabStops>>();
-
-function pageTabStops(page: PageRecord): ReadonlyMap<string, ResolvedTabStops> {
-  const cached = fragmentTabStopsByPage.get(page);
-  if (cached) return cached;
-  const stops = new Map<string, ResolvedTabStops>();
-  eachParagraphFragmentOnPage(page, (fragment) =>
-    recordFragment(stops, fragment, fragment.tabStops)
+  return (
+    paragraphFormattingEntry(layout, paragraphId)?.fragment.props ??
+    UNPUBLISHED_PARAGRAPH_PROPERTIES
   );
-  fragmentTabStopsByPage.set(page, stops);
-  return stops;
 }
 
-/**
- * A paragraph's resolved tab stops, from the layout records, or null for a paragraph the
- * published layout does not carry.
- *
- * Not derivable from {@link paragraphPropertiesOf}: `w:tabs` carries its meaning in `w:tab`
- * CHILDREN and the flat property projection has none, so the cascade shows the element and
- * not a single stop.
- */
+/** Resolved paragraph tabs from its first published fragment. */
 export function paragraphTabStopsOf(
   layout: SemanticLayout,
   paragraphId: string
 ): ResolvedTabStops | null {
-  let index = fragmentTabStopsByLayout.get(layout);
-  if (!index) {
-    const built = new Map<string, ResolvedTabStops>();
-    // Through the PAGE memo, like the other two indexes. An incremental pass keeps most
-    // page records by identity, so a keystroke re-walks only the pages that moved rather
-    // than every line in the document.
-    for (const page of layout.pages) {
-      for (const [id, stops] of pageTabStops(page)) {
-        if (!built.has(id)) built.set(id, stops);
-      }
-    }
-    index = built;
-    fragmentTabStopsByLayout.set(layout, built);
-  }
-  return index.get(paragraphId) ?? null;
+  return paragraphFormattingEntry(layout, paragraphId)?.fragment.tabStops ?? null;
 }
-
-const fragmentTabStopsByLayout = new WeakMap<SemanticLayout, Map<string, ResolvedTabStops>>();
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
 export interface ParagraphIndentEntry {
@@ -228,20 +100,12 @@ export interface ParagraphIndentEntry {
   readonly inTable: boolean;
 }
 
-const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
-
-/** One page's indents, on the page record, for the same reason {@link pageProps} is. */
-const fragmentIndentByPage = new WeakMap<PageRecord, ReadonlyMap<string, ParagraphIndentEntry>>();
-
-function pageIndents(page: PageRecord): ReadonlyMap<string, ParagraphIndentEntry> {
-  const cached = fragmentIndentByPage.get(page);
-  if (cached) return cached;
-  const indents = new Map<string, ParagraphIndentEntry>();
-  eachParagraphFragmentOnPage(page, (fragment, inTable) =>
-    recordFragment(indents, fragment, { indent: fragment.indent, inTable })
-  );
-  fragmentIndentByPage.set(page, indents);
-  return indents;
+/**
+ * ONE signed first-line offset in twips, negative for a hanging indent. Hanging wins
+ * (ECMA-376 §17.3.1.12): the two spellings are mutually exclusive, never summed.
+ */
+export function signedFirstLine(value: ParagraphIndent): number {
+  return Math.round((value.hanging > 0 ? -value.hanging : value.firstLine) * 20);
 }
 
 /**
@@ -259,18 +123,7 @@ export function paragraphIndentOf(
   layout: SemanticLayout,
   paragraphId: string
 ): ParagraphIndentEntry | null {
-  let index = fragmentIndentByLayout.get(layout);
-  if (!index) {
-    const built = new Map<string, ParagraphIndentEntry>();
-    for (const page of layout.pages) {
-      for (const [id, entry] of pageIndents(page)) {
-        if (!built.has(id)) built.set(id, entry);
-      }
-    }
-    index = built;
-    fragmentIndentByLayout.set(layout, built);
-  }
-  return index.get(paragraphId) ?? null;
+  return paragraphFormattingEntry(layout, paragraphId)?.indent ?? null;
 }
 
 /*
@@ -359,20 +212,8 @@ export function authoredRunPropertiesAt(
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const runRanges = runAddressRanges(paragraph);
-  let left: OoxmlNode | null = null;
-  let right: OoxmlNode | null = null;
-  // Only runs this view RENDERS. In the resolved result a hidden tracked deletion ending at
-  // the caret used to win as `left`, so the toolbar face and the next typed character took
-  // their formatting from text nobody could look at. In All Markup that same run is on the
-  // page, struck through, and taking its face is what a reader would expect.
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
-    const range = runRanges.get(run.id);
-    if (!range || range.end <= range.start) continue;
-    if (range.start < offset && offset <= range.end) left = run;
-    if (right === null && range.start <= offset && offset < range.end) right = run;
-  }
-  const owner = left ?? right;
+  // Share the revision-filtered caret owner with complex-script lane selection.
+  const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
   if (owner) {
     return authoredProperties(
       propertyContainer(owner, 'runProperties', 'rPr'),
@@ -486,11 +327,25 @@ function selectionSpans(
    */
   paragraphOrder?: readonly string[]
 ): readonly StyleSpanRecord[] {
-  if (cells && cells.length > 0) return spansInCells(layout, cells);
+  const spans =
+    cells && cells.length > 0
+      ? spansInCells(layout, cells)
+      : spansInSelection(
+          layout,
+          selection,
+          // One paragraph is ordered by offset alone; skip the document-wide order walk.
+          paragraphOrder ??
+            (selection.anchor.paragraphId === selection.head.paragraphId
+              ? []
+              : everyStoryOrder(layout))
+        );
   // `everyStoryOrder`, not `documentOrder`. The fallback is only reached by a caller that
   // named no story, and the body's order is wrong for every caret outside it — which is the
   // exact defect the parameter above exists to prevent, left standing in its own fallback.
-  return spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
+  return spans.map((span) => {
+    const style = layoutDerivedSpacingStyleForEditing(revisionMarkupStyleForEditing(span.style));
+    return style === span.style ? span : { ...span, style };
+  });
 }
 
 /**
@@ -611,10 +466,17 @@ export function formattingAt(
    * with the head paragraph alone, so a two-paragraph header selection reported the first
    * one's alignment as if the pair agreed — and the following press changed both.
    */
-  paragraphOrder?: readonly string[]
+  paragraphOrder?: readonly string[],
+  fallbackFontFamily?: string | null
 ): SurfaceFormatting {
   const spans = selectionSpans(layout, selection, cells, paragraphOrder);
-  const styles = spans.map((span) => span.style);
+  const emptyStyles =
+    spans.length === 0
+      ? paragraphsTouched(layout, selection, cells, paragraphOrder)
+          .map((id) => emptyParagraphStyleOf(layout, id))
+          .filter((style): style is ResolvedRunStyle => style !== undefined)
+      : [];
+  const styles = emptyStyles.length > 0 ? emptyStyles : spans.map((span) => span.style);
   // Agreement across the WHOLE selection, or nothing. A collapsed caret yields the one
   // span beside it (Word's rule), so the toolbar reflects the run the user is typing in.
   const agreed = <T>(pick: (style: (typeof styles)[number]) => T): T | null => {
@@ -648,7 +510,14 @@ export function formattingAt(
       : (inherited?.(span.range.paragraphId, span.props).fontSizeHalfPoints ??
         Math.round(span.style.fontSizePt * 2));
   const caretInherited =
-    spans.length === 0 ? inherited?.(selection.head.paragraphId, []) : undefined;
+    emptyStyles.length > 0
+      ? {
+          fontFamily: agreed((style) => style.fontFamily ?? fallbackFontFamily ?? null),
+          fontSizeHalfPoints: agreed((style) => Math.round(style.fontSizePt * 2)),
+        }
+      : spans.length === 0
+        ? inherited?.(selection.head.paragraphId, [])
+        : undefined;
 
   // Paragraph-level values answer for EVERY paragraph the selection touches — the same
   // span `setParagraphProperty` writes over. Reading only `selection.head` made the
@@ -687,6 +556,7 @@ export function formattingAt(
   // never disagree about the same paragraph. It also folds the cascade the way a cascade has
   // to be folded — see `cascadedParagraphAttributes`.
   const alignment = paragraphValue((properties) => paragraphAlignment(properties));
+  const direction = paragraphValue(paragraphDirectionOf);
   // Resolved per paragraph BEFORE agreement, so a styled paragraph selected together with
   // an unstyled one still reads as mixed (two different styles), while an unstyled
   // paragraph on its own reports the default rather than nothing. Comparing raw `w:pStyle`
@@ -707,14 +577,19 @@ export function formattingAt(
   // showed the raw number would be right half the time.
   const spacing = (properties: readonly SurfaceProperty[]) =>
     cascadedParagraphAttributes(properties, 'spacing') ?? undefined;
+  //
+  // The EFFECTIVE line spacing, read through the layout's own resolver as alignment is, so
+  // the ticked menu row and the painted line answer from one place. A paragraph whose
+  // cascade states no `w:line` lays out single-spaced, and reporting nothing for it left
+  // the line-spacing menu without a current row on the commonest paragraph there is.
+  // A paragraph with no published fragment is unknown, not single-spaced: it reads as
+  // nothing, so it neither ticks a row on its own nor agrees with laid-out neighbours.
   const lineSpacingTextOf = (properties: readonly SurfaceProperty[]): string => {
-    const attributes = spacing(properties);
-    const line = Number(attributes?.line);
-    if (!Number.isFinite(line)) return '';
-    // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
-    const rule = attributes?.lineRule ?? 'auto';
-    if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
-    return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
+    if (properties === UNPUBLISHED_PARAGRAPH_PROPERTIES) return '';
+    const resolved = paragraphLineSpacing(properties);
+    const round = (value: number) => Math.round(value * 100) / 100;
+    if (resolved.rule === 'auto') return `multiple:${round(resolved.value / 240)}`;
+    return `${resolved.rule}:${round(resolved.value)}`;
   };
   const lineSpacingText = paragraphValue(lineSpacingTextOf);
   const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {
@@ -735,8 +610,8 @@ export function formattingAt(
     properties: readonly SurfaceProperty[],
     attribute: 'before' | 'after'
   ): number | null => {
-    const raw = Number(spacing(properties)?.[attribute]);
-    return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    const raw = readTwipsMeasure(spacing(properties)?.[attribute]);
+    return raw === null ? null : Math.round((raw / 20) * 100) / 100;
   };
   const spacePt = (attribute: 'before' | 'after') =>
     paragraphValue((properties) => spacePtOf(properties, attribute));
@@ -745,18 +620,25 @@ export function formattingAt(
   // its handles somewhere, and hiding them for Select All — the commonest indent gesture —
   // is worse than showing the first paragraph's truth, which is what Word shows.
   const indent = ((): SurfaceFormatting['indent'] => {
-    const entries = touchedParagraphs.map((id) => paragraphIndentOf(layout, id));
+    // Layout publishes physical sides; the contract's are logical, as `w:left` and `w:right`
+    // are, so a right-to-left paragraph reports its right indent as `left`.
+    const rtlOf = (id: string) => paragraphDirectionOf(paragraphPropertiesOf(layout, id)) === 'rtl';
+    const entries = touchedParagraphs.map((id) => {
+      const entry = paragraphIndentOf(layout, id);
+      if (!entry || !rtlOf(id)) return entry;
+      return {
+        ...entry,
+        indent: { ...entry.indent, left: entry.indent.right, right: entry.indent.left },
+      };
+    });
     const first = entries[0];
     if (!first) return null;
     // Inside a table the value is correct but unplaceable: it is measured from the cell's
     // content edge, and a ruler drawn against the page margin does not know the cell.
     if (entries.some((entry) => entry === null || entry.inTable)) return null;
+    const rtl = rtlOf(touchedParagraphs[0]!);
     // Points to twips at this boundary, so one representation crosses into the contract.
     const twips = (points: number): number => Math.round(points * 20);
-    // ONE signed first-line offset, hanging-wins (ECMA-376 §17.3.1.12) — the two spellings
-    // are mutually exclusive, never summed.
-    const signedFirstLine = (value: ParagraphIndent): number =>
-      twips(value.hanging > 0 ? -value.hanging : value.firstLine);
     const resolved = entries as readonly ParagraphIndentEntry[];
     const left = twips(first.indent.left);
     const right = twips(first.indent.right);
@@ -770,6 +652,7 @@ export function formattingAt(
         right: resolved.some((entry) => twips(entry.indent.right) !== right),
         firstLine: resolved.some((entry) => signedFirstLine(entry.indent) !== firstLine),
       },
+      ...(rtl ? { rtl } : {}),
     };
   })();
 
@@ -802,12 +685,14 @@ export function formattingAt(
     color: agreed((entry) => entry.color),
     highlight: agreed((entry) => entry.highlight),
     alignment,
+    direction,
     styleId: style,
     lineSpacing,
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
     disagrees: {
       alignment: paragraphDisagrees((properties) => paragraphAlignment(properties)),
+      direction: paragraphDisagrees(paragraphDirectionOf),
       spaceBeforePt: paragraphDisagrees((properties) => spacePtOf(properties, 'before')),
       spaceAfterPt: paragraphDisagrees((properties) => spacePtOf(properties, 'after')),
       lineSpacing: paragraphDisagrees(lineSpacingTextOf),

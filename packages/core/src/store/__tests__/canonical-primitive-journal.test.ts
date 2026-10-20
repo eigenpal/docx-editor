@@ -326,6 +326,89 @@ describe('canonical primitive journal (task 3.5)', () => {
     ).toBe(true);
   });
 
+  test('replaceChildren keeps a child that stays between new children in place', () => {
+    // Wrapping a kept run with new children must not delete and reinsert it: two peers that
+    // each wrap the same run would otherwise merge two copies of the list side by side.
+    const part = openStore().bodyStore().part;
+    const paragraph = findNode(part, (node) => node.kind === 'paragraph') as OoxmlElement;
+    const run = paragraph.children[0]!;
+    const newRun = (suffix: string) =>
+      ({
+        id: `${part.name}#journal-${suffix}`,
+        kind: 'run',
+        namespaceUri: W,
+        localName: 'r',
+        prefix: 'w',
+        attributes: [],
+        namespaceBindings: [],
+        children: [],
+      }) as unknown as OoxmlNode;
+    const before = newRun('before');
+    const after = newRun('after');
+    const wrapped = captureJournal(() => {
+      const result = replaceChildren(part, paragraph.id, [before, run, after], {
+        deferValidation: true,
+      });
+      return { ok: result.ok, change: result.ok ? result.part : null };
+    });
+    const splices = wrapped.journal!.effects.filter((effect) => effect.kind === 'spliceChildren');
+    expect(splices).toEqual([
+      {
+        kind: 'spliceChildren',
+        parentLogicalId: paragraph.id,
+        start: 0,
+        deleteCount: 0,
+        childLogicalIds: [before.id],
+      },
+      {
+        kind: 'spliceChildren',
+        parentLogicalId: paragraph.id,
+        start: 2,
+        deleteCount: 0,
+        childLogicalIds: [after.id],
+      },
+    ]);
+  });
+
+  test('child splices replay to the new order for reorders and wide lists', () => {
+    // The kept-middle search must stay correct when kept children move, and above its size
+    // cap, where the middle is lowered as one splice.
+    const part = openStore().bodyStore().part;
+    const paragraph = findNode(part, (node) => node.kind === 'paragraph') as OoxmlElement;
+    const run = (suffix: string) =>
+      ({
+        id: `${part.name}#order-${suffix}`,
+        kind: 'run',
+        namespaceUri: W,
+        localName: 'r',
+        prefix: 'w',
+        attributes: [],
+        namespaceBindings: [],
+        children: [],
+      }) as unknown as OoxmlNode;
+    const replay = (before: readonly OoxmlNode[], after: readonly OoxmlNode[]): string[] => {
+      const seeded = replaceChildren(part, paragraph.id, before, { deferValidation: true });
+      if (!seeded.ok) throw new Error('seed failed');
+      const parent = findNode(seeded.part, (node) => node.id === paragraph.id) as OoxmlElement;
+      const lowered = captureJournal(() => {
+        const result = replaceChildren(seeded.part, parent.id, after, { deferValidation: true });
+        return { ok: result.ok, change: result.ok ? result.part : null };
+      });
+      const ids = before.map((child) => child.id);
+      for (const effect of lowered.journal!.effects) {
+        if (effect.kind !== 'spliceChildren' || effect.parentLogicalId !== parent.id) continue;
+        ids.splice(effect.start, effect.deleteCount, ...effect.childLogicalIds);
+      }
+      return ids;
+    };
+    const [a, b, x] = [run('a'), run('b'), run('x')];
+    expect(replay([a, b, x], [x, a, b])).toEqual([x.id, a.id, b.id]);
+    expect(replay([a, b, x], [b, x, a])).toEqual([b.id, x.id, a.id]);
+    const wide = Array.from({ length: 80 }, (_, index) => run(`w${index}`));
+    const shuffled = [...wide.slice(40), run('new'), ...wide.slice(0, 40)].reverse();
+    expect(replay(wide, shuffled)).toEqual(shuffled.map((child) => child.id));
+  });
+
   test('same-id replaceNode lowers to text, attribute and namespace effects', () => {
     const part = openStore().bodyStore().part;
     const value = findNode(part, (node) => node.kind === 'textValue' && node.value === 'Hello');

@@ -130,16 +130,33 @@ export function pPrXml(para: HtmlParaProps): string {
     inner += `${spacing}/>`;
   }
   const first = para.firstLineTwips;
-  if (para.indLeftTwips !== undefined || para.indRightTwips !== undefined || first !== undefined) {
+  // HTML margins and `text-align` name PHYSICAL sides; a bidi paragraph's `w:ind` sides and
+  // `w:jc` `left`/`right` are its leading and trailing ones, so they mirror there.
+  const [leading, trailing] = para.bidi
+    ? [para.indRightTwips, para.indLeftTwips]
+    : [para.indLeftTwips, para.indRightTwips];
+  if (leading !== undefined || trailing !== undefined || first !== undefined) {
     let ind = '<w:ind';
-    if (para.indLeftTwips !== undefined) ind += ` w:left="${para.indLeftTwips}"`;
-    if (para.indRightTwips !== undefined) ind += ` w:right="${para.indRightTwips}"`;
+    if (leading !== undefined) ind += ` w:left="${leading}"`;
+    if (trailing !== undefined) ind += ` w:right="${trailing}"`;
     if (first !== undefined) {
       ind += first >= 0 ? ` w:firstLine="${first}"` : ` w:hanging="${-first}"`;
     }
     inner += `${ind}/>`;
   }
-  if (para.jc !== undefined) inner += `<w:jc w:val="${para.jc}"/>`;
+  // `start`/`end` are the leading and trailing sides, which is what `w:jc` `left`/`right`
+  // already mean; physical `left`/`right` mirror in a bidi paragraph.
+  const jc =
+    para.jc === 'start'
+      ? 'left'
+      : para.jc === 'end'
+        ? 'right'
+        : para.bidi && (para.jc === 'left' || para.jc === 'right')
+          ? para.jc === 'left'
+            ? 'right'
+            : 'left'
+          : para.jc;
+  if (jc !== undefined) inner += `<w:jc w:val="${jc}"/>`;
   return inner.length > 0 ? `<w:pPr>${inner}</w:pPr>` : '';
 }
 

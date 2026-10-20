@@ -1,13 +1,15 @@
-import { defineComponent, ref, watch } from 'vue';
+import { usePickerKeyboard } from './usePickerKeyboard';
+import { defineComponent, ref, useId, watch } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   AUTO_ZOOM_MODE,
   FIT_WIDTH_ZOOM_MODE,
   commandForSlotValue,
   sameZoomMode,
+  isDomNode,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -43,11 +45,6 @@ function parseTypedSize(text: string): number | null {
   const halfPoints = Math.round(points * 2);
   if (halfPoints < MIN_HALF_POINTS || halfPoints > MAX_HALF_POINTS) return null;
   return halfPoints;
-}
-
-function editorFocus(from: HTMLElement | null): void {
-  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
-  root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }
 
 const StepperShell = defineComponent({
@@ -113,7 +110,9 @@ export const ToolbarFontSize = defineComponent({
     const open = ref(false);
     const draft = ref<string | null>(null);
     const rootRef = ref<HTMLSpanElement | null>(null);
+    usePickerKeyboard(rootRef, open);
     const inputRef = ref<HTMLInputElement | null>(null);
+    const listId = useId();
 
     const applyHalfPoints = (halfPoints: number) => {
       const editor = editorRef.value;
@@ -130,19 +129,20 @@ export const ToolbarFontSize = defineComponent({
       open.value = false;
       draft.value = null;
       inputRef.value?.blur();
-      if (refocus) editorFocus(rootRef.value);
+      if (refocus) editorRef.value?.focus();
     };
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
         draft.value = null;
       };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
     });
 
     return () => {
@@ -180,60 +180,67 @@ export const ToolbarFontSize = defineComponent({
               apply(nextPreset(sizePt.value ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))
             }
           >
-            <input
-              ref={inputRef}
-              type="text"
-              inputmode="decimal"
-              class="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed docx-toolbar__font-size-input"
-              value={shown}
-              disabled={!command.isEnabled.value}
-              role="combobox"
-              aria-expanded={open.value}
-              aria-haspopup="listbox"
-              aria-label={label('fontSize.label')}
-              autocomplete="off"
-              onInput={(event: Event) => {
-                draft.value = (event.target as HTMLInputElement).value;
-                open.value = true;
-              }}
-              onFocus={(event: FocusEvent) => {
-                (event.target as HTMLInputElement).select();
-                open.value = true;
-              }}
-              onClick={() => {
-                open.value = true;
-              }}
-              onKeydown={(event: KeyboardEvent) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  commitDraft();
-                  dismiss(true);
-                } else if (event.key === 'Escape') {
-                  event.preventDefault();
-                  dismiss(true);
-                } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  open.value = true;
-                  if (sizePt.value !== null) {
-                    apply(
-                      event.key === 'ArrowDown'
-                        ? prevPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
-                        : nextPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
-                    );
-                  }
-                }
-              }}
-              onBlur={() => {
-                commitDraft();
-                draft.value = null;
-              }}
-            />
+            {{
+              default: () => (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputmode="decimal"
+                  class="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed docx-toolbar__font-size-input"
+                  value={shown}
+                  disabled={!command.isEnabled.value}
+                  role="combobox"
+                  aria-expanded={open.value}
+                  aria-haspopup="listbox"
+                  aria-label={label('fontSize.label')}
+                  aria-controls={open.value ? listId : undefined}
+                  autocomplete="off"
+                  onInput={(event: Event) => {
+                    draft.value = (event.target as HTMLInputElement).value;
+                    open.value = true;
+                  }}
+                  onFocus={(event: FocusEvent) => {
+                    (event.target as HTMLInputElement).select();
+                    open.value = true;
+                  }}
+                  onClick={() => {
+                    open.value = true;
+                  }}
+                  onKeydown={(event: KeyboardEvent) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitDraft();
+                      dismiss(true);
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      dismiss(true);
+                    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      open.value = true;
+                      if (sizePt.value !== null) {
+                        apply(
+                          event.key === 'ArrowDown'
+                            ? prevPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
+                            : nextPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
+                        );
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    commitDraft();
+                    draft.value = null;
+                  }}
+                />
+              ),
+            }}
           </StepperShell>
           {open.value && command.isEnabled.value ? (
             <div
               class="docx-toolbar__menu docx-toolbar__font-size-menu"
               role="listbox"
+              tabindex={0}
               aria-label={label('fontSize.listLabel')}
+              id={listId}
             >
               {FONT_SIZE_PRESETS_PT.map((preset) => {
                 const selected = selectedPreset === preset;
@@ -242,6 +249,7 @@ export const ToolbarFontSize = defineComponent({
                     key={preset}
                     type="button"
                     role="option"
+                    tabindex={-1}
                     aria-selected={selected}
                     {...(selected ? { 'data-selected': '' } : {})}
                     class="docx-toolbar__menu-item"
@@ -278,16 +286,18 @@ export const ToolbarZoom = defineComponent({
     const label = useToolbarLabel();
     const open = ref(false);
     const rootRef = ref<HTMLSpanElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
     });
 
     return () => {
@@ -308,38 +318,45 @@ export const ToolbarZoom = defineComponent({
             onDecrease={zoomState.zoomOut}
             onIncrease={zoomState.zoomIn}
           >
-            <button
-              type="button"
-              class="docx-toolbar__stepper-value docx-toolbar__stepper-value--menu"
-              disabled={!editorRef.value}
-              aria-haspopup="listbox"
-              aria-expanded={open.value}
-              aria-label={label('zoom.zoomLevel')}
-              onMousedown={guardToolbarMousedown}
-              onClick={() => {
-                open.value = !open.value;
-              }}
-            >
-              {display}
-              <span class="docx-toolbar__picker-caret" aria-hidden="true">
-                ▾
-              </span>
-            </button>
+            {{
+              default: () => (
+                <button
+                  type="button"
+                  class="docx-toolbar__stepper-value docx-toolbar__stepper-value--menu"
+                  disabled={!editorRef.value}
+                  aria-haspopup="listbox"
+                  aria-expanded={open.value}
+                  aria-label={`${label('zoom.zoomLevel')}: ${display}`}
+                  onMousedown={guardToolbarMousedown}
+                  onClick={() => {
+                    open.value = !open.value;
+                  }}
+                >
+                  {display}
+                  <span class="docx-toolbar__picker-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+              ),
+            }}
           </StepperShell>
           {open.value ? (
             <div
               class="docx-toolbar__menu docx-toolbar__zoom-menu"
               role="listbox"
+              tabindex={0}
               aria-label={label('zoom.zoomLevel')}
             >
               <button
                 type="button"
                 role="option"
+                tabindex={-1}
                 aria-selected={autoSelected}
                 {...(autoSelected ? { 'data-selected': '' } : {})}
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
                 onClick={() => {
+                  rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                   open.value = false;
                   zoomState.setMode('auto');
                 }}
@@ -349,11 +366,13 @@ export const ToolbarZoom = defineComponent({
               <button
                 type="button"
                 role="option"
+                tabindex={-1}
                 aria-selected={fitWidthSelected}
                 {...(fitWidthSelected ? { 'data-selected': '' } : {})}
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
                 onClick={() => {
+                  rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                   open.value = false;
                   zoomState.setMode(FIT_WIDTH_ZOOM_MODE);
                 }}
@@ -369,11 +388,13 @@ export const ToolbarZoom = defineComponent({
                     key={level}
                     type="button"
                     role="option"
+                    tabindex={-1}
                     aria-selected={selected}
                     {...(selected ? { 'data-selected': '' } : {})}
                     class="docx-toolbar__menu-item"
                     onMousedown={guardToolbarMousedown}
                     onClick={() => {
+                      rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
                       open.value = false;
                       zoomState.setZoom(level);
                     }}

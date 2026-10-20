@@ -4,6 +4,21 @@
 // small immutable expression tree and creates fresh generic OMML for supported user input.
 
 import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  equationRunFormat,
+  equationMathChild as namedChild,
+  equationMathChildren as namedChildren,
+} from './omml-run-format.ts';
+import {
+  equationStructureHasControlProperties,
+  isSupportedExpressionNode,
+  mathVal,
+} from './omml-structure-support.ts';
+import {
+  cloneEquationControl,
+  equationDefaultFormatting,
+  equationSharedRunSizePt,
+} from './omml-control-defaults.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -31,32 +46,62 @@ export interface OmmlLimits {
   readonly maxTextLength?: number;
 }
 
+/**
+ * Marks a structure whose property element carries `m:ctrlPr` operator run formatting that
+ * compact replacement cannot reproduce.
+ *
+ * The source keeps those properties verbatim. Layout draws the operator glyphs with the
+ * default math formatting. When every `m:ctrlPr` of the equation holds only default
+ * formatting, no structure carries this mark: compact replacement writes the same control
+ * properties back on each structure it emits.
+ */
+export interface EquationControlSource {
+  /** The structure carries non-default `m:ctrlPr` properties, so compact replacement refuses it. */
+  readonly controlProperties?: true;
+}
+
 export type EquationExpression =
   | { readonly kind: 'row'; readonly items: readonly EquationExpression[] }
-  | { readonly kind: 'text'; readonly value: string }
   | {
+      readonly kind: 'text';
+      readonly value: string;
+      readonly format?: {
+        readonly fontFamily?: string;
+        readonly bold?: boolean;
+        readonly italic?: boolean;
+        readonly literal?: boolean;
+        readonly normalText?: boolean;
+        readonly mathStyle?: 'p' | 'b' | 'i' | 'bi';
+      };
+    }
+  | ({
+      readonly kind: 'bar';
+      readonly body: EquationExpression;
+      readonly position: 'top' | 'bottom';
+    } & EquationControlSource)
+  | ({
       readonly kind: 'fraction';
       readonly numerator: EquationExpression;
       readonly denominator: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'radical';
       readonly radicand: EquationExpression;
       readonly degree?: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'script';
       readonly base: EquationExpression;
       readonly subscript?: EquationExpression;
       readonly superscript?: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'nary';
       readonly operator: string;
       readonly body: EquationExpression;
       readonly lowerLimit?: EquationExpression;
       readonly upperLimit?: EquationExpression;
-    }
+    } & EquationControlSource)
   | { readonly kind: 'fallback'; readonly text: string };
 
 export interface OmmlEquationProjection {
@@ -65,6 +110,11 @@ export interface OmmlEquationProjection {
   readonly fallbackText: string;
   readonly truncated: boolean;
   readonly visitedNodes: number;
+  /**
+   * The font size, in points, that every run of the equation shares through default run
+   * properties (`w:sz`). Absent, the equation takes the size of the surrounding text.
+   */
+  readonly fontSizePt?: number;
 }
 
 /**
@@ -134,6 +184,10 @@ function childrenOf(node: OoxmlElement): readonly OoxmlNode[] {
 
 interface ProjectionState {
   readonly limits: ResolvedLimits;
+  /** Every `m:ctrlPr` of the equation is default, so structures carry no control mark. */
+  readonly defaultControls?: boolean;
+  /** Every run of the equation carries default `w:rPr`, so runs carry no format. */
+  readonly defaultRuns?: boolean;
   visitedNodes: number;
   text: string;
   truncated: boolean;
@@ -179,192 +233,6 @@ function collectFallbackText(node: OoxmlNode, state: ProjectionState, depth: num
   }
 }
 
-function namedChild(
-  node: OoxmlGenericElementNode,
-  localName: string
-): OoxmlGenericElementNode | null {
-  for (const child of childrenOf(node)) {
-    if (isMathElement(child, localName)) return child;
-  }
-  return null;
-}
-
-function namedChildren(
-  node: OoxmlGenericElementNode,
-  localName: string
-): readonly OoxmlGenericElementNode[] {
-  return childrenOf(node).filter((child): child is OoxmlGenericElementNode =>
-    isMathElement(child, localName)
-  );
-}
-
-function hasOnlyMathChildren(
-  node: OoxmlGenericElementNode,
-  counts: Readonly<Record<string, { readonly min: number; readonly max: number }>>
-): boolean {
-  if (node.attributes.length > 0) return false;
-  const seen = new Map<string, number>();
-  for (const child of childrenOf(node)) {
-    if (!isMathElement(child) || counts[child.localName] === undefined) return false;
-    seen.set(child.localName, (seen.get(child.localName) ?? 0) + 1);
-  }
-  return Object.entries(counts).every(([name, range]) => {
-    const count = seen.get(name) ?? 0;
-    return count >= range.min && count <= range.max;
-  });
-}
-
-function isEmptyProperty(node: OoxmlGenericElementNode): boolean {
-  return node.attributes.length === 0 && childrenOf(node).length === 0;
-}
-
-function mathVal(node: OoxmlGenericElementNode): string | undefined {
-  return node.attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === OFFICE_MATH_NAMESPACE_URI && attribute.localName === 'val'
-  )?.value;
-}
-
-function hasOnlyMathVal(node: OoxmlGenericElementNode, accepted?: ReadonlySet<string>): boolean {
-  if (childrenOf(node).length > 0 || node.attributes.length !== 1) return false;
-  const value = mathVal(node);
-  return value !== undefined && (accepted === undefined || accepted.has(value));
-}
-
-function isSupportedRun(node: OoxmlGenericElementNode): boolean {
-  if (node.attributes.length > 0) return false;
-  const properties = namedChildren(node, 'rPr');
-  const texts = namedChildren(node, 't');
-  if (properties.length > 1 || texts.length === 0) return false;
-  if (properties[0] && !isEmptyProperty(properties[0])) return false;
-  if (properties.length + texts.length !== childrenOf(node).length) return false;
-  return texts.every(
-    (text) =>
-      text.attributes.every(
-        (attribute) =>
-          attribute.namespaceUri === XML_NAMESPACE_URI &&
-          attribute.localName === 'space' &&
-          (attribute.value === 'preserve' || attribute.value === 'default')
-      ) && childrenOf(text).every((child) => child.kind === 'textValue')
-  );
-}
-
-function isSupportedExpressionNode(node: OoxmlNode): boolean {
-  if (node.kind === 'textValue') return true;
-  if (!isMathElement(node)) return false;
-  if (node.localName === 'r') return isSupportedRun(node);
-  if (node.localName === 't') {
-    return (
-      node.attributes.every(
-        (attribute) =>
-          attribute.namespaceUri === XML_NAMESPACE_URI &&
-          attribute.localName === 'space' &&
-          (attribute.value === 'preserve' || attribute.value === 'default')
-      ) && childrenOf(node).every((child) => child.kind === 'textValue')
-    );
-  }
-  if (node.localName === 'f') {
-    if (
-      !hasOnlyMathChildren(node, {
-        fPr: { min: 0, max: 1 },
-        num: { min: 1, max: 1 },
-        den: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const property = namedChild(node, 'fPr');
-    const propertySupported =
-      !property ||
-      isEmptyProperty(property) ||
-      (hasOnlyMathChildren(property, { type: { min: 1, max: 1 } }) &&
-        hasOnlyMathVal(namedChildren(property, 'type')[0]!, new Set(['bar'])));
-    return (
-      propertySupported &&
-      childrenOf(namedChildren(node, 'num')[0]!).every(isSupportedExpressionNode) &&
-      childrenOf(namedChildren(node, 'den')[0]!).every(isSupportedExpressionNode)
-    );
-  }
-  if (node.localName === 'rad') {
-    if (
-      !hasOnlyMathChildren(node, {
-        radPr: { min: 0, max: 1 },
-        deg: { min: 1, max: 1 },
-        e: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const degree = namedChildren(node, 'deg')[0]!;
-    const property = namedChild(node, 'radPr');
-    const propertySupported =
-      !property ||
-      isEmptyProperty(property) ||
-      (childrenOf(degree).length === 0 &&
-        hasOnlyMathChildren(property, { degHide: { min: 1, max: 1 } }) &&
-        hasOnlyMathVal(namedChildren(property, 'degHide')[0]!, new Set(['1', 'true', 'on'])));
-    return (
-      propertySupported &&
-      childrenOf(degree).every(isSupportedExpressionNode) &&
-      childrenOf(namedChildren(node, 'e')[0]!).every(isSupportedExpressionNode)
-    );
-  }
-  if (node.localName === 'sSup' || node.localName === 'sSub' || node.localName === 'sSubSup') {
-    const propertyName = `${node.localName}Pr`;
-    const expected = {
-      [propertyName]: { min: 0, max: 1 },
-      e: { min: 1, max: 1 },
-      sub: { min: node.localName === 'sSup' ? 0 : 1, max: node.localName === 'sSup' ? 0 : 1 },
-      sup: { min: node.localName === 'sSub' ? 0 : 1, max: node.localName === 'sSub' ? 0 : 1 },
-    };
-    if (!hasOnlyMathChildren(node, expected)) return false;
-    const property = namedChild(node, propertyName);
-    return (
-      (!property || isEmptyProperty(property)) &&
-      ['e', 'sub', 'sup'].every((name) =>
-        namedChildren(node, name).every((container) =>
-          childrenOf(container).every(isSupportedExpressionNode)
-        )
-      )
-    );
-  }
-  if (node.localName === 'nary') {
-    if (
-      !hasOnlyMathChildren(node, {
-        naryPr: { min: 0, max: 1 },
-        sub: { min: 0, max: 1 },
-        sup: { min: 0, max: 1 },
-        e: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const property = namedChild(node, 'naryPr');
-    if (property) {
-      if (
-        !hasOnlyMathChildren(property, {
-          chr: { min: 0, max: 1 },
-          limLoc: { min: 0, max: 1 },
-        })
-      ) {
-        return false;
-      }
-      const character = namedChild(property, 'chr');
-      const limitLocation = namedChild(property, 'limLoc');
-      if (character && !hasOnlyMathVal(character)) return false;
-      if (limitLocation && !hasOnlyMathVal(limitLocation, new Set(['undOvr']))) {
-        return false;
-      }
-    }
-    return ['e', 'sub', 'sup'].every((name) =>
-      namedChildren(node, name).every((container) =>
-        childrenOf(container).every(isSupportedExpressionNode)
-      )
-    );
-  }
-  return false;
-}
-
 function projectContainer(
   node: OoxmlGenericElementNode,
   state: ProjectionState,
@@ -379,12 +247,32 @@ function projectContainer(
   return frozenRow(expressions);
 }
 
+function controlSource(
+  node: OoxmlGenericElementNode,
+  propertyName: string,
+  state: ProjectionState
+): EquationControlSource {
+  return !state.defaultControls && equationStructureHasControlProperties(node, propertyName)
+    ? { controlProperties: true }
+    : {};
+}
+
 function projectStructured(
   node: OoxmlGenericElementNode,
   state: ProjectionState,
   depth: number
 ): EquationExpression | null {
   if (!isSupportedExpressionNode(node)) return null;
+  if (node.localName === 'bar') {
+    const property = namedChild(node, 'barPr');
+    const position = property ? namedChild(property, 'pos') : null;
+    return Object.freeze({
+      kind: 'bar',
+      body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
+      position: position && mathVal(position) === 'top' ? 'top' : 'bottom',
+      ...controlSource(node, 'barPr', state),
+    });
+  }
   if (node.localName === 'f') {
     const numerator = namedChild(node, 'num');
     const denominator = namedChild(node, 'den');
@@ -393,6 +281,7 @@ function projectStructured(
       kind: 'fraction',
       numerator: projectContainer(numerator, state, depth + 1),
       denominator: projectContainer(denominator, state, depth + 1),
+      ...controlSource(node, 'fPr', state),
     });
   }
   if (node.localName === 'rad') {
@@ -407,6 +296,7 @@ function projectStructured(
       kind: 'radical',
       radicand: projectContainer(radicand, state, depth + 1),
       ...(projectedDegree === undefined ? {} : { degree: projectedDegree }),
+      ...controlSource(node, 'radPr', state),
     });
   }
   if (node.localName === 'sSup' || node.localName === 'sSub' || node.localName === 'sSubSup') {
@@ -425,6 +315,7 @@ function projectStructured(
       base: projectContainer(base, state, depth + 1),
       ...(subscript ? { subscript: projectContainer(subscript, state, depth + 1) } : {}),
       ...(superscript ? { superscript: projectContainer(superscript, state, depth + 1) } : {}),
+      ...controlSource(node, `${node.localName}Pr`, state),
     });
   }
   if (node.localName === 'nary') {
@@ -449,6 +340,7 @@ function projectStructured(
       ...(upper && childrenOf(upper).length > 0
         ? { upperLimit: projectContainer(upper, state, depth + 1) }
         : {}),
+      ...controlSource(node, 'naryPr', state),
     });
   }
   return null;
@@ -466,9 +358,21 @@ function projectNode(node: OoxmlNode, state: ProjectionState, depth: number): Eq
     return projectContainer(node, state, depth);
   }
   if (node.localName === 'r') {
-    return isSupportedExpressionNode(node)
-      ? projectContainer(node, state, depth, 'rPr')
-      : fallbackOf(node, state, depth + 1);
+    if (!isSupportedExpressionNode(node)) return fallbackOf(node, state, depth + 1);
+    // Default run properties draw like none, and replacement writes them back.
+    const format = state.defaultRuns ? {} : equationRunFormat(node)!;
+    return frozenRow(
+      namedChildren(node, 't').map((text) => {
+        const projected = projectContainer(text, state, depth + 1);
+        const formatted = (value: EquationExpression): EquationExpression =>
+          value.kind === 'text'
+            ? Object.freeze({ ...value, ...(Object.keys(format).length ? { format } : {}) })
+            : value;
+        return projected.kind === 'row'
+          ? frozenRow(projected.items.map(formatted))
+          : formatted(projected);
+      })
+    );
   }
   if (node.localName === 't') {
     return isSupportedExpressionNode(node)
@@ -515,13 +419,17 @@ export function projectOmmlEquation(
   }
   // The preflight proves the complete source is within each work limit. The structured pass
   // can revisit wrappers while it maps their roles, but it cannot discover more source nodes.
+  const defaults = equationDefaultFormatting(node, resolved.maxNodes, resolved.maxDepth);
   const state: ProjectionState = {
     limits: { ...resolved, maxNodes: Number.MAX_SAFE_INTEGER },
+    defaultControls: defaults.controls.kind === 'default',
+    defaultRuns: defaults.runs.kind === 'default',
     visitedNodes: 0,
     text: '',
     truncated: false,
   };
   const expression = projectNode(node, state, 1);
+  const fontSizePt = equationSharedRunSizePt(node, resolved.maxNodes, resolved.maxDepth);
   if (state.truncated) {
     const structuredFallback = state.text + '…';
     return publish(
@@ -541,6 +449,7 @@ export function projectOmmlEquation(
       fallbackText,
       truncated: false,
       visitedNodes: scan.visitedNodes,
+      ...(fontSizePt === undefined ? {} : { fontSizePt }),
     })
   );
 }
@@ -774,6 +683,15 @@ export function equationExpressionToLinearMath(expression: EquationExpression): 
 
 type NextNodeId = () => string;
 
+/** What emitted nodes need: fresh ids, and the default properties to write back. */
+interface EmitContext {
+  readonly nextId: NextNodeId;
+  /** The `m:ctrlPr` written on each emitted structure. */
+  readonly control: OoxmlGenericElementNode | null;
+  /** The `w:rPr` written on each emitted run. */
+  readonly runProperties: OoxmlElement | null;
+}
+
 function mathAttribute(localName: string, value: string): OoxmlAttribute {
   return Object.freeze({
     kind: 'genericExtension',
@@ -820,121 +738,119 @@ function mathElement(
   });
 }
 
-function expressionNodes(expression: EquationExpression, nextId: NextNodeId): readonly OoxmlNode[] {
+/**
+ * The property element of one emitted structure. `m:ctrlPr` is the last child in schema
+ * order. Null when the structure needs no properties at all.
+ */
+function structureProperties(
+  localName: string,
+  properties: readonly OoxmlNode[],
+  context: EmitContext
+): OoxmlGenericElementNode | null {
+  const control = context.control ? [cloneEquationControl(context.control, context.nextId)] : [];
+  if (properties.length === 0 && control.length === 0) return null;
+  return mathElement(localName, [...properties, ...control], context.nextId);
+}
+
+function structure(
+  localName: string,
+  properties: OoxmlGenericElementNode | null,
+  children: readonly OoxmlNode[],
+  context: EmitContext
+): OoxmlGenericElementNode {
+  return mathElement(localName, properties ? [properties, ...children] : children, context.nextId);
+}
+
+/** One emitted run. Schema order puts `w:rPr` (after any `m:rPr`) before `m:t`. */
+function textRun(value: string, context: EmitContext): OoxmlNode {
+  const { nextId, runProperties } = context;
+  const properties = runProperties ? [cloneEquationControl(runProperties, nextId)] : [];
+  return mathElement(
+    'r',
+    [...properties, mathElement('t', [textValue(value, nextId)], nextId, textAttributes(value))],
+    nextId
+  );
+}
+
+function expressionNodes(
+  expression: EquationExpression,
+  context: EmitContext
+): readonly OoxmlNode[] {
+  const { nextId } = context;
+  const container = (localName: string, value: EquationExpression | undefined): OoxmlNode =>
+    mathElement(localName, value ? expressionNodes(value, context) : [], nextId);
   switch (expression.kind) {
     case 'row':
-      return expression.items.flatMap((child) => expressionNodes(child, nextId));
+      return expression.items.flatMap((child) => expressionNodes(child, context));
     case 'text':
-      return [
-        mathElement(
-          'r',
-          [
-            mathElement(
-              't',
-              [textValue(expression.value, nextId)],
-              nextId,
-              textAttributes(expression.value)
-            ),
-          ],
-          nextId
-        ),
-      ];
+      return [textRun(expression.value, context)];
     case 'fallback':
+      return [textRun(expression.text, context)];
+    case 'bar': {
+      const position = mathElement('pos', [], nextId, [
+        mathAttribute('val', expression.position === 'top' ? 'top' : 'bot'),
+      ]);
       return [
-        mathElement(
-          'r',
-          [
-            mathElement(
-              't',
-              [textValue(expression.text, nextId)],
-              nextId,
-              textAttributes(expression.text)
-            ),
-          ],
-          nextId
+        structure(
+          'bar',
+          structureProperties('barPr', [position], context),
+          [container('e', expression.body)],
+          context
         ),
       ];
+    }
     case 'fraction':
       return [
-        mathElement(
+        structure(
           'f',
-          [
-            mathElement('num', expressionNodes(expression.numerator, nextId), nextId),
-            mathElement('den', expressionNodes(expression.denominator, nextId), nextId),
-          ],
-          nextId
+          structureProperties('fPr', [], context),
+          [container('num', expression.numerator), container('den', expression.denominator)],
+          context
         ),
       ];
     case 'radical':
       return [
-        mathElement(
+        structure(
           'rad',
-          [
-            mathElement(
-              'deg',
-              expression.degree ? expressionNodes(expression.degree, nextId) : [],
-              nextId
-            ),
-            mathElement('e', expressionNodes(expression.radicand, nextId), nextId),
-          ],
-          nextId
+          structureProperties('radPr', [], context),
+          [container('deg', expression.degree), container('e', expression.radicand)],
+          context
         ),
       ];
     case 'script': {
-      if (expression.subscript && expression.superscript) {
-        return [
-          mathElement(
-            'sSubSup',
-            [
-              mathElement('e', expressionNodes(expression.base, nextId), nextId),
-              mathElement('sub', expressionNodes(expression.subscript, nextId), nextId),
-              mathElement('sup', expressionNodes(expression.superscript, nextId), nextId),
-            ],
-            nextId
-          ),
-        ];
-      }
+      const both = expression.subscript !== undefined && expression.superscript !== undefined;
       const superscript = expression.superscript !== undefined;
-      const script = superscript ? expression.superscript! : expression.subscript!;
+      const localName = both ? 'sSubSup' : superscript ? 'sSup' : 'sSub';
+      const properties = structureProperties(`${localName}Pr`, [], context);
+      const base = container('e', expression.base);
+      const scripts = both
+        ? [container('sub', expression.subscript), container('sup', expression.superscript)]
+        : [
+            container(
+              superscript ? 'sup' : 'sub',
+              superscript ? expression.superscript : expression.subscript
+            ),
+          ];
+      return [structure(localName, properties, [base, ...scripts], context)];
+    }
+    case 'nary': {
+      const properties = [
+        mathElement('chr', [], nextId, [mathAttribute('val', expression.operator)]),
+        mathElement('limLoc', [], nextId, [mathAttribute('val', 'undOvr')]),
+      ];
       return [
-        mathElement(
-          superscript ? 'sSup' : 'sSub',
+        structure(
+          'nary',
+          structureProperties('naryPr', properties, context),
           [
-            mathElement('e', expressionNodes(expression.base, nextId), nextId),
-            mathElement(superscript ? 'sup' : 'sub', expressionNodes(script, nextId), nextId),
+            container('sub', expression.lowerLimit),
+            container('sup', expression.upperLimit),
+            container('e', expression.body),
           ],
-          nextId
+          context
         ),
       ];
     }
-    case 'nary':
-      return [
-        mathElement(
-          'nary',
-          [
-            mathElement(
-              'naryPr',
-              [
-                mathElement('chr', [], nextId, [mathAttribute('val', expression.operator)]),
-                mathElement('limLoc', [], nextId, [mathAttribute('val', 'undOvr')]),
-              ],
-              nextId
-            ),
-            mathElement(
-              'sub',
-              expression.lowerLimit ? expressionNodes(expression.lowerLimit, nextId) : [],
-              nextId
-            ),
-            mathElement(
-              'sup',
-              expression.upperLimit ? expressionNodes(expression.upperLimit, nextId) : [],
-              nextId
-            ),
-            mathElement('e', expressionNodes(expression.body, nextId), nextId),
-          ],
-          nextId
-        ),
-      ];
   }
 }
 
@@ -943,9 +859,9 @@ function expressionNodes(expression: EquationExpression, nextId: NextNodeId): re
  */
 function ommlEquationFromExpression(
   expression: EquationExpression,
-  nextId: NextNodeId
+  context: EmitContext
 ): OoxmlGenericElementNode {
-  const equation = mathElement('oMath', expressionNodes(expression, nextId), nextId);
+  const equation = mathElement('oMath', expressionNodes(expression, context), context.nextId);
   return Object.freeze({
     ...equation,
     namespaceBindings: Object.freeze([
@@ -960,11 +876,35 @@ export function linearMathToOmml(
   nextId: NextNodeId,
   limits?: OmmlLimits
 ): LinearMathOmmlResult {
+  return linearMathReplacementOmml(input, nextId, null, limits);
+}
+
+/**
+ * Generate the OMML that replaces `replacing`, an existing `m:oMath`. When every `m:ctrlPr`
+ * in it holds only default formatting, each emitted structure receives a copy of its first
+ * `m:ctrlPr`. When every run in it carries default `w:rPr`, each emitted run receives a copy
+ * of its first run's `w:rPr`. Otherwise the result matches {@link linearMathToOmml}.
+ */
+export function linearMathReplacementOmml(
+  input: string,
+  nextId: NextNodeId,
+  replacing: OoxmlNode | null,
+  limits?: OmmlLimits
+): LinearMathOmmlResult {
   const parsed = parseLinearMath(input, limits);
   if (!parsed.ok) return parsed;
+  const resolved = resolveLimits(limits);
+  const defaults = replacing
+    ? equationDefaultFormatting(replacing, resolved.maxNodes, resolved.maxDepth)
+    : null;
+  const context: EmitContext = {
+    nextId,
+    control: defaults?.controls.kind === 'default' ? defaults.controls.control : null,
+    runProperties: defaults?.runs.kind === 'default' ? defaults.runs.properties : null,
+  };
   return Object.freeze({
     ok: true,
     expression: parsed.expression,
-    equation: ommlEquationFromExpression(parsed.expression, nextId),
+    equation: ommlEquationFromExpression(parsed.expression, context),
   });
 }

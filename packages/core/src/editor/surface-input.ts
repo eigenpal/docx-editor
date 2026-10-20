@@ -6,6 +6,7 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
+import { chordLetter, isGoToChord } from './chord-letter.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
@@ -15,6 +16,7 @@ import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
+import { historyShortcutOf } from './history-shortcut.ts';
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -24,6 +26,15 @@ const NAVIGATION: Record<string, NavigationCommand> = {
   Home: 'lineStart',
   End: 'lineEnd',
 };
+
+/**
+ * Whether the keymap answers this key by moving the selection: caret motion, page motion
+ * or select-all. Viewing ignores exactly these and keeps the view chords (Show/Hide).
+ */
+function keyMovesSelection(event: KeyboardEvent): boolean {
+  if (NAVIGATION[event.key] || event.key === 'PageUp' || event.key === 'PageDown') return true;
+  return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a';
+}
 
 /** Paragraph alignment shortcuts (`w:jc`), matching Word. */
 const ALIGNMENT: Record<string, string> = {
@@ -64,7 +75,7 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
  * layout that has an AltGr level — so refusing on it alone would have taken the long-shipped
  * `Ctrl+Alt+F` and `Ctrl+Alt+D` note chords down on Polish and Croatian, where those two keys
  * compose nothing. What settles it is whether a character WAS composed, which is exactly what
- * `letterOf` answers: a composed character is not a Latin letter, so the letter it returns came
+ * `chordLetter` answers: a composed character is not a Latin letter, so the letter it returns came
  * from the KEYCAP and differs from what was typed.
  *
  * The macOS half never reaches any of that: the chord there is Cmd+Option, and Command is not
@@ -81,34 +92,6 @@ function isAltAccelerator(event: KeyboardEvent, letter: string): boolean {
   return event.key.toLowerCase() === letter;
 }
 
-/** A single Latin letter, which is what every chord in this keymap is named by. */
-const CHORD_LETTER = /^[a-z]$/;
-
-/**
- * Which LETTER a chord names, for the accelerators held with Alt.
- *
- * The CHARACTER first. A user reaching for Ctrl+Alt+F presses the key that types `f`,
- * wherever their layout puts it, and Windows resolves accelerators the same way — so reading
- * the physical position first sent Dvorak's footnote chord to the key that types `u`.
- *
- * `event.code` is the fallback, for the case that makes `key` unreadable: a modifier that
- * COMPOSES. macOS turns Option+F into `ƒ`, Option+C into `ç` and Option+D into `∂`, none of
- * them a letter — so falling through to the keycap is the only way those chords work there,
- * and it costs nothing, because a `key` that IS a letter has already answered.
- *
- * Never both for one event: consulting `code` as well would claim a second chord wherever
- * the two disagree, which is every remapped layout.
- */
-function letterOf(event: KeyboardEvent): string {
-  const typed = event.key.toLowerCase();
-  if (CHORD_LETTER.test(typed)) return typed;
-  // Defaulted, like `getModifierState` above: a synthesised event — this repo's own keymap
-  // tests build several — carries no `code`, and reading `.length` off it would throw out of
-  // the keydown handler.
-  const physical = event.code ?? '';
-  return physical.length === 4 && physical.startsWith('Key') ? physical[3]!.toLowerCase() : '';
-}
-
 export function createKeyDownHandler(
   surface: PaginatedSurface,
   hooks: {
@@ -119,6 +102,19 @@ export function createKeyDownHandler(
      * rather than doing something surprising.
      */
     readonly onRequestHyperlink?: () => void;
+    /**
+     * Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog. Answers whether chrome took the
+     * request; when none did, the key is left to the browser.
+     */
+    readonly onRequestBookmark?: () => boolean;
+    /**
+     * Ctrl+G (Cmd+Option+G on macOS) opens the host's Go To UI. Answers whether chrome took
+     * the request; when none did, the key is left to the browser.
+     */
+    readonly onRequestGoTo?: () => boolean;
+    readonly onToggleParagraphMarks?: () => void;
+    /** @internal */
+    readonly onToggleFieldCodes?: () => void;
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
@@ -130,6 +126,53 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
+    // Viewing moves no caret from the keyboard, as it places none from the pointer. Chromium
+    // drops focus from the pages once they stop being editable; a browser that keeps it would
+    // walk an invisible caret, and the toolbar would follow it. Writes refuse on their own.
+    if (surface.editingMode() === 'view' && keyMovesSelection(event)) return;
+    if (
+      event.key === 'F5' &&
+      event.shiftKey &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.isComposing &&
+      hooks.onRequestBookmark?.()
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (isGoToChord(event) && hooks.onRequestGoTo?.()) {
+      event.preventDefault();
+      return;
+    }
+    // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.
+    if (
+      event.key === 'F9' &&
+      event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      !event.isComposing &&
+      hooks.onToggleFieldCodes
+    ) {
+      event.preventDefault();
+      hooks.onToggleFieldCodes();
+      return;
+    }
+    if (
+      !event.altKey &&
+      !event.isComposing &&
+      ((event.metaKey && !event.ctrlKey && !event.shiftKey && event.key === '8') ||
+        (event.ctrlKey &&
+          !event.metaKey &&
+          event.shiftKey &&
+          (event.code === 'Digit8' || event.key === '*'))) &&
+      hooks.onToggleParagraphMarks
+    ) {
+      event.preventDefault();
+      hooks.onToggleParagraphMarks();
+      return;
+    }
     // Escape releases the transient modes, innermost first. The format painter is the
     // innermost of all: it is armed ON TOP of whatever scope is open, so a press that closed
     // a header instead would leave the painter armed with no way left to release it.
@@ -149,7 +192,7 @@ export function createKeyDownHandler(
       return;
     }
     // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote, and the Format Painter pair.
-    const altLetter = letterOf(event);
+    const altLetter = chordLetter(event);
     if (isAltAccelerator(event, altLetter) && !event.shiftKey) {
       const key = altLetter;
       if (key === 'f') {
@@ -260,14 +303,15 @@ export function createKeyDownHandler(
         }
       }
       // In a LIST, Tab demotes and Shift+Tab promotes — the list level, so the marker
-      // changes with it. Outside one, Tab is a tab character and Shift+Tab outdents,
-      // which is what Word does.
+      // changes with it. Outside one, Tab and Shift+Tab change the indent of a selection over
+      // paragraphs, or from a paragraph start, and keep the text. Anywhere else Tab types a
+      // tab character and Shift+Tab outdents.
+      const direction = event.shiftKey ? 'decrease' : 'increase';
       if (surface.isListParagraph()) {
-        surface.adjustIndent(event.shiftKey ? 'decrease' : 'increase');
-      } else if (event.shiftKey) {
-        surface.adjustIndent('decrease');
-      } else {
-        surface.insertTab();
+        surface.adjustIndent(direction);
+      } else if (!surface.indentWithTab(direction)) {
+        if (event.shiftKey) surface.adjustIndent('decrease');
+        else surface.insertTab();
       }
       event.preventDefault();
       return;
@@ -346,7 +390,13 @@ export function createKeyDownHandler(
       // page anyway. Right alignment stays on Ctrl+R, which pages may claim and which is
       // an unused chord on macOS.
       if (event.metaKey && event.key.toLowerCase() === 'r') return;
-      surface.setParagraphProperty('jc', { val: ALIGNMENT[event.key.toLowerCase()]! });
+      surface.setParagraphProperties([
+        {
+          localName: 'jc',
+          attributes: { val: ALIGNMENT[event.key.toLowerCase()]! },
+          physicalAlignment: true,
+        },
+      ]);
       event.preventDefault();
       return;
     }
@@ -362,18 +412,13 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    // Ctrl+Y is Windows' redo; Ctrl/Cmd+Shift+Z is the mac one. Word accepts both.
-    if (accel && event.key.toLowerCase() === 'y') {
-      surface.redo();
-      event.preventDefault();
-      return;
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    const history = historyShortcutOf(event);
+    if (history) {
       // Undo and redo publish a model change like any other commit, so the scheduler
       // repaints. What the scheduler cannot supply is WHERE the caret belongs: offsets in
       // the reverted tree do not correspond to offsets in the one that replaced it, so the
       // entry's own selection is restored.
-      if (event.shiftKey) surface.redo();
+      if (history === 'redo') surface.redo();
       else surface.undo();
       event.preventDefault();
     }
@@ -397,7 +442,11 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
 } {
   const writeFlavours = (event: ClipboardEvent): boolean => {
     const flavours = surface.copyFlavours();
-    if (!flavours.text) return false;
+    if (flavours.reason) {
+      event.preventDefault();
+      return false;
+    }
+    if (!flavours.text || !event.clipboardData) return false;
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
     return true;

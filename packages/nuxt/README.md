@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
@@ -12,14 +16,13 @@
 
 # @docx-editor.dev/nuxt
 
-This private workspace package provides a Nuxt 3 and 4 module for
-[docx-editor.dev](https://docx-editor.dev). npm does not publish it.
+Use this private workspace module with Nuxt 3 and 4. The repository does not publish it to npm.
 
-External Nuxt applications can use `@docx-editor.dev/vue` inside
-`<ClientOnly>`. See the
-[Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
+External Nuxt applications can use `@docx-editor.dev/vue` inside `<ClientOnly>`. See the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
 
 ## Workspace setup
+
+Register the private module in `nuxt.config.ts`:
 
 ```ts
 // nuxt.config.ts
@@ -27,6 +30,8 @@ export default defineNuxtConfig({
   modules: ['@docx-editor.dev/nuxt'],
 });
 ```
+
+Use the registered component to open a selected file:
 
 ```vue
 <script setup lang="ts">
@@ -46,12 +51,13 @@ async function loadFile(e: Event) {
 </template>
 ```
 
-The module registers `<DocxEditor>` as a client-only component. Nuxt renders a
-server placeholder and hydrates the editor in the browser.
+The module registers `<DocxEditor>` as a client-only component. Nuxt renders a server placeholder and hydrates the editor in the browser.
 
 The module also adds the editor stylesheet to the Nuxt CSS pipeline.
 
 ## Options
+
+Set the component prefix and stylesheet behavior in `nuxt.config.ts`:
 
 ```ts
 export default defineNuxtConfig({
@@ -63,27 +69,14 @@ export default defineNuxtConfig({
 });
 ```
 
-| Option         | Type      | Default | Description                                                       |
-| -------------- | --------- | ------- | ----------------------------------------------------------------- |
-| `prefix`       | `string`  | `''`    | Component name prefix. `'Ep'` registers `<EpDocxEditor>`.         |
-| `injectStyles` | `boolean` | `true`  | Set `false` to import `@docx-editor.dev/vue/styles.css` yourself. |
-
-## Packages
-
-| Package                                                                                    | Description                                                                                                                               |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter with packaged chrome.               |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter with packaged chrome.            |
-| `@docx-editor.dev/nuxt`                                                                    | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Private Nuxt 3 and 4 workspace module.             |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. Depend on this if you fork the React or Vue adapter. |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.               |
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `prefix` | `string` | `''` | Component name prefix. `'Ep'` registers `<EpDocxEditor>`. |
+| `injectStyles` | `boolean` | `true` | Set `false` to import `@docx-editor.dev/vue/styles.css` yourself. |
 
 ## Component API
 
-`<DocxEditor>` is the Vue adapter component. It keeps the same props, emits, and
-`DocxEditorRef` methods. See the
-[Vue props reference](https://www.docx-editor.dev/docs/2.x/vue/props).
+`<DocxEditor>` is the Vue adapter component. It keeps the same props, emits, and `DocxEditorRef` methods. See the [Vue props reference](https://www.docx-editor.dev/docs/2.x/vue/props).
 
 ## Beyond the component
 
@@ -92,17 +85,16 @@ When you need the rest of the Vue adapter surface, import it from `@docx-editor.
 - the `DocxEditorProps` and `DocxEditorRef` types
 - composition primitives like `DocxEditorRoot`, `DocxEditorToolbar`, `DocxEditorNavigation`, `HorizontalRuler`, and `PageIndicator`
 
-These are not re-exported by the Nuxt module. Import them from the adapter directly, and add it to your own `dependencies` so the import is explicit:
+The Nuxt module does not export these members. Add the Vue adapter to your dependencies before importing them:
 
 ```bash
-npm install @docx-editor.dev/vue
+npm install @docx-editor.dev/vue @docx-editor.dev/core
 ```
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+To contribute, see [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
 
 ## Commercial support
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+For commercial support or custom features, [email the support team](mailto:docx-editor@eigenpal.com).

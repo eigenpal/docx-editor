@@ -22,7 +22,7 @@
 // a bounded share of what is left rather than zero, and no fit may scale a table below one
 // point per column — a zero-width column is unrecoverable downstream.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
 
 export { MAX_TABLE_COLUMNS };
@@ -52,7 +52,7 @@ export type PreferredWidthType = 'dxa' | 'pct' | 'auto' | 'nil';
  */
 export interface PreferredWidth {
   readonly type: PreferredWidthType;
-  /** POINTS for `dxa`, PERCENT (0–100) for `pct`, 0 for `auto`/`nil`. */
+  /** POINTS for `dxa`, PERCENT for `pct` (0–100, or up to 655.34 for a table), 0 otherwise. */
   readonly value: number;
 }
 
@@ -62,15 +62,23 @@ export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto'
 /** Widest a `pct` preference may resolve to, so `w:w="999999"` cannot inflate a table. */
 const MAX_PREFERRED_PERCENT = 100;
 
-/** Points per unit for `ST_UniversalMeasure`'s suffixes (`pi` is a synonym for `pc`). */
-const MEASURE_UNIT_PT: Readonly<Record<string, number>> = Object.freeze({
-  mm: 72 / 25.4,
-  cm: 72 / 2.54,
-  in: 72,
-  pt: 1,
-  pc: 12,
-  pi: 12,
-});
+/** Widest TABLE percentage honoured above 100, as a signed 16-bit count of fiftieths. */
+export const MAX_TABLE_PERCENT_UNITS = 32_767;
+
+/**
+ * A bare table percentage is a 16-bit count of fiftieths: a larger count wraps, and a count
+ * that wraps to zero or past the signed range states no width. `undefined` means `auto`.
+ */
+export function wrappedTablePercentUnits(units: number): number | undefined {
+  const wrapped = units % 65_536;
+  return wrapped > 0 && wrapped <= MAX_TABLE_PERCENT_UNITS ? wrapped : undefined;
+}
+
+/** The narrowest stated table percentage: one fiftieth of a percent. */
+const MIN_TABLE_PERCENT = 1 / 50;
+
+/** A width stated without a unit: its type says whether it is twips or fiftieths of a percent. */
+const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
@@ -87,7 +95,8 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
  * Bounded reader for `ST_MeasurementOrPercent` — the union `w:w` actually admits. Word
  * writes the plain twips form, but `ST_UniversalMeasure` (`2.5in`, `72pt`) and
  * `ST_Percentage` (`33.3%`, the form 17.4.71's own example uses) are equally valid, and
- * dropping them silently loses geometry a conformant producer stated.
+ * dropping them silently loses geometry a conformant producer stated. Lengths go through
+ * `readTwipsMeasure`, so a decimal (`9026.0`) truncates to whole twips.
  *
  * Every branch is anchored with a bounded quantifier: these run over attacker-controlled
  * attribute values and must not backtrack.
@@ -98,21 +107,14 @@ function readMeasurementOrPercent(
   | { readonly kind: 'length'; readonly pt: number }
   | { readonly kind: 'percent'; readonly percent: number }
   | null {
-  if (/^\d{1,9}$/.test(raw)) {
-    const pt = Number(raw) / 20;
-    return Number.isFinite(pt) ? { kind: 'length', pt } : null;
-  }
   const percent = /^(\d{1,7}(?:\.\d{1,4})?)%$/.exec(raw);
   if (percent) {
     const value = Number(percent[1]);
     return Number.isFinite(value) ? { kind: 'percent', percent: value } : null;
   }
-  const universal = /^(\d{1,9}(?:\.\d{1,4})?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
-  if (universal) {
-    const pt = Number(universal[1]) * MEASURE_UNIT_PT[universal[2]!]!;
-    return Number.isFinite(pt) ? { kind: 'length', pt } : null;
-  }
-  return null;
+  const twips = readTwipsMeasure(raw);
+  // A width is unsigned: a negative one is no length at all.
+  return twips !== null && twips >= 0 ? { kind: 'length', pt: twips / 20 } : null;
 }
 
 /**
@@ -127,7 +129,7 @@ function readMeasurementOrPercent(
  * 17.4.87 also settles the conflict case: where the type and the measurement `w:w` actually
  * states contradict each other, the measurement wins and the type is ignored.
  */
-export function readPreferredWidth(node: OoxmlElement | undefined): PreferredWidth {
+export function readPreferredWidth(node: OoxmlElement | undefined, table = false): PreferredWidth {
   if (!node) return AUTO_PREFERRED_WIDTH;
   const rawType = attributeValue(node, 'type');
   if (rawType !== undefined && rawType !== 'pct' && rawType !== 'dxa') {
@@ -141,14 +143,33 @@ export function readPreferredWidth(node: OoxmlElement | undefined): PreferredWid
 
   // A bare number carries no unit of its own, so the type decides how to read it. A stated
   // `%` or `in` DOES carry one, and 17.4.87 says that statement overrides the type.
-  const bare = /^\d{1,9}$/.test(raw);
+  const bare = UNITLESS.test(raw);
   if (measure.kind === 'percent' || (bare && rawType === 'pct')) {
-    const percent = measure.kind === 'percent' ? measure.percent : Number(raw) / 50;
+    // A bare `pct` value is fiftieths of a percent, read as whole units like any other.
+    const percent = measure.kind === 'percent' ? measure.percent : (measure.pt * 20) / 50;
     if (!Number.isFinite(percent) || percent <= 0) return AUTO_PREFERRED_WIDTH;
-    return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+    if (!table) return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+    // A table may extend past the text column, within a 16-bit count of fiftieths. Past that
+    // range a stated percentage lays the table out at its narrowest; a bare count wraps.
+    if (measure.kind === 'percent')
+      return {
+        type: 'pct',
+        value: percent * 50 <= MAX_TABLE_PERCENT_UNITS + 1e-6 ? percent : MIN_TABLE_PERCENT,
+      };
+    const units = wrappedTablePercentUnits(percent * 50);
+    return units === undefined ? AUTO_PREFERRED_WIDTH : { type: 'pct', value: units / 50 };
   }
   if (!Number.isFinite(measure.pt) || measure.pt <= 0) return AUTO_PREFERRED_WIDTH;
   return { type: 'dxa', value: Math.min(measure.pt, MAX_COLUMN_WIDTH_PT) };
+}
+
+/**
+ * `w:tblW` (17.4.63). Unlike a cell's share of its table, a table percentage can exceed 100
+ * and extend the table past the text column, up to `MAX_TABLE_PERCENT_UNITS`. The percentage
+ * is a share of the same reference width as any other table percentage.
+ */
+export function readTablePreferredWidth(node: OoxmlElement | undefined): PreferredWidth {
+  return readPreferredWidth(node, true);
 }
 
 /** A CT_TblWidth read down to points, for the `dxa` geometry the placement reads use. */
@@ -160,6 +181,38 @@ export function preferredLengthPt(
   const width = readPreferredWidth(node);
   if (width.type !== 'dxa') return undefined;
   return Math.min(width.value, limit);
+}
+
+/**
+ * `w:tblInd` (17.4.50) read to SIGNED points, clamped to `[-limit, limit]`; `undefined` when
+ * the element states no usable indent, so the style cascade supplies one.
+ *
+ * An indent is a signed offset: a negative value pulls the table into the leading margin.
+ * Only this reader accepts the sign. Widths, margins and cell spacing keep the unsigned
+ * `readPreferredWidth` path, where zero or a negative value is no width at all. Here a
+ * stated zero IS a value, so it overrides a style's indent.
+ *
+ * The type rules follow `readPreferredWidth`: an absent type is `dxa`, a bare number under
+ * `pct` or any other type states no indent, and a universal measure carries its own unit
+ * whatever the type says. A percentage states no indent. Only the bare twips form carries a
+ * sign: a captured control places `-0.5in` half an inch INTO the column, so a universal
+ * measure reads as its magnitude.
+ */
+export function readTableIndentPt(
+  node: OoxmlElement | undefined,
+  limit: number
+): number | undefined {
+  if (!node) return undefined;
+  const type = attributeValue(node, 'type');
+  if (type !== undefined && type !== 'dxa' && type !== 'pct') return undefined;
+  const raw = attributeValue(node, 'w');
+  if (raw === undefined) return undefined;
+  if (type === 'pct' && UNITLESS.test(raw)) return undefined;
+  const twips = readTwipsMeasure(raw);
+  if (twips === null) return undefined;
+  const pt = twips / 20;
+  // `+ 0` turns a stated `-0` into zero.
+  return Math.max(-limit, Math.min(pt, limit)) + 0;
 }
 
 /** Declared `w:gridCol` elements, bounded before anything is allocated from them. */
@@ -210,6 +263,33 @@ export interface CellWidthClaim {
   readonly preferred: PreferredWidth;
 }
 
+/** Absolute single-column preferences replace the initial grid when every cell states one. */
+function fixedCellWidthSeed(
+  seed: readonly (number | undefined)[],
+  claims: readonly CellWidthClaim[]
+): readonly (number | undefined)[] {
+  // Keep the existing reconciliation for spans and unspecified preferences. Those cells
+  // can retain part of the initial grid, so their absence is not a zero-width claim.
+  if (
+    claims.length === 0 ||
+    claims.some(
+      (claim) =>
+        claim.span !== 1 ||
+        claim.preferred.type !== 'dxa' ||
+        !Number.isFinite(claim.preferred.value) ||
+        claim.preferred.value <= 0
+    )
+  ) {
+    return seed;
+  }
+  const widths: (number | undefined)[] = seed.map(() => undefined);
+  for (const claim of claims) {
+    if (claim.start < 0 || claim.start >= seed.length) continue;
+    widths[claim.start] = Math.max(widths[claim.start] ?? 0, claim.preferred.value);
+  }
+  return seed.map((width, index) => widths[index] ?? width);
+}
+
 /** Floor for a column nothing states, so a resolved grid never contains a zero column. */
 const MIN_DERIVED_COLUMN_PT = 1;
 
@@ -228,6 +308,18 @@ const WIDTH_EPSILON_PT = 0.001;
  * Claims are applied narrowest-span-first so single-column statements land before the spans
  * that contain them; a span then distributes only the width its settled columns have not
  * already accounted for.
+ *
+ * That maximum settles rows that disagree with EACH OTHER. It does not settle a cell that
+ * disagrees with the grid of a table that states its own total width: there the producer has
+ * already reconciled `w:tblGrid` against `w:tblW`, so widening one column only forces the
+ * whole table to be scaled back down and redistributes width across columns nobody restated.
+ * Both reference engines render the authored grid in that case. So when `w:tblW` states a
+ * positive total, an ABSOLUTE `w:tcW` settles only the columns `w:tblGrid` leaves open.
+ *
+ * Absolute is the operative word. A `dxa` preference is stated in the grid's own unit, so
+ * disagreeing with the grid is a real disagreement. A `pct` preference cannot express an
+ * exact twip, so it disagrees with the grid it was computed from by a rounding — which is
+ * `legacyRoundedCellClaims`' subject, and which keeps its own reconciliation here.
  */
 function applyWidthClaims(
   seed: readonly (number | undefined)[],
@@ -235,6 +327,8 @@ function applyWidthClaims(
   columnCount: number,
   tableWidthPt: number
 ): (number | undefined)[] {
+  // A stated total is what makes the authored grid a settled layout rather than a seed.
+  const gridIsSettled = tableWidthPt > 0;
   const settled: (number | undefined)[] = [];
   for (let index = 0; index < columnCount; index += 1) settled.push(seed[index]);
 
@@ -259,7 +353,10 @@ function applyWidthClaims(
     if (!Number.isFinite(stated) || stated <= 0) continue;
 
     if (last - claim.start === 1) {
-      // A single-column claim states that column outright; maximum wins across rows.
+      // A single-column claim states that column outright; maximum wins across rows. It does
+      // not get to restate a column an already-reconciled grid settled.
+      if (gridIsSettled && claim.preferred.type === 'dxa' && seed[claim.start] !== undefined)
+        continue;
       const current = settled[claim.start];
       settled[claim.start] = current === undefined ? stated : Math.max(current, stated);
       continue;
@@ -285,16 +382,14 @@ function applyWidthClaims(
  *
  * `w:tblGrid` seeds the columns, the authored `w:tcW`/`w:wBefore` preferences are laid over
  * it (see {@link applyWidthClaims}), and anything still unstated shares what the content
- * width has left. Columns never resolve to zero.
+ * width has left. Columns never resolve to zero. Where `w:tblW` states a positive total the
+ * grid is already reconciled against it, so an absolute preference fills its gaps rather
+ * than restating its columns.
  *
- * Fit is then applied per 17.18.87. The table's total is measured against `w:tblW`, and
- * "if at any stage, the preferred width requested for the cells exceeds the preferred width
- * of the table, then each grid column is proportionally reduced in size to fit" — that
- * reduction belongs to BOTH layout algorithms, so a fixed table is still held to a stated
- * `w:tblW`. What is autofit-only is the PAGE clamp: 17.18.87 ends the autofit override chain
- * with "override the preferred table width until the table reaches the page width", and says
- * nothing of the sort for fixed. A fixed table with no `w:tblW` therefore renders past the
- * right margin, which is what Word does; an autofit table never exceeds the text column.
+ * A stated preferred width bounds the initial grid. The text column bounds an autofit
+ * table only when no positive table width is authored. A requested width may extend into
+ * the margins; clamping it to the text column changes both alignment and cell wrapping.
+ * The AutoFit content-growth limit does not shrink an already-authored wider table.
  *
  * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
  * table narrower than its stated percentage is stretched up to it as well as shrunk down.
@@ -308,6 +403,7 @@ export function resolveColumnWidthsPt(input: {
   readonly contentWidthPt: number;
   readonly tableWidth: PreferredWidth;
   readonly layoutFixed: boolean;
+  readonly hasOmittedRows?: boolean;
 }): readonly number[] {
   const { columnCount, tableWidth } = input;
   // A caller with a degenerate or non-finite content box has told us nothing about the page.
@@ -326,7 +422,11 @@ export function resolveColumnWidthsPt(input: {
         ? (available * tableWidth.value) / 100
         : 0;
 
-  const seed = gridColumnWidthsPt(input.gridCols);
+  const grid = gridColumnWidthsPt(input.gridCols);
+  const seed =
+    input.layoutFixed && !input.hasOmittedRows && statedTableWidth <= 0
+      ? fixedCellWidthSeed(grid, input.claims)
+      : grid;
   const settled = applyWidthClaims(seed, input.claims, columnCount, statedTableWidth);
 
   let stated = 0;
@@ -362,7 +462,7 @@ export function resolveColumnWidthsPt(input: {
   const floor = columnCount * MIN_DERIVED_COLUMN_PT;
   const pageCap = input.layoutFixed || !hasPage ? Number.POSITIVE_INFINITY : available;
   const target = Math.max(
-    statedTableWidth > 0 ? Math.min(statedTableWidth, pageCap) : Math.min(total, pageCap),
+    statedTableWidth > 0 ? statedTableWidth : Math.min(total, pageCap),
     floor
   );
 

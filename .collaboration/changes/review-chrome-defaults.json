@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The default toolbar shows Track changes options, and only markers or Next Change open a closed review pane. Collapsed comment markers default to author initials.",
+  "after": "Track changes options moves to the Review menu only, and a click on commented text opens a closed review pane. Collapsed comment markers default to the comment icon.",
+  "reason": "These changes affect only the local view state of one editor. No document operation, shared state, or protocol changes.",
+  "tests": [
+    "packages/pro/src/__tests__/review-balloons.test.tsx",
+    "packages/pro/src/__tests__/review-balloons-vue.test.ts"
+  ],
+  "changeset": "review-chrome-defaults",
+  "migration": null
+}

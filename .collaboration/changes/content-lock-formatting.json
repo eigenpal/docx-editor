@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A content-locked control refused every local write, including run formatting.",
+  "after": "With contentLockPolicy.allowFormattingInLockedContent, an untracked local run-property or paragraph-mark write that does not hide text passes the content half of the lock. Other writes are still refused. Without the option, behavior is unchanged.",
+  "reason": "The option changes only local validation. A formatting edit produces the same run-property primitives as on an unlocked control, which released participants already apply. Remote updates bypass local protection checks, so replicas with different policies converge.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-control-locks.test.ts",
+    "packages/core/src/automation/__tests__/automation-content-lock-formatting.test.ts",
+    "packages/core/src/editor/__tests__/content-lock-formatting.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-content-lock-formatting.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-content-lock-formatting.test.ts"
+  ],
+  "changeset": "content-lock-formatting",
+  "migration": null
+}

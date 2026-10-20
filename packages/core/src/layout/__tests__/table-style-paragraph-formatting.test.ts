@@ -49,7 +49,7 @@ const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
 function layoutTable(rows: string, withCascade = true): SemanticLayout {
   const body =
-    `<w:tbl><w:tblPr><w:tblStyle w:val="Banded"/>${LOOK}</w:tblPr>` +
+    `<w:tbl><w:tblPr><w:tblStyle w:val="Banded"/>${LOOK}<w:tblLayout w:type="fixed"/></w:tblPr>` +
     '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
     rows +
     '</w:tbl>';

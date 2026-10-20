@@ -169,6 +169,20 @@ describe('tracked rows inside a textbox keep their anchors', () => {
 });
 
 describe('the deep paragraph order reaches paragraphs the shallow one cannot', () => {
+  test('retains empty paragraphs beside property leaves', () => {
+    const result = readOoxmlPart(
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        '<w:body><w:p/><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Text</w:t></w:r></w:p>' +
+        '<w:p/></w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const order = deepParagraphOrderOfPart(result.part);
+    expect(order.size).toBe(3);
+    expect([...order]).toEqual([...paragraphOrderOfPart(result.part)]);
+    expect(deepParagraphOrderOfPart(result.part)).toBe(order);
+  });
+
   // A position the order index cannot see is an item that can never become active: the
   // surface resolves both the caret's and a range's paragraphs through it. The shallow
   // order stops at the host paragraph, so a tracked change inside a textbox was

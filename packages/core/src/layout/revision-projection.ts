@@ -1,3 +1,5 @@
+import { carrySymbolRun } from './symbol-run.ts';
+import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // Revision attribution and display modes for layout.
 //
 // The canonical tree keeps `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` as wrappers, because
@@ -59,6 +61,18 @@ export interface RevisionAttribution {
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 /**
+ * The views the review chrome offers, in Word's terms: the three layout projections plus
+ * Simple Markup, which reads as the proposed result with a red change bar beside every line
+ * a change touched — the document as accepting everything would leave it, and where.
+ */
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+/** The projection the layout performs for a review view: Simple Markup lays out the proposal. */
+export function layoutProjectionOf(mode: ReviewDisplayMode): RevisionDisplayMode {
+  return mode === 'simple-markup' ? 'proposed' : mode;
+}
+
+/**
  * How a document renders tracked changes when nothing says otherwise.
  *
  * `all-markup` matches Word's own default: a reader who opens a document with pending changes
@@ -75,12 +89,79 @@ export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
  * delimiter-based key.
  */
 export interface RevisionFilter {
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
   readonly hiddenAuthors: ReadonlySet<string>;
   readonly includes?: (revision: RevisionAttribution) => boolean;
   readonly includesNode?: (nodeId: string, author: string) => boolean;
   /** Accepted/original projection for a revision excluded by `includesNode`. */
   readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
+  /**
+   * In a resolved view, content the view keeps paints as ORDINARY text: no author ink, no
+   * decoration, no change bar of its own. This is Word's No Markup, Original and Simple
+   * Markup, which the review chrome asks for. Without it the accepted projection keeps the
+   * attribution on kept insertions, which is what the engine paints when no review module
+   * is registered — colour by author, deletions resolved — and what its roster reads.
+   */
+  readonly resolvedMarkup?: 'plain';
   readonly cacheKey: string;
+  /**
+   * @internal Revision records the review queue leaves out, by change-element node id, and the
+   * paragraphs that hold them. Their paragraphs project without those records, so they paint
+   * no markup. Not a selection: it never moves a projection off the unfiltered path.
+   */
+  readonly unlisted?: {
+    readonly sites: ReadonlySet<string>;
+    /** Each paragraph that holds one, keyed by the records it holds. */
+    readonly paragraphs: ReadonlyMap<string, string>;
+    /** Names the styles and numbering the records were decided against. */
+    readonly key: string;
+  };
+}
+
+/**
+ * Whether a filter changes which revisions a projection keeps.
+ *
+ * The editor always hands layout a filter, because the filter also carries viewer settings
+ * such as revision markup. One that hides no author and excludes no change keeps every
+ * revision, so an All Markup projection takes the same path as no filter at all. A
+ * projection reads markup settings through `revisionMarkup` itself, never through this test.
+ */
+export function revisionFilterSelects(filter: RevisionFilter | undefined): boolean {
+  return (
+    filter !== undefined &&
+    (filter.hiddenAuthors.size > 0 ||
+      filter.includes !== undefined ||
+      filter.includesNode !== undefined ||
+      filter.excludedNodeMode !== undefined)
+  );
+}
+
+/** The plain-resolved policy with nobody hidden, for a review view that filters no one. */
+const PLAIN_RESOLVED_FILTER: RevisionAuthorFilter = Object.freeze({
+  hiddenAuthors: Object.freeze(new Set<string>()) as ReadonlySet<string>,
+  resolvedMarkup: 'plain' as const,
+  cacheKey: 'plain',
+});
+
+/** One wrapped filter per base, so identity-keyed layout memos see one object per session state. */
+const plainResolvedFilters = new WeakMap<RevisionAuthorFilter, RevisionAuthorFilter>();
+
+/** The same filter, with the review chrome's plain-resolved policy applied. */
+export function withPlainResolvedMarkup(
+  filter: RevisionAuthorFilter | undefined
+): RevisionAuthorFilter {
+  if (!filter) return PLAIN_RESOLVED_FILTER;
+  if (filter.resolvedMarkup === 'plain') return filter;
+  let wrapped = plainResolvedFilters.get(filter);
+  if (!wrapped) {
+    wrapped = Object.freeze({
+      ...filter,
+      resolvedMarkup: 'plain' as const,
+      cacheKey: `${filter.cacheKey}|plain`,
+    });
+    plainResolvedFilters.set(filter, wrapped);
+  }
+  return wrapped;
 }
 
 /** A read-only Set facade whose backing collection is unreachable to consumers. */
@@ -237,7 +318,8 @@ export function revisionAuthorFilter(
   });
 }
 
-function revisionIncluded(filter: RevisionFilter, revision: RevisionAttribution): boolean {
+/** Whether a reviewer filter keeps this revision's markup and change bar. */
+export function revisionIncluded(filter: RevisionFilter, revision: RevisionAttribution): boolean {
   return (
     filter.includes?.(revision) ?? revisionNodeIncluded(filter, revision.nodeId, revision.author)
   );
@@ -334,7 +416,12 @@ export function withRevision(
 }
 
 /** True when the node is a wrapper layout should descend into rather than skip. */
-export function isRevisionWrapper(node: OoxmlNode): node is OoxmlElement {
+export function isRevisionWrapper(node: OoxmlNode): node is Extract<
+  OoxmlElement,
+  {
+    readonly kind: 'revisionInsert' | 'revisionDelete' | 'revisionMoveFrom' | 'revisionMoveTo';
+  }
+> {
   return node.kind !== 'textValue' && isContentRevisionKind(node.kind);
 }
 
@@ -352,7 +439,8 @@ export function revisionsVisible(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  if (revisions.length === 0 || (mode === 'all-markup' && !authorFilter)) return true;
+  if (revisions.length === 0 || (mode === 'all-markup' && !revisionFilterSelects(authorFilter)))
+    return true;
   for (const revision of revisions) {
     const revisionMode = authorFilter ? revisionProjectionMode(authorFilter, revision, mode) : mode;
     if (revisionMode === 'all-markup') continue;
@@ -376,11 +464,33 @@ export function projectedRevisions(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): readonly RevisionAttribution[] | null {
-  if (!authorFilter && mode === 'all-markup') return revisions;
+  if (mode === 'all-markup' && !revisionFilterSelects(authorFilter)) return revisions;
   if (!revisionsVisible(revisions, mode, authorFilter)) return null;
+  // A review view that resolves shows the document as accepting (or rejecting) every change
+  // would leave it: content it keeps is ordinary text, so it carries no markup to paint.
+  // Returning the attribution here underlined every kept insertion in No Markup.
+  if (mode !== 'all-markup' && authorFilter?.resolvedMarkup === 'plain') return NO_REVISIONS;
   if (!authorFilter) return revisions;
   const visible = revisions.filter((revision) => revisionIncluded(authorFilter, revision));
   return visible.length === 0 ? NO_REVISIONS : visible;
+}
+
+/**
+ * The revisions a resolved view answered for some content — kept as ordinary text or
+ * removed — that the reader can still be told about: what Simple Markup's change bar marks.
+ *
+ * Empty in All Markup, where the content carries its own markup, and empty for a revision
+ * the reviewer filter hides, whose content the view resolves silently.
+ */
+export function resolvedChangeSites(
+  revisions: readonly RevisionAttribution[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly RevisionAttribution[] {
+  if (mode === 'all-markup' || revisions.length === 0) return NO_REVISIONS;
+  if (!authorFilter) return revisions;
+  const included = revisions.filter((revision) => revisionIncluded(authorFilter, revision));
+  return included.length === 0 ? NO_REVISIONS : included;
 }
 
 /** Whether one attributed mark remains markup in the current reviewer view. */
@@ -398,7 +508,7 @@ export function projectedRevisionProperties(
   authorFilter?: RevisionAuthorFilter
 ): readonly OoxmlProperty[] {
   if (!authorFilter) return properties;
-  return properties.filter((property) => {
+  const projected = properties.filter((property) => {
     if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') return true;
     const nodeId =
       'revisionNodeId' in property && typeof property.revisionNodeId === 'string'
@@ -412,6 +522,50 @@ export function projectedRevisionProperties(
       nodeId,
     });
   });
+  if (projected.length === properties.length) return properties;
+  carrySymbolRun(properties, projected);
+  return projected;
+}
+
+/** What one laid-out piece carries after the reviewer view is applied to it. */
+export interface PieceAttribution {
+  /** Run properties with hidden-reviewer provenance (`rPrChange`) removed. */
+  readonly props: readonly OoxmlProperty[];
+  /** The revisions still shown as markup; absent when the piece paints as ordinary text. */
+  readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The revisions a resolved view accepted into this piece, which paints as ordinary text.
+   * Absent in All Markup and for content no included revision touched. Simple Markup's
+   * change bar reads it; nothing inline does.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
+}
+
+/**
+ * The attribution and properties one piece publishes under the current reviewer view, or
+ * `null` when that view removes the content altogether.
+ *
+ * The ONE projection for every piece the paragraph walk emits, whichever route it takes to the
+ * piece list. An ordinary run is projected as it is pushed; a field's editable or demoted
+ * result is buffered first and flushed later, and a buffered piece that skipped this step kept
+ * a hidden reviewer's colour and `rPrChange` while the review list and the change bar had
+ * already dropped them. Both routes call this so they cannot disagree again.
+ */
+export function projectPieceAttribution(
+  revisions: readonly RevisionAttribution[],
+  props: readonly OoxmlProperty[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionFilter
+): PieceAttribution | null {
+  const projected = projectedRevisions(revisions, mode, authorFilter);
+  if (projected === null) return null;
+  const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
+  const changeSites = resolvedChangeSites(revisions, mode, authorFilter);
+  return {
+    props: publishedProps,
+    ...(projected.length === 0 ? {} : { revisions: projected }),
+    ...(changeSites.length === 0 ? {} : { changeSites }),
+  };
 }
 
 /** Paragraph-mark revisions that remain attributed in the current reviewer view. */
@@ -485,27 +639,7 @@ export function paragraphMarkMarkupVisible(
  * by name rather than by kind.
  */
 export function paragraphMarkRevisionsOf(paragraph: OoxmlNode): readonly RevisionAttribution[] {
-  if (paragraph.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr || pPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
-  if (!rPr || rPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const revisions: RevisionAttribution[] = [];
-  for (const child of rPr.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    const kind = MARK_REVISION_KINDS[child.localName];
-    if (kind === undefined) continue;
-    const date = attributeValue(child, 'date');
-    revisions.push({
-      kind,
-      id: attributeValue(child, 'id') ?? '',
-      author: attributeValue(child, 'author') ?? '',
-      ...(date === undefined ? {} : { date }),
-      nodeId: child.id,
-    });
-  }
-  return revisions.length > 0 ? revisions : EMPTY_MARK_REVISIONS;
+  return markRevisionDataOf(paragraph).revisions;
 }
 
 /** `EG_ParaRPrTrackChanges` in full: `ins? del? moveFrom? moveTo?` (§17.13.5.20-25). */
@@ -529,28 +663,57 @@ const MARK_REVISION_KINDS: Readonly<Record<string, RevisionKind | undefined>> = 
  * this reads the change element's own attributes and never descends into it.
  */
 export function paragraphMarkFormatRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
-  if (paragraph.kind === 'textValue') return null;
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr || pPr.kind === 'textValue') return null;
-  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
-  if (!rPr || rPr.kind === 'textValue') return null;
-  for (const child of rPr.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'rPrChange') continue;
-    const date = attributeValue(child, 'date');
-    return {
-      kind: 'format',
-      id: attributeValue(child, 'id') ?? '',
-      author: attributeValue(child, 'author') ?? '',
-      ...(date === undefined ? {} : { date }),
-      nodeId: child.id,
-    };
-  }
-  return null;
+  return markRevisionDataOf(paragraph).format;
 }
 
 /** One shared empty, so an unmarked paragraph publishes no array of its own. */
 const EMPTY_MARK_REVISIONS: readonly RevisionAttribution[] = Object.freeze([]);
+interface MarkRevisionData {
+  readonly revisions: readonly RevisionAttribution[];
+  readonly format: RevisionAttribution | null;
+}
+const EMPTY_MARK_DATA: MarkRevisionData = Object.freeze({
+  revisions: EMPTY_MARK_REVISIONS,
+  format: null,
+});
+const markRevisionData = new WeakMap<OoxmlNode, MarkRevisionData>();
+
+function markRevisionDataOf(paragraph: OoxmlNode): MarkRevisionData {
+  const known = markRevisionData.get(paragraph);
+  if (known) return known;
+  const read = (): MarkRevisionData => {
+    if (paragraph.kind === 'textValue') return EMPTY_MARK_DATA;
+    const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+    if (!pPr || pPr.kind === 'textValue') return EMPTY_MARK_DATA;
+    const rPr = pPr.children.find((child) => child.kind === 'runProperties');
+    if (!rPr || rPr.kind === 'textValue') return EMPTY_MARK_DATA;
+    const revisions: RevisionAttribution[] = [];
+    let format: RevisionAttribution | null = null;
+    for (const child of rPr.children) {
+      if (child.kind === 'textValue' || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+      const kind =
+        MARK_REVISION_KINDS[child.localName] ??
+        (child.localName === 'rPrChange' ? 'format' : undefined);
+      if (kind === undefined) continue;
+      const date = attributeValue(child, 'date');
+      const revision: RevisionAttribution = {
+        kind,
+        id: attributeValue(child, 'id') ?? '',
+        author: attributeValue(child, 'author') ?? '',
+        ...(date === undefined ? {} : { date }),
+        nodeId: child.id,
+      };
+      if (kind === 'format') format ??= revision;
+      else revisions.push(revision);
+    }
+    return revisions.length || format
+      ? { revisions: revisions.length ? revisions : EMPTY_MARK_REVISIONS, format }
+      : EMPTY_MARK_DATA;
+  };
+  const result = read();
+  markRevisionData.set(paragraph, result);
+  return result;
+}
 
 /**
  * The single decision a one-field reader sees.

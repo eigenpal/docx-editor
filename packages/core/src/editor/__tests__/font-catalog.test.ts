@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { availableFontFamilies, configuredDefaultFontFamily } from '../font-catalog.ts';
+import { resolveMarkAttr } from '../docx-editor-support.ts';
 
 const face = (family: string, weight = 400, style: 'normal' | 'italic' = 'normal') => ({
   family,
@@ -40,9 +41,28 @@ describe('configuredDefaultFontFamily', () => {
   });
 });
 
+const STANDARD_FONTS = [
+  'Arial',
+  'Calibri',
+  'Cambria',
+  'Consolas',
+  'Courier New',
+  'Garamond',
+  'Georgia',
+  'Helvetica',
+  'Open Sans',
+  'Roboto',
+  'Times New Roman',
+  'Verdana',
+];
+
+const withStandardFonts = (...families: string[]) =>
+  [...new Set([...STANDARD_FONTS, ...families])].sort();
+
 describe('availableFontFamilies', () => {
-  test('a blank document with no configuration still offers the default face', () => {
-    expect(availableFontFamilies(undefined, [])).toEqual(['Calibri']);
+  test('blank and populated documents offer the same standard choices', () => {
+    expect(availableFontFamilies(undefined, [])).toEqual(STANDARD_FONTS);
+    expect(availableFontFamilies(undefined, ['Arial', 'Georgia'])).toEqual(STANDARD_FONTS);
   });
 
   test('substitution Word-names are offered; their stand-in faces are not', () => {
@@ -56,11 +76,13 @@ describe('availableFontFamilies', () => {
       },
       []
     );
-    expect(catalog).toEqual(['Calibri', 'Times New Roman']);
+    expect(catalog).toEqual(STANDARD_FONTS);
   });
 
   test('host-registered families that stand in for nothing are offered', () => {
-    expect(availableFontFamilies({ sources: [source('Inter')] }, [])).toEqual(['Calibri', 'Inter']);
+    expect(availableFontFamilies({ sources: [source('Inter')] }, [])).toEqual(
+      withStandardFonts('Inter')
+    );
   });
 
   test('document fonts merge, dedup case-insensitively with configured casing winning', () => {
@@ -68,11 +90,56 @@ describe('availableFontFamilies', () => {
       { substitutions: [{ from: face('Arial'), to: face('Liberation Sans') }] },
       ['arial', 'Georgia', 'CALIBRI']
     );
-    expect(catalog).toEqual(['Arial', 'Calibri', 'Georgia']);
+    expect(catalog).toEqual(STANDARD_FONTS);
   });
 
   test('invalid document names are dropped, never repaired', () => {
-    const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad;name']);
-    expect(catalog).toEqual(['Calibri', 'Georgia']);
+    const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad";name']);
+    expect(catalog).toEqual(STANDARD_FONTS);
   });
+
+  test('a face supplied for a symbol is offerable, like every other honoured family', () => {
+    // The editor asks the resolver for the face a `w:sym` names. Once an app answers, the
+    // editor can honour that family for text too, which is the only question this catalog
+    // asks — Word lists installed symbol fonts in its own picker for the same reason. A
+    // symbol face nothing supplied never reaches here: `collectDocumentFonts` reads
+    // `w:rFonts` declarations, and a `w:sym` face is not one.
+    const catalog = availableFontFamilies({ sources: [source('Wingdings')] }, ['Georgia']);
+    expect(catalog).toEqual(withStandardFonts('Wingdings'));
+  });
+});
+
+test('document-only families still join the standard catalog', () => {
+  expect(availableFontFamilies(undefined, ['Sagona', 'sagona', 'bad";name'])).toEqual(
+    withStandardFonts('Sagona')
+  );
+});
+
+test('punctuated font references remain one catalog entry', () => {
+  const catalog = availableFontFamilies(undefined, ['Georgia;Verdana', 'Georgia,Verdana']);
+  expect(catalog).toContain('Georgia;Verdana');
+  expect(catalog).toContain('Georgia,Verdana');
+  expect(catalog.filter((family) => family === 'Georgia')).toHaveLength(1);
+});
+
+test('every listed punctuated name is a valid font family command value', () => {
+  const catalog = availableFontFamilies(undefined, [
+    'Georgia;Verdana',
+    'Georgia,Verdana',
+    '宋体;SimSun',
+  ]);
+  expect(catalog).toContain('宋体;SimSun');
+  for (const family of catalog) {
+    expect(resolveMarkAttr({ mark: 'fontFamily', value: family })).toEqual({
+      ok: true,
+      localName: 'rFonts',
+      attributes: { ascii: family, hAnsi: family },
+    });
+  }
+  for (const value of ['', ' ', 'A";color:red', 'A\\B', 'A\nB', 'A\u0000B', 'A'.repeat(65), 7]) {
+    expect(resolveMarkAttr({ mark: 'fontFamily', value })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+  }
 });

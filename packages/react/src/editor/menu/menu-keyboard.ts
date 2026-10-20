@@ -63,3 +63,31 @@ export function focusEdge(items: readonly HTMLElement[], edge: 'first' | 'last')
   target.focus();
   return true;
 }
+
+/** Give the export dialog a stable menu trigger to restore focus to. */
+export function restoreExportFocus(root: HTMLElement | null): void {
+  const focused = root?.ownerDocument.activeElement;
+  const menu = focused && root?.contains(focused) ? focused.closest('[data-menu]') : null;
+  const trigger =
+    menu?.querySelector<HTMLElement>(':scope > [role="menuitem"]') ??
+    root?.querySelector<HTMLElement>('.docx-menubar__trigger[aria-expanded="true"]');
+  trigger?.focus({ preventScroll: true });
+}
+
+/**
+ * Whether a shortcut target is this editor's pages in ANOTHER window than the bar.
+ *
+ * A host can keep the menu bar in its main window and render the pages in a pop-out window.
+ * Keys typed there never reach the bar's own subtree, so the bar's scope test alone would leave
+ * Cmd+S and Cmd+P to the browser. `editorElement` is THIS editor's mount element
+ * (`editorHostElement(editor)`): a target inside it belongs to this editor, and only to it,
+ * even when several editors share the pop-out.
+ */
+export function isPoppedOutEditorTarget(
+  target: Node,
+  barDocument: Document,
+  editorElement: Element | null
+): boolean {
+  if (!editorElement || editorElement.ownerDocument === barDocument) return false;
+  return editorElement.contains(target);
+}

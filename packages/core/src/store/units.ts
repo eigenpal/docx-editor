@@ -72,3 +72,57 @@ export const twipsToPoints = (value: Twips): Points => (value / TWIPS_PER_POINT)
  * @public
  */
 export const pointsToTwips = (value: Points): Twips => Math.round(value * TWIPS_PER_POINT) as Twips;
+
+// `ST_TwipsMeasure` / `ST_SignedTwipsMeasure` lexical forms. Every quantifier is bounded, so a
+// hostile attribute value cannot make either pattern backtrack.
+const PLAIN_TWIPS = /^([+-]?)(\d{0,9})(?:\.(\d{0,32}))?$/;
+const UNIVERSAL_TWIPS = /^[+-]?(\d{0,9})(?:\.(\d{0,32}))?(mm|cm|in|pt|pc|pi)$/;
+
+/** Twips per unit as an exact fraction, so `1.27cm` reads as 720 rather than 719. */
+const UNIVERSAL_TWIPS_PER_UNIT: Readonly<Record<string, readonly [bigint, bigint]>> = {
+  in: [1440n, 1n],
+  pt: [20n, 1n],
+  pc: [240n, 1n],
+  pi: [240n, 1n],
+  cm: [72_000n, 127n],
+  mm: [7_200n, 127n],
+};
+
+/**
+ * Read a twips attribute (`ST_TwipsMeasure`, `ST_SignedTwipsMeasure`, or a `dxa` table width)
+ * as a whole, signed number of twips, or `null` when the value is not a measurement.
+ *
+ * The schema allows an integer or a universal measure, but files also carry decimal twips
+ * (`4743.74`, `708.0`, `707.9999999999998`). The accepted forms read as follows:
+ *
+ * - A decimal truncates toward zero: `1443.74` is 1443 and `-720.6` is -720. A leading `+`,
+ *   leading zeros, a bare fraction (`.5`) and a trailing point (`1440.`) are accepted.
+ * - A universal measure (`mm`, `cm`, `in`, `pt`, `pc`, `pi`) converts exactly and then
+ *   truncates: `1.27cm` is 720 and `0.333in` is 479. Its sign is ignored, so `-0.5in` is 720.
+ * - Whitespace, exponents, hexadecimal, uppercase units, and an integer part longer than nine
+ *   digits are not measurements.
+ *
+ * The result is NOT bounded. Callers apply their own sign rule and range clamp, because each
+ * attribute has a different valid range and a different fallback.
+ *
+ * @internal
+ */
+export function readTwipsMeasure(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const plain = PLAIN_TWIPS.exec(raw);
+  if (plain) {
+    const [, sign, whole = '', fraction = ''] = plain;
+    if (whole === '' && fraction === '') return null;
+    const magnitude = whole === '' ? 0 : Number(whole);
+    return sign === '-' && magnitude !== 0 ? -magnitude : magnitude;
+  }
+  const universal = UNIVERSAL_TWIPS.exec(raw);
+  if (!universal) return null;
+  const [, whole = '', fraction = '', unit = ''] = universal;
+  const ratio = UNIVERSAL_TWIPS_PER_UNIT[unit];
+  if ((whole === '' && fraction === '') || ratio === undefined) return null;
+  const [numerator, denominator] = ratio;
+  const mantissa = BigInt(`${whole}${fraction}`);
+  // BigInt division truncates toward zero, which is the rounding a decimal value gets too.
+  return Number((mantissa * numerator) / (denominator * 10n ** BigInt(fraction.length)));
+}

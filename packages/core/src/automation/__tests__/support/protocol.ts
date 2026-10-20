@@ -166,12 +166,22 @@ export function textAt(response: AutomationBatchResponse, index: number): string
   return result.value.text;
 }
 
+/**
+ * The span's position without the host's `readAt` stamp, which `automation-stale-spans.test.ts`
+ * covers. Tests here compare where a span is; the stamp says when it was read.
+ */
+function positionOf(span: AutomationSpan): AutomationSpan {
+  const { readAt: _start, ...start } = span.start;
+  const { readAt: _end, ...end } = span.end;
+  return { start, end };
+}
+
 export function spanAt(response: AutomationBatchResponse, index: number): AutomationSpan {
   const result = response.results[index];
   if (result?.status !== 'ok' || result.value.kind !== 'span') {
     throw new Error(`expected a span at ${index}: ${describe(response, index)}`);
   }
-  return result.value.span;
+  return positionOf(result.value.span);
 }
 
 export function spansAt(
@@ -182,7 +192,7 @@ export function spansAt(
   if (result?.status !== 'ok' || result.value.kind !== 'spans') {
     throw new Error(`expected spans at ${index}: ${describe(response, index)}`);
   }
-  return result.value.spans;
+  return result.value.spans.map(positionOf);
 }
 
 export function errorAt(response: AutomationBatchResponse, index: number): string {
@@ -222,4 +232,26 @@ export function paragraphTexts(host: AutomationHost, body: AutomationHandle): st
 
 export function storyText(host: AutomationHost, body: AutomationHandle): string {
   return textAt(host.execute({ operations: [{ op: 'getText', target: body }] }), 0);
+}
+
+/** Add complete real numbering definitions to a list fixture. */
+export function withNumbering(bytes: Uint8Array, ids: readonly string[]): Uint8Array {
+  const files = unzipSync(bytes);
+  files['word/numbering.xml'] = strToU8(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">${Array.from({ length: 9 }, (_, level) => `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%${level + 1}."/></w:lvl>`).join('')}</w:abstractNum>${ids.map((id) => `<w:num w:numId="${id}"><w:abstractNumId w:val="0"/></w:num>`).join('')}</w:numbering>`
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>'
+    )
+  );
+  const rels = files['word/_rels/document.xml.rels'];
+  files['word/_rels/document.xml.rels'] = strToU8(
+    (rels ? strFromU8(rels) : `<Relationships xmlns="${REL}"></Relationships>`).replace(
+      '</Relationships>',
+      '<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>'
+    )
+  );
+  return zipSync(files);
 }

@@ -18,11 +18,16 @@
 // caller's is bounded and validated as XML text here, and only ever compared against names the
 // document already declares — nothing is templated into markup and no id is derived from it.
 
-import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { indexStyles, numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import {
+  paragraphInheritsRtl,
+  type DirectionSources,
+} from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 
 /** Longest style name a write may carry. Word's own limit is far below this. */
@@ -38,14 +43,13 @@ export interface AutomationStyleIndex {
   readonly defaultId: string | null;
   /** Whether the package has a styles part at all. */
   readonly present: boolean;
+  /**
+   * Whether the paragraph is right to left when its own `w:bidi` is ignored: document defaults,
+   * an enclosing cell's table style, its paragraph style chain, and its numbering level, as
+   * layout resolves them. `styleId` resolves it as if it named that paragraph style.
+   */
+  inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
 }
-
-const NO_STYLES: AutomationStyleIndex = Object.freeze({
-  nameOf: () => null,
-  idOf: () => null,
-  defaultId: null,
-  present: false,
-});
 
 /**
  * Index the package's PARAGRAPH styles.
@@ -56,7 +60,23 @@ const NO_STYLES: AutomationStyleIndex = Object.freeze({
  */
 export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   const part = stylesPartOf(pkg);
-  if (!part) return NO_STYLES;
+  const sources: DirectionSources = {
+    styles: part?.root ?? null,
+    settings: settingsPartOf(pkg)?.root ?? null,
+    numbering: numberingRootOf(pkg),
+  };
+  // Cell styles resolve as the proposed document shows them, like automation's run writes.
+  const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
+  if (!part) {
+    return Object.freeze({
+      nameOf: () => null,
+      idOf: () => null,
+      defaultId: null,
+      present: false,
+      inheritsRtl,
+    });
+  }
   const byId = new Map<string, string | null>();
   const byName = new Map<string, string>();
   let defaultId: string | null = null;
@@ -76,6 +96,7 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     idOf: (name: string) => byName.get(name.trim().toLowerCase()) ?? null,
     defaultId,
     present: true,
+    inheritsRtl,
   });
 }
 

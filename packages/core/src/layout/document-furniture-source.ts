@@ -12,6 +12,7 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
+import { verticalMarginInsets } from './page-body-margins.ts';
 import {
   enumerateDocumentSections,
   geometryOfSection,
@@ -23,6 +24,7 @@ import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { createBackgroundFurnitureProjection, hasPageBackground } from './background-furniture.ts';
 
 /** Page furniture supplied to semantic layout. @public */
 export interface DocumentFurnitureSource {
@@ -39,6 +41,7 @@ export interface CreateDocumentFurnitureSourceOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
+  readonly compatibilityMode?: () => number | undefined;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
@@ -49,6 +52,8 @@ export interface CreateDocumentFurnitureSourceOptions {
   /** Link/property projection and its inseparable cache identities. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
 }
 
 const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
@@ -78,6 +83,20 @@ function headerFooterOccurrenceOwner(
   return pkg.relationships.get(pkg.mainDocumentPart) ?? pkg.relationships;
 }
 
+/**
+ * Page geometries remembered per header/footer part. A document rarely uses more than two
+ * (portrait and landscape); the bound keeps a file with many page sizes from growing the memo.
+ */
+const MAX_STORY_GEOMETRIES_PER_PART = 8;
+
+/** A header measures from the sheet top, a footer (`w:ftr` root) from the sheet bottom. */
+function storyDistanceOf(
+  part: OoxmlPart,
+  geometry: { readonly headerDistance?: number; readonly footerDistance?: number }
+): number | undefined {
+  return part.root.localName === 'ftr' ? geometry.footerDistance : geometry.headerDistance;
+}
+
 /** Build section-aware header/footer layout from a neutral document view. @public */
 export function createDocumentFurnitureSource(
   options: CreateDocumentFurnitureSourceOptions
@@ -90,6 +109,7 @@ export function createDocumentFurnitureSource(
     styleCascade,
     numberingIndex,
     defaultTabStopPt,
+    compatibilityMode,
     displayMode,
     revisionAuthorFilter,
     inlineDrawingLayoutForPart,
@@ -97,27 +117,33 @@ export function createDocumentFurnitureSource(
     drawingTokenForParagraphForPart,
     linkProjectors,
     projectFieldLink,
+    showFieldCodes,
   } = options;
+  const background = createBackgroundFurnitureProjection(() => view.stylesRoot());
 
-  const memo = new WeakMap<
-    object,
-    {
-      width: number;
-      pageHeight: number;
-      marginTop: number;
-      marginBottom: number;
-      marginLeft: number;
-      marginRight: number;
-      producer: string;
-      projectionEpoch: string;
-      revisionAuthorFilterKey: string;
-      defaultTabStopPt: number | undefined;
-      drawingLayoutToken: string;
-      numberingIndex: NumberingIndex | undefined;
-      styleCascade: StyleCascadeTable | undefined;
-      story: ReturnType<typeof layoutHeaderFooterStory>;
-    }
-  >();
+  interface StoryMemoEntry {
+    width: number;
+    pageHeight: number;
+    marginTop: number;
+    marginBottom: number;
+    marginLeft: number;
+    marginRight: number;
+    storyDistance: number | undefined;
+    producer: string;
+    projectionEpoch: string;
+    revisionAuthorFilterKey: string;
+    defaultTabStopPt: number | undefined;
+    compatibilityMode: number | undefined;
+    drawingLayoutToken: string;
+    numberingIndex: NumberingIndex | undefined;
+    styleCascade: StyleCascadeTable | undefined;
+    story: ReturnType<typeof layoutHeaderFooterStory>;
+  }
+  // Several entries per part, one per page geometry. Sections that alternate portrait and
+  // landscape share their header and footer parts, and a single slot per part evicted the
+  // other geometry's story on every section, so each keystroke re-laid the shared header and
+  // footer once per section.
+  const memo = new WeakMap<object, StoryMemoEntry[]>();
   // Occurrence identity belongs on a cheap wrapper, but that wrapper must itself stay stable:
   // header/footer list and drawing-resource tokens are memoized by story object identity on the
   // editor keystroke path. Partition by the immutable main-relationship snapshot: body-only
@@ -174,23 +200,32 @@ export function createDocumentFurnitureSource(
     const projectionEpoch = linkProjectors.epochForPart(part.name);
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
-    const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
+    const currentCompatibilityMode = compatibilityMode?.();
+    const authoredPart = !background.isImplicitPart(part);
+    const drawingLayoutToken = authoredPart ? (drawingLayoutTokenForPart?.(part.name) ?? '') : '';
+    // The story's margin frames sit at the text extents, which a signed margin gives by size.
+    const margins = verticalMarginInsets(geometry);
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
     const projectLink = linkProjectors.projectLinkForPart(part.name);
-    const cached = memo.get(part);
+    const entries = memo.get(part);
+    const cached = entries?.find(
+      (entry) =>
+        entry.width === width &&
+        entry.pageHeight === geometry.height &&
+        entry.marginTop === margins.top &&
+        entry.marginBottom === margins.bottom &&
+        entry.marginLeft === geometry.margin.left &&
+        entry.marginRight === geometry.margin.right &&
+        entry.storyDistance === storyDistanceOf(part, geometry)
+    );
     if (
       cached &&
-      cached.width === width &&
-      cached.pageHeight === geometry.height &&
-      cached.marginTop === geometry.margin.top &&
-      cached.marginBottom === geometry.margin.bottom &&
-      cached.marginLeft === geometry.margin.left &&
-      cached.marginRight === geometry.margin.right &&
       cached.producer === producer &&
       cached.projectionEpoch === projectionEpoch &&
       cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
       cached.defaultTabStopPt === currentDefaultTabStopPt &&
+      cached.compatibilityMode === currentCompatibilityMode &&
       cached.drawingLayoutToken === drawingLayoutToken &&
       cached.numberingIndex === numbering &&
       cached.styleCascade === styles
@@ -209,8 +244,8 @@ export function createDocumentFurnitureSource(
       undefined,
       currentDefaultTabStopPt,
       displayMode,
-      inlineDrawingLayoutForPart?.(part.name),
-      drawingTokenForParagraphForPart
+      authoredPart ? inlineDrawingLayoutForPart?.(part.name) : undefined,
+      authoredPart && drawingTokenForParagraphForPart
         ? (paragraph) => drawingTokenForParagraphForPart(part.name, paragraph)
         : undefined,
       undefined,
@@ -220,14 +255,17 @@ export function createDocumentFurnitureSource(
         pageHeight: geometry.height,
         marginLeft: geometry.margin.left,
         marginRight: geometry.margin.right,
-        marginTop: geometry.margin.top,
-        marginBottom: geometry.margin.bottom,
+        marginTop: margins.top,
+        marginBottom: margins.bottom,
+        storyDistance: storyDistanceOf(part, geometry),
       },
       view.documentProperties(),
       {
+        compatibilityMode: currentCompatibilityMode,
         ...(numbering ? { numberingIndex: numbering } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
+        showFieldCodes,
         projectionEpoch,
         projectionTokenForParagraph: (paragraph: OoxmlNode) =>
           linkProjectors.tokenForParagraphForPart(part.name, paragraph),
@@ -236,22 +274,33 @@ export function createDocumentFurnitureSource(
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
       }
     );
-    memo.set(part, {
+    const entry: StoryMemoEntry = {
       width,
       pageHeight: geometry.height,
-      marginTop: geometry.margin.top,
-      marginBottom: geometry.margin.bottom,
+      marginTop: margins.top,
+      marginBottom: margins.bottom,
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
+      storyDistance: storyDistanceOf(part, geometry),
       producer,
       projectionEpoch,
       revisionAuthorFilterKey,
       defaultTabStopPt: currentDefaultTabStopPt,
+      compatibilityMode: currentCompatibilityMode,
       drawingLayoutToken,
       numberingIndex: numbering,
       styleCascade: styles,
       story: baseline,
-    });
+    };
+    // A stale entry for the same geometry is replaced; distinct geometries each keep one.
+    // A loop, not a closure: a closure naming `cached` puts it in the context every closure
+    // of this call shares, and the story's own callbacks then keep the previous story alive,
+    // which keeps the one before it, back to the first layout.
+    const kept: StoryMemoEntry[] = [];
+    for (const other of entries ?? []) if (other !== cached) kept.push(other);
+    kept.push(entry);
+    if (kept.length > MAX_STORY_GEOMETRIES_PER_PART) kept.shift();
+    memo.set(part, kept);
     return baseline;
   };
 
@@ -262,24 +311,34 @@ export function createDocumentFurnitureSource(
     resolution: HeaderFooterSectionResolution | undefined,
     geometry: ReturnType<typeof geometryOfSection>
   ): PageFurniture | undefined => {
-    if (!parts || (parts.headers.size === 0 && parts.footers.size === 0)) return undefined;
+    const reserveBackground = hasPageBackground(view.part());
+    if (!parts || (!reserveBackground && parts.headers.size === 0 && parts.footers.size === 0))
+      return undefined;
     const width = geometry.width - geometry.margin.left - geometry.margin.right;
     const map = (
       source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>,
-      slots: HeaderFooterSectionResolution['headers'] | undefined
+      slots: HeaderFooterSectionResolution['headers'] | undefined,
+      kind: 'header' | 'footer'
     ) => {
       const stories = new Map<
         HeaderFooterVariantName,
         ReturnType<typeof layoutHeaderFooterStory>
       >();
-      for (const [variant, part] of source) {
+      const variants: readonly HeaderFooterVariantName[] = reserveBackground
+        ? ['default', 'first', 'even']
+        : [...source.keys()];
+      for (const variant of variants) {
+        const authored = source.get(variant);
+        const part = reserveBackground
+          ? background.variantPart(authored, kind, variant)
+          : authored!;
         const slot = slots?.get(variant);
         // Relationship ids identify an occurrence, not a part. Several section/variant slots may
         // legally target one shared part through distinct rIds, so keep the expensive baseline
         // part-memoized and stamp only this cheap occurrence wrapper with its exact slot identity.
         const rId =
           slot?.partName === part.name ? slot.rId : rIdOf(packageOwner, occurrenceOwner, part.name);
-        const baseline = storyOf(part, width, geometry);
+        const baseline = background.authoredStory(storyOf(part, width, geometry));
         stories.set(variant, rId ? stampStoryRId(occurrenceOwner, baseline, rId) : baseline);
       }
       return stories;
@@ -287,8 +346,8 @@ export function createDocumentFurnitureSource(
     return {
       titlePage: parts.titlePage,
       evenAndOddHeaders: parts.evenAndOddHeaders,
-      headers: map(parts.headers, resolution?.headers),
-      footers: map(parts.footers, resolution?.footers),
+      headers: map(parts.headers, resolution?.headers, 'header'),
+      footers: map(parts.footers, resolution?.footers, 'footer'),
     };
   };
 

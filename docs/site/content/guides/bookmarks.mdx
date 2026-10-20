@@ -1,0 +1,191 @@
+---
+title: 'Bookmarks'
+description: 'Show, add, delete, and go to bookmarks with the Bookmark dialog, editor commands, and hooks.'
+category: 'Guides'
+---
+
+A bookmark names a stretch of a document, or one point in it. Internal links, cross-reference fields, and tables of contents point at bookmarks. The editor keeps every bookmark a document declares, and you can show, add, delete, and go to bookmarks.
+
+## Use the Bookmark dialog
+
+Open the dialog from **Insert** > **Bookmark**, or press Ctrl+Shift+F5 (Cmd+Shift+F5 on macOS) while the document has focus. If the selection starts inside a bookmark, the dialog opens with that bookmark's name. The dialog does the following:
+
+- Lists the document's bookmarks, sorted by **Name** or by **Location**.
+- Shows hidden bookmarks when you select **Hidden bookmarks**. A hidden bookmark has a name that starts with an underscore, such as the targets of a table of contents.
+- Adds a bookmark at the selection when you type a name and click **Add**. The dialog then closes.
+- Deletes the bookmark in the name box when you click **Delete**. The text stays.
+- Selects the bookmark's text and scrolls to it when you click **Go To**. The dialog stays open.
+
+A bookmark name starts with a letter. It holds only letters, digits, and underscores, and has at most 40 characters. The dialog explains why a name cannot be used. Names compare without case, so `Intro` and `INTRO` are the same bookmark: adding a name that exists moves that bookmark to the selection.
+
+Moving or deleting protected bookmark markers refuses the whole change. The same rule applies to markers inside data-bound content controls. Direct bookmark marker changes remain available with `TrackMineOnly`.
+
+## Find and go to bookmarks
+
+The navigation pane has a **Bookmarks** tab that goes to a bookmark. Open it from the pane's tab strip, click **Insert** > **Go To Bookmark…** in the menu bar, or press <kbd>Ctrl</kbd>+<kbd>G</kbd> (<kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>G</kbd> on macOS) while the document has focus. The tab does the following:
+
+- Lists the document's bookmarks under a **Bookmarks** label with their count, sorted by **Name** or by **Location**, as the Bookmark dialog does. Numbers in names sort by value, so `Section2` comes before `Section10`.
+- Groups the list by place when sorted by location: **Main text**, **Headers**, **Footers**, **Footnotes**, and **Endnotes**. Sorted by name, a bookmark that is not in the main text shows its place after its name.
+- Shows a bookmark icon for a bookmark that marks text, an I-beam for one that marks a point, and a dot for the bookmark that contains the cursor.
+- Shows hidden bookmarks when you select **Hidden bookmarks**.
+- Filters the list as you type, and shows the matching part of each name in bold. Names that start with what you typed come first.
+- Moves through the list with the arrow keys. <kbd>Enter</kbd> or a click jumps to the highlighted bookmark, the one named exactly as typed, or the first one in the list.
+
+If the document has no bookmarks, the tab explains how to add one and offers **Add a bookmark…**, which opens the Bookmark dialog.
+
+A jump selects the bookmark's text, opens the header, footer, or note that holds it, and scrolls it into view. The document then takes focus, so you can type at the bookmark. If no bookmark has the typed name, the tab says so. <kbd>Esc</kbd> clears the search. With nothing typed, <kbd>Esc</kbd> closes the pane. The list follows the document, so bookmarks that you or a collaborator add or delete appear and disappear.
+
+In a document open for viewing, a jump selects a bookmark in the main text. A bookmark in a header, footer, or note is scrolled into view, and the caret stays where it was, because viewing does not open those regions.
+
+### Open Go to from code
+
+To open the tab from your own control, run the `openGoTo` command. It fails with `unsupported` while no navigation pane is mounted. The `insert.goToBookmark` menu slot runs the same command, so the menu row is disabled while no navigation pane is mounted. The menu row shows the Go To shortcut while the shortcut opens Go To. If your Go To UI registers with `shortcut: false`, the shortcut is left to the browser everywhere in the editor, and `{ type: 'openGoTo', fromShortcut: true }` is refused with `unsupported`. To jump without any UI, run `goToBookmark`. It fails with `notFound` when no bookmark has the name:
+
+```ts
+editor.exec({ type: 'openGoTo' });
+editor.exec({ type: 'goToBookmark', name: 'Intro' });
+```
+
+To build your own Go To UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`. Ctrl+G (Cmd+Option+G on macOS) in the document then opens your UI, because the shortcut sends `openGoTo`.
+
+In a document script, go to a bookmark the Office.js way:
+
+```ts
+const range = context.document.getBookmarkRangeOrNullObject('Intro');
+await context.sync();
+if (!range.isNullObject) {
+  range.select();
+  await context.sync();
+}
+```
+
+`range.select()` opens the story that holds the bookmark. A read-only editor selects in the main text, and refuses a header, footer, or note with `NotSupported`. A server runtime has no reader, so it refuses `select()` with `NotSupported`.
+
+## Show bookmarks
+
+Select **Review** > **Show bookmarks** to paint a gray bracket just before the first character and just after the last character of each bookmark, and an I-beam at a bookmark that marks a point. The marks show bookmarks in the main text, headers, footers, footnotes, and endnotes. A bookmark in a header or footer is marked on every page that shows that header or footer. Hidden bookmarks are not shown.
+
+The marks are a view setting. They do not change the document, its undo history, or its export. The selection, the caret, and the pointer pass through them. They do not print unless you ask for it.
+
+## Style the bookmark marks
+
+The marks take their look from these CSS custom properties. Set them on `.docx-editor` or on an element inside it.
+
+| Token                        | Controls                                                         |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `--doc-bookmark-mark`        | The mark color. The default is gray.                             |
+| `--doc-bookmark-mark-width`  | The stroke width. The default is `1px`.                          |
+| `--doc-bookmark-mark-size`   | The width of a bracket arm at 100% zoom. The default is `3px`.   |
+| `--doc-bookmark-point-glyph` | A CSS `background` that replaces the I-beam of a point bookmark. |
+
+For example, the following rule draws thicker blue marks:
+
+```css
+.docx-editor {
+  --doc-bookmark-mark: #1a73e8;
+  --doc-bookmark-mark-width: 2px;
+  --doc-bookmark-mark-size: 4px;
+}
+```
+
+Each mark is an element with the class `docx-bookmark-mark` and one of `docx-bookmark-mark--start`, `docx-bookmark-mark--end`, or `docx-bookmark-mark--point`. Each mark also has these attributes:
+
+- `data-bookmark-name`: the bookmark's name.
+- `data-bookmark-hidden`: `true` for a hidden bookmark, else `false`.
+- `data-bookmark-edge`: `start`, `end`, or `point`.
+- `data-bookmark-story`: `body`, `headerFooter`, or `note`.
+
+To style one bookmark, select it by name:
+
+```css
+.docx-bookmark-mark[data-bookmark-name='Intro'] {
+  --doc-bookmark-mark: #c5221f;
+}
+```
+
+## Choose and customize the marks
+
+Call `editor.setBookmarkMarks(options)` to choose which bookmarks get marks, to change each mark, or to print the marks. In React and Vue, get the editor from `useDocxEditor()`. The call returns a function that restores the previous options.
+
+- `include`: `'visible'` (the default) skips hidden bookmarks. `'all'` marks every bookmark. A function receives `name`, `hidden`, and `story`, and returns whether to mark the bookmark.
+- `decorate(element, mark)`: changes a mark before the editor places it. Add a class, a `title`, or attributes, or return another element to replace the mark. The editor positions the element that you return. `mark` has `name`, `hidden`, `story`, and `edge`.
+- `print`: if `true`, the marks stay when the browser prints the page. Exports never include the marks.
+
+The following example marks only bookmarks whose names start with `Sec`, and shows the name when the pointer rests on a mark:
+
+```ts
+const restore = editor.setBookmarkMarks({
+  include: (bookmark) => bookmark.name.startsWith('Sec'),
+  decorate(element, mark) {
+    element.title = mark.name;
+    // Marks ignore the pointer by default. A tooltip needs pointer events.
+    element.style.pointerEvents = 'auto';
+  },
+});
+
+// Later, return to the default marks.
+restore();
+```
+
+A mark that receives pointer events covers a few pixels of text. A press on a mark does not move the caret or the selection, so keep the mark narrow if you turn pointer events on. A form control that you put in a mark still receives its presses.
+
+If `decorate` throws, the editor keeps the default mark, paints the other marks, and reports the error as an `error` event with the code `hostCallback`.
+
+## How editing treats bookmarks
+
+- Text you type or paste at the start of a bookmark becomes part of it. A line break at the start also goes inside.
+- Text you type or paste at the end of a bookmark stays outside it. A line break or a new paragraph at the end also stays outside.
+- Text you type at a point bookmark goes after the point.
+- Typing over a selection that crosses the start of a bookmark puts the new text inside it. Typing over a selection that crosses its end puts the new text outside it.
+- Pressing Enter at the start of a bookmark, or at a point bookmark, keeps the start or the point in the first paragraph.
+- Deleting all of a bookmark's text removes the bookmark. Typing over all of it also removes it. Deleting part of it keeps the bookmark around the rest.
+- Deleting text that only touches a point bookmark keeps the bookmark.
+- A deletion across paragraphs removes the bookmarks it encloses, including ones that span paragraphs, and shrinks the ones it crosses.
+- A tracked deletion keeps every bookmark. When you accept the deletion, the bookmark stays at the point where its text was.
+
+Bookmarks are not tracked changes. Adding or deleting one in suggesting mode writes the change directly.
+
+## Use the editor commands
+
+The editor exposes the same operations as commands and a query. Each write is one undo step, including a move of a name from another story:
+
+```ts
+editor.exec({ type: 'insertBookmark', name: 'Intro' });
+editor.exec({ type: 'goToBookmark', name: 'intro' });
+editor.exec({ type: 'deleteBookmark', name: 'Intro' });
+editor.exec({ type: 'toggleBookmarks' });
+
+editor.exec({ type: 'openBookmarkDialog' });
+
+const bookmarks = editor.query({ type: 'bookmarks' });
+```
+
+`openBookmarkDialog` opens the `bookmark` popup, the same request that the **Insert** menu row and Ctrl+Shift+F5 send. It works in a document open for viewing, because **Go To** still works there. If no bookmark dialog is registered, for example because the `bookmark` popup is `false`, the command fails with `unsupported`.
+
+The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, `empty`, `atSelection`, and `duplicates`. `editor.snapshot().showBookmarks` says whether the marks are shown.
+
+Bookmark names are unique in the whole document, across the main text, headers, footers, and notes. If another story has the name, `insertBookmark` moves the bookmark from that story. `insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
+
+## Bookmarks in collaboration
+
+Bookmark writes synchronize like other edits. If two people add the same name at different places while one of them is offline, both bookmarks remain after they reconnect. Every participant then uses the first one in document order: the list, **Go To**, links, and the marks all use it. The editor does not remove the copy by itself, because an automatic edit could remove a bookmark that someone placed on purpose.
+
+The copies are visible instead. The `duplicates` field of the `bookmarks` query counts them. When you pick the name in the Bookmark dialog, the dialog says how many other places use it and shows **Keep first**. **Keep first** keeps the first bookmark and removes every copy in one undo step. It does not move the selection. If two people select **Keep first** at the same time, they remove the same copies, and both end with one bookmark. Deleting the name also removes every copy.
+
+To remove the copies from your own UI, run the `keepFirstBookmark` command. It fails with `notFound` when no bookmark has the name, and with `unsupported` when the name has no copies:
+
+```ts
+editor.exec({ type: 'keepFirstBookmark', name: 'Intro' });
+```
+
+## Build your own bookmark UI
+
+In React, `useBookmarks()` returns the bookmark list and the `insert`, `remove`, and `goTo` actions. In Vue, the composable with the same name returns refs. For examples, see [React hooks](/docs/2.x/react/hooks#usebookmarks) and [Vue composables](/docs/2.x/vue/composables#usebookmarks).
+
+To replace the packaged dialog, pass your own renderer as the `bookmark` popup, or compose `DocxEditor.BookmarkDialog` from its parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
+
+The packaged editor registers the `bookmark` popup for you. If you mount your own dialog outside the popup map, register it with `editor.setBookmarkChrome({ onRequest })`. The menu row, Ctrl+Shift+F5, and `openBookmarkDialog` then open it. The call returns a function that removes the registration.
+
+## Use the document API
+
+The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. Replacing the text of a bookmark's range with `insertText(text, 'Replace')` removes the bookmark, as typing over it does. `Document.deleteBookmark` and `Bookmark.delete` can share a `context.sync()` with edits in any story. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).

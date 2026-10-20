@@ -17,6 +17,7 @@ import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   DEFAULT_SUPPORTED_MC_REQUIRES,
   projectDrawingWithState,
+  projectDrawingsInPart,
 } from '../package/drawing-projection.ts';
 import { createWalkState, type DrawingDiagnostic } from '../package/drawing-projection-walk.ts';
 import { createPackageShapeThemeResolvers } from '../package/theme-color-resolution.ts';
@@ -484,14 +485,13 @@ describe('wps vector shape projection', () => {
     }
   });
 
-  // `flipH`/`flipV` are `xsd:boolean`. The engine cannot paint a flip, so a set flag refuses
-  // the shape — and a spelling the schema does not allow must refuse too, not fall through
-  // to "unset" and paint the shape the wrong way round.
+  // `flipH`/`flipV` are `xsd:boolean`. Shapes now honor legal flips, while group-level
+  // transforms remain narrower. Invalid spellings refuse instead of painting unflipped.
   //
   // Four call sites read a flip: `flipH` and `flipV` on a shape's own `a:xfrm`, and the same
   // pair on a group's `wpg:grpSpPr/a:xfrm`. The group pair is the lane this file exists for,
   // so every spelling runs against all four.
-  test('an unset flip paints and any other spelling refuses, at all four sites', () => {
+  test('legal shape flips paint; group flips and schema-invalid spellings still refuse', () => {
     const spellings = [
       // Legal `xsd:boolean` false, including the forms the fixed `whiteSpace="collapse"`
       // facet makes valid. The XML reader does not trim, so the helper has to.
@@ -500,7 +500,7 @@ describe('wps vector shape projection', () => {
       ['false', true],
       [' 0 ', true],
       ['\nfalse\n', true],
-      // Legal true — the engine cannot paint a flip, so it refuses.
+      // Legal true — supported for shapes, but still refused at group level below.
       ['1', false],
       ['true', false],
       [' 1 ', false],
@@ -552,7 +552,11 @@ describe('wps vector shape projection', () => {
           }).values(),
         ][0]?.vectorShape;
         const label = `${site.name}=${JSON.stringify(value)}`;
-        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+        const supportedShapeFlip =
+          site.name.startsWith('shape ') && ['1', 'true'].includes(value?.trim() ?? '');
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(
+          `${label}: ${paints || supportedShapeFlip}`
+        );
       }
     }
   });
@@ -715,6 +719,64 @@ describe('wps vector shape projection', () => {
     ][0]!.vectorShape!;
     expect(shape.strokeHex).toBe('4472C4');
     expect(shape.strokeWidthEmu).toBe(25_400);
+    expect(shape.components[0]!.strokeInset).toBeUndefined();
+
+    // An inset theme line marks the outline inset.
+    const insetMatrix = readOoxmlPart(
+      `<a:ln xmlns:a="${A}" w="25400" algn="in">` +
+        '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+        '</a:ln>',
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!insetMatrix.ok) throw new Error(insetMatrix.reason);
+    const inset = [
+      ...indexInlineDrawingProjectionsInPart(part, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(inset.components[0]!.strokeInset).toBe(true);
+
+    // A direct line with its own fill still inherits the theme line's alignment.
+    const ownFill = parsePart(
+      `<w:p><w:r>${drawing.replace(
+        '</wps:spPr>',
+        '<a:ln><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></wps:spPr>'
+      )}</w:r></w:p>`
+    );
+    const inherited = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(inherited.strokeHex).toBe('FF0000');
+    expect(inherited.components[0]!.strokeInset).toBe(true);
+    // The width inherits the same way: the direct line names none, so the theme's applies.
+    expect(inherited.strokeWidthEmu).toBe(25_400);
+    // And the theme line keeps its attributes when its colour cannot resolve.
+    const unresolved = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveStyleMatrixReference: () => insetMatrix.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(unresolved.strokeHex).toBe('FF0000');
+    expect(unresolved.strokeWidthEmu).toBe(25_400);
+    expect(unresolved.components[0]!.strokeInset).toBe(true);
+    // A theme entry that is not a line carries no line attributes.
+    const notLine = readOoxmlPart(
+      `<a:solidFill xmlns:a="${A}" w="254000" algn="in"><a:schemeClr val="phClr"/></a:solidFill>`,
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!notLine.ok) throw new Error(notLine.reason);
+    const odd = [
+      ...indexInlineDrawingProjectionsInPart(ownFill, {
+        resolveSchemeColor: () => '4472C4',
+        resolveStyleMatrixReference: () => notLine.part.root,
+      }).values(),
+    ][0]!.vectorShape!;
+    expect(odd.strokeWidthEmu).toBe(12_700);
+    expect(odd.components[0]!.strokeInset).toBeUndefined();
   });
 
   test('an out-of-range colour transform refuses the vector payload', () => {
@@ -728,7 +790,10 @@ describe('wps vector shape projection', () => {
     const atoms = indexInlineDrawingProjectionsInPart(part, {
       resolveSchemeColor: () => '4472C4',
     });
-    expect(atoms.size).toBe(0);
+    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
+      [true, null],
+    ]);
   });
 
   test('an MC wpg group projects each child with its own geometry and colour', () => {
@@ -778,7 +843,7 @@ describe('wps vector shape projection', () => {
           resolveSchemeColor: () => '4472C4',
         }).values(),
       ][0]!.vectorShape
-    ).toBeNull();
+    ).not.toBeNull();
 
     const withMetadata = parsePart(
       `<w:p><w:r>${drawing.replace('<wpg:wgp>', '<wpg:wgp><wpg:cNvPr id="1"/>')}</w:r></w:p>`
@@ -827,6 +892,31 @@ describe('wps vector shape projection', () => {
     expect(story!.verticalAnchor).toBe('top');
     // Empty bodyPr means the OOXML inset defaults, not zero.
     expect(story!.insetsEmu).toEqual({ top: 45_720, right: 91_440, bottom: 45_720, left: 91_440 });
+
+    // A text box outline with its own fill but no width takes the theme line's width.
+    const theme = readOoxmlPart(
+      `<a:ln xmlns:a="${A}" w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>`,
+      { name: '/word/theme/test.xml', contentType: 'application/xml' }
+    );
+    if (!theme.ok) throw new Error(theme.reason);
+    const outlined = parsePart(
+      `<w:p><w:r>${drawing
+        .replace(
+          '</wps:spPr>',
+          '<a:ln><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:ln></wps:spPr>'
+        )
+        .replace(
+          '<wps:bodyPr/>',
+          '<wps:style><a:lnRef idx="1"/></wps:style><wps:bodyPr/>'
+        )}</w:r></w:p>`
+    );
+    const box = [
+      ...indexInlineDrawingProjectionsInPart(outlined, {
+        resolveStyleMatrixReference: () => theme.part.root,
+      }).values(),
+    ][0]!.textboxStory!;
+    expect(box.strokeHex).toBe('0000FF');
+    expect(box.strokeWidthEmu).toBe(6350);
   });
 
   test('a wps txbx without txbxContent projects no story and keeps the placeholder path', () => {
@@ -846,7 +936,7 @@ describe('wps vector shape projection', () => {
     expect(projection.diagnostics.filter((d) => d.code === 'unsupported-graphic')).toHaveLength(1);
   });
 
-  test('an MC-wrapped chart stays invisible, like its VML fallback always was', () => {
+  test('an MC-wrapped inline chart paints nothing and keeps its extent on the line', () => {
     const drawing =
       '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
       '<wp:extent cx="914400" cy="457200"/><wp:docPr id="10" name="Chart 10"/>' +
@@ -855,7 +945,10 @@ describe('wps vector shape projection', () => {
       '</a:graphicData></a:graphic></wp:inline></w:drawing>';
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
-    expect(atoms.size).toBe(0);
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.extentEmu])).toEqual([
+      [true, { cx: 914400, cy: 457200 }],
+    ]);
+    expect(projectDrawingsInPart(part)).toHaveLength(0);
   });
 
   test('unsupported path verbs refuse vector geometry and stay invisible under MC', () => {
@@ -865,7 +958,10 @@ describe('wps vector shape projection', () => {
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(bezier)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
-    expect(atoms.size).toBe(0);
+    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
+      [true, null],
+    ]);
   });
 
   test('limits are respected', () => {

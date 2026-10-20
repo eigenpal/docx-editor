@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Page-anchored header frame groups use ordinary paragraph flow.",
+  "after": "Supported header frame groups retain page positions without increasing body insets.",
+  "reason": "Only layout geometry changes; canonical nodes, operations, and room encoding stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/header-positioned-frames.test.ts",
+    "packages/core/src/layout/__tests__/header-page-frame.test.ts"
+  ],
+  "changeset": "grouped-header-frames",
+  "migration": null
+}

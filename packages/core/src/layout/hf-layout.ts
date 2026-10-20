@@ -1,3 +1,11 @@
+import {
+  readPositionedHeaderFrames,
+  placePositionedHeaderFrames,
+} from './header-positioned-frames.ts';
+import { withFieldResultsProducer } from './field-results-producer.ts';
+import { characterStyleValuesToken } from './character-style-tokens.ts';
+import { characterHeaderPageToken } from './character-header-pages.ts';
+import { headerTopMarginOrigin } from './header-footer-drawing-origin.ts';
 // Header/footer story layout (phase 2 of the legacy-lane retirement).
 //
 // A header or footer is a STORY laid out at the section's content width with no pagination:
@@ -9,13 +17,12 @@
 // because digit widths affect right-tab alignment. Callers obtain those via
 // {@link HeaderFooterStoryLayout.withPageContext}:
 //
-//   - no dynamic fields → identity reuse of the baseline
 //   - NUMPAGES only → one cached layout per page count
 //   - SECTIONPAGES only → one cached layout per section page count
 //   - PAGE (alone or combined) → bounded LRU over the distinct evaluated values
 //
-// Scope stays furniture-only; body field projection remains deferred.
 
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
@@ -42,10 +49,14 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
-import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
+import {
+  forEachStoryDrawing,
+  forEachStoryParagraphFragment,
+  ownedTextboxStories,
+} from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -55,6 +66,23 @@ import type {
 } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
+import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
+import {
+  footerLiftAboveTables,
+  placeFloatingStoryTables,
+  splitFloatingStoryTables,
+} from './hf-floating-tables.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
+import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
+
+/**
+ * How many times a footer grows upward when text wrapped beside a page-framed table runs past
+ * the sheet. Each growth moves the top edge up by the overflow and wraps again; a narrower
+ * passage can add a line each time, so the growth is bounded rather than iterated to a fixed
+ * point. Three covers a wrap that adds a line per pass for the passages a footer table leaves;
+ * past that, the text is lifted above every table it meets, which always fits the sheet.
+ */
+const FOOTER_GROWTH_PASSES = 3;
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -62,8 +90,26 @@ import { storyBlocks } from './story-roots.ts';
  * Finalize stores projected furniture on each page record, so eviction cannot drop published
  * geometry. The bound only prevents the per-story cache from retaining every historical
  * `(pageNumber, pageCount)` pair across edits.
+ *
+ * When the caller does not pass its own bound, this is the floor, and the bound grows with the
+ * document: see {@link HF_PAGE_CONTEXTS_PER_PAGE}.
  */
 export const DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES = 128;
+
+/**
+ * Contexts the default bound keeps per page of the highest page number the story has served.
+ *
+ * The cache must hold one pass's working set. A footer with PAGE and NUMPAGES asks for two
+ * contexts per page it lands on (the provisional page count while the pass runs, then the final
+ * one), and a shared footer lands on every page. At a fixed 128, a 500-page document evicted
+ * each context before the next keystroke asked for it again, so every keystroke re-laid the
+ * footer hundreds of times. Sizing by page number keeps a short document's cache as small as
+ * before; the third slot per page leaves room for the previous page count after an edit.
+ */
+const HF_PAGE_CONTEXTS_PER_PAGE = 3;
+
+/** The adaptive bound's ceiling, so a hostile page count cannot size the cache. */
+const MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES = 4096;
 
 /** Page geometry for header/footer anchored frame resolution (story-relative layout space). */
 export interface HeaderFooterPageContext {
@@ -74,6 +120,8 @@ export interface HeaderFooterPageContext {
   readonly marginRight: number;
   readonly marginTop: number;
   readonly marginBottom: number;
+  /** `w:pgMar/@w:header` for a header, `@w:footer` for a footer: the story edge's distance. */
+  readonly storyDistance?: number;
 }
 
 /** Per-sheet geometry needed to resolve header/footer anchors before wrap and clipping. */
@@ -145,11 +193,16 @@ export function headerFooterContentKey(part: OoxmlPart): string {
 function createBoundedContextCache(maxEntries: number): {
   get(key: string): HeaderFooterStoryLayout | undefined;
   set(key: string, value: HeaderFooterStoryLayout): void;
+  /** Raise the bound; it never shrinks, so entries already held are never dropped by it. */
+  growTo(size: number): void;
   readonly size: number;
 } {
-  const capacity = Math.max(1, Math.floor(maxEntries));
+  let capacity = Math.max(1, Math.floor(maxEntries));
   const entries = new Map<string, HeaderFooterStoryLayout>();
   return {
+    growTo(size) {
+      if (Number.isFinite(size) && size > capacity) capacity = Math.floor(size);
+    },
     get(key) {
       const value = entries.get(key);
       if (value === undefined) return undefined;
@@ -181,6 +234,7 @@ function createBoundedContextCache(maxEntries: number): {
  * painted no marker for as long as headers have been editable. Everything new goes here.
  */
 export interface HeaderFooterStoryInputs {
+  readonly compatibilityMode?: number;
   /**
    * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker — directly or
    * inside an anchored text box, which lays out with its own per-box counters.
@@ -192,6 +246,8 @@ export interface HeaderFooterStoryInputs {
   /** Sanitized hyperlink seams scoped to this header/footer part. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** @internal */
+  readonly showFieldCodes?: boolean;
   /** Per-paragraph identity for links and live document-property projection. */
   readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /** Memoized aggregate projection identity for table subtrees. */
@@ -229,7 +285,7 @@ export function layoutHeaderFooterStory(
   cache?: ParagraphLayoutCache<readonly PendingLine[]>,
   styleCascade?: StyleCascadeTable,
   pageContext?: FieldPageContext,
-  maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
+  maxPageContextEntries?: number,
   defaultTabStopPt?: number,
   displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
@@ -239,14 +295,24 @@ export function layoutHeaderFooterStory(
   documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
   inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
+  if (inputs?.showFieldCodes) producer += '|field-codes';
+  producer = withFieldResultsProducer(producer);
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
-  const needs = detectStoryPageFields(part.root);
-  const contextCache = createBoundedContextCache(maxPageContextEntries);
+  const pageFrame = readHeaderPageFrame(part);
+  const positionedFrames = readPositionedHeaderFrames(part);
+  const detected = detectStoryPageFields(part.root);
+  // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
+  // context even when no page field is detected in it.
+  const needs = pageFrame?.parity ? { ...detected, hasPageParity: true } : detected;
+  const contextCache = createBoundedContextCache(
+    maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
+  );
   // WITH the display mode, like every other consumer of this list. The inline flow already
   // received it — a deleted run vanished from a header in `proposed` — while the block list
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
   const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
+  const floatingSplit = splitFloatingStoryTables(blocks);
   // The story's own list-item map, resolved once per layout of this part.
   //
   // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
@@ -254,24 +320,25 @@ export function layoutHeaderFooterStory(
   // `w:start` and shows the same number on page 3 as on page 1. That matches Word, which keeps
   // furniture numbering independent of the body's.
   const listItems: ReadonlyMap<string, ResolvedListItem> | undefined = withResolvedListItems(
-    { numberingIndex: inputs?.numberingIndex, styleCascade },
+    { numberingIndex: inputs?.numberingIndex, styleCascade, measurer },
     blocks
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
-  // ONE provider for the whole story layout — every reflow pass and page-field projection
-  // reuses it, the body lane's own rule ("ONE provider for every fold of this flow").
-  const hostedListDeps = hostedListTokenDeps(
-    inputs?.numberingIndex,
-    styleCascade,
-    displayMode,
-    revisionAuthorFilter
-  );
   let baseline: HeaderFooterStoryLayout | undefined;
+  // Whether the header frame lane holds, decided once by the layout without a page context.
+  let frameAdmitted: boolean | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
-    const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
+    const effectiveCtx =
+      storyNeedsPageFields(needs) ||
+      positionedFrames ||
+      inlineDrawingLayout ||
+      ctx?.characterStyleValues
+        ? ctx
+        : undefined;
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
+    const topMarginOrigin = headerTopMarginOrigin(part, effectiveCtx, hfPageContext);
     const anchorPageToken =
       inlineDrawingLayout &&
       effectiveCtx?.contentInsetTop !== undefined &&
@@ -280,15 +347,29 @@ export function layoutHeaderFooterStory(
         ? `|hf:${effectiveCtx.contentInsetTop},${effectiveCtx.contentInsetBottom},${effectiveCtx.storyTop}`
         : '';
     const token =
+      (positionedFrames
+        ? `|frames:${effectiveCtx?.storyTop ?? hfPageContext?.storyDistance ?? ''}`
+        : '') +
       fieldPageContextToken(effectiveCtx, needs) +
-      (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
-      anchorPageToken;
+      (inlineDrawingLayout ? `|pn:${pageNumber}|tm:${topMarginOrigin ?? ''}` : '') +
+      anchorPageToken +
+      (effectiveCtx?.characterStyleValues
+        ? `|cs:${characterStyleValuesToken(effectiveCtx.characterStyleValues)}`
+        : '');
 
     if (token === '') {
       if (baseline) return baseline;
     } else {
       const cached = contextCache.get(token);
       if (cached) return cached;
+      // Only a PAGE-field story needs a context per page. One whose sole page dependence is an
+      // anchored drawing keys by page number too, but lays out the same on every page, so it
+      // keeps the floor rather than holding one identical layout per page.
+      if (maxPageContextEntries === undefined && storyNeedsPageFields(needs)) {
+        contextCache.growTo(
+          Math.min(MAX_ADAPTIVE_HF_PAGE_CONTEXT_ENTRIES, pageNumber * HF_PAGE_CONTEXTS_PER_PAGE)
+        );
+      }
     }
 
     let lineCounter = 0;
@@ -329,173 +410,329 @@ export function layoutHeaderFooterStory(
         marginLeft,
         marginRight,
         marginBottom,
-        // ON PURPOSE, unlike the body story: the established page/topMargin/bottomMargin
+        // ON PURPOSE, unlike the body story: the established page/bottomMargin
         // frames keep the AUTHORED margin here. `hfAnchorOnPageSheet` re-bases page-frame
         // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly. The
         // vertical margin frame above carries the effective content-box geometry separately.
         contentInsetTop: marginTop,
         contentInsetBottom: marginBottom,
         contentWidth,
+        topMarginFrameOrigin: topMarginOrigin,
         ...(verticalMarginFrame ? { verticalMarginFrame } : {}),
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,
         ownerPartName: part.name,
-        storyKind: part.name.includes('ftr') ? 'footer' : 'header',
+        storyKind: part.root.localName === 'ftr' ? 'footer' : 'header',
       });
     };
 
-    let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
-    let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
-
-    if (inlineDrawingLayout) {
-      let converged = false;
-      for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
-        pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
-        lineCounter = 0;
-        flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
-          measurer,
-          cache,
-          producer:
-            producer +
-            token +
-            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-            (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-          nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
-          styleCascade,
-          ...(listItems ? { listItems } : {}),
-          // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
-          // only this branch folds their list state into the cell-lane break keys.
-          ...hostedListDeps,
-          pageContext: effectiveCtx,
-          ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-          displayMode,
-          ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-          ...(documentProperties ? { documentProperties } : {}),
-          ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
-          ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
-          ...(inputs?.projectionTokenForParagraph
-            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-            : {}),
-          ...(inputs?.projectionTokenForTable
-            ? { projectionTokenForTable: inputs.projectionTokenForTable }
-            : {}),
-          inlineDrawingLayout,
-          anchorFrameBase,
-          pageContentClip: () => {
-            const frame = anchorFrameBase();
-            return effectiveCtx?.storyTop !== undefined
-              ? Object.freeze({
-                  x: -frame.marginLeft,
-                  y: -effectiveCtx.storyTop,
-                  width: frame.pageWidth,
-                  height: frame.pageHeight,
-                })
-              : pageClipRegion(frame);
-          },
-          // Textbox stories flow with the SAME page-field context as the host story, so a
-          // PAGE field inside an anchored footer text box evaluates per page like a direct
-          // footer field. The context token already keys this cache entry.
-          layoutTextboxStoryFor: (projection) =>
-            layoutTextboxStory(projection, {
-              measurer,
-              producer:
-                producer +
-                token +
-                (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-                (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-              cache,
-              styleCascade,
-              ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
-              ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-              displayMode,
-              ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-              ...(documentProperties ? { documentProperties } : {}),
-              ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
-              ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
-              inlineDrawingLayout,
-              ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
-              ...(inputs?.projectionTokenForParagraph
-                ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-                : {}),
-              ...(inputs?.projectionTokenForTable
-                ? { projectionTokenForTable: inputs.projectionTokenForTable }
-                : {}),
-              ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
-            }),
-          collectAnchoredDrawings: (drawings) => {
-            pendingAnchoredDrawings.push(...drawings);
-          },
-          columnBoxForParagraph: (paragraphBox) =>
-            Object.freeze({
-              x: 0,
-              y: paragraphBox.y,
-              width: contentWidth,
-              height: paragraphBox.height,
-            }),
-          pageExclusionZones: () => exclusionZones,
-          ...(drawingTokenForParagraph
-            ? { drawingTokenForParagraph }
-            : drawingLayoutToken
-              ? { drawingLayoutToken }
-              : {}),
-          ...(inputs?.projectionTokenForParagraph
-            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-            : {}),
-          ...(inputs?.projectionTokenForTable
-            ? { projectionTokenForTable: inputs.projectionTokenForTable }
-            : {}),
-        });
-        const nextZones = collectExclusionZonesFromDrawings(
-          pendingAnchoredDrawings,
-          inlineDrawingLayout,
-          0,
-          contentWidth
-        );
-        if (nextZones.length === 0) {
-          converged = true;
-          exclusionZones = nextZones;
-          break;
-        }
-        if (pass > 0 && exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)) {
-          converged = true;
-          exclusionZones = nextZones;
-          break;
-        }
-        exclusionZones = nextZones;
-      }
-      if (!converged) {
-        throw new DrawingExclusionConvergenceError(
-          `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
-        );
-      }
-    } else {
-      flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
+    // Textbox stories flow with the SAME page-field context as the host story, so a PAGE
+    // field inside an anchored footer text box evaluates per page like a direct footer
+    // field. The context token already keys this cache entry.
+    const layoutTextboxStoryFor = (
+      projection: import('../store/package/drawing-projection.ts').DrawingProjection
+    ) =>
+      layoutTextboxStory(projection, {
         measurer,
-        cache,
         producer:
           producer +
           token +
           (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
           (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-        nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
+        cache,
         styleCascade,
-        ...(listItems ? { listItems } : {}),
-        pageContext: effectiveCtx,
+        ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        compatibilityMode: inputs?.compatibilityMode,
         displayMode,
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),
         ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
         ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+        showFieldCodes: inputs?.showFieldCodes,
+        inlineDrawingLayout,
+        ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
         ...(inputs?.projectionTokenForParagraph
           ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
           : {}),
         ...(inputs?.projectionTokenForTable
           ? { projectionTokenForTable: inputs.projectionTokenForTable }
           : {}),
+        ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
       });
-    }
+    // ONE capability for the whole projected story — every exclusion reflow pass uses the
+    // same layout callback and list-token provider, structurally paired for table-cell flow.
+    const hostedStory = inlineDrawingLayout
+      ? hostedStoryFlowDeps(
+          layoutTextboxStoryFor,
+          inputs?.numberingIndex,
+          styleCascade,
+          displayMode,
+          revisionAuthorFilter
+        )
+      : undefined;
 
+    let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
+    // The zones of the story's own floating tables, which every flow pass wraps around.
+    let tableZones: readonly ExclusionZone[] = Object.freeze([]);
+    let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
+    // A floating table needs the page geometry to find its anchor. Without it, it stays in flow.
+    const floatingGeometry =
+      floatingSplit.floating.length > 0 &&
+      hfPageContext &&
+      (effectiveCtx?.storyTop !== undefined || hfPageContext.storyDistance !== undefined)
+        ? hfPageContext
+        : undefined;
+    const flowBlocks = floatingGeometry ? floatingSplit.flowBlocks : blocks;
+    const plainDeps = () => ({
+      measurer,
+      cache,
+      producer:
+        producer +
+        token +
+        (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+        (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+      nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
+      styleCascade,
+      ...(listItems ? { listItems } : {}),
+      pageContext: effectiveCtx,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      compatibilityMode: inputs?.compatibilityMode,
+      tableNestingOffset: 1 as const,
+      displayMode,
+      ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
+      ...(documentProperties ? { documentProperties } : {}),
+      ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+      ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+      showFieldCodes: inputs?.showFieldCodes,
+      ...(inputs?.projectionTokenForParagraph
+        ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+        : {}),
+      ...(inputs?.projectionTokenForTable
+        ? { projectionTokenForTable: inputs.projectionTokenForTable }
+        : {}),
+      ...(tableZones.length > 0 ? { pageExclusionZones: () => exclusionZones } : {}),
+    });
+    // Before mode 15 Word runs header and footer text outside tables under their own logos;
+    // the cells read it through `CellAnchorScope.anchorsWrapText`.
+    const anchorsWrapText = hasCompatibilityRule(
+      inputs?.compatibilityMode,
+      'headerFooterAnchorsWrapText'
+    );
+    const collect = (drawings: readonly AnchoredDrawingRecord[]) => {
+      pendingAnchoredDrawings.push(...drawings);
+    };
+    const drawingDeps = (collectAnchoredDrawings: typeof collect) => ({
+      ...plainDeps(),
+      hostedStory,
+      anchorsWrapText,
+      inlineDrawingLayout,
+      anchorFrameBase,
+      pageContentClip: () => {
+        const frame = anchorFrameBase();
+        return effectiveCtx?.storyTop !== undefined
+          ? Object.freeze({
+              x: -frame.marginLeft,
+              y: -effectiveCtx.storyTop,
+              width: frame.pageWidth,
+              height: frame.pageHeight,
+            })
+          : pageClipRegion(frame);
+      },
+      collectAnchoredDrawings,
+      columnBoxForParagraph: (paragraphBox: LayoutBox) =>
+        Object.freeze({
+          x: 0,
+          y: paragraphBox.y,
+          width: contentWidth,
+          height: paragraphBox.height,
+        }),
+      pageExclusionZones: () => exclusionZones,
+      ...(drawingTokenForParagraph
+        ? { drawingTokenForParagraph }
+        : drawingLayoutToken
+          ? { drawingLayoutToken }
+          : {}),
+    });
+
+    const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
+      exclusionZones = tableZones;
+      if (inlineDrawingLayout) {
+        let converged = false;
+        for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+          pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
+          lineCounter = firstLine;
+          flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
+          const drawingZones = collectExclusionZonesFromDrawings(
+            pendingAnchoredDrawings,
+            inlineDrawingLayout,
+            0,
+            contentWidth
+          );
+          const nextZones = tableZones.length ? [...tableZones, ...drawingZones] : drawingZones;
+          if (drawingZones.length === 0) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
+          if (
+            pass > 0 &&
+            exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)
+          ) {
+            converged = true;
+            exclusionZones = nextZones;
+            break;
+          }
+          exclusionZones = nextZones;
+        }
+        if (!converged) {
+          throw new DrawingExclusionConvergenceError(
+            `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
+          );
+        }
+      } else {
+        lineCounter = firstLine;
+        flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, plainDeps());
+      }
+    };
+
+    // The frame lays out alone, first, so its line keeps the first line id of the story.
+    const frameBlock =
+      floatingSplit.floating.length === 0 &&
+      pageFrame &&
+      flowBlocks[0]?.id === pageFrame.frameId &&
+      flowBlocks[1]?.id === pageFrame.anchorId
+        ? flowBlocks[0]
+        : undefined;
+    let placed: typeof flow | null = null;
+    const decideFrame = effectiveCtx === undefined;
+    if (frameBlock && !decideFrame && frameAdmitted === undefined) layoutOnce(undefined);
+    if (pageFrame && frameBlock && (decideFrame || frameAdmitted)) {
+      flowStory([frameBlock], 0);
+      const framed = flow;
+      flowStory(flowBlocks.slice(1), lineCounter);
+      // An anchored drawing wraps the story around an exclusion the isolated frame never saw.
+      // Only an empty frame can share that band without another collision check.
+      placed =
+        pageFrame.empty || pendingAnchoredDrawings.length === 0
+          ? placeHeaderPageFrame(
+              pageFrame,
+              framed,
+              flow,
+              contentWidth,
+              effectiveCtx?.sheetNumber ?? pageNumber,
+              decideFrame
+            )
+          : null;
+      if (decideFrame) frameAdmitted = placed !== null;
+    }
+    if (placed) flow = placed;
+    else if (
+      positionedFrames &&
+      hfPageContext?.storyDistance !== undefined &&
+      !floatingSplit.floating.length
+    ) {
+      const framedIds = new Set(
+        positionedFrames.flatMap((group) => group.paragraphs.map((paragraph) => paragraph.id))
+      );
+      const ordinary = flowBlocks.filter((block) => !framedIds.has(block.id));
+      // A normal paragraph owns the header story, even when it is empty.
+      if (ordinary.some((block) => block.kind === 'paragraph')) {
+        flowStory(ordinary, 0);
+        if (pendingAnchoredDrawings.length === 0) {
+          placed = placePositionedHeaderFrames(
+            positionedFrames,
+            flowBlocks,
+            flow,
+            (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
+            hfPageContext,
+            effectiveCtx?.storyTop ?? hfPageContext.storyDistance
+          );
+        }
+      }
+      if (placed) flow = placed;
+      else flowStory(flowBlocks, 0);
+    } else flowStory(flowBlocks, 0);
+
+    if (floatingGeometry) {
+      const anchors = flow;
+      // A footer's bottom edge is fixed and its top rises with its height. The tables resolve
+      // once, against the flow before wrapping, so they stay where the text wraps around them.
+      // The page furniture hands a footer the top its last height implies (`sheet bottom -
+      // distance - flowHeight`) and repeats until the height settles; without it, the top
+      // follows the unwrapped flow. The height reported below is the distance from that top to
+      // the fixed bottom edge, so a handed top that already holds a lift reproduces it.
+      const footerBottom =
+        part.root.localName === 'ftr' && floatingGeometry.storyDistance !== undefined
+          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance
+          : undefined;
+      let storyTop =
+        footerBottom !== undefined
+          ? (effectiveCtx?.storyTop ?? footerBottom - anchors.bottom)
+          : (effectiveCtx?.storyTop ?? floatingGeometry.storyDistance!);
+      const placeTables = () =>
+        placeFloatingStoryTables(
+          anchors.blocks,
+          anchors.bottom,
+          floatingSplit.floating,
+          { ...floatingGeometry, contentWidth, storyTop },
+          anchorsWrapText,
+          // A table never wraps around its own zone, or another table's.
+          (table, left, top, placed) =>
+            flowBlocksInBox(
+              [table],
+              left,
+              left + Math.max(1, contentWidth),
+              top,
+              0,
+              withoutFloatingTableZones(
+                inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+              )
+            ).blocks
+        );
+      let tables = placeTables();
+      // A page-framed footer table keeps its page position, so the footer's top edge is fixed
+      // first: at its natural top, or raised so the text ends where the table starts. Text
+      // the table pushes down may run past the footer's bottom edge, never past the sheet's.
+      const framedFooter = footerBottom !== undefined && tables.pageFramed;
+      const liftAbove = (pageBottom: number) => {
+        const lift = footerLiftAboveTables(tables, anchors.bottom, pageBottom);
+        if (lift <= 0) return false;
+        storyTop -= lift;
+        tables = placeTables();
+        return true;
+      };
+      if (framedFooter) liftAbove(floatingGeometry.pageHeight - storyTop);
+      // The placement reads only the unwrapped flow, so one wrapped pass settles it. Placing
+      // again after that pass publishes the drawings inside the tables once.
+      const wrapTables = () => {
+        tableZones = tables.zones;
+        flowStory(flowBlocks, 0);
+        tables = placeTables();
+      };
+      if (tables.zones.length) wrapTables();
+      // Text wrapped beside a narrow table can grow past its natural height and the sheet.
+      // The footer then grows upward by that height, a bounded number of times, and as a last
+      // resort its text rises above every table it meets.
+      const offSheet = () => storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01;
+      for (let pass = 0; framedFooter && pass < FOOTER_GROWTH_PASSES && offSheet(); pass++) {
+        storyTop = Math.min(storyTop, footerBottom - flow.bottom);
+        tables = placeTables();
+        wrapTables();
+      }
+      if (framedFooter && offSheet() && liftAbove(Number.NEGATIVE_INFINITY)) wrapTables();
+      flow = {
+        blocks: [...flow.blocks, ...tables.tables],
+        bottom: framedFooter ? footerBottom - storyTop : flow.bottom,
+      };
+    }
+    flow = positionLegacyFooterPageFrame(
+      part,
+      flow,
+      contentWidth,
+      hfPageContext,
+      styleCascade?.fixedParagraphSpacing
+    );
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,
@@ -508,10 +745,19 @@ export function layoutHeaderFooterStory(
         ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
         : {}),
       withPageContext: (next) => {
-        if (!storyNeedsPageFields(needs) && !story.anchoredDrawings?.length) {
+        if (
+          !storyNeedsPageFields(needs) &&
+          !positionedFrames &&
+          !story.anchoredDrawings?.length &&
+          !next.characterStyleValues &&
+          !effectiveCtx?.characterStyleValues
+        ) {
           return baseline ?? story;
         }
-        return layoutOnce(next);
+        return layoutOnce({
+          ...next,
+          characterStyleValues: next.characterStyleValues ?? effectiveCtx?.characterStyleValues,
+        });
       },
     };
 
@@ -574,6 +820,14 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
       box: shiftBox(area.box),
       ...(area.separator
         ? { separator: { ...area.separator, box: shiftBox(area.separator.box) } }
+        : {}),
+      ...(area.continuationNotice
+        ? {
+            continuationNotice: {
+              ...area.continuationNotice,
+              box: shiftBox(area.continuationNotice.box),
+            },
+          }
         : {}),
       notes: area.notes.map((note) => ({ ...note, box: shiftBox(note.box) })),
     };
@@ -674,8 +928,9 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const tokens: string[] = [];
   forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
-    if (drawing.kind === 'anchoredDrawing' && drawing.textboxStory?.clippedResourceToken) {
-      tokens.push(`clip:${drawing.textboxStory.clippedResourceToken}`);
+    for (const owned of ownedTextboxStories(drawing)) {
+      const clipped = owned.story.clippedResourceToken;
+      if (clipped) tokens.push(`clip:${clipped}`);
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
@@ -698,6 +953,9 @@ export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout):
   return framedTokenJoin([
     label,
     String(story.flowHeight),
+    // Published pages carry the story's relationship id, so a rewrite that only renames it
+    // must not hand back pages showing the old one.
+    story.rId ?? '',
     story.contentKey,
     story.projectionEpoch ?? '',
     storyDrawingResourceToken(story),
@@ -733,6 +991,10 @@ export function furnitureLayoutContext(
     );
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-    framedTokenJoin([stories('h', furniture.headers), stories('f', furniture.footers)])
+    framedTokenJoin([
+      stories('h', furniture.headers),
+      stories('f', furniture.footers),
+      characterHeaderPageToken(furniture),
+    ])
   );
 }

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Toolbar dropdowns stay open when Escape comes from the document after a mouse click.",
+  "after": "Escape closes an open toolbar dropdown in both adapters. Inside the editor, the same key does not also leave a header, a note, or the format painter.",
+  "reason": "Dismissal changes local chrome state only. It adds no document operation or shared field. Saved document XML stays unchanged.",
+  "tests": [
+    "packages/react/test/toolbar-dropdown-escape.test.tsx",
+    "packages/vue/test/toolbar-dropdown-escape.test.ts"
+  ],
+  "changeset": "toolbar-dropdown-escape",
+  "migration": null
+}

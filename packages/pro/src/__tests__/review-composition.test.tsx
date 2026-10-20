@@ -114,6 +114,48 @@ describe('review compound composition', () => {
     expect(view.getByTestId('card-extra').textContent).toBe('Host action');
   });
 
+  test('a host input in a card keeps focus, and pressing it does not activate the card', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview>
+            <DocxEditorReview.List>
+              <input data-testid="host-input" aria-label="Host input" />
+            </DocxEditorReview.List>
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const card = view.getByTestId('review-card');
+    const input = view.getByTestId('host-input') as HTMLInputElement;
+    expect(card.contains(input)).toBe(true);
+    input.focus();
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      input.click();
+    });
+    expect(document.activeElement).toBe(input);
+    expect(card.hasAttribute('data-active')).toBe(false);
+  });
+
+  test('a click on the card text activates the card', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const card = view.getByTestId('review-card');
+    expect(card.hasAttribute('data-active')).toBe(false);
+    act(() => {
+      view.getByTestId('review-summary').click();
+    });
+    expect(view.getByTestId('review-card').hasAttribute('data-active')).toBe(true);
+  });
+
   test('keeps direct root Card children as a compatibility shorthand', () => {
     const view = render(
       <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
@@ -171,6 +213,78 @@ describe('review compound composition', () => {
       add.click();
     });
     expect(view.getByTestId('review-draft')).toBeDefined();
+  });
+
+  test('a Draft root part takes the host position from top', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment />
+            <DocxEditorReview.Draft top={123} />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      view.getByTestId('review-add-comment').click();
+    });
+    const slot = view.getByTestId('review-draft').parentElement!;
+    expect(slot.style.top).toBe('123px');
+  });
+
+  test('a Draft inside host content renders only while a draft is open', async () => {
+    let instance: DocxEditorInstance | null = null;
+    function HostCards() {
+      return (
+        <div data-testid="host-cards">
+          <DocxEditorReview.Draft top={40} />
+        </div>
+      );
+    }
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment />
+            <HostCards />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.getByTestId('host-cards')).toBeDefined();
+    expect(view.queryByTestId('review-draft')).toBeNull();
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      view.getByTestId('review-add-comment').click();
+    });
+    const draft = view.getByTestId('review-draft');
+    expect(view.getByTestId('host-cards').contains(draft)).toBe(true);
+    expect(draft.parentElement!.style.top).toBe('40px');
+    await act(async () => {
+      view.getByTestId('review-draft-cancel').click();
+    });
+    expect(view.queryByTestId('review-draft')).toBeNull();
   });
 
   test('uses a List Empty override and preserves legacy root render children', () => {

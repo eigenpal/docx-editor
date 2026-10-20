@@ -1,3 +1,5 @@
+import { readTableStructure } from '../semantic-table.ts';
+import { vMergePlanFor } from '../table-vmerge-plan.ts';
 // When a vertical merge is allowed to size its span, and what happens when it is not.
 //
 // Giving the span its own height is only safe while every row of it lands on one page and
@@ -133,10 +135,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // Two pages rather than three, because Word's cell margins make every row 12.73pt where
-    // it used to be 18.73pt. The shape this test needs is unchanged, and verified: the merge
-    // still does not fit the band it is offered, it still moves to a fresh page, and that
-    // page still re-emits the `w:tblHeader` row above it.
+    // The one-point table grid reserves clearance even when tcBorders omits it.
+    // The shared half-strokes fit on two pages; the repeated header must still
+    // reduce the merge's admission band and every fragment must remain contained.
     expect(layout.pages).toHaveLength(2);
     expect(headerRepeatsOn(layout, 1)).toBe(true);
     expectContentInsideItsTable(layout);
@@ -176,7 +177,7 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
-  test('a span where nothing can grow keeps its authored height and clips, like Word', () => {
+  test('a span where nothing can grow keeps its authored height and clips at its bottom', () => {
     const layout = layoutTiny(
       loadPart(
         `<w:tbl>${GRID}` +
@@ -190,19 +191,19 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(table.rows.map((row) => row.box.height)).toEqual([20, 20]);
     const head = table.rows[0]!.cells[0]!;
     expect(head.box.height).toBe(40);
-    // The span cannot hold the head, so the head keeps sizing its own row and the exact
-    // height clips it there: one line, inside the 20pt row, the way Word draws it.
-    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 20 + 0.001);
+    // The span cannot hold the head, so the merged text runs through both rows and is
+    // clipped at the bottom of the second one.
+    expect(contentBottomOf(head)).toBeGreaterThan(head.box.y + 20);
+    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 40 + 0.001);
+    const cut = head.blocks.at(-1)!;
+    expect(cut.kind === 'paragraph' && cut.clipToBox).toBe(true);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
-  test('a merge over a row that heads another merge is left alone', () => {
-    // Column 0 merges rows 0-1 and column 1 restarts at row 1. Row 1 therefore sizes itself
-    // around the second head whenever that one is not planned, which is a height the first
-    // span never measured, and the row can then take the whole-row move and leave the first
-    // span's content on the page above with no table under it. Nothing revokes a span once
-    // its head content has been placed, so the first span is not taken at all.
+  test('overlapping merges keep their content contained when the second head splits', () => {
+    // Column 0 merges rows 0-1 and column 1 restarts at row 1. The second head can
+    // start in the remaining band; both fragments must still bound their own content.
     const layout = layoutTiny(
       loadPart(
         `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
@@ -213,13 +214,13 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The two-line head sizes its own row, so its content has a cell around it.
+    // The first merge covers the partial second row on this page.
     const first = tablesOf(layout, 0)[0]!;
     const head = first.rows[0]!.cells[0]!;
-    expect(head.rowSpan).toBe(1);
+    expect(head.rowSpan).toBe(2);
     expect(contentBottomOf(head)).toBeGreaterThan(first.box.y + 18);
     expectContentInsideItsTable(layout);
-    // The merge that starts BELOW it is still planned, on the page it moves to.
+    // The second merge continues into the following row on the next page.
     const carried = tablesOf(layout, 1)[0]!;
     expect(carried.rows[0]!.cells[1]!.rowSpan).toBe(2);
     for (const pageIndex of layout.pages.keys()) {
@@ -382,6 +383,92 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     }
   });
 
+  test('merges over the same rows leave the head row to the cells that stay in it', () => {
+    // Columns 1 and 2 both merge rows 0-1. The head row is as tall as its side cell alone;
+    // the taller merge is carried by the rows together, whichever column it sits in.
+    const shaped = (b: string, c: string): SemanticLayout =>
+      layoutTiny(
+        loadPart(
+          `<w:tbl>${GRID}` +
+            `<w:tr>${tc(p('s0'))}${tc(b, RESTART)}${tc(c, RESTART)}</w:tr>` +
+            `<w:tr>${tc(p('s1'))}${tc(p(''), CONTINUE)}${tc(p(''), CONTINUE)}</w:tr>` +
+            '</w:tbl>'
+        )
+      );
+    const tall = Array.from({ length: 4 }, (_, index) => p(`T${index}`)).join('');
+    const short = p('A0') + p('A1');
+    const control = tablesOf(shaped(p('x'), p('y')), 0)[0]!;
+    const layouts = [shaped(short, tall), shaped(tall, short)];
+    for (const layout of layouts) {
+      expect(layout.pages).toHaveLength(1);
+      const table = tablesOf(layout, 0)[0]!;
+      expect(table.rows[0]!.box.height).toBe(control.rows[0]!.box.height);
+      expect(table.rows[1]!.box.height).toBeGreaterThan(control.rows[1]!.box.height);
+      for (const column of [1, 2]) {
+        const head = table.rows[0]!.cells[column]!;
+        expect(head.rowSpan).toBe(2);
+        expect(head.box.height).toBe(table.box.height);
+      }
+      expectContentInsideItsTable(layout);
+    }
+    const [first, second] = layouts.map((layout) => tablesOf(layout, 0)[0]!) as [
+      TableFragmentRecord,
+      TableFragmentRecord,
+    ];
+    expect(first.rows.map((row) => row.box.height)).toEqual(
+      second.rows.map((row) => row.box.height)
+    );
+    // The span is exactly as tall as the tallest head needs: four lines and no stacked row.
+    const tallHead = first.rows[0]!.cells[2]!;
+    expect(contentBottomOf(tallHead)).toBeLessThanOrEqual(tallHead.box.y + tallHead.box.height);
+    expect(first.box.height).toBeLessThan(control.rows[0]!.box.height + 4 * 14 + 4);
+  });
+
+  test('merges over the same rows that no page holds keep every line inside the table', () => {
+    const nine = (prefix: string) =>
+      Array.from({ length: 9 }, (_, index) => p(`${prefix}${index}`)).join('');
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('side'))}${tc(nine('A'), RESTART)}${tc(nine('B'), RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('side2'))}${tc(p('ghost'), CONTINUE)}${tc(p('ghost'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const painted = layout.pages
+      .flatMap((page) => tablesOf(layout, layout.pages.indexOf(page)))
+      .flatMap((table) => table.rows)
+      .flatMap((row) => row.cells)
+      .flatMap((cell) => cell.blocks)
+      .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+      .flatMap((line) => line.spans)
+      .map((span) => span.text);
+    for (const prefix of ['A', 'B']) {
+      for (let index = 0; index < 9; index += 1) expect(painted).toContain(`${prefix}${index}`);
+    }
+    expect(painted).toContain('side2');
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
+  test('merges over the same rows under a repeated header stay inside their page', () => {
+    const layout = layoutTiny(
+      loadPart(
+        `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
+          `<w:tr><w:trPr><w:tblHeader/></w:trPr>${tc(p('H'))}${tc(p('Hb'))}${tc(p('Hc'))}</w:tr>` +
+          `<w:tr>${tc(p('side'))}${tc(p('A0') + p('A1'), RESTART)}${tc(MERGED_CONTENT, RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('side2'))}${tc(p('g'), CONTINUE)}${tc(p('g'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
   test('two merges in different columns are decided one at a time', () => {
     // Column 0 merges rows 0-1 and column 1 merges rows 1-2. Treating the two as one
     // keep-together block moved the whole table to the next page and left the first one
@@ -396,9 +483,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    // The first row still uses the room left on the page it was reached on.
-    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(1);
-    // The second merge is kept whole on the page it moved to, and its content fits it.
+    // Both the first row and the start of the second use the remaining page band.
+    expect(tablesOf(layout, 0)[0]!.rows).toHaveLength(2);
+    // The continued merge covers the remaining rows, with its content inside its box.
     const carried = tablesOf(layout, 1)[0]!;
     const merged = carried.rows[0]!.cells[1]!;
     expect(merged.rowSpan).toBe(2);
@@ -406,6 +493,80 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expectContentInsideItsTable(layout);
     for (const pageIndex of layout.pages.keys()) {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+});
+
+// Every row reserves the rule its OWN top resolves to, so an interior row only measures
+// differently as a fragment's first row when the table's outer `w:top` differs from its
+// `w:insideH`. Here they are 4pt and 1pt, and the merge starts at the second row.
+const OUTER_TOP_GRID =
+  '<w:tblPr><w:tblBorders>' +
+  ['left', 'bottom', 'right', 'insideH', 'insideV']
+    .map((side) => `<w:${side} w:val="single" w:sz="8" w:color="000000"/>`)
+    .join('') +
+  '<w:top w:val="single" w:sz="32" w:color="000000"/></w:tblBorders></w:tblPr>';
+test('merge preflight remeasures the outer top inset after an occurrence changes', () => {
+  const part = loadPart(`<w:tbl>${OUTER_TOP_GRID}<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>
+    <w:tr>${tc(p('Lead'))}</w:tr>
+    <w:tr>${tc(MERGED_CONTENT, RESTART)}</w:tr><w:tr>${tc(p(''), CONTINUE)}</w:tr></w:tbl>`);
+  const body = part.root.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'body'
+  );
+  if (!body || body.kind === 'textValue') throw new Error('body expected');
+  const table = body.children.find((node) => node.kind === 'table')!;
+  const structure = readTableStructure(table, 180, 0)!;
+  let first = false;
+  const plan = vMergePlanFor(
+    structure,
+    0,
+    0,
+    {
+      measurer: createFixedMeasurer(),
+      producer: 'probe',
+      nextLineId: () => 'probe',
+    },
+    undefined,
+    (row) => first && row.id === structure.rows[1]!.id
+  )!;
+  const span = plan.spansAt(1)[0]!;
+  const interior = plan.heightOf(span, 0);
+  first = true;
+  const outer = plan.heightOf(span, 0);
+  expect(outer - interior).toBeCloseTo(3, 8);
+  first = false;
+  expect(plan.heightOf(span, 0)).toBe(interior);
+});
+
+describe('coextensive merges over fixed rows', () => {
+  test('both heads paint every line that fits their shared span', () => {
+    for (const [a, b] of [
+      [1, 2],
+      [2, 1],
+      [2, 2],
+    ]) {
+      const lines = (prefix: string, count: number) =>
+        Array.from({ length: count }, (_, index) => p(`${prefix}${index}`)).join('');
+      const result = layoutTiny(
+        loadPart(
+          `<w:tbl><w:tblPr/><w:tr>${exactRow(500)}` +
+            tc(lines('A', a!), RESTART) +
+            tc(lines('B', b!), RESTART) +
+            '</w:tr>' +
+            `<w:tr>${exactRow(500)}${tc(p(''), CONTINUE)}${tc(p(''), CONTINUE)}</w:tr></w:tbl>`
+        )
+      );
+      expect(result.pages).toHaveLength(1);
+      const table = tablesOf(result, 0)[0]!;
+      expect(table.box.height).toBeCloseTo(50, 3);
+      const painted = table.rows
+        .flatMap((row) => row.cells)
+        .flatMap((cell) => cell.blocks)
+        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+        .flatMap((line) => line.spans)
+        .map((span) => span.text);
+      for (let i = 0; i < a!; i += 1) expect(painted).toContain(`A${i}`);
+      for (let i = 0; i < b!; i += 1) expect(painted).toContain(`B${i}`);
     }
   });
 });

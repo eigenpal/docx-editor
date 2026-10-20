@@ -1,12 +1,26 @@
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
+import { TablePaginationError } from '../../layout/semantic-table-layout.ts';
+import { refusalYieldsHiddenFurniture } from '../../layout/furniture-drawing-exclusion.ts';
 import { ExportResourceError, openDocumentForExport } from '../export-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+test('does not inspect a host failure when no hidden furniture can yield', () => {
+  let inspected = false;
+  const hostile = new Proxy(new Error('host failure'), {
+    getPrototypeOf() {
+      inspected = true;
+      throw new Error('prototype inspection');
+    },
+  });
+  expect(refusalYieldsHiddenFurniture(hostile, {})).toBe(false);
+  expect(inspected).toBe(false);
+});
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -24,13 +38,18 @@ function docx(body: string): Uint8Array {
 }
 
 test('normalizes fail-closed layout invariants at the shared exporter boundary', async () => {
-  const source = docx(
-    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
-      '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:hRule="exact" w:val="60000"/></w:trPr>' +
-      '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
-      '<w:p><w:r><w:t>Authored overheight row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
-  );
-  const opened = openDocumentForExport(source);
+  // Layout fails closed when authored geometry cannot fit its page model. The measurer raises
+  // that invariant here, so the boundary is tested without depending on one document shape.
+  const fallback = createFixedMeasurer();
+  const source = docx('<w:p><w:r><w:t>Invariant</w:t></w:r></w:p>');
+  const opened = openDocumentForExport(source, {
+    measurer: {
+      measure: () => {
+        throw new TablePaginationError('table-row-overheight', 'Authored overheight row');
+      },
+      lineMetrics: (style) => fallback.lineMetrics(style),
+    },
+  });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   try {

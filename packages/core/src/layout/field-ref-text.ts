@@ -4,12 +4,18 @@
 // its line budget. Every walk here is node/depth/character capped — the inputs are
 // attacker-controlled OOXML.
 
+import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
+  hardBreakKind,
   isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import {
   consumeScanNode,
   createScanBudget,
@@ -51,6 +57,13 @@ export function fldSimpleCachedText(
       }
       return;
     }
+    // The same hyphen text the computed result carries, so a cache can match it.
+    const hyphen = visibleHyphenText(node);
+    if (hyphen !== null) {
+      text += hyphen.slice(0, MAX_REF_TEXT_CHARS - text.length);
+      return;
+    }
+    if (node.kind === 'revisionDelete') return;
     for (const child of node.children) visit(child, depth + 1);
   };
   for (const child of simple.children) visit(child, 1);
@@ -63,8 +76,8 @@ const bookmarkTextMemos = new WeakMap<OoxmlElement, Map<string, string>>();
 /**
  * The bookmarked text inside the target paragraph: from the named `w:bookmarkStart` to the
  * `w:bookmarkEnd` carrying the same `w:id`, or to the paragraph's end when the range runs
- * past it. Length-capped; collects `w:t` and tabs only — deleted text, field chrome and
- * drawings never join a computed result.
+ * past it. Length-capped; collects `w:t`, tabs and line breaks only — deleted text, page
+ * breaks, field chrome and drawings never join a computed result.
  */
 export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string {
   let memo = bookmarkTextMemos.get(paragraph);
@@ -86,8 +99,9 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
     text += value.length > room ? value.slice(0, room) : value;
   };
 
-  const visit = (node: OoxmlNode, depth: number): void => {
+  const visit = (node: OoxmlNode, depth: number, containerDepth: number, deleted = false): void => {
     if (done || node.kind === 'textValue') return;
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
     if (node.kind === 'bookmarkStart') {
       if (!collecting && wmlAttribute(node, 'name') === name) {
@@ -101,7 +115,9 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
       return;
     }
     if (node.kind === 'run') {
-      if (!collecting) return;
+      // Deleted content never joins a computed result. A run holds no bookmark marker, so a
+      // deleted one is skipped whole; markers beside it in the deletion still count.
+      if (!collecting || deleted) return;
       for (const grand of node.children) {
         if (done || !consumeScanNode(budget)) return;
         if (grand.kind === 'text') {
@@ -110,17 +126,26 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           }
         } else if (grand.kind === 'tab') {
           append('\t');
+        } else if (grand.kind === 'hardBreak' && hardBreakKind(grand) === 'line') {
+          // A line break stays a line break in the result. A page break does not join it.
+          append('\n');
+        } else {
+          // A REF result is read as one string, where an optional hyphen shows nothing.
+          const hyphen = visibleHyphenText(grand);
+          if (hyphen) append(hyphen);
         }
       }
       return;
     }
     if (isDrawingHost(node) || isFldSimple(node)) return;
     if (!consumeScanNode(budget)) return;
-    for (const child of node.children) visit(child, depth + 1);
+    const nextDepth = nextInlineContainerDepth(node, containerDepth);
+    const within = deleted || node.kind === 'revisionDelete';
+    for (const child of node.children) visit(child, depth + 1, nextDepth, within);
   };
   for (const child of paragraph.children) {
     if (done || !consumeScanNode(budget)) break;
-    visit(child, 1);
+    visit(child, 1, 0);
   }
 
   if (!memo) {

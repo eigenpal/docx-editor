@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Note collections were available only through document aliases.",
+  "after": "Body collections enumerate referenced notes and the writer edits their stories through existing operations.",
+  "reason": "The scoped query adds no shared fields or write format. Note edits use existing operations. Writer tests cover collaboration, concurrent insertion, undo, redo, and save/reopen.",
+  "tests": ["packages/editor-api/src/model/__tests__/body-notes.test.ts"],
+  "changeset": "body-note-collections",
+  "migration": null
+}

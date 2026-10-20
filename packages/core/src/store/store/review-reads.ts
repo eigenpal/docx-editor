@@ -1,22 +1,22 @@
-// The review queue: every pending decision in the document, derived from the TREE.
-//
-// Deliberately not from laid-out spans. Layout is a VIEW — the proposed-result mode drops every
-// deletion and the original mode drops every insertion — so a queue derived from spans empties
-// by half the moment a reader switches view, and the changes that vanished become unreachable
-// from the surface that is supposed to resolve them. The queue is a property of the document.
-//
-// SO IT IS DERIVED IN THE STORE LANE, where every lane can reach it. The review rail asks this
-// question to draw cards, and an automation host asks it to answer "what comments does this
-// document hold" to a script; a lane that could not import the derivation would have written a
-// second one, and two derivations of a reviewer's queue disagree eventually — a comment listed
-// on screen and missing from the object model, or a change the pane offers to accept and the
-// script cannot find. Layout re-exports what is here and adds only GEOMETRY: where a card sits
-// beside the page, which is the one thing the tree cannot answer.
+import { unboundTableHistories } from './revision-table-unbound-history.ts';
+import { ordinaryMoveRanges, ordinaryMoveInsertionSites } from './revision-move-ranges.ts';
+import { mergeAdjacentSameKindEdits } from './review-inline-groups.ts';
+import { groupTableRevisions } from './review-table-groups.ts';
+import { structuralChangeOf } from './review-structural-details.ts';
+import { textUnder } from './review-text.ts';
+export { commentBodyText, commentInitials } from './review-text.ts';
+// Derive pending review decisions from the canonical tree, not the visible spans:
+// original/proposed display modes must never hide a decision from review actions.
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { hardBreakText } from '../package/hard-break.ts';
-import { isInstrText } from '../package/field-nodes.ts';
+import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
+import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
+import { mergeConsecutiveParagraphPropertyChanges } from './review-paragraph-property-groups.ts';
+import {
+  changedLanguages,
+  changedFormatting,
+  type ReviewFormattingChange,
+} from './review-formatting.ts';
 import { collectRevisionSites } from './tree-op-revisions.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import {
@@ -28,6 +28,8 @@ import {
 } from './comment-reads.ts';
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
+import { withStableCards } from './review-item-identity.ts';
+import { rememberRevisionRoot, unchangedRevisionItems } from './review-items-reuse.ts';
 import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
@@ -55,31 +57,6 @@ const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' 
   moveTo: 'moveTo',
 };
 
-/** Plain text of a comment's body, so a card never re-implements the run walk. */
-export function commentBodyText(comment: CommentRecord): string {
-  const parts: string[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') {
-      parts.push(node.value);
-      return;
-    }
-    for (const child of node.children) visit(child);
-  };
-  for (const block of comment.blocks) visit(block);
-  return parts.join('');
-}
-
-/** Author initials for an avatar, from `@w:initials` or the name. */
-export function commentInitials(comment: CommentRecord): string {
-  if (comment.initials && comment.initials.trim().length > 0) return comment.initials.trim();
-  const words = comment.author.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]!.toUpperCase())
-    .join('');
-}
-
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
   for (const attribute of node.attributes) {
     if (attribute.localName === localName && attribute.namespaceUri === WML_NAMESPACE_URI) {
@@ -89,27 +66,28 @@ function wmlAttribute(node: OoxmlElement, localName: string): string | undefined
   return undefined;
 }
 
-/** Text under a node, counting `w:t` and `w:delText` alike. */
-function textUnder(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.value;
-  // A tab or a break carries no text value, so a card derived from a tracked one read as
-  // EMPTY — the reviewer was asked to accept content they were never shown, and a tab
-  // replacing a word presented as a pure deletion. Project the same characters the offset
-  // model counts for them.
-  if (node.kind === 'tab') return '\t';
-  if (node.kind === 'hardBreak') return hardBreakText(node);
-  // A field's instruction is CODE, not content: it measures nothing in the offset model,
-  // and a tracked page field would otherwise present its ` PAGE ` source as inserted
-  // words. `isInstrText` covers all three spellings — the typed kind, the parse-demoted
-  // generic, and `w:delInstrText`, which a struck field's card would otherwise read out.
-  if (isInstrText(node)) return '';
-  let text = '';
-  for (const child of node.children) text += textUnder(child);
-  return text;
-}
-
 function addressKey(address: RevisionAddress): string {
   return `${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
+}
+
+/**
+ * The key a site groups under, one string per site node and kind. Rebuilt per site on every
+ * derivation, each key was a new string that every map lookup hashed again; a long reviewed
+ * document derives the queue after each tracked keystroke. The node is immutable, and its
+ * address is read from its own attributes.
+ */
+const sourceKeys = new WeakMap<object, { readonly kind: string; readonly key: string }>();
+
+function sourceKeyOf(node: object, kind: ReviewRevisionKind, address: RevisionAddress): string {
+  const cached = sourceKeys.get(node);
+  if (cached?.kind === kind) return cached.key;
+  const localName = (node as { localName?: string }).localName;
+  const key =
+    kind === 'structural'
+      ? `structural\u0000${addressKey(address)}`
+      : `${kind}\u0000${localName}\u0000${addressKey(address)}`;
+  sourceKeys.set(node, { kind, key });
+  return key;
 }
 
 const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
@@ -117,6 +95,8 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
   revisionDelete: 'delete',
   revisionMoveFrom: 'moveFrom',
   revisionMoveTo: 'moveTo',
+  moveFromRangeStart: 'moveFrom',
+  moveToRangeStart: 'moveTo',
 };
 
 /** @internal */
@@ -139,17 +119,11 @@ const interactiveReviewDerivation: ReviewDerivationDependencies = {
 /**
  * Every revision in one story, one card per DECISION.
  *
- * Sites sharing an `(id, author, date)` triple are ONE revision — a tracked row insertion is
- * `w:trPr/w:ins` plus `w:cellIns` on every cell — so they coalesce into one card listing every
- * range it touches. Keying per site would show the reviewer four decisions where there is one,
- * and accepting any of them would make the other three vanish.
+ * Sites sharing an `(id, author, date)` and revision kind retain their source sites.
+ * Unchanged text separates inline decisions even when their source attributes match.
  *
- * Memoized per part root like the indexes it reads, and for the same reason: a heavily
- * tracked document produces tens of thousands of cards, and rebuilding them per read cost
- * more than everything the memos above saved. The paragraph-scoped view the local review
- * patch derives (`revisionItemsOfParagraph`'s synthetic paragraph-root part) is NOT cached:
- * each keystroke would insert a fresh root and churn the bounded ring. The instance is
- * SHARED, so the return type is readonly.
+ * Cached by part root except for paragraph-scoped synthetic roots. Results are shared
+ * and readonly; part names are checked because ranges embed them.
  */
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[] {
   return revisionItemsOfWith(part, interactiveReviewDerivation);
@@ -165,11 +139,26 @@ function revisionItemsOfWith(
     // The name rides along because the items embed it (`ranges[*].partName`): a root is
     // the cache key, and serving one part's items to another part that shares the root
     // under a different name would stamp every range with the wrong part.
-    if (cached && cached.name === part.name) return cached.items;
+    if (cached && cached.name === part.name) {
+      rememberRevisionRoot(part);
+      return cached.items;
+    }
+    const unchanged = unchangedRevisionItems(part, (root) => {
+      const previous = revisionItemsCache.get(root);
+      return previous?.name === part.name ? previous.items : undefined;
+    });
+    if (unchanged) {
+      revisionItemsCache.set(part.root, { name: part.name, items: unchanged });
+      rememberRevisionRoot(part);
+      return unchanged;
+    }
   }
-  const items = computeRevisionItemsOf(part, dependencies);
+  const computed = computeRevisionItemsOf(part, dependencies);
+  const items =
+    cacheable && dependencies.retainRevisionItems ? withStableCards(part.name, computed) : computed;
   if (cacheable && dependencies.retainRevisionItems) {
     revisionItemsCache.set(part.root, { name: part.name, items });
+    rememberRevisionRoot(part);
   }
   return items;
 }
@@ -183,7 +172,7 @@ const revisionItemsCache = createRecentRootCache<{
 function computeRevisionItemsOf(
   part: OoxmlPart,
   dependencies: ReviewDerivationDependencies
-): ReviewRevisionItem[] {
+): readonly ReviewRevisionItem[] {
   // Sites FIRST, and the site index only when there is at least one. `locateSites` merges
   // an O(document) index per fresh root, and a structural keystroke on an untracked
   // document paid that merge for a list this function was about to answer "empty" over.
@@ -191,16 +180,25 @@ function computeRevisionItemsOf(
   const sites = dependencies.revisionSites(part);
   if (sites.length === 0) return [];
   const located = dependencies.locations(part);
+  const moveRanges = new Map(ordinaryMoveRanges(part.root).map((range) => [range.start.id, range]));
+  const moveInsertions = ordinaryMoveInsertionSites(part.root);
+  const hasParagraphMarks = sites.some((site) => site.paragraphMark);
+  const previewByNode = new Map<string, { range: ReviewRange; text: string }>();
   const byAddress = new Map<
     string,
     {
       address: RevisionAddress;
       revisionKind: ReviewRevisionKind;
+      localName: string;
+      identitySuffix?: string;
       markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
       author: string;
       date?: string;
       text: string;
-      /** Kept apart from `text`: a replacement needs both halves to word its card. */
+      structuralChanges?: NonNullable<ReviewRevisionItem['structuralChanges']>[number][];
+      formattingLanguages?: string[];
+      formattingChanges?: ReviewFormattingChange[];
+      /** Deletion previews remain separate from inserted text. */
       deletedText: string;
       ranges: ReviewRange[];
       siteNodeIds: string[];
@@ -210,28 +208,40 @@ function computeRevisionItemsOf(
     }
   >();
 
+  const currentInlineGroup = new Map<string, string>();
+  const unboundHistories = unboundTableHistories(part, sites);
   for (const site of sites) {
-    const id = wmlAttribute(site.node, 'id');
-    if (id === undefined) continue;
+    if (unboundHistories.has(site.node.id)) continue;
+    const moveRange = moveRanges.get(site.node.id);
+    const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
+    const sourceId = wmlAttribute(site.node, 'id');
+    const id = sourceId ?? `missing-${site.node.id}`;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it
     // anyway. Skipping those made the revision invisible in the pane AND invisible to
     // Accept All, which then reported success over a document that still held tracked
     // markup. It is listed instead, read-only, because there is no author to resolve it as.
     const author = wmlAttribute(site.node, 'author') ?? '';
-    const authorless = wmlAttribute(site.node, 'author') === undefined;
+    const authorless =
+      wmlAttribute(site.node, 'author') === undefined && site.node.localName !== 'tblGridChange';
     const date = wmlAttribute(site.node, 'date');
     const address: RevisionAddress = date === undefined ? { id, author } : { id, author, date };
 
-    const kind: ReviewRevisionKind = site.propertyChange
-      ? 'format'
-      : site.paragraphMark
-        ? 'paragraphMark'
-        : (CONTENT_KINDS[site.node.kind] ?? 'structural');
+    const kind: ReviewRevisionKind = moveInsertions.has(site.node.id)
+      ? 'insert'
+      : site.propertyChange
+        ? 'format'
+        : site.paragraphMark
+          ? 'paragraphMark'
+          : (CONTENT_KINDS[site.node.kind] ?? 'structural');
     // The element name IS the decision for a mark, and it is the only place the direction
     // survives: `w:pPr/w:rPr` holds the revision as a bare element, not as a wrapper kind.
     const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;
 
-    const where = located.get(site.node.id);
+    const structuralChange = kind === 'structural' ? structuralChangeOf(site) : undefined;
+    const start = located.get(site.node.id);
+    const end = moveRange?.end && located.get(moveRange.end.id);
+    const where =
+      start && end && start.paragraphId === end.paragraphId ? { ...start, end: end.end } : start;
     const range: ReviewRange | null = where
       ? {
           partName: part.name,
@@ -240,17 +250,55 @@ function computeRevisionItemsOf(
         }
       : null;
 
+    if (
+      hasParagraphMarks &&
+      range &&
+      (kind === 'paragraphMark' || kind === 'insert' || kind === 'delete')
+    ) {
+      previewByNode.set(site.node.id, {
+        range,
+        text: kind === 'paragraphMark' ? '\n' : siteText,
+      });
+    }
+
     // Keyed on the ELEMENT too. `@w:id` has no uniqueness constraint and Word writes one
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const key =
-      kind === 'structural'
-        ? `structural\u0000${addressKey(address)}`
-        : `${site.node.localName}\u0000${addressKey(address)}`;
+    const sourceKey = sourceKeyOf(site.node, kind, address);
+    // Same attributes do not join text across an unchanged character.
+    let key = currentInlineGroup.get(sourceKey) ?? sourceKey;
+    const previous = byAddress.get(key);
+    const previousEnd = previous?.ranges[previous.ranges.length - 1]?.end;
+    if (
+      (kind === 'insert' || kind === 'delete') &&
+      range &&
+      previousEnd &&
+      previousEnd.paragraphId === range.start.paragraphId &&
+      previousEnd.offset < range.start.offset
+    ) {
+      key = `${sourceKey}\u0000site-${site.node.id}`;
+    }
+    if (kind === 'insert' || kind === 'delete') currentInlineGroup.set(sourceKey, key);
     const existing = byAddress.get(key);
     if (existing) {
       existing.siteNodeIds.push(site.node.id);
+      if (structuralChange && !existing.structuralChanges?.includes(structuralChange)) {
+        (existing.structuralChanges ??= []).push(structuralChange);
+      }
+      if (site.propertyChange) {
+        existing.formattingLanguages = [
+          ...new Set([...(existing.formattingLanguages ?? []), ...changedLanguages(site)]),
+        ];
+        existing.formattingChanges = [
+          ...new Map(
+            [...(existing.formattingChanges ?? []), ...changedFormatting(site)].map((change) => [
+              JSON.stringify(change),
+              change,
+            ])
+          ).values(),
+        ];
+      }
       if (
         range &&
         !existing.ranges.some(
@@ -267,28 +315,29 @@ function computeRevisionItemsOf(
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }
-      // An address holding BOTH an insertion and a deletion is one edit that replaced text:
-      // this engine writes a replacement that way on purpose, so the halves cannot drift
-      // apart and one Accept resolves them together.
-      if (
-        (kind === 'insert' && existing.revisionKind === 'delete') ||
-        (kind === 'delete' && existing.revisionKind === 'insert') ||
-        existing.revisionKind === 'replace'
-      ) {
-        existing.revisionKind = 'replace';
-      }
       // ANY refused site refuses the whole decision, matching `resolveRevisions`: resolving
       // only the sites the engine understands would leave a row half-tracked.
       existing.readOnly ||= site.refused || authorless;
       // The deepest site speaks for the decision. A group's sites can sit at different
       // depths, and the shallowest would make an enclosed change look unenclosed.
       if (site.nesting > existing.nesting) existing.nesting = site.nesting;
-      if (kind === 'delete' || kind === 'moveFrom') existing.deletedText += textUnder(site.node);
-      else if (kind !== 'format' && kind !== 'paragraphMark') existing.text += textUnder(site.node);
+      if (kind === 'delete' || kind === 'moveFrom') existing.deletedText += siteText;
+      else if (kind !== 'format' && kind !== 'paragraphMark') existing.text += siteText;
       continue;
     }
     byAddress.set(key, {
       address,
+      localName: site.node.localName,
+      ...(kind === 'insert' || kind === 'delete'
+        ? { identitySuffix: `\u0000site-${site.node.id}` }
+        : {}),
+      ...(structuralChange ? { structuralChanges: [structuralChange] } : {}),
+      ...(site.propertyChange
+        ? {
+            formattingLanguages: changedLanguages(site),
+            formattingChanges: changedFormatting(site),
+          }
+        : {}),
       revisionKind: kind,
       ...(markDirection ? { markDirection } : {}),
       author,
@@ -296,14 +345,13 @@ function computeRevisionItemsOf(
       text:
         kind === 'format' || kind === 'paragraphMark' || kind === 'delete' || kind === 'moveFrom'
           ? ''
-          : textUnder(site.node),
-      deletedText: kind === 'delete' || kind === 'moveFrom' ? textUnder(site.node) : '',
+          : siteText,
+      deletedText: kind === 'delete' || kind === 'moveFrom' ? siteText : '',
       ranges: range ? [range] : [],
       siteNodeIds: [site.node.id],
       nesting: site.nesting,
-      // A format or paragraph-mark change is resolvable; the structural kinds are not, and
-      // nor is one with no author to address it by.
-      readOnly: site.refused || authorless,
+      // The resolver decides support; unaddressable records remain visible but read-only.
+      readOnly: site.refused || authorless || sourceId === undefined,
     });
   }
 
@@ -312,22 +360,26 @@ function computeRevisionItemsOf(
       registerRevisionSiteNodeIds(
         {
           kind: 'revision' as const,
-          // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
-          // and a header `w:ins` numbered 1 by the same author on the same date produced one
-          // id for two decisions: the rail's `byId` map kept whichever came last, so one card
-          // was unreachable, its replies were attached to the other, and React saw two
-          // children under one key.
-          id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
+          // Include the part: body/header revisions can share id, author, and date.
+          id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}${entry.identitySuffix ?? ''}`,
           address: entry.address,
           addresses: [entry.address],
           revisionKind: entry.revisionKind,
+          ...(entry.revisionKind === 'format' ? { formattingKind: entry.localName } : {}),
+          ...(entry.structuralChanges?.length
+            ? { structuralChanges: entry.structuralChanges }
+            : {}),
+          ...(entry.formattingChanges?.length
+            ? { formattingChanges: entry.formattingChanges }
+            : {}),
+          ...(entry.formattingLanguages?.length
+            ? { formattingLanguages: entry.formattingLanguages }
+            : {}),
           ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
           author: entry.author,
           ...(entry.date === undefined ? {} : { date: entry.date }),
-          // A pure deletion shows the words it removes as its text; a replacement shows what
-          // takes their place, with the removed half beside it.
-          text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
-          replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
+          text: entry.text || entry.deletedText,
+          replacedText: '',
           ranges: entry.ranges,
           nesting: entry.nesting,
           readOnly: entry.readOnly,
@@ -337,274 +389,19 @@ function computeRevisionItemsOf(
         entry.siteNodeIds
       )
   );
-  return pairReplacements(items, dependencies.deepOrder(part));
-}
-
-/**
- * Fold an adjacent deletion and insertion by one author into a single replacement.
- *
- * Typing over a selection is ONE edit, and Word shows it as one `Replaced "x" with "y"`
- * card. Whether the file records it as one revision or two is the writer's choice — Word
- * mints separate ids for the halves — so the pairing is done on ADJACENCY here rather than
- * on identity, which is the only thing that works for a file this engine did not write.
- *
- * The same argument folds runs of one KIND first: a word struck in three gestures is three
- * `w:del` elements under three ids, and listing `Deleted "Le"`, `Deleted "gor"`, `Deleted
- * "a"` reads one edit as three. Adjacent same-kind, same-author items merge into one card
- * before the halves pair, so the pair is whole-word against whole-word.
- *
- * Every address rides along, so accept and reject resolve the pair in one transaction.
- * Resolving half a replacement is never what the reviewer meant.
- */
-function pairReplacements(
-  allItems: readonly ReviewRevisionItem[],
-  order: ReadonlyMap<string, number>
-): ReviewRevisionItem[] {
-  const items = mergeAdjacentSameKindEdits(allItems);
-  // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
-  // struck text crosses something that is not text — an endnote or footnote reference, a
-  // field, a break — because those cannot go inside the same wrapper. Requiring a single range
-  // meant striking across an endnote mark and typing over it showed a Deleted card and an
-  // Inserted card instead of one Replaced, on an edit the user made in one gesture.
-  const pairable = items.filter(
-    (item) =>
-      (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
-      !item.readOnly &&
-      item.ranges.length > 0
+  const order = dependencies.deepOrder(part);
+  // Finish inline chains before a paragraph mark connects their endpoints. Otherwise a
+  // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
+  // an atomic field, leaving those wrappers as separate review decisions.
+  const tableItems = groupTableRevisions(part, items, sites, located, order);
+  // Same-kind fragments remain one decision even when their source dates differ.
+  const textItems = mergeParagraphBreakEdits(
+    mergeAdjacentSameKindEdits(tableItems, order),
+    part,
+    order,
+    previewByNode
   );
-  const taken = new Set<string>();
-  const replacements = new Map<string, ReviewRevisionItem>();
-
-  // Insertions indexed by where their FIRST range starts. Pairing is exact end-to-start
-  // position equality — DELETION FIRST, same paragraph only. The cross-paragraph case is
-  // gone deliberately: it checked that the insertion's paragraph followed the deletion's,
-  // never that the deletion sat at the END of its own, so routine mid-paragraph edits
-  // folded into one card. Order matters too: this engine only ever writes
-  // delete-then-insert, so an insertion FOLLOWED by a deletion is a foreign file where
-  // pairing them would be an invention. The index makes the lookup exact rather than a
-  // scan of every insertion per deletion, which was quadratic in a heavily edited document.
-  const insertionsByStart = new Map<string, ReviewRevisionItem[]>();
-  for (const insertion of pairable) {
-    if (insertion.revisionKind !== 'insert') continue;
-    const start = insertion.ranges[0]!.start;
-    const key = `${start.paragraphId}\u0000${start.offset}`;
-    const bucket = insertionsByStart.get(key);
-    if (bucket) bucket.push(insertion);
-    else insertionsByStart.set(key, [insertion]);
-  }
-
-  for (const deletion of pairable) {
-    if (deletion.revisionKind !== 'delete' || taken.has(deletion.id)) continue;
-    // The deletion's LAST range end: the end that actually meets the insertion's first
-    // start when the halves span more than one range each.
-    const end = deletion.ranges[deletion.ranges.length - 1]!.end;
-    const bucket = insertionsByStart.get(`${end.paragraphId}\u0000${end.offset}`) ?? [];
-    // A ZERO-WIDTH insertion is not the replacement, even when it starts exactly here.
-    // Several legal shapes cover no characters: an empty run carrying only run properties,
-    // a comment reference, a bookmark pair. Taking the first candidate in the bucket paired
-    // the deletion with one of those, so the card read Replaced-old-with-nothing while the
-    // real insertion beside it was orphaned into an Inserted card of its own. Text-bearing
-    // candidates go first; order within each group is preserved.
-    const candidates =
-      bucket.length > 1
-        ? [...bucket].sort((a, b) => (a.text.length > 0 ? 0 : 1) - (b.text.length > 0 ? 0 : 1))
-        : bucket;
-    for (const insertion of candidates) {
-      if (taken.has(insertion.id)) continue;
-      // Same AUTHOR is the whole predicate, deliberately. A time window used to sit here
-      // too, but Word itself pairs on adjacency alone: a reviewer who strikes text one day
-      // and types its replacement the next still sees one `Replaced` card in Word, and the
-      // halves of a foreign file routinely carry timestamps hours or days apart. Splitting
-      // those into a Deleted and an Inserted card misread one edit as two.
-      if (insertion.author !== deletion.author) continue;
-      taken.add(deletion.id);
-      taken.add(insertion.id);
-      // Anchored at whichever half comes FIRST, so the card sits where the edit starts.
-      const first = before(deletion.ranges[0]!, insertion.ranges[0]!, order) ? deletion : insertion;
-      // The card is dated when the replacement was COMPLETED: the later half's stamp.
-      const date = replacementDate(deletion.date, insertion.date);
-      replacements.set(
-        deletion.id,
-        registerRevisionSiteNodeIds(
-          {
-            ...first,
-            id: `replace-${deletion.id}-${insertion.id}`,
-            revisionKind: 'replace',
-            ...(date === undefined ? {} : { date }),
-            // DEDUPED: when this engine wrote the replacement both halves share one identity,
-            // and applying the same `acceptRevision` twice in one transaction refuses the second
-            // — which refused the whole thing and left the replacement unresolved.
-            addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
-            text: insertion.text,
-            replacedText: deletion.text,
-            ranges: [...deletion.ranges, ...insertion.ranges],
-            // Struck half first, so the split point is simply how many the deletion contributed.
-            replacedRangeCount: deletion.ranges.length,
-            readOnly: deletion.readOnly || insertion.readOnly,
-          },
-          [...revisionSiteNodeIdsOf(deletion), ...revisionSiteNodeIdsOf(insertion)]
-        )
-      );
-      break;
-    }
-  }
-
-  const out: ReviewRevisionItem[] = [];
-  for (const item of items) {
-    const replacement = replacements.get(item.id);
-    if (replacement) {
-      out.push(replacement);
-      continue;
-    }
-    if (!taken.has(item.id)) out.push(item);
-  }
-  return out;
-}
-
-/**
- * Fold chains of ADJACENT items of one kind by one author into single cards.
- *
- * A word struck in several gestures — or re-struck around something a `w:del` cannot
- * contain — lands in the file as several sibling elements under distinct ids. They are one
- * decision to the reviewer, and Word shows them as one. Adjacency is the same exact
- * end-to-start test the replacement pairing uses, so an untracked character between two
- * deletions keeps them apart.
- */
-function mergeAdjacentSameKindEdits(
-  items: readonly ReviewRevisionItem[]
-): readonly ReviewRevisionItem[] {
-  const mergeable = items.filter(
-    (item) =>
-      (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
-      !item.readOnly &&
-      item.ranges.length > 0
-  );
-  if (mergeable.length < 2) return items;
-
-  const keyOf = (item: ReviewRevisionItem, position: ReviewPosition): string =>
-    `${item.revisionKind}\u0000${item.author}\u0000${position.paragraphId}\u0000${position.offset}`;
-  const byStart = new Map<string, ReviewRevisionItem>();
-  const endKeys = new Set<string>();
-  for (const item of mergeable) {
-    byStart.set(keyOf(item, item.ranges[0]!.start), item);
-    // An empty field-control wrapper can prefix a visible revision at the same position.
-    // Its point is not evidence that the visible revision has a predecessor.
-    if (
-      item.ranges.some(
-        (range) =>
-          range.start.paragraphId !== range.end.paragraphId ||
-          range.start.offset !== range.end.offset
-      )
-    ) {
-      endKeys.add(keyOf(item, item.ranges[item.ranges.length - 1]!.end));
-    }
-  }
-
-  const consumed = new Set<string>();
-  const merged = new Map<string, ReviewRevisionItem>();
-  for (const head of mergeable) {
-    if (consumed.has(head.id)) continue;
-    // A chain is walked from its HEAD only — an item whose start some sibling's end meets
-    // is a tail, and walking it early would split the chain in two.
-    if (endKeys.has(keyOf(head, head.ranges[0]!.start))) continue;
-    const chain = [head];
-    let current = head;
-    for (;;) {
-      const next = byStart.get(keyOf(current, current.ranges[current.ranges.length - 1]!.end));
-      if (!next || next === current || consumed.has(next.id)) break;
-      consumed.add(next.id);
-      chain.push(next);
-      current = next;
-    }
-    if (chain.length > 1) merged.set(head.id, foldChain(chain));
-  }
-  if (merged.size === 0) return items;
-
-  const out: ReviewRevisionItem[] = [];
-  for (const item of items) {
-    if (consumed.has(item.id)) continue;
-    out.push(merged.get(item.id) ?? item);
-  }
-  return out;
-}
-
-/** One card from a chain of adjacent same-kind halves, in document order. */
-function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
-  const first = chain[0]!;
-  const addresses = [...first.addresses];
-  const ranges = [...first.ranges];
-  const siteNodeIds = [...revisionSiteNodeIdsOf(first)];
-  let text = first.text;
-  let date = first.date;
-  for (const next of chain.slice(1)) {
-    for (const address of next.addresses) {
-      if (!addresses.some((known) => sameAddress(known, address))) addresses.push(address);
-    }
-    for (const range of next.ranges) ranges.push(range);
-    for (const nodeId of revisionSiteNodeIdsOf(next)) siteNodeIds.push(nodeId);
-    text += next.text;
-    date = laterStamp(date, next.date);
-  }
-  return registerRevisionSiteNodeIds(
-    {
-      ...first,
-      id: chain.map((item) => item.id).join('+'),
-      addresses,
-      ranges,
-      text,
-      ...(date === undefined ? {} : { date }),
-    },
-    siteNodeIds
-  );
-}
-
-/** The later of two stamps; the first one when they cannot be compared. */
-function laterStamp(a: string | undefined, b: string | undefined): string | undefined {
-  if (a === undefined) return b;
-  if (b === undefined) return a;
-  const first = Date.parse(a);
-  const second = Date.parse(b);
-  if (Number.isNaN(first) || Number.isNaN(second)) return a;
-  return second > first ? b : a;
-}
-
-/** Every address once, keeping first-seen order. */
-function dedupeAddresses(addresses: readonly RevisionAddress[]): RevisionAddress[] {
-  const out: RevisionAddress[] = [];
-  for (const address of addresses) {
-    if (!out.some((known) => sameAddress(known, address))) out.push(address);
-  }
-  return out;
-}
-
-/** Two addresses naming one revision. */
-function sameAddress(a: RevisionAddress, b: RevisionAddress): boolean {
-  return a.id === b.id && a.author === b.author && (a.date ?? '') === (b.date ?? '');
-}
-
-/**
- * When the replacement was completed: the later of the two halves' stamps. Preference goes
- * to the insertion whenever the stamps cannot be compared — the inserted text is the half
- * the reviewer reads as "the edit", and typing it is the gesture that finished the change.
- */
-function replacementDate(
-  deletion: string | undefined,
-  insertion: string | undefined
-): string | undefined {
-  if (insertion === undefined) return deletion;
-  if (deletion === undefined) return insertion;
-  const struck = Date.parse(deletion);
-  const typed = Date.parse(insertion);
-  if (Number.isNaN(struck) || Number.isNaN(typed)) return insertion;
-  return struck > typed ? deletion : insertion;
-}
-
-/** Document order of two ranges' starts. */
-function before(a: ReviewRange, b: ReviewRange, order: ReadonlyMap<string, number>): boolean {
-  const first = order.get(a.start.paragraphId) ?? 0;
-  const second = order.get(b.start.paragraphId) ?? 0;
-  if (first !== second) return first < second;
-  return a.start.offset <= b.start.offset;
+  return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
 }
 
 /**
@@ -740,7 +537,10 @@ export function collectReviewItemsWith(
   // or the same shared header under two sections — cannot double every card in it.
   const parts: OoxmlPart[] = [input.storyPart];
   const seen = new Set<string>([input.storyPart.name]);
-  for (const part of input.furnitureParts ?? []) {
+  for (const part of [
+    ...(input.furnitureParts ?? []),
+    ...(input.stylesPart ? [input.stylesPart] : []),
+  ]) {
     if (seen.has(part.name)) continue;
     seen.add(part.name);
     parts.push(part);
@@ -821,6 +621,13 @@ function normalizeRetainedCommentLinks<T extends LinkableReviewItem>(
   return { ...item, replyIds: retainedReplyIds } as T;
 }
 
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1)
+    if (left[index] !== right[index]) return false;
+  return true;
+}
+
 /** A range as a comparable key, so "exactly these characters" is one lookup. */
 function rangeKey(range: ReviewRange): string {
   return (
@@ -850,13 +657,21 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
   const retainedItems = items.map((item) =>
     normalizeRetainedCommentLinks(item, retainedCommentIds)
   );
-  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  // Only a span some comment can claim is ever looked up: keying every revision's range built
+  // a string per change per keystroke on documents with thousands of changes and no answers.
+  const claimableStarts = new Set<string>();
   for (const item of retainedItems) {
+    if (item.kind === 'comment' && item.parentId === undefined && !item.orphaned && item.range)
+      claimableStarts.add(item.range.start.paragraphId);
+  }
+  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  for (const item of claimableStarts.size > 0 ? retainedItems : []) {
     if (item.kind !== 'revision') continue;
     for (const range of item.ranges ?? []) {
       if (
-        range.start.paragraphId === range.end.paragraphId &&
-        range.start.offset === range.end.offset
+        !claimableStarts.has(range.start.paragraphId) ||
+        (range.start.paragraphId === range.end.paragraphId &&
+          range.start.offset === range.end.offset)
       ) {
         continue;
       }
@@ -911,7 +726,8 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
   return retainedItems.map((item) => {
     if (item.kind === 'revision') {
       const replies = repliesOf.get(item.id) ?? [];
-      if (replies.length === 0 && (item.replyIds ?? []).length === 0) return item;
+      // Unchanged links keep the item, so every identity-keyed read of it stays warm.
+      if (sameIds(replies, item.replyIds ?? [])) return item;
       return registerRevisionSiteNodeIds(
         { ...item, replyIds: replies },
         revisionSiteNodeIdsOf(item)

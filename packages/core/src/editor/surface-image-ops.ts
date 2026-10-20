@@ -197,7 +197,11 @@ export function createImageOps(deps: {
         bytes,
         mime,
         deps.decodePort(),
-        { ...options, ...(actorId ? { actorId } : {}) }
+        {
+          ...options,
+          commitGuard: () => deps.editingMode() === 'edit' && options.commitGuard?.() !== false,
+          ...(actorId ? { actorId } : {}),
+        }
       );
     },
   };

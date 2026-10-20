@@ -91,6 +91,28 @@ describe('body paragraph section index parity', () => {
     }
   });
 
+  test('maps a paragraph a hidden mark removes from the flow to the next section', () => {
+    const hidden = '<w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr></w:p>';
+    const body = `${para('s0-a')}${breakPara('12240')}${hidden}${hidden}${para('s1-a')}`;
+    const part = load(body);
+    const paragraphs = part.root.children[0]!.children.filter(
+      (child) => child.kind === 'paragraph'
+    );
+    const oracle = buildBodyParagraphSectionIndex(part);
+    expect(paragraphs.map((paragraph) => oracle.get(paragraph.id))).toEqual([0, 0, 1, 1, 1]);
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      expect(bodySectionIndexOf(opened.surface.session, paragraphs[2]!.id)).toBe(1);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
+  });
+
   test('returns null for non-body ids without rebuilding on every lookup', () => {
     const part = load(`${para('one')}${para('two')}`);
     const container = document.createElement('div');

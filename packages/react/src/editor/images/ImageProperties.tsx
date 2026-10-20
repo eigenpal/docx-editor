@@ -1,3 +1,5 @@
+import { renderPopup } from '../popup-renderer';
+import { usePopupConfig } from '../popup-config';
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -8,6 +10,7 @@ import type { DrawingPositionInput, ImageWrapTarget } from '@docx-editor.dev/cor
 import {
   DRAWING_REL_FROM_H,
   DRAWING_REL_FROM_V,
+  hostDocumentOf,
   IMAGE_WRAP_TARGETS,
   positionInputFromPropertiesCommand,
   validateDrawingPositionInput,
@@ -26,7 +29,21 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
     root.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+  ).filter(
+    (element) => element.offsetParent !== null || element === hostDocumentOf(root).activeElement
+  );
+}
+
+/**
+ * A host may render this public dialog from its own chrome, outside the editor. The
+ * packaged rules are anchored to `.docx-editor`, so the overlay carries that class
+ * itself when nothing above it does, the way `DialogFrame` does for native dialogs.
+ *
+ * This runs as an element ref, not an effect: the panel mounts only once its draft
+ * exists, which is a later render than the one that sets `open`.
+ */
+function scopeOverlay(node: HTMLDivElement | null): void {
+  if (node && !node.closest('.docx-editor')) node.classList.add('docx-editor');
 }
 
 function guardDialogMousedown(event: React.MouseEvent): void {
@@ -288,7 +305,7 @@ export function DocxEditorImagePropertiesDialog({
       if (event.key !== 'Tab') return;
       const items = dialogFocusables(dialog);
       if (items.length === 0) return;
-      const active = document.activeElement;
+      const active = hostDocumentOf(dialog).activeElement;
       const currentIndex = items.findIndex((element) => element === active);
       if (currentIndex === -1) return;
       event.preventDefault();
@@ -297,8 +314,9 @@ export function DocxEditorImagePropertiesDialog({
         : (currentIndex + 1) % items.length;
       items[nextIndex]?.focus();
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    const doc = hostDocumentOf(dialog);
+    doc.addEventListener('keydown', onKeyDown);
+    return () => doc.removeEventListener('keydown', onKeyDown);
   }, [open, dismiss]);
 
   const aspectRatio = useMemo(() => {
@@ -469,6 +487,7 @@ export function DocxEditorImagePropertiesDialog({
 
   return (
     <div
+      ref={scopeOverlay}
       className={`docx-dialog-overlay${className ? ` ${className}` : ''}`}
       onClick={dismiss}
       onMouseDown={(event) => {
@@ -480,6 +499,7 @@ export function DocxEditorImagePropertiesDialog({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        data-docx-modal=""
         aria-labelledby={titleId}
         className="docx-dialog docx-image-properties-dialog"
         onClick={(event) => event.stopPropagation()}
@@ -836,6 +856,7 @@ export function ImagePropertiesTrigger({
   asChild,
   children,
 }: ImagePropertiesTriggerProps) {
+  const popups = usePopupConfig();
   const editor = useDocxEditor();
   const { t } = useTranslation();
   const image = useEditorState(selectImage);
@@ -869,11 +890,17 @@ export function ImagePropertiesTrigger({
       ) : (
         <button {...shared}>{children ?? chromeIcon(control?.paths)}</button>
       )}
-      <DocxEditorImagePropertiesDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        triggerRef={triggerRef}
-      />
+      {open && popups?.imageProperties !== false ? (
+        popups?.imageProperties ? (
+          renderPopup(popups.imageProperties, { open, onClose: () => setOpen(false), triggerRef })
+        ) : (
+          <DocxEditorImagePropertiesDialog
+            open={open}
+            onClose={() => setOpen(false)}
+            triggerRef={triggerRef}
+          />
+        )
+      ) : null}
     </>
   );
 }

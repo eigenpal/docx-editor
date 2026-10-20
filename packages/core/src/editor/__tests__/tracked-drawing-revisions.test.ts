@@ -1,7 +1,8 @@
+import { resolveRevisionMarkup } from '../../contracts/revision-markup.ts';
 // A drawing inside a tracked insertion or deletion carries the change (#479).
 //
 // The record folds the owning run's revision stack in, paint marks the element with the
-// same `data-revision-*` datasets spans carry plus a kind-coloured outline class, deleted
+// same `data-revision-*` datasets spans carry and a shared margin change bar; deleted
 // pictures stay laid out under `all-markup` (dimmed, like struck text), and the resolved
 // display modes remove what they resolve away — inline and anchored alike.
 
@@ -95,7 +96,7 @@ function lineDrawings(surface: PaginatedSurface): readonly InlineDrawingRecord[]
 }
 
 describe('tracked drawings carry and paint their revision', () => {
-  test('an inserted inline picture is outlined, attributed, and gets a change bar', async () => {
+  test('an inserted inline picture is attributed and gets a shared change bar', async () => {
     const { surface, container } = await mount(
       docx(`<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>${ins(inlinePicture(5))}</w:p>`)
     );
@@ -122,7 +123,10 @@ describe('tracked drawings carry and paint their revision', () => {
 
       // The line's only change is the picture — no revision span — and the margin still says
       // something changed on it.
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -143,7 +147,10 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(element!.classList.contains('docx-drawing--revision-deletion')).toBe(true);
       expect(element!.dataset.revisionKind).toBe('delete');
       expect(element!.dataset.reviewAuthor).toBe('Bob');
-      expect(container.querySelector('.docx-change-bar-deletion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-deletion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -154,11 +161,20 @@ describe('tracked drawings carry and paint their revision', () => {
     const body =
       `<w:p><w:r><w:t xml:space="preserve">text </w:t></w:r>${del(inlinePicture(6))}</w:p>` +
       `<w:p>${ins(inlinePicture(7))}</w:p>`;
+    // Without a review module the engine keeps the surviving picture attributed (its own
+    // reading of the proposal), and publishes the decision as a change site on its line as
+    // well, which is what a review view's Simple Markup bar reads.
+    const siteKinds = (surface: PaginatedSurface): string[] =>
+      surface
+        .layout()
+        .pages[0]!.fragments.flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+        .flatMap((line) => (line.changeSites ?? []).map((site) => site.kind));
     const proposed = await mount(docx(body), 'proposed');
     try {
       const drawings = lineDrawings(proposed.surface);
       expect(drawings).toHaveLength(1);
       expect(drawings[0]!.revisions![0]!.kind).toBe('insert');
+      expect(siteKinds(proposed.surface)).toEqual(['delete', 'insert']);
     } finally {
       proposed.surface.destroy();
       proposed.container.remove();
@@ -168,6 +184,7 @@ describe('tracked drawings carry and paint their revision', () => {
       const drawings = lineDrawings(original.surface);
       expect(drawings).toHaveLength(1);
       expect(drawings[0]!.revisions![0]!.kind).toBe('delete');
+      expect(siteKinds(original.surface)).toEqual(['delete', 'insert']);
     } finally {
       original.surface.destroy();
       original.container.remove();
@@ -211,7 +228,10 @@ describe('tracked drawings carry and paint their revision', () => {
 
       // The anchor line carries no span or line drawing for the picture, so the bar reads
       // the line's own anchor attribution.
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -234,7 +254,11 @@ describe('tracked drawings carry and paint their revision', () => {
         .flatMap((cell) => cell.blocks)
         .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []));
       expect(cellLines.some((line) => (line.anchorRevisions ?? []).length > 0)).toBe(true);
-      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+      const element = container.querySelector<HTMLElement>('.docx-drawing');
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-insertion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
     } finally {
       surface.destroy();
       container.remove();
@@ -260,7 +284,10 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(after[0]!.revisions![0]).toMatchObject({ kind: 'delete', author: 'Demo Reviewer' });
       const element = container.querySelector<HTMLElement>('.docx-drawing');
       expect(element!.classList.contains('docx-drawing--revision-deletion')).toBe(true);
-      expect(container.querySelector('.docx-change-bar-deletion')).not.toBeNull();
+      expect(element!.style.outlineColor).toBe('');
+      expect(
+        container.querySelector<HTMLElement>('.docx-change-bar-deletion')!.style.backgroundColor
+      ).toBe('var(--doc-review-change-bar)');
 
       // The review queue offers the deletion itself — NOT a "deleted paragraph break" card.
       const items = revisionItemsOf(surface.session.part());
@@ -413,4 +440,56 @@ describe('tracked drawings carry and paint their revision', () => {
     expect(original.bars).toBe(0);
     expect(original.y).toBe(plain.y);
   });
+});
+
+test.each(['inline', 'anchored'] as const)(
+  'hidden deletion removes %s drawing geometry and keeps its bar',
+  async (kind) => {
+    const { surface, container } = await mount(
+      docx(
+        `<w:p>${del(kind === 'inline' ? inlinePicture(5) : anchoredPicture(5))}<w:r><w:t>kept</w:t></w:r></w:p>`
+      )
+    );
+    try {
+      surface.setRevisionMarkup(resolveRevisionMarkup({ deletions: { mark: 'hidden' } }));
+      expect(lineDrawings(surface)).toHaveLength(0);
+      expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
+      expect(container.querySelector('.docx-change-bar')).not.toBeNull();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  }
+);
+
+test('move fallback hides anchored drawings and removes their wrap holes', async () => {
+  const drawing = anchoredPicture(9).replace('<wp:wrapNone/>', '<wp:wrapTopAndBottom/>');
+  const { surface, container } = await mount(
+    docx(
+      `<w:p><w:moveFrom w:id="7" w:author="Reviewer">${drawing}</w:moveFrom><w:r><w:t>anchor line</w:t></w:r></w:p>`
+    )
+  );
+  const firstY = () =>
+    surface
+      .layout()
+      .pages[0]!.fragments.flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))[0]!
+      .box.y;
+  try {
+    const initialY = firstY();
+    surface.setRevisionMarkup(
+      resolveRevisionMarkup({
+        trackMoves: false,
+        deletions: { mark: 'hidden' },
+      })
+    );
+    expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
+    expect(firstY()).toBeLessThan(initialY);
+    expect(container.querySelector('.docx-change-bar')).not.toBeNull();
+    surface.setRevisionMarkup(resolveRevisionMarkup());
+    expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(1);
+    expect(firstY()).toBe(initialY);
+  } finally {
+    surface.destroy();
+    container.remove();
+  }
 });

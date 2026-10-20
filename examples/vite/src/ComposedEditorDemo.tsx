@@ -1,8 +1,8 @@
+import { demoExporters } from '../../shared/menu-exporters';
 // The FLAGSHIP demo: the provider-first composition API, end to end.
 //
 // Everything on screen is composed under `<DocxEditor.Root>`: the library's compound
-// toolbar (the FULL chrome registry by default, with the FontFamily slot overridden in
-// place by a composed picker), the library's compound MENU BAR (with a demo-owned row
+// toolbar (the full default chrome registry), the library's compound MENU BAR (with a demo-owned row
 // appended into File and the whole Help menu replaced), and a demo-owned header shell
 // around them — brand, title, status, Open/New/Save buttons, the perf HUD — built from
 // nothing but the public hooks (`useDocxEditor`, `useEditorEvent`, `useFontFamily`).
@@ -19,7 +19,7 @@ import {
   useDocxSource,
   useEditorCaret,
   useEditorEvent,
-  useFontFamily,
+  useEditorState,
   type EditorCaret,
 } from '@docx-editor.dev/react';
 // PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
@@ -32,9 +32,11 @@ import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
+import { ReviewSettings, storedReviewPane } from './ReviewSettings';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
@@ -65,7 +67,9 @@ import {
  * optional while licensing is honor-system.
  */
 const PRO_MODULES = [
-  reviewModule(),
+  // The example starts with the pane closed, so comments show as margin miniatures; the
+  // header's settings panel saves other choices over that.
+  reviewModule({ pane: storedReviewPane() }),
   customNodesModule({
     nodes: [DEMO_CITATION],
     // A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an
@@ -91,35 +95,6 @@ function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
   anchor.download = name;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Toolbar customization: the in-place FontFamily override with typeface previews
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Custom items for the FontFamily popup: each offerable font as a single-line row
- * rendered in its own typeface, reference-picker style (the selected row gets the
- * library's right-aligned check). Options come from `useFontFamily()` — the editor's
- * configured catalog merged with the document's declared fonts, so a brand-new
- * document still lists real choices; the list follows edits.
- */
-function FontPreviewItems() {
-  const { options } = useFontFamily();
-  if (options.length === 0) {
-    return <div className="demo-font-empty">No fonts declared in this document</div>;
-  }
-  return (
-    <>
-      {options.map((family) => (
-        <DocxEditor.Toolbar.FontFamily.Item key={family} value={family} className="demo-font-item">
-          <span className="demo-font-item__name" style={{ fontFamily: family }}>
-            {family}
-          </span>
-        </DocxEditor.Toolbar.FontFamily.Item>
-      ))}
-    </>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,6 +361,8 @@ function EditorChrome({
   collaborationControl: ReactNode;
 }) {
   const editor = useDocxEditor();
+  // While a large file opens, the previous document is still mounted: Open and New wait.
+  const opening = useEditorState((snapshot) => snapshot.isOpening === true);
   // Where the caret is, as a paragraph and an offset — the shape the write APIs take as
   // their `at`. `snapshot.selection` cannot answer this (it addresses paragraphs by id and
   // carries no offsets), and reading it used to mean reaching into `editor.surface`, an
@@ -451,6 +428,8 @@ function EditorChrome({
             spellCheck={false}
           />
           <DocxEditor.Menu
+            exporters={demoExporters}
+            fileName={title}
             onOpen={collaborating ? undefined : () => fileInputRef.current?.click()}
             onSave={saveDocument}
             onPageSetup={() => setShowPageSetup(true)}
@@ -459,10 +438,18 @@ function EditorChrome({
                 order is clearer than merging into it. */}
             <DocxEditor.Menu.File preset={false}>
               <DocxEditor.Menu.Open />
-              <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor || collaborating}>
+              <DocxEditor.Menu.Row
+                onSelect={newDocument}
+                disabled={!editor || collaborating || opening}
+              >
                 New
               </DocxEditor.Menu.Row>
               <DocxEditor.Menu.Save />
+              <DocxEditor.Menu.Submenu labelKey="toolbar.export">
+                <DocxEditor.Menu.ExportMarkdown />
+                <DocxEditor.Menu.ExportPdf />
+              </DocxEditor.Menu.Submenu>
+              <DocxEditor.Menu.Print />
               <DocxEditor.Menu.Separator />
               <DocxEditor.Menu.PageSetup />
             </DocxEditor.Menu.File>
@@ -515,14 +502,15 @@ function EditorChrome({
 
         <div className="demo-header__right">
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
+          <ReviewSettings />
           <DemoHeaderButton
             variant="primary"
-            disabled={!editor || collaborating}
+            disabled={!editor || collaborating || opening}
             onClick={() => fileInputRef.current?.click()}
           >
             Open DOCX
           </DemoHeaderButton>
-          <DemoHeaderButton disabled={!editor || collaborating} onClick={newDocument}>
+          <DemoHeaderButton disabled={!editor || collaborating || opening} onClick={newDocument}>
             New
           </DemoHeaderButton>
           {collaborationControl}
@@ -543,21 +531,23 @@ function EditorChrome({
         }}
       />
 
-      {/* The LIBRARY toolbar: the FULL chrome registry by default. One slot is
-          customized IN PLACE to show override semantics: FontFamily renders each
-          document-derived family in its own typeface. Save is
-          live because the toolbar was given an onSave handler. */}
-      <DocxEditor.Toolbar className="demo-toolbar" onSave={saveDocument}>
-        <DocxEditor.Toolbar.FontFamily>
-          <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
-          <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
-            <FontPreviewItems />
-          </DocxEditor.Toolbar.FontFamily.Content>
-        </DocxEditor.Toolbar.FontFamily>
-      </DocxEditor.Toolbar>
+      <DocxEditor.Toolbar onSave={saveDocument} />
 
       {/* Word-style compatibility bar when document fonts render in substitutes. */}
       <DocxEditor.FontNotice />
+
+      {/* Explains a file that did not open, with an action to try another one. */}
+      <DocxEditor.OpenFailure
+        actions={() => (
+          <DocxEditor.OpenFailure.Action
+            variant="primary"
+            dismiss
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Open another file
+          </DocxEditor.OpenFailure.Action>
+        )}
+      />
 
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
@@ -630,6 +620,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   // key against a closed, commit-pinned catalog — and a failed fetch degrades to the fixed
   // measurer rather than breaking the document.
   //
+  // `cjkFonts()` comes last. Its one face stands in for the East Asian families (SimSun,
+  // MS Mincho, and their localized names) that the two origins before it cannot serve, and
+  // it downloads only when a document names one of them.
+  //
   // The trade is one reflow. Nothing can know the families before the parse, so the
   // document opens on the fixed measurer and re-paginates when the faces land; the eager
   // `{ fonts: defaultFonts }` still holds `document` back until fonts settle, at the cost
@@ -638,7 +632,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(fixtureUrl, { fonts: [packagedFonts(), googleFonts()] });
+  } = useDocxSource(fixtureUrl, {
+    fonts: [packagedFonts(), googleFonts(), cjkFonts()],
+  });
 
   const activeDocument = collaboration.document ?? bytes;
 
@@ -707,7 +703,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
-              <div className="demo-vruler" aria-hidden="true">
+              <div className="demo-vruler">
                 <DocxEditor.VerticalRuler />
               </div>
               {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
@@ -756,6 +752,8 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 <CitationCardActions />
               </DocxEditorReview>
             </DocxEditor.Viewport>
+            {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
+                still render into this row, so it never scrolls away with the pages. */}
             <DocxEditor.PageNumber />
             {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
                 the positioned ancestor). Zero conditions wired here: the engine opens a

@@ -125,7 +125,7 @@ function fontOrigins(source: DocxFontsSource): readonly DocxFontOrigin[] {
 
 /**
  * A loader sitting in an ON-DEMAND list is still a loader: wrapped so it is called with no
- * argument, once per load, and so a throw lands in `composeFontOrigins`' per-origin catch
+ * argument, per font request, and so a throw lands in `composeFontOrigins`' per-origin catch
  * rather than escaping the surrounding `.map`.
  */
 function asFontOrigin(origin: DocxFontOrigin): FontOrigin {
@@ -247,7 +247,7 @@ export function useDocxSource(
   // in Vue, whose watcher keys on the option value. Keying on the value is not open to
   // this hook: React rebuilds the options object every render, so `{ fonts: [a, b] }`
   // written inline would re-run the whole eager load on every render. Neither behaviour is
-  // a contract — remount, or load a document, to change fonts deliberately.
+  // a contract — pass a new `fonts` value, or load a document, to change fonts deliberately.
   useEffect(() => {
     const fontsSource = latest.current.fonts;
     if (fontsSource === undefined) {

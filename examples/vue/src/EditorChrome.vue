@@ -18,6 +18,8 @@
           @input="emit('update:title', ($event.target as HTMLInputElement).value)"
         />
         <DocxEditorMenu
+          :exporters="demoExporters"
+          :file-name="title"
           @open="openFilePicker"
           @save="saveDocument"
           @page-setup="showPageSetup = true"
@@ -26,6 +28,11 @@
             <DocxEditorMenuOpen />
             <DocxEditorMenuRow :disabled="!editor" @select="newDocument">New</DocxEditorMenuRow>
             <DocxEditorMenuSave />
+            <DocxEditorMenuSubmenu label-key="toolbar.export">
+              <DocxEditorMenuExportMarkdown />
+              <DocxEditorMenuExportPdf />
+            </DocxEditorMenuSubmenu>
+            <DocxEditorMenuPrint />
             <DocxEditorMenuSeparator />
             <DocxEditorMenuPageSetup />
           </DocxEditorMenuFile>
@@ -58,6 +65,7 @@
 
       <div class="demo-header__right">
         <ThemeToggle :value="colorMode" @update:value="emit('update:colorMode', $event)" />
+        <ReviewSettings />
         <button
           type="button"
           :style="DEMO_PRIMARY_BUTTON"
@@ -90,24 +98,34 @@
     <DocxEditorToolbar class="demo-toolbar" @save="saveDocument">
       <DocxEditorToolbarFontFamily>
         <DocxEditorToolbarFontFamilyTrigger class="demo-font-trigger" />
-        <DocxEditorToolbarFontFamilyContent class="demo-font-menu">
-          <FontPreviewItems />
-        </DocxEditorToolbarFontFamilyContent>
+        <DocxEditorToolbarFontFamilyContent class="demo-font-menu" />
       </DocxEditorToolbarFontFamily>
     </DocxEditorToolbar>
 
     <DocxEditorFontNotice />
+
+    <!-- Explains a file that did not open, with an action to try another one. -->
+    <DocxEditorOpenFailure>
+      <template #actions>
+        <DocxEditorOpenFailureAction variant="primary" dismiss @click="openFilePicker">
+          Open another file
+        </DocxEditorOpenFailureAction>
+      </template>
+    </DocxEditorOpenFailure>
 
     <DocxEditorPageSetupDialog :open="showPageSetup" @close="showPageSetup = false" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { demoExporters } from '../../shared/menu-exporters';
 import { ref } from 'vue';
 import {
   DocxEditorMenu,
   DocxEditorToolbar,
   DocxEditorFontNotice,
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
   DocxEditorPageSetupDialog,
   useDocxEditor,
   useEditorCaret,
@@ -118,7 +136,7 @@ import BrandLogo from '../../shared/BrandLogo.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
 import SourceLink from '../../shared/SourceLink.vue';
 import ThemeToggle from './ThemeToggle.vue';
-import FontPreviewItems from './FontPreviewItems.vue';
+import ReviewSettings from './ReviewSettings.vue';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 
 const props = defineProps<{
@@ -137,6 +155,10 @@ const DocxEditorMenuFile = DocxEditorMenu.File;
 const DocxEditorMenuOpen = DocxEditorMenu.Open;
 const DocxEditorMenuRow = DocxEditorMenu.Row;
 const DocxEditorMenuSave = DocxEditorMenu.Save;
+const DocxEditorMenuSubmenu = DocxEditorMenu.Submenu;
+const DocxEditorMenuExportMarkdown = DocxEditorMenu.ExportMarkdown;
+const DocxEditorMenuExportPdf = DocxEditorMenu.ExportPdf;
+const DocxEditorMenuPrint = DocxEditorMenu.Print;
 const DocxEditorMenuSeparator = DocxEditorMenu.Separator;
 const DocxEditorMenuPageSetup = DocxEditorMenu.PageSetup;
 const DocxEditorMenuInsert = DocxEditorMenu.Insert;

@@ -15,25 +15,20 @@ export function createWebrtcCollaboration(options: CreateWebrtcCollaborationOpti
 
 // @public
 export interface CreateWebrtcCollaborationOptions {
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly iceServers?: readonly RTCIceServer[];
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
     readonly password?: string;
-    // (undocumented)
     readonly roomId: string;
-    // (undocumented)
-    readonly signaling?: readonly string[];
+    readonly signaling: readonly string[];
 }
 
 // @public
 export const DEMO_SIGNALING_ENDPOINTS: readonly string[];
 
 // @internal
-export function resetDemoSignalingWarningForTests(): void;
+export function requireSignaling(signaling: readonly string[] | undefined): readonly string[];
 
 // @internal
 export function resolveWebrtcRoomPassword(options: {
@@ -44,17 +39,12 @@ export function resolveWebrtcRoomPassword(options: {
 // @public
 export function validateRoomId(value: string): string;
 
-// @internal
-export function warnOnDemoSignalingFallback(signaling: readonly string[] | undefined): void;
-
 // @public
 export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
-    // (undocumented)
     readonly provider: WebrtcProvider;
-    // (undocumented)
+    subscribeUnsyncedChanges(listener: () => void): () => void;
+    unsyncedChanges(): number;
     readonly ydoc: Y.Doc;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

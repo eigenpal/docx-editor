@@ -13,8 +13,11 @@ import { createPortal } from 'react-dom';
 import {
   captureImageMutationPreconditions,
   computeMovedImagePosition,
+  hostWindowOf,
+  historyShortcutOf,
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
+  isElementNode,
   isStaleImageInteractionCommit,
   selectedDrawingOverlayTargetOf,
   type ImageInteractionSession,
@@ -127,7 +130,11 @@ export function ImageSelectionOverlay({
     const container = containerRef.current;
     if (!container) return undefined;
     const onPointerDown = (event: PointerEvent): void => {
-      const element = event.target instanceof Element ? event.target : null;
+      const element = isElementNode(event.target) ? event.target : null;
+      if (element?.closest('.docx-drawing-textbox-content')) {
+        focusRequestedForDrawingRef.current = null;
+        return;
+      }
       const drawingId = element
         ?.closest<HTMLElement>('[data-drawing-node-id]')
         ?.getAttribute('data-drawing-node-id');
@@ -175,8 +182,9 @@ export function ImageSelectionOverlay({
     // pass still gets its observer, and a fresh selection re-measures a moved origin.
     refreshOrigin();
     const portal = portalRef.current;
-    if (!portal || typeof ResizeObserver !== 'function') return undefined;
-    const observer = new ResizeObserver(refreshOrigin);
+    const Observer = hostWindowOf(portal).ResizeObserver;
+    if (!portal || typeof Observer !== 'function') return undefined;
+    const observer = new Observer(refreshOrigin);
     observer.observe(portal);
     // The origin is a function of BOTH boxes: the surface's own width moves the centring
     // margin at a constant portal box (a page-size change), so observe the surface too.
@@ -233,6 +241,9 @@ export function ImageSelectionOverlay({
       // the session is stamped against the flushed layout. Preconditions are captured
       // after it, so a flush that lands buffered input cannot stamp a selection the
       // flush is about to move.
+      const scope = editor.surface.activeScope();
+      if (scope.kind === 'frame' && !editor.surface.selectDrawing(active.id, scope.hostParagraphId))
+        return;
       const layout = editor.surface.layout();
       const pre = captureImageMutationPreconditions(editor);
       if (!pre) return;
@@ -334,6 +345,15 @@ export function ImageSelectionOverlay({
         return;
       }
       if (previewRef.current) return;
+      // Focus sits on the overlay, not the text surface, so history keys stop here unless
+      // the overlay forwards them. Undo usually reverts the resize or move just made.
+      const history = historyShortcutOf(event);
+      if (history) {
+        event.preventDefault();
+        event.stopPropagation();
+        editor.exec({ type: history });
+        return;
+      }
       const step = event.shiftKey ? IMAGE_OVERLAY_NUDGE_SHIFT_PT : IMAGE_OVERLAY_NUDGE_PT;
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
@@ -359,7 +379,12 @@ export function ImageSelectionOverlay({
           deltaXPt: dx,
           deltaYPt: dy,
           transform: active.transform,
-          preserveAspect: resizePreservesAspect(handle, active.aspectLocked, event.shiftKey),
+          preserveAspect: resizePreservesAspect(
+            handle,
+            active.aspectLocked,
+            event.shiftKey,
+            active.textbox
+          ),
           kind: active.kind,
         });
         editor.exec({
@@ -447,7 +472,8 @@ export function ImageSelectionOverlay({
         preserveAspect: resizePreservesAspect(
           current.session.handle,
           current.bounds.aspectLocked,
-          event.shiftKey
+          event.shiftKey,
+          current.bounds.textbox
         ),
         kind: current.session.kind,
       });
@@ -482,6 +508,7 @@ export function ImageSelectionOverlay({
           deltaYPt: deltaY,
           accumulatedScrollPt: current.accumulatedScrollPt,
           aspectLocked: current.bounds.aspectLocked,
+          textbox: current.bounds.textbox,
           shiftKey: event.shiftKey,
           anchorFrameOrigin: current.session.anchorFrameOrigin,
         });
@@ -494,13 +521,15 @@ export function ImageSelectionOverlay({
         );
       } else clearPreview();
     };
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
+    // The surface's own window: a drag in a pop-out window never reaches the opener's.
+    const win = hostWindowOf(containerRef.current);
+    win.addEventListener('pointermove', onPointerMove);
+    win.addEventListener('pointerup', finish);
+    win.addEventListener('pointercancel', finish);
     return () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
+      win.removeEventListener('pointermove', onPointerMove);
+      win.removeEventListener('pointerup', finish);
+      win.removeEventListener('pointercancel', finish);
     };
   }, [clearPreview, commitSession, containerRef, editor, preview]);
 
@@ -547,6 +576,7 @@ export function ImageSelectionOverlay({
           className={`docx-image-selection-overlay__frame${
             showMove ? ' docx-editor-one-surface__overlay-control' : ''
           }`}
+          data-textbox={active.textbox ? 'true' : undefined}
           role="group"
           aria-label={t('imageOverlay.selection')}
           style={{

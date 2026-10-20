@@ -25,13 +25,9 @@
 // Every value is `ST_OnOff` and every element is optional, so absence is the answer rather
 // than an error.
 
-import {
-  isSettingsElement as isElement,
-  settingsAttributeValue as attributeValue,
-  settingsChildNamed as childNamed,
-  settingsOnOff as onOff,
-} from './settings-onoff.ts';
+import { isSettingsElement as isElement, settingsOnOff as onOff } from './settings-onoff.ts';
 import type { OoxmlNode } from './ooxml-tree.ts';
+import { readDocumentProtection } from './document-protection.ts';
 
 /** What the document asks for. Every field defaults to "the document said nothing". */
 export interface DocumentTrackingSettings {
@@ -43,6 +39,18 @@ export interface DocumentTrackingSettings {
    * Advisory. Presenting it as enforcement would be a lie about a file anyone can edit.
    */
   readonly restrictedToTrackedChanges: boolean;
+  /**
+   * `w:documentProtection/@w:edit="forms"` enforced — Track Changes is UNAVAILABLE.
+   *
+   * Word refuses to turn tracking on while a document is protected for filling in forms. A
+   * document tracked BEFORE it was protected keeps the revisions it already carries; what the
+   * protection stops is making new ones.
+   */
+  readonly restrictedToForms: boolean;
+  /** `w:documentProtection/@w:edit="readOnly"` enforced — no edit is permitted at all. */
+  readonly restrictedToReadOnly: boolean;
+  /** `w:documentProtection/@w:edit="comments"` enforced — only comments are permitted. */
+  readonly restrictedToComments: boolean;
   /** `w:doNotTrackMoves` — write a move as a delete and an insert. */
   readonly doNotTrackMoves: boolean;
   /** `w:doNotTrackFormatting` — apply formatting without recording a `w:rPrChange`. */
@@ -53,6 +61,9 @@ export interface DocumentTrackingSettings {
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings = Object.freeze({
   trackRevisions: false,
   restrictedToTrackedChanges: false,
+  restrictedToForms: false,
+  restrictedToReadOnly: false,
+  restrictedToComments: false,
   doNotTrackMoves: false,
   doNotTrackFormatting: false,
 });
@@ -62,21 +73,14 @@ export function readTrackingSettings(
   settingsRoot: OoxmlNode | null | undefined
 ): DocumentTrackingSettings {
   if (!isElement(settingsRoot)) return NO_TRACKING_SETTINGS;
-  const protection = childNamed(settingsRoot, 'documentProtection');
-  // `@w:edit` is `ST_DocProtect`; only this one value restricts editing to tracked changes.
-  // `@w:enforcement` gates whether the protection applies at all — a document can record a
-  // protection it is not currently enforcing, and honouring that would lock a document Word
-  // lets the user edit freely.
-  const enforcement = protection === null ? undefined : attributeValue(protection, 'enforcement');
-  const enforcing =
-    enforcement !== undefined &&
-    enforcement !== '0' &&
-    enforcement !== 'false' &&
-    enforcement !== 'off';
+  const documentProtection = readDocumentProtection(settingsRoot);
   return {
     trackRevisions: onOff(settingsRoot, 'trackRevisions'),
     restrictedToTrackedChanges:
-      enforcing && protection !== null && attributeValue(protection, 'edit') === 'trackedChanges',
+      documentProtection.edit === 'trackedChanges' && documentProtection.enforced,
+    restrictedToForms: documentProtection.edit === 'forms' && documentProtection.enforced,
+    restrictedToReadOnly: documentProtection.edit === 'readOnly' && documentProtection.enforced,
+    restrictedToComments: documentProtection.edit === 'comments' && documentProtection.enforced,
     doNotTrackMoves: onOff(settingsRoot, 'doNotTrackMoves'),
     doNotTrackFormatting: onOff(settingsRoot, 'doNotTrackFormatting'),
   };

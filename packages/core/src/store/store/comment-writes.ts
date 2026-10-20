@@ -1,3 +1,4 @@
+import { commentPackageContext } from './comment-package-edit.ts';
 // Adding a comment, and replying to one.
 //
 // This is the write the package transaction exists for. One reply touches the story (three
@@ -54,7 +55,7 @@ import {
 import { nextCommentId } from './comment-id-mint.ts';
 import { rewriteExtendedRoot, stampThreadParaIds } from './comment-resolution-rewrites.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
-import type { TreeOpRejection } from './tree-op-validate.ts';
+import type { TreeOpRejection } from './tree-op-types.ts';
 
 const COMMENTS_PART = '/word/comments.xml';
 const COMMENTS_EXTENDED_PART = '/word/commentsExtended.xml';
@@ -582,7 +583,8 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   const endParagraphId = request.anchor.endParagraphId ?? request.anchor.paragraphId;
 
   const result = store.transact(
-    (ctx) => {
+    (transaction) => {
+      const ctx = commentPackageContext(transaction);
       // The comment part first, so the relationship the story needs already has a target.
       ctx.applyPackage((current) => {
         const withCommentsPart = current.parts.has(commentsName)
@@ -929,7 +931,8 @@ export function setCommentResolvedWithBudget(
   const extendedName = indexed.extendedPartName ?? COMMENTS_EXTENDED_PART;
   const createRelationship = indexed.extendedPartName === null;
 
-  const result = store.transact((ctx) => {
+  const result = store.transact((transaction) => {
+    const ctx = commentPackageContext(transaction);
     ctx.applyPackage((current) => {
       const stamped = stampThreadParaIds(current, members, stampedParagraph);
       if (stamped === null) return current;

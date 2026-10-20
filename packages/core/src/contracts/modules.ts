@@ -1,3 +1,6 @@
+import type { RevisionMarkupDialogSession } from './revision-markup.ts';
+import type { ReviewPaneOptions } from './review-pane.ts';
+import type { EditorDiagnostic, EditorDiagnosticKind } from './diagnostics.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -20,7 +23,7 @@
 
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { CollaborationModuleContribution } from '../collaboration/index.ts';
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
   ReviewItem,
   ReviewModelInput,
@@ -48,7 +51,7 @@ export type {
 // definition of the document model. A module author reaches the tree at
 // `@docx-editor.dev/core/store`, which is a published subpath written for exactly that.
 export type { OoxmlPart, RevisionAddress } from '@docx-editor.dev/core/store';
-export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+export type { ReviewDisplayMode, RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
  * Derives the review queue — every pending revision decision and comment
@@ -60,6 +63,18 @@ export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
  */
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
+/** Viewer settings dialog supplied by the review module. @public */
+export interface RevisionMarkupDialog {
+  open(): void;
+  destroy(): void;
+}
+
+/** Local settings access for review chrome. No document mutations occur here. @public */
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
+  readonly container: HTMLElement;
+  readonly translate?: (key: string) => string | undefined;
+}
+
 /**
  * What a review module contributes: the queue derivation, and the revision
  * display modes the editor may enter beyond the free tier's final-state
@@ -68,15 +83,18 @@ export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewIte
  * @public
  */
 export interface ReviewModuleContribution {
+  /** Create local review settings chrome when a host opens the dialog. */
+  readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
   /**
    * Display modes this module unlocks (the free engine renders `proposed` only).
    *
-   * Currently DECLARATIVE: any registered review module restores the layout
-   * default (`all-markup`), and no runtime mode switch exists yet. The list is
-   * carried so the future `setRevisionDisplayMode` command can validate against
-   * it without a breaking module-shape change.
+   * The module enables the listed review projections.
    */
-  readonly displayModes: readonly RevisionDisplayMode[];
+  readonly displayModes: readonly ReviewDisplayMode[];
+  /**
+   * The review pane settings the editor starts with. `setReviewPaneOptions` changes them later.
+   */
+  readonly pane?: ReviewPaneOptions;
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;
   /**
@@ -140,6 +158,20 @@ export interface EditorModule {
    * package that raised it.
    */
   readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+  /**
+   * Told about every anonymous diagnostic of this editor, from its first open on.
+   *
+   * The same events as `editor.on('diagnostic')`, but registered before the editor exists, so
+   * a document passed at construction is observed too. A listener that throws is ignored: an
+   * observer must never break the editor it observes.
+   */
+  readonly onDiagnostic?: (event: EditorDiagnostic) => void;
+  /**
+   * Whether `onDiagnostic` wants events of `kind` now. Absent, it wants every kind. The editor
+   * asks before work that only a diagnostic needs, such as timing key presses for
+   * `performance`, and skips that work when no listener wants it. Read often: keep it cheap.
+   */
+  readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 /**
@@ -155,6 +187,10 @@ export interface EditorModuleRegistry {
   readonly customNodePayloadNamespaces: readonly string[];
   /** Every registered diagnostic listener, in registration order. */
   readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
+  /** Every registered `onDiagnostic` listener, in registration order. */
+  readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
+  /** Whether any module with `onDiagnostic` wants events of `kind` now. */
+  readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
 }
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
@@ -163,6 +199,8 @@ const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   customNodes: Object.freeze([]) as readonly unknown[],
   customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
   customNodeDiagnostics: Object.freeze([]) as readonly ((diagnostic: unknown) => void)[],
+  diagnosticListeners: Object.freeze([]) as readonly ((event: EditorDiagnostic) => void)[],
+  wantsDiagnostic: () => false,
 });
 
 /** Resolve construction-time modules into the registry the instance dispatches over. */
@@ -175,6 +213,8 @@ export function resolveEditorModules(
   const customNodes: unknown[] = [];
   const namespaces = new Set<string>();
   const diagnostics: ((diagnostic: unknown) => void)[] = [];
+  const diagnosticListeners: ((event: EditorDiagnostic) => void)[] = [];
+  const wants: ((kind: EditorDiagnosticKind) => boolean)[] = [];
   for (const module of modules) {
     // First registration wins: two review modules is a configuration mistake,
     // and silently merging them would leave neither author able to say which
@@ -192,6 +232,10 @@ export function resolveEditorModules(
     if (module.customNodes) customNodes.push(...module.customNodes);
     for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
     if (module.onCustomNodeDiagnostic) diagnostics.push(module.onCustomNodeDiagnostic);
+    if (module.onDiagnostic) {
+      diagnosticListeners.push(module.onDiagnostic);
+      wants.push(module.wantsDiagnostic ?? (() => true));
+    }
   }
   return {
     review,
@@ -199,5 +243,15 @@ export function resolveEditorModules(
     customNodes,
     customNodePayloadNamespaces: [...namespaces],
     customNodeDiagnostics: diagnostics,
+    diagnosticListeners,
+    // A module that throws is asked again next time; an observer never breaks the editor.
+    wantsDiagnostic: (kind) =>
+      wants.some((want) => {
+        try {
+          return want(kind) === true;
+        } catch {
+          return false;
+        }
+      }),
   };
 }

@@ -1,3 +1,14 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+  FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  ImageDecodePort,
+  LockedControlNavigation,
+} from '@docx-editor.dev/core/editor';
+import type { DocxEditorPopups } from './editor/popup-config';
 import type { DocxEditorChildren } from './docx-editor-children';
 import type {
   DocumentChange,
@@ -6,6 +17,7 @@ import type {
   Editor,
   EditorCommand,
   EditorFontError,
+  EditorExecOptions,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -20,6 +32,11 @@ import type {
 import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
+import type { DocxEditorNavigationProps } from './editor/navigation';
+import type {
+  DocxEditorOpenFailureContext,
+  DocxEditorOpenFailureProps,
+} from './editor/DocxEditorOpenFailure';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -44,17 +61,23 @@ export type {
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
+  /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
+  popups?: DocxEditorPopups;
   /**
-   * Immutable byte-backed font sources sampled at mount. Remount to replace this
-   * configuration atomically.
+   * Font sources for layout and paint. A new value replaces the fonts in place, keeping the
+   * document, selection and undo history; keep the reference stable across renders.
    *
    * Optional, but it decides layout FIDELITY. With it, the engine shapes text through
    * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout
    * runs on a fixed monospace approximation: glyphs still paint in their true faces, so the
    * page looks right, but wrap points and pagination are estimated rather than
-   * Word-accurate. Omit it to mount in one line; supply it when breaks must match Word.
+   * measured. Omit it to mount in one line; supply it when break positions matter.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
+  fontShaping?: FontShapingOptions;
+  /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
+  imageDecodePort?: ImageDecodePort;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them
@@ -62,6 +85,35 @@ export interface DocxEditorProps {
    */
   readonly renderTitleBarLeft?: () => DocxEditorChildren;
   readonly renderTitleBarRight?: () => DocxEditorChildren;
+  /**
+   * Your own buttons in the dialog for a file that does not open, before **Close**. Build
+   * them from `DocxEditor.OpenFailure.Action`. It is the same as `openFailure.actions`; pass
+   * only one. With `openFailure={false}` there is no dialog, so it renders nothing.
+   *
+   * ```tsx
+   * <DocxEditor
+   *   document={bytes}
+   *   renderOpenFailureActions={({ failure }) => (
+   *     <DocxEditor.OpenFailure.Action asChild>
+   *       <a href={`/support?code=${failure.code}`}>Get help</a>
+   *     </DocxEditor.OpenFailure.Action>
+   *   )}
+   * />
+   * ```
+   */
+  readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+  /**
+   * Your own loading indicator, in place of the packaged spinner. It shows centered on a
+   * blank page before the document arrives, then on the document's first page while a large
+   * document lays out its remaining pages, and scrolls with it. Include text for screen
+   * readers, as the packaged indicator does. Requires `chrome`; without it, compose
+   * `DocxEditor.Loading` yourself.
+   *
+   * ```tsx
+   * <DocxEditor document={bytes} loadingIndicator={<MyLogoSpinner label="Opening" />} />
+   * ```
+   */
+  readonly loadingIndicator?: DocxEditorChildren;
   /**
    * Chrome colour mode. `'system'` follows the OS and re-resolves when it changes.
    * Only the editor CHROME is themed — the document canvas stays Word-faithful.
@@ -92,8 +144,8 @@ export interface DocxEditorProps {
    *
    * Equivalent to wrapping this editor in `<LocaleProvider i18n={de}>`, which is still
    * the way to set one language for several editors at once — this prop overrides such a
-   * provider for this editor only. Unlike `locale`, which tells the ENGINE what language
-   * the document is in, this decides what the buttons say.
+   * provider for this editor only. `locale` separately selects regional date input and
+   * generated document labels; it does not select the UI language.
    *
    * Hold it at a stable identity: a catalogue written inline (`i18n={{ toolbar: … }}`) is
    * a new object every render, and the merged catalogue behind it is what the chrome
@@ -133,8 +185,8 @@ export interface DocxEditorProps {
    *
    * `false` removes it. An OBJECT is `DocxEditorMenuProps`, passed straight through, so a
    * host can redirect one row without giving up the bar: `menu={{ reportIssue: false }}`
-   * drops the report-an-issue row, `menu={{ onPageSetup: openMine }}` swaps the dialog,
-   * and `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
+   * drops the report-an-issue row. Use `popups.pageSetup` to customize Page Setup.
+   * `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
    * whole menu in place. Before this took an object the only way to change any of that was
    * `menu={false}` plus rebuilding the entire title block.
    *
@@ -167,8 +219,27 @@ export interface DocxEditorProps {
    * space that is already empty, and only moves the page when the window is genuinely too
    * narrow to hold both. Compose `DocxEditor.Navigation` yourself, or build on
    * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
+   *
+   * An object is `DocxEditorNavigationProps`, passed straight through, so a host can drive
+   * the pane from its own chrome without giving up the packaged one:
+   * `navigation={{ open, onOpenChange }}` toggles it, `navigation={{ tab: 'find', onTabChange }}`
+   * opens Find. Before this took an object the only way to change any of that was
+   * `navigation={false}` plus rebuilding the pane. `true`/undefined keep the packaged
+   * defaults.
+   *
+   * The pane captures Ctrl+F (Cmd+F on macOS) while focus is in this editor and opens Find.
+   * `navigation={{ findShortcut: false }}` leaves the shortcut to the browser.
    */
-  navigation?: boolean;
+  navigation?: boolean | DocxEditorNavigationProps;
+  /**
+   * The dialog that explains a file the editor refused to open, on by default. A refused
+   * open leaves the pages blank, so without it the reader sees nothing.
+   *
+   * An object is `DocxEditorOpenFailureProps`, passed straight through: change the title or
+   * message, hide the error code, or add your own support action with `actions`. `false`
+   * removes the dialog, for a host that reports the failure itself through `useOpenFailure`.
+   */
+  openFailure?: boolean | DocxEditorOpenFailureProps;
   /**
    * Horizontal and vertical rulers, on by default with the packaged chrome.
    *
@@ -185,8 +256,7 @@ export interface DocxEditorProps {
    * Omitting it mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
   /**
-   * The mode the editor opens in, matching the toolbar's three-state pill. Applied at
-   * mount only — not reactive; remount to change.
+   * The host mode, matching the toolbar's three-state pill. Changes apply without a remount.
    *
    * Defaults to `'edit'`: the packaged editor opens every document ready to type, even
    * one whose `w:trackRevisions` asks for tracked changes. Pass `'suggesting'` (needs
@@ -205,11 +275,48 @@ export interface DocxEditorProps {
    * `{ type: 'fixed' }` opts out.
    */
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
+
+  /**
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * UI translations are supplied separately through i18n.
+   */
   locale?: string;
   author?: string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
-   * custom nodes). Applied at mount only, like `mode`.
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes).
+   * Applied at mount only.
    */
   modules?: readonly EditorModule[];
   /**
@@ -251,7 +358,7 @@ export interface DocxEditorRef {
   getEditor(): Editor | null;
   focus(): void;
   /** Run a typed command through the facade; refused with `notFound` before mount. */
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   /** The current read model; a loading, non-editable snapshot before mount. */
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 }

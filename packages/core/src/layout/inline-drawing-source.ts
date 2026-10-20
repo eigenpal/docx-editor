@@ -1,9 +1,17 @@
+import { sameResourceSubstrate } from './package-resource-substrate.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
+import { groupTextboxesLayoutToken } from './group-textbox-layout.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-change.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
 //
 // Precomputes run-level drawing / MC atom projections from a bounded part traversal with
 // ancestor xmlns bindings. Field projection consumes the atom-id map; it never re-walks MC
 // with an empty namespace scope.
 
+import { textboxLayoutToken } from './textbox-layout-token.ts';
+import { pointsDigest, vectorShapeLayoutToken } from './drawing-geometry-digest.ts';
+import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import type {
   OoxmlDrawingNode,
   OoxmlGenericElementNode,
@@ -34,9 +42,16 @@ import {
   type ValidatedImageBytesReleaseToken,
 } from '../store/package/validated-image-bytes.ts';
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
+import { wrapFootprintProjection } from '../store/package/drawing-wrap-footprint.ts';
+import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { aggregateParagraphTokensForTableBlock, framedTokenJoin } from './layout-cache.ts';
+import { walkDrawingAtoms } from './drawing-inline-walk.ts';
+import { framedTokenJoin } from './framed-token.ts';
+import {
+  aggregateParagraphTokensForTableBlock,
+  createTableRowTokenStore,
+} from './table-paragraph-tokens.ts';
 
 /** Layout-owned read surface for inline drawing package state (no binding/session lane). */
 export interface InlineDrawingPackageReader {
@@ -70,8 +85,15 @@ export interface CreateInlineDrawingLayoutBundleOptions {
   readonly resourceLookup?: ImageResourceLookup;
 }
 
+const FOOTPRINT_RESOURCE: ImageResourceState = Object.freeze({
+  kind: 'unrenderable',
+  partName: null,
+  mime: 'unknown',
+  reason: 'non-picture-graphic',
+});
+
 function pendingResourceKey(projection: DrawingProjection): string {
-  const picture = projection.picture;
+  const picture = projection.picture ?? projection.groupPicture;
   if (picture?.embeddedRelationshipId) {
     return `embed:${projection.ownerPartName}:${picture.embeddedRelationshipId}`;
   }
@@ -113,7 +135,7 @@ function subtreeDrawingAtoms(node: OoxmlNode, composeDepth: number): SubtreeDraw
   const cached = subtreeDrawingAtomMemos.get(node);
   if (cached) return cached;
   let result: SubtreeDrawingAtoms;
-  if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
+  if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node) || isLegacyVmlAtom(node)) {
     result = { atoms: new Map([[node.id, node]]), visited: 1, deepest: 0 };
   } else if (!('children' in node) || node.children.length === 0) {
     result = { atoms: EMPTY_ATOMS, visited: 1, deepest: 0 };
@@ -150,7 +172,11 @@ function subtreeDrawingAtoms(node: OoxmlNode, composeDepth: number): SubtreeDraw
       if (visited > MAX_PART_SCAN_ELEMENTS) break;
       if (frame.depth > deepest) deepest = frame.depth;
       const current = frame.node;
-      if (current.kind === 'drawing' || isRunLevelMcAlternateContent(current)) {
+      if (
+        current.kind === 'drawing' ||
+        isRunLevelMcAlternateContent(current) ||
+        isLegacyVmlAtom(current)
+      ) {
         atoms.set(current.id, current);
         continue;
       }
@@ -179,6 +205,10 @@ const drawingSourceOrdersByRoot = new WeakMap<
   OoxmlNode,
   WeakMap<InlineDrawingLayoutContext, ReadonlyMap<string, number>>
 >();
+const lastDrawingSourceOrder = new WeakMap<
+  InlineDrawingLayoutContext,
+  { readonly part: OoxmlPart; readonly order: ReadonlyMap<string, number> }
+>();
 
 /**
  * Canonical drawing traversal order for one immutable story root.
@@ -200,7 +230,17 @@ export function drawingSourceOrderInPart(
 ): ReadonlyMap<string, number> {
   let byContext = drawingSourceOrdersByRoot.get(part.root);
   const cached = byContext?.get(context);
-  if (cached) return cached;
+  if (cached) {
+    lastDrawingSourceOrder.set(context, { part, order: cached });
+    return cached;
+  }
+  const previous = lastDrawingSourceOrder.get(context);
+  if (previous && drawingInputsUnchangedByParagraphEdit(previous.part.root, part.root)) {
+    if (!byContext) drawingSourceOrdersByRoot.set(part.root, (byContext = new WeakMap()));
+    byContext.set(context, previous.order);
+    lastDrawingSourceOrder.set(context, { part, order: previous.order });
+    return previous.order;
+  }
   const identities = drawingAtomIdentities(part);
   const order = new Map<string, number>();
   let index = 0;
@@ -221,68 +261,8 @@ export function drawingSourceOrderInPart(
     drawingSourceOrdersByRoot.set(part.root, byContext);
   }
   byContext.set(context, order);
+  lastDrawingSourceOrder.set(context, { part, order });
   return order;
-}
-
-// Scratch view used to fold a coordinate in by its exact IEEE-754 bits. Coordinates are not
-// integers once a group transform has scaled them, so rounding would fold real geometry
-// changes together.
-const COORDINATE_SCRATCH = new Float64Array(1);
-const COORDINATE_BITS = new Uint32Array(COORDINATE_SCRATCH.buffer);
-
-/**
- * Digest of one vector shape's geometry and chrome, for the layout reuse token.
- *
- * Deliberately NOT a serialization. `JSON.stringify` of a shape at the 1024-point budget is
- * ~48 KB and ~230 us, and `isCompatibleWith` reads this token twice per atom whenever the
- * atom-identity fast path misses, so the serialization dominated a document full of shapes.
- * Every other field in the enclosing token is a cheap scalar join; this one folds the point
- * stream into two 32-bit FNV-1a accumulators and joins the scalars verbatim. The shape of
- * the component list (its length, and each subpath's length) is joined literally rather than
- * hashed, so a structural change can never hide inside the digest.
- *
- * This is a cache key, NOT a security primitive. FNV-1a is trivially invertible — its round
- * is `h = (h ^ d) * p` with an odd, hence modularly invertible, `p` — so a chosen last
- * coordinate can drive both accumulators to any target in closed form. That buys nothing
- * here, because forging a collision needs two shapes under the same `drawingNodeId` in two
- * revisions of one document, and the payoff is a stale repaint. Do not reuse this digest
- * anywhere an attacker profits from a collision.
- */
-export function vectorShapeLayoutToken(
-  vector: NonNullable<DrawingProjection['vectorShape']>
-): string {
-  let hashA = 0x811c_9dc5;
-  let hashB = 0x1000_0193;
-  const scalars: string[] = [];
-  for (const component of vector.components) {
-    scalars.push(
-      component.fillHex ?? '',
-      String(component.fillAlpha),
-      component.strokeHex ?? '',
-      String(component.strokeAlpha),
-      String(component.strokeWidthEmu),
-      String(component.subpathsEmu.length)
-    );
-    for (const subpath of component.subpathsEmu) {
-      scalars.push(String(subpath.length));
-      for (const point of subpath) {
-        COORDINATE_SCRATCH[0] = point.x;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
-        COORDINATE_SCRATCH[0] = point.y;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
-      }
-    }
-  }
-  return [
-    String(vector.extentEmu.cx),
-    String(vector.extentEmu.cy),
-    String(vector.components.length),
-    scalars.join(','),
-    (hashA >>> 0).toString(36),
-    (hashB >>> 0).toString(36),
-  ].join(';');
 }
 
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {
@@ -291,34 +271,77 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   const picture = projection.picture;
   const wrap = projection.wrapGeometry;
   const vector = projection.vectorShape;
+  const groupPicture = projection.groupPicture;
   // Length-framed (`framedTokenJoin`): relationship ids, part names, and preset geometry
   // are verbatim file values, so a printable field separator would let two different
   // picture references serialize to one token — and `isCompatibleWith` compares
   // projections by this token alone when the resource substrate is unchanged.
-  return framedTokenJoin([
-    projection.drawingNodeId,
-    projection.ownerPartName,
-    projection.kind,
-    projection.hidden ? '1' : '0',
-    String(projection.extentEmu.cx),
-    String(projection.extentEmu.cy),
-    String(projection.effectExtentEmu.top),
-    String(projection.effectExtentEmu.right),
-    String(projection.effectExtentEmu.bottom),
-    String(projection.effectExtentEmu.left),
-    projection.compatibilityBranchNodeId ?? '',
-    anchor?.simplePos ? 'sp' : 'pv',
-    anchor ? String(anchor.relativeHeight) : '',
-    anchor ? (anchor.layoutInCell ? '1' : '0') : '',
-    picture
+  // This also validates retained projections used by paint and drawing controls. Every
+  // top-level field needs a token decision, including diagnostics used for placeholders.
+  const fields = {
+    drawingNodeId: projection.drawingNodeId,
+    ownerPartName: projection.ownerPartName,
+    kind: projection.kind,
+    diagnostics: framedTokenJoin(
+      projection.diagnostics.map((diagnostic) =>
+        framedTokenJoin([diagnostic.code, diagnostic.nodeId, diagnostic.detail ?? ''])
+      )
+    ),
+    relationshipId: projection.relationshipId ?? '',
+    docPrId: String(projection.docPrId ?? ''),
+    name: projection.name,
+    title: projection.title,
+    description: projection.description,
+    hyperlinkHref: projection.hyperlinkHref ?? '',
+    hidden: String(projection.hidden),
+    extentEmu: framedTokenJoin([String(projection.extentEmu.cx), String(projection.extentEmu.cy)]),
+    effectExtentEmu: framedTokenJoin([
+      String(projection.effectExtentEmu.top),
+      String(projection.effectExtentEmu.right),
+      String(projection.effectExtentEmu.bottom),
+      String(projection.effectExtentEmu.left),
+    ]),
+    inlineDistancesEmu: framedTokenJoin([
+      String(projection.inlineDistancesEmu.top),
+      String(projection.inlineDistancesEmu.right),
+      String(projection.inlineDistancesEmu.bottom),
+      String(projection.inlineDistancesEmu.left),
+    ]),
+    wrap: projection.wrap,
+    textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
+    groupTextboxes: groupTextboxesLayoutToken(projection.groupTextboxes),
+    compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
+    footprintOnly: projection.footprintOnly ? 'footprint' : '',
+    anchor: anchor
+      ? framedTokenJoin([
+          String(anchor.simplePos),
+          String(anchor.relativeHeight),
+          String(anchor.layoutInCell),
+          String(anchor.allowOverlap),
+          String(anchor.behindDocument),
+        ])
+      : '',
+    locks: framedTokenJoin([
+      String(projection.locks.select),
+      String(projection.locks.move),
+      String(projection.locks.resize),
+      String(projection.locks.changeAspect),
+    ]),
+    effects: framedTokenJoin([
+      String(projection.effects.grayscale),
+      String(projection.effects.brightness),
+      String(projection.effects.contrast),
+      String(projection.effects.bilevel ?? ''),
+    ]),
+    picture: picture
       ? framedTokenJoin([
           String(picture.crop.left),
           String(picture.crop.top),
           String(picture.crop.right),
           String(picture.crop.bottom),
           String(picture.transform.rotationDegrees),
-          picture.transform.flipHorizontal ? '1' : '0',
-          picture.transform.flipVertical ? '1' : '0',
+          String(picture.transform.flipHorizontal),
+          String(picture.transform.flipVertical),
           String(picture.transform.offsetEmu.x),
           String(picture.transform.offsetEmu.y),
           String(picture.transform.extentEmu.cx),
@@ -326,10 +349,29 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.embeddedRelationshipId ?? '',
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
+          picture.fillMode,
         ])
       : '',
-    vector ? vectorShapeLayoutToken(vector) : '',
-    wrap
+    groupPicture: groupPicture
+      ? framedTokenJoin([
+          String(groupPicture.crop.left),
+          String(groupPicture.crop.top),
+          String(groupPicture.crop.right),
+          String(groupPicture.crop.bottom),
+          String(groupPicture.frameEmu.x),
+          String(groupPicture.frameEmu.y),
+          String(groupPicture.frameEmu.cx),
+          String(groupPicture.frameEmu.cy),
+          groupPicture.embeddedRelationshipId ?? '',
+          groupPicture.linkedRelationshipId ?? '',
+          groupPicture.memberNodeId,
+          groupPicture.alternateContent ? 'mc' : '',
+        ])
+      : '',
+    legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
+    textArt: JSON.stringify(projection.textArt) ?? '',
+    vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
+    wrapGeometry: wrap
       ? framedTokenJoin([
           wrap.element,
           wrap.textSide,
@@ -338,9 +380,10 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(wrap.distancesEmu.bottom),
           String(wrap.distancesEmu.left),
           String(wrap.polygon.length),
+          pointsDigest(wrap.polygon),
         ])
       : '',
-    position
+    position: position
       ? framedTokenJoin([
           position.horizontal.relativeFrom,
           position.horizontal.align ?? '',
@@ -352,7 +395,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(position.simplePosition.yEmu),
         ])
       : '',
-  ]);
+  } satisfies Record<keyof DrawingProjection, string>;
+  return framedTokenJoin(Object.values(fields));
 }
 
 // Length-framed where a field embeds file text (resource keys carry relationship ids and
@@ -390,20 +434,20 @@ function drawingResourceLayoutToken(resource: ImageResourceState): string {
  */
 const MAX_HOSTED_STORY_TOKEN_DEPTH = 1;
 
-function collectDrawingAtoms(node: OoxmlNode, ids: string[]): void {
-  if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
-    ids.push(node.id);
+function collectStoryDrawingAtoms(node: OoxmlNode, ids: string[]): void {
+  if (node.kind === 'paragraph') {
+    for (const id of drawingAtomsInParagraph(node)) ids.push(id);
     return;
   }
   if ('children' in node) {
-    for (const child of node.children) collectDrawingAtoms(child, ids);
+    for (const child of node.children) collectStoryDrawingAtoms(child, ids);
   }
 }
 
 function drawingAtomsInParagraph(paragraph: OoxmlNode): readonly string[] {
   if (paragraph.kind !== 'paragraph') return [];
   const ids: string[] = [];
-  for (const child of paragraph.children) collectDrawingAtoms(child, ids);
+  walkDrawingAtoms(paragraph, (node) => ids.push(node.id));
   return Object.freeze(ids);
 }
 
@@ -415,6 +459,7 @@ function createPartDrawingContextSlot(options: {
   readonly onResourceSettled: (ownerPartName: string) => void;
   readonly rememberReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly forgetReadyHandle: (handle: ValidatedImageBytesHandle) => void;
+  readonly pictureBulletResource: NonNullable<InlineDrawingLayoutContext['pictureBulletResource']>;
 }): PartDrawingContextSlot {
   const {
     ownerPartName,
@@ -436,15 +481,23 @@ function createPartDrawingContextSlot(options: {
   >();
   const atomsByParagraph = new WeakMap<OoxmlNode, readonly string[]>();
   let resourceEpoch = 0;
+  let lastCompatiblePart = part;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const theme = createPackageShapeThemeResolvers(pkg);
+  const stylesPart = stylesPartOf(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(part, {
+    stylesPart,
     resolveRelationship: resolveRelationshipTarget,
     resolveSchemeColor: theme.resolveSchemeColor,
     resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
   });
   const atomIdentities = drawingAtomIdentities(part);
+  const hasObjects = atomIdentities
+    ? Array.from(atomIdentities.values()).some(
+        (node) => node.kind !== 'textValue' && node.localName === 'object'
+      )
+    : true;
 
   const scheduleResolve = (projection: DrawingProjection, key: string): void => {
     if (disposed || inFlight.has(key)) return;
@@ -482,11 +535,13 @@ function createPartDrawingContextSlot(options: {
   };
 
   const resourceOf = (projection: DrawingProjection): ImageResourceState => {
+    // A wrap footprint has nothing to resolve, and must never start a decode or a fetch.
+    if (projection.footprintOnly) return FOOTPRINT_RESOURCE;
     const key = pendingResourceKey(projection);
     const cached = resourceByKey.get(key);
     if (cached) return cached;
 
-    const linked = projection.picture?.linkedRelationshipId;
+    const linked = (projection.picture ?? projection.groupPicture)?.linkedRelationshipId;
     if (linked) {
       const linkedState = lookup.resolveLinked(ownerPartName, linked);
       resourceByKey.set(key, linkedState);
@@ -506,14 +561,27 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  const projectionForAtom = (atomNodeId: string): DrawingProjection | null =>
-    atomProjections.get(atomNodeId) ?? null;
+  // An MC-wrapped group whose picture cannot render paints nothing, the same as an MC
+  // payload the projection cannot draw (`projectRunLevelMcDrawing`), and keeps only its wrap
+  // footprint. A linked picture settles at once; an embedded one counts only after its decode
+  // settles, so a pending group keeps its frame and paints its vector members.
+  const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
+    const projection = atomProjections.get(atomNodeId) ?? null;
+    if (!projection?.groupPicture?.alternateContent) return projection;
+    const state = projection.groupPicture.linkedRelationshipId
+      ? resourceOf(projection)
+      : resourceByKey.get(pendingResourceKey(projection));
+    return state && state.kind !== 'ready' && state.kind !== 'pending'
+      ? wrapFootprintProjection(projection)
+      : projection;
+  };
 
   const context: InlineDrawingLayoutContext = Object.freeze({
     ownerPartName,
     projectionForAtom,
     project: (drawing: OoxmlDrawingNode) => projectionForAtom(drawing.id),
     resourceOf,
+    pictureBulletResource: options.pictureBulletResource,
   });
 
   /**
@@ -537,10 +605,15 @@ function createPartDrawingContextSlot(options: {
     const visit = (atomIds: readonly string[], depth: number): void => {
       if (depth >= MAX_HOSTED_STORY_TOKEN_DEPTH) return;
       for (const atomId of atomIds) {
-        const story = atomProjections.get(atomId)?.textboxStory;
-        if (!story) continue;
+        const projection = atomProjections.get(atomId);
+        if (!projection) continue;
+        // A group's text box members host stories too, so their pictures key the host.
+        const roots = [
+          ...(projection.textboxStory ? [projection.textboxStory.content] : []),
+          ...(projection.groupTextboxes ?? []).map((member) => member.story.content),
+        ];
         const inner: string[] = [];
-        collectDrawingAtoms(story.content, inner);
+        for (const root of roots) collectStoryDrawingAtoms(root, inner);
         if (inner.length === 0) continue;
         if (!expanded) expanded = [...direct];
         // A LOOP, not `push(...inner)`: the count comes from the file, and spreading a few
@@ -587,9 +660,24 @@ function createPartDrawingContextSlot(options: {
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
-      if (nextPart === part) return true;
+      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
+      if (
+        stylesPartOf(nextPkg) === stylesPart &&
+        drawingInputsUnchangedByParagraphEdit(lastCompatiblePart.root, nextPart.root)
+      ) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
       const nextAtomIdentities = drawingAtomIdentities(nextPart);
-      if (atomIdentities && nextAtomIdentities && atomIdentities.size === nextAtomIdentities.size) {
+      if (
+        !hasObjects &&
+        atomIdentities &&
+        nextAtomIdentities &&
+        atomIdentities.size === nextAtomIdentities.size
+      ) {
         let unchanged = true;
         for (const [id, node] of atomIdentities) {
           if (nextAtomIdentities.get(id) !== node) {
@@ -597,9 +685,13 @@ function createPartDrawingContextSlot(options: {
             break;
           }
         }
-        if (unchanged) return true;
+        if (unchanged) {
+          lastCompatiblePart = nextPart;
+          return true;
+        }
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
+        stylesPart: stylesPartOf(nextPkg),
         resolveRelationship: createDrawingRelationshipResolver(nextPkg, ownerPartName),
         resolveSchemeColor: nextTheme.resolveSchemeColor,
         resolveStyleMatrixReference: nextTheme.resolveStyleMatrixReference,
@@ -614,6 +706,7 @@ function createPartDrawingContextSlot(options: {
           return false;
         }
       }
+      lastCompatiblePart = nextPart;
       return true;
     },
     dispose: () => {
@@ -671,6 +764,13 @@ export function createInlineDrawingLayoutBundle(
     }
   };
 
+  const pictureBullets = createPictureBulletResourceResolver({
+    currentPackage: () => pkgSnapshot,
+    lookup: () => lookup,
+    rememberReadyHandle,
+    onResourcesChanged: () => options.onResourcesChanged(),
+  });
+
   const resolvePart = (ownerPartName: string, reader: InlineDrawingPackageReader): OoxmlPart => {
     const pkg = reader.currentPackage();
     const existing = pkg.parts.get(ownerPartName) ?? partByName.get(ownerPartName);
@@ -699,6 +799,7 @@ export function createInlineDrawingLayoutBundle(
       onResourceSettled: () => options.onResourcesChanged(),
       rememberReadyHandle,
       forgetReadyHandle,
+      pictureBulletResource: pictureBullets.resolve,
     });
     slots.set(ownerPartName, slot);
     slotMintCounter += 1;
@@ -708,11 +809,9 @@ export function createInlineDrawingLayoutBundle(
 
   const resetPackage = (reader: InlineDrawingPackageReader): void => {
     const nextPkg = reader.currentPackage();
-    const resourceSubstrateUnchanged =
-      nextPkg.partBytes === pkgSnapshot.partBytes &&
-      nextPkg.relationships === pkgSnapshot.relationships &&
-      nextPkg.contentTypes === pkgSnapshot.contentTypes;
+    const resourceSubstrateUnchanged = sameResourceSubstrate(nextPkg, pkgSnapshot);
     if (resourceSubstrateUnchanged) {
+      // The numbering part's bytes and rels are unchanged too, so resolved bullets stand.
       for (const [ownerPartName, slot] of slots) {
         const nextPart =
           nextPkg.parts.get(ownerPartName) ??
@@ -735,6 +834,7 @@ export function createInlineDrawingLayoutBundle(
     for (const token of releaseTokensByKey.values()) releaseValidatedImageBytesToken(token);
     releaseTokensByKey.clear();
     handlesByKey.clear();
+    pictureBullets.reset();
     if (!options.resourceLookup) lookup.dispose();
     pkgRevision = reader.packageRevision();
     pkgSnapshot = nextPkg;
@@ -754,17 +854,20 @@ export function createInlineDrawingLayoutBundle(
     },
     cacheTokenForPart(ownerPartName: string) {
       const slot = slotFor(ownerPartName, options.session);
-      return `${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
+      return `${pictureBullets.epoch()}|${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
     },
     drawingTokenForParagraph(paragraph: OoxmlNode, ownerPartName: string) {
       const slot = slotFor(ownerPartName, options.session);
-      // Slot mint belongs in the token: a package swap recreates the slot and
-      // drops handle tracking, and a token that only names resource state would
-      // reuse cached line records whose ready handles the new registry cannot mint.
-      return `${slotMintBySlot.get(slot) ?? 0}|${slot.drawingTokenForParagraph(paragraph)}`;
+      const token = slot.drawingTokenForParagraph(paragraph);
+      // The slot mint keeps cached lines from holding handles a recreated slot cannot mint.
+      // A paragraph without drawings holds none, so a package swap keeps its key.
+      if (token === '') return `${pictureBullets.epoch()}|`;
+      return `${pictureBullets.epoch()}|${slotMintBySlot.get(slot) ?? 0}|${token}`;
     },
     pendingResourceCount() {
-      let count = 0;
+      // Picture bullets settle on the same loop drawings do: a caller that waits for
+      // quiescence must not be told zero while a marker image is still decoding.
+      let count = pictureBullets.pendingCount();
       for (const slot of slots.values()) count += slot.pendingResourceCount();
       return count;
     },
@@ -781,6 +884,7 @@ export function createInlineDrawingLayoutBundle(
       resetPackage(reader);
     },
     dispose() {
+      pictureBullets.reset();
       for (const slot of slots.values()) slot.dispose();
       slots.clear();
       partByName.clear();
@@ -802,7 +906,7 @@ export const createInlineDrawingLayoutInput = createInlineDrawingLayoutBundle;
 export function isInlineDrawingRunAtom(
   node: OoxmlNode
 ): node is OoxmlDrawingNode | OoxmlGenericElementNode {
-  return node.kind === 'drawing' || isRunLevelMcAlternateContent(node);
+  return node.kind === 'drawing' || isRunLevelMcAlternateContent(node) || isLegacyVmlAtom(node);
 }
 
 /** Paragraph-local drawing cache token from a layout context (tests / headless callers). */
@@ -861,16 +965,20 @@ export function drawingTokenForTableBlockMemo(
   if (epoch === undefined) return drawingTokenForTableBlock(table, drawingTokenForParagraph);
   const cached = tableDrawingTokenCache.get(table);
   if (cached && cached.epoch === epoch) return cached.token;
-  const token = drawingTokenForTableBlock(table, drawingTokenForParagraph);
-  tableDrawingTokenCache.set(table, { epoch, token });
+  // Rows keep their identity across a cell edit, so their segments answer under the same epoch.
+  const reuse = { rows: rowDrawingTokens, scope: undefined, epoch };
+  const token = aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph, reuse);
+  // A token grows with the table: about one item per 64 characters.
+  tableDrawingTokenCache.set(table, { epoch, token }, token.length >> 6);
   return token;
 }
 
 /** Aggregated drawing token per immutable table node, valid for one drawing epoch. */
-const tableDrawingTokenCache = new WeakMap<
-  OoxmlNode,
-  { readonly epoch: string; readonly token: string }
->();
+const tableDrawingTokenCache = createSubtreeAggregateMemo<{
+  readonly epoch: string;
+  readonly token: string;
+}>();
+const rowDrawingTokens = createTableRowTokenStore();
 
 /**
  * Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys).
@@ -889,4 +997,4 @@ export function drawingTokenForTableBlock(
   return aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph);
 }
 
-export { drawingProjectionLayoutToken, drawingResourceLayoutToken };
+export { drawingProjectionLayoutToken, drawingResourceLayoutToken, vectorShapeLayoutToken };

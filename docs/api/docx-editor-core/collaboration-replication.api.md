@@ -151,12 +151,14 @@ export interface CollaborationDocumentPort {
     readonly documentId: string;
     flushPendingJournals(): void;
     hasPendingJournals(): boolean;
+    readonly interactive?: boolean;
     observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
     // (undocumented)
     paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
     paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
     // (undocumented)
     paragraphs(): readonly CollaborationParagraph[];
+    paragraphTextOf?(nodeId: string): string | null;
     // (undocumented)
     revision(): number;
     // (undocumented)
@@ -197,8 +199,22 @@ export function createCollaborationDocumentPort(store: TreePackageStore, options
 export interface CreateCollaborationDocumentPortOptions {
     // (undocumented)
     readonly documentId: string;
+    readonly interactive?: boolean;
 }
 
-// (No @packageDocumentation comment for this package)
+// @public
+export type HistoryGroup = symbol;
+
+// @public
+export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
+
+// @public
+export function mapOffsetAcrossText(offset: number, before: string, after: string): number;
+
+// @internal
+export function registerUndoHistoryPosition(owner: object, position: UndoHistoryPosition): void;
+
+// @public (undocumented)
+export function reportHistoryGroup(group: HistoryGroup | undefined, kind: HistoryCaptureKind, reason?: HistoryCaptureReason): void;
 
 ```

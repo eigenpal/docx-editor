@@ -19,6 +19,7 @@ import {
 } from './canonical-primitive-publish.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
+import type { HistoryGroup } from '../store/history-group.ts';
 
 export {
   flushPendingCanonicalJournals,
@@ -29,6 +30,8 @@ export {
 interface CaptureFrame {
   readonly observed: boolean;
   readonly effects: CanonicalPrimitiveEffect[] | null;
+  /** The gesture the transaction named, carried onto the journal it publishes. */
+  readonly historyGroup: HistoryGroup | undefined;
   suppressDepth: number;
 }
 
@@ -91,10 +94,10 @@ function storeObserverCount(store: object): number {
   return observersByStore.get(store)?.size ?? 0;
 }
 
-function pushFrame(observed: boolean): void {
+function pushFrame(observed: boolean, historyGroup: HistoryGroup | undefined): void {
   const effects = observed ? [] : null;
   if (observed) allocationCount += 1;
-  frames.push({ observed, effects, suppressDepth: 0 });
+  frames.push({ observed, effects, historyGroup, suppressDepth: 0 });
 }
 
 function popFrame(): CaptureFrame | undefined {
@@ -111,15 +114,16 @@ function popFrame(): CaptureFrame | undefined {
 export function runObservedStoreTransaction<T>(
   store: object,
   run: () => T,
-  committed: (result: NoInfer<T>) => boolean
+  committed: (result: NoInfer<T>) => boolean,
+  historyGroup?: HistoryGroup
 ): T {
   const observed = storeObserverCount(store) > 0;
-  pushFrame(observed);
+  pushFrame(observed, historyGroup);
   try {
     const result = run();
     const frame = popFrame();
     if (observed && frame?.effects && committed(result)) {
-      publishCanonicalPrimitiveJournal(store, frame.effects);
+      publishCanonicalPrimitiveJournal(store, frame.effects, frame.historyGroup);
     }
     return result;
   } catch (error) {

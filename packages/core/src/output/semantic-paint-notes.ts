@@ -14,6 +14,7 @@ import type {
 /** Minimal paint context (scale) — shared shape with semantic-paint without a cycle. */
 export interface NotePaintContext {
   readonly scale: number;
+  readonly tabLeaderOriginXPt?: number;
   readonly fontAlias?: (family: string) => string | undefined;
 }
 
@@ -66,26 +67,38 @@ function paintNoteArea(
   areaEl.style.width = `${area.box.width * options.scale}px`;
   areaEl.style.height = `${area.box.height * options.scale}px`;
 
-  if (area.separator) {
+  for (const separator of [area.separator, area.continuationNotice]) {
+    if (!separator) continue;
     const sep = document.createElement('div');
     sep.className = 'docx-note-separator';
-    sep.dataset.docxNoteSeparator = area.separator.kind;
+    sep.dataset.docxNoteSeparator = separator.kind;
     sep.setAttribute('contenteditable', 'false');
     sep.setAttribute('aria-hidden', 'true');
     sep.style.position = 'absolute';
-    sep.style.left = `${(area.separator.box.x - area.box.x) * options.scale}px`;
-    sep.style.top = `${(area.separator.box.y - area.box.y) * options.scale}px`;
-    sep.style.width = `${area.separator.box.width * options.scale}px`;
-    sep.style.height = `${Math.max(area.separator.box.height, 0.75) * options.scale}px`;
-    const ruleStyle = area.separator.ruleStyle;
-    if (ruleStyle || area.separator.synthetic || area.separator.fragments.length === 0) {
-      paintSeparatorRule(sep, document, ruleStyle ?? 'single', options.scale);
+    sep.style.left = `${(separator.box.x - area.box.x) * options.scale}px`;
+    sep.style.top = `${(separator.box.y - area.box.y) * options.scale}px`;
+    sep.style.width = `${separator.box.width * options.scale}px`;
+    sep.style.height = `${separator.box.height * options.scale}px`;
+    const ruleStyle = separator.ruleStyle;
+    if (ruleStyle || separator.synthetic) {
+      paintSeparatorRule(
+        sep,
+        document,
+        ruleStyle ?? 'single',
+        options.scale,
+        separator.box.height,
+        separator.ruleColor
+      );
     } else {
-      for (const fragment of area.separator.fragments) {
+      const separatorOptions = {
+        ...options,
+        tabLeaderOriginXPt: separator.box.x - page.box.x,
+      };
+      for (const fragment of separator.fragments) {
         sep.append(
           fragment.kind === 'table'
-            ? paintTableFragment(document, fragment, options)
-            : paintFragment(document, fragment, options)
+            ? paintTableFragment(document, fragment, separatorOptions)
+            : paintFragment(document, fragment, separatorOptions)
         );
       }
     }
@@ -93,6 +106,7 @@ function paintNoteArea(
   }
 
   for (const note of area.notes) {
+    const noteOptions = { ...options, tabLeaderOriginXPt: note.box.x - page.box.x };
     const noteEl = document.createElement('div');
     noteEl.className = 'docx-note';
     noteEl.dataset.docxNote = note.noteKind;
@@ -109,8 +123,8 @@ function paintNoteArea(
     for (const fragment of note.fragments) {
       noteEl.append(
         fragment.kind === 'table'
-          ? paintTableFragment(document, fragment, options)
-          : paintFragment(document, fragment, options)
+          ? paintTableFragment(document, fragment, noteOptions)
+          : paintFragment(document, fragment, noteOptions)
       );
     }
     areaEl.append(noteEl);
@@ -128,13 +142,17 @@ function paintSeparatorRule(
   host: HTMLElement,
   document: Document,
   ruleStyle: 'single' | 'double',
-  scale: number
+  scale: number,
+  heightPt: number,
+  ruleColor?: string | null
 ): void {
   host.dataset.docxNoteRule = ruleStyle;
+  const color = ruleColor && /^[a-f\d]{6}$/i.test(ruleColor) ? `#${ruleColor}` : '#000000';
+  host.style.color = color;
   const stroke = Math.max(1, scale * 0.75);
   if (ruleStyle === 'single') {
-    host.style.borderTop = `${stroke}px solid currentColor`;
-    host.style.opacity = '0.85';
+    host.style.backgroundColor = color;
+    host.style.height = `${heightPt * scale}px`;
     return;
   }
   // Double: two short rules stacked with a Word-like gap (layout box already sized).

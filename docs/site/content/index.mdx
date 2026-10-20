@@ -1,55 +1,86 @@
 ---
 title: 'Introduction'
 description: 'Browser-based WYSIWYG DOCX editor for React and Vue 3, with tracked changes, comments, content controls, and custom nodes.'
-category: 'Getting Started'
+category: 'Getting started'
 order: 1
 seoTitle: 'Documentation and API reference'
 ---
 
-`docx-editor` is a what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React
-and Vue 3.
+`docx-editor` is a what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React and Vue 3.
 
-It parses Office Open XML (OOXML), renders paginated pages, and saves the edited
-state as a DOCX file. Browser editing needs no upload or conversion service.
+It parses Office Open XML (OOXML), renders paginated pages, and saves the edited state as a DOCX file. Browser editing needs no upload or conversion service.
 
 <Cards>
   <Card title="Install the editor" href="/docs/2.x/quickstart">
     Install an adapter, load a DOCX file, and save the result.
   </Card>
-  <Card title="Compose an editor interface" href="/docs/2.x/react/composition">
-    Build an interface with public components and hooks.
+  <Card title="Customize your editor" href="/docs/2.x/customization">
+    Customize controls, colors, dialogs, and review with React and Vue examples.
   </Card>
   <Card title="Review document fidelity" href="/docs/2.x/word-fidelity">
     Check feature support, round-trip behavior, security, and limits.
   </Card>
-  <Card title="Build a DOCX agent" href="/docs/2.x/build-a-docx-agent">
-    Define tools a model can call to read, draft, and redline a DOCX.
+  <Card title="Connect an agent to a document" href="/docs/2.x/build-a-docx-agent">
+    Choose how an agent edits a DOCX and how readers see its updates.
   </Card>
 </Cards>
 
+## Which API for which job
+
+| Job | Use |
+| --- | --- |
+| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
+| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+
+| Task | Browser host (React or Vue) | Headless, server, or agent |
+| --- | --- | --- |
+| [Comment on found text](/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
+| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Record a tracked replacement](/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `proposeRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Accept or reject a change](/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
+| [Open or reveal a change without scrolling](/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Highlight ranges](/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
+| [Custom review rail cards](/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
+| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
+
+The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+
+For worked examples, see [Task recipes](/docs/2.x/recipes).
+
 ## Packages
 
-| Package                                               | Purpose                                                                        | License                                                 |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter and composition hooks                                            | Apache 2.0                                              |
-| [`@docx-editor.dev/vue`](/docs/2.x/vue)               | Vue 3 adapter and composables                                                  | Apache 2.0                                              |
-| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-independent OOXML, document, layout, paint, and editor engine        | Apache 2.0                                              |
-| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Browser and server automation through a documented Office.js-compatible subset | EigenPal Pro License                                    |
-| [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes                                    | EigenPal Pro License                                    |
-| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Shared interface translations                                                  | Apache 2.0                                              |
-| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Open-licensed substitutes for common Word fonts                                | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| Package | Purpose | License |
+| --- | --- | --- |
+| [`@docx-editor.dev/react`](/docs/2.x/react) | React adapter and composition hooks | Apache 2.0 |
+| [`@docx-editor.dev/vue`](/docs/2.x/vue) | Vue 3 adapter and composables | Apache 2.0 |
+| [`@docx-editor.dev/core`](/docs/2.x/core) | Framework-independent OOXML, document, layout, paint, and editor engine | Apache 2.0 |
+| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Browser and server automation through a documented Office.js-compatible subset | EigenPal Pro License |
+| [`@docx-editor.dev/docx-to-markdown`](/docs/2.x/export/markdown) | DOCX to Markdown conversion with pages and media | Apache 2.0 |
+| [`@docx-editor.dev/docx-to-pdf`](/docs/2.x/export/pdf) | DOCX to PDF conversion on Node.js | EigenPal Pro License |
+| [`@docx-editor.dev/pro`](/docs/2.x/pro) | Tracked changes, comments, and custom nodes | EigenPal Pro License |
+| [`@docx-editor.dev/telemetry`](/docs/2.x/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers | EigenPal Pro License |
+| [`@docx-editor.dev/i18n`](/docs/2.x/i18n) | Shared interface translations | Apache 2.0 |
+| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts) | Open-licensed substitutes for common Word fonts | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| [`@docx-editor.dev/fonts-cjk`](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) | Optional Chinese, Japanese, and Korean fallback font for PDF conversion | Apache-2.0 AND OFL-1.1 |
 
-The Pro packages are licensed under the EigenPal Pro License, and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+Compare EigenPal Pro License and support options on the [pricing page](https://www.docx-editor.dev/pricing).
+
+The Nuxt module is a private workspace package. For external applications, follow the [Nuxt guide](/docs/2.x/frameworks/nuxt).
 
 ## Select packages
 
-| Goal                                                                   | Packages                                                       |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------- |
-| React editor                                                           | `@docx-editor.dev/react` and `@docx-editor.dev/core`           |
-| Vue editor                                                             | `@docx-editor.dev/vue` and `@docx-editor.dev/core`             |
-| Tracked changes, comments, or custom nodes                             | Add `@docx-editor.dev/pro`                                     |
-| Server-side editing through the documented Office.js-compatible subset | `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`      |
-| Browser automation through the same subset                             | Add `@docx-editor.dev/editor-api` and use its `/browser` entry |
+| Goal | Packages |
+| --- | --- |
+| Convert DOCX to Markdown | `@docx-editor.dev/docx-to-markdown` and `@docx-editor.dev/core` |
+| Convert DOCX to PDF on Node.js | `@docx-editor.dev/docx-to-pdf` and `@docx-editor.dev/core`; add `@docx-editor.dev/fonts-cjk` for Chinese, Japanese, and Korean text |
+| React editor | `@docx-editor.dev/react` and `@docx-editor.dev/core` |
+| Vue editor | `@docx-editor.dev/vue` and `@docx-editor.dev/core` |
+| Tracked changes, comments, or custom nodes | Add `@docx-editor.dev/pro` |
+| Server-side editing through the documented Office.js-compatible subset | `@docx-editor.dev/editor-api` and `@docx-editor.dev/core` |
+| Browser automation through the same subset | Add `@docx-editor.dev/editor-api` and use its `/browser` entry |
+| Anonymous diagnostics, metrics, or error reporting | Add `@docx-editor.dev/telemetry` |
 
 Install the React editor:
 
@@ -69,9 +100,19 @@ For Vue, replace `@docx-editor.dev/react` with `@docx-editor.dev/vue`.
 | Content     | Images, hyperlinks, bookmarks, and fields                               |
 | Review      | Tracked changes and comments with `@docx-editor.dev/pro`                |
 
-Support differs by feature and operation. See
-[Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip
-status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
+Support differs by feature and operation. See [Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
+
+## Find a guide for your task
+
+| Task | Guide |
+| --- | --- |
+| Check pagination, table layout, and drawing limits | [Word fidelity](/docs/2.x/word-fidelity) |
+| Set paragraph direction for Arabic or Hebrew text | [Right-to-left text](/docs/2.x/guides/right-to-left) |
+| Scroll to and highlight an external paragraph reference | [Navigate a document](/docs/2.x/guides/navigation) |
+| Configure PDF fonts, including Chinese, Japanese, and Korean fallback | [PDF fonts](/docs/2.x/export/pdf/fonts) |
+| Configure interface translations, including Spanish | [`@docx-editor.dev/i18n`](/docs/2.x/i18n) |
+
+Document direction, interface language, and font selection have separate settings. Use the corresponding guide to configure each setting.
 
 ## Round-trip behavior
 
@@ -84,14 +125,16 @@ Saving preserves untouched package content and unsupported OOXML.
 | Media, fonts, macros, and VBA projects | Copies package payloads through save.     |
 | Custom XML and add-in markup           | Preserves structural content.             |
 
-For the preservation contract and test method, see
-[Word fidelity](/docs/2.x/word-fidelity). For engine details, see
-[Architecture](/docs/2.x/core/architecture).
+For the preservation contract and test method, see [Word fidelity](/docs/2.x/word-fidelity). For engine details, see [Architecture](/docs/2.x/core/architecture).
 
 ## Next steps
 
 - [Quickstart](/docs/2.x/quickstart): Load, edit, and save a DOCX file.
-- [Build a DOCX agent](/docs/2.x/build-a-docx-agent): Define document tools for a model.
+- [Connect an agent to a document](/docs/2.x/build-a-docx-agent): Choose an integration approach and show agent updates.
 - [Installation](/docs/2.x/installation): Configure supported frameworks.
 - [React composition](/docs/2.x/react/composition): Build a React interface.
 - [Vue composition](/docs/2.x/vue/composition): Build a Vue interface.
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

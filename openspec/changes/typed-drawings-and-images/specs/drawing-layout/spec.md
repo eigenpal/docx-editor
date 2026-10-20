@@ -52,7 +52,16 @@ An anchored drawing SHALL resolve `wp:positionH` against its `ST_RelFromH` frame
 
 - **WHEN** an anchor with `@layoutInCell="1"` is anchored inside a table cell
 - **THEN** its frames resolve against the cell
-- **AND** with `@layoutInCell="0"` they resolve against the page or margin as declared
+- **AND** with `@layoutInCell="0"` they resolve against the page or margin as declared only when the document's compatibility mode is 14 or lower or absent, and the object is not positioned against its character or line
+- **AND** such an out-of-cell object with square, tight, through, or top-and-bottom wrapping keeps the position the unpushed table gives it, and every table row whose band touches it moves below it with the rows after it
+- **AND** in compatibility mode 15 or higher `@layoutInCell="0"` is ignored and the object lays out in the cell as for `"1"`, as Word does
+- **AND** outside a real table cell (a header, footer, note or text-box story) `@layoutInCell` is ignored
+
+#### Scenario: Header and footer text around their own objects
+
+- **WHEN** a header or footer story contains an anchored drawing with a wrapping mode
+- **THEN** in compatibility mode 15 or higher the story's text wraps around it
+- **AND** in compatibility mode 14 or lower, or with no mode declared, the story's text outside tables runs under it as if it had no wrap, as Word does, while text in a table cell of that story still wraps
 
 #### Scenario: Unsupported frame falls back visibly
 
@@ -111,7 +120,7 @@ The wrap element SHALL determine how surrounding text flows. `wrapNone` produces
 
 - **WHEN** two anchored drawings would occupy the same space
 - **THEN** the one with the greater `@relativeHeight` paints on top
-- **AND** where `@allowOverlap="0"`, the later drawing is displaced instead of overlapping
+- **AND** where `@allowOverlap="0"`, the later drawing is displaced instead of overlapping: at its authored height, flush right of the drawing it hits when it fits in the content box, else flush left, and down only when neither side fits
 
 #### Scenario: Paint order does not change layout
 

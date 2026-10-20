@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A legacy VML text box with no DrawingML alternative was no drawing atom: its shape was dropped, its story was not laid out, and Find and the editor could not reach its text. Floating v:line shapes, stroked rectangles, and shapes with aligned positions or extra inert style keys were dropped.",
+  "after": "A supported VML text box is one drawing atom of its paragraph, like a DrawingML text box. Its story lays out inside the shape, Find reaches it, and a body box takes text editing through the existing text-box frame scope. Floating lines, stroked and rounded rectangles, and aligned VML positions render. The VML shape itself refuses drawing operations.",
+  "reason": "Story edits are the existing paragraph text, run, and split operations on w:txbxContent paragraphs in the owner part, which released participants already synchronize for DrawingML text boxes. No operation, stored field, identity, or repair rule changes. The projection is read-only and derived locally from the shared tree. As for earlier projection subset changes, a published selection after a newly supported VML atom can differ by one offset between versions.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-vml-textboxes.test.ts",
+    "packages/core/src/editor/__tests__/legacy-vml-textbox-editing.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-textbox.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-textbox-layout.test.ts"
+  ],
+  "changeset": "legacy-vml-textboxes",
+  "migration": null
+}

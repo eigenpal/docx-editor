@@ -1,3 +1,4 @@
+import { REVISION_PROPERTY_CONTAINERS } from './revision-property-records.ts';
 // Tracked FORMAT changes — `w:rPrChange` and `w:pPrChange` (tracked-edits seam).
 //
 // The third kind of tracked edit, beside content wrappers (`tree-op-tracked.ts`) and
@@ -70,6 +71,8 @@ export const PROPERTY_CHANGE_WRAPPER_OF_OP: ReadonlyMap<string, 'rPrChange' | 'p
     ['setRunProperties', 'rPrChange'],
     ['setParagraphMarkProperties', 'rPrChange'],
     ['setParagraphProperties', 'pPrChange'],
+    ['setListLevel', 'pPrChange'],
+    ['setListNumbering', 'pPrChange'],
   ]);
 
 /** `w:rPr` records through `w:rPrChange`; `w:pPr` through `w:pPrChange`. */
@@ -144,13 +147,13 @@ function sameProperties(left: readonly OoxmlNode[], right: readonly OoxmlNode[])
  */
 export function recordedProperties(wrapper: OoxmlNode): readonly OoxmlNode[] | null {
   if (wrapper.kind === 'textValue') return null;
-  const inner = wrapper.localName === 'rPrChange' ? 'rPr' : 'pPr';
-  for (const child of wrapper.children) {
-    if (child.kind === 'textValue' || !isWmlNamed(child, inner)) continue;
-    const children: readonly OoxmlNode[] = child.children;
-    return children;
+  const inner = REVISION_PROPERTY_CONTAINERS.get(wrapper.localName);
+  if (!inner) return null;
+  const snapshots = wrapper.children.filter((child) => isWmlNamed(child, inner));
+  if (snapshots.length === 1 && snapshots[0]!.kind !== 'textValue') {
+    return snapshots[0]!.children;
   }
-  return null;
+  return wrapper.localName === 'sectPrChange' && wrapper.children.length === 0 ? [] : null;
 }
 
 /**
@@ -241,9 +244,45 @@ export function insideOwnInsertion(part: OoxmlPart, nodeId: string, author: stri
   let ancestor = parentNodeOf(part, nodeId);
   while (ancestor !== null) {
     if (ancestor.kind === 'revisionInsert') return ownedBy(ancestor, author);
+    const table = insertedTablePart(ancestor, author);
+    if (table !== null) return table;
     ancestor = parentNodeOf(part, ancestor.id);
   }
   return false;
+}
+
+/**
+ * For a row or cell proposed as an insertion (`w:trPr/w:ins`, `w:tcPr/w:cellIns`), whether
+ * this author proposed it; null for anything else. Rejecting the author's own removes
+ * everything inside, formatting included, so nothing inside needs a format record, the same as
+ * a run in their `w:ins`. Someone else's is the nearest owner, and the record belongs on it.
+ */
+function insertedTablePart(node: OoxmlNode, author: string): boolean | null {
+  if (node.kind === 'textValue') return null;
+  const container = node.kind === 'tableRow' ? 'trPr' : node.kind === 'tableCell' ? 'tcPr' : null;
+  if (!container) return null;
+  const properties = node.children.find((child) => isWmlNamed(child, container));
+  if (!properties || properties.kind === 'textValue') return null;
+  const marker = properties.children.find((child) =>
+    isWmlNamed(child, container === 'trPr' ? 'ins' : 'cellIns')
+  );
+  return marker ? ownedBy(marker, author) : null;
+}
+
+/**
+ * {@link ownProposedMark} for a paragraph, also true inside a row or cell this author
+ * proposed inserting: such a paragraph never existed for anyone else either.
+ */
+export function ownProposedParagraph(
+  part: OoxmlPart,
+  paragraphId: string,
+  markProperties: readonly OoxmlNode[],
+  author: string
+): boolean {
+  // The nearest proposal decides: the mark's own `w:ins`, then the innermost proposed row.
+  if (markProperties.some((child) => isWmlNamed(child, 'ins')))
+    return ownProposedMark(markProperties, author);
+  return insideOwnInsertion(part, paragraphId, author);
 }
 
 /**

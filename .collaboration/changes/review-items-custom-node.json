@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The local review patch could skip a custom node inserted into a paragraph that held no control.",
+  "after": "An edit that adds or changes a control in a paragraph rebuilds the review list in full.",
+  "reason": "Only the local review list cache changes. No shared node, operation, or package serialization changes.",
+  "tests": ["packages/pro/src/__tests__/insert-custom-node.test.ts"],
+  "changeset": "review-items-custom-node",
+  "migration": null
+}

@@ -1,0 +1,67 @@
+{
+  "config": "denseControls",
+  "seed": 24,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertNote",
+          "noteKind": "footnote",
+          "offset": 20
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 2,
+          "end": 3
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertNote",
+          "noteKind": "footnote",
+          "offset": 4
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    }
+  ]
+}

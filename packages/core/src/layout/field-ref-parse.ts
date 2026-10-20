@@ -16,7 +16,7 @@ export interface RefFieldSpec {
   readonly bookmark: string;
   /** `r` / `w` paint the target's number; `n` the same without context; null the range text. */
   readonly numberSwitch: 'r' | 'w' | 'n' | null;
-  /** `\h` parsed and inert — the reference paints; navigation is a follow-up. */
+  /** `\h` marks a reference whose displayed result links to its bookmark. */
   readonly hyperlink: boolean;
 }
 
@@ -179,4 +179,13 @@ function parsePageRefSwitches(tokens: readonly string[], bookmark: string): RefF
   const spec: RefFieldSpec = { bookmark, numberSwitch: null, hyperlink };
   refSpecModifiers.set(spec, REF_MODS_PAGEREF);
   return spec;
+}
+
+/**
+ * A plain REF: its result is the target's text or number, which pagination never changes.
+ * PAGEREF shows a page number and NOTEREF a note number that can restart on each page.
+ */
+export function plainRefSpec(spec: RefFieldSpec): boolean {
+  const modifiers = refSpecModifiersOf(spec);
+  return !modifiers.pageRef && !modifiers.noteRef;
 }

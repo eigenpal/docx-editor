@@ -1,8 +1,10 @@
+import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
 // Paste flavour routing (rich-clipboard-fidelity task 4.1).
 //
 // Fidelity order: internal fragment, then external `text/html`, then `text/plain` — and
 // the degrade is CONTINUOUS: a payload that fails decoding, fails the bounded package
-// read, or is refused at apply falls to the next flavour instead of leaving a no-op
+// read, or has a recoverable apply refusal falls to the next flavour. Unsupported object
+// content refuses without fallback. Other failures do not leave a no-op
 // paste. Suggesting mode and non-body stories force the plain lane, whose tracked-write
 // behaviour already exists; the drop lane never routes through here.
 
@@ -12,8 +14,8 @@ import { projectExternalHtml } from './clipboard-html-read.ts';
 export interface PasteRouteTarget {
   /** True when a fragment landing is even possible: body story, edit mode. */
   readonly richLaneOpen: boolean;
-  /** Land a fragment package; false means refused (any reason) and the router degrades. */
-  pasteFragment(bytes: Uint8Array, lastMarkCovered: boolean): boolean;
+  /** False permits fallback; unsupported-content refuses the complete paste. */
+  pasteFragment(bytes: Uint8Array, lastMarkCovered: boolean): boolean | 'unsupported-content';
   insertPlainText(text: string): void;
 }
 
@@ -24,7 +26,12 @@ export interface PasteRouteInput {
   readonly forcePlain: boolean;
 }
 
-export type PasteRouteLane = 'fragment' | 'external-html' | 'plain' | 'none';
+export type PasteRouteLane =
+  | 'fragment'
+  | 'external-html'
+  | 'plain'
+  | 'none'
+  | 'unsupported-content';
 
 /** Route one paste payload; reports the lane that actually landed. */
 export function routePaste(target: PasteRouteTarget, input: PasteRouteInput): PasteRouteLane {
@@ -34,19 +41,27 @@ export function routePaste(target: PasteRouteTarget, input: PasteRouteInput): Pa
     return 'plain';
   };
 
-  if (input.forcePlain || !target.richLaneOpen) return plain();
+  if (input.forcePlain) return plain();
   const html = input.html;
   if (html === null || html.length === 0) return plain();
 
   const embedded = fragmentFromHtml(html);
-  if (embedded && target.pasteFragment(embedded.bytes, embedded.lastMarkCovered)) {
-    return 'fragment';
+  if (!target.richLaneOpen) {
+    if (embedded && fragmentContainsClipboardObject(embedded.bytes)) return 'unsupported-content';
+    return plain();
+  }
+  if (embedded) {
+    const result = target.pasteFragment(embedded.bytes, embedded.lastMarkCovered);
+    if (result === 'unsupported-content') return 'unsupported-content';
+    if (result) return 'fragment';
   }
 
   const projected = projectExternalHtml(html);
   if (projected.ok && projected.truncated && input.text.length > 0) return plain();
-  if (projected.ok && target.pasteFragment(projected.fragmentBytes, projected.lastMarkCovered)) {
-    return 'external-html';
+  if (projected.ok) {
+    const result = target.pasteFragment(projected.fragmentBytes, projected.lastMarkCovered);
+    if (result === 'unsupported-content') return 'unsupported-content';
+    if (result) return 'external-html';
   }
 
   return plain();

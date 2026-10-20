@@ -1,15 +1,21 @@
-import { defineComponent, ref, watch } from 'vue';
+import { defineComponent, ref } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue } from '@docx-editor.dev/core/editor';
+import {
+  isHTMLElementNode,
+  lineSpacingMenuRowLabel,
+  lineSpacingMenuRows,
+  type LineSpacingMenuRow,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useParagraphDialog } from '../paragraph-dialog-host';
+import { useTranslation } from '../../i18n';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';
+import { useDropdownClose } from './useDropdownClose';
 
-const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 const DEFAULT_PARAGRAPH_SPACE_PT = 10;
 // Remove writes an explicit ZERO, not nothing: dropping the attribute lets the style's own
 // space come back, so on a Word default document Remove gave the space straight back.
@@ -46,25 +52,25 @@ export const ToolbarLineSpacing = defineComponent({
     const paragraphDialogCommand = useEditorCommand('paragraph.dialog');
     const paragraphDialog = useParagraphDialog();
     const label = useToolbarLabel();
+    // Kept whole, not destructured: `lang` is a getter, read in render so it tracks.
+    const i18n = useTranslation();
     const open = ref(false);
     const rootRef = ref<HTMLSpanElement | null>(null);
 
-    watch(open, (isOpen, _, onCleanup) => {
-      if (!isOpen) return;
-      const onMouseDown = (event: MouseEvent) => {
-        const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
-        open.value = false;
-      };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
-    });
+    useDropdownClose(
+      open,
+      (value) => {
+        open.value = value;
+      },
+      rootRef,
+      () => Boolean(props.hidden)
+    );
 
-    const applyLines = (lines: number) => {
+    const applyRow = (row: LineSpacingMenuRow) => {
       open.value = false;
-      if (!editorRef.value) return;
-      const cmd = commandForSlotValue('list.lineSpacing', lines);
-      if (cmd && editorRef.value!.can(cmd).ok) editorRef.value!.exec(cmd);
+      // The selected row has no command: it already holds (see `LineSpacingMenuRow`).
+      if (!editorRef.value || !row.command) return;
+      if (editorRef.value.can(row.command).ok) editorRef.value.exec(row.command);
     };
 
     const applySpace = (field: 'beforePt' | 'afterPt', points: number | null) => {
@@ -79,10 +85,9 @@ export const ToolbarLineSpacing = defineComponent({
       const control = chromeControlForSlot('list.lineSpacing');
       const hasBefore = (spacing.value.spaceBeforePt ?? 0) > 0;
       const hasAfter = (spacing.value.spaceAfterPt ?? 0) > 0;
-      const ticked =
-        spacing.value.lineSpacing?.rule === 'multiple'
-          ? (spacing.value.lineSpacing?.value ?? null)
-          : null;
+      // The spacing in force always shows as a ticked row, even one no preset matches; a
+      // mixed selection ticks none.
+      const rows = lineSpacingMenuRows(spacing.value.lineSpacing);
 
       return (
         <span ref={rootRef} class="docx-toolbar__line-spacing" data-slot="list.lineSpacing">
@@ -107,20 +112,25 @@ export const ToolbarLineSpacing = defineComponent({
           </button>
           {open.value && command.isEnabled.value ? (
             <div class="docx-toolbar__menu docx-toolbar__line-spacing-menu" role="menu">
-              {LINE_SPACING_PRESETS.map((lines) => {
-                const selected = ticked === lines;
+              {rows.map((row) => {
+                const selected = row.selected;
                 return (
                   <button
-                    key={lines}
+                    key={`${row.spacing.rule}:${row.spacing.value}`}
                     type="button"
                     role="menuitemradio"
                     aria-checked={selected}
                     {...(selected ? { 'data-selected': '' } : {})}
                     class="docx-toolbar__menu-item"
                     onMousedown={guardToolbarMousedown}
-                    onClick={() => applyLines(lines)}
+                    onClick={() => applyRow(row)}
                   >
-                    {Number.isInteger(lines * 10) ? lines.toFixed(1) : lines.toFixed(2)}
+                    {lineSpacingMenuRowLabel(row, label, i18n.lang)}
+                    {selected ? (
+                      <span class="docx-toolbar__menu-check" aria-hidden="true">
+                        ✓
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -143,7 +153,7 @@ export const ToolbarLineSpacing = defineComponent({
                   const trigger = rootRef.value?.querySelector(
                     '.docx-toolbar__line-spacing-trigger'
                   );
-                  paragraphDialog?.open(trigger instanceof HTMLElement ? trigger : null);
+                  paragraphDialog?.open(isHTMLElementNode(trigger) ? trigger : null);
                 }}
               >
                 {label('lineSpacing.options')}

@@ -68,7 +68,7 @@ import {
   FACES,
   FAMILY_PLANS,
   PACKAGED_ONLY_FAMILIES,
-  type WordDefaultFamily,
+  type DefaultFontFamily,
 } from './family-plans.ts';
 import {
   GOOGLE_FONTS_REVISION,
@@ -92,7 +92,7 @@ import type {
  * it from the bundle here is what makes `googleFonts()` the ON-DEMAND path for it, so
  * `defaultFonts()` does not have to load ~709 KB of it for every document that never asks.
  */
-const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
+const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, DefaultFontFamily> = new Map(
   PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
 );
 
@@ -111,6 +111,16 @@ const faceKey = (family: string, weight: number, style: string): string =>
   `${family.trim().toLowerCase()} ${weight} ${style}`;
 
 export { GOOGLE_FONTS_REVISION, GOOGLE_FONT_CATALOG, type GoogleFontFace };
+// The package entry's types this entry's signatures name, so a consumer importing only
+// `@docx-editor.dev/fonts/google` can write them down.
+export type {
+  DefaultFontFaceRequest,
+  DefaultFontSource,
+  DefaultFontSubstitution,
+  FontOriginRequest,
+  FontResolverMark,
+  ResolvedFontFace,
+} from './index.ts';
 
 /** Every family the catalog can serve, sorted — the set a font picker may offer. */
 export const GOOGLE_FONT_FAMILIES: readonly string[] = Object.freeze([
@@ -185,6 +195,8 @@ export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<Googl
 
 /** What one resolver call produced, for callers that want it without the editor. */
 export interface GoogleFontsFragment {
+  /** Families this provider can serve after applying allow and substitute options. */
+  readonly supportedFamilies?: readonly string[];
   readonly sources: readonly DefaultFontSource[];
   readonly substitutions: readonly DefaultFontSubstitution[];
   readonly failures: readonly GoogleFontLoadFailure[];
@@ -428,6 +440,24 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
+  const supportedFamilies = Object.freeze(
+    [
+      ...new Set([
+        ...GOOGLE_FONT_FAMILIES,
+        ...PACKAGED_ONLY_FAMILIES,
+        ...Object.keys({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }),
+      ]),
+    ].filter((family) => {
+      const target = substitutes.get(family.toLowerCase());
+      const bundled =
+        target === undefined ? PACKAGED_ONLY_BY_NAME.get(family.toLowerCase()) : undefined;
+      const resolved = bundled
+        ? FAMILY_PLANS.get(bundled)?.substitute
+        : catalogByFamily.get((target ?? family).toLowerCase())?.[0]?.family;
+      return resolved !== undefined && (!allowed || allowed.has(resolved.toLowerCase()));
+    })
+  );
+
   async function resolveGoogleFonts(request: FontOriginRequest): Promise<GoogleFontsFragment> {
     // Faces an earlier origin can already PAINT. Skipping them is not only bytes: a face
     // the composition would drop anyway is a CDN request that tells a third party which
@@ -442,7 +472,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
     /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
-    const packaged = new Map<string, WordDefaultFamily>();
+    const packaged = new Map<string, DefaultFontFamily>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
       const target = substitutes.get(declared.toLowerCase());
@@ -559,7 +589,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     // Deterministic regardless of which response landed first, so the same document
     // composes to the same configuration fingerprint on every load.
     sources.sort((left, right) => left.id.localeCompare(right.id));
-    return { sources, substitutions, failures };
+    return { sources, substitutions, failures, supportedFamilies };
   }
 
   const descriptor = { value: true, enumerable: false, configurable: true } as const;

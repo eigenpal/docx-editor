@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A copied picture with an extension-style content type keeps that type in the clipboard package, so an earlier editor version drops it on paste.",
+  "after": "The clipboard package declares the standard image type for such a picture.",
+  "reason": "Only the clipboard package that a copy produces changes. Shared operations, identities, fields, and document package serialization stay unchanged, and a paste still replicates through the existing resource effects.",
+  "tests": [
+    "packages/core/src/store/__tests__/clipboard-fragment-media-types.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste.test.ts"
+  ],
+  "changeset": "copied-image-standard-type",
+  "migration": null
+}

@@ -97,6 +97,21 @@ afterEach(() => {
 });
 
 describe('the review sidebar', () => {
+  test('names the nested review region without adding a complementary landmark', async () => {
+    const view = render(
+      <DocxEditorRoot document={SOURCE} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const region = view.getByRole('region', { name: 'Review' });
+    expect(region.tagName).toBe('ASIDE');
+    expect(view.getByRole('region', { name: 'Document pages' }).contains(region)).toBe(true);
+    expect(view.queryByRole('complementary')).toBeNull();
+  });
+
   test('right-click Add a comment starts a draft instead of only toggling the pane', async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(
@@ -126,7 +141,7 @@ describe('the review sidebar', () => {
       fireEvent.contextMenu(surface, { clientX: 100, clientY: 100, button: 2 });
     });
     const row = view.container.querySelector(
-      '[data-slot="review.comments"]'
+      '[data-slot="review.addComment"]'
     ) as HTMLButtonElement | null;
     expect(row).not.toBeNull();
     expect(row?.getAttribute('aria-disabled')).not.toBe('true');
@@ -170,7 +185,7 @@ describe('the review sidebar', () => {
       fireEvent.contextMenu(surface, { clientX: 100, clientY: 100, button: 2 });
     });
     const row = view.container.querySelector(
-      '[data-slot="review.comments"]'
+      '[data-slot="review.addComment"]'
     ) as HTMLButtonElement | null;
     expect(row).not.toBeNull();
     expect(row?.getAttribute('aria-disabled')).toBe('true');
@@ -180,7 +195,7 @@ describe('the review sidebar', () => {
       editor.exec({ type: 'setEditingMode', mode: 'editing' });
     });
     expect(
-      view.container.querySelector('[data-slot="review.comments"]')?.getAttribute('aria-disabled')
+      view.container.querySelector('[data-slot="review.addComment"]')?.getAttribute('aria-disabled')
     ).not.toBe('true');
   });
 
@@ -312,22 +327,12 @@ describe('the review sidebar', () => {
       editor.setActiveReviewItem(editor.getReviewItems().find((i) => i.kind === 'revision')!.key);
     });
 
-    // TWO controls, one per node: the change's own and the reply's. Without the reply's, the
-    // only way to take back a single answer was to delete the whole thread it hangs off.
-    //
-    // Both are always RENDERED; which one the reader can see is the stylesheet's business —
-    // each is revealed by hovering the node it deletes, and the selectors that do it are
-    // anchored on this structure. So the structure is what this asserts: the reply's control
-    // lives inside the reply, and the change's inside the card's own head.
+    // Delete belongs to the reply. The revision already has a Reject action.
     expect(view.getAllByTestId('review-reply')).toHaveLength(1);
     const controls = view.getAllByTestId('review-delete');
-    expect(controls).toHaveLength(2);
+    expect(controls).toHaveLength(1);
     const reply = view.getAllByTestId('review-reply')[0]!;
-    expect(reply.contains(controls[1]!)).toBe(true);
-    expect(reply.contains(controls[0]!)).toBe(false);
-    expect(controls[0]!.closest('.docx-review__head')?.parentElement).toBe(
-      view.getAllByTestId('review-card')[0]!
-    );
+    expect(reply.contains(controls[0]!)).toBe(true);
 
     // And CLICKING the reply keeps the change open rather than closing it: the reply covers
     // exactly the change's characters, so it wins the innermost test at the caret, and
@@ -336,10 +341,10 @@ describe('the review sidebar', () => {
       fireEvent.click(view.getAllByTestId('review-reply')[0]!);
     });
     expect(view.getAllByTestId('review-card')[0]!.hasAttribute('data-active')).toBe(true);
-    expect(view.getAllByTestId('review-delete')).toHaveLength(2);
+    expect(view.getAllByTestId('review-delete')).toHaveLength(1);
 
     await act(async () => {
-      fireEvent.click(controls[1]!);
+      fireEvent.click(controls[0]!);
     });
     // The reply is gone; the change it answered is not.
     expect(view.queryAllByTestId('review-reply')).toHaveLength(0);
@@ -347,37 +352,44 @@ describe('the review sidebar', () => {
     expect(editor.surface!.session.bodyText()).toBe('base added');
   });
 
-  test('a tracked change carries a delete control that discards the suggestion', async () => {
-    let instance: DocxEditorInstance | null = null;
-    const view = render(
-      <DocxEditorRoot
-        document={TRACKED}
-        author="Grace Hopper"
-        modules={[reviewModule()]}
-        onReady={(editor) => {
-          instance = editor as DocxEditorInstance;
-        }}
-      >
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    const editor = instance!;
-    // The rail had accept and reject for a change and nothing at all for a comment, so a
-    // remark could be resolved but never removed. One control now sits on both kinds, without
-    // the reader having to open the card first.
-    expect(view.getAllByTestId('review-card')).toHaveLength(1);
-    expect(view.getAllByTestId('review-delete')).toHaveLength(1);
+  for (const explicitDelete of [false, true]) {
+    test(`a tracked change exposes Discard only when explicitly composed: ${explicitDelete}`, async () => {
+      let instance: DocxEditorInstance | null = null;
+      const view = render(
+        <DocxEditorRoot
+          document={TRACKED}
+          author="Grace Hopper"
+          modules={[reviewModule()]}
+          onReady={(editor) => {
+            instance = editor as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+            <DocxEditorReview>
+              {explicitDelete ? (
+                <DocxEditorReview.List>
+                  <DocxEditorReview.Card>
+                    <DocxEditorReview.Delete />
+                  </DocxEditorReview.Card>
+                </DocxEditorReview.List>
+              ) : null}
+            </DocxEditorReview>
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      );
+      const editor = instance!;
+      expect(view.getAllByTestId('review-card')).toHaveLength(1);
+      expect(view.queryAllByTestId('review-delete')).toHaveLength(explicitDelete ? 1 : 0);
 
-    await act(async () => {
-      fireEvent.click(view.getByTestId('review-delete'));
+      await act(async () => {
+        fireEvent.click(view.getByTestId(explicitDelete ? 'review-delete' : 'review-reject'));
+      });
+      // Discarding a suggestion is rejecting it: the proposal goes, the base text stays.
+      expect(view.queryAllByTestId('review-card')).toHaveLength(0);
+      expect(editor.surface!.session.bodyText()).toBe('base ');
     });
-    // Discarding a suggestion is rejecting it: the proposal goes, the base text stays.
-    expect(view.queryAllByTestId('review-card')).toHaveLength(0);
-    expect(editor.surface!.session.bodyText()).toBe('base ');
-  });
+  }
 
   test('stops observing a card slot when the card unmounts', async () => {
     const original = globalThis.ResizeObserver;
@@ -406,7 +418,7 @@ describe('the review sidebar', () => {
       const slot = observed.find((node) => node.classList.contains('docx-review__slot'));
       expect(slot).toBeDefined();
       await act(async () => {
-        fireEvent.click(view.getByTestId('review-delete'));
+        fireEvent.click(view.getByTestId('review-reject'));
       });
       expect(unobserved.includes(slot!)).toBe(true);
     } finally {
@@ -439,7 +451,6 @@ describe('the review sidebar', () => {
     const actions = [
       view.getByTestId('review-accept'),
       view.getByTestId('review-reject'),
-      view.getByTestId('review-delete'),
     ] as HTMLButtonElement[];
     for (const action of actions) {
       expect(action.disabled).toBe(true);
@@ -456,7 +467,7 @@ describe('the review sidebar', () => {
     const view = render(
       <DocxEditorRoot
         document={COMMENTED_SOURCE}
-        modules={[reviewModule()]}
+        modules={[reviewModule({ pane: { commentMarkers: 'initials' } })]}
         onReady={(editor) => {
           instance = editor as DocxEditorInstance;
         }}
@@ -479,7 +490,8 @@ describe('the review sidebar', () => {
     expect(card().hasAttribute('data-resolved-miniature')).toBe(true);
     act(() => editor.exec({ type: 'toggleReviewPane' }));
     const marker = view.getByTestId('review-marker');
-    expect(marker.querySelector('.docx-review__resolved-icon')).not.toBeNull();
+    // `commentMarkers: 'initials'` draws a resolved thread as the quiet check badge.
+    expect(marker.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
     act(() => fireEvent.click(marker));
     expect(card().open).toBe(true);
     expect(view.getByText('Resolved')).toBeDefined();
@@ -587,59 +599,6 @@ describe('the review sidebar', () => {
     expect(commentOf(editor).resolved).toBe(true);
   });
 
-  test('hides the read-only structural cards by default, and shows them on request', () => {
-    // One resolvable insertion plus one structural site (a tracked row insertion,
-    // `w:trPr/w:ins`) — the kind of markup a heavily revised contract carries by the dozen.
-    const TRACKED = docx(
-      '<w:p><w:r><w:t>base </w:t></w:r>' +
-        '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
-        '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
-        '<w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
-        '<w:tr><w:trPr><w:ins w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"/></w:trPr>' +
-        '<w:tc><w:tcPr/><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr>' +
-        '</w:tbl>'
-    );
-    const kindsOf = (root: HTMLElement) =>
-      [...root.querySelectorAll('[data-testid="review-card"]')].map(
-        (card) => (card as HTMLElement).dataset.kind
-      );
-
-    let instance: DocxEditorInstance | null = null;
-    const view = render(
-      <DocxEditorRoot
-        document={TRACKED}
-        modules={[reviewModule()]}
-        onReady={(editor) => {
-          instance = editor as DocxEditorInstance;
-        }}
-      >
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    // The ENGINE still lists the structural revision — only its card is hidden.
-    expect(
-      instance!
-        .getReviewItems()
-        .some((item) => item.kind === 'revision' && item.revisionKind === 'structural')
-    ).toBe(true);
-    expect(kindsOf(view.container)).toContain('insert');
-    expect(kindsOf(view.container)).not.toContain('structural');
-    view.unmount();
-
-    const shown = render(
-      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview structural />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    expect(kindsOf(shown.container)).toContain('structural');
-  });
-
   test('clicking a format or structural change opens its balloon; content changes stay rail-only', async () => {
     const TRACKED = docx(
       '<w:p><w:r><w:t>base </w:t></w:r>' +
@@ -656,11 +615,11 @@ describe('the review sidebar', () => {
       <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
         <DocxEditorViewport>
           <DocxEditorContent />
-          <DocxEditorReview />
+          <DocxEditorReview formatting={false} structural={false} />
         </DocxEditorViewport>
       </DocxEditorRoot>
     );
-    // FORMAT cards are out of the rail by default, like structural ones; the balloon —
+    // FORMAT cards are explicitly excluded from the rail, like structural ones; the balloon —
     // not a hover — is where their decision lives.
     const railKinds = [...view.container.querySelectorAll('[data-testid="review-card"]')].map(
       (card) => (card as HTMLElement).dataset.kind
@@ -780,7 +739,7 @@ const FORMAT_AND_INSERT = docx(
 );
 
 describe('DocxEditor.Review query exclusions', () => {
-  test('default rail lists only non-format/non-structural cards', () => {
+  test('default rail keeps formatting in the page balloon', () => {
     const view = render(
       <DocxEditorRoot document={FORMAT_AND_INSERT} modules={[reviewModule()]}>
         <DocxEditorViewport>

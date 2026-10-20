@@ -6,8 +6,19 @@
 // re-exported from here, so importers keep one module to reach for.
 
 import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-reader.ts';
-import { isValidNCName } from './qname.ts';
+import { noteKindCompatible } from './ooxml-note-kinds.ts';
+import {
+  BLANK_TEXT,
+  canonicalLegacyChildren,
+  XML_INDENTATION_TEXT,
+} from './ooxml-text-children.ts';
+import { isXmlNCName } from './qname.ts';
 import { candidateSdtKind } from './ooxml-sdt.ts';
+import {
+  EMPTY_NAMESPACE_BINDINGS,
+  EMPTY_NODE_CHILDREN,
+  OoxmlReadMetadata,
+} from './ooxml-read-metadata.ts';
 import {
   TreeReadError,
   W14_NAMESPACE_URI,
@@ -17,9 +28,9 @@ import {
   DRAWINGML_MAIN_NAMESPACE_URI,
   WP_NAMESPACE_URI,
   PIC_NAMESPACE_URI,
-  expandedKey,
   knownKindAllowsWmlVal,
-  splitQName,
+  rejectDuplicateAttribute,
+  splitQNameShared,
   validKnownKind,
   validateQNameAttributeValues,
   type ExpandedName,
@@ -32,6 +43,7 @@ import {
   validateDrawingNode,
   type DrawingParentContext,
 } from './ooxml-drawing-rules.ts';
+import { keepLeadingParagraphProperties } from './ooxml-paragraph-properties.ts';
 
 export {
   W14_NAMESPACE_URI,
@@ -867,14 +879,14 @@ export interface OoxmlTabNode extends OoxmlElementBase<
   readonly localName: 'tab';
 }
 
-/** `w:br` — a line, column or page break inside a run. */
+/** `w:br` — a line, column or page break; `w:cr` — a manual line break. */
 export interface OoxmlHardBreakNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'hardBreak';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
-  readonly localName: 'br';
+  readonly localName: 'br' | 'cr';
 }
 
 /**
@@ -1449,6 +1461,7 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   pPr: 'paragraphProperties',
   tab: 'tab',
   br: 'hardBreak',
+  cr: 'hardBreak',
   fldChar: 'fldChar',
   instrText: 'instrText',
   fldSimple: 'fldSimple',
@@ -1592,16 +1605,32 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
       ? 'generic'
       : 'contentControl';
   }
+  // `w:br`/`w:cr` are run content (`EG_RunInnerContent`). A stray one written straight under a
+  // paragraph or link, typed, demoted that container — and layout drops a generic paragraph
+  // whole. It stays generic at its position instead, so the runs around it keep painting.
+  if ((localName === 'br' || localName === 'cr') && parentLocalName !== undefined) {
+    return parentLocalName === 'r' ? 'hardBreak' : 'generic';
+  }
   return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
 }
 
-function deepFreezeNode(node: OoxmlNode): OoxmlNode {
+/**
+ * @internal Freeze `node` and everything under it. A frozen node is skipped whole: reads
+ * freeze bottom-up, so its subtree is frozen already.
+ */
+export function deepFreezeNode(node: OoxmlNode): OoxmlNode {
+  if (Object.isFrozen(node)) return node;
   if (node.kind === 'textValue') return Object.freeze(node);
-  for (const attribute of node.attributes) Object.freeze(attribute);
-  for (const binding of node.namespaceBindings) Object.freeze(binding);
+  // Equal attribute lists are shared across elements, so most are frozen already.
+  if (!Object.isFrozen(node.attributes)) {
+    for (const attribute of node.attributes) Object.freeze(attribute);
+    Object.freeze(node.attributes);
+  }
+  if (!Object.isFrozen(node.namespaceBindings)) {
+    for (const binding of node.namespaceBindings) Object.freeze(binding);
+    Object.freeze(node.namespaceBindings);
+  }
   for (const child of node.children) deepFreezeNode(child);
-  Object.freeze(node.attributes);
-  Object.freeze(node.namespaceBindings);
   Object.freeze(node.children);
   return Object.freeze(node);
 }
@@ -1617,12 +1646,13 @@ function namespaceDeclarations(
   // dominated parse allocation on long documents.
   let bindings: Map<string, string> | null = null;
   const authored: OoxmlNamespaceBinding[] = [];
-  for (const [name, namespaceUri] of Object.entries(element.attributes)) {
+  for (const name in element.attributes) {
     if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    const namespaceUri = element.attributes[name]!;
     bindings ??= new Map(inherited);
     const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
     if (
-      (prefix !== '' && !isValidNCName(prefix)) ||
+      (prefix !== '' && !isXmlNCName(prefix)) ||
       prefix === 'xmlns' ||
       (prefix === 'xml' && namespaceUri !== XML_NAMESPACE_URI) ||
       (prefix !== 'xml' && namespaceUri === XML_NAMESPACE_URI) ||
@@ -1640,7 +1670,7 @@ function resolveElementName(
   authoredName: string,
   bindings: ReadonlyMap<string, string>
 ): ExpandedName & { readonly namespaceUri: string } {
-  const name = splitQName(authoredName);
+  const name = splitQNameShared(authoredName);
   if (name.prefix === 'xmlns') throw new TreeReadError('invalid-namespace');
   if (name.prefix !== undefined) {
     const namespaceUri = bindings.get(name.prefix);
@@ -1659,21 +1689,21 @@ function resolveAttributes(
   readonly hasWmlVal: boolean;
 } {
   const attributes: OoxmlAttribute[] = [];
-  const seen = new Set<string>();
+  const duplicates = { seen: undefined as Set<string> | undefined };
   let compatibleWithKnownNode = true;
   let hasWmlVal = false;
-  for (const [authoredName, value] of Object.entries(element.attributes)) {
+  // `for...in`: the attribute record has no prototype, and this runs for every element.
+  for (const authoredName in element.attributes) {
     if (authoredName === 'xmlns' || authoredName.startsWith('xmlns:')) continue;
-    const name = splitQName(authoredName);
+    const value = element.attributes[authoredName]!;
+    const name = splitQNameShared(authoredName);
     let namespaceUri = '';
     if (name.prefix !== undefined) {
       namespaceUri = bindings.get(name.prefix) ?? '';
       if (!bindings.has(name.prefix)) throw new TreeReadError('undeclared-prefix');
       if (name.prefix === 'xmlns') throw new TreeReadError('invalid-namespace');
     }
-    const key = expandedKey(namespaceUri, name.localName);
-    if (seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
-    seen.add(key);
+    rejectDuplicateAttribute(attributes, namespaceUri, name.localName, duplicates);
     if (namespaceUri === XML_NAMESPACE_URI && name.localName === 'space') {
       if (name.prefix === 'xml' && (value === 'default' || value === 'preserve')) {
         attributes.push({
@@ -1725,45 +1755,54 @@ function resolvedXmlSpace(
   return value === 'preserve' ? true : value === 'default' ? false : inheritedPreserve;
 }
 
-function canonicalLegacyChildren(
-  children: readonly XmlNode[],
-  preserve: boolean,
-  isWmlText: boolean
-): readonly XmlNode[] {
-  // Whitespace stripping and adjacent-text merging only apply to TEXT children; the
-  // structural bulk of a part has none, and skipping the filter/merge allocation there
-  // is a measurable parse win on long documents.
-  if (!children.some((child) => child.type === 'text')) return children;
-  const hasElement = children.some((child) => child.type === 'element');
-  const hasNonWhitespaceText = children.some(
-    (child) => child.type === 'text' && !/^\s*$/.test(child.value)
-  );
-  const retained = children.filter(
-    (child) =>
-      child.type === 'element' ||
-      preserve ||
-      isWmlText ||
-      !hasElement ||
-      hasNonWhitespaceText ||
-      !/^\s*$/.test(child.value)
-  );
-  const merged: XmlNode[] = [];
-  for (const child of retained) {
-    const previous = merged[merged.length - 1];
-    if (child.type === 'text' && previous?.type === 'text') {
-      merged[merged.length - 1] = {
-        type: 'text',
-        value: previous.value + child.value,
-      };
-    } else {
-      merged.push(child);
-    }
-  }
-  return merged;
+/** Typed WML kinds whose text children are character content. */
+const WML_TEXT_KINDS: ReadonlySet<string> = new Set(['text', 'deletedText', 'instrText']);
+
+/** Typed drawing kinds whose value is their text (`wp:align`, `wp:posOffset`). */
+const DRAWING_TEXT_KINDS: ReadonlySet<string> = new Set([
+  'drawingPositionAlign',
+  'drawingPositionOffset',
+]);
+
+/**
+ * Whether `xml:space="preserve"` can make whitespace between this element's children content.
+ *
+ * `xml:space` is inherited by every descendant, but it only governs character content. Every
+ * other typed kind has an element-only content model, so whitespace between its children is
+ * indentation whatever the inherited value. Kept as a text child, it failed the kind's own
+ * validation: a run written with its `w:t` on an indented line demoted to generic, and its
+ * text left the flow. Unmodeled elements keep the whitespace, because their content model is
+ * not known here.
+ */
+function preserveGovernsChildren(kind: KnownKind | 'generic'): boolean {
+  return kind === 'generic' || WML_TEXT_KINDS.has(kind) || DRAWING_TEXT_KINDS.has(kind);
 }
 
-function convertElement(
+/**
+ * One element's read state between opening it and closing it over its children.
+ *
+ * @internal The stepped part read converts the body's children in tasks of their own between
+ * {@link openElement} and {@link closeElement}; the one-shot read does all three at once.
+ */
+export interface OpenedElement {
+  readonly metadata: OoxmlReadMetadata;
+  readonly partName: string;
+  readonly path: string;
+  readonly name: ReturnType<typeof resolveElementName>;
+  readonly declarations: ReturnType<typeof namespaceDeclarations>;
+  readonly resolvedAttributes: ReturnType<typeof resolveAttributes>;
+  readonly attributes: readonly OoxmlAttribute[];
+  readonly preserve: boolean;
+  readonly candidateKind: KnownKind | 'generic';
+  readonly childParent: DrawingParentContext;
+  readonly parent: DrawingParentContext | undefined;
+  readonly retainedChildren: readonly XmlNode[];
+}
+
+/** @internal Names, attributes, scope and candidate kind of `element`, before its children. */
+export function openElement(
   element: LegacyElement,
+  metadata: OoxmlReadMetadata,
   inherited: ReadonlyMap<string, string>,
   partName: string,
   path: string,
@@ -1771,11 +1810,11 @@ function convertElement(
   parentWmlLocalName?: string,
   parentCandidate: KnownKind | 'generic' | undefined = undefined,
   parent?: DrawingParentContext
-): OoxmlElement {
+): OpenedElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
   const resolvedAttributes = resolveAttributes(element, declarations.bindings);
-  const attributes = resolvedAttributes.attributes;
+  const attributes = metadata.shareAttributes(resolvedAttributes.attributes);
   validateQNameAttributeValues(
     attributes,
     declarations.bindings,
@@ -1804,10 +1843,12 @@ function convertElement(
   const drawingKind = resolveElementKind(name.namespaceUri, name.localName, parent);
   const candidateKind =
     drawingKind !== 'generic' && isDrawingKnownKind(drawingKind) ? drawingKind : wmlKind;
+  const preserveGoverns = preserveGovernsChildren(candidateKind);
   const retainedChildren = canonicalLegacyChildren(
     element.children,
-    preserve,
-    candidateKind === 'text' || candidateKind === 'deletedText' || candidateKind === 'instrText'
+    preserve && preserveGoverns,
+    WML_TEXT_KINDS.has(candidateKind),
+    preserve && !preserveGoverns ? XML_INDENTATION_TEXT : BLANK_TEXT
   );
   const childParent: DrawingParentContext = {
     wmlLocalName: isWml ? name.localName : undefined,
@@ -1816,25 +1857,76 @@ function convertElement(
     localName: name.localName,
     attributes,
   };
-  const children = retainedChildren.map((child, index): OoxmlNode => {
-    const childPath = `${path}.${index}`;
-    if (child.type === 'text')
-      return {
-        id: `${partName}#${childPath}`,
-        kind: 'textValue',
-        value: child.value,
-      };
-    return convertElement(
-      child,
-      declarations.bindings,
-      partName,
-      childPath,
-      preserve,
-      childParent.wmlLocalName,
-      childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
-      childParent
-    );
-  });
+  return {
+    metadata,
+    partName,
+    path,
+    name,
+    declarations,
+    resolvedAttributes,
+    attributes,
+    preserve,
+    candidateKind,
+    childParent,
+    parent,
+    retainedChildren,
+  };
+}
+
+/** @internal {@link openElement} for `child`, the `index`th retained child of `opened`. */
+export function openChildOf(
+  opened: OpenedElement,
+  child: LegacyElement,
+  index: number
+): OpenedElement {
+  const { childParent } = opened;
+  return openElement(
+    child,
+    opened.metadata,
+    opened.declarations.bindings,
+    opened.partName,
+    childPath(opened.path, index),
+    opened.preserve,
+    childParent.wmlLocalName,
+    childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
+    childParent
+  );
+}
+
+// Ids and paths are built with `join`, which gives a flat string. A template literal gives a
+// rope that points at the parent's path, and a large document kept millions of those.
+const childPath = (path: string, index: number): string => [path, index].join('.');
+const nodeId = (partName: string, path: string): string => [partName, path].join('#');
+
+/** @internal The read of `child`, the `index`th retained child of `opened`. */
+export function convertChildOf(opened: OpenedElement, child: XmlNode, index: number): OoxmlNode {
+  if (child.type === 'text')
+    return {
+      id: nodeId(opened.partName, childPath(opened.path, index)),
+      kind: 'textValue',
+      value: child.value,
+    };
+  const own = openChildOf(opened, child, index);
+  return closeElement(
+    own,
+    own.retainedChildren.map((grandchild, at) => convertChildOf(own, grandchild, at))
+  );
+}
+
+/** @internal The kind checks and the node of `opened`, over its converted children. */
+export function closeElement(opened: OpenedElement, converted: readonly OoxmlNode[]): OoxmlElement {
+  const children =
+    opened.candidateKind === 'paragraph' ? keepLeadingParagraphProperties(converted) : converted;
+  const {
+    partName,
+    path,
+    name,
+    declarations,
+    resolvedAttributes,
+    attributes,
+    candidateKind,
+    parent,
+  } = opened;
   const attributesOk =
     resolvedAttributes.compatibleWithKnownNode &&
     (!resolvedAttributes.hasWmlVal ||
@@ -1865,79 +1957,40 @@ function convertElement(
       ? demoteDrawingKindsInSubtree(children, name)
       : children;
   return {
-    id: `${partName}#${path}`,
+    id: nodeId(partName, path),
     kind,
     namespaceUri: name.namespaceUri,
     localName: name.localName,
     ...(name.prefix === undefined ? {} : { prefix: name.prefix }),
-    namespaceBindings: declarations.authored,
+    namespaceBindings: declarations.authored.length
+      ? declarations.authored
+      : EMPTY_NAMESPACE_BINDINGS,
     attributes,
-    children: finalChildren,
+    children: finalChildren.length ? finalChildren : EMPTY_NODE_CHILDREN,
   } as OoxmlElement;
 }
 
-/** Extra gates for typed note vocabulary — illegal id/type demotes fail-open. */
-function noteKindCompatible(
-  kind: KnownKind | 'generic',
-  localName: string,
-  attributes: readonly OoxmlAttribute[]
-): boolean {
-  if (
-    kind !== 'note' &&
-    kind !== 'noteReference' &&
-    kind !== 'noteRef' &&
-    kind !== 'separator' &&
-    kind !== 'continuationSeparator' &&
-    kind !== 'footnotes' &&
-    kind !== 'endnotes'
-  ) {
-    return true;
-  }
+function convertElement(
+  element: LegacyElement,
+  metadata: OoxmlReadMetadata,
+  inherited: ReadonlyMap<string, string>,
+  partName: string,
+  path: string,
+  inheritedPreserve: boolean
+): OoxmlElement {
+  const opened = openElement(element, metadata, inherited, partName, path, inheritedPreserve);
+  return closeElement(
+    opened,
+    opened.retainedChildren.map((child, index) => convertChildOf(opened, child, index))
+  );
+}
 
-  const attr = (local: string): string | undefined => {
-    for (const entry of attributes) {
-      if (entry.localName !== local) continue;
-      if (entry.namespaceUri === WML_NAMESPACE_URI || entry.namespaceUri === '') return entry.value;
-    }
-    return undefined;
-  };
-
-  if (kind === 'note') {
-    if (localName !== 'footnote' && localName !== 'endnote') return false;
-    const id = attr('id');
-    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
-    const n = Number(id);
-    if (!Number.isInteger(n) || n < -0x80000000 || n > 0x7fffffff) return false;
-    const type = attr('type');
-    if (
-      type !== undefined &&
-      type !== 'normal' &&
-      type !== 'separator' &&
-      type !== 'continuationSeparator' &&
-      type !== 'continuationNotice'
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  if (kind === 'noteReference') {
-    if (localName !== 'footnoteReference' && localName !== 'endnoteReference') return false;
-    const id = attr('id');
-    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
-    const n = Number(id);
-    return Number.isInteger(n) && n >= -0x80000000 && n <= 0x7fffffff;
-  }
-
-  if (kind === 'noteRef') {
-    return localName === 'footnoteRef' || localName === 'endnoteRef';
-  }
-
-  if (kind === 'separator') return localName === 'separator';
-  if (kind === 'continuationSeparator') return localName === 'continuationSeparator';
-  if (kind === 'footnotes') return localName === 'footnotes';
-  if (kind === 'endnotes') return localName === 'endnotes';
-  return true;
+/** @internal The prefixes every part's root inherits. */
+export function rootBindings(): Map<string, string> {
+  return new Map([
+    ['xml', XML_NAMESPACE_URI],
+    ['xmlns', XMLNS_NAMESPACE_URI],
+  ]);
 }
 
 /**
@@ -1959,16 +2012,7 @@ export function readOoxmlPart(
   if (roots.length !== 1) return { ok: false, reason: 'multiple-roots' };
   try {
     const root = deepFreezeNode(
-      convertElement(
-        roots[0],
-        new Map([
-          ['xml', XML_NAMESPACE_URI],
-          ['xmlns', XMLNS_NAMESPACE_URI],
-        ]),
-        metadata.name,
-        '0',
-        false
-      )
+      convertElement(roots[0], new OoxmlReadMetadata(), rootBindings(), metadata.name, '0', false)
     ) as OoxmlElement;
     return {
       ok: true,

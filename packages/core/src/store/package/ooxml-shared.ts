@@ -6,7 +6,7 @@
 // apart from all three so none of them has to import another for a constant — the type
 // imports below are erased, so the module graph stays acyclic at runtime.
 
-import { isValidNCName } from './qname.ts';
+import { isXmlNCName } from './qname.ts';
 import {
   validContentControlCheckboxChildren,
   validContentControlChildren,
@@ -69,14 +69,62 @@ export interface ExpandedName {
 export function splitQName(name: string): ExpandedName {
   const colon = name.indexOf(':');
   if (colon < 0) {
-    if (!isValidNCName(name)) throw new TreeReadError('invalid-name');
+    if (!isXmlNCName(name)) throw new TreeReadError('invalid-name');
     return { localName: name };
   }
   if (name.indexOf(':', colon + 1) >= 0) throw new TreeReadError('invalid-name');
   const prefix = name.slice(0, colon);
   const localName = name.slice(colon + 1);
-  if (!isValidNCName(prefix) || !isValidNCName(localName)) throw new TreeReadError('invalid-name');
+  if (!isXmlNCName(prefix) || !isXmlNCName(localName)) throw new TreeReadError('invalid-name');
   return { prefix, localName };
+}
+
+/**
+ * {@link splitQName} for names that repeat across a part. A long document repeats a few
+ * hundred element and attribute names millions of times, and each one was validated again.
+ * Bounded, so a part of unique names cannot grow it without limit. Results are frozen and
+ * shared; a failing name still throws every time, because it is never stored.
+ */
+const qNames = new Map<string, ExpandedName>();
+const MAX_SHARED_QNAMES = 4096;
+
+export function splitQNameShared(authoredName: string): ExpandedName {
+  let name = qNames.get(authoredName);
+  if (name) return name;
+  name = Object.freeze(splitQName(authoredName));
+  if (qNames.size < MAX_SHARED_QNAMES) qNames.set(authoredName, name);
+  return name;
+}
+
+/** Attribute lists shorter than this find duplicates by a scan instead of a set. */
+const SCANNED_ATTRIBUTES = 8;
+
+/**
+ * Throw when `attributes` already holds the expanded name. Most lists are short, and a scan
+ * beats a set and a key string per element. A long list (file input is untrusted) switches to
+ * a set kept in `state`, so the whole check stays linear.
+ */
+export function rejectDuplicateAttribute(
+  attributes: readonly { readonly namespaceUri: string; readonly localName: string }[],
+  namespaceUri: string,
+  localName: string,
+  state: { seen: Set<string> | undefined }
+): void {
+  if (attributes.length < SCANNED_ATTRIBUTES) {
+    for (const earlier of attributes) {
+      if (earlier.localName === localName && earlier.namespaceUri === namespaceUri)
+        throw new TreeReadError('duplicate-expanded-attribute');
+    }
+    return;
+  }
+  if (!state.seen) {
+    state.seen = new Set();
+    for (const earlier of attributes)
+      state.seen.add(expandedKey(earlier.namespaceUri, earlier.localName));
+  }
+  const key = expandedKey(namespaceUri, localName);
+  if (state.seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
+  state.seen.add(key);
 }
 
 export function expandedKey(namespaceUri: string, localName: string): string {
@@ -103,7 +151,7 @@ export function resolvedPrefixNamespaceSet(
     .split(/\s+/)
     .filter(Boolean)
     .map((prefix) => {
-      if (!isValidNCName(prefix)) throw new TreeReadError('invalid-name');
+      if (!isXmlNCName(prefix)) throw new TreeReadError('invalid-name');
       const namespaceUri = bindings.get(prefix);
       if (namespaceUri === undefined) throw new TreeReadError('undeclared-prefix');
       return namespaceUri;
@@ -178,6 +226,64 @@ export function isContentRevisionKind(
     kind === 'revisionMoveFrom' ||
     kind === 'revisionMoveTo'
   );
+}
+
+/** Total transparent-container depth available to every paragraph-inline walk. */
+export const MAX_INLINE_CONTAINER_DEPTH = 32;
+
+/** Depth inherited by a node's children in the shared paragraph-inline address space. */
+export function nextInlineContainerDepth(node: OoxmlNode, depth: number): number {
+  const contentControl =
+    node.kind === 'contentControl' ||
+    (node.kind === 'generic' &&
+      node.namespaceUri === WML_NAMESPACE_URI &&
+      node.localName === 'sdt');
+  return isInlineRunContainer(node) || contentControl ? depth + 1 : depth;
+}
+
+/** Whether a run/block-polymorphic wrapper contains block-level content. */
+function hasBlockContent(node: OoxmlElement, depth = 0): boolean {
+  // Exhaustion hides deeper content; it is not evidence of block-level children.
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return false;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (
+      child.kind === 'paragraph' ||
+      child.kind === 'table' ||
+      child.kind === 'tableRow' ||
+      child.kind === 'tableCell'
+    ) {
+      return true;
+    }
+    const nestedContainer =
+      child.kind === 'contentControl' ||
+      child.kind === 'contentControlContent' ||
+      (child.kind === 'generic' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        child.localName === 'customXml');
+    if (nestedContainer && hasBlockContent(child, depth + 1)) return true;
+  }
+  return false;
+}
+
+/** A paragraph-level wrapper whose descendants contribute ordinary run content. */
+export function isInlineRunContainer(node: OoxmlNode): node is Extract<
+  OoxmlElement,
+  {
+    readonly kind:
+      | 'generic'
+      | 'hyperlink'
+      | 'revisionInsert'
+      | 'revisionDelete'
+      | 'revisionMoveFrom'
+      | 'revisionMoveTo';
+  }
+> {
+  if (node.kind === 'textValue') return false;
+  if (node.kind === 'hyperlink' || isContentRevisionKind(node.kind)) return true;
+  if (node.kind !== 'generic' || node.namespaceUri !== WML_NAMESPACE_URI) return false;
+  if (node.localName === 'customXml') return !hasBlockContent(node);
+  return node.localName === 'smartTag' || node.localName === 'dir' || node.localName === 'bdo';
 }
 
 /** Move-range and comment-range boundary markers, which are empty and sit between runs. */

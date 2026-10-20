@@ -2,16 +2,27 @@
   "title": "Guides",
   "pages": [
     "loading-and-saving",
+    "open-failures",
+    "diagnostics",
+    "document-refresh",
+    "navigation",
+    "bookmarks",
     "toolbar",
     "chrome-slots",
+    "customize-dialogs",
     "zoom",
     "content-controls",
+    "document-protection",
     "headers-footers",
     "footnotes-and-endnotes",
     "fields",
     "images",
     "custom-styles",
     "fonts",
-    "dark-mode"
+    "right-to-left",
+    "dark-mode",
+    "pop-out-windows",
+    "export",
+    "print"
   ]
 }

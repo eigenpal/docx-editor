@@ -1,3 +1,6 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { useDocxEditor } from '../context';
 import {
   computed,
   defineComponent,
@@ -85,11 +88,11 @@ const FontFamilyTrigger = defineComponent({
         ...(!context.isEnabled.value ? { 'data-disabled': '' } : {}),
         'aria-haspopup': 'listbox' as const,
         'aria-expanded': context.open.value,
-        'aria-label': text,
+        'aria-label': slots.default ? undefined : `${text}: ${context.value.value ?? '—'}`,
         title: text,
       };
       const display = slots.default?.() ?? [<span>{context.value.value ?? '—'}</span>];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -109,10 +112,19 @@ const FontFamilyContent = defineComponent({
   setup(props, { slots }) {
     const context = useFontFamilyContext();
     const label = useToolbarLabel();
+    const query = ref('');
+    watch(
+      () => context?.open.value,
+      (open) => {
+        if (!open) query.value = '';
+      }
+    );
     return () => {
       if (!context || !context.open.value) return null;
       const shared = {
         role: 'listbox' as const,
+        tabindex: 0,
+        'aria-label': label('font.selectAriaLabel'),
         // Anchoring, layering and colors all come from the core stylesheet — the popup
         // must sit in the overlay band, above ambient chrome like the navigation panel.
         class: `docx-toolbar__menu docx-toolbar__font-family-content${props.className ? ` ${props.className}` : ''}`,
@@ -124,13 +136,15 @@ const FontFamilyContent = defineComponent({
         const grouped = FONT_GROUPS.map((group) => ({
           ...group,
           fonts: context.options.value.filter(
-            (option) => (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
+            (option) =>
+              option.toLowerCase().includes(query.value.toLowerCase()) &&
+              (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
           ),
         })).filter((group) => group.fonts.length > 0);
         items = grouped.flatMap((group, index) => {
           const nodes: VNode[] = [];
           if (index > 0) {
-            nodes.push(<div class="docx-toolbar__menu-separator" role="separator" />);
+            nodes.push(<div class="docx-toolbar__menu-separator" aria-hidden="true" />);
           }
           if (group.labelKey) {
             nodes.push(<div class="docx-toolbar__menu-label">{label(group.labelKey)}</div>);
@@ -141,8 +155,30 @@ const FontFamilyContent = defineComponent({
           return nodes;
         });
       }
-      if (props.asChild) return <Slot {...shared}>{items}</Slot>;
-      return <div {...shared}>{items}</div>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => items }}</Slot>;
+      if (slots.default) return <div {...shared}>{items}</div>;
+      return (
+        <div class={shared.class}>
+          <input
+            type="search"
+            class="docx-toolbar__font-search"
+            aria-label={label('font.search')}
+            placeholder={label('font.search')}
+            value={query.value}
+            onInput={(event) => {
+              query.value = (event.target as HTMLInputElement).value;
+            }}
+          />
+          <div
+            role="listbox"
+            tabindex={0}
+            aria-label={label('font.selectAriaLabel')}
+            class="docx-toolbar__font-options"
+          >
+            {items}
+          </div>
+        </div>
+      );
     };
   },
 });
@@ -155,25 +191,28 @@ const FontFamilyItem = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
+    const editor = useDocxEditor();
     const context = useFontFamilyContext();
     return () => {
       if (!context) return null;
       const selected = context.value.value === props.value;
       const shared = {
         role: 'option' as const,
+        tabindex: -1,
         'aria-selected': selected,
         ...(selected ? { 'data-selected': '' } : {}),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           context.setValue(props.value);
           context.setOpen(false);
+          editor.value?.focus();
         },
         class: `docx-toolbar__font-family-item${props.className ? ` ${props.className}` : ''}`,
       };
       const display = slots.default?.() ?? [
         <span style={{ fontFamily: props.value }}>{props.value}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -208,16 +247,18 @@ const FontFamilyRoot = defineComponent({
     const state = useFontFamily();
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
     });
 
     const context: FontFamilyContextValue = {
@@ -240,7 +281,7 @@ const FontFamilyRoot = defineComponent({
       if (props.asChild) {
         return (
           <Slot {...shared} ref={rootRef}>
-            {body}
+            {{ default: () => body }}
           </Slot>
         );
       }

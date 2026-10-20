@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Scrolling to a paragraph required an internal block ID or a selection change.",
+  "after": "The browser editor resolves DocAnchor values and scrolls without changing selection or editing scope.",
+  "reason": "Navigation uses existing document reads and viewport geometry. It adds no document operations or collaboration format changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/scroll-to-anchor.test.ts",
+    "packages/core/src/editor/__tests__/scroll-to-anchor-stories.test.ts",
+    "e2e/scroll-to-anchor.interaction.spec.ts"
+  ],
+  "changeset": "scroll-to-document-anchor",
+  "migration": null
+}

@@ -1,5 +1,440 @@
 # @docx-editor.dev/pro
 
+## 2.31.0
+
+### Minor Changes
+
+- f2b71d4: Add `useReviewRailMetrics` for React and Vue to position custom review columns.
+- 73ae2fa: Require explicit WebRTC `signaling` settings as a security compatibility exception; configure your servers or explicitly select demo endpoints. Isolate each room's signaling connections. Fixes #1345
+
+### Patch Changes
+
+- ec393d3: Support undo and redo shortcuts with selected pictures. Close the context menu before requesting clipboard access.
+- aaebb18: A paragraph with a tracked formatting change now tints while the pointer is over it and while its review balloon is open, so you can see which paragraph the balloon describes.
+- a15181f: Preserve header text, fields, and pictures when removing or replacing a watermark.
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/react@2.31.0, @docx-editor.dev/vue@2.31.0
+
+## 2.30.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.30.0, @docx-editor.dev/react@2.30.0, @docx-editor.dev/vue@2.30.0
+
+## 2.29.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.29.0, @docx-editor.dev/react@2.29.0, @docx-editor.dev/vue@2.29.0
+
+## 2.28.0
+
+### Minor Changes
+
+- 9535470: Add `collaborationMigrationNeed` and `migrateCollaborationRoom`, which move a saved room of an earlier collaboration format to the current format from its export, keep the room's document ID, and return the new room only when it matches the export. See [Upgrade saved rooms](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms).
+- 9535470: Add `DocxEditorCollaboration.Status`, which tells users when the document is connecting, offline, waiting for changes, out of sync, or refused an edit. The collaboration hooks also report `waiting`, `recovering`, and `failureCount`, and the Hocuspocus and WebRTC hooks report `unsyncedChanges` so you can warn before a page with unsent edits closes.
+- 9535470: Add `compactCollaborationState` and `checkCollaborationRoomGeneration`, so a Hocuspocus server keeps each room's size bounded by compacting it into a new generation when it loads the room. A replica that still holds the previous generation reports `room-generation-changed` and rejoins.
+- 9535470: Keep collaboration rooms working when people edit the same paragraphs at the same time, keep your caret in place while others type, and recover from a bad remote update without leaving the room. Editing continues while disconnected by default, and `offlineEditing: false` pauses it. Fixes #579
+- 9535470: Text one participant deletes now stays deleted when another participant moves it or undoes a change around it at the same time. `CollaborationResourceUsage` reports `formattingMarkers`, so hosts can see a room's formatting history grow.
+- 9535470: Collaboration keeps every participant's typing and formatting when edits conflict, including typing in text another participant deletes, reformats, splits, or joins at the same time. Breaking collaboration upgrade: rooms of earlier formats must be exported and reseeded; see [Upgrade rooms to format 1.4.2.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1421).
+- 9535470: Add `prepareCollaborationServerDocument` for servers that hold a room's document, such as Hocuspocus. Call it when the server creates or loads the document, so the server never removes formatting from text that participants type.
+- 9535470: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- 9535470: Remove the experimental `createTextCollaboration` factory; use `createDocumentCollaboration`, which now refuses an insert longer than the shared text limit before the edit applies, instead of dropping it.
+- 9535470: Add tracked change balloons, comment marker styles, and horizontal review pane scrolling. Comment markers use icons by default; set `commentMarkers: 'initials'` to show author initials and reply counts.
+- 63dde82: Keep comment icons as the default markers, move Track changes options to the Review menu, and open comments when you click their text. Preserve text selection and handled link clicks.
+- 9535470: Add review pane settings, `getReviewItemsAt`, `getReviewItemRects`, `getActivatedReviewItemKey`, replacement pairing, and `scrollToBlock` scroll options for hosts that draw their own review interface. Fix the compact review card template, reply author colors, and `useReviewAuthor` outside the review rail.
+
+### Patch Changes
+
+- 9535470: Keep one collaboration room for each hook call, so pages with several hydrated React roots, or Vue stores that hold a room for each tenant, no longer close each other's rooms.
+- 9535470: Typing in a collaboration room writes each keystroke to shared state directly, which makes typing faster in long documents. Fixes #1168
+- 9535470: Collaborative documents hold less memory for each paragraph, and a room migration needs less heap.
+- 63dde82: Validate current-format rooms before the migration example reports success, and document recovery after partial migrations.
+- 63dde82: Preserve deprecated public text-only collaboration constants and the session type for existing imports.
+- 9535470: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- 63dde82: Refuse incompatible or damaged saved rooms in the server review example.
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/react@2.28.0, @docx-editor.dev/vue@2.28.0
+
+## 2.27.0
+
+### Patch Changes
+
+- 1e1b513: Text that another participant types into a run at the same time as a line break or tab is inserted in that run is no longer lost. Fixes #1129
+- 9318dc1: Keep replacement halves and revisions separated by unchanged text independently reviewable. Fixes #1139
+- 2246044: Keep separate editing commands in separate undo steps and restore text selections during undo and redo.
+- Updated dependencies: @docx-editor.dev/core@2.27.0, @docx-editor.dev/react@2.27.0, @docx-editor.dev/vue@2.27.0
+
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.26.0, @docx-editor.dev/react@2.26.0, @docx-editor.dev/vue@2.26.0
+
+## 2.25.0
+
+### Minor Changes
+
+- 5d02def: Support native rich text, paragraph, list, and table suggestions, date-picker creation, and safer collaborative editing through the document API.
+
+### Patch Changes
+
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+  - @docx-editor.dev/react@2.25.0
+  - @docx-editor.dev/vue@2.25.0
+
+## 2.24.0
+
+### Patch Changes
+
+- Updated dependencies [3a8853f]
+- Updated dependencies [de3aac8]
+- Updated dependencies [79d8bc1]
+- Updated dependencies [997814e]
+- Updated dependencies [de3aac8]
+  - @docx-editor.dev/core@2.24.0
+  - @docx-editor.dev/react@2.24.0
+  - @docx-editor.dev/vue@2.24.0
+
+## 2.23.0
+
+### Patch Changes
+
+- 30bd2a8: Preserve existing consecutive-tab placement when wrapping table-cell text.
+- 30bd2a8: Preserve grouped header text frame positions, borders, and body spacing.
+- 1bd31d4: Apply font formatting to text with inherited complex-script properties.
+- 1bd31d4: Reduce typing delays, refresh table pagination after field or numbering changes, and refuse unsupported grouped drawing effects.
+- 30bd2a8: Correct content alignment and cell padding in supported fixed legacy tables.
+- 1bd31d4: Keep long consecutive paragraph groups together across page breaks.
+- 30bd2a8: Keep longer table row groups and closed vertical merges together during pagination.
+- 30bd2a8: Preserve wrapped left-tab advances in table cells.
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [b981ea6]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [0e42c85]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d04902a]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [a2951cf]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ab460dc]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e633def]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [4fafb7c]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [cee5764]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [390c177]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ae1afe0]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [bf776f2]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d6c75d2]
+- Updated dependencies [2eea4de]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e040ff8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [aab4053]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [9afb832]
+- Updated dependencies [6794f4d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+  - @docx-editor.dev/core@2.23.0
+  - @docx-editor.dev/react@2.23.0
+  - @docx-editor.dev/vue@2.23.0
+
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [139688b]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [abc656b]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9912e81]
+- Updated dependencies [7ff2004]
+- Updated dependencies [fe66ece]
+- Updated dependencies [ac84ccf]
+- Updated dependencies [cde01d8]
+- Updated dependencies [648f13c]
+- Updated dependencies [95c792f]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [23093e9]
+- Updated dependencies [edfb06d]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [e6616fe]
+- Updated dependencies [1bb2434]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [139688b]
+- Updated dependencies [a893c05]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9db7eb3]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [95c792f]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+  - @docx-editor.dev/core@2.22.0
+  - @docx-editor.dev/vue@2.22.0
+  - @docx-editor.dev/react@2.22.0
+
+## 2.21.1
+
+### Patch Changes
+
+- 6a7b93a: Match Word when resolving paragraph breaks before tables, numbering-reference insertion history, and partial section-property history. Preserve protection and selected-decision boundaries, and expose structural operation details and accurate table/cell review anchors.
+
+  Show structural decisions in the React and Vue review sidebars by default, with descriptive row, cell, merge, and numbering labels. Keep run/paragraph formatting in balloons while showing formatting without a painted anchor in the sidebar.
+
+## 2.21.0
+
+### Patch Changes
+
+- 2d4e0e7: Resolve independent tracked changes in bulk while preserving excluded and unsupported table and paragraph revisions.
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/react@2.21.0
+  - @docx-editor.dev/vue@2.21.0
+
+## 2.20.0
+
+### Patch Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+- Updated dependencies [a9034d4]
+- Updated dependencies [c10916a]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+  - @docx-editor.dev/core@2.20.0
+  - @docx-editor.dev/react@2.20.0
+  - @docx-editor.dev/vue@2.20.0
+
+## 2.19.1
+
+## 2.19.0
+
+### Patch Changes
+
+- fb596a6: Preserve formatted text when splitting a paragraph in a collaboration room.
+- af15667: Reject oversized collaboration edits before allocating their shared-state projection.
+- @docx-editor.dev/core@2.19.0
+  - @docx-editor.dev/react@2.19.0
+  - @docx-editor.dev/vue@2.19.0
+
+## 2.18.0
+
+### Minor Changes
+
+- c6a829d: Add collaboration format checks for clients and saved rooms, with errors linking to the upgrade guide. Preserve Hocuspocus server error codes during connection and reconnection to distinguish version mismatches from rejected credentials.
+- f56f0b6: Preserve text across repeated concurrent formatting, typing, deletion, and undo, and add collaboration compatibility checks. This is a breaking collaboration upgrade: export existing rooms with the previous release, then create replacement rooms with fresh collaboration undo history; fixes #592.
+
+### Patch Changes
+
+- Updated dependencies [ded420d]
+- Updated dependencies [d2d3824]
+- Updated dependencies [b5bf09f]
+- Updated dependencies [10a3d41]
+- Updated dependencies [e78dc17]
+- Updated dependencies [84c4622]
+- Updated dependencies [564182f]
+- Updated dependencies [d4daf40]
+- Updated dependencies [f2dfcac]
+- Updated dependencies [758551b]
+- Updated dependencies [452312f]
+- Updated dependencies [5598465]
+- Updated dependencies [60b9163]
+- Updated dependencies [59520ce]
+- Updated dependencies [95db5eb]
+- Updated dependencies [1e36856]
+- Updated dependencies [6eb1eb4]
+- Updated dependencies [37be540]
+- Updated dependencies [9198848]
+- Updated dependencies [2cea799]
+- Updated dependencies [f23f974]
+- Updated dependencies [7c2b4aa]
+- Updated dependencies [90ea211]
+- Updated dependencies [f10341d]
+- Updated dependencies [040e653]
+  - @docx-editor.dev/core@2.18.0
+  - @docx-editor.dev/react@2.18.0
+  - @docx-editor.dev/vue@2.18.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [332494b]
+- Updated dependencies [d1d8043]
+  - @docx-editor.dev/core@2.17.0
+  - @docx-editor.dev/react@2.17.0
+  - @docx-editor.dev/vue@2.17.0
+
+## 2.16.2
+
+## 2.16.1
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/react@2.16.0
+  - @docx-editor.dev/vue@2.16.0
+
+## 2.15.1
+
+## 2.15.0
+
+### Patch changes
+
+- 7dc8b22: Preserve concurrent text edits when another collaborator formats the same run. Fixes #590.
+- Updated dependencies [5284df5]
+- Updated dependencies [e9baf4d]
+- Updated dependencies [087bb78]
+- Updated dependencies [0d81033]
+- Updated dependencies [a3819aa]
+- Updated dependencies [a53f75c]
+- Updated dependencies [36c1f04]
+- Updated dependencies [8e6133f]
+- Updated dependencies [678fe91]
+- Updated dependencies [cfe3fe1]
+- Updated dependencies [0e1360d]
+- Updated dependencies [2a8e57e]
+  - @docx-editor.dev/core@2.15.0
+  - @docx-editor.dev/react@2.15.0
+  - @docx-editor.dev/vue@2.15.0
+
 ## 2.14.1
 
 ## 2.14.0
@@ -89,10 +524,8 @@
 - e4872fb: Hold remote collaboration updates to the same node, part, relationship, and blob limits as local writes, so one peer can no longer drive unbounded allocation on every replica in the room.
 - e4872fb: Collaboration status now keeps a typed last-failure reason after the session recovers, so a host can learn why a replica failed. The session factory that always received `"document"` is removed; pass a ready session instead.
 - e4872fb: Resolving, reopening, and deleting a comment now replicate to collaboration peers without dropping the anchored text.
-- e4872fb: Keep both authors' work when two collaborators add the first footnote or endnote at the same
-  time, instead of dropping one of them.
-- e4872fb: Keep a collaborative room editable and converged when two people press Enter or paste in the
-  same paragraph at the same time, instead of leaving each author on their own copy.
+- e4872fb: Keep both authors' work when two collaborators add the first footnote or endnote at the same time, instead of dropping one of them.
+- e4872fb: Keep a collaborative room editable and converged when two people press Enter or paste in the same paragraph at the same time, instead of leaving each author on their own copy.
 - e4872fb: A cross-paragraph type-over now replicates to peers. Joining no longer adopts the removed paragraph's properties onto the survivor.
 - e4872fb: A character-format command no longer duplicates selected text. New text nodes fill by replacing their current value, so a replay cannot insert the same characters again.
 - e4872fb: Inserting an image in a collaborative document now copies only that image's bytes into the room, instead of serializing the whole document.

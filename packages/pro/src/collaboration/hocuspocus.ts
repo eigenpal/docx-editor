@@ -14,14 +14,19 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
+import {
+  isCollaborationFailureCode,
+  type CollaborationIdentity,
+} from '@docx-editor.dev/core/collaboration';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from './document-session.ts';
+import { isRoomGenerationClose, roomGenerationMessage } from './room-generation.ts';
 import { validateRoomId } from './room-id.ts';
-import { CollaborationSchemaError } from './schema.ts';
-import type { CollaborationBootstrap } from './session.ts';
+import { CollaborationSchemaError } from './errors.ts';
+import { HOCUSPOCUS_PROVIDER_FOR_TESTS } from './hocuspocus-test-provider.ts';
+import type { CollaborationBootstrap } from './types.ts';
 
 export { createCollaborationRoomId, validateRoomId } from './room-id.ts';
 
@@ -32,6 +37,7 @@ const DEFAULT_SYNCED_TIMEOUT_MS = 30_000;
 export interface CreateHocuspocusCollaborationOptions {
   /** Hocuspocus server WebSocket URL, for example `wss://collab.example.test`. */
   readonly url: string;
+  /** Room name on the server, also the document id. Make one with `createCollaborationRoomId`. */
   readonly roomId: string;
   /**
    * Authentication token the provider sends in its auth handshake. The server queues all
@@ -40,7 +46,9 @@ export interface CreateHocuspocusCollaborationOptions {
    * reconnect, which is how expiring JWTs renew.
    */
   readonly token?: string | (() => string | Promise<string>);
+  /** The local participant. Recorded as the author of this replica's changes. */
   readonly identity: CollaborationIdentity;
+  /** Whether to seed the room, join it, or let the peers decide. */
   readonly bootstrap: CollaborationBootstrap;
   /**
    * Bound on the wait for the server's initial sync in the `join` and `create-or-join`
@@ -50,14 +58,17 @@ export interface CreateHocuspocusCollaborationOptions {
   readonly syncedTimeoutMs?: number;
   /**
    * Admit local edits while the transport is `disconnected`. Buffered updates merge on
-   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
 }
 
 /** Owned Hocuspocus provider and provider-neutral collaboration resources. @public */
 export interface HocuspocusCollaborationRoom extends DocumentCollaborationHandle {
+  /** The room's Yjs document. `destroy()` destroys it. */
   readonly ydoc: Y.Doc;
+  /** The connected provider. `destroy()` destroys it. */
   readonly provider: HocuspocusProvider;
 }
 
@@ -66,6 +77,8 @@ interface OwnedHocuspocusProvider {
   readonly isSynced: boolean;
   on(event: string, fn: (...args: never[]) => void): unknown;
   off(event: string, fn: (...args: never[]) => void): unknown;
+  /** Send a stateless message; on `open` it arrives before the provider's first sync. */
+  sendStateless?(payload: string): void;
   destroy(): void;
 }
 
@@ -78,16 +91,6 @@ interface HocuspocusProviderInit {
 }
 
 type HocuspocusProviderFactory = (init: HocuspocusProviderInit) => OwnedHocuspocusProvider;
-
-/**
- * Test-only provider factory. Not re-exported from
- * `@docx-editor.dev/pro/collaboration/hocuspocus`.
- *
- * @internal
- */
-export const HOCUSPOCUS_PROVIDER_FOR_TESTS: unique symbol = Symbol(
-  'createHocuspocusCollaboration.provider'
-);
 
 const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
   // The provider connects on construction and performs the mandatory auth handshake
@@ -109,12 +112,21 @@ const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
  * A joiner that never syncs would otherwise wait forever on a room the server does not
  * hold. The same bounded-wait rule the bootstrap paths already use applies here, with the
  * same failure code. A server that rejects the auth token never syncs either, so
- * `authenticationFailed` rejects immediately — code `initialization-aborted`, because the
- * server ended this initialization, with a detail naming authentication — instead of
- * burning the whole timeout.
+ * `authenticationFailed` rejects immediately. Preserve known collaboration failure codes
+ * so a version refusal cannot be mistaken for an expired credential. Other reasons keep
+ * `initialization-aborted` and diagnostic detail instead of burning the whole timeout.
  */
-function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Promise<void> {
+function waitForSynced(
+  provider: OwnedHocuspocusProvider,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    // The bootstrap `signal` covers the whole join, the server's load of the room included.
+    if (signal?.aborted) {
+      reject(new CollaborationSchemaError('initialization-aborted'));
+      return;
+    }
     if (provider.isSynced) {
       resolve();
       return;
@@ -123,6 +135,11 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
       clearTimeout(timer);
       provider.off('synced', onSynced);
       provider.off('authenticationFailed', onAuthenticationFailed);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = (): void => {
+      cleanup();
+      reject(new CollaborationSchemaError('initialization-aborted'));
     };
     const onSynced = (): void => {
       cleanup();
@@ -132,7 +149,7 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
       cleanup();
       reject(
         new CollaborationSchemaError(
-          'initialization-aborted',
+          isCollaborationFailureCode(event.reason) ? event.reason : 'initialization-aborted',
           `authentication failed: ${event.reason}`
         )
       );
@@ -143,6 +160,7 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
     }, timeoutMs);
     provider.on('synced', onSynced);
     provider.on('authenticationFailed', onAuthenticationFailed);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -157,33 +175,53 @@ export async function createHocuspocusCollaboration(
     ] ?? defaultProviderFactory;
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
-  const connectProvider = (): OwnedHocuspocusProvider =>
-    providerFactory({
+  // Every connection first names the room generation this replica holds, so a server that
+  // compacted the room refuses it before any of its state merges (`room-generation.ts`).
+  // The provider emits `open` before it sends its token and starts the sync.
+  const connectProvider = (): OwnedHocuspocusProvider => {
+    const created = providerFactory({
       url: options.url,
       name: roomId,
       document: ydoc,
       awareness,
       ...(options.token !== undefined ? { token: options.token } : {}),
     });
+    created.on('open', () => created.sendStateless?.(roomGenerationMessage(ydoc)));
+    return created;
+  };
   let provider: OwnedHocuspocusProvider | null = null;
   let handle: DocumentCollaborationHandle | null = null;
   try {
-    // 'join' reads already-synced shared state and 'create-or-join' probes for it, so both
-    // connect the provider and wait for the server's initial sync before the factory runs.
-    // 'create' seeds first, so nothing half-seeded is broadcast.
-    if (options.bootstrap.kind !== 'create') {
-      provider = connectProvider();
-      await waitForSynced(provider, options.syncedTimeoutMs ?? DEFAULT_SYNCED_TIMEOUT_MS);
+    // Every bootstrap reads the server's state first. 'join' and 'create-or-join' need it, and
+    // 'create' needs it too: seeding before the sync could not see a room that already holds
+    // a document, and merging a second seed into it doubled every paragraph. Synced first,
+    // 'create' refuses such a room with `already-initialized`. The seed is one transaction,
+    // so peers never receive half of it.
+    // A join aborted before it starts opens no connection at all.
+    if (options.bootstrap.kind !== 'create' && options.bootstrap.signal?.aborted) {
+      throw new CollaborationSchemaError('initialization-aborted');
     }
+    provider = connectProvider();
+    await waitForSynced(
+      provider,
+      options.syncedTimeoutMs ?? DEFAULT_SYNCED_TIMEOUT_MS,
+      options.bootstrap.kind === 'create' ? undefined : options.bootstrap.signal
+    );
+    // The server's synced state is the whole room, so there is nothing left to probe for: an
+    // uninitialized room after the sync is empty. The election still runs, for two clients
+    // that race to seed it.
+    const bootstrap =
+      options.bootstrap.kind === 'create-or-join' && options.bootstrap.probeTimeoutMs === undefined
+        ? { ...options.bootstrap, probeTimeoutMs: 0 }
+        : options.bootstrap;
     handle = await createDocumentCollaboration({
       ydoc,
       awareness,
       documentId: roomId,
       identity: options.identity,
-      bootstrap: options.bootstrap,
+      bootstrap,
       offlineEditing: options.offlineEditing,
     });
-    if (!provider) provider = connectProvider();
   } catch (error) {
     handle?.destroy();
     provider?.destroy();
@@ -205,10 +243,29 @@ export async function createHocuspocusCollaboration(
   connectedProvider.on('status', onStatus);
   // A token the server later rejects (an expired JWT on reconnect) stops replication for
   // good: surface it as a terminal session error rather than a silent stall.
-  const onAuthenticationFailed = (): void => {
-    session.setTransportStatus('error', 'authentication-failed');
+  const onAuthenticationFailed = (event: { readonly reason: string }): void => {
+    // The server's reason travels as the detail, as it does on the join path, so a host can
+    // tell a retired room from an expired credential.
+    session.setTransportStatus(
+      'error',
+      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed',
+      `authentication failed: ${event.reason}`
+    );
   };
   connectedProvider.on('authenticationFailed', onAuthenticationFailed);
+  // The server compacted the room into a new generation while this replica was away. Every
+  // reconnect would be refused the same way, so the provider stops, and the session reports
+  // it: the document stays as it is, and a rejoin continues in the new generation.
+  let generationChanged = false;
+  const onClose = (event: {
+    readonly event?: { readonly code?: number; readonly reason?: string };
+  }) => {
+    if (generationChanged || !event.event || !isRoomGenerationClose(event.event)) return;
+    generationChanged = true;
+    session.setTransportStatus('error', 'room-generation-changed');
+    connectedProvider.destroy();
+  };
+  connectedProvider.on('close', onClose);
 
   let destroyed = false;
   return Object.freeze({
@@ -221,8 +278,9 @@ export async function createHocuspocusCollaboration(
       destroyed = true;
       connectedProvider.off('status', onStatus);
       connectedProvider.off('authenticationFailed', onAuthenticationFailed);
+      connectedProvider.off('close', onClose);
       connectedHandle.destroy();
-      connectedProvider.destroy();
+      if (!generationChanged) connectedProvider.destroy();
       awareness.destroy();
       ydoc.destroy();
     },

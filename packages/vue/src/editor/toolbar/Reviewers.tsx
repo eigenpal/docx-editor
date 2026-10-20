@@ -2,13 +2,14 @@ import { computed, defineComponent, nextTick, ref, watch, type PropType } from '
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { toolbarCommandState, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useReviewAuthors } from '../useReviewAuthors';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 
 const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
@@ -50,20 +51,22 @@ export const ToolbarReviewers = Object.assign(
             if (rootRef.value?.contains(event.target as Node)) return;
             open.value = false;
           };
-          const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            open.value = false;
-            void nextTick(() => triggerRef.value?.focus());
-          };
-          document.addEventListener('mousedown', onMouseDown, true);
-          document.addEventListener('keydown', onKeyDown);
+          const doc = hostDocumentOf(rootRef.value);
+          doc.addEventListener('mousedown', onMouseDown, true);
           onCleanup(() => {
-            document.removeEventListener('mousedown', onMouseDown, true);
-            document.removeEventListener('keydown', onKeyDown);
+            doc.removeEventListener('mousedown', onMouseDown, true);
           });
         },
         { flush: 'post' }
+      );
+      // Escape through the shared rule: a host input keeps its own Escape.
+      usePopupEscape(
+        () => open.value,
+        rootRef,
+        (fromInside) => {
+          open.value = false;
+          if (fromInside) void nextTick(() => triggerRef.value?.focus());
+        }
       );
 
       const onMenuKeyDown = (event: KeyboardEvent) => {
@@ -71,7 +74,7 @@ export const ToolbarReviewers = Object.assign(
           ...(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]') ??
             []),
         ];
-        const at = items.indexOf(document.activeElement as HTMLButtonElement);
+        const at = items.indexOf(hostDocumentOf(menuRef.value).activeElement as HTMLButtonElement);
         const move = (to: number) => {
           event.preventDefault();
           items[(to + items.length) % items.length]?.focus();

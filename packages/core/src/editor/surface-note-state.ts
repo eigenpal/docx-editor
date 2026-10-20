@@ -33,7 +33,11 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
+import {
+  layoutProjectionOf,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from '../layout/revision-projection.ts';
 
 export type NotePropertiesSlice = {
   readonly resolved: ResolvedFootnoteProperties | ResolvedEndnoteProperties;
@@ -79,7 +83,7 @@ export function notePropertiesStateOf(
 ): NotePropertiesStateSnapshot | null {
   if (!surface) return null;
   const session = surface.session;
-  const displayMode = surface.revisionDisplayMode();
+  const displayMode = layoutProjectionOf(surface.revisionDisplayMode());
   const paragraphId = surface.state().selection.head.paragraphId;
   const sectionIndex = sectionIndexForCaret(
     session,

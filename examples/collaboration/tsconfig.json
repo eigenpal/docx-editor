@@ -19,7 +19,7 @@
       "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
       "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun", "vite/client"]
   },
   "include": ["src", "headless-agent.ts"]
 }

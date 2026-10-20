@@ -8,6 +8,16 @@
 
 import type { ColorValue } from './types';
 
+/** Where the caret sits inside a table: its shape and current cell. */
+export interface TableContext {
+  readonly rows: number;
+  readonly columns: number;
+  /** Zero-based, within the table. */
+  readonly rowIndex: number;
+  /** Zero-based, within the row. */
+  readonly columnIndex: number;
+}
+
 /** Which cell edges a table border command targets. */
 export type TableBorderTarget =
   | 'all'

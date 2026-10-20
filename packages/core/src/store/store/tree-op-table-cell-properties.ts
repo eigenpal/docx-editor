@@ -80,7 +80,7 @@ interface SidePatch {
   readonly spec?: TableBorderSpecInput;
 }
 
-interface PlacedCell {
+export interface PlacedCell {
   readonly rowIndex: number;
   readonly startCol: number;
   readonly span: number;
@@ -105,7 +105,7 @@ interface PhysicalGrid {
   readonly rows: readonly (readonly OwnershipInterval[])[];
 }
 
-interface ValidatedCellSelection {
+export interface ValidatedCellSelection {
   readonly index: PlacedCellIndex;
   readonly selectedIds: ReadonlySet<string>;
   readonly grid: PhysicalGrid;
@@ -259,7 +259,7 @@ function buildRowGridSlots(
   return slots;
 }
 
-interface PlacedCellIndex {
+export interface PlacedCellIndex {
   readonly placed: readonly PlacedCell[];
   readonly byId: ReadonlyMap<string, PlacedCell>;
   readonly byRow: ReadonlyMap<number, readonly PlacedCell[]>;
@@ -300,7 +300,7 @@ function createPlacedCell(
   return cell;
 }
 
-function buildPlacedCellIndex(
+export function buildPlacedCellIndex(
   topology: EditableTableTopology,
   limits: TableTopologyLimits
 ):
@@ -404,7 +404,7 @@ function buildPlacedCellIndex(
   };
 }
 
-function validateVMergeChains(index: PlacedCellIndex): boolean {
+export function validateVMergeChains(index: PlacedCellIndex): boolean {
   const openChains = new Map<string, number>();
   for (const entry of index.placed) {
     const key = intervalKey(entry.startCol, entry.span);
@@ -589,7 +589,7 @@ function rejectDuplicateCellProperties(cell: OoxmlTableCellNode): TreeOpRejectio
   return null;
 }
 
-function validateCellSelection(
+export function validateCellSelection(
   topology: EditableTableTopology,
   cellIds: readonly string[],
   limits: TableTopologyLimits

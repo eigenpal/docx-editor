@@ -1,3 +1,8 @@
+import {
+  headerStoryForPage,
+  characterHeaderPageToken,
+  characterHeaderReserveHeight,
+} from './character-header-pages.ts';
 // Per-page content-box insets, derived from the header and footer variant THAT page shows.
 //
 // Word resolves the variant page by page (`w:titlePg` 17.6.55, `w:evenAndOddHeaders` 17.10.1)
@@ -10,7 +15,14 @@
 // shrink the content column to nothing, because pagination into a zero-height column never ends.
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
-import type { HeaderFooterStoryRecord, LayoutBox, SemanticLayout } from './semantic-records.ts';
+import type {
+  HeaderFooterStoryRecord,
+  LayoutBox,
+  PageBorderFrameRecord,
+  SemanticLayout,
+} from './semantic-records.ts';
+import { headerFooterVariantCanPaint } from '../store/package/hf-references.ts';
+import { marginIgnoresFurniture, marginInset } from './page-body-margins.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -46,14 +58,18 @@ export interface PageContentInsets {
 export interface PageContentInsetInputs {
   readonly furniture?: PageFurniture;
   readonly pageHeight: number;
+  /** Signed `w:pgMar/@w:top` in points; negative is exact (see `page-body-margins.ts`). */
   readonly marginTop: number;
+  /** Signed `w:pgMar/@w:bottom` in points; negative is exact. */
   readonly marginBottom: number;
   /** `w:pgMar/@w:header` in points. */
   readonly headerDistance: number;
   /** `w:pgMar/@w:footer` in points. */
   readonly footerDistance: number;
-  /** Where this section's first sheet lands in the DOCUMENT, for even/odd selection. */
+  /** Where this section's first sheet lands in the document. */
   readonly pageIndexStart: number;
+  /** Displayed number of local page zero, before adding later pages. */
+  readonly pageNumberStart?: number;
   /**
    * The content box local page 0 must flow against when this section CONTINUES the previous
    * one's sheet, instead of opening one of its own.
@@ -75,17 +91,22 @@ export interface PageContentInsetInputs {
  * The variant the page at section-local `index` shows.
  *
  * `w:titlePg` is a property of the SECTION, so its first page is the section's own first — the
- * local index. `w:evenAndOddHeaders` lives in settings.xml and alternates by the page's number
- * in the DOCUMENT, so it reads through `pageIndexStart`: a section that begins on an even page
- * must open with the even header, and `remapPage` renumbers a page without re-picking anything.
+ * local index. Alternating variants use displayed page numbering, including section restarts.
+ * The physical document index remains separate for source-addressed header drawings.
  */
 export function headerFooterVariantFor(
   furniture: PageFurniture | undefined,
-  pageIndexStart: number,
+  pageNumberStart: number,
   index: number
 ): HeaderFooterVariantName {
-  if (furniture?.titlePage && index === 0) return 'first';
-  if (furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0) return 'even';
+  if (furniture && headerFooterVariantCanPaint(furniture, 'first') && index === 0) return 'first';
+  if (
+    furniture &&
+    headerFooterVariantCanPaint(furniture, 'even') &&
+    (pageNumberStart + index) % 2 === 0
+  ) {
+    return 'even';
+  }
   return 'default';
 }
 
@@ -100,25 +121,49 @@ export function createPageContentInsets(
 ): (index: number) => PageContentInsets {
   const { furniture, pageHeight, marginTop, marginBottom } = inputs;
   const cap = pageHeight * FURNITURE_INSET_FRACTION;
-  const memo = new Map<HeaderFooterVariantName, PageContentInsets>();
-  const edge = (distance: number, story: HeaderFooterStoryLayout | undefined, margin: number) =>
-    // An absent variant reserves nothing: the page has no furniture on that edge at all, so
-    // the authored margin is the whole inset.
-    Math.min(cap, Math.max(margin, story ? distance + story.flowHeight : 0));
+  const memo = new Map<string, PageContentInsets>();
+  const edge = (
+    distance: number,
+    story: HeaderFooterStoryLayout | undefined,
+    margin: number,
+    reserveHeight = 0
+  ) =>
+    // A negative margin is exact (§17.6.11): the header or footer overlaps the body instead of
+    // pushing it. An absent variant reserves nothing: the page has no furniture on that edge
+    // at all, so the authored margin is the whole inset. The cap bounds both cases.
+    Math.min(
+      cap,
+      marginIgnoresFurniture(margin)
+        ? marginInset(margin)
+        : Math.max(margin, story ? distance + Math.max(story.flowHeight, reserveHeight) : 0)
+    );
   return (index: number): PageContentInsets => {
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
     if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
-    const variant = headerFooterVariantFor(furniture, inputs.pageIndexStart, index);
-    const cached = memo.get(variant);
+    const variant = headerFooterVariantFor(
+      furniture,
+      inputs.pageNumberStart ?? inputs.pageIndexStart + 1,
+      index
+    );
+    const key = furniture && characterHeaderPageToken(furniture) ? `${variant}:${index}` : variant;
+    const cached = memo.get(key);
     if (cached) return cached;
-    const top = edge(inputs.headerDistance, furniture?.headers.get(variant), marginTop);
+    const header = headerStoryForPage(furniture, variant, inputs.pageIndexStart + index);
+    const top = edge(
+      inputs.headerDistance,
+      header,
+      marginTop,
+      header && !marginIgnoresFurniture(marginTop)
+        ? characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
+        : 0
+    );
     const bottom = edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom);
     const insets: PageContentInsets = Object.freeze({
       top,
       bottom,
       height: pageHeight - top - bottom,
     });
-    memo.set(variant, insets);
+    memo.set(key, insets);
     return insets;
   };
 }
@@ -136,6 +181,12 @@ export interface OverflowPageShell {
   readonly insets: PageContentInsets;
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
+  /**
+   * The `w:pgBorders` frame the sheet's OWN position in its section resolves to. Not the
+   * template's: a template that is the section's first page has no `notFirstPage` frame, and
+   * the sheets minted after it must still draw one.
+   */
+  readonly pageBorders?: PageBorderFrameRecord;
 }
 
 /**

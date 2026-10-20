@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editing API had no word ranges, no expandTo, no Range.getRange, no reviewed text read, and no content controls on a range or a paragraph.",
+  "after": "getTextRanges, expandSpan, and getReviewedText are read operations that answer spans and text from one snapshot, and getContentControls accepts a span scope. The accepted view of a field result leaves out pending deleted text. Edits through the answered spans use the existing text operations.",
+  "reason": "The new operations are reads. They write no shared state, add no node kinds, and change no offsets or serialization. Edits made through word ranges reach the journal as the same text operations a search result produces, so convergence, undo, and reconnect behavior is unchanged.",
+  "tests": [
+    "packages/core/src/automation/__tests__/reviewed-text-projection.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-text-ranges.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-range-content-controls.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-text-ranges.test.ts"
+  ],
+  "changeset": "editor-api-text-ranges",
+  "migration": null
+}

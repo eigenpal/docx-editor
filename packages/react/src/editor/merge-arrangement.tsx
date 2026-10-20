@@ -51,7 +51,11 @@ export interface MergeArrangementInput<Entry> {
   readonly keyOfEntry: (entry: Entry, index: number) => string;
   readonly keyOfChild: KeyOfChild;
   /** Render one packaged entry, for the positions no child overrode. */
-  readonly renderEntry: (entry: Entry, index: number) => DocxEditorChildren;
+  readonly renderEntry: (entry: Entry, index: number, children?: ReactNode) => DocxEditorChildren;
+  /** Nested registry entries use the same slot overrides as their parent panel. */
+  readonly childrenOfEntry?: (entry: Entry) => readonly Entry[] | undefined;
+  /** Told of each keyed child that names no entry; it still renders after the default set. */
+  readonly onUnmatched?: (key: string, element: ReactElement) => void;
 }
 
 /**
@@ -70,6 +74,8 @@ export function mergeArrangement<Entry>({
   keyOfEntry,
   keyOfChild,
   renderEntry,
+  childrenOfEntry,
+  onUnmatched,
 }: MergeArrangementInput<Entry>): ReactNode {
   if (!preset) return children;
   const overrides = new Map<string, ReactElement>();
@@ -80,17 +86,23 @@ export function mergeArrangement<Entry>({
     if (key) overrides.set(key, child as ReactElement);
     else appended.push(child);
   }
-  const base = entries.map((entry, index) => {
-    const key = keyOfEntry(entry, index);
-    const override = overrides.get(key);
-    // A `hidden` override renders null where it stands, removing the member.
-    if (override) return <Fragment key={key}>{override}</Fragment>;
-    return <Fragment key={key}>{renderEntry(entry, index)}</Fragment>;
-  });
-  const known = new Set(entries.map(keyOfEntry));
+  const known = new Set<string>();
+  const renderEntries = (items: readonly Entry[]): ReactNode =>
+    items.map((entry, index) => {
+      const key = keyOfEntry(entry, index);
+      known.add(key);
+      const nested = childrenOfEntry?.(entry);
+      const content = nested ? renderEntries(nested) : undefined;
+      const override = overrides.get(key);
+      return <Fragment key={key}>{override ?? renderEntry(entry, index, content)}</Fragment>;
+    });
+  const base = renderEntries(entries);
   const unmatched = [...overrides.entries()]
     .filter(([key]) => !known.has(key))
-    .map(([key, element]) => <Fragment key={key}>{element}</Fragment>);
+    .map(([key, element]) => {
+      onUnmatched?.(key, element);
+      return <Fragment key={key}>{element}</Fragment>;
+    });
   return (
     <>
       {base}

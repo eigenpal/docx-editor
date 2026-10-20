@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Automation refuses row insertion in every merged table and exposes only edge insertion.",
+  "after": "Automation inserts ordinary rows beside an addressed row and preserves unrelated merged headers.",
+  "reason": "The authorTable operation uses existing row insertion primitives and unchanged collaboration journals. Existing clients can replay the resulting rows.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-api-row-insertion.test.ts"],
+  "changeset": "fresh-tables-insert",
+  "migration": null
+}

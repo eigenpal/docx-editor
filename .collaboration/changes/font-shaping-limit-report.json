@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An admitted face could exceed the shaping byte limit without a host font-error report.",
+  "after": "The current measurement owner reports the refusal and retains the original fallback behavior.",
+  "reason": "This change adds local diagnostics only. Shared operations, canonical XML, model offsets, selections, awareness, and layout geometry stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/font-shaping-limit-report.test.ts",
+    "packages/core/src/editor/__tests__/font-shaping-real-default-budget.test.ts",
+    "packages/core/src/editor/__tests__/font-shaping-host-lifecycle.test.ts",
+    "packages/pro/src/collaboration/__tests__/font-shaping-limit-editors.test.ts"
+  ],
+  "changeset": "font-shaping-limit-report",
+  "migration": null
+}

@@ -8,12 +8,13 @@
 // the current alignment comes from the engine's own `isActive` answer — never a
 // locally tracked guess.
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand, type EditorCommandState } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps } from './parts';
+import { useDropdownClose } from './useDropdownClose';
 
 const ALIGNMENT_SLOTS = [
   'alignment.left',
@@ -38,18 +39,7 @@ function ToolbarAlignmentImpl({ className, hidden }: ToolbarSlotPartProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Outside mousedown closes the panel — mousedown, not click, so the panel is gone
-  // before any click lands (same reasoning as FontFamily.Content).
-  useEffect(() => {
-    if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open]);
+  useDropdownClose(open, setOpen, rootRef, hidden);
 
   if (hidden) return null;
 

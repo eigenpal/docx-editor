@@ -5,10 +5,12 @@
 // formatting / IME / undo path at that story — never a parallel reduced editor.
 
 import {
+  caretAt,
   caretStopsForBlocks,
   documentOrder,
   moveCaret,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
 } from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
@@ -27,9 +29,15 @@ import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
+import {
+  hitAnchoredDrawingAtPoint,
+  hitTestFragments,
+  hitTestPage,
+  pageAtY,
+  type SemanticHit,
+} from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { logicalLineSegments } from '../layout/line-segments.ts';
 
 export const SCOPE_BODY: ViewScope = Object.freeze({ kind: 'body' as const });
 
@@ -112,7 +120,15 @@ export function storyScopeOfNodeId(
   fallback: StoryScope
 ): StoryScope {
   const hash = nodeId?.indexOf('#') ?? -1;
-  const partName = hash === -1 ? '' : nodeId!.slice(0, hash);
+  return storyScopeOfPartName(session, hash === -1 ? '' : nodeId!.slice(0, hash), fallback);
+}
+
+/** The story a part holds: the body, a header or footer, or a notes part. */
+export function storyScopeOfPartName(
+  session: StoryScopeLookup,
+  partName: string,
+  fallback: StoryScope
+): StoryScope {
   if (partName.length === 0 || partName === session.part().name) return { kind: 'body' };
   for (const section of session.headerFooterResolutionBySection()) {
     for (const slots of [section.headers, section.footers]) {
@@ -383,8 +399,15 @@ export function navigateInActiveScope(
   desiredX: number | null,
   active: HeaderFooterScopeBinding | null,
   noteScopeId?: string | null,
-  measurer?: TextMeasurer
-): { position: SemanticPosition; desiredX: number | null; pageIndex?: number } | null {
+  measurer?: TextMeasurer,
+  lineId?: string
+): {
+  position: SemanticPosition;
+  desiredX: number | null;
+  pageIndex?: number;
+  /** The caret on the line the motion chose, when its offset also starts the next line. */
+  caret?: CaretGeometry;
+} | null {
   const storyStops = active
     ? activeStoryCaretStops(layout, active, measurer)
     : noteScopeId
@@ -393,17 +416,40 @@ export function navigateInActiveScope(
   const moved = moveCaret(layout, position, command, desiredX, {
     ...(measurer ? { measurer } : {}),
     ...(storyStops ? { stops: storyStops } : {}),
+    ...(lineId !== undefined ? { lineId } : {}),
   });
   if (!moved) return null;
-  if (!storyStops) return moved;
   // Prefer an exact stop match so continuation-page geometry carries its pageIndex through
-  // word/line gestures that rebuild the position without returning the stop itself.
-  const stop = storyStops.find(
-    (candidate) =>
-      candidate.position.paragraphId === moved.position.paragraphId &&
-      candidate.position.offset === moved.position.offset
-  );
-  return stop ? { ...moved, pageIndex: stop.pageIndex } : moved;
+  // word/line gestures that rebuild the position without returning the stop itself. A stop on
+  // the chosen line wins: a wrap offset has its stop on the next line.
+  const stop =
+    storyStops?.find(
+      (candidate) =>
+        candidate.position.paragraphId === moved.position.paragraphId &&
+        candidate.position.offset === moved.position.offset &&
+        (moved.lineId === undefined || candidate.lineId === moved.lineId)
+    ) ??
+    storyStops?.find(
+      (candidate) =>
+        candidate.position.paragraphId === moved.position.paragraphId &&
+        candidate.position.offset === moved.position.offset
+    );
+  const pageIndex = stop?.pageIndex;
+  // The line the motion chose travels as the caret's affinity, in every story.
+  const caret =
+    moved.lineId === undefined
+      ? null
+      : caretAt(layout, moved.position, {
+          ...(measurer ? { measurer } : {}),
+          ...(pageIndex !== undefined ? { preferredPageIndex: pageIndex } : {}),
+          preferredLineId: moved.lineId,
+        });
+  return {
+    position: moved.position,
+    desiredX: moved.desiredX,
+    ...(pageIndex !== undefined ? { pageIndex } : {}),
+    ...(caret ? { caret } : {}),
+  };
 }
 
 export function findNoteAtSheetPoint(
@@ -498,6 +544,8 @@ export function findEmptyFurnitureBandAtSheetPoint(
   pageOffsetX: (pageIndex: number) => number
 ): { pageIndex: number; kind: 'header' | 'footer' } | null {
   for (const page of layout.pages) {
+    // A blank parity sheet belongs to no section, so it has no header or footer to create.
+    if (page.parityBlank) continue;
     const ox = pageOffsetX(page.index);
     for (const kind of ['header', 'footer'] as const) {
       if (page[kind]) continue;
@@ -559,6 +607,48 @@ export function findStoryAtSheetPoint(
 }
 
 /**
+ * Whether a {@link findStoryAtSheetPoint} hit inside the page's content box belongs to the body.
+ *
+ * A negative `w:top` or `w:bottom` measures the body from the page edge, so a tall header or
+ * footer paints over body lines. The activation band stays the margin region above or below
+ * the content box. Inside the content box, a closed story takes the press only on its own
+ * glyphs or anchored drawings with no body glyph under the point. The open story also keeps
+ * its whitespace, so a press beside its text still places the caret there. A body anchored
+ * drawing counts as body content, a behind-text one included. Footnote and endnote text in
+ * the page's note area counts as body content too, so an open footer over a note gives the
+ * press to the note.
+ */
+export function storyHitYieldsToBody(
+  layout: SemanticLayout,
+  storyHit: NonNullable<ReturnType<typeof findStoryAtSheetPoint>>,
+  sheet: { readonly x: number; readonly y: number },
+  pageOffsetX: (pageIndex: number) => number,
+  storyIsActive: boolean,
+  measurer?: TextMeasurer
+): boolean {
+  const page = layout.pages[storyHit.pageIndex];
+  if (!page) return false;
+  const box = page.contentBox;
+  const x = sheet.x - pageOffsetX(page.index) - box.x;
+  const y = sheet.y - box.y;
+  if (x < 0 || x >= box.width || y < 0 || y >= box.height) return false;
+  const options = measurer ? { measurer } : {};
+  const { story, local } = storyHit;
+  const onStory =
+    hitAnchoredDrawingAtPoint(story.anchoredDrawings, local, page.index) !== null ||
+    hitTestFragments(layout, page.index, story.fragments, local, options)?.onGlyphs === true;
+  if (storyIsActive && onStory) return false;
+  // The page walk answers a text-free page from a neighbour's geometry; that is not on glyphs here.
+  const bodyHit = hitTestPage(layout, page.index, { x, y }, options);
+  const note = findNoteAtSheetPoint(layout, sheet, pageOffsetX);
+  const onBody =
+    (bodyHit?.onGlyphs === true && bodyHit.pageIndex === page.index) ||
+    (note?.pageIndex === page.index &&
+      hitTestFragments(layout, page.index, note.fragments, note.local, options)?.onGlyphs === true);
+  return storyIsActive ? onBody : onBody || !onStory;
+}
+
+/**
  * Document-order paragraph ids for the active scope (deduped across shared page copies).
  *
  * Body (no HF / no note) falls through to memoized {@link documentOrder} so per-keystroke
@@ -581,7 +671,7 @@ export function scopedDocumentOrder(
       // from this order compares as before every other one — which would put a selection
       // anchored in it at the top of the story.
       for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
+        for (const segment of logicalLineSegments(line)) {
           if (seen.has(segment.paragraphId)) continue;
           seen.add(segment.paragraphId);
           order.push(segment.paragraphId);
@@ -630,4 +720,19 @@ function paragraphFragmentsFromBlocks(
   };
   visit(blocks);
   return found;
+}
+
+/** The note whose painted fragments hold this paragraph, or null. */
+export function noteScopeIdInLayout(layout: SemanticLayout, paragraphId: string): string | null {
+  for (const page of layout.pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          if (fragment.paragraphId === paragraphId) return note.scopeId;
+        }
+      }
+    }
+  }
+  return null;
 }

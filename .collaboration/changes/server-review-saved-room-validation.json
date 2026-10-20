@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The server review example loads saved room bytes after compaction validation fails.",
+  "after": "The server review example refuses incompatible or damaged saved rooms before loading them.",
+  "reason": "The example changes server admission only. Shared state, document operations, and synchronization formats stay unchanged.",
+  "tests": [],
+  "changeset": "server-review-saved-room-validation",
+  "migration": null
+}

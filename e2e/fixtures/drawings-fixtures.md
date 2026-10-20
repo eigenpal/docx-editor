@@ -17,26 +17,26 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
 
 ## Entries
 
-| File                                      | Source                                                                                 | SHA-256             | Branch / refusal                                           | Word evidence                                  |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
-| comprehensive-word-element-test.docx      | Word-authored                                                                          | `d2db0c9423d69d52…` | canonical tree / none for supported drawings               | pending — editor-only baseline captured Task 0 |
-| list-pagination-break.docx                | Word-authored                                                                          | `a4581c20871339e4…` | external rel refusal / external image — no fetch           | n/a — security oracle                          |
-| float-wrap-comprehensive-test.docx        | Word-authored                                                                          | `276eff8171685aab…` | polygon/bbox exclusion / none                              | pending (9.5)                                  |
-| image-layout-modes-demo.docx              | Word-authored                                                                          | `598ae22b400ce2e1…` | authoring chrome / none                                    | pending (9.5)                                  |
-| issue-705-anchored-header-letterhead.docx | Word-authored                                                                          | `a98dbe5afd96bba8…` | HF furniture / none                                        | pending (9.5)                                  |
-| wrap-none-positioned-image-demo.docx      | Word-authored                                                                          | `4ae338400267ef24…` | layer order / none                                         | pending (9.5)                                  |
-| footer-textbox-page-fields.docx           | Word-authored, sanitized (length-preserving text scramble, neutral metadata and media) | `f10deb8c12cc325d…` | textbox story layout / cached field text never painted     | pending (9.5)                                  |
-| images-external.docx                      | deterministic builder                                                                  | `d9a81f2c66c3a237…` | external/missing/spoof/unrenderable / zero fetch           | not applicable — synthetic OPC                 |
-| images-wrap-sides.docx                    | deterministic builder                                                                  | `c10acd51efa93ab4…` | nine wrap modes / layout records per wrap                  | not applicable — synthetic OPC                 |
-| images-crop.docx                          | deterministic builder                                                                  | `6ec351c1b99133ad…` | inline crop / crop permille preserved                      | not applicable — synthetic OPC                 |
-| images-zorder.docx                        | deterministic builder                                                                  | `bdf3931fe99def4f…` | two overlapping anchors / layer metadata                   | not applicable — synthetic OPC                 |
-| images-formats.docx                       | deterministic builder                                                                  | `1459468b6726c3d3…` | seven inline drawings / ready vs placeholder               | not applicable — synthetic OPC                 |
-| images-tiff.docx                          | deterministic builder                                                                  | `0439dbcea6f9e650…` | three inline drawings / converted raster vs placeholder    | not applicable — synthetic OPC                 |
-| images-header.docx                        | deterministic builder                                                                  | `6f8c21cc81369919…` | HF furniture anchor / header flow height unchanged         | not applicable — synthetic OPC                 |
-| images-nonpicture.docx                    | deterministic builder                                                                  | `22599a1d9ba7bc33…` | extent placeholders / non-picture refusal                  | not applicable — synthetic OPC                 |
-| images-transform.docx                     | deterministic builder                                                                  | `313237fe1ef34828…` | three inline drawings / transform paint metadata           | not applicable — synthetic OPC                 |
-| images-compatibility-malformed.docx       | deterministic builder                                                                  | `9a8582879a75fae3…` | demotion/generic preservation / inert unsupported payloads | not applicable — synthetic OPC                 |
-| images-drawingml-watermark.docx           | deterministic builder                                                                  | `3b41aa8cad33a27e…` | centered watermark anchor / watermark effects paint        | not applicable — synthetic OPC                 |
+| File | Source | SHA-256 | Branch / refusal | Word evidence |
+| --- | --- | --- | --- | --- |
+| comprehensive-word-element-test.docx | Word-authored | `d2db0c9423d69d52…` | canonical tree / none for supported drawings | pending — editor-only baseline captured Task 0 |
+| list-pagination-break.docx | Word-authored | `a4581c20871339e4…` | external rel refusal / external image — no fetch | n/a — security oracle |
+| float-wrap-comprehensive-test.docx | Word-authored | `276eff8171685aab…` | polygon/bbox exclusion / none | pending (9.5) |
+| image-layout-modes-demo.docx | Word-authored | `598ae22b400ce2e1…` | authoring chrome / none | pending (9.5) |
+| issue-705-anchored-header-letterhead.docx | Word-authored | `a98dbe5afd96bba8…` | HF furniture / none | pending (9.5) |
+| wrap-none-positioned-image-demo.docx | Word-authored | `4ae338400267ef24…` | layer order / none | pending (9.5) |
+| footer-textbox-page-fields.docx | Word-authored, sanitized (length-preserving text scramble, neutral metadata and media) | `f10deb8c12cc325d…` | textbox story layout / cached field text never painted | pending (9.5) |
+| images-external.docx | deterministic builder | `439f3fe4f6ecd263…` | external/missing/spoof/unrenderable / zero fetch | not applicable — synthetic OPC |
+| images-wrap-sides.docx | deterministic builder | `c10acd51efa93ab4…` | nine wrap modes / layout records per wrap | not applicable — synthetic OPC |
+| images-crop.docx | deterministic builder | `6ec351c1b99133ad…` | inline crop / crop permille preserved | not applicable — synthetic OPC |
+| images-zorder.docx | deterministic builder | `bdf3931fe99def4f…` | two overlapping anchors / layer metadata | not applicable — synthetic OPC |
+| images-formats.docx | deterministic builder | `1459468b6726c3d3…` | seven inline drawings / ready vs placeholder | not applicable — synthetic OPC |
+| images-tiff.docx | deterministic builder | `0439dbcea6f9e650…` | three inline drawings / converted raster vs placeholder | not applicable — synthetic OPC |
+| images-header.docx | deterministic builder | `6f8c21cc81369919…` | HF furniture anchor / header flow height unchanged | not applicable — synthetic OPC |
+| images-nonpicture.docx | deterministic builder | `22599a1d9ba7bc33…` | extent placeholders / non-picture refusal | not applicable — synthetic OPC |
+| images-transform.docx | deterministic builder | `313237fe1ef34828…` | three inline drawings / transform paint metadata | not applicable — synthetic OPC |
+| images-compatibility-malformed.docx | deterministic builder | `9a8582879a75fae3…` | demotion/generic preservation / inert unsupported payloads | not applicable — synthetic OPC |
+| images-drawingml-watermark.docx | deterministic builder | `3b41aa8cad33a27e…` | centered watermark anchor / watermark effects paint | not applicable — synthetic OPC |
 
 <!-- DRAWINGS_FIXTURE_MANIFEST
 {
@@ -171,7 +171,7 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
       "refusal": "zero fetch",
       "wordEvidence": "not applicable — synthetic OPC",
       "tolerance": "fingerprint + digest equality",
-      "sha256": "d9a81f2c66c3a2371f17d3ed02d60cd4873a2b68be9e8f126c95f4c3c1447a50"
+      "sha256": "439f3fe4f6ecd2634bceaeb25120f773d3151dd9d26c709bd40d9d896c1a6c5d"
     },
     {
       "file": "images-wrap-sides.docx",

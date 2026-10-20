@@ -1,3 +1,4 @@
+import { pdfExportPlugin } from '../shared/pdf-export-plugin';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
@@ -26,6 +27,7 @@ async function fetchGitHubStars(): Promise<number | null> {
  */
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([
+    ['/bulk-review.docx', path.join(monorepoRoot, 'e2e/fixtures/bulk-review.docx')],
     [
       '/comprehensive-word-element-test.docx',
       path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
@@ -90,10 +92,21 @@ export default defineConfig(async (): Promise<UserConfig> => {
   // `dist/` (same code path a `npm install` consumer gets). Used by the parity
   // build so community members see the real installed experience.
   const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
+  const plugins: Plugin[] = [...react(), canonicalFixturePlugin(), pdfExportPlugin()];
+
+  const css: UserConfig['css'] = {
+    postcss: {
+      plugins: [
+        tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
+        autoprefixer(),
+        stripUnexpandedTailwind,
+      ],
+    },
+  };
 
   return {
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react(), canonicalFixturePlugin()],
+    plugins,
     root: __dirname,
     resolve: {
       alias: usePublished
@@ -103,8 +116,30 @@ export default defineConfig(async (): Promise<UserConfig> => {
               replacement: path.join(monorepoRoot, 'packages/react/dist/index.mjs'),
             },
             { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+            // examples/shared imports it, and node_modules lookup from there never
+            // reaches this app's workspace link.
+            {
+              find: /^@docx-editor\.dev\/docx-to-markdown$/,
+              replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/dist/index.js'),
+            },
           ]
         : [
+            {
+              find: /^@docx-editor\.dev\/docx-to-markdown$/,
+              replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/src/index.ts'),
+            },
+            {
+              find: /^@docx-editor\.dev\/core$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/editor-api/browser',
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/browser.ts'),
+            },
+            {
+              find: '@docx-editor.dev/editor-api',
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/index.ts'),
+            },
             // Resolve package imports to source for live development
             // Order matters: more-specific prefixes before less-specific ones
             {
@@ -132,7 +167,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(binding|collaboration|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|export|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {
@@ -160,6 +195,10 @@ export default defineConfig(async (): Promise<UserConfig> => {
               replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
             },
             {
+              find: '@docx-editor.dev/fonts-cjk/browser',
+              replacement: path.join(monorepoRoot, 'packages/fonts-cjk/src/browser.ts'),
+            },
+            {
               find: '@docx-editor.dev/fonts/google',
               replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
             },
@@ -178,19 +217,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
             },
           ],
     },
-    css: {
-      postcss: {
-        // Two copies of postcss are installed, so `tailwindcss` and `autoprefixer` are typed
-        // against a different one than vite's `AcceptedPlugin`. Identical shapes, unrelated
-        // types. Deduplicating the dependency is the real fix; casting keeps that a dependency
-        // problem rather than a reason to leave this whole project unchecked.
-        plugins: [
-          tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
-          autoprefixer(),
-          stripUnexpandedTailwind,
-        ] as UserConfig['css'] extends { postcss?: { plugins?: infer P } } ? P : never,
-      },
-    },
+    css,
     define: {
       __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(
         process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'

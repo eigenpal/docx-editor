@@ -17,6 +17,7 @@ const REMOVED_SURFACE_PATTERNS = [
 ];
 
 export function isCurrentPublicDoc(file) {
+  file = file.replaceAll('\\', '/');
   return (
     /\.mdx?$/.test(file) &&
     !/\.api\.md$/i.test(file) &&

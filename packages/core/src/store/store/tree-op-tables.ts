@@ -4,6 +4,7 @@
 // and publishes one flow-structural effect per operation. A row inserted inside a vertical
 // merge repeats `w:vMerge` for the covered cells, so the merge grows by one row.
 
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   createNodeIdAllocator,
   insertChildren,
@@ -49,6 +50,8 @@ import {
   patchTcPrChild,
   patchTrPrChild,
 } from './tree-op-table-properties.ts';
+import { resizedGridCells, validateTableResizeGrid } from './table-resize-grid.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
@@ -59,7 +62,16 @@ import {
   tableHidesRowBetween,
   verticalMergeContinuationCells,
 } from './tree-op-table-vmerge.ts';
+import {
+  planVerticalMergeHeadRepairs,
+  verticalMergeHeadRepairDirtyIds,
+  rowRemovalEdits,
+} from './tree-op-table-vmerge-removal.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
+import {
+  insertedCellParagraphContent,
+  insertedCellParagraphNodeCount,
+} from './tree-op-table-row-paragraph.ts';
 import {
   invalidRevisionAttribution,
   type RevisionAttributionInput,
@@ -72,13 +84,13 @@ const TR_PR_STRIP = new Set(['ins', 'del', 'trPrChange']);
 const TC_PR_STRIP = new Set(['vMerge', 'hMerge', 'cellIns', 'cellDel', 'cellMerge', 'tcPrChange']);
 const COLUMN_TC_PR_STRIP = new Set([...TC_PR_STRIP, 'gridSpan']);
 
-const SAFE_TRPR_LEAVES: readonly string[] = CT_TRPR_SEQUENCE.filter(
+export const SAFE_TRPR_LEAVES: readonly string[] = CT_TRPR_SEQUENCE.filter(
   (name) => !TR_PR_STRIP.has(name)
 );
 const SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
   (name) => !TC_PR_STRIP.has(name)
 );
-const COLUMN_SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
+export const COLUMN_SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
   (name) => !COLUMN_TC_PR_STRIP.has(name)
 );
 
@@ -153,7 +165,7 @@ interface RowInsertionPlan {
   readonly continuations: ReadonlySet<number>;
 }
 
-function mapTopologyRejection(
+export function mapTopologyRejection(
   reason: 'unknown-table' | 'duplicate-property-container' | 'duplicate-node-id' | 'resource-limit'
 ): TreeOpRejection {
   if (reason === 'duplicate-node-id') return 'unknown-table';
@@ -248,7 +260,7 @@ function projectWmlAttributes(
   return projected;
 }
 
-function freshWmlElement(
+export function freshWmlElement(
   localName: string,
   nextId: () => string,
   wml: WmlFreshNamespaceContext,
@@ -286,7 +298,7 @@ function trackedRevisionAttributes(
   ];
 }
 
-function withTrackedRowMarker(
+export function withTrackedRowMarker(
   row: OoxmlTableRowNode,
   markerKind: 'ins' | 'del',
   revisionId: string,
@@ -331,7 +343,7 @@ function withTrackedRowMarker(
   return Object.freeze({ ...row, children }) as OoxmlTableRowNode;
 }
 
-function freshTableRow(
+export function freshTableRow(
   nextId: () => string,
   children: readonly OoxmlNode[],
   wml: WmlFreshNamespaceContext
@@ -348,7 +360,7 @@ function freshTableRow(
   } as OoxmlTableRowNode;
 }
 
-function freshTableCell(
+export function freshTableCell(
   nextId: () => string,
   children: readonly OoxmlNode[],
   wml: WmlFreshNamespaceContext
@@ -453,7 +465,7 @@ function projectPropertyLeaf(
   return projectSimplePropertyLeaf(source, nextId, wml);
 }
 
-function copySafePropertyContainer(
+export function copySafePropertyContainer(
   container: OoxmlElement,
   allowedLeaves: readonly string[],
   nextId: () => string,
@@ -518,6 +530,7 @@ function planRowInsertion(
     structureBudget += 2;
     const tcPr = wmlChildNamed(cells[index]!, 'tcPr');
     if (tcPr) structureBudget += countAllowlistedLeaves(tcPr, SAFE_TCPR_LEAVES);
+    structureBudget += insertedCellParagraphNodeCount(cells[index]!);
     // A continued merge adds `w:vMerge`, plus a `w:tcPr` to carry it whenever the copy has
     // none — including a source `w:tcPr` whose every leaf is stripped. Budget the ceiling.
     if (continuations.has(index)) structureBudget += 2;
@@ -527,18 +540,19 @@ function planRowInsertion(
   return { sourceRow, cellCount: cells.length, structureBudget, continuations };
 }
 
-function emptyParagraph(
+export function emptyParagraph(
   part: OoxmlPart,
   targetTable: OoxmlElement,
   nextId: () => string,
   seed: string,
   used: Set<string>,
-  wml: WmlFreshNamespaceContext
+  wml: WmlFreshNamespaceContext,
+  content: readonly OoxmlNode[] = []
 ): OoxmlParagraphNode {
   const w14Prefix = w14PrefixInScopeAt(part, targetTable);
   const identity: OoxmlAttribute[] = [];
   if (w14Prefix !== null) {
-    const paraIdValue = mintParaId(seed, used);
+    const paraIdValue = mintParaId(actorScopedSeed(seed), used);
     used.add(paraIdValue);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
   }
@@ -550,7 +564,7 @@ function emptyParagraph(
     ...(wml.elementPrefix === undefined ? {} : { prefix: wml.elementPrefix }),
     namespaceBindings: [],
     attributes: identity,
-    children: [],
+    children: content,
   } as OoxmlParagraphNode;
 }
 
@@ -589,7 +603,8 @@ function buildFreshCell(
     : copiedTcPr;
   const children: OoxmlNode[] = [];
   if (finalTcPr) children.push(finalTcPr);
-  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml));
+  const content = insertedCellParagraphContent(sourceCell, nextId, wml);
+  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml, content));
   return freshTableCell(nextId, children, wml);
 }
 
@@ -712,7 +727,34 @@ export function validateTableRowOp(
 
   if (op.op === 'deleteTableRow') {
     if (topology.rows.length === 1) return 'block-required';
-    return null;
+    if (op.revision) {
+      const { row, cells } = topology.rows[rowIndex]!;
+      const trPr = wmlChildNamed(row, 'trPr');
+      if (trPr && (wmlChildNamed(trPr, 'ins') || wmlChildNamed(trPr, 'del')))
+        return 'unsupported-revision';
+      for (const cell of cells) {
+        const tcPr = wmlChildNamed(cell, 'tcPr');
+        if (
+          tcPr &&
+          (wmlChildNamed(tcPr, 'cellIns') ||
+            wmlChildNamed(tcPr, 'cellDel') ||
+            wmlChildNamed(tcPr, 'cellMerge'))
+        )
+          return 'unsupported-revision';
+      }
+      if (
+        !topology.rows.some(({ row }, index) => {
+          if (index === rowIndex) return false;
+          const properties = wmlChildNamed(row, 'trPr');
+          return !properties || !wmlChildNamed(properties, 'del');
+        })
+      )
+        return 'block-required';
+      // The row stays until the deletion is accepted, so no merge changes here.
+      return null;
+    }
+    const repairs = planVerticalMergeHeadRepairs(part, op.rowId);
+    return repairs.ok ? null : repairs.reason;
   }
 
   return validateRowInsertionPlan(part, topology, rowIndex, op.where, resolved);
@@ -831,15 +873,19 @@ export function applyDeleteTableRow(
     };
     return fromEdit(replaceNode(part, op.rowId, trackedRow, options), effect);
   }
+  const repairs = planVerticalMergeHeadRepairs(part, op.rowId);
+  if (!repairs.ok) return { ok: false, reason: repairs.reason };
   const effect: TreeOpEffect = {
-    dirty: [op.tableId],
+    dirty: [op.tableId, ...verticalMergeHeadRepairDirtyIds(repairs.repairs)],
     created: [],
     deleted: [op.rowId, ...paragraphs],
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
-  return fromEdit(removeNode(part, op.rowId, options), effect);
+  if (repairs.repairs.length === 0) return fromEdit(removeNode(part, op.rowId, options), effect);
+  const edits = rowRemovalEdits(repairs.repairs, op.rowId, options);
+  return fromEdit(applyEdits(part, edits, options), effect);
 }
 
 export function applyTableRowOp(
@@ -857,9 +903,9 @@ function readTcWidthTwipsForGrid(cell: OoxmlTableCellNode): string | undefined {
   if (!tcW) return undefined;
   const rawType = wmlAttributeValue(tcW, 'type');
   if (rawType !== undefined && rawType !== 'dxa') return undefined;
-  const rawW = wmlAttributeValue(tcW, 'w');
-  if (!rawW || !/^\d{1,9}$/.test(rawW)) return undefined;
-  return rawW;
+  const width = readTwipsMeasure(wmlAttributeValue(tcW, 'w'));
+  // Written back as whole twips, so a decimal width does not carry into a new grid column.
+  return width !== null && width >= 0 ? String(width) : undefined;
 }
 
 type InsertTableColumnOp = Extract<TableColumnDocOp, { op: 'insertTableColumn' }>;
@@ -923,7 +969,9 @@ function tableHasColumnMergeMarkers(topology: EditableTableTopology): boolean {
   return false;
 }
 
-function validateRegularColumnTable(topology: EditableTableTopology): TreeOpRejection | null {
+export function validateRegularColumnTable(
+  topology: EditableTableTopology
+): TreeOpRejection | null {
   if (tableHasColumnMergeMarkers(topology)) return 'table-has-merge';
   if (topology.rows.length === 0) return 'tree-invariant';
   const cellCount = topology.rows[0]!.cells.length;
@@ -945,13 +993,13 @@ function referenceGridWidthTwips(
 ): string | undefined {
   const gridColumn = topology.gridColumns[columnIndex];
   if (gridColumn) {
-    const width = wmlAttributeValue(gridColumn, 'w');
-    return width && /^\d{1,9}$/.test(width) ? width : undefined;
+    const width = readTwipsMeasure(wmlAttributeValue(gridColumn, 'w'));
+    return width !== null && width >= 0 ? String(width) : undefined;
   }
   return readTcWidthTwipsForGrid(topology.rows[0]!.cells[columnIndex]!);
 }
 
-function freshGridCol(
+export function freshGridCol(
   nextId: () => string,
   wml: WmlFreshNamespaceContext,
   widthTwips: string | undefined
@@ -1042,7 +1090,7 @@ function firstParagraphId(cell: OoxmlTableCellNode): string | null {
   return paragraph?.id ?? null;
 }
 
-function tableWithDeclaredWmlBinding(
+export function tableWithDeclaredWmlBinding(
   table: OoxmlElement,
   part: OoxmlPart,
   wml: WmlFreshNamespaceContext
@@ -1079,6 +1127,7 @@ function planColumnInsertion(
     structureBudget += 2;
     const tcPr = wmlChildNamed(cell, 'tcPr');
     if (tcPr) structureBudget += countAllowlistedLeaves(tcPr, COLUMN_SAFE_TCPR_LEAVES);
+    structureBudget += insertedCellParagraphNodeCount(cell);
   }
   void wml;
   return {
@@ -1107,7 +1156,8 @@ function buildFreshColumnCell(
     : undefined;
   const children: OoxmlNode[] = [];
   if (copiedTcPr) children.push(copiedTcPr);
-  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml));
+  const content = insertedCellParagraphContent(sourceCell, nextId, wml);
+  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml, content));
   return freshTableCell(nextId, children, wml);
 }
 
@@ -1371,11 +1421,8 @@ function ownTableWidthTwips(op: object, key: string): number | null {
 }
 
 function readGridColWidthTwips(column: OoxmlElement): number | null {
-  const raw = wmlAttributeValue(column, 'w');
-  if (!raw || !/^\d{1,9}$/.test(raw)) return null;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) return null;
-  return value;
+  const value = readTwipsMeasure(wmlAttributeValue(column, 'w'));
+  return value !== null && value >= 0 ? value : null;
 }
 
 function gridColWithWidth(
@@ -1577,7 +1624,7 @@ export function validateTableResizeOp(
     return topology.rows.some((entry) => entry.row.id === op.rowId) ? null : 'unknown-row';
   }
 
-  const regular = validateRegularColumnTable(topology);
+  const regular = validateTableResizeGrid(topology);
   if (regular) return regular;
 
   const readable = validateResizeGridReadable(topology);
@@ -1682,15 +1729,16 @@ function applySetTableColumnWidths(
   const tblPrRejection = queueTblPrResizeEdits(edits, targetTable, nextId, wml, options);
   if (tblPrRejection) return { ok: false, reason: tblPrRejection };
 
-  for (const { cells } of topology.rows) {
-    const leftCell = patchCellTcWidthDxa(cells[leftIndex]!, op.leftWidthTwips, nextId, wml);
-    const rightCell = patchCellTcWidthDxa(cells[rightIndex]!, op.rightWidthTwips, nextId, wml);
-    if (leftCell !== cells[leftIndex]!) {
-      edits.push((current) => replaceNode(current, leftCell.id, leftCell, options));
-    }
-    if (rightCell !== cells[rightIndex]!) {
-      edits.push((current) => replaceNode(current, rightCell.id, rightCell, options));
-    }
+  for (const { cell, width } of resizedGridCells(
+    topology,
+    new Map([
+      [leftIndex, op.leftWidthTwips],
+      [rightIndex, op.rightWidthTwips],
+    ])
+  )) {
+    const patched = patchCellTcWidthDxa(cell, width, nextId, wml);
+    if (patched !== cell)
+      edits.push((current) => replaceNode(current, patched.id, patched, options));
   }
 
   const dirty = [
@@ -1761,11 +1809,13 @@ function applySetTableRightEdgeWidth(
   );
   if (tblPrRejection) return { ok: false, reason: tblPrRejection };
 
-  for (const { cells } of topology.rows) {
-    const patchedCell = patchCellTcWidthDxa(cells[lastIndex]!, op.columnWidthTwips, nextId, wml);
-    if (patchedCell !== cells[lastIndex]!) {
-      edits.push((current) => replaceNode(current, patchedCell.id, patchedCell, options));
-    }
+  for (const { cell, width } of resizedGridCells(
+    topology,
+    new Map([[lastIndex, op.columnWidthTwips]])
+  )) {
+    const patched = patchCellTcWidthDxa(cell, width, nextId, wml);
+    if (patched !== cell)
+      edits.push((current) => replaceNode(current, patched.id, patched, options));
   }
 
   const dirty = [

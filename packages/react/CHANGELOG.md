@@ -1,5 +1,427 @@
 # @eigenpal/docx-js-editor
 
+## 2.31.0
+
+### Minor Changes
+
+- f2b71d4: Add `useReviewRailMetrics` for React and Vue to position custom review columns.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/i18n@2.31.0
+
+## 2.30.0
+
+### Minor Changes
+
+- f09b44b: Add the `fontShaping` option, which sets the largest font file that text shaping accepts, separately from font loading limits.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.30.0, @docx-editor.dev/i18n@2.30.0
+
+## 2.29.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.29.0, @docx-editor.dev/i18n@2.29.0
+
+## 2.28.0
+
+### Minor Changes
+
+- 9535470: The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.
+- 9535470: Toolbar and menu popups close when focus moves elsewhere, such as to the find field, and the navigation pane stays docked beside a scrolling review column. `Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take `slotId`; `slot` is deprecated and still works with a development warning, and on `MenuItemProps` and `MenuSubmenuProps` both `slot` and `labelKey` are optional, because `slotId` and `label` can take their place.
+- 9535470: Add toolbar host groups, slot replacement, an Add comment control, and a table-size grid for the toolbar's table button, and make the menu bar move menus that do not fit into one "⋯" menu instead of wrapping by default (set `overflow={false}` to keep wrapping). The context-menu row id `review.comments` is deprecated in favor of `review.addComment`, and the old id still works with a development warning.
+
+### Patch Changes
+
+- 63dde82: Fix keyboard access and enabled states for composed menu actions in React and Vue.
+- 9535470: The page number indicator now stays in view when you place it inside the viewport instead of beside it.
+- 9535470: Close toolbar dropdowns, pickers, and the More panel when you press Escape in the document, and keep Escape in your own inputs working. Fixes #1151
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/i18n@2.28.0
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.27.0, @docx-editor.dev/i18n@2.27.0
+
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.26.0, @docx-editor.dev/i18n@2.26.0
+
+## 2.25.0
+
+### Patch Changes
+
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+  - @docx-editor.dev/i18n@2.25.0
+
+## 2.24.0
+
+### Patch Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- Updated dependencies [3a8853f]
+- Updated dependencies [de3aac8]
+- Updated dependencies [79d8bc1]
+- Updated dependencies [997814e]
+- Updated dependencies [de3aac8]
+- Updated dependencies [567c1e5]
+  - @docx-editor.dev/core@2.24.0
+  - @docx-editor.dev/i18n@2.24.0
+
+## 2.23.0
+
+### Patch Changes
+
+- 4fafb7c: Some inferred union types in the published declarations list their members in a different order. The types themselves are unchanged.
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [b981ea6]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [0e42c85]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d04902a]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [a2951cf]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [5981e48]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ab460dc]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e633def]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [cee5764]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [390c177]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ae1afe0]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [bf776f2]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d6c75d2]
+- Updated dependencies [2eea4de]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e040ff8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [aab4053]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [9afb832]
+- Updated dependencies [6794f4d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [3b95523]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+  - @docx-editor.dev/core@2.23.0
+  - @docx-editor.dev/i18n@2.23.0
+
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [139688b]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [abc656b]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9912e81]
+- Updated dependencies [7ff2004]
+- Updated dependencies [fe66ece]
+- Updated dependencies [ac84ccf]
+- Updated dependencies [cde01d8]
+- Updated dependencies [648f13c]
+- Updated dependencies [95c792f]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [23093e9]
+- Updated dependencies [edfb06d]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [e6616fe]
+- Updated dependencies [1bb2434]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [139688b]
+- Updated dependencies [a893c05]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9db7eb3]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+  - @docx-editor.dev/core@2.22.0
+  - @docx-editor.dev/i18n@2.22.0
+
+## 2.21.1
+
+### Patch Changes
+
+- Updated dependencies [6a7b93a]
+  - @docx-editor.dev/i18n@2.21.1
+
+## 2.21.0
+
+### Patch Changes
+
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/i18n@2.21.0
+
+## 2.20.0
+
+### Patch Changes
+
+- Updated dependencies [a9034d4]
+- Updated dependencies [c10916a]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+  - @docx-editor.dev/core@2.20.0
+  - @docx-editor.dev/i18n@2.20.0
+
+## 2.19.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.19.1
+
+## 2.19.0
+
+### Patch Changes
+
+- @docx-editor.dev/core@2.19.0
+  - @docx-editor.dev/i18n@2.19.0
+
+## 2.18.0
+
+### Minor Changes
+
+- d4daf40: Customize React and Vue popups with `definePopup()` components or typed render callbacks, including Page Setup, Paragraph Options, and Field Options. Reuse parts and draft hooks for automatic behavior, or disable automatic rendering to manage the popup yourself. Fixes #771.
+
+### Patch Changes
+
+- 90ea211: Preserve the document's scroll position and text selection when picking or typing a font size, or dismissing the font-size input with Escape. Restore the saved selection when returning focus to the editor from toolbar inputs.
+- Updated dependencies [ded420d]
+- Updated dependencies [d2d3824]
+- Updated dependencies [b5bf09f]
+- Updated dependencies [10a3d41]
+- Updated dependencies [e78dc17]
+- Updated dependencies [84c4622]
+- Updated dependencies [564182f]
+- Updated dependencies [f2dfcac]
+- Updated dependencies [758551b]
+- Updated dependencies [452312f]
+- Updated dependencies [5598465]
+- Updated dependencies [60b9163]
+- Updated dependencies [59520ce]
+- Updated dependencies [95db5eb]
+- Updated dependencies [1e36856]
+- Updated dependencies [6eb1eb4]
+- Updated dependencies [37be540]
+- Updated dependencies [9198848]
+- Updated dependencies [2cea799]
+- Updated dependencies [f23f974]
+- Updated dependencies [7c2b4aa]
+- Updated dependencies [90ea211]
+- Updated dependencies [f10341d]
+- Updated dependencies [040e653]
+  - @docx-editor.dev/core@2.18.0
+  - @docx-editor.dev/i18n@2.18.0
+
+## 2.17.0
+
+### Minor Changes
+
+- d1d8043: Let `navigation` on `<DocxEditor>` pass through pane props so hosts can control open state and the active tab, and focus the find input when that tab is shown.
+
+### Patch Changes
+
+- Updated dependencies [332494b]
+  - @docx-editor.dev/core@2.17.0
+  - @docx-editor.dev/i18n@2.17.0
+
+## 2.16.2
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.16.2
+
+## 2.16.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.16.1
+
+## 2.16.0
+
+### Minor Changes
+
+- 2c7a3c9: Use `locale` for regional date input in text form fields, including dotted dates and year-first patterns. Remove the unreleased `dateInputOrder` prop and setter. Preserve existing dates when locale changes.
+
+  Form-field dialogs and accessibility labels now honor `i18n`, including live catalogue changes.
+
+### Patch Changes
+
+- 0a75175: Preserve pending form values when moving or remounting the editor. Add `PaginatedSurface.save()` to validate pending input and refresh REF fields before serialization. Browser automation and paginated React and Vue refs use this save path. Synchronous saves refuse active edits and destroyed surfaces. Field-exit callbacks can throw or remount the editor without changing date interpretation.
+
+  Preserve nested simple-field results in clipboard HTML. Reject partial field quotes in the server-agent review example before an edit can affect additional text. Refuse tracked deletion or replacement of simple fields with nested result structures instead of leaving old text behind.
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/i18n@2.16.0
+
+## 2.15.1
+
+### Patch changes
+
+- @docx-editor.dev/i18n@2.15.1
+
+## 2.15.0
+
+### Patch changes
+
+- Updated dependencies [5284df5]
+- Updated dependencies [e9baf4d]
+- Updated dependencies [087bb78]
+- Updated dependencies [0d81033]
+- Updated dependencies [a3819aa]
+- Updated dependencies [a53f75c]
+- Updated dependencies [36c1f04]
+- Updated dependencies [8e6133f]
+- Updated dependencies [678fe91]
+- Updated dependencies [cfe3fe1]
+- Updated dependencies [0e1360d]
+- Updated dependencies [2a8e57e]
+  - @docx-editor.dev/core@2.15.0
+  - @docx-editor.dev/i18n@2.15.0
+
 ## 2.14.1
 
 ### Patch Changes
@@ -276,21 +698,14 @@
 
 - 26095c6: Initial release.
 
-  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints
-  the real paginated layout, edits it in place, and writes a `.docx` back out.
-  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the
-    packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks
-    (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
-  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical
-    OOXML tree, layout, paint, and the `Editor` contract the adapters render.
+  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints the real paginated layout, edits it in place, and writes a `.docx` back out.
+  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
+  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical OOXML tree, layout, paint, and the `Editor` contract the adapters render.
   - `@docx-editor.dev/i18n` — the shared string catalogue, with nine locales.
-  - `@docx-editor.dev/editor-api` — a batching document object model for automating a
-    document from a server or from an editor already open in a page.
+  - `@docx-editor.dev/editor-api` — a batching document object model for automating a document from a server or from an editor already open in a page.
   - `@docx-editor.dev/pro` — tracked changes, comments, and custom nodes.
 
-  Word fidelity is structural: styles, theme colours, tables, headers and footers, section
-  layout, numbering, and tab stops resolve through the same cascade Word uses, and content
-  the editor does not model round-trips untouched.
+  Word fidelity is structural: styles, theme colours, tables, headers and footers, section layout, numbering, and tab stops resolve through the same cascade Word uses, and content the editor does not model round-trips untouched.
 
 - 26095c6: Remove `EditorHost`, `EditorConfig` and `createEditor` from the public surface. They described a retired pipeline in which the adapter supplied DOM handles and a display sink; the editor has painted its own surface since `createDocxEditor` replaced it, and none of the three had a caller. Use `createDocxEditor` with `DocxEditorConfig`.
 
@@ -702,9 +1117,7 @@
 
 ### Patch Changes
 
-- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic
-  locale loading can code-split a single locale instead of bundling the whole
-  set:
+- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic locale loading can code-split a single locale instead of bundling the whole set:
 
   ```ts
   // Static — bundler ships only this locale's strings
@@ -714,21 +1127,11 @@
   const pl = (await import('@docx-editor.dev/i18n/pl')).default;
   ```
 
-  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`,
-  `/zh-CN`. The named exports on the package root still work — pick the
-  ergonomic path for static lists, the subpath for runtime locale switching.
+  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. The named exports on the package root still work — pick the ergonomic path for static lists, the subpath for runtime locale switching.
 
-  Also re-export `createEmptyDocument`, `createDocumentWithText`, and
-  `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and
-  `@docx-editor.dev/vue` so the common "spawn a blank editor"
-  affordance no longer requires installing `-core` alongside the adapter.
+  Also re-export `createEmptyDocument`, `createDocumentWithText`, and `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and `@docx-editor.dev/vue` so the common "spawn a blank editor" affordance no longer requires installing `-core` alongside the adapter.
 
-  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`,
-  `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`,
-  `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main
-  `@docx-editor.dev/core` entry. They were already public via
-  `@docx-editor.dev/core/headless`; the main entry just hadn't been
-  re-exporting them.
+  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`, `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`, `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main `@docx-editor.dev/core` entry. They were already public via `@docx-editor.dev/core/headless`; the main entry just hadn't been re-exporting them.
 
 - Updated dependencies [8d60d65]
 - Updated dependencies [7806b78]
@@ -1249,46 +1652,21 @@
 
 ### Patch Changes
 
-- 71a1836: Replace hardcoded `816` page-width literals in `DocxEditor` with the existing
-  `DEFAULT_PAGE_WIDTH` constant exported from `PagedEditor`, and fold the two
-  duplicated `pageWidth` fallback expressions into a single `pageWidthPx` value
-  shared by `UnifiedSidebar` and `CommentMarginMarkers`.
+- 71a1836: Replace hardcoded `816` page-width literals in `DocxEditor` with the existing `DEFAULT_PAGE_WIDTH` constant exported from `PagedEditor`, and fold the two duplicated `pageWidth` fallback expressions into a single `pageWidthPx` value shared by `UnifiedSidebar` and `CommentMarginMarkers`.
 - f31fd5a: Fix document outline overlap and ruler behavior
-  - Outline panel no longer sits on top of the page. On wide viewports the
-    page stays where it was (centered, or translated left by the comments
-    sidebar) — only the layout's min-width grows so the centered page never
-    overlaps the panel. On narrow viewports the page + outline scroll
-    horizontally as a unit instead.
-  - Outline panel header lines up with the doc's top margin and uses a
-    transparent background so the page's left-side shadow stays visible when
-    the viewport is squeezed.
-  - Vertical ruler stays pinned to the viewport's left edge during horizontal
-    scroll instead of scrolling out of view.
-  - Horizontal ruler is now sticky inside the scroll container, so it scrolls
-    horizontally with the doc and stays put on vertical scroll. Padding tracks
-    the outline (right shift) and comments sidebar (left shift) so the ruler
-    centers against the same axis as the page.
-  - Editor surround uses `--doc-bg` uniformly so the over-scroll/rubber-band
-    area matches the gutter.
+  - Outline panel no longer sits on top of the page. On wide viewports the page stays where it was (centered, or translated left by the comments sidebar) — only the layout's min-width grows so the centered page never overlaps the panel. On narrow viewports the page + outline scroll horizontally as a unit instead.
+  - Outline panel header lines up with the doc's top margin and uses a transparent background so the page's left-side shadow stays visible when the viewport is squeezed.
+  - Vertical ruler stays pinned to the viewport's left edge during horizontal scroll instead of scrolling out of view.
+  - Horizontal ruler is now sticky inside the scroll container, so it scrolls horizontally with the doc and stays put on vertical scroll. Padding tracks the outline (right shift) and comments sidebar (left shift) so the ruler centers against the same axis as the page.
+  - Editor surround uses `--doc-bg` uniformly so the over-scroll/rubber-band area matches the gutter.
 
 - 6a0b9a9: Fix crash when accepting a tracked replacement.
 
-  The `paragraphChangeTracker` plugin walked `tr.steps` using each step's raw
-  `from`/`to`/`pos` against `tr.doc` (the final doc after every step has been
-  applied). Those coords are valid only in the doc as it was _when that step
-  ran_, so a later doc-shrinking step could leave the earlier step's coords
-  past the final doc end and crash `Fragment.nodesBetween` on
-  `undefined.nodeSize`.
+  The `paragraphChangeTracker` plugin walked `tr.steps` using each step's raw `from`/`to`/`pos` against `tr.doc` (the final doc after every step has been applied). Those coords are valid only in the doc as it was _when that step ran_, so a later doc-shrinking step could leave the earlier step's coords past the final doc end and crash `Fragment.nodesBetween` on `undefined.nodeSize`.
 
-  Concretely: `acceptChange` emits `[RemoveMarkStep, ReplaceStep]` when the
-  range contains both an `insertion` mark and a `deletion` (a tracked
-  replace). The replace shrinks the doc, the mark step's `to` becomes
-  invalid in `tr.doc`, and the editor crashes.
+  Concretely: `acceptChange` emits `[RemoveMarkStep, ReplaceStep]` when the range contains both an `insertion` mark and a `deletion` (a tracked replace). The replace shrinks the doc, the mark step's `to` becomes invalid in `tr.doc`, and the editor crashes.
 
-  Remap each step's coords through `tr.mapping.slice(stepIndex + 1)` before
-  using them with `tr.doc`, and skip steps whose range was fully consumed by
-  a later deletion. Adds a regression test reproducing the
-  accept-tracked-replacement crash shape.
+  Remap each step's coords through `tr.mapping.slice(stepIndex + 1)` before using them with `tr.doc`, and skip steps whose range was fully consumed by a later deletion. Adds a regression test reproducing the accept-tracked-replacement crash shape.
 
 - 95f8df1: Add Brazilian Portuguese (pt-BR) locale support with 100% translation coverage.
 

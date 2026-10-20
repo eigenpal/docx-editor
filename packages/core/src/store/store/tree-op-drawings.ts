@@ -1,3 +1,4 @@
+import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Canonical drawing mutations over the OOXML tree (typed-drawings-and-images task 11).
 //
 // Pure tree edits only — package media/relationship lifecycle stays in task 12. Each op
@@ -39,7 +40,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { cloneWithNewIds, fromEdit, parentOf, TEXT_DEPS } from './tree-op-nodes.ts';
+import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
 import { applyInsertTrackedRun, build as buildTrackedNode } from './tree-op-tracked.ts';
 import { invalidRevisionAttribution } from './tree-op-types.ts';
 import { insertRunPayloadAtOffset, offsetInsideAtomicSegment } from './tree-op-insert-offset.ts';
@@ -65,16 +66,6 @@ function parseOoxmlBoolean(value: string | undefined): boolean | undefined {
 
 function ooxmlBooleanString(value: boolean): string {
   return value ? '1' : '0';
-}
-
-function paragraphContainingNode(part: OoxmlPart, nodeId: string): OoxmlParagraphNode | null {
-  let current: OoxmlNode | null = findNode(part, nodeId);
-  while (current) {
-    if (current.kind === 'paragraph') return current as OoxmlParagraphNode;
-    const parent = parentOf(part, current.id);
-    current = parent;
-  }
-  return null;
 }
 
 function isPositionOrWrapChild(child: OoxmlElement): boolean {
@@ -218,7 +209,13 @@ function anchorRootOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
 
 function isTopLevelDrawing(part: OoxmlPart, nodeId: string): nodeId is string {
   const node = findNode(part, nodeId);
-  return node !== null && node.kind === 'drawing';
+  return (
+    node !== null &&
+    (node.kind === 'drawing' ||
+      (node.kind !== 'textValue' &&
+        node.namespaceUri === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main' &&
+        node.localName === 'drawing'))
+  );
 }
 
 function projectionOf(part: OoxmlPart, drawing: OoxmlDrawingNode): DrawingProjection | null {
@@ -227,12 +224,6 @@ function projectionOf(part: OoxmlPart, drawing: OoxmlDrawingNode): DrawingProjec
     supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
   });
-}
-
-function isPictureProjection(
-  projection: DrawingProjection | null
-): projection is DrawingProjection {
-  return projection !== null && projection.picture !== null;
 }
 
 function validateFinitePositiveEmu(value: number): boolean {
@@ -309,21 +300,36 @@ function lockBlocks(anchor: OoxmlElement, op: DrawingTreeDocOp['op']): TreeOpRej
 
 function drawingContext(
   part: OoxmlPart,
-  drawingNodeId: string
+  drawingNodeId: string,
+  operation: DrawingTreeDocOp['op']
 ):
   | { drawing: OoxmlDrawingNode; anchor: OoxmlElement; projection: DrawingProjection }
   | TreeOpRejection {
-  if (!isTopLevelDrawing(part, drawingNodeId)) {
+  const original = findNode(part, drawingNodeId);
+  const atomProjection =
+    original?.kind === 'drawing' ? null : drawingAtomProjection(part, drawingNodeId);
+  const resolvedId = atomProjection?.drawingNodeId ?? drawingNodeId;
+  if (!isTopLevelDrawing(part, resolvedId)) {
     const node = findNode(part, drawingNodeId);
     if (!node) return 'unknown-drawing';
     return 'not-a-drawing';
   }
-  const drawing = findNode(part, drawingNodeId) as OoxmlDrawingNode;
+  const drawing = findNode(part, resolvedId) as OoxmlDrawingNode;
   const anchor = anchorRootOf(drawing);
   if (!anchor) return 'not-a-drawing';
-  const projection = projectionOf(part, drawing);
+  const projection = atomProjection ?? projectionOf(part, drawing);
   if (!projection) return 'not-a-picture-drawing';
-  if (!isPictureProjection(projection)) return 'not-a-picture-drawing';
+  if (
+    projection.picture === null &&
+    !(
+      projection.textboxStory &&
+      (operation === 'resizeDrawing' ||
+        operation === 'positionDrawing' ||
+        operation === 'deleteDrawing' ||
+        operation === 'setDrawingMetadata')
+    )
+  )
+    return 'not-a-picture-drawing';
   return { drawing, anchor, projection };
 }
 
@@ -331,7 +337,6 @@ function validateRelationshipId(value: string): boolean {
   return value.length > 0 && value.length <= 512 && /^[A-Za-z0-9._-]+$/.test(value);
 }
 
-/** Impact class for a drawing op — metadata/locks are text-local; geometry/wrap are flow-structural. */
 export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass {
   switch (op.op) {
     case 'setDrawingMetadata':
@@ -380,7 +385,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       const anchor = anchorRootOf(op.drawing);
       if (!anchor) return 'not-a-drawing';
       const projection = projectionOf(part, op.drawing);
-      if (!isPictureProjection(projection)) return 'not-a-picture-drawing';
+      if (!projection || (projection.picture === null && !projection.textboxStory))
+        return 'not-a-picture-drawing';
       // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
       // would serialize a proposal no reader can attribute or resolve.
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
@@ -394,13 +400,13 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
     }
     case 'deleteDrawing': {
       if (op.revision) return 'trackedDrawingDeletionUnsupported';
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
     case 'replaceDrawingResource': {
       if (!validateRelationshipId(op.relationshipId)) return 'invalid-drawing-value';
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
@@ -411,26 +417,26 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       ) {
         return 'invalid-drawing-value';
       }
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
     case 'cropDrawing': {
       if (!validateCrop(op.crop)) return 'invalid-drawing-value';
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
     case 'positionDrawing': {
       if (!validateDrawingPositionInput(op.position)) return 'invalid-drawing-value';
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       if (ctx.projection.kind !== 'anchored') return 'invalid-drawing-value';
       return lockBlocks(ctx.anchor, op.op);
     }
     case 'setDrawingWrap': {
       if (!IMAGE_WRAP_TARGETS.includes(op.wrap)) return 'invalid-drawing-value';
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
@@ -444,7 +450,7 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (op.hyperlink !== undefined && op.hyperlink !== null) {
         return 'packageTransactionRequired';
       }
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return null;
     }
@@ -457,12 +463,12 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       ]) {
         if (value !== undefined && typeof value !== 'boolean') return 'invalid-drawing-value';
       }
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       return null;
     }
     case 'transformDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return ctx;
       if (!ctx.projection.picture) return 'not-a-drawing';
       return lockBlocks(ctx.anchor, op.op);
@@ -1068,31 +1074,32 @@ function wrapSchemaAttributes(
   spec: ReturnType<typeof wrapTargetToAnchorSpec>,
   existing: OoxmlElement | null
 ): OoxmlAttribute[] {
-  const distances = existing
-    ? readDistancesFromWrap(existing)
-    : { top: 0, right: 0, bottom: 0, left: 0 };
+  // Wrap-side distances are optional. One the old wrap element lacks stays absent, so the
+  // anchor distance keeps applying to that side after the edit.
+  const distances: Partial<DistanceTexts> = existing ? readDistanceTexts(existing) : {};
   const attrs: OoxmlAttribute[] = (existing?.attributes ?? []).filter(
     (attribute) => attribute.namespaceUri !== ''
   );
+  const pushDistances = (...sides: readonly (readonly [string, keyof DistanceTexts])[]) => {
+    for (const [name, side] of sides) {
+      const value = distances[side];
+      if (value !== undefined) attrs.push(attr(name, value));
+    }
+  };
   switch (wrapLocalName) {
     case 'wrapNone':
       break;
     case 'wrapSquare':
-      attrs.push(
-        attr('distT', String(distances.top)),
-        attr('distB', String(distances.bottom)),
-        attr('distL', String(distances.left)),
-        attr('distR', String(distances.right))
-      );
+      pushDistances(['distT', 'top'], ['distB', 'bottom'], ['distL', 'left'], ['distR', 'right']);
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTight':
     case 'wrapThrough':
-      attrs.push(attr('distL', String(distances.left)), attr('distR', String(distances.right)));
+      pushDistances(['distL', 'left'], ['distR', 'right']);
       if (spec.wrapText) attrs.push(attr('wrapText', spec.wrapText));
       break;
     case 'wrapTopAndBottom':
-      attrs.push(attr('distT', String(distances.top)), attr('distB', String(distances.bottom)));
+      pushDistances(['distT', 'top'], ['distB', 'bottom']);
       break;
   }
   return attrs;
@@ -1139,14 +1146,26 @@ function wrapElementForSpec(
   } as OoxmlElement;
 }
 
-function readDistancesFromWrap(wrap: OoxmlElement): {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-} {
-  const read = (name: string): number => Number(schemaAttributeValue(wrap.attributes, name) ?? '0');
+type DistanceTexts = { top: string; right: string; bottom: string; left: string };
+
+/**
+ * Copied text distances keep their `xsd:unsignedInt` spelling, including the two's-complement
+ * form of a negative distance. A malformed value becomes 0, which is how it reads; a missing
+ * one is undefined.
+ */
+function readDistanceTexts(element: OoxmlElement): Partial<DistanceTexts> {
+  const read = (name: string): string | undefined => {
+    const value = schemaAttributeValue(element.attributes, name);
+    if (value === undefined) return undefined;
+    return /^\d+$/.test(value) && Number(value) <= 0xffff_ffff ? value : '0';
+  };
   return { top: read('distT'), right: read('distR'), bottom: read('distB'), left: read('distL') };
+}
+
+/** `wp:anchor` and `wp:inline` have no fallback, so a missing distance is written as 0. */
+function readRootDistanceTexts(element: OoxmlElement): DistanceTexts {
+  const { top = '0', right = '0', bottom = '0', left = '0' } = readDistanceTexts(element);
+  return { top, right, bottom, left };
 }
 
 function defaultPositionChildren(nextId: () => string, projection: DrawingProjection): OoxmlNode[] {
@@ -1251,13 +1270,8 @@ function buildAnchoredRoot(
   const position = defaultPositionChildren(nextId, projection);
   const inlineDistances =
     inlineOrAnchor.kind === 'inlineDrawing' || inlineOrAnchor.localName === 'inline'
-      ? {
-          top: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distT') ?? '0'),
-          right: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distR') ?? '0'),
-          bottom: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distB') ?? '0'),
-          left: Number(schemaAttributeValue(inlineOrAnchor.attributes, 'distL') ?? '0'),
-        }
-      : { top: 0, right: 0, bottom: 0, left: 0 };
+      ? readRootDistanceTexts(inlineOrAnchor)
+      : { top: '0', right: '0', bottom: '0', left: '0' };
   const preservedAnchorAttrs = inlineOrAnchor.attributes.filter(
     (attribute) => attribute.namespaceUri !== ''
   );
@@ -1269,10 +1283,10 @@ function buildAnchoredRoot(
     prefix: 'wp',
     namespaceBindings: [],
     attributes: [
-      attr('distT', String(inlineDistances.top)),
-      attr('distB', String(inlineDistances.bottom)),
-      attr('distL', String(inlineDistances.left)),
-      attr('distR', String(inlineDistances.right)),
+      attr('distT', inlineDistances.top),
+      attr('distB', inlineDistances.bottom),
+      attr('distL', inlineDistances.left),
+      attr('distR', inlineDistances.right),
       attr('simplePos', schemaAttributeValue(inlineOrAnchor.attributes, 'simplePos') ?? '0'),
       attr('relativeHeight', String(projection.anchor?.relativeHeight ?? 251658240)),
       attr('behindDoc', spec.behindDocument ? '1' : '0'),
@@ -1287,12 +1301,7 @@ function buildAnchoredRoot(
 
 function buildInlineRoot(anchor: OoxmlElement, nextId: () => string): OoxmlElement {
   const shared = sharedAnchorChildren(anchor);
-  const inlineDistances = {
-    top: Number(schemaAttributeValue(anchor.attributes, 'distT') ?? '0'),
-    right: Number(schemaAttributeValue(anchor.attributes, 'distR') ?? '0'),
-    bottom: Number(schemaAttributeValue(anchor.attributes, 'distB') ?? '0'),
-    left: Number(schemaAttributeValue(anchor.attributes, 'distL') ?? '0'),
-  };
+  const inlineDistances = readRootDistanceTexts(anchor);
   return {
     id: nextId(),
     kind: 'inlineDrawing',
@@ -1301,10 +1310,10 @@ function buildInlineRoot(anchor: OoxmlElement, nextId: () => string): OoxmlEleme
     prefix: 'wp',
     namespaceBindings: [],
     attributes: [
-      attr('distT', String(inlineDistances.top)),
-      attr('distR', String(inlineDistances.right)),
-      attr('distB', String(inlineDistances.bottom)),
-      attr('distL', String(inlineDistances.left)),
+      attr('distT', inlineDistances.top),
+      attr('distR', inlineDistances.right),
+      attr('distB', inlineDistances.bottom),
+      attr('distL', inlineDistances.left),
     ],
     children: shared,
   } as OoxmlElement;
@@ -1399,7 +1408,7 @@ function updateAxisPosition(
     );
     children.push({
       id: nextId(),
-      kind: 'drawingPositionOffset',
+      kind: axis.kind === 'generic' ? 'generic' : 'drawingPositionOffset',
       namespaceUri: WP_NAMESPACE_URI,
       localName: 'posOffset',
       prefix: 'wp',
@@ -1421,7 +1430,9 @@ function updatePosition(
 ): OoxmlElement {
   const simplePos = schemaAttributeValue(anchor.attributes, 'simplePos') === '1';
   if (simplePos) {
-    const simple = findDirectChild(anchor.children, { kind: 'drawingSimplePos' });
+    const simple =
+      findDirectChild(anchor.children, { kind: 'drawingSimplePos' }) ??
+      findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'simplePos' });
     if (!simple) return anchor;
     let attrs = simple.attributes;
     if (position.horizontalEmu !== undefined) {
@@ -1550,63 +1561,64 @@ export function applyDrawingOp(
       return fromEdit(edited, effect);
     }
     case 'deleteDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
-      const paragraph = paragraphContainingNode(part, ctx.drawing.id);
+      const targetId = ctx.projection.textboxStory ? op.drawingNodeId : ctx.drawing.id;
+      const paragraph = paragraphContainingNode(part, targetId);
       const effect: TreeOpEffect = {
-        dirty: paragraph ? [paragraph.id, ctx.drawing.id] : [ctx.drawing.id],
+        dirty: paragraph ? [paragraph.id, targetId] : [targetId],
         created: [],
-        deleted: [ctx.drawing.id],
+        deleted: [targetId],
         dependencyKeys: TEXT_DEPS,
         impact: drawingOpImpact(op),
       };
-      return fromEdit(removeNode(part, ctx.drawing.id, options), effect);
+      return fromEdit(removeNode(part, targetId, options), effect);
     }
     case 'replaceDrawingResource': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateBlipRelationship(ctx.anchor, op.relationshipId);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'resizeDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateExtent(ctx.anchor, op.extentEmu.cx, op.extentEmu.cy);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'cropDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateCrop(ctx.anchor, op.crop, nextId);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'positionDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updatePosition(ctx.anchor, op.position, nextId);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'setDrawingWrap': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedDrawing = convertWrap(ctx.drawing, ctx.anchor, ctx.projection, op.wrap, nextId);
       const replaced = replaceNode(part, ctx.drawing.id, updatedDrawing, options);
       return fromEdit(replaced, drawingEffect(part, ctx.drawing.id, op));
     }
     case 'setDrawingMetadata': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateDocPrMetadata(ctx.anchor, op.title, op.description, op.hyperlink);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'setDrawingLocks': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateLocks(ctx.anchor, ctx.projection, op.locks, nextId);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);
     }
     case 'transformDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId);
+      const ctx = drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
       const updatedAnchor = updateTransform(ctx.anchor, ctx.projection, op.action);
       return replaceDrawingAnchor(part, ctx.drawing, updatedAnchor, op, options);

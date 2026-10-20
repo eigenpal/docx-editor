@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Editors reported refused edits but not committed edits, sessions, or saves.",
+  "after": "Each editor counts the local edits it commits and reports session and save diagnostics.",
+  "reason": "Edit counts come from local commits and local undo only. Shared operations, stored data, and room versions remain unchanged, and remote edits are not counted.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/session-diagnostics-collaboration.test.ts",
+    "packages/core/src/editor/__tests__/editor-session.test.ts"
+  ],
+  "changeset": "telemetry-sessions-saves-edits",
+  "migration": null
+}

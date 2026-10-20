@@ -1,0 +1,606 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
+import { DocxEditor, type DocxEditorServerRuntime, type RequestContext } from '../../index.ts';
+import { docx, p } from './support/docx.ts';
+import type { Range } from '../../model/range.ts';
+
+const sample = docx(p('First clause.') + p('Second clause.') + p('Third clause.'));
+const open = () => DocxEditor.createServer(sample, { author: 'Agent' });
+async function markup(r: DocxEditorServerRuntime) {
+  return strFromU8(unzipSync(await r.save())['word/document.xml']!);
+}
+async function mode(r: DocxEditorServerRuntime) {
+  return r.run(async (c) => {
+    c.document.load('changeTrackingMode');
+    await c.sync();
+    return c.document.changeTrackingMode;
+  });
+}
+async function match(c: RequestContext, quote = 'First') {
+  const range = c.document.body.search(quote).getFirstOrNullObject();
+  await c.sync();
+  return range;
+}
+
+test('mode reads require load, setters queue, and mode survives context lifetime', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      expect(() => c.document.changeTrackingMode).toThrow();
+      c.document.load('changeTrackingMode');
+      await c.sync();
+      expect<string>(c.document.changeTrackingMode).toBe('Off');
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      expect<string>(c.document.changeTrackingMode).toBe('Off');
+      await c.sync();
+      expect<string>(c.document.changeTrackingMode).toBe('TrackMineOnly');
+    });
+    expect(await mode(r)).toBe('TrackMineOnly');
+    await r.run(async (c) => {
+      const range = await match(c);
+      range.insertText('New', 'Replace');
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('<w:ins');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('mode changes and reads follow FIFO order within one successful batch', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      paragraphs.items[0]!.insertText('Tracked', 'Replace');
+      c.document.changeTrackingMode = 'Off';
+      paragraphs.items[1]!.insertText('Plain', 'Replace');
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      c.document.load('changeTrackingMode');
+      paragraphs.items[2]!.insertText('Also tracked', 'End');
+      await c.sync();
+      expect<string>(c.document.changeTrackingMode).toBe('TrackMineOnly');
+    });
+    const xml = await markup(r);
+    expect(xml).toContain('First clause.');
+    expect(xml).not.toContain('Second clause.');
+    expect(xml.match(/<w:ins\b/g)).toHaveLength(2);
+    expect(xml.match(/<w:del\b/g)).toHaveLength(1);
+  } finally {
+    r.dispose();
+  }
+});
+
+test('failed trailing operation rolls back edits, mode, revision, and loaded property', async () => {
+  const r = await open();
+  try {
+    const before = await markup(r);
+    await r.run(async (c) => {
+      const range = await match(c);
+      c.document.load('changeTrackingMode');
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      range.insertText('New', 'Replace');
+      c.document.body.clear(); // unsupported tracked mutation
+      await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
+      expect<string>(c.document.changeTrackingMode).toBe('Off');
+      expect(await markup(r)).toBe(before);
+      range.insertText('Plain', 'Replace'); // same read revision still valid
+      await c.sync();
+    });
+    expect(await mode(r)).toBe('Off');
+    expect(await markup(r)).not.toContain('<w:ins');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('failed disabling batch leaves tracking on', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      await c.sync();
+      c.document.changeTrackingMode = 'Off';
+      c.document.changeTrackingMode = 'TrackAll';
+      await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
+      expect<string>(c.document.changeTrackingMode).toBe('TrackMineOnly');
+    });
+    expect(await mode(r)).toBe('TrackMineOnly');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('returned replacement range names only inserted text and supports later formatting', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const range = await match(c);
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const inserted = range.insertText('Replacement', 'Replace');
+      await c.sync();
+      inserted.load('text');
+      await c.sync();
+      expect(inserted.text).toBe('Replacement');
+      c.document.changeTrackingMode = 'Off'; // formatting revisions are not yet supported
+      inserted.font.italic = true;
+      await c.sync();
+      c.document.revisions.acceptAll();
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('<w:i');
+    expect(await markup(r)).not.toContain('First');
+  } finally {
+    r.dispose();
+  }
+});
+
+for (const operation of ['delete', 'clear', 'emptyReplace'] as const) {
+  test(`${operation} authors a deletion through standard range APIs`, async () => {
+    const r = await open();
+    try {
+      await r.run(async (c) => {
+        const range = await match(c);
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        if (operation === 'emptyReplace') range.insertText('', 'Replace');
+        else range[operation]();
+        await c.sync();
+      });
+      expect(await markup(r)).toContain('<w:del');
+      expect(await markup(r)).not.toContain('<w:ins');
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('collapsed replacement inserts and empty insertion is a no-op', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const range = await match(c);
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const empty = range.insertText('', 'Before');
+      await c.sync();
+      expect(await markup(r)).not.toContain('<w:ins');
+      const written = empty.insertText('Prefix ', 'Replace');
+      await c.sync();
+      written.load('text');
+      await c.sync();
+      expect(written.text).toBe('Prefix ');
+    });
+    expect(await markup(r)).toContain('<w:ins');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('unsupported structural edits refuse without silently making permanent changes', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      await c.sync();
+      const before = await markup(r);
+      c.document.body.clear();
+      await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(await markup(r)).toBe(before);
+    });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('tracked font and paragraph formatting supports accept, reject, and save/reopen', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraph = c.document.body.paragraphs.getFirst();
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      paragraph.font.bold = true;
+      paragraph.font.italic = true;
+      paragraph.spaceAfter = 12;
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('rPrChange');
+    expect(await markup(r)).toContain('pPrChange');
+    const reopened = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+    try {
+      await reopened.run(async (c) => {
+        c.document.revisions.load('items');
+        await c.sync();
+        expect(c.document.revisions.items.length).toBeGreaterThan(0);
+        c.document.body.revisions.rejectAll();
+        await c.sync();
+      });
+      expect(await markup(reopened)).not.toContain('PrChange');
+      expect(await markup(reopened)).not.toMatch(/<w:b[ \/>]/);
+      expect(await markup(reopened)).not.toContain('w:after="240"');
+    } finally {
+      reopened.dispose();
+    }
+    await r.run(async (c) => {
+      c.document.body.revisions.acceptAll();
+      await c.sync();
+    });
+    expect(await markup(r)).not.toContain('PrChange');
+    expect(await markup(r)).toContain('w:after="240"');
+  } finally {
+    r.dispose();
+  }
+});
+
+for (const location of ['Before', 'After'] as const) {
+  test(`tracked paragraph insertion ${location} rejects text and its paragraph break together`, async () => {
+    const r = await open();
+    try {
+      await r.run(async (c) => {
+        const paragraph = c.document.body.paragraphs.getFirst();
+        await c.sync();
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const inserted = paragraph.insertParagraph('New paragraph', location);
+        await c.sync();
+        inserted.font.bold = true;
+        inserted.spaceAfter = 18;
+        await c.sync();
+      });
+      const next = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+      try {
+        await next.run(async (c) => {
+          c.document.body.revisions.rejectAll();
+          await c.sync();
+          c.document.body.paragraphs.load('items');
+          c.document.body.load('text');
+          await c.sync();
+          expect(c.document.body.paragraphs.items).toHaveLength(3);
+          expect(c.document.body.text).not.toContain('New paragraph');
+          expect(c.document.body.text).toContain('First clause.');
+        });
+        expect(await markup(next)).not.toMatch(/<w:b[ \/>]/);
+        expect(await markup(next)).not.toContain('w:after="360"');
+      } finally {
+        next.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('proposed numbered lists reject membership and keep text', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const list = paragraphs.items[0]!.startNewList();
+      await c.sync();
+      list.load('id');
+      await c.sync();
+      list.setLevelNumbering(0, 'Arabic', [0, '.']);
+      await c.sync();
+      paragraphs.items[1]!.attachToList(list.id, 0);
+      await c.sync();
+      paragraphs.items[1]!.listItem.level = 1;
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('pPrChange');
+    const next = await DocxEditor.createServer(await r.save());
+    try {
+      await next.run(async (c) => {
+        c.document.body.revisions.rejectAll();
+        await c.sync();
+        c.document.body.lists.load('items');
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.lists.items).toHaveLength(0);
+        expect(c.document.body.text).toContain('First clause.');
+        expect(c.document.body.text).toContain('Second clause.');
+      });
+    } finally {
+      next.dispose();
+    }
+  } finally {
+    r.dispose();
+  }
+});
+
+test('accepting a proposed list preserves numbering after reopen', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraph = c.document.body.paragraphs.getFirst();
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const list = paragraph.startNewList();
+      await c.sync();
+      list.setLevelNumbering(0, 'Arabic', [0, '.']);
+      await c.sync();
+      c.document.body.revisions.acceptAll();
+      await c.sync();
+    });
+    const next = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+    try {
+      await next.run(async (c) => {
+        c.document.body.lists.load('items');
+        c.document.revisions.load('items');
+        await c.sync();
+        expect(c.document.body.lists.items).toHaveLength(1);
+        expect(c.document.revisions.items).toHaveLength(0);
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        c.document.body.lists.items[0]!.setLevelBullet(0, 'Solid');
+        await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
+      });
+      expect(await markup(next)).not.toContain('pPrChange');
+    } finally {
+      next.dispose();
+    }
+  } finally {
+    r.dispose();
+  }
+});
+
+// A counterparty's pending text, and a reviewer who edits it under their own name.
+const COUNTERPARTY = 'w:author="Tailspin Legal" w:date="2026-09-01T00:00:00Z"';
+const PROPOSED = 'thirty (30) days of receipt';
+const REVISED = 'forty-five (45) days of receipt';
+const counterpartyInsertion = docx(
+  `<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r>` +
+    `<w:ins w:id="7" ${COUNTERPARTY}><w:r><w:t>${PROPOSED}</w:t></w:r></w:ins>` +
+    '<w:r><w:t>.</w:t></w:r></w:p>'
+);
+const counterpartyDeletion = docx(
+  `<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r>` +
+    `<w:del w:id="7" ${COUNTERPARTY}><w:r><w:delText>${PROPOSED}</w:delText></w:r></w:del>` +
+    '<w:r><w:t>.</w:t></w:r></w:p>'
+);
+const reviewer = (bytes: Uint8Array) => DocxEditor.createServer(bytes, { author: 'Avery Chen' });
+
+/** Accept or reject each revision whose author and type match, one decision at a time. */
+async function decide(
+  r: DocxEditorServerRuntime,
+  author: string,
+  type: string,
+  action: 'accept' | 'reject'
+) {
+  await r.run(async (c) => {
+    const revisions = c.document.body.revisions;
+    revisions.load('items');
+    await c.sync();
+    for (const item of revisions.items) item.load('author,type');
+    await c.sync();
+    const matches = revisions.items.filter((item) => item.author === author && item.type === type);
+    expect(matches.length).toBeGreaterThan(0);
+    for (const revision of matches) revision[action]();
+    await c.sync();
+  });
+}
+
+for (const [name, edit, written] of [
+  ['Replace', (range: Range) => range.insertText(REVISED, 'Replace'), REVISED],
+  ['After', (range: Range) => range.insertText(' net', 'After'), ' net'],
+  ['delete', (range: Range) => range.delete(), null],
+] as const) {
+  test(`${name} inside another author's pending insertion records a nested proposal`, async () => {
+    const r = await reviewer(counterpartyInsertion);
+    try {
+      await r.run(async (c) => {
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const range = await match(c, PROPOSED);
+        const result = edit(range);
+        await c.sync();
+        if (written !== null && result) {
+          result.load('text');
+          await c.sync();
+          expect(result.text).toBe(written);
+        }
+      });
+      const xml = await markup(r);
+      if (name === 'After') {
+        expect(xml).not.toContain('<w:del');
+        expect(xml).toMatch(/<\/w:ins><w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t[^>]*> net/);
+      } else {
+        expect(xml).toMatch(
+          /<w:ins [^>]*w:author="Tailspin Legal"[^>]*><w:del [^>]*w:author="Avery Chen"/
+        );
+      }
+      if (name === 'Replace')
+        expect(xml).toMatch(/<\/w:del><\/w:ins><w:ins [^>]*w:author="Avery Chen"/);
+      const reopened = await reviewer(await r.save());
+      try {
+        expect(await markup(reopened)).toBe(xml);
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+for (const order of ['accept the counterparty first', 'reject the reviewer first'] as const) {
+  test(`nested proposals resolve separately: ${order}`, async () => {
+    const r = await reviewer(counterpartyInsertion);
+    try {
+      await r.run(async (c) => {
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        (await match(c, PROPOSED)).insertText(REVISED, 'Replace');
+        await c.sync();
+      });
+      const reopened = await reviewer(await r.save());
+      try {
+        if (order === 'accept the counterparty first') {
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'accept');
+          const xml = await markup(reopened);
+          expect(xml).not.toContain('Tailspin Legal');
+          // The reviewer's deletion of the accepted words still stands.
+          expect(xml).toMatch(/<w:del [^>]*w:author="Avery Chen"[^>]*><w:r><w:delText>thirty/);
+          await decide(reopened, 'Avery Chen', 'Delete', 'accept');
+          await decide(reopened, 'Avery Chen', 'Insert', 'accept');
+          expect(await markup(reopened)).not.toContain(PROPOSED);
+          expect(await markup(reopened)).toContain(REVISED);
+          expect(await markup(reopened)).not.toMatch(/<w:(ins|del)\b/);
+        } else {
+          await decide(reopened, 'Avery Chen', 'Delete', 'reject');
+          await decide(reopened, 'Avery Chen', 'Insert', 'reject');
+          const xml = await markup(reopened);
+          expect(xml).not.toContain('Avery Chen');
+          expect(xml).not.toContain(REVISED);
+          expect(xml).toMatch(/<w:ins [^>]*w:author="Tailspin Legal"[^>]*><w:r><w:t>thirty/);
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'accept');
+          expect(await markup(reopened)).toContain(PROPOSED);
+          expect(await markup(reopened)).not.toMatch(/<w:(ins|del)\b/);
+        }
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test("After inside another author's pending deletion lands after the deletion", async () => {
+  const r = await reviewer(counterpartyDeletion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const inside = c.document.body.search('thirty', { matchCase: true }).getFirst();
+      await c.sync();
+      const written = inside.insertText('sixty (60) days of receipt', 'After');
+      await c.sync();
+      written.load('text');
+      await c.sync();
+      expect(written.text).toBe('sixty (60) days of receipt');
+    });
+    expect(await markup(r)).toMatch(
+      /<w:del [^>]*w:author="Tailspin Legal"[^>]*>[^]*?<\/w:del><w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t>sixty/
+    );
+  } finally {
+    r.dispose();
+  }
+});
+
+for (const order of ['reject theirs first', 'accept mine first'] as const) {
+  test(`words written in the middle of another author's insertion stay separate: ${order}`, async () => {
+    const r = await reviewer(counterpartyInsertion);
+    try {
+      await r.run(async (c) => {
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const written = (await match(c, 'thirty')).insertText(' (or sixty)', 'After');
+        await c.sync();
+        written.load('text');
+        await c.sync();
+        expect(written.text).toBe(' (or sixty)');
+      });
+      expect(await markup(r)).toMatch(
+        /<\/w:ins><w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t[^>]*> \(or sixty\)<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Tailspin Legal"/
+      );
+      const reopened = await reviewer(await r.save());
+      try {
+        if (order === 'reject theirs first') {
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'reject');
+          // The reviewer's words survive as their own pending insertion.
+          expect(await markup(reopened)).toMatch(
+            /<w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t[^>]*> \(or sixty\)/
+          );
+          expect(await markup(reopened)).not.toContain('Tailspin Legal');
+          await decide(reopened, 'Avery Chen', 'Insert', 'accept');
+        } else {
+          await decide(reopened, 'Avery Chen', 'Insert', 'accept');
+          // The reviewer's words are plain text between the halves of the pending insertion.
+          expect(await markup(reopened)).toMatch(
+            /<\/w:ins><w:r><w:t[^>]*> \(or sixty\)<\/w:t><\/w:r><w:ins [^>]*w:author="Tailspin Legal"/
+          );
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'reject');
+        }
+        await reopened.run(async (c) => {
+          c.document.body.load('text');
+          c.document.body.revisions.load('items');
+          await c.sync();
+          expect(c.document.body.text).toBe('Payment is due within  (or sixty).');
+          expect(c.document.body.revisions.items).toHaveLength(0);
+        });
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('a refused tracked edit names its rule in debugInfo', async () => {
+  const r = await reviewer(counterpartyDeletion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      (await match(c, 'thirty')).insertText('sixty', 'Replace');
+      await expect(c.sync()).rejects.toMatchObject({
+        code: 'NotImplemented',
+        debugInfo: { innerError: { code: 'edit.tracked-deleted-text-only' } },
+      });
+    });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('replacing the range a tracked write returned names the own-pending rule', async () => {
+  const r = await reviewer(counterpartyInsertion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const written = (await match(c, PROPOSED)).insertText(REVISED, 'Replace');
+      await c.sync();
+      written.insertText('sixty (60) days of receipt', 'Replace');
+      await expect(c.sync()).rejects.toMatchObject({
+        code: 'NotImplemented',
+        debugInfo: { innerError: { code: 'edit.tracked-own-pending-change' } },
+      });
+    });
+  } finally {
+    r.dispose();
+  }
+});
+
+test("one resolve call rejects both halves of another author's split insertion", async () => {
+  const r = await reviewer(counterpartyInsertion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      (await match(c, 'thirty')).insertText(' (or sixty)', 'After');
+      await c.sync();
+    });
+    await r.run(async (c) => {
+      const revisions = c.document.body.revisions;
+      revisions.load('items');
+      await c.sync();
+      for (const item of revisions.items) item.load('author');
+      await c.sync();
+      const theirs = revisions.items.filter((item) => item.author === 'Tailspin Legal');
+      // Their insertion is two revisions after the split, one on each side of the new words.
+      expect(theirs).toHaveLength(2);
+      const result = revisions.resolve('reject', theirs);
+      await c.sync();
+      expect(result.value.resolved).toHaveLength(2);
+      c.document.body.load('text');
+      await c.sync();
+      expect(c.document.body.text).toBe('Payment is due within  (or sixty).');
+    });
+  } finally {
+    r.dispose();
+  }
+});

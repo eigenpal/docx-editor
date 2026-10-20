@@ -9,6 +9,7 @@ import {
   EMPTY_INSETS,
   MAX_IMAGE_POLYGON_POINTS,
   expandBoxByInsets,
+  finite,
   projectPointsThroughXfrm,
   sourceExtentFrame,
   type DrawingGeometry,
@@ -42,10 +43,6 @@ export interface WrapExclusionInput {
   readonly textSide: WrapTextSide;
   readonly contentLeft: number;
   readonly contentRight: number;
-}
-
-function finite(value: number): number {
-  return Number.isFinite(value) ? value : 0;
 }
 
 export function mergeScanlineIntervals(

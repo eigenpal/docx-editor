@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Text box members of a shape group painted their fill and outline, but not their text.",
+  "after": "Their text lays out and paints read-only inside the group, exports to PDF, and is found by Find.",
+  "reason": "The projection reads existing group members, and layout and paint derive from it. The text stays read-only, so no new operations exist. Shared document content and the collaboration format do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/group-textbox-layout.test.ts",
+    "packages/core/src/editor/__tests__/inline-group-textbox-member.test.ts",
+    "packages/docx-to-pdf/test/textbox.test.ts"
+  ],
+  "changeset": "header-drawing-fidelity",
+  "migration": null
+}

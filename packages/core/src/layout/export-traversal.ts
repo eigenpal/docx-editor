@@ -18,6 +18,7 @@ import {
   type SemanticRootStoryKind,
   type SemanticStoryKind,
   type SemanticStoryVisit,
+  type TextboxOwnerRecord,
 } from './semantic-record-queries.ts';
 
 export {
@@ -32,6 +33,7 @@ export {
   type StoryDrawingContext,
   type StoryDrawingHost,
   type StoryParagraphFragmentContext,
+  type TextboxOwnerRecord,
 } from './semantic-record-queries.ts';
 
 /** One span in the engine's published story order. @public */
@@ -51,10 +53,10 @@ export interface SemanticSpanVisit {
   readonly noteAreaKind: SemanticStoryVisit['noteAreaKind'];
   /** Zero outside a textbox, otherwise its bounded nesting depth. */
   readonly textboxDepth: number;
-  /** Immediate textbox-owning anchor, or null in the root story. */
-  readonly textboxOwner: AnchoredDrawingRecord | null;
-  /** Root-to-leaf textbox owners, preserving anchor identity for future exporters. */
-  readonly textboxPath: readonly AnchoredDrawingRecord[];
+  /** Immediate textbox-owning drawing, anchored or inline, or null in the root story. */
+  readonly textboxOwner: TextboxOwnerRecord | null;
+  /** Root-to-leaf textbox owners, preserving drawing identity for future exporters. */
+  readonly textboxPath: readonly TextboxOwnerRecord[];
   /** Enclosing published fragment; use paragraphId for the authored span owner. */
   readonly paragraph: ParagraphFragmentRecord;
   /** Authored paragraph owning this span, including spans merged into another fragment. */

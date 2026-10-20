@@ -28,6 +28,8 @@ import { computeDrawingGeometry } from '../../layout/drawing-geometry.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
+  collectUsedDrawingElementKeys,
+  collectUsedDrawingResourceKeys,
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
   drawingUrlRegistryFor,
@@ -81,6 +83,7 @@ function inlinePictureXml(
     readonly flipV?: boolean;
     readonly lum?: string;
     readonly grayscale?: boolean;
+    readonly bilevel?: string;
     readonly preset?: string;
   } = {}
 ): string {
@@ -94,6 +97,7 @@ function inlinePictureXml(
   const flipV = options.flipV ? ' flipV="1"' : '';
   const lum = options.lum ?? '';
   const grayscale = options.grayscale ? '<a:grayscl/>' : '';
+  const bilevel = options.bilevel === undefined ? '' : `<a:biLevel thresh="${options.bilevel}"/>`;
   const preset = options.preset ?? 'rect';
   return (
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
@@ -104,7 +108,7 @@ function inlinePictureXml(
     '<wp:cNvGraphicFramePr/>' +
     `<a:graphic><a:graphicData uri="${PIC_URI}">` +
     '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-    `<pic:blipFill><a:blip r:embed="rId14">${grayscale}${lum}</a:blip><a:srcRect ${srcRect}/>` +
+    `<pic:blipFill><a:blip r:embed="rId14">${bilevel}${grayscale}${lum}</a:blip><a:srcRect ${srcRect}/>` +
     `<a:stretch/></pic:blipFill>` +
     `<pic:spPr><a:xfrm${rot}${flipH}${flipV}><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>` +
     `<a:prstGeom prst="${preset}"><a:avLst/></a:prstGeom></pic:spPr>` +
@@ -257,9 +261,17 @@ describe('paints validated raster records', () => {
     );
     const element = paintRecord(drawing, fakeUrlPort().port);
     const frame = element.querySelector('.docx-drawing-image-frame') as HTMLElement;
-    expect(frame.style.filter).toContain('grayscale(1)');
-    expect(frame.style.filter).toContain('brightness(');
-    expect(frame.style.filter).toContain('contrast(');
+    expect(frame.style.filter).toBe('grayscale(1) contrast(0.625) brightness(0.48)');
+  });
+
+  test('washout lum keeps a white background white', () => {
+    const drawing = readyRecordFromXml(
+      inlinePictureXml({ lum: '<a:lum bright="70001" contrast="-70000"/>' })
+    );
+    const element = paintRecord(drawing, fakeUrlPort().port);
+    const frame = element.querySelector('.docx-drawing-image-frame') as HTMLElement;
+    // contrast() first keeps white inside [0, 1]; brightness() then lifts it back to 1.
+    expect(frame.style.filter).toBe('contrast(0.157067) brightness(1.910013)');
   });
 
   test('uses descr for aria-label and never name', () => {
@@ -321,6 +333,75 @@ describe('paints validated raster records', () => {
     expect(second.dataset.revisionKind).toBeUndefined();
     expect(second.dataset.revisionId).toBeUndefined();
     expect(second.dataset.reviewAuthor).toBeUndefined();
+  });
+
+  test('validates bilevel thresholds and paints a bounded alpha-preserving filter', () => {
+    for (const value of ['0', '25000', '50000', '100000']) {
+      const record = readyRecordFromXml(inlinePictureXml({ bilevel: value }));
+      expect(record.effects.bilevel).toBe(Number(value) / 100_000);
+      const painted = paintRecord(record, fakeUrlPort().port);
+      expect(painted.querySelector('filter')?.getAttribute('color-interpolation-filters')).toBe(
+        'sRGB'
+      );
+      expect(painted.querySelectorAll('feFuncA')).toHaveLength(0);
+      expect(painted.querySelectorAll('feComponentTransfer')).toHaveLength(1);
+      const table = painted
+        .querySelector('feFuncR')!
+        .getAttribute('tableValues')!
+        .split(' ')
+        .map(Number);
+      expect(table).toHaveLength(256);
+      expect(
+        table.every((v, index) => v === (index / 255 >= Number(value) / 100_000 ? 1 : 0))
+      ).toBe(true);
+    }
+    for (const value of ['', '-1', '100001', 'NaN', 'Infinity', '0.5', 'url(x)']) {
+      const record = readyRecordFromXml(inlinePictureXml({ bilevel: value }));
+      expect(record.effects.bilevel).toBeUndefined();
+      expect(paintRecord(record, fakeUrlPort().port).querySelector('filter')).toBeNull();
+    }
+  });
+
+  test('changing or removing bilevel invalidates a retained paint frame', () => {
+    const { port } = fakeUrlPort();
+    const registry = drawingUrlRegistryFor(document.createElement('div'), port);
+    const ctx = { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: port };
+    const firstRecord = readyRecordFromXml(
+      inlinePictureXml({
+        bilevel: '50000',
+        grayscale: true,
+        lum: '<a:lum bright="-30000" contrast="66000"/>',
+      })
+    );
+    const first = paintDrawingRecord(document, firstRecord, ctx, registry)!;
+    const id = first.querySelector('filter')!.id;
+    expect(paintDrawingRecord(document, firstRecord, ctx, registry)).toBe(first);
+    expect(first.querySelector('filter')!.id).toBe(id);
+    const second = paintDrawingRecord(
+      document,
+      readyRecordFromXml(inlinePictureXml({ bilevel: '75000' })),
+      ctx,
+      registry
+    )!;
+    expect(second).toBe(first);
+    expect(second.querySelector('filter')!.id).not.toBe(id);
+    expect(
+      second
+        .querySelector('feFuncR')!
+        .getAttribute('tableValues')!
+        .split(' ')
+        .filter((v) => v === '1')
+    ).toHaveLength(64);
+    const third = paintDrawingRecord(
+      document,
+      readyRecordFromXml(inlinePictureXml()),
+      ctx,
+      registry
+    )!;
+    expect(third).toBe(first);
+    expect(third.querySelector('filter')).toBeNull();
+    expect(third.querySelector<HTMLElement>('.docx-drawing-image-frame')!.style.filter).toBe('');
+    registry.revokeAll();
   });
 });
 
@@ -656,6 +737,7 @@ describe('URL port lifecycle', () => {
               kind: 'paragraph' as const,
               paragraphId: 'p1',
               fragmentIndex: 0,
+              props: [],
               box: Object.freeze({ x: 0, y: 0, width: 600, height: 100 }),
               lines: [
                 Object.freeze({
@@ -718,5 +800,97 @@ describe('ready drawings with unavailable bytes', () => {
     expect(element?.classList.contains('docx-drawing-placeholder')).toBe(true);
     detachDrawingUrlRegistry(host);
     host.remove();
+  });
+});
+
+describe('drawing membership belongs to the immutable layout', () => {
+  function layoutWithResource(resource: ImageResourceState = READY_PNG) {
+    return layoutSemanticDocument(load(inlinePictureXml()), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: {
+        ownerPartName: OWNER,
+        project: (node) =>
+          projectDrawing(node, {
+            ownerPartName: OWNER,
+            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+          }),
+        resourceOf: () => resource,
+      },
+    });
+  }
+
+  test('both collectors share one page-list visit, then skip unchanged-layout aggregation', () => {
+    const original = layoutWithResource();
+    let pageListReads = 0;
+    const layout = Object.freeze({
+      revision: original.revision,
+      get pages() {
+        pageListReads++;
+        return original.pages;
+      },
+    });
+    const elements = collectUsedDrawingElementKeys(layout);
+    const resources = collectUsedDrawingResourceKeys(layout);
+    expect(elements.size).toBe(1);
+    expect([...resources]).toEqual([READY_PNG.resourceKey]);
+    expect(pageListReads).toBe(1);
+    expect(collectUsedDrawingElementKeys(layout)).toBe(elements);
+    expect(collectUsedDrawingResourceKeys(layout)).toBe(resources);
+    expect(pageListReads).toBe(1);
+  });
+
+  test('reused drawings deduplicate resources but retain each page occurrence', () => {
+    const original = layoutWithResource();
+    const first = original.pages[0]!;
+    const shifted = Object.freeze({ ...first, index: 7 });
+    const layout = Object.freeze({ ...original, pages: Object.freeze([first, shifted]) });
+    const originalElements = collectUsedDrawingElementKeys(original);
+    expect([...collectUsedDrawingResourceKeys(layout)]).toEqual([READY_PNG.resourceKey]);
+    expect([...collectUsedDrawingElementKeys(layout)]).toEqual([
+      ...originalElements,
+      ...[...originalElements].map((key) => key.replace(/^p0\|/, 'p7|')),
+    ]);
+    const removed = Object.freeze({ ...layout, pages: Object.freeze([shifted]) });
+    expect([...collectUsedDrawingElementKeys(removed)]).toEqual(
+      [...originalElements].map((key) => key.replace(/^p0\|/, 'p7|'))
+    );
+    expect(collectUsedDrawingElementKeys(original)).toBe(originalElements);
+  });
+
+  test('new layouts invalidate ready membership even at the same document revision', () => {
+    const ready = layoutWithResource();
+    const pending = layoutWithResource(Object.freeze({ kind: 'pending', resourceKey: 'pending' }));
+    expect(ready.revision).toBe(pending.revision);
+    expect([...collectUsedDrawingResourceKeys(ready)]).toEqual([READY_PNG.resourceKey]);
+    expect(collectUsedDrawingResourceKeys(pending).size).toBe(0);
+    expect(collectUsedDrawingElementKeys(pending).size).toBe(1);
+    const replacement = layoutWithResource({ ...READY_PNG, resourceKey: 'replacement' });
+    expect([...collectUsedDrawingResourceKeys(replacement)]).toEqual(['replacement']);
+    expect([...collectUsedDrawingResourceKeys(ready)]).toEqual([READY_PNG.resourceKey]);
+  });
+
+  test('offscreen repaint releases resources and recreates them on return', () => {
+    const layout = layoutWithResource();
+    const { port, revoked } = fakeUrlPort();
+    const container = document.createElement('div');
+    const options = { scale: 1, imageUrlPort: port };
+    paintSemanticLayout(container, layout, options);
+    const image = container.querySelector('img');
+    expect(image).not.toBeNull();
+    const url = image!.getAttribute('src');
+    paintSemanticLayout(container, layout, { ...options, materialize: new Set<number>() });
+    expect(container.querySelector('img')).toBeNull();
+    expect(revoked).toEqual([url!]);
+    expect(image!.getAttribute('src')).toBeNull();
+    paintSemanticLayout(container, layout, options);
+    expect(container.querySelector('img')).not.toBe(image);
+    expect(container.querySelector('img')!.getAttribute('src')).toBe(url);
+    expect(revoked).toEqual([url!]);
+    paintSemanticLayout(container, Object.freeze({ ...layout, pages: Object.freeze([]) }), options);
+    expect(revoked).toEqual([url!, url!]);
+    expect(image!.getAttribute('src')).toBeNull();
+    paintSemanticLayout(container, layout, options);
+    detachDrawingUrlRegistry(container);
+    expect(revoked).toEqual([url!, url!, url!]);
   });
 });

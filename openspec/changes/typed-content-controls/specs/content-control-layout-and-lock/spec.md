@@ -108,6 +108,35 @@ The shipped `ContentControlSummary.locked?: boolean` reports only the content-ed
 - **THEN** it is refused with `locked`, even though the paragraph named by the operation is outside the control
 - **AND** the same operation addressing offsets beside the control is allowed
 
+### Requirement: A host may let formatting pass the content half of a lock
+
+A host MAY open a store with `contentLockPolicy.allowFormattingInLockedContent`. With it, a `setRunProperties` or `setParagraphMarkProperties` operation SHALL pass the content-edit axis of the nested lock union, at control level and at run level, in the same `TreeDocOp` validation that enforces the lock, so a keystroke, a command, and an agent are still answered identically. The paragraph mark carries run formatting (`CT_ParaRPr`), so formatting a whole paragraph writes both. The exception SHALL NOT admit a write of `w:vanish`, `w:specVanish`, or `w:webHidden`, because hiding protected text removes it for every reader. The run-property vocabulary refuses these properties for every run today; the exception still names them, so a vocabulary that accepts them later does not open protected text to hiding. No other operation SHALL pass: the exception names the operation kinds that change only how text looks, and an operation kind added later SHALL meet the lock until it is named here. The removal axis, `w:dataBinding` refusals with `bound`, the stored `w:lock` value, and `ContentControlSummary.locked` SHALL NOT change. Without the option, every scenario of the lock requirements holds as written.
+
+#### Scenario: Formatting a content-locked control with the policy
+
+- **WHEN** a host opened the store with the policy and a run-property write addresses offsets inside a `sdtContentLocked` inline control
+- **THEN** the write is applied and the control keeps its text and its `w:lock`
+
+#### Scenario: Formatting a paragraph mark inside a content-locked block control with the policy
+
+- **WHEN** a host opened the store with the policy and a paragraph-mark run-property write addresses a paragraph inside a `contentLocked` block control
+- **THEN** the write is applied and the control keeps its `w:lock`
+
+#### Scenario: Hiding text stays refused with the policy
+
+- **WHEN** a host opened the store with the policy and a run-property or paragraph-mark write that sets `w:vanish`, `w:specVanish`, or `w:webHidden` addresses content inside a content-locked control
+- **THEN** it is refused with `locked`
+
+#### Scenario: Text edits stay refused with the policy
+
+- **WHEN** a host opened the store with the policy and an insertion or a deletion addresses offsets inside the same control
+- **THEN** it is refused with `locked`
+
+#### Scenario: A bound control with the policy
+
+- **WHEN** a host opened the store with the policy and a run-property write addresses a control that carries `w:dataBinding`
+- **THEN** it is refused with `bound`
+
 ### Requirement: A control's leading edge belongs to the control and its trailing edge does not
 
 An offset at a boundary is owned by the run that STARTS there, which is what an insertion applied at that offset actually does. Validation SHALL resolve a control's reach the same way: a point operation that WRITES content at a control's leading edge SHALL be treated as reaching inside the control, and the same operation at its trailing edge SHALL NOT. A point operation that writes no content into the run it names — a comment marker, a paragraph split — SHALL be treated as beside the control at either edge. A caller that must write into a control regardless of what sits at the offset SHALL name that control on the operation, and the write SHALL then land in the control's own runs.

@@ -5,16 +5,52 @@
 ```ts
 
 // @public
+export interface BreakMarkStrings {
+    // (undocumented)
+    readonly columnBreak: string;
+    // (undocumented)
+    readonly pageBreak: string;
+    // (undocumented)
+    readonly sectionBreakContinuous: string;
+    // (undocumented)
+    readonly sectionBreakEvenPage: string;
+    // (undocumented)
+    readonly sectionBreakNextColumn: string;
+    // (undocumented)
+    readonly sectionBreakNextPage: string;
+    // (undocumented)
+    readonly sectionBreakOddPage: string;
+}
+
+// @public
+export type ChangeBarsMode = 'all-markup' | 'simple-markup' | 'none';
+
+// @public
+export function collectPageChangeBars(page: PageRecord, scale: number, mode: ChangeBarsMode, toggle?: boolean, markup?: ResolvedRevisionMarkup, facingPages?: boolean, colors?: RevisionStyleContext): PageChangeBars;
+
+// @public
 export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 
 // @public
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
+export interface LumTransfer {
+    // (undocumented)
+    readonly intercept: number;
+    // (undocumented)
+    readonly slope: number;
+}
+
+// @public
+export function lumTransfer(brightPercent: number, contrastPercent: number): LumTransfer | null;
+
+// @public
 export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
 
 // @public
 export interface OverlayRect {
+    readonly activeBackground?: string;
     readonly className?: string;
     // (undocumented)
     readonly height: number;
@@ -30,10 +66,26 @@ export interface OverlayRect {
 }
 
 // @public
+export interface PageChangeBars {
+    // (undocumented)
+    readonly color?: string;
+    readonly left: number;
+    // (undocumented)
+    readonly mode: ChangeBarsMode;
+    // (undocumented)
+    readonly runs: readonly BarRun[];
+    readonly signature: string;
+    readonly toggle: boolean;
+}
+
+// @public
 export interface PaintOptions {
     readonly activeHeaderFooterPageIndex?: number;
     readonly activeHeaderFooterRId?: string;
     readonly ariaHidden?: boolean;
+    readonly breakMarkStrings?: BreakMarkStrings;
+    readonly changeBars?: ChangeBarsMode;
+    readonly changeBarsToggle?: boolean;
     readonly contentControlChrome?: {
         readonly activeIds?: ReadonlySet<string>;
         readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
@@ -48,15 +100,22 @@ export interface PaintOptions {
     // (undocumented)
     readonly drawingStrings?: DrawingPaintStrings;
     readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
+    // (undocumented)
+    readonly facingPages?: boolean;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     // (undocumented)
     readonly imageUrlPort?: PaintImageUrlPort;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
+    // (undocumented)
+    readonly revisionKindColors?: boolean;
+    // (undocumented)
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly shadeFormFields?: boolean;
+    readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly unsupportedOwnerPartName?: (nodeId: string) => string;
     // (undocumented)
@@ -86,6 +145,7 @@ export interface RevisionAuthorAssignments {
 
 // @public
 export interface RevisionAuthorStyle {
+    activeBackground?: string;
     avatarUrl?: string;
     background?: string;
     color?: string;
@@ -153,7 +213,5 @@ export interface UnsupportedElementRule {
     // (undocumented)
     readonly match?: (element: UnsupportedElement) => boolean;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

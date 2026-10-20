@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The pending release removes previously public text-only constants and the session type.",
+  "after": "Deprecated exports preserve their published values and type shape.",
+  "reason": "Compatibility exports do not read or write shared state and do not change synchronization behavior.",
+  "tests": ["packages/pro/src/collaboration/__tests__/legacy-public-exports.test.ts"],
+  "changeset": "retain-public-collaboration-exports",
+  "migration": null
+}

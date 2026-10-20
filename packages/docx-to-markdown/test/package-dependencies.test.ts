@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repositoryRoot = join(import.meta.dir, '..', '..', '..');
@@ -20,9 +20,6 @@ const coreManifest = JSON.parse(
 const fontsManifest = JSON.parse(
   readFileSync(join(repositoryRoot, 'packages', 'fonts', 'package.json'), 'utf8')
 ) as { version: string };
-
-const changesetHeaderFor = (packageName: string): RegExp =>
-  new RegExp(`['"]${packageName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}['"]\\s*:`);
 
 // Patch releases within the engine minor are compatible. The declared floor may lag behind the
 // workspace version because publishing an in-range patch does not need to rewrite every peer.
@@ -45,33 +42,17 @@ describe('engine dependency integrity', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
   });
 
-  test('stays private and outside release automation until the explicit release step', () => {
+  test('participates in public releases with compatible engine dependencies', () => {
     const packageName = '@docx-editor.dev/docx-to-markdown';
-    const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
-    expect(manifest.private).toBe(true);
-    expect(manifest.publishConfig).toBeUndefined();
-    expect(changesetConfig.fixed?.flat()).not.toContain(packageName);
-    expect(changesetConfig.ignore).toContain(packageName);
+    expect(manifest.private).toBe(false);
+    expect(manifest.publishConfig).toEqual({ access: 'public' });
+    expect(changesetConfig.fixed?.flat()).toContain(packageName);
+    expect(changesetConfig.ignore).not.toContain(packageName);
     expect(changesetConfig.updateInternalDependencies).toBe('patch');
     expect(
       requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/core'], coreManifest.version)
     ).toBe(true);
     expect(manifest.dependencies?.['@docx-editor.dev/fonts']).toBe(`~${fontsManifest.version}`);
-
-    const pendingChangesets = readdirSync(join(repositoryRoot, '.changeset')).filter((entry) =>
-      entry.endsWith('.md')
-    );
-    const packageHeader = changesetHeaderFor(packageName);
-    expect(`'${packageName}': minor`).toMatch(packageHeader);
-    expect(`"${packageName}": minor`).toMatch(packageHeader);
-    for (const changeset of pendingChangesets) {
-      expect(readFileSync(join(repositoryRoot, '.changeset', changeset), 'utf8')).not.toMatch(
-        packageHeader
-      );
-    }
-    expect(readme).toMatch(
-      /replace this private banner and workspace demo quick start with public\s+installation and usage instructions/
-    );
   });
 
   test('accepts only compatible tilde floors from the current engine minor', () => {
@@ -87,25 +68,73 @@ describe('engine dependency integrity', () => {
     expect(requiresSameMinor(undefined, '2.13.0')).toBe(false);
   });
 
-  test('owns the Markdown API without exposing it from core or the public docs site', () => {
+  test('owns the Markdown API and has a public guide', () => {
     const coreExportSource = readFileSync(
       join(repositoryRoot, 'packages', 'core', 'src', 'export', 'index.ts'),
       'utf8'
     );
     expect(coreExportSource).not.toMatch(/Markdown|\.\/markdown/);
     expect(existsSync(join(repositoryRoot, 'packages/core/src/export/markdown.ts'))).toBe(false);
-    expect(existsSync(join(repositoryRoot, 'docs/site/content/docx-to-markdown/index.mdx'))).toBe(
-      false
+    expect(existsSync(join(repositoryRoot, 'docs/site/content/export/markdown/index.mdx'))).toBe(
+      true
     );
-    expect(
-      readFileSync(join(repositoryRoot, 'docs', 'site', 'content', 'meta.json'), 'utf8')
-    ).not.toContain('docx-to-markdown');
+    const navigation = JSON.parse(
+      readFileSync(join(repositoryRoot, 'docs/site/content/meta.json'), 'utf8')
+    );
+    const exportNavigation = JSON.parse(
+      readFileSync(join(repositoryRoot, 'docs/site/content/export/meta.json'), 'utf8')
+    );
+    const markdownNavigation = JSON.parse(
+      readFileSync(join(repositoryRoot, 'docs/site/content/export/markdown/meta.json'), 'utf8')
+    );
+    const exportSectionIndex = navigation.pages.indexOf('---Export formats---');
+    expect(exportSectionIndex).toBeGreaterThan(navigation.pages.indexOf('guides/dark-mode'));
+    const nextSectionIndex = navigation.pages.findIndex(
+      (page: string, index: number) => index > exportSectionIndex && page.startsWith('---')
+    );
+    expect(nextSectionIndex).toBeGreaterThan(exportSectionIndex);
+    // Keep format guides nested below the shared export and print guides.
+    expect(navigation.pages.slice(exportSectionIndex + 1, nextSectionIndex)).toEqual([
+      'guides/export',
+      'guides/print',
+      'export/markdown',
+      'export/pdf',
+    ]);
+    expect(navigation.pages).not.toContain('export');
+    expect(exportNavigation.title).toBe('Export formats');
+    expect(exportNavigation.pages).toContain('markdown');
+    expect(markdownNavigation.pagesIndex).toBe('index');
+    for (const format of ['markdown', 'pdf']) {
+      const directory = join(repositoryRoot, 'docs/site/content/export', format);
+      const group = JSON.parse(readFileSync(join(directory, 'meta.json'), 'utf8'));
+      expect(group.pagesIndex).toBe('index');
+      expect(group.pages).not.toContain(group.pagesIndex);
+      for (const page of [group.pagesIndex, ...group.pages]) {
+        expect(existsSync(join(directory, `${page}.mdx`))).toBe(true);
+      }
+    }
   });
 
-  test('documents the current embedded-font parity boundary before private release', () => {
-    const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
-    expect(readme).toContain('Document-embedded fonts are not automatically admitted');
-    expect(readme).toContain('paginate differently from the browser editor');
+  test('confines packaged fonts through the fonts package asset-root contract', () => {
+    const source = readFileSync(join(import.meta.dir, '..', 'src', 'index.ts'), 'utf8');
+    const fontsIndex = readFileSync(
+      join(repositoryRoot, 'packages', 'fonts', 'src', 'index.ts'),
+      'utf8'
+    );
+    expect(manifest.dependencies?.['@docx-editor.dev/fonts']).toBe(`~${fontsManifest.version}`);
+    expect(source).toContain('FONT_ASSET_ROOT');
+    expect(source).toContain("from '@docx-editor.dev/fonts'");
+    expect(source).not.toContain('../../fonts/assets/');
+    expect(fontsIndex).toContain('export const FONT_ASSET_ROOT');
+    expect(fontsIndex).not.toMatch(/docx-to-markdown|docx-to-pdf/);
+  });
+
+  test('documents the embedded-font parity boundary', () => {
+    const readme = readFileSync(join(import.meta.dir, '..', 'docs', 'api.md'), 'utf8');
+    expect(readme).toContain(
+      'Document-embedded fonts are admitted after caller fonts, bundled substitutes, and optional fallback origins'
+    );
+    expect(readme).toContain('same mapper as the browser editor');
     expect(readme).toContain('host-owned');
   });
 });

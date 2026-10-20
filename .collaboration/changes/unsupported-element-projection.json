@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Unsupported generic OOXML has no application component projection; rendered fallbacks use built-in placeholders.",
+  "after": "Local renderer declarations project unsupported inline and block content into custom components while collaboration edits use unchanged canonical operations.",
+  "reason": "No shared format change: registration rules, layout dimensions, component state, and DOM hosts remain local presentation. Canonical source XML, shared registry records, primitive journals, and awareness addresses retain their existing format.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts",
+    "packages/core/src/editor/__tests__/unsupported-elements-live.test.ts"
+  ],
+  "changeset": "custom-unsupported-placeholders",
+  "migration": null
+}

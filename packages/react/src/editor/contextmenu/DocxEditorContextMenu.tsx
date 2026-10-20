@@ -29,10 +29,11 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { contextMenuRowId } from './row-alias';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -43,7 +44,15 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotId,
+  type MenuItemProps,
+} from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -56,6 +65,8 @@ import {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
@@ -69,6 +80,7 @@ import {
 } from './parts';
 import { useScopeClassName } from '../scope-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
+import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
 const VIEWPORT_INSET = 8;
@@ -94,36 +106,27 @@ export interface DocxEditorContextMenuProps {
   children?: DocxEditorChildren;
 }
 
-/** Viewing refuses every review write, comment authoring included. */
-const selectDocumentReadOnly = (snapshot: EditorSnapshot): boolean =>
-  snapshot.editingMode === 'viewing';
-
 /** The packaged set, in order. Separators are positional, so they are part of the list. */
 type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
 function ContextMenuAddComment() {
-  const editor = useDocxEditor();
   const rail = useContext(ReviewRailContext);
   const menu = useMenuContext();
   const label = useMenuLabel();
-  const gate = editor?.can({ type: 'toggleReviewPane' });
-  // `toggleReviewPane` is deliberately NON-mutating, so it stays `ok` in viewing — and this
-  // row, which writes a comment, rode on it and showed up fully enabled. It then closed the
-  // menu and wrote nothing, because the rail refuses a draft on a read-only document.
-  const readOnly = useEditorState(selectDocumentReadOnly);
-  const disabled =
-    !gate?.ok || readOnly || (rail?.mounted ?? 0) === 0 || editor?.getSelectionPlacement() === null;
-  const control = chromeControlForSlot('review.comments');
+  // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one source:
+  // `toolbarCommandState`. The row needs a mounted review rail to open the draft, so without
+  // one it is left out, whatever the engine answers.
+  const { isEnabled, reason } = useAddCommentState(label);
+  if ((rail?.mounted ?? 0) === 0) return null;
+  const control = chromeControlForSlot('review.addComment');
   return (
     <MenuRow
       icon={chromeIcon(control?.paths)}
-      slot="review.comments"
-      disabled={disabled}
-      title={
-        gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined
-      }
+      slot="review.addComment"
+      disabled={!isEnabled}
+      title={reason ?? undefined}
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);
@@ -134,7 +137,26 @@ function ContextMenuAddComment() {
   );
 }
 
+function ContextMenuEditField() {
+  const editor = useDocxEditor();
+  const menu = useMenuContext();
+  const label = useMenuLabel();
+  if (!editor?.can({ type: 'editTextFormField' }).ok) return null;
+  return (
+    <MenuRow
+      slot="field.edit"
+      onSelect={() => {
+        menu.setOpenMenu(null);
+        editor.exec({ type: 'editTextFormField' });
+      }}
+    >
+      {label('textFormField.edit')}
+    </MenuRow>
+  );
+}
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
+  { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
@@ -164,12 +186,12 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     render: () => (
       // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
       // here would put a literal English keystroke in a row every locale renders.
-      <MenuItem slot="text.link" labelKey="formattingBar.insertLink" />
+      <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />
     ),
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];
@@ -197,6 +219,17 @@ function tableContextEntries(): readonly DefaultEntry[] {
       kind: 'row',
       id: ContextMenuInsertColumnRight.docxRow,
       render: () => <ContextMenuInsertColumnRight />,
+    },
+    { kind: 'separator', id: 'sep.table.cells' },
+    {
+      kind: 'row',
+      id: ContextMenuMergeCells.docxRow,
+      render: () => <ContextMenuMergeCells />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuSplitCell.docxRow,
+      render: () => <ContextMenuSplitCell />,
     },
     { kind: 'separator', id: 'sep.table.destructive' },
     {
@@ -262,8 +295,8 @@ function rowOfChild(child: ReactNode): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotId(child.props as MenuItemProps);
+    if (slot) return slot;
   }
   return null;
 }
@@ -369,7 +402,7 @@ export function DocxEditorContextMenu({
       // The engine's own listener sits INSIDE this one and has already recorded which table
       // of contents the press landed on, so reading it here is reading it current.
       setTocId(editor?.snapshot().tocContext?.id ?? null);
-      setTarget(keyboard || !(event.target instanceof HTMLElement) ? null : event.target);
+      setTarget(keyboard || !isHTMLElementNode(event.target) ? null : event.target);
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
@@ -407,17 +440,21 @@ export function DocxEditorContextMenu({
     // Capture, because the scroll that matters is the editor's own scroller and scroll
     // events do not bubble to the window from it.
     const onScroll = () => close();
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    window.addEventListener('blur', onScroll);
-    window.addEventListener('resize', onScroll);
+    // The editor's own document and window, which are not the script's globals when the
+    // editor renders into a pop-out window or an iframe.
+    const doc = hostDocumentOf(hostRef.current ?? panelRef.current);
+    const win = hostWindowOf(hostRef.current ?? panelRef.current);
+    doc.addEventListener('pointerdown', onPointerDown, true);
+    doc.addEventListener('keydown', onKeyDown);
+    doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    win.addEventListener('blur', onScroll);
+    win.addEventListener('resize', onScroll);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('blur', onScroll);
-      window.removeEventListener('resize', onScroll);
+      doc.removeEventListener('pointerdown', onPointerDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('scroll', onScroll, true);
+      win.removeEventListener('blur', onScroll);
+      win.removeEventListener('resize', onScroll);
     };
   }, [anchor, close]);
 
@@ -426,8 +463,9 @@ export function DocxEditorContextMenu({
     const panel = panelRef.current;
     if (!anchor || !panel) return;
     const { width, height } = panel.getBoundingClientRect();
-    const maxX = window.innerWidth - width - VIEWPORT_INSET;
-    const maxY = window.innerHeight - height - VIEWPORT_INSET;
+    const view = hostWindowOf(panel);
+    const maxX = view.innerWidth - width - VIEWPORT_INSET;
+    const maxY = view.innerHeight - height - VIEWPORT_INSET;
     // Flip to the other side of the pointer when there is no room past it, then clamp BOTH
     // ends. The low end is not theoretical: a keyboard-invoked menu anchors on the scroller's
     // client rect, whose `top` is far negative once the reader is on page ten, and an
@@ -528,10 +566,10 @@ export function DocxEditorContextMenu({
                 const items = panelItems(panel);
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
-                  focusBy(items, document.activeElement, 1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, 1);
                 } else if (event.key === 'ArrowUp') {
                   event.preventDefault();
-                  focusBy(items, document.activeElement, -1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, -1);
                 } else if (event.key === 'Home') {
                   event.preventDefault();
                   focusEdge(items, 'first');
@@ -547,9 +585,13 @@ export function DocxEditorContextMenu({
                 children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
                 preset,
                 keyOfEntry: (entry) => entry.id,
-                keyOfChild: rowOfChild,
+                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, element) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
+                },
               })}
             </div>
           </ContextMenuContext.Provider>
@@ -576,6 +618,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
   readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
   readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+  readonly MergeCells: typeof ContextMenuMergeCells;
+  readonly SplitCell: typeof ContextMenuSplitCell;
   readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
@@ -584,7 +628,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
-  /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
+  /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
   readonly Row: typeof MenuRow;
@@ -605,6 +649,8 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   InsertRowBelow: ContextMenuInsertRowBelow,
   InsertColumnLeft: ContextMenuInsertColumnLeft,
   InsertColumnRight: ContextMenuInsertColumnRight,
+  MergeCells: ContextMenuMergeCells,
+  SplitCell: ContextMenuSplitCell,
   DeleteTableRow: ContextMenuDeleteTableRow,
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,

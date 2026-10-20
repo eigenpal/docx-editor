@@ -23,6 +23,7 @@ export type SectionPrepassGuard =
   | 'derived-covered';
 
 export const SECTION_PREPASS_GUARDS = {
+  framePolicy: 'validity-checked',
   // The block list itself — compared element-wise by identity, which is what makes a
   // typing pass in a many-section document reuse every section but the edited one.
   bodies: 'validity-checked',
@@ -43,9 +44,12 @@ export const SECTION_PREPASS_GUARDS = {
   // blocks, list map and TOC shape are all identity-unchanged; this clause is what sees it.
   refToken: 'validity-checked',
   prepared: 'derived-covered',
+  positioned: 'derived-covered',
   keys: 'derived-covered',
   paragraphDocumentOrder: 'derived-covered',
   keepsNext: 'derived-covered',
   markerTexts: 'derived-covered',
   flowKeys: 'derived-covered',
+  flowKeyIntern: 'derived-covered',
+  terminalTextTables: 'derived-covered',
 } as const satisfies Record<keyof SectionPrepass, SectionPrepassGuard>;

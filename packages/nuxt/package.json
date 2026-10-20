@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/nuxt",
-  "version": "2.14.1",
+  "version": "2.19.0",
   "private": true,
   "description": "Nuxt 3 & 4 module for the @docx-editor.dev/vue WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
   "type": "module",
@@ -25,11 +25,11 @@
   "scripts": {
     "build": "nuxt-module-build build",
     "prepack": "nuxt-module-build build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@nuxt/kit": "^3.14.0 || ^4.0.0",
-    "@docx-editor.dev/vue": "^2.14.1",
+    "@docx-editor.dev/vue": "workspace:*",
     "prosemirror-commands": "^1.5.2",
     "prosemirror-dropcursor": "^1.8.2",
     "prosemirror-history": "^1.4.0",
@@ -38,7 +38,7 @@
     "prosemirror-state": "^1.4.3",
     "prosemirror-tables": "^1.8.5",
     "prosemirror-transform": "^1.12.0",
-    "prosemirror-view": "^1.41.6"
+    "prosemirror-view": "^1.42.3"
   },
   "peerDependencies": {
     "vue": "^3.3.0"
@@ -47,7 +47,8 @@
     "@nuxt/module-builder": "^1.0.0",
     "@nuxt/schema": "^4.4.6",
     "nuxt": "^4.4.6",
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "nuxt",

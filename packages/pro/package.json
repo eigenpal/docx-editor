@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/pro",
-  "version": "2.14.1",
+  "version": "2.31.0",
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, and realtime collaboration.",
   "sideEffects": false,
   "type": "module",
@@ -59,20 +59,21 @@
   },
   "files": [
     "dist",
+    "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.vue.json",
+    "build": "node ../../scripts/check-built-siblings.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
+    "typecheck": "bun check && bun check -p tsconfig.vue.json",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.14.0",
-    "@docx-editor.dev/react": "~2.14.0",
-    "@docx-editor.dev/vue": "~2.14.0",
+    "@docx-editor.dev/core": "~2.31.0",
+    "@docx-editor.dev/react": "~2.31.0",
+    "@docx-editor.dev/vue": "~2.31.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "vue": "^3.3.0",
@@ -118,12 +119,12 @@
     "@happy-dom/global-registrator": "^20.8.3",
     "@hocuspocus/provider": "^4.6.0",
     "@testing-library/react": "^16.0.0",
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.3.3",
+    "typescript7": "npm:typescript@^7.0.2",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.32",
     "zod": "^4.4.3"

@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Resolving a tracked change rebuilt the whole part with new node identities, and review reads, list numbering and footnote reserve rounds walked the whole story after each edit, and the footnote reserves after an edit or a sliced open depended on where the search started.",
+  "after": "Resolution keeps untouched subtrees by identity, and review reads, list numbering and reserve rounds reuse unchanged work; the resulting part, operations and serialized XML are the same; footnote pagination settles on the answer a one-pass layout of the same content finds, computed in a background layout session.",
+  "reason": "Only object identity, layout caches and timing change. Shared nodes, text offsets, operations, and package serialization stay unchanged, so replicas converge on the same state. Every replica derives the same pagination from the same content, because the settled answer no longer depends on local editing history.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-resolve.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revisions.test.ts",
+    "packages/core/src/layout/__tests__/note-reserve-resume.test.ts",
+    "packages/core/src/layout/__tests__/list-resolve-memo.test.ts",
+    "packages/core/src/editor/__tests__/first-comment-relayout.test.ts",
+    "packages/core/src/editor/__tests__/surface-canonical-layout.test.ts",
+    "packages/core/src/layout/__tests__/note-search-steps.test.ts"
+  ],
+  "changeset": "large-document-editing-speed",
+  "migration": null
+}

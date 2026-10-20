@@ -698,3 +698,69 @@ describe('the open-story token and parts come from one list', () => {
     );
   });
 });
+
+describe('content-lock formatting policy across story stores', () => {
+  const locked =
+    '<w:p><w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
+    '<w:sdtContent><w:r><w:t>TOKEN</w:t></w:r></w:sdtContent></w:sdt></w:p>';
+  const scopes: StoryScope[] = [
+    { kind: 'body' },
+    { kind: 'headerFooter', rId: 'rId7' },
+    { kind: 'headerFooter', rId: 'rId8' },
+    { kind: 'notesPart', noteKind: 'footnote' },
+  ];
+  function bytes(protection?: string) {
+    return build({
+      body:
+        locked +
+        '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
+        '<w:footerReference w:type="default" r:id="rId8"/></w:sectPr>',
+      rels:
+        `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>` +
+        `<Relationship Id="rId8" Type="${R}/footer" Target="footer1.xml"/>` +
+        `<Relationship Id="rId9" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        `<Relationship Id="rId10" Type="${R}/settings" Target="settings.xml"/>`,
+      overrides:
+        HEADER_OVERRIDE +
+        FOOTER_OVERRIDE +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>',
+      headerParts: {
+        'word/header1.xml': `<w:hdr xmlns:w="${W}">${locked}</w:hdr>`,
+        'word/footer1.xml': `<w:ftr xmlns:w="${W}">${locked}</w:ftr>`,
+        'word/footnotes.xml': `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${locked}</w:footnote></w:footnotes>`,
+        'word/settings.xml': `<w:settings xmlns:w="${W}">${protection ? `<w:documentProtection w:edit="${protection}" w:enforcement="1"/>` : ''}</w:settings>`,
+      },
+    });
+  }
+  test.each([undefined, 'forms', 'readOnly', 'comments'])(
+    'each story retains document protection (%s) and the creation policy',
+    (protection) => {
+      const policy = { allowFormattingInLockedContent: true };
+      const store = openPackage(bytes(protection), { contentLockPolicy: policy });
+      policy.allowFormattingInLockedContent = false;
+      for (const scope of scopes) {
+        const id = paragraphIds(store.partFor(scope)!)[0]!;
+        const changed = store.transact(scope, (context) =>
+          context.apply({
+            op: 'setRunProperties',
+            paragraphId: id,
+            start: 0,
+            end: 5,
+            properties: [{ localName: 'b' }],
+          })
+        );
+        const allowed = protection === undefined || protection === 'forms';
+        expect(changed.ok).toBe(allowed);
+        expect(JSON.stringify(store.partFor(scope)!.root).includes('"localName":"b"')).toBe(
+          allowed
+        );
+        const typed = store.transact(scope, (context) =>
+          context.apply({ op: 'insertText', paragraphId: id, offset: 2, text: 'X' })
+        );
+        expect(typed.ok).toBe(false);
+        expect(paragraphTextOf(store.partFor(scope)!, id)).toBe('TOKEN');
+      }
+    }
+  );
+});

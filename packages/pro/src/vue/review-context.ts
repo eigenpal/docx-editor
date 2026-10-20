@@ -22,9 +22,11 @@ import {
   type VNode,
   type MaybeRefOrGetter,
 } from 'vue';
+import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { useTranslation } from '@docx-editor.dev/vue';
+import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
+import { useReviewAuthors, useTranslation } from '@docx-editor.dev/vue';
 import type { ReviewActions } from './review-types.ts';
 import type { ReviewItemView } from './useReview.ts';
 
@@ -34,6 +36,10 @@ export interface ReviewRailValue {
   readonly cardClassName: string | undefined;
   readonly readOnly: boolean;
   readonly composeTop: number | null;
+  /** The compose box's rail-local `left` in the compact rail, or null in the full column. */
+  readonly composeLeft: number | null;
+  /** Whether a comment draft is open. A `Draft` part renders only while it is. */
+  readonly drafting: boolean;
   readonly review: ReviewActions;
   readonly allItems: readonly ReviewItemView[];
   readonly authorSlots: ReadonlyMap<string, number>;
@@ -47,6 +53,10 @@ export interface ReviewRailValue {
   readonly endDraft: () => void;
   readonly expandedResolvedKey: string | null;
   readonly setExpandedResolvedKey: (key: string | null) => void;
+  /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
+  readonly commentMarkers: CommentMarkerStyle;
+  /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
+  readonly revisionsIn: RevisionDisplay;
 }
 
 export const ReviewContextKey: InjectionKey<ComputedRef<ReviewRailValue>> = Symbol('ReviewContext');
@@ -56,9 +66,11 @@ export const ReviewItemContextKey: InjectionKey<ComputedRef<ReviewItemView | nul
 const INERT_REVIEW: ReviewActions = {
   items: [],
   activeKey: null,
+  activatedKey: null,
   setActive: () => false,
   accept: () => false,
   reject: () => false,
+  adopt: () => false,
   resolve: () => false,
   reopen: () => false,
   commentResolutionDisabledReason: null,
@@ -66,6 +78,7 @@ const INERT_REVIEW: ReviewActions = {
   reply: () => false,
   selectionAnchorY: null,
   comment: () => false,
+  lastRefusal: null,
   paneOpen: true,
   setPaneOpen: () => {},
   ready: false,
@@ -76,6 +89,8 @@ const INERT_RAIL: ReviewRailValue = {
   cardClassName: undefined,
   readOnly: false,
   composeTop: null,
+  composeLeft: null,
+  drafting: false,
   review: INERT_REVIEW,
   allItems: [],
   authorSlots: new Map(),
@@ -89,6 +104,8 @@ const INERT_RAIL: ReviewRailValue = {
   endDraft: () => {},
   expandedResolvedKey: null,
   setExpandedResolvedKey: () => {},
+  commentMarkers: 'icon',
+  revisionsIn: 'pane',
 };
 
 /** @internal */
@@ -109,25 +126,45 @@ export function useReviewItem(): ComputedRef<ReviewItemView | null> {
 /**
  * Returns the resolved color, slot, and declared style for one review author.
  *
- * The result updates when the author or revision style declarations change.
+ * The result updates when the author or revision style declarations change. Outside the
+ * review rail it reads the editor's author roster.
  *
  * @public
  */
 export function useReviewAuthor(
   author: MaybeRefOrGetter<string | undefined>
 ): ComputedRef<ReviewAuthorInfo | undefined> {
-  const rail = useRail();
+  const rail = inject(ReviewContextKey, null);
+  // Inside the rail its own author map answers; only a caller outside it reads the roster.
+  const roster = rail ? null : useReviewAuthors();
   return computed(() => {
     const name = toValue(author);
-    return name === undefined ? undefined : rail.value.authorInfo.get(name);
+    if (name === undefined) return undefined;
+    return rail
+      ? rail.value.authorInfo.get(name)
+      : roster?.value.find((info) => info.author === name);
   });
 }
 
 /** @internal */
-export function useReviewLabel(): (key: TranslationKey) => string {
+/** Placeholder values for a review label, such as `{ count: 3 }` for `{count}`. */
+export type ReviewLabelParams = Readonly<Record<string, string | number>>;
+
+/** Fill `{name}` placeholders in a host-translated label, the way the catalogue's `t()` does. */
+function withParams(text: string, params: ReviewLabelParams | undefined): string {
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    Object.hasOwn(params, name) ? String(params[name]) : whole
+  );
+}
+
+export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelParams) => string {
   const rail = useRail();
   const { t } = useTranslation();
-  return (key: TranslationKey) => rail.value.t?.(key) ?? t(key);
+  return (key: TranslationKey, params?: ReviewLabelParams) => {
+    const host = rail.value.t?.(key);
+    return host !== undefined ? withParams(host, params) : t(key, params);
+  };
 }
 
 function reviewItemRenderKey(item: ReviewItemView): string {
@@ -166,7 +203,7 @@ export const ReviewItemScope = defineComponent({
     let measuredNode: HTMLElement | null = null;
     let measuredKey: string | null = null;
     const bindMeasuredNode = (node: Element | null): void => {
-      const nextNode = node instanceof HTMLElement ? node : null;
+      const nextNode = isHTMLElementNode(node) ? node : null;
       const nextKey = nextNode && props.measureKey ? props.measureKey : null;
       if (measuredNode === nextNode && measuredKey === nextKey) return;
       if (measuredKey) rail.value.measure(null, measuredKey);
@@ -182,10 +219,10 @@ export const ReviewItemScope = defineComponent({
         'div',
         {
           onVnodeMounted: (vnode) => {
-            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+            bindMeasuredNode(isElementNode(vnode.el) ? vnode.el : null);
           },
           onVnodeUpdated: (vnode) => {
-            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+            bindMeasuredNode(isElementNode(vnode.el) ? vnode.el : null);
           },
           onVnodeBeforeUnmount: () => {
             bindMeasuredNode(null);

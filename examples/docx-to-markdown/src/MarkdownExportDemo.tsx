@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { MediaPreview } from './MediaPreview';
+import { useMarkdownDownload } from './useMarkdownDownload';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import { reviewModule } from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
@@ -9,7 +19,6 @@ import {
   type ExportFontResolutionReport,
   type MarkdownComment,
   type MarkdownExportResult,
-  type MarkdownPage,
 } from '@docx-editor.dev/docx-to-markdown';
 import { BrandLogo } from '../../shared/BrandLogo';
 import {
@@ -23,11 +32,16 @@ import {
 } from './export-state';
 import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
-import { HighlightedCode } from './HighlightedCode';
-import { MarkdownBlock } from './MarkdownBlock';
-import { PageReviewArtifacts } from './PageReviewArtifacts';
-import { markdownPageToReveal, type PreviewMode } from './preview-navigation';
-import { indexPageReviewSelections, type PageReviewSelectionIndex } from './review-presentation';
+import { DeveloperView } from './DeveloperView';
+import { MarkdownPagePreview } from './MarkdownPagePreview';
+import {
+  capturePreviewPosition,
+  restorePreviewPosition,
+  markdownPageToReveal,
+  type PreviewMode,
+  type PreviewPosition,
+} from './preview-navigation';
+import { indexPageReviewSelections } from './review-presentation';
 import {
   clampSplit,
   desktopSplitBounds,
@@ -103,140 +117,14 @@ function MarkdownLoadingState() {
   );
 }
 
-function DeveloperView({
-  tab,
-  result,
-  status,
-  error,
-  onTabChange,
-}: {
-  readonly tab: DeveloperPanelTab;
-  readonly result: MarkdownExportResult | null;
-  readonly status: ExportStatus;
-  readonly error: string | null;
-  readonly onTabChange: (tab: DeveloperPanelTab) => void;
-}) {
-  const content = useMemo(
-    () => developerPanelContent(tab, result, status, error),
-    [error, result, status, tab]
-  );
-  return (
-    <section className="md-developer-view" aria-labelledby="developer-view-title">
-      <header className="md-developer-view__header">
-        <strong id="developer-view-title">Use the export API</strong>
-        <span>One call returns logical and page-aware Markdown.</span>
-      </header>
-      <div className="md-developer-tabs" role="group" aria-label="Developer reference">
-        <button
-          type="button"
-          aria-pressed={tab === 'example'}
-          onClick={() => onTabChange('example')}
-        >
-          Example
-        </button>
-        <button
-          type="button"
-          aria-pressed={tab === 'response'}
-          onClick={() => onTabChange('response')}
-        >
-          Response
-        </button>
-      </div>
-      <HighlightedCode
-        code={content}
-        language={tab === 'example' ? 'typescript' : 'json'}
-        label={tab === 'example' ? 'TypeScript code example' : 'JSON API response'}
-      />
-    </section>
-  );
-}
-
-function PageField({
-  kind,
-  markdown,
-  mode,
-}: {
-  readonly kind: 'header' | 'body' | 'footer';
-  readonly markdown: string;
-  readonly mode: Exclude<PreviewMode, 'developer'>;
-}) {
-  if (!markdown && kind !== 'body') return null;
-  return (
-    <section className={`md-page-field md-page-field--${kind}`} aria-label={`${kind} Markdown`}>
-      {mode === 'rendered' ? (
-        markdown ? (
-          <MarkdownBlock>{markdown}</MarkdownBlock>
-        ) : (
-          <p className="md-page-empty">No body content on this page</p>
-        )
-      ) : (
-        <pre className="md-source">
-          <code>{markdown || ' '}</code>
-        </pre>
-      )}
-    </section>
-  );
-}
-
-function MarkdownPagePreview({
-  page,
-  commentById,
-  selectionIndex,
-  mode,
-  showHeaders,
-  showFooters,
-  showComments,
-  showTrackedChanges,
-  onRevealDocumentPage,
-}: {
-  readonly page: MarkdownPage;
-  readonly commentById: ReadonlyMap<string, MarkdownComment>;
-  readonly selectionIndex: PageReviewSelectionIndex;
-  readonly mode: Exclude<PreviewMode, 'developer'>;
-  readonly showHeaders: boolean;
-  readonly showFooters: boolean;
-  readonly showComments: boolean;
-  readonly showTrackedChanges: boolean;
-  readonly onRevealDocumentPage: (pageNumber: number) => void;
-}) {
-  const revealPage = () => onRevealDocumentPage(page.number);
-  return (
-    <article className="md-page-wrap" id={`markdown-page-${page.number}`}>
-      <div className="md-page-meta">
-        <button type="button" onClick={revealPage}>
-          <span>Page {page.number}</span>
-          <span className="md-page-meta__action">View in DOCX</span>
-        </button>
-      </div>
-      <div className="md-page-sheet">
-        {showHeaders ? (
-          <PageField kind="header" markdown={page.headerMarkdown} mode={mode} />
-        ) : null}
-        <PageField kind="body" markdown={page.markdown} mode={mode} />
-        <PageReviewArtifacts
-          page={page}
-          commentById={commentById}
-          selectionIndex={selectionIndex}
-          showComments={showComments}
-          showTrackedChanges={showTrackedChanges}
-          mode={mode}
-        />
-        {showFooters ? (
-          <PageField kind="footer" markdown={page.footerMarkdown} mode={mode} />
-        ) : null}
-      </div>
-    </article>
-  );
-}
-
 function coverageLabel(report: ExportFontResolutionReport | null): string | null {
   if (!report) return null;
   const unresolved = report.families
     .filter((family) => family.coverage !== 'complete')
     .map((family) => family.family);
-  if (unresolved.length > 0) return `Incomplete font-face coverage: ${unresolved.join(', ')}`;
+  if (unresolved.length > 0) return `Some font styles are unavailable: ${unresolved.join(', ')}`;
   if (report.originFailures.length > 0)
-    return 'A font source failed; requested face coverage remains complete';
+    return 'A font source could not load. All requested font styles are available from other sources.';
   return null;
 }
 
@@ -248,7 +136,7 @@ function carriesFiles(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes('Files');
 }
 
-export function MarkdownExportDemo() {
+export function MarkdownExportDemo({ embedded = false }: { embedded?: boolean }) {
   const editor = useRef<DocxEditorRef>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const workbench = useRef<HTMLElement>(null);
@@ -263,9 +151,19 @@ export function MarkdownExportDemo() {
   const copiedTimer = useRef<number | null>(null);
   const [operations] = useState(createLatestOperationGate);
   const fonts = useFonts(EDITOR_PACKAGED_FONTS, GOOGLE_FONT_FALLBACK);
+  const [filename, setFilename] = useState('sample.docx');
   const [document, setDocument] = useState<Uint8Array>();
   const [exportView, setExportView] = useState<ExportViewState>(EMPTY_EXPORT);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('rendered');
+  const pendingPreviewPosition = useRef<PreviewPosition | null>(null);
+  const changePreviewMode = (next: PreviewMode) => {
+    if (next === previewMode) return;
+    pendingPreviewPosition.current =
+      next !== 'developer' && previewMode !== 'developer'
+        ? capturePreviewPosition(previewScroll.current)
+        : null;
+    setPreviewMode(next);
+  };
   const [mobilePane, setMobilePane] = useState<MobilePane>('source');
   const [sourceWidth, setSourceWidth] = useState(50);
   const [splitBounds, setSplitBounds] = useState({
@@ -281,6 +179,15 @@ export function MarkdownExportDemo() {
   const [copied, setCopied] = useState(false);
   const [developerPanelTab, setDeveloperPanelTab] = useState<DeveloperPanelTab>('example');
   const [exportActivity, setExportActivity] = useState<ExportActivity>('document');
+
+  const previewFields = useMemo(
+    () => ({ showHeaders, showFooters, showComments, showTrackedChanges }),
+    [showHeaders, showFooters, showComments, showTrackedChanges]
+  );
+
+  useEffect(() => {
+    setCopied(false);
+  }, [previewMode, developerPanelTab, previewFields, filename, exportView.result]);
 
   const revealMarkdownPage = useCallback((pageNumber: number) => {
     const scroller = previewScroll.current;
@@ -304,7 +211,13 @@ export function MarkdownExportDemo() {
     });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const position = pendingPreviewPosition.current;
+    if (position) {
+      pendingPreviewPosition.current = null;
+      restorePreviewPosition(previewScroll.current, position);
+      return;
+    }
     const pageNumber = markdownPageToReveal(
       previewMode,
       exportView.status,
@@ -367,6 +280,7 @@ export function MarkdownExportDemo() {
       setExportView((current) => ({ ...current, status: 'exporting', error: null }));
       try {
         const result = await exportMarkdown(bytes, {
+          images: { syntax: 'html' },
           fallbackFonts: GOOGLE_FONT_FALLBACK,
           resourceTimeoutMs: 30_000,
           signal: controller.signal,
@@ -398,10 +312,11 @@ export function MarkdownExportDemo() {
   );
 
   const openBytes = useCallback(
-    (bytes: Uint8Array, _name: string, operation: number) => {
+    (bytes: Uint8Array, name: string, operation: number) => {
       if (!operations.isCurrent(operation)) return;
       latestEditorPage.current = 1;
       sourcePointerReveal.current = false;
+      setFilename(name);
       setDocument(bytes);
       void runExport(bytes, operation, 'document');
     },
@@ -517,7 +432,17 @@ export function MarkdownExportDemo() {
   }, [beginOperation, operations, runExport]);
 
   const copyMarkdown = useCallback(() => {
-    const markdown = copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
+    const markdown =
+      previewMode === 'developer'
+        ? developerPanelContent(
+            developerPanelTab,
+            exportView.result,
+            exportView.status,
+            exportView.error,
+            previewFields,
+            filename
+          )
+        : copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
     if (markdown === null) return;
     void navigator.clipboard
       .writeText(markdown)
@@ -527,7 +452,9 @@ export function MarkdownExportDemo() {
         copiedTimer.current = window.setTimeout(() => setCopied(false), 1_500);
       })
       .catch((error) => console.warn(`[clipboard] ${errorMessage(error)}`));
-  }, [exportView.result, exportView.status]);
+  }, [exportView, previewMode, developerPanelTab, previewFields, filename]);
+
+  const download = useMarkdownDownload(exportView.result, filename);
 
   const fontStatus = coverageLabel(exportView.fontReport);
   const commentById = useMemo(() => {
@@ -559,9 +486,9 @@ export function MarkdownExportDemo() {
   const canCopy = canCopyExport(exportView.status, exportView.result !== null);
   const exportStatusLabel =
     exportView.status === 'queued'
-      ? 'Waiting for your pause'
+      ? 'Changes pending'
       : exportView.status === 'exporting'
-        ? 'Updating Markdown export'
+        ? 'Updating Markdown'
         : exportView.status === 'error'
           ? exportView.result
             ? 'Export failed; showing the last successful snapshot'
@@ -585,7 +512,7 @@ export function MarkdownExportDemo() {
 
   return (
     <div
-      className={`md-demo${resizing ? ' md-demo--resizing' : ''}`}
+      className={`md-demo${embedded ? ' md-demo--embedded' : ''}${resizing ? ' md-demo--resizing' : ''}`}
       data-mobile-pane={mobilePane}
       style={layoutStyle}
       onDragEnter={(event) => {
@@ -614,12 +541,18 @@ export function MarkdownExportDemo() {
     >
       <header className="md-topbar">
         <div className="md-topbar-pane md-topbar-pane--source">
-          <div className="md-brand-lockup">
-            <BrandLogo />
-            <div className="md-product-title">
-              <strong>DOCX to Markdown</strong>
+          {embedded ? (
+            <div className="md-export-identity md-source-identity">
+              <strong>Word document</strong>
             </div>
-          </div>
+          ) : (
+            <div className="md-brand-lockup">
+              <BrandLogo />
+              <div className="md-product-title">
+                <strong>DOCX to Markdown</strong>
+              </div>
+            </div>
+          )}
           <div className="md-mobile-tabs" role="group" aria-label="Demo view">
             <button
               type="button"
@@ -639,13 +572,15 @@ export function MarkdownExportDemo() {
             </button>
           </div>
           <div className="md-source-actions">
-            <button
-              type="button"
-              className="md-button md-button--compact md-button--quiet"
-              onClick={() => loadSample()}
-            >
-              Reset
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className="md-button md-button--compact md-button--quiet"
+                onClick={() => loadSample()}
+              >
+                Reset
+              </button>
+            )}
             <button
               type="button"
               className="md-button md-button--compact md-button--primary"
@@ -667,43 +602,40 @@ export function MarkdownExportDemo() {
               <button
                 type="button"
                 aria-pressed={previewMode === 'rendered'}
-                onClick={() => setPreviewMode('rendered')}
+                onClick={() => changePreviewMode('rendered')}
               >
                 Preview
               </button>
               <button
                 type="button"
                 aria-pressed={previewMode === 'source'}
-                onClick={() => setPreviewMode('source')}
+                onClick={() => changePreviewMode('source')}
               >
                 Source
               </button>
               <button
                 type="button"
                 aria-pressed={previewMode === 'developer'}
-                onClick={() => setPreviewMode('developer')}
+                onClick={() => changePreviewMode('developer')}
               >
-                Code
+                API
               </button>
             </div>
-            <details className="md-settings" hidden={previewMode === 'developer'}>
+            <details className="md-settings">
               <summary
                 className="md-icon-button"
-                aria-label={
-                  fontStatus
-                    ? `Page display and font fidelity settings; ${fontStatus}`
-                    : 'Page display settings'
-                }
-                title={
-                  fontStatus ? 'Page display and font fidelity settings' : 'Page display settings'
-                }
+                aria-label="Preview settings"
+                title="Preview settings"
               >
                 <SettingsIcon />
               </summary>
               <div className="md-settings-popover">
                 <div className="md-settings-heading">
-                  <strong>Page display</strong>
-                  <span>Choose what appears in the preview.</span>
+                  <strong>Preview settings</strong>
+                  <span>
+                    Choose page fields to display. The API returns all fields; full-document
+                    Markdown contains the body.
+                  </span>
                 </div>
                 <label className="md-setting-row">
                   <span>Page headers</span>
@@ -742,13 +674,46 @@ export function MarkdownExportDemo() {
             </details>
           </div>
           <div className="md-preview-actions">
+            {download.error ? <span role="alert">{download.error}</span> : null}
+            <button
+              type="button"
+              className="md-icon-button"
+              onClick={() => void download.download()}
+              disabled={!canCopy || download.busy}
+              aria-label={
+                exportView.result?.media.length
+                  ? 'Download Markdown and images'
+                  : 'Download Markdown'
+              }
+              title={exportView.result?.media.length ? 'Download .zip' : 'Download .md'}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 3v10m0 0 3.5-3.5M10 13 6.5 9.5M4 13v4h12v-4" />
+              </svg>
+            </button>
             <button
               type="button"
               className="md-icon-button md-copy-action"
               onClick={copyMarkdown}
-              disabled={!canCopy}
-              aria-label={copied ? 'Markdown copied' : 'Copy full-document Markdown'}
-              title={copied ? 'Copied' : 'Copy Markdown'}
+              disabled={
+                previewMode === 'developer' && developerPanelTab === 'example' ? false : !canCopy
+              }
+              aria-label={
+                copied
+                  ? 'Copied'
+                  : previewMode === 'developer'
+                    ? developerPanelTab === 'example'
+                      ? 'Copy code'
+                      : 'Copy JSON response'
+                    : 'Copy full-document Markdown'
+              }
+              title={
+                copied
+                  ? 'Copied'
+                  : previewMode === 'developer'
+                    ? 'Copy code or response'
+                    : 'Copy full-document Markdown'
+              }
             >
               <CopyIcon copied={copied} />
             </button>
@@ -879,6 +844,8 @@ export function MarkdownExportDemo() {
           <div ref={previewScroll} className="md-preview-scroll" aria-busy={busy}>
             {previewMode === 'developer' ? (
               <DeveloperView
+                fields={previewFields}
+                filename={filename}
                 tab={developerPanelTab}
                 result={exportView.status === 'ready' ? exportView.result : null}
                 status={exportView.status}
@@ -893,9 +860,7 @@ export function MarkdownExportDemo() {
                   <div className="md-live-update" role="status">
                     <Spinner />
                     <span>
-                      {exportView.status === 'queued'
-                        ? 'Changes pending—Markdown will update when you pause'
-                        : 'Updating page-aware Markdown'}
+                      {exportView.status === 'queued' ? 'Changes pending' : 'Updating Markdown'}
                     </span>
                   </div>
                 ) : null}
@@ -914,25 +879,27 @@ export function MarkdownExportDemo() {
                   <div
                     className={`md-pages${busyPresentation === 'overlay' ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
                   >
-                    {exportView.result.pages.map((page) => (
-                      <MarkdownPagePreview
-                        key={page.id}
-                        page={page}
-                        commentById={commentById}
-                        selectionIndex={reviewSelectionIndex}
-                        mode={previewMode}
-                        showHeaders={showHeaders}
-                        showFooters={showFooters}
-                        showComments={showComments}
-                        showTrackedChanges={showTrackedChanges}
-                        onRevealDocumentPage={revealDocumentPage}
-                      />
-                    ))}
+                    <MediaPreview result={exportView.result}>
+                      {exportView.result.pages.map((page) => (
+                        <MarkdownPagePreview
+                          key={page.id}
+                          page={page}
+                          commentById={commentById}
+                          selectionIndex={reviewSelectionIndex}
+                          mode={previewMode}
+                          showHeaders={showHeaders}
+                          showFooters={showFooters}
+                          showComments={showComments}
+                          showTrackedChanges={showTrackedChanges}
+                          onRevealDocumentPage={revealDocumentPage}
+                        />
+                      ))}
+                    </MediaPreview>
                   </div>
                 ) : exportView.error ? null : (
                   <div className="md-empty-state" role="status">
                     <Spinner />
-                    <span>Preparing Markdown…</span>
+                    <span>Preparing Markdown</span>
                   </div>
                 )}
               </>

@@ -1,0 +1,19 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The writer uses mixed document editing paths.",
+  "after": "The writer uses public editing methods, native row and property revisions, complete proposed tables, and date-picker creation. Concurrent list creation and undo preserve shared numbering data. Tracked replacements across paragraphs and whole-cell values refuse collaborative hosts. Streamed edits use existing operations.",
+  "reason": "Existing OOXML nodes and shared fields represent these edits. Node IDs remain unique across previews. Undo retains numbering infrastructure that concurrent authors can still use. No shared format fields change. Tracked replacements across paragraphs and whole-cell values refuse collaboration because concurrent text can enter a pending deletion. Other edits use existing native OOXML and shared fields.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-change-tracking.test.ts",
+    "packages/editor-api/src/model/__tests__/model-control-creation.test.ts",
+    "packages/core/src/store/__tests__/ooxml-edit-index.test.ts",
+    "packages/core/src/automation/__tests__/automation-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/registry-undo-tombstone.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-rich-table.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-rich-range.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-rich-api.test.ts"
+  ],
+  "changeset": "writer-sdt-controls",
+  "migration": null
+}

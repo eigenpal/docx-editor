@@ -113,6 +113,7 @@ const PARAGRAPH_PROPERTY_FIXTURES: readonly VariantFixture[] = [
   paraProp('widowControl', { localName: 'widowControl', attributes: { val: 'false' } }),
   paraProp('pageBreakBefore', { localName: 'pageBreakBefore' }),
   paraProp('contextualSpacing', { localName: 'contextualSpacing' }),
+  paraProp('bidi', { localName: 'bidi' }),
   paraProp('shd', {
     localName: 'shd',
     attributes: { val: 'clear', color: 'auto', fill: 'FFFF00' },

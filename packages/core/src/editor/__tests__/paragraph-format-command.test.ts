@@ -579,7 +579,7 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toEqual(wanted);
   });
 
-  test('a fractional clear does not spawn a second one at its rounded position', () => {
+  test('a fractional clear does not spawn a second one at its truncated position', () => {
     const editor = mount(p('alpha', '<w:tabs><w:tab w:val="clear" w:pos="1440.5"/></w:tabs>'));
     editor.surface!.selectAll();
     editor.exec({
@@ -587,20 +587,42 @@ describe('tab stops, which a flat property write could never author', () => {
       tabStops: [{ positionTwips: 2880, alignment: 'right' }],
     });
     const xml = xmlOf(editor);
-    // ONE clear, not two. It lands at the rounded position, which is the only one the
-    // reader can see anyway — `1440.5` and `1441` resolve to the same stop for it.
+    // ONE clear, not two. It lands at the truncated position, which is the only one the
+    // reader can see anyway — `1440.5` and `1440` resolve to the same stop for it.
     expect([...xml.matchAll(/w:val="clear"/g)]).toHaveLength(1);
     expect(xml).toContain('w:val="right"');
   });
 
-  test('a fractional w:pos the reader rounds away is preserved, like bar and num', () => {
+  test('a fractional w:pos is an ordinary stop at its truncated position', () => {
     const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440.5"/></w:tabs>'));
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [
+        { positionTwips: 1440, alignment: 'center' },
+        { positionTwips: 2880, alignment: 'right' },
+      ],
+    });
+    const xml = xmlOf(editor);
+    expect(xml).not.toContain('w:pos="1440.5"');
+    expect(xml).toContain('<w:tab w:pos="1440" w:val="center"/>');
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'center' },
+      { positionTwips: 2880, alignment: 'right' },
+    ]);
+  });
+
+  test('a w:pos that is not a measurement is preserved, like bar and num', () => {
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1e3"/></w:tabs>'));
     editor.surface!.selectAll();
     editor.exec({
       type: 'setParagraphFormat',
       tabStops: [{ positionTwips: 2880, alignment: 'right' }],
     });
-    expect(xmlOf(editor)).toContain('w:pos="1440.5"');
+    expect(xmlOf(editor)).toContain('w:pos="1e3"');
   });
 
   test('a bar tab the reader cannot model survives an unrelated tab edit', () => {

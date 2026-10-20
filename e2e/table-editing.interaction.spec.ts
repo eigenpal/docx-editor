@@ -339,6 +339,9 @@ const BORDER_WIDTH_INDEX: Record<string, number> = {
 
 async function pickToolbarOption(page: Page, slot: string, value: string) {
   const root = page.locator(`[data-slot="${slot}"]`).first();
+  if (!(await root.isVisible())) {
+    await page.locator('[data-slot="toolbar.more"]').click();
+  }
   if (slot === 'table.borderColor' || slot === 'table.cellFill') {
     await root.locator('.docx-toolbar__colorsplit-caret').click();
     await expect(root.locator('[role="dialog"]')).toBeVisible();
@@ -685,13 +688,14 @@ test.describe('nested table editing acceptance', () => {
     await capture(page, 'task12-10-save-reopen');
   });
 
-  test('merged-table column insert exposes the engine refusal reason', async ({ page }) => {
+  test('invalid table grid exposes the column-insert refusal reason', async ({ page }) => {
     await waitForHook(page);
     await focusParagraph(page, 'MERGED-ONLY');
     const refusal = await e2eCan(page, { type: 'insertColumn', where: 'right' });
     expect(refusal.ok).toBe(false);
     if (refusal.ok) return;
-    expect(refusal.reason.toLowerCase()).toContain('merge');
+    // This row occupies three columns, but its table grid declares only two.
+    expect(refusal.reason).toBe('this table has a cell the editor cannot place in the grid');
     const mergedCell = page.locator('.docx-paragraph-fragment').filter({ hasText: 'MERGED-ONLY' }).first();
     const box = await mergedCell.boundingBox();
     if (!box) throw new Error('merged cell box missing');

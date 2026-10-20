@@ -183,6 +183,8 @@ export interface CustomNodeDefinition<
   /**
    * Contribute a card to the review sidebar for every recognized node of this
    * definition, anchored at the node's range. Return null to skip one node.
+   * Without this hook the node has no card: it never becomes the active review
+   * item, so placing the cursor inside it shows no active highlight.
    *
    * `attrs` and `text` originate in the file — untrusted; the returned strings
    * are rendered as TEXT by the pane, never markup. The context-menu section

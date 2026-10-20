@@ -121,6 +121,69 @@ describe('nested revisions resolve by containment', () => {
     const outerOnly = xml(apply(doc(), accept(DEV)));
     expect(innerFirst).toBe(outerOnly);
   });
+
+  // Resolving the INNER wrapper can leave the outer one holding nothing. A wrapper with no
+  // content is not a decision anyone can take — it carded as a blank entry and kept the
+  // document reporting tracked changes — so it goes with the content it wrapped.
+  test('accepting the inner deletion drops the outer insertion it emptied', () => {
+    const nested = load(
+      `<w:p>${run('keep ')}${wrap('ins', QA, wrap('del', DEV, delRun('new')))}${run(' end')}</w:p>`
+    );
+    const out = xml(apply(nested, accept(DEV)));
+    expect(out).not.toContain('<w:ins');
+    expect(out).not.toContain('<w:del');
+    expect(out).toContain('keep ');
+    expect(out).toContain(' end');
+  });
+
+  test('rejecting the inner insertion drops the outer deletion it emptied', () => {
+    const out = xml(apply(doc(), reject(QA)));
+    expect(out).not.toContain('<w:ins');
+    expect(out).not.toContain('<w:del');
+  });
+
+  test('an outer wrapper that still holds content keeps it, pending', () => {
+    const nested = load(`<w:p>${wrap('ins', QA, run('a') + wrap('del', DEV, delRun('b')))}</w:p>`);
+    const out = xml(apply(nested, accept(DEV)));
+    expect(out).toContain('<w:ins');
+    expect(out).toContain('>a<');
+    expect(out).not.toContain('>b<');
+  });
+
+  test('a wrapper reduced to markers is hollow too, and the markers are hoisted', () => {
+    // Word writes proofing marks and bookmark / comment-range boundaries directly inside a
+    // wrapper, beside the runs. Striking the runs leaves the markers; each pairs with a
+    // counterpart elsewhere, so they stay in the paragraph while the wrapper goes.
+    for (const [open, close] of [
+      ['<w:proofErr w:type="spellStart"/>', '<w:proofErr w:type="spellEnd"/>'],
+      ['<w:bookmarkStart w:id="7" w:name="mark"/>', '<w:bookmarkEnd w:id="7"/>'],
+      ['<w:commentRangeStart w:id="3"/>', '<w:commentRangeEnd w:id="3"/>'],
+    ]) {
+      const nested = load(
+        `<w:p>${run('a')}${wrap('ins', QA, open + wrap('del', DEV, delRun('x')) + close)}${run('z')}</w:p>`
+      );
+      const out = xml(apply(nested, accept(DEV)));
+      expect(out).not.toContain('<w:ins');
+      expect(out).not.toContain('<w:del');
+      expect(out).toContain(open!);
+      expect(out).toContain(close!);
+      expect(out.indexOf(open!)).toBeLessThan(out.indexOf(close!));
+    }
+  });
+
+  test('a wrapper that arrived hollow is not this decision’s to remove', () => {
+    // A producer-written `<w:ins/>` at a content position, empty or holding only a marker,
+    // stays: the sweep removes only what the resolution itself emptied, so an unrelated
+    // accept by another author changes nothing else.
+    for (const inner of ['', '<w:proofErr w:type="spellStart"/>']) {
+      const hollow = load(
+        `<w:p>${wrap('ins', QA, inner)}${wrap('del', DEV, delRun('x'))}${run('z')}</w:p>`
+      );
+      const out = xml(apply(hollow, accept(DEV)));
+      expect(out).toContain('<w:ins');
+      expect(out).not.toContain('<w:del');
+    }
+  });
 });
 
 describe('a move is one decision', () => {
@@ -155,6 +218,32 @@ describe('a move is one decision', () => {
     expect(out).not.toContain('<w:moveTo w');
     expect(out.match(/here/g) ?? []).toHaveLength(1);
     expect(out).not.toContain('delText');
+  });
+
+  test('a half emptied by another author’s decision goes, and the other half still resolves', () => {
+    // Dev strikes the moved-to text; accepting that strike leaves QA's `w:moveTo` hollow. The
+    // range markers are the wrapper's SIBLINGS, so the surviving `w:moveFrom` still finds its
+    // name and resolves alone — no blank card, and no marker left over afterwards.
+    const struckDestination = load(
+      '<w:p>' +
+        `<w:moveFromRangeStart w:id="10" w:name="${MOVE_NAME}" w:author="QA" w:date="${QA.date}"/>` +
+        wrap('moveFrom', QA, delRun('here')) +
+        '<w:moveFromRangeEnd w:id="10"/>' +
+        '</w:p><w:p>' +
+        `<w:moveToRangeStart w:id="11" w:name="${MOVE_NAME}" w:author="QA" w:date="${QA.date}"/>` +
+        wrap('moveTo', QA, wrap('del', DEV, delRun('here'))) +
+        '<w:moveToRangeEnd w:id="11"/>' +
+        '</w:p>'
+    );
+    const afterStrike = apply(struckDestination, accept(DEV));
+    const out = xml(afterStrike);
+    expect(out).not.toContain('<w:moveTo w');
+    expect(out).toContain('<w:moveFrom w');
+    expect(out).toContain('moveToRangeStart');
+    const settled = xml(apply(afterStrike, accept(QA)));
+    expect(settled).not.toContain('<w:moveFrom w');
+    expect(settled).not.toContain('RangeStart');
+    expect(settled).not.toContain('here');
   });
 
   test('the range markers go with the move they described', () => {
@@ -230,7 +319,7 @@ describe('structural revision resolution', () => {
 
   test('a refused kind leaves the tree byte-identical', () => {
     const part = load(
-      `<w:tbl><w:tr><w:tc><w:tcPr><w:cellIns w:id="1" w:author="QA" w:date="${QA.date}"/></w:tcPr>` +
+      `<w:tbl><w:tr><w:tc><w:tcPr><w:cellMerge w:id="1" w:author="QA" w:date="${QA.date}" w:vMerge="invalid"/></w:tcPr>` +
         `<w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
     );
     const before = xml(part);
@@ -239,10 +328,9 @@ describe('structural revision resolution', () => {
   });
 
   test('one refused site refuses the whole revision, not just that site', () => {
-    // A tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell,
-    // all sharing one triple. Resolving the inline half alone would leave the row half-tracked.
+    // A duplicate row marker is ambiguous; its shared inline revision must remain intact.
     const part = load(
-      `<w:tbl><w:tr><w:trPr><w:ins w:id="1" w:author="QA" w:date="${QA.date}"/></w:trPr>` +
+      `<w:tbl><w:tr><w:trPr><w:ins w:id="1" w:author="QA" w:date="${QA.date}"/><w:ins w:id="1" w:author="QA" w:date="${QA.date}"/></w:trPr>` +
         `<w:tc><w:p>${wrap('ins', QA, run('cell'))}</w:p></w:tc></w:tr></w:tbl>`
     );
     expect(refuse(part, accept(QA))).toBe('unsupported-revision');
@@ -318,7 +406,7 @@ describe('accept-all and reject-all', () => {
   test('accept-all refuses when any revision in the document is a refused kind', () => {
     const part = load(
       `<w:p>${wrap('ins', QA, run('inline'))}</w:p>` +
-        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev" w:date="${DEV.date}"/></w:trPr>` +
+        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev" w:date="${DEV.date}"/><w:del w:id="9" w:author="Dev" w:date="${DEV.date}"/></w:trPr>` +
         '<w:tc><w:p/></w:tc></w:tr></w:tbl>'
     );
     expect(refuse(part, { op: 'acceptAllRevisions' })).toBe('unsupported-revision');
@@ -332,7 +420,7 @@ describe('accept-all and reject-all', () => {
         `<w:tc><w:tcPr><w:cellIns w:id="8" w:author="Row"/></w:tcPr>` +
         `<w:p>${run('tracked row')}</w:p></w:tc></w:tr></w:tbl></w:footnote>` +
         `<w:footnote w:id="2"><w:p>${wrap('ins', QA, run('sibling'))}</w:p>` +
-        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/></w:trPr>` +
+        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/><w:del w:id="9" w:author="Dev"/></w:trPr>` +
         `<w:tc><w:p>${run('unsupported')}</w:p></w:tc></w:tr></w:tbl></w:footnote>`
     );
     const target = part.root.children.find(
@@ -352,7 +440,7 @@ describe('accept-all and reject-all', () => {
   test('an unsupported revision inside a scoped note refuses atomically', () => {
     const part = loadNotes(
       `<w:footnote w:id="1"><w:p>${wrap('ins', QA, run('target'))}</w:p>` +
-        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/></w:trPr>` +
+        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/><w:del w:id="9" w:author="Dev"/></w:trPr>` +
         `<w:tc><w:p>${run('incomplete')}</w:p></w:tc></w:tr></w:tbl></w:footnote>` +
         `<w:footnote w:id="2"><w:p>${wrap('ins', QA, run('sibling'))}</w:p></w:footnote>`
     );
@@ -415,13 +503,13 @@ describe('a move recorded on the paragraph mark', () => {
     expect(xml(apply(moved('moveTo'), accept(QA))).match(/<w:p[ >]/g)).toHaveLength(2);
   });
 
-  test('a move marker in run properties stays inert malformed input', () => {
+  test('a move marker in run properties refuses as malformed input', () => {
     const part = load(
       `<w:p><w:r><w:rPr><w:moveFrom w:id="${QA.id}" w:author="${QA.author}" w:date="${QA.date}"/></w:rPr><w:t>text</w:t></w:r></w:p>`
     );
     const before = xml(part);
 
-    expect(refuse(part, accept(QA))).toBe('unknown-revision');
+    expect(refuse(part, accept(QA))).toBe('unsupported-revision');
     expect(xml(part)).toBe(before);
   });
 });
@@ -467,7 +555,7 @@ describe('a run of removed paragraph marks', () => {
     expect(out).not.toContain('before after');
   });
 
-  test('a table is a boundary: the content stays in front of it', () => {
+  test('a removed mark before a table merges into its first cell, as in Word', () => {
     // `followed` looked at any later paragraph, so the text merged into the one AFTER the
     // table and arrived behind it — in a place the reader never put it.
     const table =
@@ -477,7 +565,9 @@ describe('a run of removed paragraph marks', () => {
       '</w:tc></w:tr></w:tbl>';
     const part = load(delMark('before ') + table + `<w:p>${run('after')}</w:p>`);
     const out = xml(apply(part, { op: 'acceptAllRevisions' }));
-    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('<w:tbl'));
+    expect(out.indexOf('before ')).toBeGreaterThan(out.indexOf('<w:tc>'));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('cell'));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('</w:tc>'));
     expect(out).not.toContain('before after');
   });
 });
@@ -527,5 +617,37 @@ describe('joining paragraphs moves the mark, not just the section break', () => 
     });
     if (!joined.ok) throw new Error(joined.reason);
     expect(xml(joined.part)).toContain('<w:del');
+  });
+});
+
+describe('untouched content keeps its identity', () => {
+  test('resolving one change shares every paragraph, table and run it did not touch', () => {
+    const table =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`;
+    const part = load(
+      `<w:p>${run('before')}</w:p>${table}` +
+        `<w:p>${run('keep ')}${wrap('ins', QA, run('new'))}${run(' tail')}</w:p>` +
+        `<w:p>${run('after')}${wrap('del', DEV, delRun('gone'))}</w:p>`
+    );
+    const body = part.root.children[0]!;
+    if (body.kind === 'textValue') throw new Error('expected a body');
+    for (const action of [accept, reject]) {
+      const next = apply(part, action(QA));
+      const nextBody = next.root.children[0]!;
+      if (nextBody.kind === 'textValue') throw new Error('expected a body');
+      // The first paragraph, the table, and the paragraph holding the other author's change.
+      expect(nextBody.children[0]).toBe(body.children[0]);
+      expect(nextBody.children[1]).toBe(body.children[1]);
+      expect(nextBody.children[3]).toBe(body.children[3]);
+      // The resolved paragraph is new, but its untouched leading run is shared.
+      const resolved = nextBody.children[2]!;
+      const original = body.children[2]!;
+      if (resolved.kind === 'textValue' || original.kind === 'textValue') {
+        throw new Error('expected paragraphs');
+      }
+      expect(resolved).not.toBe(original);
+      expect(resolved.children[0]).toBe(original.children[0]);
+    }
   });
 });

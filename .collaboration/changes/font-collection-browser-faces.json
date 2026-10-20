@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Browser font registration passed collection bytes without selecting the admitted face index. Different faces could share one alias.",
+  "after": "Browser font registration materializes the selected face and includes its face index in the private alias identity.",
+  "reason": "The change affects local font registration. Canonical OOXML, tree operations, room data, and face-index measurement inputs stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/font-collection-face.test.ts",
+    "packages/core/src/editor/__tests__/embedded-font-faces.test.ts"
+  ],
+  "changeset": "font-collection-browser-faces",
+  "migration": null
+}

@@ -56,13 +56,21 @@ const body =
     .join('\n') +
   '\n];\n\n' +
   '/**\n' +
-  ' * Bundler-visible URL for every packaged face. Each `new URL` argument is deliberately\n' +
+  ' * Bundler-visible location of every packaged face. Each `new URL` argument is deliberately\n' +
   ' * a literal so Vite, webpack, and Turbopack emit the matching asset instead of collapsing\n' +
   ' * a dynamic template to one arbitrary file.\n' +
   ' *\n' +
+  ' * The value type is `URL | string`, not `URL`, because that is what the expression\n' +
+  ' * actually evaluates to once a bundler has seen it. Node, Bun, and Vite leave a `URL`.\n' +
+  ' * webpack and Turbopack replace the whole expression with a bare path STRING for the\n' +
+  ' * asset they emitted (`/_next/static/media/Caladea-Bold.d6e01b80.ttf`). Typing it as\n' +
+  ' * `URL` reads as a promise this package cannot keep, and let a single-argument `URL`\n' +
+  ' * construction over a relative string ship that threw at module scope in every browser\n' +
+  ' * build.\n' +
+  ' *\n' +
   ' * @internal\n' +
   ' */\n' +
-  'export const FONT_ASSET_URLS: Readonly<Record<string, URL>> = {\n' +
+  'export const FONT_ASSET_URLS: Readonly<Record<string, URL | string>> = {\n' +
   entries
     .map((entry) => `  '${entry.file}': new URL('../assets/${entry.file}', import.meta.url),`)
     .join('\n') +

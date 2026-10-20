@@ -1,10 +1,16 @@
 import { ref, watch, type CSSProperties, type ShallowRef } from 'vue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { formatPx } from '../lib/units';
 import { scopeDispose } from './scope-dispose';
 import { absolutePointInScroller } from './scroller-geometry';
 
-type AnchorPlacement = 'before' | 'after' | 'story-label';
+/**
+ * Where a scoped chrome anchor sits relative to its story: before it, after it, or on its label.
+ *
+ * @public
+ */
+export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
 
 /** @public */
 export interface ScopedChromeAnchor {
@@ -19,7 +25,7 @@ export interface ScopedChromeAnchor {
  */
 export function useScopedChromeAnchor(
   findAnchor: (viewport: HTMLElement) => HTMLElement | null,
-  placement: AnchorPlacement
+  placement: ScopedChromeAnchorPlacement
 ): ScopedChromeAnchor {
   const chrome = ref<HTMLDivElement | null>(null);
   const style = ref<CSSProperties>({ visibility: 'hidden' });
@@ -39,9 +45,12 @@ export function useScopedChromeAnchor(
         currentChrome?.parentElement?.querySelector<HTMLElement>('.docx-editor__scroll-container');
       if (!currentChrome || !viewport) return;
 
+      // The viewport's own window: observers, frames and resize belong to the window the
+      // editor paints in, which a pop-out window can own.
+      const win = hostWindowOf(viewport);
       let frame = 0;
       let observedAnchor: HTMLElement | null = null;
-      const resizeObserver = new ResizeObserver(() => schedule());
+      const resizeObserver = new win.ResizeObserver(() => schedule());
 
       const update = () => {
         frame = 0;
@@ -101,12 +110,12 @@ export function useScopedChromeAnchor(
 
       const schedule = () => {
         if (frame) return;
-        frame = requestAnimationFrame(update);
+        frame = win.requestAnimationFrame(update);
       };
 
       resizeObserver.observe(viewport);
       resizeObserver.observe(currentChrome);
-      const mutationObserver = new MutationObserver(schedule);
+      const mutationObserver = new win.MutationObserver(schedule);
       mutationObserver.observe(viewport, {
         subtree: true,
         childList: true,
@@ -114,15 +123,15 @@ export function useScopedChromeAnchor(
         attributeFilter: ['data-docx-hf-active', 'data-docx-note-scope'],
       });
       viewport.addEventListener('scroll', schedule, { passive: true });
-      window.addEventListener('resize', schedule);
+      win.addEventListener('resize', schedule);
       update();
 
       onCleanup(() => {
-        if (frame) cancelAnimationFrame(frame);
+        if (frame) win.cancelAnimationFrame(frame);
         resizeObserver.disconnect();
         mutationObserver.disconnect();
         viewport.removeEventListener('scroll', schedule);
-        window.removeEventListener('resize', schedule);
+        win.removeEventListener('resize', schedule);
       });
     },
     { flush: 'post' }

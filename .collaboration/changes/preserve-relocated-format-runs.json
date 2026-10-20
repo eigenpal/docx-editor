@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph splits can assign replacement metadata to relocated existing runs and hide their text.",
+  "after": "Relocated existing runs preserve their lineage while newly split runs retain the existing replacement representation.",
+  "reason": "The fix stops incorrect metadata writes without changing shared fields or their meaning. Published readers interpret corrected writes through the same format.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-split-relocated-format.test.ts",
+    "scripts/collaboration/scenarios.mjs"
+  ],
+  "changeset": "quiet-runs-travel",
+  "migration": null
+}

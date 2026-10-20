@@ -1,6 +1,7 @@
 // Canonical document-view composition root shared by browser and exporter hosts.
 
 import type { HeadlessDocumentView, OoxmlNode } from '@docx-editor.dev/core/store';
+import { withFieldResultsMode, type FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
@@ -14,7 +15,8 @@ import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { layoutSemanticDocument, type SemanticLayoutOptions } from './semantic-layout.ts';
+import { layoutSemanticDocumentSteps, type SemanticLayoutOptions } from './semantic-layout.ts';
+import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
 import type { SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 
@@ -42,16 +44,24 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   displayMode: 'document-coordinator',
   revisionAuthorFilter: 'document-coordinator',
   sectionFurniture: 'document-coordinator',
+  evenAndOddHeaders: 'document-coordinator',
   sectionColumns: 'layout-internal',
+  paragraphLineUnitPt: 'layout-internal',
+  sectionPageBorders: 'layout-internal',
   styleCascade: 'document-coordinator',
   numberingIndex: 'document-coordinator',
   listItems: 'layout-internal',
   defaultTabStopPt: 'document-coordinator',
+  compatibilityMode: 'document-coordinator',
   projectLink: 'document-coordinator',
   projectFieldLink: 'document-coordinator',
+  showFieldCodes: 'document-coordinator',
+  fieldResults: 'document-coordinator',
   documentProperties: 'document-coordinator',
   notes: 'document-coordinator',
   pageBottomReserves: 'layout-internal',
+  pageBottomReservesFromPreviousPass: 'layout-internal',
+  pageBottomReservesFollowFlow: 'layout-internal',
   noteMarks: 'layout-internal',
   inlineDrawingLayout: 'document-coordinator',
   drawingTokenForParagraph: 'document-coordinator',
@@ -63,8 +73,11 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   drawingExclusionZonesByPage: 'layout-internal',
   drawingSourceOrder: 'layout-internal',
   tocFieldChromeParagraphIds: 'layout-internal',
+  fieldCodeRanges: 'layout-internal',
+  tocLinkStyleRanges: 'layout-internal',
   emptyTocPlaceholderParagraphIds: 'layout-internal',
   emptyTocSuppressedResultParagraphIds: 'layout-internal',
+  bodyBlockLimit: 'document-coordinator',
 } satisfies Readonly<Record<keyof SemanticLayoutOptions, SemanticLayoutOptionRole>>);
 
 type SemanticOptionsWithRole<Role extends SemanticLayoutOptionRole> = {
@@ -86,10 +99,15 @@ export interface LayoutDocumentViewOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
+  readonly compatibilityMode?: () => number | undefined;
   readonly furniture: DocumentFurnitureSource;
   /** Body/story projection paired with every cache identity it requires. */
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
+  /** How saved field results are addressed; see `SemanticLayoutOptions.fieldResults`. */
+  readonly fieldResults?: FieldResultsMode;
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
@@ -100,6 +118,8 @@ export interface LayoutDocumentViewOptions {
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Lay out only this many body blocks; see `SemanticLayoutOptions.bodyBlockLimit`. */
+  readonly bodyBlockLimit?: number;
 }
 
 type LayoutDocumentViewSink = 'notes' | 'semantic-layout' | 'both';
@@ -115,9 +135,13 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   styleCascade: 'both',
   numberingIndex: 'both',
   defaultTabStopPt: 'both',
+  compatibilityMode: 'both',
   furniture: 'semantic-layout',
   linkProjectors: 'both',
   projectFieldLink: 'both',
+  showFieldCodes: 'both',
+  // The whole view is laid out inside the mode, notes included.
+  fieldResults: 'semantic-layout',
   inlineDrawingLayout: 'semantic-layout',
   inlineDrawingLayoutForPart: 'notes',
   drawingTokenForParagraph: 'semantic-layout',
@@ -126,6 +150,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   drawingLayoutEpochForPart: 'notes',
   displayMode: 'both',
   revisionAuthorFilter: 'both',
+  bodyBlockLimit: 'semantic-layout',
 } as const satisfies Readonly<Record<keyof LayoutDocumentViewOptions, LayoutDocumentViewSink>>;
 
 type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> = {
@@ -143,6 +168,25 @@ type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> 
  * @internal
  */
 export function layoutDocumentView(options: LayoutDocumentViewOptions): SemanticLayout {
+  return withFieldResultsMode(options.fieldResults, () =>
+    drainLayoutSteps(layoutDocumentViewSteps(options))
+  );
+}
+
+/**
+ * {@link layoutDocumentView} as steps that may pause inside a long table; see
+ * `layout-steps.ts`. A sliced open runs its prefix passes this way.
+ * @internal
+ */
+export function layoutDocumentViewSteps(
+  options: LayoutDocumentViewOptions
+): LayoutSteps<SemanticLayout> {
+  return stepsInFieldResultsMode(options.fieldResults, layoutDocumentViewInModeSteps(options));
+}
+
+function* layoutDocumentViewInModeSteps(
+  options: LayoutDocumentViewOptions
+): LayoutSteps<SemanticLayout> {
   const defaultTabStopPt = options.defaultTabStopPt?.();
   const bodyPartName = options.view.part().name;
   const noteOptions = {
@@ -153,11 +197,13 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     styleCascade: options.styleCascade,
     numberingIndex: options.numberingIndex,
     defaultTabStopPt,
+    compatibilityMode: options.compatibilityMode?.(),
     inlineDrawingLayoutForPart: options.inlineDrawingLayoutForPart,
     drawingTokenForParagraphForPart: options.drawingTokenForParagraphForPart,
     drawingLayoutEpochForPart: options.drawingLayoutEpochForPart,
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
+    showFieldCodes: options.showFieldCodes,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
   } satisfies CreateDocumentNotesInputOptions &
@@ -175,13 +221,17 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     numberingIndex: options.numberingIndex,
     defaultTabStopPt,
     furniture: options.furniture,
+    compatibilityMode: options.compatibilityMode,
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
+    showFieldCodes: options.showFieldCodes,
+    fieldResults: options.fieldResults,
     inlineDrawingLayout: options.inlineDrawingLayout,
     drawingTokenForParagraph: options.drawingTokenForParagraph,
     drawingLayoutEpoch: options.drawingLayoutEpoch,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
+    bodyBlockLimit: options.bodyBlockLimit,
   } satisfies Record<CoordinatorInputsFor<'semantic-layout'>, unknown>;
   const semanticOptions = {
     measurer: semanticInputs.measurer,
@@ -190,11 +240,17 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     producer: semanticInputs.producer,
     styleCascade: semanticInputs.styleCascade?.(),
     defaultTabStopPt: semanticInputs.defaultTabStopPt,
+    compatibilityMode: semanticInputs.compatibilityMode?.(),
     numberingIndex: semanticInputs.numberingIndex?.(),
     sectionFurniture: semanticInputs.furniture.sectionFurniture(),
     furniture: semanticInputs.furniture.furniture(),
+    // A settings.xml flag: every section's resolved parts carry the same value.
+    evenAndOddHeaders:
+      semanticInputs.view.headerFooterPartsBySection()[0]?.evenAndOddHeaders === true,
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
+    showFieldCodes: semanticInputs.showFieldCodes,
+    fieldResults: semanticInputs.fieldResults,
     documentProperties: semanticInputs.view.documentProperties(),
     inlineDrawingLayout: semanticInputs.inlineDrawingLayout,
     drawingTokenForParagraph: semanticInputs.drawingTokenForParagraph,
@@ -207,8 +263,9 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     notes,
     displayMode: semanticInputs.displayMode,
     revisionAuthorFilter: semanticInputs.revisionAuthorFilter,
+    bodyBlockLimit: semanticInputs.bodyBlockLimit,
   } satisfies SemanticLayoutOptions & Record<DocumentCoordinatedSemanticOption, unknown>;
-  return layoutSemanticDocument(
+  return yield* layoutSemanticDocumentSteps(
     semanticInputs.view.part(),
     semanticInputs.revision,
     semanticOptions

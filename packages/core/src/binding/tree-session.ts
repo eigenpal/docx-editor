@@ -1,25 +1,25 @@
+import { shareUndoHistoryPosition } from '../store/store/undo-history-position.ts';
+import { createSessionPackageWriter } from './session-package-writer.ts';
 // Tree-backed editing session (cutover step 2b).
 //
 // The replacement for `openDocxSession`'s `PackageModel` path. Same job — open bytes, hand
 // out a ProseMirror projection, accept an edited doc, save — over the canonical tree
 // instead of a semantic model plus a byte-range preservation snapshot.
 //
-// Most of what the legacy session exposes exists to express the SECOND model's limits:
-// `readOnlyBlockIds`, `readOnlyRegions`, `structuralMutationAllowed` and the
-// fully-captured-slice rule are all answers to "can this paragraph's original bytes be
-// patched?". On the tree that question does not arise. A paragraph is editable because it
-// is a paragraph; unknown content survives because it is in the tree; so those fields
-// collapse to a single honest statement of what the part contains.
+// Paragraphs are edited through the canonical tree; unknown content remains preserved there.
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
-import type { Node as PMNode } from 'prosemirror-model';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
 import {
   canApplyLocalReviewPatch,
   localReviewPatchParagraphId,
+  reviewQueueKeptByStructure,
   patchLocalReviewItems,
 } from './review-patch.ts';
-import type { ReviewModuleContribution } from '../contracts/modules.ts';
+import { createReviewItemsMemo } from './review-items-memo.ts';
+import { reviewItemFiltering } from './review-item-filter.ts';
 import {
   addPackageComment,
   deletePackageComments,
@@ -43,10 +43,10 @@ import {
   TreePackageStore,
   readEmbeddedFonts,
   readOoxmlPackage,
+  type OoxmlPackageResult,
   resolveHeaderFooterParts,
   resolveHeaderFooterResolutionBySection,
   resolveRelationship,
-  writeOoxmlPackage,
   ensureListDefinition,
   ensureNumberingLevel,
   ensureHyperlinkRelationship,
@@ -61,7 +61,6 @@ import {
   type HeaderFooterSectionResolution,
   type OoxmlElement,
   type OoxmlPackage,
-  type OoxmlPackageRejection,
   type OoxmlPart,
   type RelationshipRecord,
   type StoryScope,
@@ -71,6 +70,7 @@ import { headerFooterPartsFromResolution } from '../store/package/hf-references.
 import {
   collectDocumentFonts,
   collectDocumentStyles,
+  collectSymbolFontFamilies,
   documentRendersText,
   type DocumentStyleEntry,
 } from './document-catalog.ts';
@@ -80,7 +80,7 @@ import {
   type DocumentOutlineEntry,
 } from './document-outline.ts';
 import { collectRenderedFontFamilies } from './document-rendered-fonts.ts';
-import { collectTextMatches, type DocumentSearchResult } from './document-search.ts';
+import { createSessionTextSearch } from './session-text-search.ts';
 import {
   collectDocumentThemeColors,
   collectDocumentThemeFonts,
@@ -112,33 +112,24 @@ import { commitSessionTreeOps, commitSessionTreeOpsAtomic } from './tree-session
 // tree-session-contract.ts; re-exported so every existing import through this module stays
 // stable.
 import type {
+  PackageWriteOptions,
   TreeApplyOptions,
   TreeApplyResult,
   TreeDocxSessionView,
 } from './tree-session-contract.ts';
-export type { TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
-
-/**
- * Binding-only session methods that exchange ProseMirror projections.
- *
- * Editor surfaces expose {@link TreeDocxSessionView}. Only the binding lane sees this extension.
- */
-export interface TreeDocxSession extends TreeDocxSessionView {
-  /** Project the current BODY revision into a ProseMirror doc. */
-  projectDoc(): PMNode;
-  /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
-  reconcile(previousDoc: PMNode): PMNode;
-  /**
-   * Whether the last commit changed the BLOCK SEQUENCE (a split, join, insert or delete).
-   *
-   * A host needs this to decide whether the view must be re-projected at all. After a pure
-   * text edit, the view already holds what the model holds. Re-projecting wastes work and
-   * races the next keystroke.
-   */
-  lastCommitWasStructural(): boolean;
-  /** Map an edited BODY doc to tree ops and commit them as one transaction. */
-  applyPmDoc(doc: PMNode): TreeApplyResult;
-}
+export type { PackageWriteOptions, TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
+import type {
+  OpenTreeSessionOptions,
+  OpenTreeSessionResult,
+  TreeDocxSession,
+  TreeSessionRejection,
+} from './tree-session-options.ts';
+export type {
+  OpenTreeSessionOptions,
+  OpenTreeSessionResult,
+  TreeDocxSession,
+  TreeSessionRejection,
+};
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
@@ -146,34 +137,8 @@ export type { DocumentOutlineEntry } from './document-outline.ts';
 export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
 export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 
-/**
- * Why bytes could not be opened: any bounded-reader rejection, plus the package that parsed but
- * carried no main document tree.
- */
-export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
-
-/**
- * An open session, or a typed refusal.
- *
- * A result rather than a throw: every failure here is a property of the FILE, and a host needs to
- * tell "this is not a package" from "this package is malicious" from "this document has no body".
- */
-export type OpenTreeSessionResult =
-  | { readonly ok: true; readonly session: TreeDocxSession }
-  | { readonly ok: false; readonly reason: TreeSessionRejection; readonly detail?: string };
-
 /** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
 const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
-
-export interface OpenTreeSessionOptions {
-  /**
-   * The review module's derivation hooks, contributed through the editor's
-   * `EditorModule` seam. Absent — the free engine — the session's
-   * `reviewItems()` reports the typed empty queue; parse, preservation, and
-   * `hasReviewContent` are unaffected.
-   */
-  readonly reviewModel?: ReviewModuleContribution;
-}
 
 /**
  * Open DOCX bytes into a tree-backed session.
@@ -189,14 +154,21 @@ export function openTreeSession(
   bytes: Uint8Array,
   options: OpenTreeSessionOptions = {}
 ): OpenTreeSessionResult {
-  const loaded = readOoxmlPackage(bytes);
-  if (!loaded.ok) {
-    return {
-      ok: false,
-      reason: loaded.reason,
-      ...(loaded.detail ? { detail: loaded.detail } : {}),
-    };
-  }
+  return openTreeSessionFromPackage(readOoxmlPackage(bytes), options);
+}
+
+/**
+ * {@link openTreeSession} over a package read already, so a large open can read it in short
+ * tasks (`readOoxmlPackageSteps`) and open the session after.
+ *
+ * @internal
+ */
+export function openTreeSessionFromPackage(
+  loaded: OoxmlPackageResult,
+  options: OpenTreeSessionOptions = {}
+): OpenTreeSessionResult {
+  // The package's refusal as it is, with the limit it crossed when it names one.
+  if (!loaded.ok) return loaded;
 
   const pkgLoaded: OoxmlPackage = loaded.package;
   const main = pkgLoaded.parts.get(pkgLoaded.mainDocumentPart);
@@ -208,7 +180,12 @@ export function openTreeSession(
   // layer can seed split-tail mints and the contract can address by paraId. A document
   // already carrying valid ids normalizes to the SAME part reference (byte-stable save).
   const normalized = normalizeParagraphIdentity(main);
-  const packageStore = new TreePackageStore(pkgLoaded, normalized);
+  // Empty prompt-bearing controls open showing their glossary placeholder, as Word shows it.
+  const packageStore = new TreePackageStore(
+    pkgLoaded,
+    materializeGlossaryPlaceholders(pkgLoaded, normalized),
+    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
+  );
 
   let headerFooterBySection: {
     readonly packageRevision: number;
@@ -225,9 +202,14 @@ export function openTreeSession(
     /** Package revision when this queue was last fully derived or patched. */
     packageRevision: number;
     items: readonly ReviewItem[];
-    paragraphOrder: ReadonlyMap<string, number>;
+    /** The body's paragraph order for `items`, or null when it is read on demand. */
+    paragraphOrder: ReadonlyMap<string, number> | null;
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
+    pkg: OoxmlPackage;
+    /** The styles and numbering `items` were filtered against. */
+    stylesPart: OoxmlPart | undefined;
+    numberingRoot: OoxmlElement | null;
   } | null = null;
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
@@ -243,6 +225,7 @@ export function openTreeSession(
 
   const bodyStore = () => packageStore.bodyStore();
   const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
+  const writePackage = createSessionPackageWriter();
   const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
 
   const headerFooterSettingsPart = (
@@ -327,8 +310,6 @@ export function openTreeSession(
   // Their memoized roots are cleared after the narrow package edits this session supports.
   const STYLES_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-  const NUMBERING_REL_TYPE =
-    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
   let stylesRoot: OoxmlElement | null = null;
   const resolveStylesRoot = (): OoxmlElement | null => {
     const live = currentPackage();
@@ -358,24 +339,11 @@ export function openTreeSession(
     const live = currentPackage();
     if (numberingRootPackage === live) return numberingRoot;
     numberingRootPackage = live;
-    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
-      (rel) => rel.type === NUMBERING_REL_TYPE
-    );
-    let part: OoxmlPart | undefined;
-    if (record) {
-      const resolved = resolveRelationship(record);
-      if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = live.parts.get(resolved.target.partName);
-      }
-    }
-    part ??= live.parts.get('/word/numbering.xml');
-    numberingRoot = part?.root ?? null;
+    numberingRoot = numberingRootOf(live);
     return numberingRoot;
   };
 
-  // The settings part, resolved like the styles part. Word writes document-wide layout
-  // constants here — `w:defaultTabStop` among them — that no paragraph property chain can
-  // see, so layout has to be handed them separately.
+  // Settings supply document-wide layout constants and theme font languages.
   const SETTINGS_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
   let settingsRootPackage: OoxmlPackage | null = null;
@@ -395,7 +363,13 @@ export function openTreeSession(
       }
     }
     part ??= live.parts.get('/word/settings.xml');
-    settingsRoot = part?.root ?? null;
+    const next = part?.root ?? null;
+    if (next !== settingsRoot) {
+      settingsRoot = next;
+      themeFontsCache = null;
+      stylesCache = null;
+      runDefaultsResolver = null;
+    }
     return settingsRoot;
   };
 
@@ -469,21 +443,22 @@ export function openTreeSession(
   const FONT_TABLE_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
   let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
-  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
-    if (embeddedFontsCache) return embeddedFontsCache;
+  const resolveFontTablePart = (): OoxmlPart | undefined => {
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === FONT_TABLE_REL_TYPE
     );
-    let part: OoxmlPart | undefined;
-    if (record) {
-      const resolved = resolveRelationship(record);
-      if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = live.parts.get(resolved.target.partName);
-      }
-    }
-    part ??= live.parts.get('/word/fontTable.xml');
-    embeddedFontsCache = Object.freeze(readEmbeddedFonts(live, part));
+    const resolved = record ? resolveRelationship(record) : null;
+    const named =
+      resolved?.mode === 'Internal' && resolved.target.ok
+        ? live.parts.get(resolved.target.partName)
+        : undefined;
+    return named ?? live.parts.get('/word/fontTable.xml');
+  };
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    embeddedFontsCache ??= Object.freeze(
+      readEmbeddedFonts(currentPackage(), resolveFontTablePart())
+    );
     return embeddedFontsCache;
   };
 
@@ -493,6 +468,8 @@ export function openTreeSession(
     readonly styles: OoxmlElement | null;
     readonly families: readonly string[];
   } | null = null;
+  let symbolFontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null =
+    null;
   let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
@@ -528,14 +505,6 @@ export function openTreeSession(
   let outlineCache: {
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
-  } | null = null;
-  // Last search answered, keyed on the revision AND the exact question. A find panel asks
-  // the same question repeatedly — a re-render, a tick, a next/previous press — and one
-  // entry is enough to make those free; a different query simply replaces it.
-  let searchCache: {
-    readonly revision: number;
-    readonly key: string;
-    readonly result: DocumentSearchResult;
   } | null = null;
   let anchorsCache: {
     readonly revision: number;
@@ -639,6 +608,7 @@ export function openTreeSession(
    * The store hangs off the MAIN part in every case: Word only reads one authored there. So the
    * story varies per call and the data owner does not.
    */
+  const reviewItemsMemo = createReviewItemsMemo();
   const customNodePayloadsAcrossStories = (): ReadonlyMap<string, CustomNodePayloadRead> => {
     const owner = bodyStore().part.name;
     const merged = new Map<string, CustomNodePayloadRead>();
@@ -690,7 +660,7 @@ export function openTreeSession(
     return parts;
   };
 
-  return {
+  const result: OpenTreeSessionResult = {
     ok: true,
     session: {
       // A document with paragraphs — body-level OR inside table cells — is editable. There
@@ -716,7 +686,7 @@ export function openTreeSession(
       currentPackage,
 
       collaborationPort: (documentId) =>
-        createCollaborationDocumentPort(packageStore, { documentId }),
+        createCollaborationDocumentPort(packageStore, { documentId, interactive: true }),
 
       applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
         return commitSessionTreeOps(
@@ -799,7 +769,11 @@ export function openTreeSession(
       },
 
       save() {
-        return writeOoxmlPackage(currentPackage());
+        return writePackage(currentPackage());
+      },
+
+      saveSteps() {
+        return writePackage.steps(currentPackage());
       },
 
       headerFooterParts: () => {
@@ -810,8 +784,7 @@ export function openTreeSession(
       headerFooterResolutionBySection: () => resolvedHeaderFooterBySection().resolution,
 
       documentFonts() {
-        // Keyed on the package revision: body or header/footer edits can add or remove a
-        // run-level `w:rFonts`.
+        // Body and furniture edits can change font declarations.
         if (fontsCache && fontsCache.revision === packageStore.packageRevision) {
           return fontsCache.fonts;
         }
@@ -819,16 +792,26 @@ export function openTreeSession(
           revision: packageStore.packageRevision,
           fonts: collectDocumentFonts(
             catalogRoots(),
-            collectDocumentThemeFonts(resolveThemeRoot())
+            collectDocumentThemeFonts(resolveThemeRoot(), resolveSettingsRoot())
           ),
         };
         return fontsCache.fonts;
       },
 
+      symbolFontFamilies() {
+        // Same revision key as `documentFonts`: a `w:sym` can be pasted in or deleted.
+        if (symbolFontsCache && symbolFontsCache.revision === packageStore.packageRevision) {
+          return symbolFontsCache.fonts;
+        }
+        symbolFontsCache = {
+          revision: packageStore.packageRevision,
+          fonts: collectSymbolFontFamilies(catalogRoots()),
+        };
+        return symbolFontsCache.fonts;
+      },
+
       renderedFontFamilies() {
-        // Keyed on the package revision AND the styles root: `resolveStylesRoot` swaps the
-        // root by identity when the styles part is repaired or replaced, and the style
-        // chains this derivation walks live there.
+        // Replacing styles or editing any story can change rendered font families.
         const styles = resolveStylesRoot();
         if (
           renderedFontsCache &&
@@ -843,7 +826,7 @@ export function openTreeSession(
           families: collectRenderedFontFamilies(
             storyCatalogRoots(),
             styles,
-            collectDocumentThemeFonts(resolveThemeRoot())
+            collectDocumentThemeFonts(resolveThemeRoot(), resolveSettingsRoot())
           ),
         };
         return renderedFontsCache.families;
@@ -863,17 +846,14 @@ export function openTreeSession(
       },
 
       documentStyles() {
-        // Both resolvers invalidate `stylesCache`/`runDefaultsResolver` as a side effect of
-        // being CALLED after their part changes. Resolve them before the `??=` short-circuit,
-        // or a theme/styles part swap keeps serving previews through the replaced faces.
+        // Resolve all dependencies before cached defaults can short-circuit their invalidation.
         const stylesRootNow = resolveStylesRoot();
         const themeRootNow = resolveThemeRoot();
-        // Font and size for each style's PREVIEW come from the run-defaults resolver, which
-        // already owns the basedOn chain, `docDefaults` and the theme font scheme — a
-        // picker showing every row in the UI font is the thing this avoids.
+        const settingsRootNow = resolveSettingsRoot();
+        // Style previews use the same basedOn/defaults/theme cascade as runs.
         runDefaultsResolver ??= createRunDefaultsResolver(
           stylesRootNow,
-          collectDocumentThemeFonts(themeRootNow)
+          collectDocumentThemeFonts(themeRootNow, settingsRootNow)
         );
         const resolve = runDefaultsResolver;
         stylesCache ??= collectDocumentStyles(stylesRootNow, (styleId) => resolve(styleId));
@@ -884,7 +864,12 @@ export function openTreeSession(
 
       documentThemeFonts() {
         const root = resolveThemeRoot();
-        themeFontsCache ??= collectDocumentThemeFonts(root);
+        const settings = resolveSettingsRoot();
+        themeFontsCache ??= collectDocumentThemeFonts(
+          root,
+          settings,
+          resolveFontTablePart()?.root ?? null
+        );
         return themeFontsCache;
       },
 
@@ -904,9 +889,10 @@ export function openTreeSession(
         // Same rule as `documentStyles`: resolving runs the invalidation side effects.
         const stylesRootNow = resolveStylesRoot();
         const themeRootNow = resolveThemeRoot();
+        const settingsRootNow = resolveSettingsRoot();
         runDefaultsResolver ??= createRunDefaultsResolver(
           stylesRootNow,
-          collectDocumentThemeFonts(themeRootNow)
+          collectDocumentThemeFonts(themeRootNow, settingsRootNow)
         );
         const store = bodyStore();
         if (!pStyleCache || pStyleCache.revision !== store.revision) {
@@ -933,18 +919,12 @@ export function openTreeSession(
         return outlineCache.outline;
       },
 
-      findText(query, options) {
-        const store = bodyStore();
-        const key = `${options?.matchCase === true ? 'c' : ''}${
-          options?.wholeWord === true ? 'w' : ''
-        }${options?.limit ?? ''}${'\u0000'}${query}`;
-        if (searchCache && searchCache.revision === store.revision && searchCache.key === key) {
-          return searchCache.result;
-        }
-        const result = collectTextMatches(store.part, query, options ?? {});
-        searchCache = { revision: store.revision, key, result };
-        return result;
-      },
+      findText: createSessionTextSearch({
+        revision: () => packageStore.packageRevision,
+        bodyPart: () => bodyStore().part,
+        currentPackage,
+        headerFooterBySection: () => resolvedHeaderFooterBySection().resolution,
+      }),
 
       embeddedFonts: resolveEmbeddedFonts,
 
@@ -1028,57 +1008,89 @@ export function openTreeSession(
         const commentsExtendedPart = pkg.parts.get(
           commentsExtendedPartNameOf(pkg, store.part.name)
         );
-        const furnitureParts = furnitureAndNoteParts();
-
-        const patchParagraphId =
-          reviewCache && lastChange
-            ? localReviewPatchParagraphId(
-                lastChange,
-                reviewCache,
-                reviewCache.items,
-                store.part,
-                commentsPart,
-                commentsExtendedPart,
-                packageStore.packageRevision
-              )
-            : null;
-
-        let items: readonly ReviewItem[];
-        let paragraphOrder: ReadonlyMap<string, number>;
-        if (patchParagraphId && reviewCache) {
-          const localRevisions = derive.revisionItemsOfParagraph(store.part, patchParagraphId);
-          if (canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)) {
-            items = patchLocalReviewItems(
-              reviewCache.items,
-              reviewCache.paragraphOrder,
-              patchParagraphId,
-              localRevisions
-            );
-            paragraphOrder = reviewCache.paragraphOrder;
-          } else {
-            paragraphOrder = paragraphOrderOfPart(store.part);
-            items = derive.collectReviewItems({
+        const memoInputs = {
+          root: store.part.root,
+          commentsPart,
+          commentsExtendedPart,
+          stylesPart: stylesPartOf(pkg),
+          numberingRoot: resolveNumberingRoot(),
+          furnitureParts: furnitureAndNoteParts(),
+          // Resolved HERE because a payload lives in a customXml data part: the derivation
+          // receives story parts, and reaching a package part from one is not something a
+          // capability module can do.
+          customNodePayloads: customNodePayloadsAcrossStories(),
+        };
+        const { stylesPart, numberingRoot } = memoInputs;
+        const filtering = reviewItemFiltering(derive, pkg, memoInputs, reviewCache);
+        const derived = (): readonly ReviewItem[] =>
+          reviewItemsMemo.get(memoInputs) ??
+          filtering.filtered(
+            derive.collectReviewItems({
               storyPart: store.part,
-              furnitureParts,
+              furnitureParts: memoInputs.furnitureParts,
+              stylesPart: memoInputs.stylesPart,
               commentsPart,
               commentsExtendedPart,
-              customNodePayloads: customNodePayloadsAcrossStories(),
-            });
-          }
+              customNodePayloads: memoInputs.customNodePayloads,
+            })
+          );
+        const inputs = {
+          part: store.part,
+          commentsPart,
+          commentsExtendedPart,
+          currentPackageRevision: packageStore.packageRevision,
+          currentPackage: pkg,
+          changePackage: lastChangePackage,
+        };
+
+        let items: readonly ReviewItem[];
+        // Null until a patch needs it: a split keeps the queue but moves the order.
+        let paragraphOrder: ReadonlyMap<string, number> | null = null;
+        if (
+          reviewCache &&
+          lastChange &&
+          filtering.sameFilter &&
+          reviewQueueKeptByStructure(lastChange, reviewCache, reviewCache.items, inputs)
+        ) {
+          items = reviewCache.items;
         } else {
-          paragraphOrder = paragraphOrderOfPart(store.part);
-          items = derive.collectReviewItems({
-            storyPart: store.part,
-            furnitureParts,
-            commentsPart,
-            commentsExtendedPart,
-            // Resolved HERE because a payload lives in a customXml data part: the derivation
-            // receives story parts, and reaching a package part from one is not something a
-            // capability module can do.
-            customNodePayloads: customNodePayloadsAcrossStories(),
-          });
+          const patchParagraphId =
+            reviewCache && lastChange
+              ? localReviewPatchParagraphId(lastChange, reviewCache, reviewCache.items, inputs)
+              : null;
+          const localRevisions =
+            patchParagraphId && reviewCache && filtering.patchable(patchParagraphId)
+              ? derive.revisionItemsOfParagraph(store.part, patchParagraphId)
+              : null;
+          if (
+            patchParagraphId &&
+            reviewCache &&
+            localRevisions &&
+            canApplyLocalReviewPatch(
+              reviewCache.items,
+              localRevisions,
+              patchParagraphId,
+              store.part
+            )
+          ) {
+            paragraphOrder = reviewCache.paragraphOrder ?? paragraphOrderOfPart(store.part);
+            const patched = patchLocalReviewItems(
+              reviewCache.items,
+              paragraphOrder,
+              patchParagraphId,
+              localRevisions,
+              filtering.filtered,
+              store.part
+            );
+            if (!patched) paragraphOrder = paragraphOrderOfPart(store.part);
+            items = patched ?? derived();
+          } else {
+            paragraphOrder = paragraphOrderOfPart(store.part);
+            items = derived();
+          }
         }
 
+        reviewItemsMemo.set(memoInputs, (items = filtering.publish(items)));
         reviewCache = {
           revisionKey,
           bodyRevision: store.revision,
@@ -1087,6 +1099,9 @@ export function openTreeSession(
           paragraphOrder,
           commentsPart,
           commentsExtendedPart,
+          pkg,
+          stylesPart,
+          numberingRoot,
         };
         return reviewCache.items;
       },
@@ -1102,19 +1117,35 @@ export function openTreeSession(
         // moved only `packageRevision`, leaving a stale answer cached behind it.
         const revision = packageStore.packageRevision;
         if (!reviewContentCache || reviewContentCache.revision !== revision) {
-          const stories = [bodyStore().part, ...furnitureAndNoteParts()];
+          const styles = stylesPartOf(currentPackage());
+          const stories = [
+            bodyStore().part,
+            ...furnitureAndNoteParts(),
+            ...(styles ? [styles] : []),
+          ];
           reviewContentCache = {
             revision,
+            // The memoized anchor check first: it answers by path after an edit, where the
+            // site list is rebuilt for the whole story.
             present: stories.some(
               (part) =>
-                collectRevisionSites(part).length > 0 || storyCarriesCommentAnchor(part.root)
+                storyCarriesCommentAnchor(part.root) || collectRevisionSites(part).length > 0
             ),
           };
         }
         return reviewContentCache.present;
       },
 
-      replyToComment(parentCommentId, anchor, text, author, date, scope = BODY_SCOPE, actorId) {
+      replyToComment(
+        parentCommentId,
+        anchor,
+        text,
+        author,
+        date,
+        scope = BODY_SCOPE,
+        actorId,
+        options = {}
+      ) {
         // The story that OWNS the anchor. Resolving a refused scope falls back to the body
         // rather than throwing: the caller's next check is the null return either way.
         const result = addPackageComment(
@@ -1137,26 +1168,27 @@ export function openTreeSession(
             ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
             ...(actorId === undefined ? {} : { actorId }),
           },
-          scope
+          scope,
+          options.historyToken
         );
         return result.ok ? result.commentId : null;
       },
 
-      setCommentResolved(commentId, resolved) {
-        const result = setPackageCommentResolved(packageStore, commentId, resolved);
-        return result.ok;
+      setCommentResolved(commentId, resolved, options = {}) {
+        return setPackageCommentResolved(packageStore, commentId, resolved, options.historyToken)
+          .ok;
       },
 
-      deleteComment(commentId, scope = BODY_SCOPE, noteId) {
-        return this.deleteComments([{ commentId }], scope, noteId);
+      deleteComment(commentId, scope = BODY_SCOPE, noteId, options) {
+        return this.deleteComments([{ commentId }], scope, noteId, options);
       },
 
-      deleteComments(comments, scope = BODY_SCOPE, noteId) {
-        return deletePackageComments(packageStore, comments, scope, noteId);
+      deleteComments(comments, scope = BODY_SCOPE, noteId, options = {}) {
+        return deletePackageComments(packageStore, comments, scope, noteId, options.historyToken);
       },
 
-      insertCustomNode(write, scope = BODY_SCOPE) {
-        return insertPackageCustomNode(packageStore, write, scope);
+      insertCustomNode(write, scope = BODY_SCOPE, options = {}) {
+        return insertPackageCustomNode(packageStore, write, scope, options.historyToken);
       },
 
       removeCustomNode(controlNodeId, scope = BODY_SCOPE) {
@@ -1264,6 +1296,8 @@ export function openTreeSession(
       },
     },
   };
+  shareUndoHistoryPosition(result.session, packageStore);
+  return result;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

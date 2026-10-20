@@ -28,6 +28,7 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { DocxEditorWindow, type DocxEditorWindowProps } from './editor/DocxEditorWindow';
 export { DocxEditorEquation } from './editor/DocxEditorEquation';
 export {
   DocxEditorLoading,
@@ -62,9 +63,50 @@ export {
   type DocxEditorParagraphDialogProps,
 } from './editor/DocxEditorParagraphDialog';
 export {
+  DocxEditorWatermarkDialog,
+  useWatermarkDialog,
+  type DocxEditorWatermarkDialogProps,
+  type UseWatermarkDialogReturn,
+  type WatermarkDialogFieldName,
+} from './editor/DocxEditorWatermark';
+export {
+  DEFAULT_WATERMARK_PRESETS,
+  type WatermarkDialogFields,
+  type WatermarkDialogKind,
+  type WatermarkDialogLayout,
+} from './editor/watermark-dialog-model';
+export { useWatermark, type UseWatermarkReturn } from './editor/useWatermark';
+export {
+  DocxEditorBookmarkDialog,
+  useBookmarkDialog,
+  type BookmarkDialogFields,
+  type DocxEditorBookmarkDialogProps,
+  type UseBookmarkDialogReturn,
+} from './editor/DocxEditorBookmark';
+export {
+  DocxEditorSplitCellDialog,
+  useSplitCellDialog,
+  type DocxEditorSplitCellDialogProps,
+  type SplitCellDialogFields,
+  type UseSplitCellDialogReturn,
+} from './editor/DocxEditorSplitCell';
+export { useBookmarks, type UseBookmarksReturn } from './editor/useBookmarks';
+export {
   DocxEditorFontNotice,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
+export {
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
+  useOpenFailure,
+  type DocxEditorOpenFailureActionProps,
+  type DocxEditorOpenFailureComponent,
+  type DocxEditorOpenFailureContext,
+  type DocxEditorOpenFailureMessage,
+  type DocxEditorOpenFailureProps,
+  type UseOpenFailureOptions,
+  type UseOpenFailureReturn,
+} from './editor/DocxEditorOpenFailure';
 // The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
 // module-gated). What this package exports are the integration points the pro pane —
 // or any external chrome — composes with: the rail registry the Viewport and rulers
@@ -88,13 +130,14 @@ export {
 } from './i18n';
 export { useChromeTranslate, type ChromeTranslate } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
-// left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
+// left gutter, its parts, and the hooks a custom pane is built from. The pane FLOATS
 // — it displaces the page only when the gutter is too narrow to hold it, and
 // `navigationShift` is that rule as a pure function a host can reuse or test.
 export {
   DocxEditorNavigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -103,13 +146,18 @@ export {
   NavigationToggle,
   NAVIGATION_PANE_GAP,
   NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_MIN_PAGE_ROOM,
   NAVIGATION_PANE_WIDTH,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
   useDocumentOutline,
   useDocumentSearch,
+  useGoToBookmark,
   useNavigationPane,
   useNavigationShift,
   type DocxEditorNavigationNamespace,
@@ -121,7 +169,15 @@ export {
   type OutlineHeading,
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
+  type DocumentSearchFindOptions,
+  type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
 } from './editor/navigation';
@@ -165,6 +221,8 @@ export {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
@@ -248,7 +306,11 @@ export {
   type DocxEditorPageNumberProps,
   PageNumberTranslationContext,
 } from './editor/DocxEditorPageNumber';
-export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+export {
+  useScopedChromeAnchor,
+  type ScopedChromeAnchor,
+  type ScopedChromeAnchorPlacement,
+} from './editor/useScopedChromeAnchor';
 export {
   ToolbarContext,
   useToolbarContext,
@@ -257,6 +319,13 @@ export {
   type ToolbarContextValue,
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { useCommentDraftRequest } from './editor/useCommentDraftRequest';
+export {
+  useEditorHostDocument,
+  type UseEditorHostDocumentReturn,
+} from './editor/useEditorHostDocument';
+export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
   useParagraphFormat,
@@ -296,6 +365,8 @@ export {
   type ParagraphStylePartProps,
   type ParagraphStyleProps,
   type ToolbarButtonProps,
+  type DocxEditorToolbarGroupProps,
+  type DocxEditorToolbarSlotProps,
   type ToolbarPartComponent,
   type ToolbarPartProps,
   type ToolbarReviewersProps,
@@ -326,6 +397,7 @@ export {
   type MenuActionProps,
   type MenuGroupProps,
   type MenuId,
+  type MenuItemBaseProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
@@ -333,6 +405,7 @@ export {
   type MenuReviewersProps,
   type MenuRowProps,
   type MenuSeparatorProps,
+  type MenuSubmenuBaseProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './editor/menu';
@@ -382,6 +455,7 @@ export type {
 // never needs a core import.
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   composeFontOrigins,
@@ -405,16 +479,43 @@ export {
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  DocumentOpenFailure,
+  DocumentOpenFailureReason,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
+  TextMatch,
   Editor,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  ScrollToAnchorOptions,
+  Watermark,
+  WatermarkState,
 } from '@docx-editor.dev/core/contracts/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 
-export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarGroup,
+  type ToolbarProps,
+  type SelectionFormatting,
+  type FormattingAction,
+} from './components/Toolbar';
+export type { TableAction } from './components/ui/TableToolbar';
+export type { FontOption } from './lib/fontOptions';
+export type { ListState, ListType } from './lib/listState';
+export type { ParagraphAlignment } from './components/ui/AlignmentButtons';
+export type { DocumentStyleSummary } from './lib/stylePreview';
+export type { DocxEditorRefCallback } from './docx-editor-ref-callback';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 export { PageIndicator, type PageIndicatorProps } from './components/DocxEditor/PageIndicator';
@@ -438,11 +539,130 @@ export {
 export { useEditorSnapshot } from './useEditorSnapshot';
 
 export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';
+export type { DocxEditorPopups } from './editor/popup-config';
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type DocxEditorTextFormFieldDialogProps,
+  type UseTextFormFieldDialogReturn,
+} from './editor/DocxEditorTextFormFieldDialog';
+
+export {
+  DocxEditorImageAltTextPopup,
+  type DocxEditorImageAltTextPopupProps,
+} from './editor/images/ImageAltText';
+export {
+  DocxEditorNotePropertiesDialog,
+  type DocxEditorNotePropertiesDialogProps,
+} from './editor/DocxEditorNotes';
+export {
+  DocxEditorNotePreview,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotePreviewProps,
+  type DocxEditorNotesContextMenuProps,
+} from './editor/note-popup-parts';
+
+export {
+  DocxEditorContentControlWidget,
+  type DocxEditorContentControlWidgetProps,
+  type DocxEditorContentControlWidgetNamespace,
+} from './editor/DocxEditorContentControlWidget';
+export {
+  useContentControlWidget,
+  type UseContentControlWidgetResult,
+  type ContentControlWidgetEntry,
+} from './editor/content-control-widget/context';
+export {
+  type DocxEditorContentControlWidgetPartProps,
+  type ContentControlWidgetDayProps,
+  type ContentControlWidgetItemProps,
+  type ContentControlWidgetPictureProps,
+} from './editor/content-control-widget/parts';
+export {
+  DocxEditorInvalidTextFormFieldDialog,
+  type DocxEditorInvalidTextFormFieldDialogProps,
+} from './editor/DocxEditorInvalidTextFormFieldDialog';
+export {
+  DocxEditorImageInsertErrorDialog,
+  type DocxEditorImageInsertErrorDialogProps,
+} from './editor/images/ImageInsertErrorDialog';
+
+export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
+
+export { createDocumentRefresh, DocumentRefreshError } from '@docx-editor.dev/core/editor';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
+} from '@docx-editor.dev/core/editor';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorExportDialog,
+  type DocxEditorExportDialogProps,
+} from './editor/DocxEditorExportDialog';
+
+export {
+  DocxEditorPrintDialog,
+  type DocxEditorPrintDialogProps,
+} from './editor/DocxEditorPrintDialog';
+
+export {
+  DocxEditorRevisionMarkup,
+  type DocxEditorRevisionMarkupProps,
+} from './editor/DocxEditorRevisionMarkup';
+
+export type {
+  RevisionMarkupOptions,
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
+  ResolvedRevisionMarkup,
+  RevisionMarkupColor,
+  RevisionMarkupNamedColor,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorRevisionMarkupDialog,
+  useRevisionMarkupDialog,
+  type DocxEditorRevisionMarkupDialogProps,
+  type UseRevisionMarkupDialogReturn,
+} from './editor/DocxEditorRevisionMarkupDialog';
+
+export type {
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,
 } from '@docx-editor.dev/core/output';
-
 export {
   DocxEditorUnsupportedElement,
   type DocxEditorUnsupportedElementProps,

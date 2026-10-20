@@ -1,0 +1,17 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A browser smoke spec checked that a click on a middle field line keeps that line.",
+  "after": "The surface and collaboration unit tests check the same clicked-line behavior without a browser spec.",
+  "reason": "Only test coverage moves. Shared nodes, text offsets, operations, and package serialization do not change.",
+  "tests": [],
+  "supersedesTests": [
+    {
+      "path": "e2e/field-caret-affinity.smoke.spec.ts",
+      "by": "packages/core/src/editor/__tests__/surface-field-caret-affinity.test.ts",
+      "reason": "Browser checks stay local scratch scripts; the surface test covers the clicked-line affinity in CI."
+    }
+  ],
+  "changeset": null,
+  "migration": null
+}

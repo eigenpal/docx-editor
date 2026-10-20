@@ -1,3 +1,14 @@
+import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
+import {
+  hasBorderPayload,
+  positionCommandHasFields,
+  propertiesCommandHasFields,
+} from './image-command-fields.ts';
+import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
+import { commandProtectionRefusal } from './command-protection.ts';
+import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
+import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
+import { reportCommandResult } from './command-reporting.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
 // Reads derive from layout records plus canonical projection; writes route through the
@@ -11,6 +22,7 @@ import type {
   SelectedImageState,
 } from '../contracts/editor.ts';
 import { geometryOfSection, lineAtPosition } from '../layout/index.ts';
+import { verticalMarginInsets } from '../layout/page-body-margins.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
@@ -48,6 +60,16 @@ export type { ImageContext, SelectedImageState };
 
 type SelectedDrawingRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
+export {
+  computeMovedImagePosition,
+  computeResizedImageExtentEmu,
+  emuToOverlayPoints,
+  EMU_PER_POINT,
+  pointsToEmu,
+  type ImageResizeHandle,
+} from './image-overlay-geometry.ts';
+import type { ImageResizeHandle } from './image-overlay-geometry.ts';
+
 const IMAGE_ASYNC_COMMAND_TYPES = new Set(['insertImage', 'replaceImage']);
 const IMAGE_COMMAND_TYPES = new Set([
   'insertImage',
@@ -67,10 +89,30 @@ export type ImageMutationPreconditions = Readonly<{
   selectionOffset: number;
 }>;
 
+/**
+ * Whether a record answers to this caret, and to the drawing the caller named.
+ *
+ * One paragraph can anchor several drawings, and they occupy ADJACENT offsets, so the offset
+ * alone is ambiguous: the second box's anchor offset is also the first box's `start + 1`.
+ * A named drawing therefore decides the tie, or the scan returns whichever came first and the
+ * caller can never address the rest.
+ */
+function drawingAnswersTo(
+  drawing: Pick<InlineDrawingRecord, 'drawingNodeId' | 'start' | 'accessibility'>,
+  offset: number,
+  wanted: string | null
+): boolean {
+  // A hidden record (an MC wrap footprint) holds layout space only; nothing can select it.
+  if (drawing.accessibility.hidden) return false;
+  if (wanted !== null && drawing.drawingNodeId !== wanted) return false;
+  return drawing.start === offset || drawing.start + 1 === offset;
+}
+
 function inlineDrawingAtOffset(
   line: ReturnType<typeof lineAtPosition>,
   paragraphId: string,
-  offset: number
+  offset: number,
+  wanted: string | null
 ): InlineDrawingRecord | null {
   if (!line) return null;
   for (const drawing of line.drawings ?? []) {
@@ -78,7 +120,7 @@ function inlineDrawingAtOffset(
     // the join line and both count from zero, so an offset alone selected the other half's
     // image — and every later command addressed that one.
     if (drawing.paragraphId !== paragraphId) continue;
-    if (drawing.start === offset || drawing.start + 1 === offset) return drawing;
+    if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
   }
   return null;
 }
@@ -86,27 +128,20 @@ function inlineDrawingAtOffset(
 function anchoredDrawingAtSelection(
   surface: PaginatedSurface,
   paragraphId: string,
-  offset: number
+  offset: number,
+  wanted: string | null
 ): AnchoredDrawingRecord | null {
   const layout = surface.layout();
   for (const page of layout.pages) {
     for (const drawing of page.anchoredDrawings ?? []) {
-      if (
-        drawing.anchorParagraphId === paragraphId &&
-        (drawing.start === offset || drawing.start + 1 === offset)
-      ) {
-        return drawing;
-      }
+      if (drawing.anchorParagraphId !== paragraphId) continue;
+      if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
     }
     for (const story of [page.header, page.footer]) {
       if (!story) continue;
       for (const drawing of story.anchoredDrawings ?? []) {
-        if (
-          drawing.anchorParagraphId === paragraphId &&
-          (drawing.start === offset || drawing.start + 1 === offset)
-        ) {
-          return drawing;
-        }
+        if (drawing.anchorParagraphId !== paragraphId) continue;
+        if (drawingAnswersTo(drawing, offset, wanted)) return drawing;
       }
     }
   }
@@ -136,14 +171,14 @@ export function resolveSelectedDrawingRecord(
   const { anchor, head } = surface.state().selection;
   if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
   const line = lineAtIndexedPosition(surface.layout(), anchor.paragraphId, anchor.offset);
-  const record =
-    inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset) ??
-    anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset);
-  if (!record) return null;
-  // A pointer press names its drawing, so a stale press can never claim a DIFFERENT
-  // drawing the caret later visits (a find jump that lands at another anchor).
-  if (intent.kind === 'pointer' && record.drawingNodeId !== intent.drawingNodeId) return null;
-  return record;
+  // A press names its drawing, so a stale press can never claim a DIFFERENT drawing the caret
+  // later visits (a find jump that lands at another anchor), and a paragraph anchoring several
+  // drawings resolves to the named one rather than to the first.
+  const wanted = intent.kind === 'pointer' ? intent.drawingNodeId : null;
+  return (
+    inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset, wanted) ??
+    anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset, wanted)
+  );
 }
 
 function projectDrawingForRecord(
@@ -153,7 +188,8 @@ function projectDrawingForRecord(
   const scope = surface.storyScope();
   const part = surface.session.partFor(scope) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
-  if (!drawing || drawing.kind !== 'drawing') return null;
+  if (!drawing) return null;
+  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId);
   return projectDrawing(drawing as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode, {
     ownerPartName: record.ownerPartName,
     supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
@@ -199,11 +235,14 @@ function capabilityFlags(
   projection: DrawingProjection
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
   const locks = projection.locks;
+  // An inline text box flows with its line: it is neither dragged nor resized in place.
+  const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
-    canResize: !locks.resize && !projection.hidden,
-    canMove: !locks.move && !projection.hidden,
-    canChangeWrap: !locks.move && projection.kind === 'anchored' && !projection.hidden,
-    canCrop: !locks.resize && !locks.changeAspect && !projection.hidden,
+    canResize: !fixed && !locks.resize && !projection.hidden,
+    canMove: !fixed && !locks.move && !projection.hidden,
+    canChangeWrap: projection.picture !== null && !locks.move && !projection.hidden,
+    canCrop:
+      projection.picture !== null && !locks.resize && !locks.changeAspect && !projection.hidden,
   });
 }
 
@@ -212,17 +251,19 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
   return record.wrap;
 }
 
+/** Image commands reach pictures and text boxes; the overlay offers handles on the same gate. */
+const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
+  record.placeholderGraphicKind === null || !!record.textboxStory;
+
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
  *
- * Null covers more than "no selection": a placeholder graphic, a drawing the file marks hidden,
- * and one whose `select` lock is set all read as no selection, because chrome that offered
- * resize handles on them would promise an edit the store is about to refuse.
+ * Unsupported placeholders, hidden drawings, and select-locked drawings cannot be selected.
  */
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (record.placeholderGraphicKind !== null) return null;
+  if (!imageCommandsReach(record)) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;
@@ -391,6 +432,29 @@ function drawingOpsResult(
   return null;
 }
 
+/** Keeps an inline picture where it is when a wrap change makes it float. */
+function keepPlaceWhenFloated(
+  surface: PaginatedSurface,
+  drawingNodeId: string,
+  wrap: ImageWrapTarget
+): DrawingTreeDocOp[] {
+  if (wrap === 'inline') return [];
+  const position = inlineToFloatingPosition(surface.layout(), drawingNodeId);
+  return position ? [{ op: 'positionDrawing', drawingNodeId, position }] : [];
+}
+
+function preserveWrapExtent(
+  surface: PaginatedSurface,
+  wrap: ImageWrapTarget,
+  ops: DrawingTreeDocOp[],
+  overrides?: WrapExtentOverrides
+): void {
+  const record = resolveSelectedDrawingRecord(surface);
+  const projection = record && projectDrawingForRecord(surface, record);
+  if (!projection) return;
+  preserveWrapExtentOps(projection, wrap, ops, overrides, record!.drawingNodeId);
+}
+
 function applyDrawingOps(
   surface: PaginatedSurface,
   ops: readonly DrawingTreeDocOp[]
@@ -406,40 +470,6 @@ function naturalExtentEmu(
   const cy = Math.round((image.intrinsic.pixelHeight * 914_400) / image.intrinsic.dpiY);
   if (!Number.isFinite(cx) || !Number.isFinite(cy) || cx <= 0 || cy <= 0) return null;
   return { cx, cy };
-}
-
-function hasBorderPayload(
-  command: Extract<EditorCommand, { type: 'setImageProperties' }>
-): boolean {
-  return command.borderWidthEmu !== undefined || command.borderColor !== undefined;
-}
-
-function positionCommandHasFields(
-  command: Extract<EditorCommand, { type: 'setImagePosition' }>
-): boolean {
-  return (
-    command.horizontalEmu !== undefined ||
-    command.verticalEmu !== undefined ||
-    command.relativeToH !== undefined ||
-    command.relativeToV !== undefined
-  );
-}
-
-function propertiesCommandHasFields(
-  command: Extract<EditorCommand, { type: 'setImageProperties' }>
-): boolean {
-  return (
-    command.widthEmu !== undefined ||
-    command.heightEmu !== undefined ||
-    command.alt !== undefined ||
-    command.title !== undefined ||
-    command.description !== undefined ||
-    command.hyperlink !== undefined ||
-    command.crop !== undefined ||
-    command.wrap !== undefined ||
-    command.resetToNaturalSize === true ||
-    propertiesCommandHasPositionFields(command)
-  );
 }
 
 function positionInputFromCommand(
@@ -502,7 +532,7 @@ function asyncImageExecutionGate(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   return null;
@@ -559,6 +589,13 @@ function isStaleImageMutation(
   return null;
 }
 
+/**
+ * Inserting a picture while one is selected has no place to land: the selection sits on the
+ * picture, and the store refuses an insert there. Refused up front, so the toolbar can say why.
+ */
+export const PICTURE_SELECTED_INSERT_REASON =
+  'a picture is selected; place the caret in text to insert a picture';
+
 export function gateImageCommand(
   command: EditorCommand,
   surface: PaginatedSurface | null
@@ -567,7 +604,12 @@ export function gateImageCommand(
   if (!surface) {
     return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   }
+  const protectedWrite = commandProtectionRefusal(command, surface);
+  if (protectedWrite) return protectedWrite;
   if (command.type === 'insertImage') {
+    if (resolveSelectedDrawingRecord(surface)) {
+      return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
+    }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'insertImage requires image bytes' };
     }
@@ -578,6 +620,20 @@ export function gateImageCommand(
       return { ok: false, code: 'invalidArgs', reason: 'insertImage dimensions must be positive' };
     }
     return null;
+  }
+  const record = resolveSelectedDrawingRecord(surface);
+  const textbox = record && 'textboxStory' in record && record.textboxStory;
+  if (
+    textbox &&
+    (command.type === 'replaceImage' ||
+      command.type === 'transformImage' ||
+      (command.type === 'setImageProperties' && command.hyperlink !== undefined))
+  ) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'this operation is not supported for textboxes',
+    };
   }
   if (command.type === 'replaceImage') {
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
@@ -593,6 +649,17 @@ export function gateImageCommand(
   if (!image) {
     return { ok: false, code: 'notFound', reason: 'no drawing is selected' };
   }
+  const wrapTarget =
+    command.type === 'setImageWrapType'
+      ? command.target
+      : command.type === 'setImageProperties'
+        ? command.wrap
+        : undefined;
+  if (wrapTarget !== undefined && image.locks.resize) {
+    const resizing: DrawingTreeDocOp[] = [];
+    preserveWrapExtent(surface, wrapTarget, resizing);
+    if (resizing.length) return { ok: false, code: 'locked', reason: 'the drawing size is locked' };
+  }
   // Suggesting supports exactly one image command: proposing the deletion. Every other
   // image edit (resize, wrap, position, replace) still refuses — a tracked form of those
   // does not exist yet, and a silent untracked commit is the one thing the mode forbids.
@@ -600,7 +667,7 @@ export function gateImageCommand(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   switch (command.type) {
@@ -799,8 +866,12 @@ export function execImageCommand(
     case 'setImageWrapType': {
       const resolved = selectedOrRequestedId(surface, command);
       if ('ok' in resolved) return resolved;
+      const ops: DrawingTreeDocOp[] = [];
+      preserveWrapExtent(surface, command.target, ops);
       return applyDrawingOps(surface, [
+        ...ops,
         { op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.target },
+        ...keepPlaceWhenFloated(surface, resolved.id, command.target),
       ]);
     }
     case 'transformImage': {
@@ -863,7 +934,9 @@ export function execImageCommand(
         });
       }
       if (command.wrap !== undefined) {
+        preserveWrapExtent(surface, command.wrap, ops, command);
         ops.push({ op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.wrap });
+        ops.push(...keepPlaceWhenFloated(surface, resolved.id, command.wrap));
       }
       if (propertiesCommandHasPositionFields(command)) {
         const position = positionInputFromPropertiesCommand(command, image);
@@ -917,7 +990,8 @@ function fitInsertExtent(
 ): { readonly widthPoints: number; readonly heightPoints: number } {
   const geometry = geometryOfSection(surface.sectionPropertiesAt(paragraphId));
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
-  const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
+  const margins = verticalMarginInsets(geometry);
+  const contentHeight = geometry.height - margins.top - margins.bottom;
   const line = lineAtIndexedPosition(surface.layout(), paragraphId, offset);
   const flowWidth =
     line && line.box.width > 0 ? Math.min(line.box.width, contentWidth) : contentWidth;
@@ -932,9 +1006,19 @@ function fitInsertExtent(
  * Run an insert or replace, re-checking the same gates {@link canExecuteImageCommand} applies.
  *
  * Async because image bytes must be decoded to derive their natural extent before the drawing can
- * be projected — the one editor command that cannot complete synchronously.
+ * be projected — the one editor command that cannot complete synchronously. It runs outside
+ * `exec`, so it reports a refusal to the editor's diagnostics itself.
  */
 export async function executeImageCommand(
+  editor: DocxEditorInstance,
+  command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
+): Promise<ExecResult> {
+  const result = await runImageCommand(editor, command);
+  reportCommandResult(editor, command, result);
+  return result;
+}
+
+async function runImageCommand(
   editor: DocxEditorInstance,
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
 ): Promise<ExecResult> {
@@ -1025,17 +1109,11 @@ export async function executeImageCommand(
   return { ok: true, changed: result.change !== null };
 }
 
-/** Which of the eight resize handles a drag started from, by compass direction. */
-export type ImageResizeHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
-
 /** How far one arrow-key press nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_PT = 1;
 
 /** How far Shift+arrow nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_SHIFT_PT = 10;
-
-/** EMUs per point. DrawingML stores extents in EMU; layout works in points. */
-export const EMU_PER_POINT = 12_700;
 
 /**
  * One in-flight image drag: where it started, and everything needed to decide at commit time
@@ -1085,6 +1163,8 @@ export interface ImageOverlayScrollPort {
  * decide what it is looking at.
  */
 export interface SelectedDrawingOverlayTarget {
+  /** Keep the text area available for pointer editing through the frame. */
+  readonly textbox?: boolean;
   readonly id: string;
   readonly pageIndex: number;
   readonly x: number;
@@ -1104,10 +1184,10 @@ export interface SelectedDrawingOverlayTarget {
 }
 
 function overlayCapabilityFlags(
-  _record: SelectedDrawingRecord,
+  record: SelectedDrawingRecord,
   projection: DrawingProjection | null
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
-  if (!projection || projection.hidden || projection.locks.select) {
+  if (!projection || projection.hidden || projection.locks.select || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
   const caps = capabilityFlags(projection);
@@ -1129,9 +1209,17 @@ export function selectedDrawingOverlayTargetOf(
   surface: PaginatedSurface | null
 ): SelectedDrawingOverlayTarget | null {
   if (!surface) return null;
+  const scope = surface.activeScope();
   const { anchor, head } = surface.state().selection;
-  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
-  const record = resolveSelectedDrawingRecord(surface);
+  if (
+    scope.kind !== 'frame' &&
+    (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset)
+  )
+    return null;
+  const record =
+    scope.kind === 'frame'
+      ? findDrawingOverlayFrameInLayout(surface.layout(), scope.drawingNodeId)?.record
+      : resolveSelectedDrawingRecord(surface);
   if (!record) return null;
   if (record.accessibility.hidden) return null;
   // `layout()`, not `publishedLayout()`: the caller is about to act on this geometry — place
@@ -1158,6 +1246,7 @@ export function selectedDrawingOverlayTargetOf(
       : null;
   return Object.freeze({
     id: record.drawingNodeId,
+    textbox: 'textboxStory' in record && !!record.textboxStory,
     pageIndex: frame.pageIndex,
     x: frame.x,
     y: frame.y,
@@ -1170,91 +1259,6 @@ export function selectedDrawingOverlayTargetOf(
     anchorFrameOrigin,
     transform: record.transform,
     ...gated,
-  });
-}
-
-/** Points to EMU, rounded — EMUs are integral in the file. */
-export function pointsToEmu(points: number): number {
-  return Math.round(points * EMU_PER_POINT);
-}
-
-/** EMU to points. Unrounded, so overlay geometry keeps sub-point precision during a drag. */
-export function emuToOverlayPoints(emu: number): number {
-  return emu / EMU_PER_POINT;
-}
-
-/**
- * The extent a resize drag produces, in EMU.
- *
- * Computed from the drag's START extent rather than the previous frame's, so a drag that reverses
- * direction lands exactly where it began instead of accumulating rounding error.
- *
- * `preserveAspect` behaves the way Word's handles do: a corner handle scales by whichever axis
- * moved further, while an edge handle drives the other axis from the original ratio. Both axes
- * are floored at one point, so a drag past the opposite edge cannot invert the image.
- */
-export function computeResizedImageExtentEmu(
-  startWidthEmu: number,
-  startHeightEmu: number,
-  handle: ImageResizeHandle,
-  deltaWidthPt: number,
-  deltaHeightPt: number,
-  preserveAspect: boolean
-): { readonly cx: number; readonly cy: number } {
-  let widthPt = emuToOverlayPoints(startWidthEmu);
-  let heightPt = emuToOverlayPoints(startHeightEmu);
-  const aspect = widthPt / heightPt;
-  const horizontal = handle.includes('e') ? deltaWidthPt : handle.includes('w') ? -deltaWidthPt : 0;
-  const vertical = handle.includes('s') ? deltaHeightPt : handle.includes('n') ? -deltaHeightPt : 0;
-  widthPt = Math.max(1, widthPt + horizontal);
-  heightPt = Math.max(1, heightPt + vertical);
-  if (preserveAspect) {
-    const corner = handle.length === 2;
-    if (corner) {
-      const scale = Math.max(
-        widthPt / emuToOverlayPoints(startWidthEmu),
-        heightPt / emuToOverlayPoints(startHeightEmu)
-      );
-      widthPt = Math.max(1, emuToOverlayPoints(startWidthEmu) * scale);
-      heightPt = Math.max(1, widthPt / aspect);
-    } else if (handle === 'e' || handle === 'w') {
-      heightPt = Math.max(1, widthPt / aspect);
-    } else {
-      widthPt = Math.max(1, heightPt * aspect);
-    }
-  }
-  return Object.freeze({ cx: pointsToEmu(widthPt), cy: pointsToEmu(heightPt) });
-}
-
-/**
- * The position a move drag produces, preserving the anchoring the file already used.
- *
- * A `frame`-mode position keeps its `relativeToH`/`relativeToV` bases and only shifts the offsets
- * it actually had — writing an offset the file omitted would re-anchor the drawing to a different
- * reference and move it somewhere the drag never pointed.
- */
-export function computeMovedImagePosition(
-  start: DrawingPositionInput,
-  deltaXPt: number,
-  deltaYPt: number
-): DrawingPositionInput {
-  if (start.mode === 'simple') {
-    return Object.freeze({
-      mode: 'simple' as const,
-      horizontalEmu: (start.horizontalEmu ?? 0) + pointsToEmu(deltaXPt),
-      verticalEmu: (start.verticalEmu ?? 0) + pointsToEmu(deltaYPt),
-    });
-  }
-  return Object.freeze({
-    mode: 'frame' as const,
-    ...(start.horizontalEmu !== undefined
-      ? { horizontalEmu: start.horizontalEmu + pointsToEmu(deltaXPt) }
-      : {}),
-    ...(start.verticalEmu !== undefined
-      ? { verticalEmu: start.verticalEmu + pointsToEmu(deltaYPt) }
-      : {}),
-    ...(start.relativeToH !== undefined ? { relativeToH: start.relativeToH } : {}),
-    ...(start.relativeToV !== undefined ? { relativeToV: start.relativeToV } : {}),
   });
 }
 

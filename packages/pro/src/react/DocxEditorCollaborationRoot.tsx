@@ -22,7 +22,7 @@ import { DocxEditorRoot } from '@docx-editor.dev/react';
 import type { DocxEditorRootProps } from '@docx-editor.dev/react';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type { ReactNode } from 'react';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 
 /**
  * What this component needs from a room, which every collaboration hook already returns.
@@ -33,8 +33,11 @@ import type { CollaborationSession } from '../collaboration/session.ts';
  * @public
  */
 export interface CollaborationRootSource {
+  /** The document bytes to mount, or null while none is ready. */
   readonly document: Uint8Array | null;
+  /** The editor modules to register, the collaboration module among them. */
   readonly modules: readonly EditorModule[];
+  /** The collaboration session, or null while none is connected. */
   readonly session: CollaborationSession | null;
 }
 

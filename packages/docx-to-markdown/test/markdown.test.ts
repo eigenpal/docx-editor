@@ -13,7 +13,7 @@ import {
   exportMarkdownLayout,
   type MarkdownExportOptions,
   type MarkdownExportResult,
-} from '../src/markdown.ts';
+} from '../src/index.ts';
 
 async function exportMarkdown(
   source: ExportDocumentSource,
@@ -214,6 +214,22 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).toContain('| Name | Value |');
     expect(result.markdown).toContain('| :---: | --- |');
     expect(result.markdown).toContain('| A\\|B | 2 |');
+  });
+
+  test('numbers a list item that opens with a page break on the page of its text', async () => {
+    const numbering =
+      `<w:numbering xmlns:w="${W}">` +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
+    const list = (text: string, lead = '') =>
+      `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${lead}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const result = await exportMarkdown(
+      docx(list('One') + list('Two', '<w:r><w:br w:type="page"/></w:r>'), numbering)
+    );
+    // The document view keeps one item; the page view numbers it where its text is.
+    expect(result.markdown).toStartWith('1. One\n\n2.');
+    expect(result.markdown).toEndWith('Two');
+    expect(result.pages.map((page) => page.markdown.trim())).toEqual(['1. One', '2. Two']);
   });
 
   test('does not turn preserved paragraph spacing or table-cell outlines into GFM blocks', async () => {
@@ -609,6 +625,21 @@ describe('record-only Markdown export', () => {
     expect(html).toContain('<a href="https://example.com/space">  </a>');
   });
 
+  test('moves trailing link whitespace outside the label, across runs', async () => {
+    // The label's trailing whitespace spans two runs and includes a tab. It must land after
+    // the link, whole and in order, not inside the brackets.
+    const body =
+      '<w:p><w:hyperlink r:id="rLink"><w:r><w:t xml:space="preserve">go  x </w:t></w:r>' +
+      '<w:r><w:tab/><w:t xml:space="preserve">  </w:t></w:r></w:hyperlink>' +
+      '<w:r><w:t>next</w:t></w:r></w:p>';
+    const result = await exportMarkdown(
+      docx(body, undefined, {
+        documentRelationships: `<Relationship Id="rLink" Type="${R}/hyperlink" Target="https://a.example" TargetMode="External"/>`,
+      })
+    );
+    expect(result.markdown).toBe('[go  x](https://a.example)    next');
+  });
+
   test('projects sanitized hyperlinks and HYPERLINK fields in header stories', async () => {
     const header =
       `<w:hdr xmlns:w="${W}" xmlns:r="${R}"><w:p>` +
@@ -869,6 +900,13 @@ describe('record-only Markdown export', () => {
       const rendered = await exportMarkdownFrom(opened.session);
       expect(rendered.markdown).not.toContain('Diagram');
       expect(rendered.pages[0]?.markdown).not.toContain('Diagram');
+      expect(rendered.warnings).toEqual([
+        {
+          code: 'omitted-drawing',
+          message: 'Images and shapes are omitted from Markdown.',
+          pageNumber: 1,
+        },
+      ]);
     } finally {
       opened.session.dispose();
     }

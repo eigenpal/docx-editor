@@ -21,6 +21,7 @@
 // the immutable paragraph node, the story aggregate is capped, and the bookmark walk shares
 // the field-scan budget and depth cap.
 
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -30,6 +31,10 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { noteIdOf, noteReferenceKindOf, type NoteKind } from '../store/package/note-nodes.ts';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import {
   authoredDocumentEndnoteProperties,
   authoredDocumentFootnoteProperties,
@@ -175,7 +180,7 @@ function customMarkFollowsOf(node: OoxmlElement): boolean {
  * scan: only typed `noteReference` nodes count, so generic/demoted wrappers never invent a
  * numbered site the painter would not number.
  */
-const paragraphNoteSites = new WeakMap<OoxmlElement, readonly ParagraphNoteSite[]>();
+const paragraphNoteSites = new FieldResultsModeMemo<OoxmlElement, readonly ParagraphNoteSite[]>();
 
 function noteSitesOfParagraph(paragraph: OoxmlElement): readonly ParagraphNoteSite[] {
   const memo = paragraphNoteSites.get(paragraph);
@@ -223,8 +228,11 @@ function endnotePropsAt(
 
 const EMPTY_MARK_INDEX: ReadonlyMap<string, string> = new Map();
 
-/** Memo per blocks array, validated on the numbering input's identity (see the wrapper memo). */
-const markIndexMemos = new WeakMap<
+/**
+ * Memo per blocks array, validated on the numbering input's identity (see the wrapper memo).
+ * Built from the mode-keyed note sites, so it is keyed on the field-result mode too.
+ */
+const markIndexMemos = new FieldResultsModeMemo<
   readonly OoxmlElement[],
   { input: NoteRefNumberingInput; index: ReadonlyMap<string, string> }
 >();
@@ -350,8 +358,9 @@ export function firstNoteReferenceIdInBookmark(
   let found: string | null = null;
   const budget = createScanBudget();
 
-  const visit = (node: OoxmlNode, depth: number): void => {
+  const visit = (node: OoxmlNode, depth: number, containerDepth: number): void => {
     if (done || node.kind === 'textValue') return;
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
     if (node.kind === 'bookmarkStart') {
       if (!collecting && wmlAttribute(node, 'name') === name) {
@@ -370,11 +379,12 @@ export function firstNoteReferenceIdInBookmark(
       return;
     }
     if (!consumeScanNode(budget)) return;
-    for (const child of node.children) visit(child, depth + 1);
+    const nextDepth = nextInlineContainerDepth(node, containerDepth);
+    for (const child of node.children) visit(child, depth + 1, nextDepth);
   };
   for (const child of paragraph.children) {
     if (done || !consumeScanNode(budget)) break;
-    visit(child, 1);
+    visit(child, 1, 0);
   }
 
   if (!memo) {

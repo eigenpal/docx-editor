@@ -1,3 +1,10 @@
+import type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';
+import type { SetFieldCodeOp } from './tree-op-field-code.ts';
+import type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
+import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-form-fields.ts';
+import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
+import type { InsertBuildingBlockOp } from './building-block-insert.ts';
+import type { InsertBookmarkOp, DeleteBookmarkOp } from './tree-op-bookmarks.ts';
 // The op vocabulary and effect/rejection contracts (tree-ops seam).
 //
 // This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
@@ -19,7 +26,6 @@ import type {
 } from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
 
-/** JSON-safe color input carried on table cell property ops. Theme/auto require a validated literal. */
 /**
  * A colour as an op carries it: a literal, a theme reference, or automatic.
  *
@@ -37,7 +43,6 @@ export type TreeDocColorValue =
     }
   | { readonly kind: 'auto'; readonly resolvedHex: string };
 
-/** Which cell edges a selected-cell border op targets. */
 /** Which edges a border op addresses — the four sides, the interiors, all, or clear. */
 export type TableBorderTarget =
   | 'all'
@@ -49,7 +54,6 @@ export type TableBorderTarget =
   | 'left'
   | 'right';
 
-/** Concrete edge scopes that apply or clear a complete border spec. */
 /** A {@link TableBorderTarget} that draws something — everything except clear. */
 export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
 
@@ -110,6 +114,9 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
   // it (`paragraphContextualSpacing`); until now nothing could write it.
   'contextualSpacing',
   'shd', // shading
+  // Paragraph base direction: Word's Left-to-Right / Right-to-Left Text Direction. On/off
+  // only; `w:val="0"` is the explicit left-to-right that overrides a right-to-left style.
+  'bidi',
 ] as const;
 
 export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
@@ -155,6 +162,7 @@ export {
  * unchanged.
  */
 export type TreeDocOp =
+  | SetFieldCodeOp
   | {
       /**
        * Replace one story's complete block structure with fresh plain paragraphs.
@@ -187,49 +195,8 @@ export type TreeDocOp =
         readonly name: string;
       }[];
     }
-  | {
-      readonly op: 'insertText';
-      readonly paragraphId: string;
-      readonly offset: number;
-      readonly text: string;
-      /**
-       * Write this as a TRACKED insertion, attributed here.
-       *
-       * On the op rather than on the store, so suggesting stays a decision the surface makes
-       * per edit and the write vocabulary stays explicit — a global "everything is tracked
-       * now" flag is exactly what `DocEdits` refuses, because it makes the meaning of an op
-       * depend on state the op does not carry.
-       */
-      readonly revision?: RevisionAttributionInput;
-      /**
-       * When set, the text belongs INSIDE this content control, whatever sits at the offset.
-       *
-       * A boundary offset is owned by the run that starts there, which at a control's trailing
-       * edge is the run after the control — so an offset alone cannot say "append to this field",
-       * the way it cannot say which run of a field result to format (see `targetRunIds`). A
-       * caller that names the control gets the text in the control; one that does not gets the
-       * plain offset rule, which is what a keystroke beside a field means.
-       */
-      readonly inside?: string;
-      /**
-       * Which side of a run BOUNDARY the text joins. Default `'left'` — Word's typing rule:
-       * the next character takes the formatting of the character before the caret.
-       *
-       * `'right'` is for a caller that is not typing but placing text inside the run that
-       * STARTS at the offset — the hyperlink editor rewriting a link's display text, where
-       * landing left of the boundary would put the new text outside the link. Ignored when
-       * the offset falls strictly inside a run, which has no boundary to choose.
-       */
-      readonly bias?: 'left' | 'right';
-    }
-  | {
-      readonly op: 'deleteText';
-      readonly paragraphId: string;
-      readonly start: number;
-      readonly end: number;
-      /** Write this as a TRACKED deletion — the characters stay, wrapped in `w:del`. */
-      readonly revision?: RevisionAttributionInput;
-    }
+  | InsertTextOp
+  | DeleteTextOp
   | {
       /**
        * Mark a paragraph's own MARK as inserted or deleted (`w:pPr/w:rPr/w:ins|w:del`,
@@ -271,11 +238,15 @@ export type TreeDocOp =
       readonly revision: RevisionAddress;
       /** When set, only wrappers with this element local name resolve (ins/del/moveFrom/moveTo). */
       readonly localName?: string;
+      /** Internal exact-site scope used when one Word revision address names separate decisions. */
+      readonly siteNodeIds?: readonly string[];
     }
   | {
       readonly op: 'rejectRevision';
       readonly revision: RevisionAddress;
       readonly localName?: string;
+      /** Internal exact-site scope used when one Word revision address names separate decisions. */
+      readonly siteNodeIds?: readonly string[];
     }
   | {
       /**
@@ -286,11 +257,25 @@ export type TreeDocOp =
        * changes made one decision, and one undo should restore all of them.
        */
       readonly op: 'acceptAllRevisions';
+      /** Exact canonical sites selected by bulk preflight. */
+      readonly siteNodeIds?: readonly string[];
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
   | {
+      /**
+       * Attribute pending revisions to another author, and optionally another date, without
+       * deciding them. `sites` name revision elements and move range starts. Sites sharing a
+       * `renumber` label take one fresh `w:id`, so the change cannot merge with another one.
+       */
+      readonly op: 'setRevisionAttribution';
+      readonly revision: RevisionAttributionInput;
+      readonly sites: readonly { readonly nodeId: string; readonly renumber?: string }[];
+    }
+  | {
       readonly op: 'rejectAllRevisions';
+      /** Exact canonical sites selected by bulk preflight. */
+      readonly siteNodeIds?: readonly string[];
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
@@ -346,6 +331,7 @@ export type TreeDocOp =
       readonly op: 'setListLevel';
       readonly paragraphId: string;
       readonly level: number;
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -373,6 +359,7 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly numId: string | null;
       readonly level?: number;
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -548,6 +535,8 @@ export type TreeDocOp =
        */
       readonly op: 'setHyperlinkTarget';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
       readonly relationshipId?: string;
       readonly anchor?: string;
       readonly tooltip?: string;
@@ -563,6 +552,8 @@ export type TreeDocOp =
        */
       readonly op: 'removeHyperlink';
       readonly linkId: string;
+      /** Optional exact paragraph offsets for an ordinary text subrange of this link. */
+      readonly range?: { readonly start: number; readonly end: number };
     }
   | {
       /**
@@ -624,6 +615,8 @@ export type TreeDocOp =
         readonly xpath: string;
         readonly storeItemId: string;
       };
+      /** Propose the control as a tracked `w:ins`; rejecting removes it with its text. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Repeating-section item insert — unsupported at this layer (out of scope). */
@@ -663,6 +656,8 @@ export type TreeDocOp =
       readonly cols: number;
       /** Width of every grid column, in twips. The caller divides the content width. */
       readonly columnWidthTwips: number;
+      /** Propose the complete table through native row and cell insertion revisions. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Insert a fresh row above or below a canonical table row. */
@@ -707,6 +702,20 @@ export type TreeDocOp =
       readonly gridColumnId: string;
     }
   | {
+      /** Merge cells covering one rectangle into its top-left cell, content in reading order. */
+      readonly op: 'mergeTableCells';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+    }
+  | {
+      /** Split one cell into `rows` by `columns` equal cells; a one-row cell adds rows. */
+      readonly op: 'splitTableCell';
+      readonly tableId: string;
+      readonly cellId: string;
+      readonly rows: number;
+      readonly columns: number;
+    }
+  | {
       /**
        * Resize one internal divider between two adjacent canonical grid columns.
        * Preserves the pair total and sets fixed table layout.
@@ -727,6 +736,34 @@ export type TreeDocOp =
       readonly gridColumnId: string;
       readonly columnWidthTwips: number;
       readonly tableWidthTwips: number;
+    }
+  | {
+      /** Atomic semantic table authoring. Newly created nodes never need caller-supplied IDs. */
+      readonly op: 'authorTable';
+      /** Native row revisions. Other structural mutations refuse this option. */
+      readonly revision?: RevisionAttributionInput;
+      readonly action:
+        | {
+            readonly kind: 'existing';
+            readonly tableId: string;
+            readonly mutation: import('./table-authoring-plan.ts').AutomationTableMutation;
+          }
+        | {
+            readonly kind: 'insert';
+            readonly paragraphId: string;
+            readonly offset: number;
+            readonly rowCount: number;
+            readonly columnCount: number;
+            readonly values?: readonly (readonly string[])[];
+          };
+    }
+  | {
+      /** Lossless direct table properties; widths are one value per rectangular grid column. */
+      readonly op: 'setTableProperties';
+      readonly tableId: string;
+      readonly styleId?: string;
+      readonly headerRowCount?: number;
+      readonly columnWidthsTwips?: readonly number[];
     }
   | {
       /** Set one authored table row to an exact height in twips. */
@@ -808,6 +845,21 @@ export type TreeDocOp =
       readonly evenAndOddHeaders?: boolean;
       readonly headerDistanceTwips?: number;
       readonly footerDistanceTwips?: number;
+    }
+  | {
+      /**
+       * Word's Protect Document: enforce or lift `w:documentProtection` in `settings.xml`.
+       * Enforcing writes `w:edit="forms"` (filling in forms, the one restriction the store
+       * applies); lifting keeps the recorded mode and clears `w:enforcement`, as Word's Stop
+       * Protection does. A password-protected file refuses to lift. Package-level.
+       */
+      readonly op: 'setDocumentProtection';
+      readonly enforce: boolean;
+    }
+  | {
+      /** Replace the watermark in every header a section shows; null removes it. Package-level. */
+      readonly op: 'setWatermark';
+      readonly watermark: import('../package/watermark-package.ts').PackageWatermarkWrite | null;
     }
   | {
       /**
@@ -895,6 +947,8 @@ export type TreeDocOp =
        * that were there; only the run boundaries move.
        */
       readonly op: 'insertContentControl';
+      /** Record a wrapper over existing text as a native replacement revision. */
+      readonly revision?: RevisionAttributionInput;
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;
@@ -1025,6 +1079,13 @@ export type TreeDocOp =
         readonly pageNumberText: string;
       }[];
     }
+  | SetTextFormFieldDefaultOp
+  | CommitTextFormFieldOp
+  | SetLegacyCheckboxOp
+  | SetLegacyDropdownOp
+  | InsertBuildingBlockOp
+  | InsertBookmarkOp
+  | DeleteBookmarkOp
   | {
       /**
        * Rewrite recognized fields' cached RESULT runs in place — between the `separate` and
@@ -1061,89 +1122,7 @@ export type DrawingTreeDocOp = Extract<
 /** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];
 
-/** Every {@link TreeDocOpKind}, for validation and exhaustiveness checks. */
-export const TREE_DOC_OP_KINDS = [
-  'replaceStoryBlocks',
-  'insertText',
-  'deleteText',
-  'setParagraphMarkRevision',
-  'proposeParagraphMerge',
-  'insertCommentMarker',
-  'acceptRevision',
-  'rejectRevision',
-  'acceptAllRevisions',
-  'rejectAllRevisions',
-  'insertTab',
-  'insertHardBreak',
-  'insertPageBreak',
-  'insertPageField',
-  'setListLevel',
-  'setListNumbering',
-  'setParagraphTabStops',
-  'setParagraphMarkProperties',
-  'splitParagraph',
-  'splitParagraphMany',
-  'joinParagraphs',
-  'setRunProperties',
-  'setParagraphProperties',
-  'setSectionProperties',
-  'setSectionMark',
-  'insertHyperlink',
-  'setHyperlinkTarget',
-  'removeHyperlink',
-  'setMathEquation',
-  'removeMathEquation',
-  'setContentControlValue',
-  'removeContentControl',
-  'insertInlineContentControl',
-  'addRepeatingSectionItem',
-  'removeRepeatingSectionItem',
-  'deleteBlock',
-  'insertTable',
-  'insertTableRow',
-  'deleteTableRow',
-  'insertTableColumn',
-  'deleteTableColumn',
-  'setTableColumnWidths',
-  'setTableRightEdgeWidth',
-  'setTableRowHeight',
-  'setTableCellBorders',
-  'setTableCellFill',
-  'setTableCellVerticalAlignment',
-  'createHeaderFooter',
-  'deleteHeaderFooter',
-  'linkToPrevious',
-  'unlinkFromPrevious',
-  'setSectionFurnitureOptions',
-  'insertNote',
-  'deleteNote',
-  'convertNote',
-  'convertAllNotes',
-  'setNoteProperties',
-  'setContentControlProperties',
-  'insertContentControl',
-  'insertFragment',
-  'insertDrawing',
-  'replaceDrawingResource',
-  'deleteDrawing',
-  'resizeDrawing',
-  'cropDrawing',
-  'positionDrawing',
-  'setDrawingWrap',
-  'setDrawingMetadata',
-  'setDrawingLocks',
-  'transformDrawing',
-  'insertToc',
-  'replaceTocResult',
-  'rewriteTocPageNumbers',
-  'refreshFieldResults',
-] as const satisfies readonly TreeDocOpKind[];
-
-// Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
-// listed here or this fails to typecheck, so it can never be silently unvalidated.
-type _MissingTreeOp = Exclude<TreeDocOpKind, (typeof TREE_DOC_OP_KINDS)[number]>;
-const _treeOpsExhaustive: _MissingTreeOp extends never ? true : ['missing', _MissingTreeOp] = true;
-void _treeOpsExhaustive;
+export { TREE_DOC_OP_KINDS } from './tree-op-kinds.ts';
 
 /**
  * How far a committed op can reach, so layout can scope its work (task 5.2).
@@ -1212,6 +1191,18 @@ export type TreeOpRejection =
    * caller learns the node would not have landed where they asked.
    */
   | 'indivisible-content'
+  /**
+   * The range has one end inside a field's editable saved result and the other outside it.
+   * Deleting it would leave the field's begin, separate, and end markers unbalanced, so it is
+   * refused. A range that covers the whole field removes the field.
+   */
+  | 'field-structure'
+  /**
+   * In the editable field-result mode, an op other than typing, deletion, or run formatting
+   * addresses a position inside a field's saved result. Splits, tabs, links, notes, and
+   * fragments there are not supported yet.
+   */
+  | 'field-result-unsupported'
   | 'unknown-block'
   | 'not-a-block'
   | 'block-required'
@@ -1223,6 +1214,11 @@ export type TreeOpRejection =
    * pointing at a part nobody created, or a part with no declared content type.
    */
   | 'package-invariant'
+  /**
+   * A package edit refused the package it was given, for example because an id or part name it
+   * expected to allocate is taken or a definition it addresses changed. Nothing was applied.
+   */
+  | 'package-changed'
   /** No revision in this part carries the addressed `(id, author, date)` triple. */
   | 'unknown-revision'
   /**
@@ -1231,6 +1227,12 @@ export type TreeOpRejection =
    * applied while leaving the row, cell, or section it describes untouched.
    */
   | 'unsupported-revision'
+  /**
+   * A tracked insertion would land inside a link, content control, or other container within
+   * another author's pending insertion. The container cannot split, and nested words would
+   * become part of that author's proposal.
+   */
+  | 'unsupported-revision:foreign-insertion'
   | 'tree-invariant'
   /** No content control in this part carries the addressed node id. */
   | 'unknown-content-control'
@@ -1263,8 +1265,18 @@ export type TreeOpRejection =
    * mapping cannot be trusted and the inserted row would not match it.
    */
   | 'row-hides-cell'
-  /** Column edit refused because the table carries horizontal or vertical merges. */
+  /** The table carries a legacy `w:hMerge`, which grid edits cannot place. */
   | 'table-has-merge'
+  /** The cells to merge do not cover one rectangle, or cover only one cell. */
+  | 'cells-not-rectangle'
+  /** A cell merged over several rows splits only into a divisor of them. */
+  | 'split-rows-not-divisor'
+  /** The cells hold a tracked cell insertion, deletion, or merge. */
+  | 'cell-has-revision'
+  /** The split cells would be narrower than the minimum column width. */
+  | 'cell-too-narrow'
+  /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
+  | 'split-needs-grid'
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
   | 'unknown-grid-column'
   /** The operation would exceed bounded table topology limits. */

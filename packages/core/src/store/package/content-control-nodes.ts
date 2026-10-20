@@ -22,8 +22,10 @@
 // is fetched, resolved, or evaluated. A projection that reached for a part would be a
 // zero-click load of a target an untrusted file chose.
 
+import { inlineCharacterTextOf } from './hyphen-text.ts';
+import { hardBreakKind } from './hard-break.ts';
 import { nextStripedDecimalId, resolveAllocationActor } from './actor-scoped-ids.ts';
-import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isInlineRunContainer, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlContentControlContentNode,
   OoxmlContentControlEndPropertiesNode,
@@ -282,7 +284,7 @@ export function contentControlPropertiesNodeOf(
  * accepts either shape (`isContentControlPropertiesNode`); this keeps the projection saying
  * the same thing about the same document.
  */
-function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement | undefined {
+export function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement | undefined {
   if (control.kind !== 'contentControl') return undefined;
   const children: readonly OoxmlNode[] = control.children;
   return children.find(
@@ -566,15 +568,7 @@ export function contentControlLevelOf(control: OoxmlNode): ContentControlLevel {
       if (nested !== 'empty') return nested;
       continue;
     }
-    if (
-      child.kind === 'run' ||
-      child.kind === 'hyperlink' ||
-      child.kind === 'fldSimple' ||
-      child.kind === 'revisionInsert' ||
-      child.kind === 'revisionDelete' ||
-      child.kind === 'revisionMoveFrom' ||
-      child.kind === 'revisionMoveTo'
-    ) {
+    if (child.kind === 'run' || child.kind === 'fldSimple' || isInlineRunContainer(child)) {
       sawInline = true;
       continue;
     }
@@ -695,8 +689,11 @@ export function findContentControl(root: OoxmlNode, nodeId: string): ContentCont
  *
  * `w:delText` is excluded: struck text is not the control's value, and a dropdown whose
  * old item is still present as a tracked deletion would otherwise report both.
+ *
+ * A manual line break is left out unless `lineBreak` names the text to report it as.
+ * With that option, column breaks report U+000E so callers cannot silently discard them.
  */
-export function contentControlTextOf(control: OoxmlNode): string {
+export function contentControlTextOf(control: OoxmlNode, lineBreak?: string): string {
   const content = contentControlContentNodeOf(control);
   if (!content) return '';
   let text = '';
@@ -711,6 +708,21 @@ export function contentControlTextOf(control: OoxmlNode): string {
     if (node.kind === 'deletedText' || node.kind === 'instrText') return;
     if (node.kind === 'tab') {
       text += '\t';
+      return;
+    }
+    if (lineBreak !== undefined) {
+      // Struck content is not the value; `w:delText` above already says so for text.
+      if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') return;
+      if (node.kind === 'hardBreak') {
+        const kind = hardBreakKind(node);
+        if (kind === 'line') text += lineBreak;
+        else if (kind === 'column') text += '\u000e';
+        return;
+      }
+    }
+    const hyphen = inlineCharacterTextOf(node);
+    if (hyphen !== null) {
+      text += hyphen;
       return;
     }
     for (const child of node.children) walk(child, depth + 1);

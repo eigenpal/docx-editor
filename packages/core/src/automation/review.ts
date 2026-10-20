@@ -8,13 +8,16 @@
 // author had in mind.
 //
 // WHAT IS LEFT OUT OF THE LISTING IS LEFT OUT ON PURPOSE. A structural revision whose exact Word
-// subtype this protocol cannot name — a row, a cell, a section, the table grid — is omitted from
+// subtype this protocol cannot name — such as cell-structure changes — is omitted from
 // `revisionReads`, because an object whose `type` we cannot publish is worse than an absence.
 // Collection membership is therefore not the collection decision set: `acceptAll` / `rejectAll`
 // still resolve every store-resolvable revision, including a complete tracked row
 // (`revisionKind: structural` and `readOnly: false`), and refuse atomically when any `readOnly`
 // item remains.
 
+import { sharesItsPart } from './stories.ts';
+import { sitesInStory, textboxSiteIndex } from './textbox-revision-scope.ts';
+import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -23,7 +26,8 @@ import {
   threadStateOfPart,
   type CommentThreadState,
 } from '../store/store/comment-reads.ts';
-import { commentBodyText, commentItemsOf, revisionItemsOf } from '../store/store/review-reads.ts';
+import { commentItemsOf, revisionItemsOf } from '../store/store/review-reads.ts';
+import { commentBodyModelText } from '../store/store/review-text.ts';
 import type {
   ReviewCommentItem,
   ReviewRange,
@@ -31,7 +35,10 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
-import type { AutomationStoryId } from './stories.ts';
+import {
+  inertPropertyChangeInputsOf,
+  withoutInertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -62,9 +69,6 @@ export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISI
  * exactly one question — what to do with a review item the part holds but nothing in it locates —
  * and getting it wrong is how a note ends up reviewing its neighbour.
  */
-function sharesItsPart(story: AutomationStoryId): boolean {
-  return story.kind === 'note';
-}
 
 /**
  * Whether an item anchored at these ranges is the addressed story's.
@@ -83,6 +87,18 @@ function inStory(reads: AutomationStoryReads, ranges: readonly ReviewRange[]): b
   return ranges.every((range) => reads.has(range.start.paragraphId));
 }
 
+/**
+ * Whether a tracked change is the addressed story's. A text box story and its owner share a
+ * part, and a change inside the box is located by its sites, not by its ranges.
+ */
+function revisionInStory(reads: AutomationStoryReads, item: ReviewRevisionItem): boolean {
+  if (reads.story.kind === 'note') return inStory(reads, item.ranges);
+  const index = textboxSiteIndex(reads.part);
+  const box =
+    reads.story.kind === 'textbox' && reads.root.kind !== 'textValue' ? reads.root.id : null;
+  return sitesInStory(index, revisionSiteNodeIdsOf(item), box, () => inStory(reads, item.ranges));
+}
+
 /** One pending decision, as the protocol answers it. */
 export interface AutomationRevisionRead {
   readonly id: string;
@@ -95,7 +111,20 @@ export interface AutomationRevisionRead {
 
 /** Every tracked-change item that belongs to one story, including unsupported structural ones. */
 export function revisionItemsInStory(reads: AutomationStoryReads): readonly ReviewRevisionItem[] {
-  return Object.freeze(revisionItemsOf(reads.part).filter((item) => inStory(reads, item.ranges)));
+  return Object.freeze(revisionItemsOf(reads.part).filter((item) => revisionInStory(reads, item)));
+}
+
+/**
+ * The story's items a caller can list: {@link revisionItemsInStory} without the property changes
+ * that leave the formatting unchanged, as the editor's review queue lists them. With no package,
+ * every item. Collection decisions still resolve the others, because they name every item.
+ */
+export function listedRevisionItemsInStory(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly ReviewRevisionItem[] {
+  const items = revisionItemsInStory(reads);
+  return pkg ? withoutInertPropertyChanges(items, inertPropertyChangeInputsOf(pkg)) : items;
 }
 
 /**
@@ -105,11 +134,23 @@ export function revisionItemsInStory(reads: AutomationStoryReads): readonly Revi
  * That listing is not the collection decision set: store-resolvable structural revisions are
  * still resolved by collection accept/reject.
  */
-export function revisionReads(reads: AutomationStoryReads): readonly AutomationRevisionRead[] {
+export function revisionReads(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly AutomationRevisionRead[] {
   const found: AutomationRevisionRead[] = [];
-  for (const item of revisionItemsInStory(reads)) {
-    if (item.readOnly || item.revisionKind === 'structural') continue;
-    const type = REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
+  const listed = listedRevisionItemsInStory(reads, pkg);
+  for (const item of listed) {
+    if (item.readOnly) continue;
+    const rowChange = item.structuralChanges?.length === 1 ? item.structuralChanges[0] : undefined;
+    const type =
+      item.revisionKind === 'structural'
+        ? rowChange === 'rowInsert'
+          ? 'Insert'
+          : rowChange === 'rowDelete'
+            ? 'Delete'
+            : undefined
+        : REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
     if (type === undefined) continue;
     found.push(
       Object.freeze({
@@ -203,7 +244,7 @@ export function commentReads(
     byId: (commentId: string) => byId.get(commentId) ?? null,
     textOf: (commentId: string) => {
       const item = byId.get(commentId);
-      return item ? commentBodyText(item.comment) : '';
+      return item ? commentBodyModelText(item.comment) : '';
     },
   });
 }

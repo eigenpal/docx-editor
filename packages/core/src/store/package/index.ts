@@ -167,12 +167,21 @@ export {
   scrubExport,
 } from './sinks.ts';
 export {
+  displayMathAlignment,
+  equationsOfAtom,
+  isOmmlDisplay,
+  isOmmlEquationAtom,
+  projectOmmlAtom,
+  projectOmmlDisplay,
+} from './omml-display.ts';
+export {
   DEFAULT_OMML_LIMITS,
   OFFICE_MATH_NAMESPACE_URI,
   equationExpressionToLinearMath,
   linearMathToOmml,
   parseLinearMath,
   projectOmmlEquation,
+  type EquationControlSource,
   type EquationExpression,
   type LinearMathOmmlResult,
   type LinearMathParseResult,
@@ -241,8 +250,10 @@ export {
   removeNode,
   replaceChildren,
   replaceNode,
+  type ContentLockPolicy,
   type EditOptions,
   type OoxmlEditResult,
+  type TransactionRevisionIds,
 } from './ooxml-edit.ts';
 export {
   PAGE_BREAK_CHAR,
@@ -272,6 +283,7 @@ export {
   type AtomicFieldSpan,
   type FldCharType,
 } from './field-nodes.ts';
+export type { FieldResultsMode } from './field-result-mode.ts';
 export {
   TOC_MAX_BOOKMARKS_PER_REFRESH,
   TOC_MAX_ENTRIES,
@@ -324,6 +336,14 @@ export {
 } from './para-id.ts';
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
+export { listBookmarks, type BookmarkPosition, type BookmarkRecord } from './bookmark-list.ts';
+export {
+  bookmarkNameKey,
+  bookmarkNameProblem,
+  isHiddenBookmarkName,
+  MAX_AUTHORED_BOOKMARK_NAME_LENGTH,
+  type BookmarkNameProblem,
+} from './bookmark-names.ts';
 export {
   collectFlowBlocks,
   contentControlContentOf,
@@ -333,6 +353,14 @@ export {
   walkParagraphInline,
   walkStoryBlocks,
 } from './content-control-walk.ts';
+export {
+  buildingBlockGalleryOf,
+  buildingBlocksForControl,
+  buildingBlocksOf,
+  glossaryPartOf,
+  type BuildingBlock,
+  type BuildingBlockGalleryFilter,
+} from './building-blocks.ts';
 export {
   authorableHyperlinkTarget,
   ensureHyperlinkRelationship,
@@ -451,6 +479,12 @@ export {
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
 export {
+  NO_DOCUMENT_PROTECTION,
+  readDocumentProtection,
+  type DocumentProtectionEdit,
+  type DocumentProtectionState,
+} from './document-protection.ts';
+export {
   DEFAULT_VIEW_SETTINGS,
   readViewSettings,
   type DocumentViewSettings,
@@ -504,6 +538,7 @@ export {
   type OoxmlStoryKind,
   type OoxmlStoryRoot,
 } from './story-blocks.ts';
+export { textboxStoriesInPart, type TextboxStoryRoot } from './textbox-stories.ts';
 export {
   CUSTOM_XML_PROPS_REL,
   CUSTOM_XML_PROPS_TYPE,
@@ -541,3 +576,4 @@ export {
   type CustomNodeExportRequest,
   type CustomNodeExportResult,
 } from './custom-node-export.ts';
+export type { DrawingImageEffects } from './drawing-image-effects.ts';

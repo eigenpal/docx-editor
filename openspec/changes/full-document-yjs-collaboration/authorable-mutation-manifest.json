@@ -7,22 +7,22 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 74,
-    "singlePartApply": 62,
-    "headerFooterLifecycle": 5,
+    "treeDocOpKinds": 89,
+    "singlePartApply": 75,
+    "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 57,
-    "chromeCommandWired": 29,
-    "chromeProbe": 6,
+    "chromeSlots": 81,
+    "chromeCommandWired": 47,
+    "chromeProbe": 8,
     "acceptedRunProperties": 19,
-    "acceptedParagraphProperties": 12,
+    "acceptedParagraphProperties": 13,
     "insertableContentControlTypes": 5,
     "imageWrapTargets": 9,
     "storyScopeKinds": 3,
     "namedPackageIntents": 16,
     "unsupportedRows": 16,
-    "activeOpenSpecChanges": 26
+    "activeOpenSpecChanges": 27
   },
   "storyScopes": [
     {
@@ -59,10 +59,12 @@
       "rejectRevision",
       "acceptAllRevisions",
       "rejectAllRevisions",
+      "setRevisionAttribution",
       "insertTab",
       "insertHardBreak",
       "insertPageBreak",
       "insertPageField",
+      "setFieldCode",
       "setListLevel",
       "setListNumbering",
       "setParagraphTabStops",
@@ -88,9 +90,13 @@
       "deleteTableRow",
       "insertTableColumn",
       "deleteTableColumn",
+      "mergeTableCells",
+      "splitTableCell",
       "setTableColumnWidths",
       "setTableRightEdgeWidth",
       "setTableRowHeight",
+      "setTableProperties",
+      "authorTable",
       "setTableCellBorders",
       "setTableCellFill",
       "setTableCellVerticalAlignment",
@@ -110,14 +116,23 @@
       "insertToc",
       "replaceTocResult",
       "rewriteTocPageNumbers",
-      "refreshFieldResults"
+      "refreshFieldResults",
+      "setTextFormFieldDefault",
+      "commitTextFormField",
+      "setLegacyCheckbox",
+      "setLegacyDropdown",
+      "insertBuildingBlock",
+      "insertBookmark",
+      "deleteBookmark"
     ],
     "headerFooterLifecycle": [
       "createHeaderFooter",
       "deleteHeaderFooter",
       "linkToPrevious",
       "unlinkFromPrevious",
-      "setSectionFurnitureOptions"
+      "setSectionFurnitureOptions",
+      "setDocumentProtection",
+      "setWatermark"
     ],
     "noteLifecycle": [
       "insertNote",
@@ -139,10 +154,12 @@
     "rejectRevision",
     "acceptAllRevisions",
     "rejectAllRevisions",
+    "setRevisionAttribution",
     "insertTab",
     "insertHardBreak",
     "insertPageBreak",
     "insertPageField",
+    "setFieldCode",
     "setListLevel",
     "setListNumbering",
     "setParagraphTabStops",
@@ -170,9 +187,13 @@
     "deleteTableRow",
     "insertTableColumn",
     "deleteTableColumn",
+    "mergeTableCells",
+    "splitTableCell",
     "setTableColumnWidths",
     "setTableRightEdgeWidth",
     "setTableRowHeight",
+    "setTableProperties",
+    "authorTable",
     "setTableCellBorders",
     "setTableCellFill",
     "setTableCellVerticalAlignment",
@@ -181,6 +202,8 @@
     "linkToPrevious",
     "unlinkFromPrevious",
     "setSectionFurnitureOptions",
+    "setDocumentProtection",
+    "setWatermark",
     "insertNote",
     "deleteNote",
     "convertNote",
@@ -202,7 +225,14 @@
     "insertToc",
     "replaceTocResult",
     "rewriteTocPageNumbers",
-    "refreshFieldResults"
+    "refreshFieldResults",
+    "setTextFormFieldDefault",
+    "commitTextFormField",
+    "setLegacyCheckbox",
+    "setLegacyDropdown",
+    "insertBuildingBlock",
+    "insertBookmark",
+    "deleteBookmark"
   ],
   "authorableVariants": {
     "insertText": {
@@ -291,7 +321,8 @@
         "widowControl",
         "pageBreakBefore",
         "contextualSpacing",
-        "shd"
+        "shd",
+        "bidi"
       ]
     },
     "setTableCellBorders": {
@@ -390,6 +421,15 @@
       "openSpec": ["typed-revisions-and-comments"]
     },
     {
+      "kind": "setRevisionAttribution",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setReviewChangesAuthor"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
       "kind": "insertTab",
       "commitPath": "applyTreeOp",
       "storyScopes": ["body", "headerFooter", "notesPart"],
@@ -431,6 +471,15 @@
       ],
       "packageIntents": [],
       "openSpec": ["scoped-header-footer-editing", "word-like-field-rendering"]
+    },
+    {
+      "kind": "setFieldCode",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setListLevel",
@@ -525,6 +574,7 @@
       "storyParity": "same",
       "commandExposure": [
         "setAlignment",
+        "setParagraphDirection",
         "setLineSpacing",
         "setParagraphSpacing",
         "setIndent",
@@ -537,6 +587,8 @@
         "alignment.center",
         "alignment.right",
         "alignment.justify",
+        "direction.ltr",
+        "direction.rtl",
         "list.lineSpacing",
         "styles.style",
         "paragraph.dialog"
@@ -712,6 +764,24 @@
       "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {
+      "kind": "mergeTableCells",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["mergeCells"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "splitTableCell",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["splitCell"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
       "kind": "setTableColumnWidths",
       "commitPath": "applyTreeOp",
       "storyScopes": ["body", "headerFooter", "notesPart"],
@@ -737,6 +807,24 @@
       "commandExposure": ["surface-table"],
       "packageIntents": [],
       "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
+    },
+    {
+      "kind": "authorTable",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": ["agent-editing-subset"]
     },
     {
       "kind": "setTableCellBorders",
@@ -816,6 +904,31 @@
       "commandExposure": ["setHeaderFooterOptions"],
       "packageIntents": ["withPart"],
       "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "setDocumentProtection",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["toggleDocumentProtection"],
+      "packageIntents": ["withPart", "withNewPart", "withContentTypeOverride", "withRelationship"],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setWatermark",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["setWatermark"],
+      "packageIntents": [
+        "withPart",
+        "withNewPart",
+        "withContentTypeOverride",
+        "withRelationship",
+        "withEmbeddedImage",
+        "withoutUnreferencedImagePart"
+      ],
+      "openSpec": ["typed-vml-watermarks"]
     },
     {
       "kind": "insertNote",
@@ -901,8 +1014,8 @@
       "commitPath": "applyTreeOp",
       "storyScopes": ["body", "headerFooter", "notesPart"],
       "storyParity": "same",
-      "commandExposure": ["insertImage"],
-      "chromeSlots": ["image.insert"],
+      "commandExposure": ["insertImage", "insertTextBox"],
+      "chromeSlots": ["image.insert", "insert.textBox"],
       "packageIntents": [
         "withBinaryPart",
         "withEmbeddedImage",
@@ -1030,6 +1143,69 @@
       "commandExposure": ["refreshRefFieldResults"],
       "packageIntents": [],
       "openSpec": []
+    },
+    {
+      "kind": "setTextFormFieldDefault",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "commitTextFormField",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "setLegacyCheckbox",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "setLegacyDropdown",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "insertBuildingBlock",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "insertBookmark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "deleteBookmark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
     }
   ],
   "packageIntents": [
@@ -1151,6 +1327,8 @@
       "alignment.center",
       "alignment.right",
       "alignment.justify",
+      "direction.ltr",
+      "direction.rtl",
       "list.bullet",
       "list.numbered",
       "list.outdent",
@@ -1158,7 +1336,20 @@
       "list.lineSpacing",
       "format.painter",
       "format.clear",
+      "review.revisionMarkup",
+      "review.simpleMarkup",
+      "review.allMarkup",
+      "review.noMarkup",
+      "review.original",
+      "review.previousChange",
+      "review.nextChange",
+      "review.acceptAllChanges",
+      "review.rejectAllChanges",
+      "review.paragraphMarks",
+      "review.bookmarks",
+      "review.protectDocument",
       "review.comments",
+      "review.addComment",
       "review.authors",
       "review.editingMode",
       "contentControl.showAll",
@@ -1175,10 +1366,16 @@
       "table.borderStyle",
       "table.borderWidth",
       "table.cellFill",
+      "table.mergeCells",
+      "table.splitCell",
       "paragraph.dialog",
       "file.open",
       "file.save",
+      "file.exportMarkdown",
+      "file.exportPdf",
+      "file.print",
       "file.pageSetup",
+      "insert.textBox",
       "insert.footnote",
       "insert.endnote",
       "insert.pageNumber",
@@ -1188,7 +1385,10 @@
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
-      "insert.toc"
+      "insert.toc",
+      "insert.bookmark",
+      "insert.goToBookmark",
+      "insert.watermark"
     ],
     "commandWired": [
       "history.undo",
@@ -1203,13 +1403,29 @@
       "alignment.center",
       "alignment.right",
       "alignment.justify",
+      "direction.ltr",
+      "direction.rtl",
       "list.bullet",
       "list.numbered",
       "list.outdent",
       "list.indent",
       "format.clear",
+      "review.revisionMarkup",
+      "review.simpleMarkup",
+      "review.allMarkup",
+      "review.noMarkup",
+      "review.original",
+      "review.previousChange",
+      "review.nextChange",
+      "review.acceptAllChanges",
+      "review.rejectAllChanges",
+      "review.paragraphMarks",
+      "review.bookmarks",
+      "review.protectDocument",
       "review.comments",
       "contentControl.remove",
+      "table.mergeCells",
+      "insert.textBox",
       "insert.footnote",
       "insert.endnote",
       "insert.pageNumber",
@@ -1219,15 +1435,19 @@
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
-      "insert.toc"
+      "insert.toc",
+      "insert.bookmark",
+      "insert.goToBookmark"
     ],
     "probe": [
       "text.link",
       "image.insert",
       "image.properties",
       "table.insert",
+      "table.splitCell",
       "paragraph.dialog",
-      "file.pageSetup"
+      "file.pageSetup",
+      "insert.watermark"
     ],
     "unwiredCommandShaped": [
       "zoom.level",
@@ -1240,10 +1460,22 @@
     "nonMutating": [
       "history.undo",
       "history.redo",
+      "review.revisionMarkup",
+      "review.simpleMarkup",
+      "review.allMarkup",
+      "review.noMarkup",
+      "review.original",
+      "review.previousChange",
+      "review.nextChange",
+      "review.paragraphMarks",
+      "review.bookmarks",
       "review.comments",
       "review.authors",
       "file.open",
-      "file.save"
+      "file.save",
+      "file.exportMarkdown",
+      "file.exportPdf",
+      "file.print"
     ]
   },
   "unsupportedRows": [
@@ -1486,6 +1718,16 @@
       "name": "document-navigation-pane",
       "role": "independent",
       "notes": "Navigation chrome. No new mutation kind."
+    },
+    {
+      "name": "agent-editing-subset",
+      "role": "mutation-extension",
+      "notes": "Adds canonical table authoring, direct table properties, and page-field instruction writes; primitive replay convergence is covered."
+    },
+    {
+      "name": "paragraph-text-collaboration",
+      "role": "collaboration-packaging",
+      "notes": "Changes how paragraph inline content is shared. Adds no TreeDocOp kind, so the freeze holds."
     }
   ],
   "remainingAmbiguity": [

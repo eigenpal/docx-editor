@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Adjacent paragraphs with identical borders share one box only when their left and right indents match, and a hanging paragraph draws its box from the left indent.",
+  "after": "Adjacent paragraphs with identical borders share one box when their box edges match, and a box starts where a hanging first line starts.",
+  "reason": "Only border geometry and border grouping in layout change. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-border-box-edge.test.ts",
+    "packages/core/src/layout/__tests__/cell-paragraph-borders.test.ts",
+    "packages/core/src/layout/__tests__/border-group-incremental.test.ts"
+  ],
+  "changeset": "paragraph-border-box-edge",
+  "migration": null
+}

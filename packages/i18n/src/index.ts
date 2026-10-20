@@ -34,12 +34,15 @@
 
 import enJson from '../en.json';
 import deJson from '../de.json';
+import esJson from '../es.json';
 import frJson from '../fr.json';
 import heJson from '../he.json';
 import hiJson from '../hi.json';
 import idJson from '../id.json';
+import jaJson from '../ja.json';
 import plJson from '../pl.json';
 import ptBRJson from '../pt-BR.json';
+import ruJson from '../ru.json';
 import trJson from '../tr.json';
 import zhCNJson from '../zh-CN.json';
 
@@ -60,13 +63,17 @@ export type LocaleStrings = typeof enJson;
  *
  * @public
  */
-export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+// prettier-ignore
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;
 
 /** German (`de`). Community-maintained; null leaves fall back to English. @public */
 export const de: PartialLocaleStrings = deJson;
+
+/** Spanish (`es`). Community-maintained; null leaves fall back to English. @public */
+export const es: PartialLocaleStrings = esJson;
 
 /** French (`fr`). Community-maintained; null leaves fall back to English. @public */
 export const fr: PartialLocaleStrings = frJson;
@@ -80,11 +87,17 @@ export const hi: PartialLocaleStrings = hiJson;
 /** Indonesian (`id`). Community-maintained; null leaves fall back to English. @public */
 export const id: PartialLocaleStrings = idJson;
 
+/** Japanese (`ja`). Community-maintained; null leaves fall back to English. @public */
+export const ja: PartialLocaleStrings = jaJson;
+
 /** Polish (`pl`). Community-maintained; null leaves fall back to English. @public */
 export const pl: PartialLocaleStrings = plJson;
 
 /** Portuguese (Brazil) (`pt-BR`). Community-maintained; null leaves fall back to English. @public */
 export const ptBR: PartialLocaleStrings = ptBRJson;
+
+/** Russian (`ru`). Community-maintained; null leaves fall back to English. @public */
+export const ru: PartialLocaleStrings = ruJson;
 
 /** Turkish (`tr`). Community-maintained; null leaves fall back to English. @public */
 export const tr: PartialLocaleStrings = trJson;
@@ -109,12 +122,15 @@ export const zhCN: PartialLocaleStrings = zhCNJson;
 export const locales: Record<LocaleCode, PartialLocaleStrings> = {
   en,
   de,
+  es,
   fr,
   he,
   hi,
   id,
+  ja,
   pl,
   'pt-BR': ptBR,
+  ru,
   tr,
   'zh-CN': zhCN,
 };
@@ -270,7 +286,7 @@ function formatMessage(
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 export { localizeDisabledReason } from './disabled-reasons';
-export { platformShortcut } from './platform-shortcuts';
+export { isApplePlatform, platformShortcut } from './platform-shortcuts';
 
 /**
  * Build a typed `t(key, vars?)` function from a merged locale.

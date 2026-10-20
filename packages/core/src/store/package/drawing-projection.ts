@@ -1,9 +1,19 @@
+import { objectPreviewFrameReader } from './legacy-object-context.ts';
+import { stylesPartOf } from './ooxml-indexes.ts';
+import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
+import { paintableMcFallback } from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
+import { readDistances } from './drawing-distances.ts';
+import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
+import { wrapFootprintProjection } from './drawing-wrap-footprint.ts';
+import { groupTextboxesField, hostsTextboxStory } from './group-textbox-projection.ts';
+import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
@@ -14,6 +24,7 @@ import {
   ST_POSITION_OFFSET_MAX,
   ST_POSITION_OFFSET_MIN,
   schemaAttributeValue,
+  parseSchemaBoolean,
 } from './ooxml-drawing-rules.ts';
 import {
   createWalkState,
@@ -44,12 +55,18 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
+import {
+  groupVectorMembersAreBounded,
+  readGroupPicture,
+  type GroupPictureProjection,
+} from './drawing-group-picture.ts';
+import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
   findDirectChild,
   parseEmu,
-  schemaFlagIsSet,
   projectTextboxStory,
   projectVectorShape,
   type ShapeSchemeColorResolver,
@@ -59,6 +76,7 @@ import {
 } from './drawing-shape-projection.ts';
 
 export type { TextboxStoryProjection, VectorShapeProjection } from './drawing-shape-projection.ts';
+export type { GroupPictureProjection } from './drawing-group-picture.ts';
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
@@ -212,14 +230,28 @@ export interface DrawingProjection {
   }> | null;
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
+  /** The picture member of a `wpg:wgp` group; `picture` stays null for a group. */
+  readonly groupPicture: GroupPictureProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
+  /** Text box members of a `wpg:wgp` group, laid out read-only; absent when none has text. */
+  readonly groupTextboxes?: readonly GroupTextboxProjection[];
+  /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
+  readonly legacyGraphic?: LegacyGraphicProjection;
+  /** Floating VML text art (a text watermark), fitted to the box by layout. */
+  readonly textArt?: import('./legacy-vml-text-art.ts').LegacyTextArtProjection;
   readonly locks: DrawingLocks;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
+  /** Layout-only wrap area of an MC payload that cannot paint (`wrapFootprintProjection`). */
+  readonly footprintOnly?: true;
 }
 
 export interface DrawingAccessibility {
+  /**
+   * The record takes part in layout only, for example the wrap area of a payload that cannot
+   * paint. Outputs must not paint, hit-test, select, link, or export it.
+   */
   readonly hidden: boolean;
   readonly decorative: boolean;
   readonly label: string | null;
@@ -296,6 +328,7 @@ const EMPTY_LOCKS: DrawingLocks = Object.freeze({
 const EMPTY_EFFECTS = Object.freeze({ grayscale: false, brightness: 0, contrast: 0 });
 
 interface ProjectionContext {
+  readonly stylesPart?: OoxmlPart;
   readonly ownerPartName: string;
   readonly supportedMcRequires: ReadonlySet<string>;
   readonly limits: DrawingProjectionLimits;
@@ -416,12 +449,6 @@ function parseSimplePosCoordinate(value: string | undefined): number | null {
   if (!Number.isInteger(parsed)) return null;
   if (parsed < ST_COORDINATE_MIN || parsed > ST_COORDINATE_MAX) return null;
   return parsed;
-}
-
-function parseCropPercent(value: string | undefined): number {
-  const parsed = parseEmu(value, false);
-  if (parsed === null || parsed <= 0) return 0;
-  return Math.min(parsed / 100_000, 1);
 }
 
 function parseDocPrId(value: string | undefined): number | null {
@@ -739,39 +766,6 @@ function findWrapElement(anchor: OoxmlElement, compatibilityMode: boolean): Ooxm
   return null;
 }
 
-function readDistances(
-  node: OoxmlElement
-): Readonly<{ top: number; right: number; bottom: number; left: number }> {
-  return Object.freeze({
-    top: parseEmu(schemaAttributeValue(node.attributes, 'distT')) ?? 0,
-    right: parseEmu(schemaAttributeValue(node.attributes, 'distR')) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(node.attributes, 'distB')) ?? 0,
-    left: parseEmu(schemaAttributeValue(node.attributes, 'distL')) ?? 0,
-  });
-}
-
-function readEffectExtentFromNode(
-  node: OoxmlElement | null,
-  compatibilityMode: boolean
-): Readonly<{ top: number; right: number; bottom: number; left: number }> | null {
-  if (!node) return null;
-  const effect =
-    findDirectKind(node.children, 'drawingEffectExtent') ??
-    (compatibilityMode
-      ? findDirectChild(node.children, {
-          namespaceUri: WP_NAMESPACE_URI,
-          localName: 'effectExtent',
-        })
-      : null);
-  if (!effect) return null;
-  return Object.freeze({
-    left: parseEmu(schemaAttributeValue(effect.attributes, 'l'), false) ?? 0,
-    top: parseEmu(schemaAttributeValue(effect.attributes, 't'), false) ?? 0,
-    right: parseEmu(schemaAttributeValue(effect.attributes, 'r'), false) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(effect.attributes, 'b'), false) ?? 0,
-  });
-}
-
 function readEffectExtent(
   anchor: OoxmlElement,
   wrapElement: OoxmlElement | null,
@@ -785,22 +779,6 @@ function readEffectExtent(
   const fromAnchor = readEffectExtentFromNode(anchor, compatibilityMode);
   if (fromAnchor) return fromAnchor;
   return EMPTY_EDGES;
-}
-
-function readExtent(
-  anchor: OoxmlElement,
-  compatibilityMode: boolean
-): Readonly<{ cx: number; cy: number }> | null {
-  const extent =
-    findDirectKind(anchor.children, 'drawingExtent') ??
-    (compatibilityMode
-      ? findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'extent' })
-      : null);
-  if (!extent) return null;
-  const cx = parseEmu(schemaAttributeValue(extent.attributes, 'cx'));
-  const cy = parseEmu(schemaAttributeValue(extent.attributes, 'cy'));
-  if (cx === null || cy === null) return null;
-  return Object.freeze({ cx, cy });
 }
 
 function readPositionAxis<H extends string>(
@@ -973,7 +951,8 @@ function wrapTargetFromAnchor(
 function readWrapGeometry(
   wrap: OoxmlElement | null,
   state: WalkState,
-  nodeId: string
+  nodeId: string,
+  anchor: OoxmlElement
 ): DrawingWrapProjection | null {
   if (!wrap) return null;
   const element = wrapElementKind(wrap);
@@ -985,7 +964,7 @@ function readWrapGeometry(
   return Object.freeze({
     element,
     textSide,
-    distancesEmu: readDistances(wrap),
+    distancesEmu: readDistances(wrap, anchor),
     polygon:
       element === 'tight' || element === 'through'
         ? readPolygon(wrap, state, nodeId)
@@ -1006,8 +985,7 @@ function readFrameLocks(node: OoxmlElement | null): DrawingLocksInput {
   const attrs = frameLocks.attributes;
   const locked = (name: string): boolean | undefined => {
     const value = schemaAttributeValue(attrs, name);
-    if (value === undefined) return undefined;
-    return value === '1' || value === 'true';
+    return value === undefined ? undefined : (parseSchemaBoolean(value) ?? false);
   };
   return {
     select: locked('noSelect'),
@@ -1052,7 +1030,7 @@ function readDocPrMetadata(
       name: '',
       title: '',
       description: '',
-      hidden: schemaAttributeValue(anchor.attributes, 'hidden') === '1',
+      hidden: parseSchemaBoolean(schemaAttributeValue(anchor.attributes, 'hidden')) ?? false,
       hyperlinkHref: null,
     });
   }
@@ -1070,40 +1048,24 @@ function readDocPrMetadata(
     title: schemaAttributeValue(docPr.attributes, 'title') ?? '',
     description: schemaAttributeValue(docPr.attributes, 'descr') ?? '',
     hidden:
-      schemaAttributeValue(docPr.attributes, 'hidden') === '1' ||
-      schemaAttributeValue(anchor.attributes, 'hidden') === '1',
+      (parseSchemaBoolean(schemaAttributeValue(docPr.attributes, 'hidden')) ?? false) ||
+      (parseSchemaBoolean(schemaAttributeValue(anchor.attributes, 'hidden')) ?? false),
     hyperlinkHref,
   });
 }
 
-function parseLumPercent(value: string | undefined): number | null {
-  if (value === undefined || !/^-?\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) return null;
-  return parsed / 1000;
-}
-
-function readBlipEffects(
-  blip: OoxmlElement
-): Readonly<{ grayscale: boolean; brightness: number; contrast: number }> {
-  let grayscale = false;
-  let brightness = 0;
-  let contrast = 0;
-  for (const child of blip.children) {
-    if (!isElement(child) || child.kind !== 'generic') continue;
-    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
-    if (child.localName === 'grayscl') {
-      grayscale = true;
-      continue;
-    }
-    if (child.localName === 'lum') {
-      const bright = parseLumPercent(schemaAttributeValue(child.attributes, 'bright'));
-      const contrastRaw = parseLumPercent(schemaAttributeValue(child.attributes, 'contrast'));
-      if (bright !== null) brightness = bright;
-      if (contrastRaw !== null) contrast = contrastRaw;
-    }
-  }
-  return Object.freeze({ grayscale, brightness, contrast });
+/**
+ * Whether an anchor's own metadata keeps its drawing off the page.
+ *
+ * Layout skips a hidden drawing outright, and hit testing rejects a zero-sized one, so a
+ * derivation that lists drawings for SELECTION must apply the same two rules. Without them it
+ * reports a drawing that no page paints and no overlay can resolve. A missing `wp:extent`
+ * demotes the drawing to generic at read time, so it never reaches here.
+ */
+export function anchorHidesDrawing(anchor: OoxmlElement, compatibilityMode: boolean): boolean {
+  if (readDocPrMetadata(anchor, compatibilityMode).hidden) return true;
+  const extent = readExtent(anchor, compatibilityMode);
+  return extent !== null && (extent.cx <= 0 || extent.cy <= 0);
 }
 
 function projectPicture(
@@ -1115,7 +1077,7 @@ function projectPicture(
 ): {
   readonly picture: PictureProjection | null;
   readonly relationshipId: string | null;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: DrawingImageEffects;
   readonly diagnostic: DrawingDiagnostic | null;
 } {
   if (!visitNode(state, ctx.limits)) {
@@ -1214,12 +1176,10 @@ function projectPicture(
     // `xsd:boolean`, so `true` is as legal as `1`; reading only `1` painted a mirrored
     // picture the right way round. A picture flip IS paintable, so a schema-invalid value
     // reads as unset here rather than refusing the whole picture.
-    flipHorizontal: schemaFlagIsSet(
-      xfrm ? schemaAttributeValue(xfrm.attributes, 'flipH') : undefined
-    ),
-    flipVertical: schemaFlagIsSet(
-      xfrm ? schemaAttributeValue(xfrm.attributes, 'flipV') : undefined
-    ),
+    flipHorizontal:
+      (xfrm ? parseSchemaBoolean(schemaAttributeValue(xfrm.attributes, 'flipH')) : null) ?? false,
+    flipVertical:
+      (xfrm ? parseSchemaBoolean(schemaAttributeValue(xfrm.attributes, 'flipV')) : null) ?? false,
     offsetEmu: Object.freeze({
       x: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'x'), false) ?? 0) : 0,
       y: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'y'), false) ?? 0) : 0,
@@ -1290,16 +1250,7 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
           // `components` is required and non-empty: paint iterates it, so a conditional
           // spread that ever took the empty branch would strip the field and throw.
           components: Object.freeze(
-            projection.vectorShape.components.map((component) =>
-              Object.freeze({
-                ...component,
-                subpathsEmu: Object.freeze(
-                  component.subpathsEmu.map((points) =>
-                    Object.freeze(points.map((point) => Object.freeze({ ...point })))
-                  )
-                ),
-              })
-            )
+            projection.vectorShape.components.map(freezeVectorShapeComponent)
           ),
         })
       : null,
@@ -1353,6 +1304,7 @@ function buildUnrenderableProjection(
       anchor: null,
       picture: null,
       vectorShape: null,
+      groupPicture: null,
       textboxStory: null,
       locks: EMPTY_LOCKS,
       effects: EMPTY_EFFECTS,
@@ -1365,6 +1317,28 @@ function buildUnrenderableProjection(
 /** Whether a run-level `mc:AlternateContent` wraps typed drawing content. */
 export function isRunLevelMcAlternateContent(node: OoxmlNode): node is OoxmlGenericElementNode {
   return isMcAlternateContent(node);
+}
+
+/** Selected MC branch container, retaining its namespace declarations for source walks. @internal */
+export function selectedRunLevelMcBranch(
+  wrapper: OoxmlGenericElementNode,
+  namespaceScope: ReadonlyMap<string, string>
+): Readonly<{ branch: OoxmlNode | null; refused: boolean }> {
+  const state = createWalkState();
+  const selected = selectCompatibilityBranch(
+    wrapper,
+    state,
+    DEFAULT_DRAWING_PROJECTION_LIMITS,
+    namespaceScope,
+    DEFAULT_SUPPORTED_MC_REQUIRES
+  );
+  return {
+    branch:
+      selected.branchNodeId === null
+        ? null
+        : (wrapper.children.find((child) => child.id === selected.branchNodeId) ?? null),
+    refused: state.refused,
+  };
 }
 
 /** Resolve a run-level MC wrapper into an atomic drawing segment descriptor. */
@@ -1405,7 +1379,8 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
         ? projection.title
         : null;
   return Object.freeze({
-    hidden: projection.hidden,
+    // A wrap footprint reserves space only: no output paints, selects or exports it.
+    hidden: projection.hidden || projection.footprintOnly === true,
     decorative: label === null,
     label,
   });
@@ -1513,8 +1488,14 @@ export function projectDrawingWithState(
 
   const metadata = readDocPrMetadata(anchor, compatibilityMode, ctx.resolveRelationship);
   const wrapElement = kind === 'anchored' ? findWrapElement(anchor, compatibilityMode) : null;
-  const behindDocument = schemaAttributeValue(anchor.attributes, 'behindDoc') === '1';
-  const simplePosEnabled = schemaAttributeValue(anchor.attributes, 'simplePos') === '1';
+  // CT_Anchor flags are `xsd:boolean`, so `true` is as legal as `1`. The `?? default`
+  // states what an absent or schema-invalid value means: off for these, on for
+  // layoutInCell and allowOverlap below, because dropping a picture's overlap is the
+  // louder mistake.
+  const anchorFlag = (name: string): boolean | null =>
+    parseSchemaBoolean(schemaAttributeValue(anchor.attributes, name));
+  const behindDocument = anchorFlag('behindDoc') ?? false;
+  const simplePosEnabled = anchorFlag('simplePos') ?? false;
   const framePr =
     findDirectKind(anchor.children, 'drawingGraphicFramePr') ??
     (compatibilityMode
@@ -1523,17 +1504,14 @@ export function projectDrawingWithState(
           localName: 'cNvGraphicFramePr',
         })
       : null);
-  const locks = mergeLocks(
-    schemaAttributeValue(anchor.attributes, 'locked') === '1',
-    readFrameLocks(framePr)
-  );
+  const locks = mergeLocks(anchorFlag('locked') ?? false, readFrameLocks(framePr));
   const pictureResult = projectPicture(anchor, state, ctx, namespaceScope, compatibilityMode);
   if (pictureResult.diagnostic) state.diagnostics.push(pictureResult.diagnostic);
   if (state.refused) {
     return buildUnrenderableProjection(drawing, ctx, state, kind, extent);
   }
   const wrapGeometry =
-    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id) : null;
+    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id, anchor) : null;
   const position = kind === 'anchored' ? readPosition(anchor, simplePosEnabled) : null;
   const anchorMeta =
     kind === 'anchored'
@@ -1541,23 +1519,37 @@ export function projectDrawingWithState(
           simplePos: simplePosEnabled,
           relativeHeight: parseEmu(schemaAttributeValue(anchor.attributes, 'relativeHeight')) ?? 0,
           behindDocument,
-          layoutInCell: schemaAttributeValue(anchor.attributes, 'layoutInCell') !== '0',
-          allowOverlap: schemaAttributeValue(anchor.attributes, 'allowOverlap') !== '0',
+          layoutInCell: anchorFlag('layoutInCell') ?? true,
+          allowOverlap: anchorFlag('allowOverlap') ?? true,
         })
       : null;
-  const vectorShape = pictureResult.picture
+  const groupRead = pictureResult.picture
+    ? null
+    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference, ctx.resolveSchemeColor);
+  const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(
         anchor,
         extent,
         compatibilityMode,
         ctx.resolveSchemeColor,
-        ctx.resolveStyleMatrixReference
+        ctx.resolveStyleMatrixReference,
+        groupRead?.picture.memberNodeId
       );
+  // A group paints whole or not at all: the picture needs every other member to paint too,
+  // inside the same bounds as the picture frame.
+  const groupAdmitted =
+    groupRead !== null &&
+    (vectorMembers
+      ? groupVectorMembersAreBounded(vectorMembers, extent)
+      : !groupRead.hasOtherMembers);
+  const groupPicture = groupAdmitted ? groupRead.picture : null;
+  const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
+  const painted = { groupPicture, vectorShape };
   const textboxStory = pictureResult.picture
     ? null
     : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
-  if (vectorShape && pictureResult.diagnostic) {
+  if ((vectorShape || groupPicture) && pictureResult.diagnostic) {
     removeSupersededDrawingDiagnostic(state.diagnostics, pictureResult.diagnostic);
   }
   return freezeDrawingProjection(
@@ -1581,7 +1573,9 @@ export function projectDrawingWithState(
       anchor: anchorMeta,
       picture: pictureResult.picture,
       vectorShape,
+      groupPicture,
       textboxStory,
+      ...groupTextboxesField(anchor, extent, { picture: pictureResult.picture, ...painted }, ctx),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1601,6 +1595,8 @@ export function projectRunLevelMcDrawing(
     resolveRelationship?: RelationshipTargetResolver;
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+    /** Answer an anchored payload that cannot paint with its wrap footprint (layout index). */
+    retainWrapFootprint?: boolean;
   }>
 ): DrawingProjection | null {
   const atom = resolveRunLevelMcAtom(
@@ -1615,16 +1611,24 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, groups) stays
-  // invisible like its VML fallback always was — a labelled placeholder card over
-  // letterhead furniture would be noisier than what either branch renders today. Text boxes
-  // carry a renderable story and pass through.
+  // An MC-wrapped payload the engine cannot draw (charts, diagrams, unsupported groups) shows
+  // its VML fallback when that paints. Otherwise it stays invisible: a placeholder card over
+  // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
+  // story and pass through. Layout still reserves the extent or the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
-    projection.textboxStory === null
+    projection.groupPicture === null &&
+    !hostsTextboxStory(projection)
   ) {
-    return null;
+    const fallback = paintableMcFallback(wrapper, context.ownerPartName);
+    if (fallback) return fallback;
+    return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
+  }
+  // Layout applies the same rule to a group picture whose resource fails.
+  if (projection.groupPicture) {
+    const groupPicture = Object.freeze({ ...projection.groupPicture, alternateContent: true });
+    return Object.freeze({ ...projection, groupPicture });
   }
   return projection;
 }
@@ -1646,6 +1650,7 @@ interface PartCollectFrame {
   readonly depth: number;
   /** Text-box stories entered on the path to this node. */
   readonly storyDepth: number;
+  readonly framed?: boolean;
 }
 
 function collectDrawingsInPartBounded(
@@ -1658,6 +1663,7 @@ function collectDrawingsInPartBounded(
   const stack: PartCollectFrame[] = [
     { node: root, namespaceScope: emptyNamespaceScope(), depth: 0, storyDepth: 0 },
   ];
+  const hasFrame = objectPreviewFrameReader(ctx.stylesPart);
   let visited = 0;
   // A drawing that hosts a text box is not a leaf: its story is ordinary WML that can hold
   // pictures of its own, and those need projections (and atom ids) like any other run-level
@@ -1685,6 +1691,7 @@ function collectDrawingsInPartBounded(
         namespaceScope: scope,
         depth: frame.depth + 1,
         storyDepth: frame.storyDepth + 1,
+        framed: frame.framed || hasFrame(frame.node),
       });
     }
   };
@@ -1701,13 +1708,31 @@ function collectDrawingsInPartBounded(
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
 
+    const framed = frame.framed || hasFrame(frame.node);
+    // Unsupported frame geometry must not turn an embedded preview into ordinary flow.
+    // Its model atom remains present for every editing and offset reader.
+    if (
+      framed &&
+      frame.node.namespaceUri === WML_NAMESPACE_URI &&
+      frame.node.localName === 'object'
+    )
+      continue;
+    const legacy = projectLegacyVml(frame.node, ownerPartName);
+    if (legacy) {
+      out.push(legacy);
+      atomIndex?.set(frame.node.id, legacy);
+      // Walk through the shape, as for a modern drawing, so namespace scope and depth stay exact.
+      if (legacy.textboxStory) descendIntoTextboxStory(frame.node, frame, scope);
+      continue;
+    }
+
     if (frame.node.kind === 'drawing') {
       const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });
       if (projected) {
         out.push(projected);
         atomIndex?.set(frame.node.id, projected);
       }
-      if (projected?.textboxStory) descendIntoTextboxStory(frame.node, frame, scope);
+      if (hostsTextboxStory(projected)) descendIntoTextboxStory(frame.node, frame, scope);
       continue;
     }
 
@@ -1720,12 +1745,13 @@ function collectDrawingsInPartBounded(
         resolveRelationship: ctx.resolveRelationship,
         resolveSchemeColor: ctx.resolveSchemeColor,
         resolveStyleMatrixReference: ctx.resolveStyleMatrixReference,
+        retainWrapFootprint: atomIndex !== undefined,
       });
       if (projected) {
-        out.push(projected);
+        if (!projected.footprintOnly) out.push(projected);
         atomIndex?.set(frame.node.id, projected);
       }
-      if (projected?.textboxStory) {
+      if (hostsTextboxStory(projected)) {
         const chosen = resolveRunLevelMcAtom(
           frame.node,
           scope,
@@ -1746,6 +1772,7 @@ function collectDrawingsInPartBounded(
           namespaceScope: scope,
           depth: frame.depth + 1,
           storyDepth: frame.storyDepth,
+          framed,
         });
       }
     }
@@ -1754,18 +1781,13 @@ function collectDrawingsInPartBounded(
 
 export function projectDrawingsInPart(
   part: OoxmlPart,
-  context?: Partial<{
-    supportedMcRequires: ReadonlySet<string>;
-    limits: DrawingProjectionLimits;
-    resolveRelationship?: RelationshipTargetResolver;
-    resolveSchemeColor?: ShapeSchemeColorResolver;
-    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
-  }>
+  context?: Partial<Omit<ProjectionContext, 'ownerPartName'>>
 ): readonly DrawingProjection[] {
   const ctx: ProjectionContext = {
     ownerPartName: part.name,
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    stylesPart: context?.stylesPart,
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
@@ -1778,18 +1800,13 @@ export function projectDrawingsInPart(
 /** Run-level drawing / MC wrapper atom id → inline projection (namespace scope from part root). */
 export function indexInlineDrawingProjectionsInPart(
   part: OoxmlPart,
-  context?: Partial<{
-    supportedMcRequires: ReadonlySet<string>;
-    limits: DrawingProjectionLimits;
-    resolveRelationship?: RelationshipTargetResolver;
-    resolveSchemeColor?: ShapeSchemeColorResolver;
-    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
-  }>
+  context?: Partial<Omit<ProjectionContext, 'ownerPartName'>>
 ): ReadonlyMap<string, DrawingProjection> {
   const ctx: ProjectionContext = {
     ownerPartName: part.name,
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    stylesPart: context?.stylesPart,
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
@@ -1818,6 +1835,7 @@ export function projectDrawingsInPackage(
     // several hundred thousand arguments overflows the stack instead of being merely slow.
     const inPart = projectDrawingsInPart(part, {
       ...context,
+      stylesPart: stylesPartOf(pkg),
       resolveRelationship: createDrawingRelationshipResolver(pkg, partName),
       resolveSchemeColor: theme.resolveSchemeColor,
       resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
@@ -1827,23 +1845,6 @@ export function projectDrawingsInPackage(
   return Object.freeze(projections.map(freezeDrawingProjection));
 }
 
-export function rangePartiallyOverlapsDrawingAtom(
-  segments: readonly {
-    readonly start: number;
-    readonly end: number;
-    readonly removeNodeIds?: readonly string[];
-  }[],
-  start: number,
-  end: number
-): boolean {
-  for (const segment of segments) {
-    if (!segment.removeNodeIds || segment.removeNodeIds.length === 0) continue;
-    const overlaps = start < segment.end && end > segment.start;
-    if (!overlaps) continue;
-    const covers = start <= segment.start && end >= segment.end;
-    if (!covers) return true;
-  }
-  return false;
-}
+export { rangePartiallyOverlapsDrawingAtom } from './drawing-atom-range.ts';
 
 export { isMcAlternateContent, namespaceScopeForNode, emptyNamespaceScope };

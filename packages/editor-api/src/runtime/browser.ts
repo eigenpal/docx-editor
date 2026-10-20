@@ -17,7 +17,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // else — the queue, the context, the object lifetime, the errors — is neutral and compiles without
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
-import { createBrowserAutomationHost, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  beginEditorPreview,
+  createBrowserAutomationHost,
+  editorPreviewActive,
+  reportAutomationException,
+  reportAutomationRefusal,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
+import { classifyRefusal, trackedDuring } from './diagnostics.ts';
+import { refusalCause } from './batch.ts';
 import { createRuntime, type DocxEditorRuntime, type RevisionTextView } from './runtime.ts';
 
 /**
@@ -31,7 +40,11 @@ export interface CreateBrowserOptions {
    *
    * Required to reply to a comment: `CT_TrackChange` makes `@w:author` mandatory, and the editor
    * does not expose a signed-in identity to automation. Omitted means comment writes refuse with
-   * `NotSupported`; ordinary document reads and writes are unaffected.
+   * `NotSupported` and the diagnostic `edit.comment-author-required`; ordinary document reads
+   * and writes are unaffected.
+   *
+   * To build a review UI over this editor, use `useReview()` from `@docx-editor.dev/pro/react`
+   * or `@docx-editor.dev/pro/vue` instead. It comments and replies as the editor's author.
    */
   readonly author?: string;
   /**
@@ -52,9 +65,26 @@ export function createBrowser(
   editor: DocxEditorInstance,
   options: CreateBrowserOptions = {}
 ): DocxEditorRuntime {
+  const host = createBrowserAutomationHost(editor);
   return createRuntime({
-    host: createBrowserAutomationHost(editor),
+    host,
     save: false,
+    // A refused batch reaches the editor's own diagnostics, so its telemetry module hears it.
+    onRefusal: (error, operations) => {
+      const { code, tracked } = classifyRefusal(error, host, operations);
+      reportAutomationRefusal(editor, code, tracked, refusalCause(error));
+    },
+    onException: (error, operations) =>
+      reportAutomationException(editor, error, trackedDuring(host, operations)),
+    // The editor validates the handle at each batch: only its own open groups bind.
+    historyGroups: { begin: (group) => host.beginHistoryGroupRun(group) },
+    // The editor forks and paints; the runtime records and replays. See `preview.ts`.
+    preview: {
+      begin: () => beginEditorPreview(editor),
+      active: () => editorPreviewActive(editor),
+      beginHistoryGroup: () => editor.beginHistoryGroup(),
+      undo: () => editor.exec({ type: 'undo' }).ok,
+    },
     ...(options.author === undefined ? {} : { author: options.author }),
     ...(options.revisionTextView === undefined
       ? {}

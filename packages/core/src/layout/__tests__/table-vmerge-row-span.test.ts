@@ -21,6 +21,10 @@ const FIXTURE = new URL('../../../../../e2e/fixtures/vmerge-row-span.docx', impo
 
 /** `w:trHeight` minimums the fixture authors, in points. */
 const SHORT_MINIMUMS_PT = [60, 120, 80];
+// Each row carries its OWN 1pt top rule outside its authored content minimum, and no row
+// carries a bottom until the table's outer edge, which the last row adds. The span still
+// totals 264: the captured rule moved the boundaries, not the table.
+const SHORT_ROW_HEIGHTS_PT = [61, 121, 82];
 const TALL_MINIMUM_PT = 36;
 
 function layoutFixture(): SemanticLayout {
@@ -105,17 +109,17 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     expect(mergedContentHeightPt(head)).toBeGreaterThan(SHORT_MINIMUMS_PT[0]!);
   });
 
-  test('each row keeps its own authored height', () => {
+  test('each row keeps its own authored content minimum plus local border clearance', () => {
     const rows = rowsOf(shortTable(layoutFixture()));
-    expect(rows.map((row) => row.box.height)).toEqual(SHORT_MINIMUMS_PT);
+    expect(rows.map((row) => row.box.height)).toEqual(SHORT_ROW_HEIGHTS_PT);
   });
 
   test('the label cells paint at their own row offsets, each with its own fill', () => {
     const rows = rowsOf(shortTable(layoutFixture()));
     const labels = rows.map((row) => row.cells[0]!);
     const top = rows[0]!.box.y;
-    expect(labels.map((cell) => cell.box.y - top)).toEqual([0, 60, 180]);
-    expect(labels.map((cell) => cell.box.height)).toEqual(SHORT_MINIMUMS_PT);
+    expect(labels.map((cell) => cell.box.y - top)).toEqual([0, 61, 182]);
+    expect(labels.map((cell) => cell.box.height)).toEqual(SHORT_ROW_HEIGHTS_PT);
     expect(labels.map((cell) => cell.shading)).toEqual(['355D7E', '7BA79D', 'B4C7DC']);
     expect(labels.map(cellText)).toEqual(['Short row 1', 'Short row 2', 'Short row 3']);
   });
@@ -125,7 +129,7 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     const head = rows[0]!.cells[1]!;
     expect(head.rowSpan).toBe(3);
     expect(head.box.y).toBe(rows[0]!.box.y);
-    expect(head.box.height).toBe(60 + 120 + 80);
+    expect(head.box.height).toBe(264);
     expectContentInsideItsTable(layoutFixture());
   });
 
@@ -137,9 +141,9 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     // The rows the merge covers cannot hold the content at their authored minimums.
     expect(contentPt).toBeGreaterThan(TALL_MINIMUM_PT * rows.length);
 
-    expect(rows[0]!.box.height).toBe(TALL_MINIMUM_PT);
-    expect(rows[1]!.box.height).toBe(TALL_MINIMUM_PT);
-    expect(rows[2]!.box.height).toBeGreaterThan(TALL_MINIMUM_PT);
+    expect(rows[0]!.box.height).toBe(TALL_MINIMUM_PT + 1);
+    expect(rows[1]!.box.height).toBe(TALL_MINIMUM_PT + 1);
+    expect(rows[2]!.box.height).toBeGreaterThan(TALL_MINIMUM_PT + 2);
 
     const spanPt = rows.reduce((sum, row) => sum + row.box.height, 0);
     expect(head.box.height).toBe(spanPt);
@@ -154,8 +158,8 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     const top = rows[0]!.box.y;
     expect(rows.map((row) => row.cells[0]!.box.y - top)).toEqual([
       0,
-      TALL_MINIMUM_PT,
-      TALL_MINIMUM_PT * 2,
+      TALL_MINIMUM_PT + 1,
+      TALL_MINIMUM_PT * 2 + 2,
     ]);
     expect(rows.map((row) => row.cells[0]!.shading)).toEqual(['355D7E', '7BA79D', 'B4C7DC']);
   });

@@ -1,21 +1,7 @@
-// The typed operation vocabulary.
-//
-// Small on purpose, and it grows by KIND of crossing rather than by convenience. Every
-// operation here is either a read derived from one canonical package snapshot, or a command
-// that turns into `TreeDocOp`s and commits through the single transaction path. Nothing in
-// between exists: there is no "read after write in the same batch", because a batch is one
-// atomic transaction and a query that answered post-commit state would describe a document
-// nobody had published yet.
-//
-// ADDRESSING IS ONE VOCABULARY: a stable paragraph handle plus a UTF-16 model offset
-// (`AutomationEndpoint`). A position may also be given as a story EDGE — the start or the end
-// of a body — because an object model that wants "append to the document" would otherwise have
-// to list every paragraph first just to find the last one, and the host already knows.
-//
-// WHERE A HANDLE IS RESOLVED matters for what a command can answer. A read names objects that
-// already exist, so its answer is available while the batch is being planned. A command that
-// CREATES a paragraph cannot name it in advance — the canonical node does not exist yet — so
-// those operations answer after the commit, from the state they made. See `plan.ts`.
+import type { AutomationAuthoringOperation } from './authoring-operations.ts';
+// Operations read one package snapshot or commit through the canonical transaction path.
+// Reads resolve existing handles before writes commit. Created objects become addressable
+// after commit. Endpoints use paragraph handles and UTF-16 offsets, or story edges.
 
 import type { AutomationFontWrite, AutomationParagraphFormatWrite } from './formatting.ts';
 import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
@@ -54,15 +40,18 @@ export type AutomationSpanRef =
   | { readonly body: AutomationHandle };
 
 /**
- * Where to look for content controls: a whole story, or inside one control.
+ * Where to look for content controls: a whole story, inside one control, or across a span.
  *
  * A control's own scope is how nesting is expressed. Listing every control of a story flat
  * would answer a form field and the group wrapping it as siblings, which is not what either of
- * them is.
+ * them is. A SPAN scope is the exception on purpose: it answers every control the span
+ * overlaps, at any depth, including a control that holds the whole span, because a caller asks
+ * a range for its controls to learn what an edit through it would touch.
  */
 export type AutomationContentControlScope =
   | { readonly body: AutomationHandle }
-  | { readonly contentControl: AutomationHandle };
+  | { readonly contentControl: AutomationHandle }
+  | { readonly span: AutomationSpanRef };
 
 /** The value a control accepts, by what kind of control it is. */
 export type AutomationContentControlValue =
@@ -123,7 +112,7 @@ export type AutomationParagraphRef =
 export interface AutomationSearchOptions {
   readonly matchCase?: boolean;
   readonly matchWholeWord?: boolean;
-  /** Text view to search. `allMarkup` preserves the historical behavior. */
+  /** Display or raw model text to search. `allMarkup` preserves the historical behavior. */
   readonly projection?: AutomationTextProjection;
   /** Not supported; `true` is refused. Punctuation-insensitive matching is not implemented. */
   readonly ignorePunct?: boolean;
@@ -136,12 +125,14 @@ export interface AutomationSearchOptions {
 }
 
 /**
- * Which revision text an automation read exposes.
+ * Which text an automation read exposes.
  *
  * `allMarkup` includes pending insertions, deletions, and both sides of replacements. `original`
  * matches Word's Original review view: deletions remain visible and insertions are hidden.
+ * Both are display text and expand saved field results. `model` returns raw model text with
+ * atomic fields represented by `U+FFFC`. Only `model` shares the protocol's offset vocabulary.
  */
-export type AutomationTextProjection = 'allMarkup' | 'original';
+export type AutomationTextProjection = 'allMarkup' | 'original' | 'model';
 
 /** Where a selection lands. `start`/`end` collapse it to one edge of the span. */
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
@@ -154,8 +145,24 @@ export type AutomationSelectionMode = 'select' | 'start' | 'end';
  * host minted, never pointers, so an operation is plain transport data.
  */
 export type AutomationOperation =
+  | AutomationAuthoringOperation
+  | { readonly op: 'getChangeTrackingMode' }
+  | {
+      readonly op: 'setChangeTrackingMode';
+      readonly mode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+      readonly author?: string;
+    }
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
+  | { readonly op: 'removeDocumentInformation'; readonly removeDocInfoType: string }
+  | {
+      readonly op: 'getDocumentProperty';
+      readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;
+    }
+  | {
+      readonly op: 'setDocumentProperties';
+      readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;
+    }
   /** The main story of a document. */
   | { readonly op: 'getBody'; readonly document: AutomationHandle }
   /**
@@ -172,18 +179,47 @@ export type AutomationOperation =
    * Text of a body or a paragraph.
    *
    * A story reads as its paragraphs joined by a carriage return — one paragraph mark, one
-   * `\r` — which is the separator Word's own text property uses.
+   * `\r` — which is the separator Word's own text property uses. Display projections expand
+   * fields, so clients must not derive model offsets from this text.
    */
   | {
       readonly op: 'getText';
       readonly target: AutomationHandle;
       readonly projection?: AutomationTextProjection;
     }
-  /** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
+  /**
+   * Display text between two endpoints, with a carriage return at each paragraph boundary.
+   * Use the `model` projection when a client needs text in the endpoint offset vocabulary.
+   */
   | {
       readonly op: 'getSpanText';
       readonly span: AutomationSpanRef;
       readonly projection?: AutomationTextProjection;
+    }
+  /**
+   * A span split into ranges that each end after one of `endingMarks`, or at a paragraph end.
+   *
+   * Boundaries come from the model text, so a field, an equation, or another atom is never
+   * split. `trimSpacing` removes spaces, tabs, and column breaks from each range's edges and
+   * drops a range left empty. A range the projection shows no character of is not answered.
+   */
+  | {
+      readonly op: 'getTextRanges';
+      readonly scope: AutomationSpanRef;
+      readonly endingMarks: readonly string[];
+      readonly trimSpacing?: boolean;
+      readonly projection?: AutomationTextProjection;
+    }
+  /** The smallest span covering both spans. Both must be in one story. */
+  | { readonly op: 'expandSpan'; readonly span: AutomationSpanRef; readonly to: AutomationSpanRef }
+  /**
+   * A span's text as if every pending revision were accepted (`current`) or rejected
+   * (`original`), with a carriage return at each paragraph mark that view keeps.
+   */
+  | {
+      readonly op: 'getReviewedText';
+      readonly span: AutomationSpanRef;
+      readonly version: 'original' | 'current';
     }
   /**
    * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
@@ -214,6 +250,25 @@ export type AutomationOperation =
    * the ones it was planned with. Addressing distinct paragraphs keeps a batch
    * order-independent.
    */
+  /** Explicit inline Word revision, independent of a browser's editing mode. */
+  | {
+      readonly op: 'proposeInsertion';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly where: 'Before' | 'After';
+      readonly author: string;
+    }
+  | {
+      readonly op: 'proposeDeletion';
+      readonly span: AutomationSpanRef;
+      readonly author: string;
+    }
+  | {
+      readonly op: 'proposeReplacement';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly author: string;
+    }
   | { readonly op: 'insertText'; readonly at: AutomationPoint; readonly text: string }
   /**
    * Replace a span with text, which may be empty — that is how a deletion is spelled.
@@ -326,9 +381,10 @@ export type AutomationOperation =
   /**
    * The header or footer story a section declares or inherits, as a BODY.
    *
-   * A variant the document has neither declared nor inherited is refused: minting the part would
-   * make a read write, and a header that exists only because it was asked about is a header the
-   * document did not have.
+   * A variant the document has neither declared nor inherited is still answered, as an empty
+   * body: every read on it answers what it answers for an empty story. Asking does not create
+   * the part. The first text written into the body creates it; any other write that would change
+   * the body is refused until then.
    */
   | {
       readonly op: 'getFurniture';
@@ -342,7 +398,12 @@ export type AutomationOperation =
    * The reserved separator and continuation-separator notes (`w:id` -1 and 0) are not notes a
    * caller can reach: reporting them would say the document has two more footnotes than it has.
    */
-  | { readonly op: 'getNotes'; readonly document: AutomationHandle; readonly noteKind: NoteKind }
+  | {
+      readonly op: 'getNotes';
+      readonly document: AutomationHandle;
+      readonly noteKind: NoteKind;
+      readonly scope?: AutomationHandle;
+    }
   /** One note's story, as a BODY. Two notes in one part are two stories. */
   | { readonly op: 'getNoteBody'; readonly note: AutomationHandle }
   /**
@@ -459,6 +520,43 @@ export type AutomationOperation =
    */
   | { readonly op: 'getBookmarkRange'; readonly bookmark: AutomationHandle }
   /**
+   * The names of the bookmarks a span overlaps, in document order: `Range.getBookmarks`.
+   *
+   * A non-empty span holds a bookmark when the two share text, and a point bookmark when the
+   * point is inside the span. An empty span holds the bookmarks around it. `includeAdjacent`
+   * adds the bookmarks that only touch the span; `includeHidden` adds names starting with `_`.
+   */
+  | {
+      readonly op: 'getBookmarkNames';
+      readonly scope: AutomationSpanRef;
+      readonly includeHidden: boolean;
+      readonly includeAdjacent: boolean;
+    }
+  /**
+   * The range of the bookmark with this name, compared without case, in any story: main text
+   * first, then headers, footers and notes. Answers no span when nothing declares the name.
+   */
+  | {
+      readonly op: 'getBookmarkRangeByName';
+      readonly document: AutomationHandle;
+      readonly name: string;
+    }
+  /**
+   * Add a bookmark around a span, or at a point. A bookmark any story declares under the same
+   * name, compared without case, moves here in the same write.
+   */
+  | { readonly op: 'insertBookmark'; readonly span: AutomationSpanRef; readonly name: string }
+  /**
+   * Remove a bookmark: by name anywhere in the document, or the one a handle names. The text
+   * stays. A name nothing declares is not an error and changes nothing.
+   */
+  | {
+      readonly op: 'deleteBookmark';
+      readonly target:
+        | { readonly document: AutomationHandle; readonly name: string }
+        | { readonly bookmark: AutomationHandle };
+    }
+  /**
    * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
    *
    * A reply is reached through the comment it answers rather than listed beside it, because a flat
@@ -541,6 +639,42 @@ export type AutomationOperation =
    * such as a complete tracked row.
    */
   | { readonly op: 'getRevisions'; readonly body: AutomationHandle }
+  /**
+   * The listed tracked changes whose characters a span overlaps, in document order. A collapsed
+   * span lists the changes it touches. Handles are the story-wide listing's handles.
+   */
+  | { readonly op: 'getRevisions'; readonly scope: AutomationSpanRef }
+  /**
+   * The listed tracked changes a review-queue key names: one, or the two halves of a paired
+   * replacement. A key naming nothing answers no handles.
+   */
+  | { readonly op: 'getRevisions'; readonly key: string }
+  /**
+   * The stretch a review-queue key names: `revision-<id>`, a paired `revision-replace:<a>+<b>`,
+   * or `comment-<id>`. Answers `spans` holding one span covering every range of the item, or no
+   * span when the key names nothing this document holds.
+   */
+  | { readonly op: 'getReviewItemRange'; readonly key: string }
+  /** Resolve eligible decisions in one story. Omit revisions to select every canonical decision. */
+  | {
+      readonly op: 'resolveRevisionBatch';
+      readonly body: AutomationHandle;
+      readonly action: 'accept' | 'reject';
+      readonly revisions?: readonly AutomationHandle[];
+    }
+  /**
+   * Attribute pending decisions in one story to another author, keeping them pending. Omit
+   * revisions to select every canonical decision. `date` is `xsd:dateTime`; omitted keeps each.
+   */
+  | {
+      readonly op: 'setRevisionAuthorBatch';
+      readonly body: AutomationHandle;
+      readonly author: string;
+      readonly date?: string;
+      readonly revisions?: readonly AutomationHandle[];
+      /** Keep only changes these authors made. Not allowed with `revisions`. */
+      readonly authors?: readonly string[];
+    }
   /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
   | { readonly op: 'getRevisionType'; readonly revision: AutomationHandle }
   | { readonly op: 'getRevisionAuthor'; readonly revision: AutomationHandle }
@@ -563,22 +697,19 @@ export type AutomationOperation =
    * header, footer, or the main body uses the part-wide store op; a note uses one store
    * all-decision scoped to that exact canonical note root. Both forms agree for the main story.
    */
-  | {
-      readonly op: 'acceptAllRevisions';
-      readonly body: AutomationHandle;
-    }
-  | {
-      readonly op: 'acceptAllRevisions';
-      readonly document: AutomationHandle;
-    }
-  | {
-      readonly op: 'rejectAllRevisions';
-      readonly body: AutomationHandle;
-    }
-  | {
-      readonly op: 'rejectAllRevisions';
-      readonly document: AutomationHandle;
-    }
+  | { readonly op: 'acceptAllRevisions'; readonly body: AutomationHandle }
+  | { readonly op: 'acceptAllRevisions'; readonly document: AutomationHandle }
+  | { readonly op: 'rejectAllRevisions'; readonly body: AutomationHandle }
+  | { readonly op: 'rejectAllRevisions'; readonly document: AutomationHandle }
+  /**
+   * Accept or reject every change a span overlaps, or the changes a review-queue key names, as
+   * one transaction. Structural changes absent from listings are included. Refused whole when
+   * any of them is read-only or cannot be resolved, and when the key names nothing.
+   */
+  | { readonly op: 'acceptAllRevisions'; readonly scope: AutomationSpanRef }
+  | { readonly op: 'rejectAllRevisions'; readonly scope: AutomationSpanRef }
+  | { readonly op: 'acceptAllRevisions'; readonly key: string }
+  | { readonly op: 'rejectAllRevisions'; readonly key: string }
   /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
@@ -692,6 +823,8 @@ export type AutomationOperation =
   /** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
   | {
       readonly op: 'setContentControlProperties';
+      readonly cannotEdit?: boolean;
+      readonly cannotDelete?: boolean;
       readonly contentControl: AutomationHandle;
       readonly tag?: string | null;
       readonly title?: string | null;
@@ -719,6 +852,7 @@ export type AutomationOperation =
   /** Wrap a span in a new control of the named type. */
   | {
       readonly op: 'insertContentControl';
+      readonly returnHandle?: boolean;
       readonly span: AutomationSpanRef;
       readonly subtype: AutomationContentControlSubtype;
       readonly tag?: string;
@@ -783,140 +917,10 @@ export interface AutomationCustomNodePayload {
 /** Just the `op` discriminants of {@link AutomationOperation}, for dispatch tables. */
 export type AutomationOperationKind = AutomationOperation['op'];
 
-/** Operations that read. They never open a transaction. */
-export const AUTOMATION_QUERY_OPERATIONS = [
-  'getDocument',
-  'getBody',
-  'getParagraphs',
-  'getSpanParagraphs',
-  'getText',
-  'getSpanText',
-  'getParagraphId',
-  'search',
-  'getFont',
-  'getParagraphFormat',
-  'getStyle',
-  'getSections',
-  'getPageSetup',
-  'getFurniture',
-  'getNotes',
-  'getNoteBody',
-  'getNoteText',
-  'getNoteKind',
-  'getLists',
-  'getListId',
-  'getListById',
-  'getListParagraphs',
-  'getParagraphList',
-  'getListLevel',
-  'getHyperlink',
-  'getBookmarks',
-  'getBookmarkName',
-  'getBookmarkRange',
-  'getComments',
-  'getCommentReplies',
-  'getCommentId',
-  'getCommentAuthor',
-  'getCommentDate',
-  'getCommentText',
-  'getCommentRange',
-  'getCommentResolved',
-  'getRevisions',
-  'getRevisionType',
-  'getRevisionAuthor',
-  'getRevisionDate',
-  'getRevisionRange',
-  'getContentControls',
-  'getContentControlById',
-  'getContentControlsByTag',
-  'getContentControlsByTitle',
-  'getContentControlTag',
-  'getContentControlTitle',
-  'getContentControlFileId',
-  'getContentControlSubtype',
-  'getContentControlLock',
-  'getContentControlIsBound',
-  'getContentControlPlaceholderShown',
-  'getContentControlTemporary',
-  'getContentControlText',
-  'getContentControlParagraphs',
-  'getContentControlRange',
-] as const satisfies readonly AutomationOperationKind[];
-
-/** Operations that write. Every one of these goes through the single transaction path. */
-export const AUTOMATION_COMMAND_OPERATIONS = [
-  'insertText',
-  'replaceSpan',
-  'replaceStoryBlocks',
-  'insertParagraph',
-  'splitParagraph',
-  'deleteParagraph',
-  'selectSpan',
-  'selectBookmark',
-  'setFont',
-  'setParagraphFormat',
-  'setStyle',
-  'setPageSetup',
-  'deleteNote',
-  'setListLevel',
-  'insertListParagraph',
-  'setHyperlink',
-  'insertComment',
-  'setCommentResolved',
-  'replyToComment',
-  'deleteComment',
-  'acceptRevision',
-  'rejectRevision',
-  'acceptAllRevisions',
-  'rejectAllRevisions',
-  'setContentControlValue',
-  'setContentControlProperties',
-  'deleteContentControl',
-  'insertContentControlText',
-  'insertContentControl',
-  'insertCustomNode',
-] as const satisfies readonly AutomationOperationKind[];
-
-/**
- * Commands that commit as a PACKAGE transaction and therefore share a batch with nothing.
- *
- * A note's lifecycle rewrites several parts at once — the notes part, the references in every
- * story that cited it, the relationship and the content-type override — and the store publishes
- * that as its own undo unit rather than as ops inside a story transaction. Two of them, or one
- * beside a story command, would be two commits: two revisions, and a moment where half the
- * caller's batch is published. Refused while planning instead.
- */
-export const AUTOMATION_SOLITARY_OPERATIONS = [
-  'deleteNote',
-  'insertComment',
-  'setCommentResolved',
-  'replyToComment',
-  // A payload write is a package transaction of its own — the data part, the node inside it and
-  // the body's control — so it shares a batch with nothing, for the same reason a reply does not.
-  'insertCustomNode',
-] as const satisfies readonly AutomationOperationKind[];
-
-const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);
-
-/** Whether an operation must be the only one in its batch. */
-export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean {
-  return SOLITARY.has(operation.op);
-}
-
-// Compile-time exhaustiveness: a new operation must be classified as a query or a command, or
-// this fails to typecheck. Without it a new operation would default to "not a command" and
-// silently skip the transaction path.
-type _Unclassified = Exclude<
-  AutomationOperationKind,
-  (typeof AUTOMATION_QUERY_OPERATIONS)[number] | (typeof AUTOMATION_COMMAND_OPERATIONS)[number]
->;
-const _operationsClassified: _Unclassified extends never ? true : ['unclassified', _Unclassified] =
-  true;
-void _operationsClassified;
-
-const COMMANDS: ReadonlySet<string> = new Set(AUTOMATION_COMMAND_OPERATIONS);
-
-/** Whether an operation writes. Drives the query/command split inside one batch. */
-export function isAutomationCommand(operation: AutomationOperation): boolean {
-  return COMMANDS.has(operation.op);
-}
+export {
+  AUTOMATION_QUERY_OPERATIONS,
+  AUTOMATION_COMMAND_OPERATIONS,
+  AUTOMATION_SOLITARY_OPERATIONS,
+  isAutomationCommand,
+  isSolitaryAutomationCommand,
+} from './operation-classification.ts';

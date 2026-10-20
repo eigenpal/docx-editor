@@ -21,6 +21,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // touches it is refused with `ConflictingChanges` rather than planned against coordinates that have
 // stopped describing it. Two syncs get both edits, each exactly as asked.
 
+import { ShapeCollection } from './shapes.ts';
+import { ContentControlCollection } from './content-controls.ts';
+import { InsertLocation, Alignment, ChangeTrackingVersion } from './editing-enums.ts';
 import {
   ObjectPath,
   fail,
@@ -28,6 +31,7 @@ import {
   hydratedHandle,
   hydratedParagraphFormat,
   hydratedSpan,
+  hydratedText,
   type AutomationHandle,
   type ObjectAddress,
   type RequestContext,
@@ -40,12 +44,29 @@ import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
+import { searchOptions as readSearchOptions, type SearchOptions } from './search-options.ts';
+import { optionalFlag, reviewedTextVersion, textRangeMarks } from './text-ranges.ts';
+import { clientResult, type ClientResult } from '../runtime/client-result.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
 
 /** Paragraph alignment values readable and writable through this object model. */
-export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+export type ParagraphAlignment =
+  | Alignment
+  | 'Mixed'
+  | 'Unknown'
+  | 'Left'
+  | 'Centered'
+  | 'Right'
+  | 'Justified';
+
+/**
+ * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.
+ *
+ * @public
+ */
+export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 /**
  * One paragraph: what it says, what it is, and the ways it can be changed.
@@ -67,9 +88,11 @@ export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Ri
  */
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
+  #shapes: ShapeCollection | undefined;
   #list: List | undefined;
   #listItem: ListItem | undefined;
   #format: Record<string, unknown> | undefined;
+  #contentControls: ContentControlCollection | undefined;
 
   /** @internal A paragraph a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph {
@@ -103,6 +126,24 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
+   * The content controls in this paragraph, in document order, at any nesting depth.
+   *
+   * Includes every inline control in the paragraph and a block control that holds it. Load
+   * `items/cannotEdit`, `items/tag`, and `items/text` before you plan edits, and keep each locked
+   * control as one unit.
+   */
+  get contentControls(): ContentControlCollection {
+    this.requireUsablePath();
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      `${this.path.label}.contentControls`,
+      this.path,
+      () => ({ span: { paragraph: this.#handle() } })
+    );
+    return this.#contentControls;
+  }
+
+  /**
    * The document's own identity for this paragraph.
    *
    * Stable across edits elsewhere in the document and across a save and reopen, because it is
@@ -127,6 +168,17 @@ export class Paragraph extends ModelObject implements PromisedItem {
     this.#authorFormat('style', requireStyleName(value, `${this.path.label}.style`));
   }
 
+  /** Floating and inline shapes in this paragraph, such as text boxes and pictures. */
+  get shapes(): ShapeCollection {
+    this.#shapes ??= ShapeCollection.of(
+      this.context,
+      `${this.path.label}.shapes`,
+      this.path,
+      'paragraph'
+    );
+    return this.#shapes;
+  }
+
   /** The character formatting of this paragraph's characters, and of its paragraph mark. */
   get font(): Font {
     this.#font ??= Font.of(this.context, `${this.path.label}.font`, this.path, 'paragraph');
@@ -145,6 +197,30 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set alignment(value: ParagraphAlignment) {
     this.#authorFormat('alignment', requireAlignment(value, `${this.path.label}.alignment`));
+  }
+
+  /**
+   * The direction the paragraph reads in: `LeftToRight` or `RightToLeft`.
+   *
+   * A DocxEditor addition: Office.js has no paragraph direction member. The values follow
+   * `Word.SectionDirection`. The read resolves the paragraph's own `w:bidi`, then its style, its
+   * list level, an enclosing cell's table style, and the document defaults, as the page shows them.
+   *
+   * A write changes nothing when the paragraph already reads that way. Otherwise it removes the
+   * paragraph's own direction when that alone set the other one, or states the asked direction,
+   * which also overrides a style. The write keeps `alignment` as authored: in a right-to-left
+   * paragraph, `Left` and `Right` name the start and end edges. With change tracking on, a write
+   * that changes the direction is recorded as a paragraph formatting revision.
+   */
+  get readingOrder(): ParagraphReadingOrder {
+    return this.loadedProperty<ParagraphReadingOrder>('readingOrder');
+  }
+
+  set readingOrder(value: ParagraphReadingOrder) {
+    this.#authorFormat(
+      'readingOrder',
+      requireReadingOrder(value, `${this.path.label}.readingOrder`)
+    );
   }
 
   /** Points. Negative for a hanging indent — the first line starting left of the rest. */
@@ -216,6 +292,148 @@ export class Paragraph extends ModelObject implements PromisedItem {
     return this.#list;
   }
 
+  /** Address this paragraph's content or an endpoint. Sync before using the returned range. */
+  getRange(
+    rangeLocation: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After' = 'Whole'
+  ): Range {
+    const target = `${this.path.label}.getRange`;
+    if (!['Whole', 'Content', 'Start', 'End', 'Before', 'After'].includes(rangeLocation))
+      fail({ code: 'InvalidArgument', target });
+    const found = Range.promised(this.context, target, false);
+    this.read(
+      target,
+      () => ({ op: 'getRange', span: { paragraph: this.#handle() }, location: rangeLocation }),
+      (value) => {
+        found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return found;
+  }
+
+  /**
+   * Every occurrence of `searchText` in this paragraph, as ranges, in reading order.
+   *
+   * Takes the same options as `Body.search`. You can search a paragraph from `getFirst()` in the
+   * same `context.sync()` that finds it.
+   */
+  search(searchText: string, searchOptions?: SearchOptions): RangeCollection {
+    const target = `${this.path.label}.search`;
+    if (typeof searchText !== 'string') fail({ code: 'InvalidArgument', target });
+    const selected = readSearchOptions(searchOptions, target);
+    this.requireUsablePath();
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'search',
+      scope: { paragraph: this.#handle() },
+      text: searchText,
+      options: {
+        ...(selected ?? {}),
+        projection: this.revisionTextView(),
+      },
+    }));
+  }
+
+  /**
+   * Split this paragraph into ranges that each end after one of `endingMarks`, such as `[' ']`
+   * for words. Takes the same arguments and follows the same rules as `Range.getTextRanges`.
+   *
+   * @example
+   * ```ts
+   * const words = paragraph.getTextRanges([' '], true);
+   * words.load('items/text');
+   * await context.sync();
+   * ```
+   */
+  getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection {
+    const target = `${this.path.label}.getTextRanges`;
+    const marks = textRangeMarks(endingMarks, target);
+    const trim = optionalFlag(trimSpacing, target);
+    this.requireUsablePath();
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'getTextRanges',
+      scope: { paragraph: this.#handle() },
+      endingMarks: marks,
+      ...(trim ? { trimSpacing: true } : {}),
+      projection: this.revisionTextView(),
+    }));
+  }
+
+  /**
+   * This paragraph's text as if every pending tracked change were accepted (`Current`, the
+   * default) or rejected (`Original`). The document does not change.
+   *
+   * After tracked edits, `text` reads both the deleted and the inserted words. Read
+   * `getReviewedText('Current')` to check the proposed result before the next edit.
+   */
+  getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+  /**
+   * This paragraph's text as if every pending tracked change were accepted (`Current`, the
+   * default) or rejected (`Original`). The document does not change.
+   */
+  getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+  getReviewedText(
+    changeTrackingVersion?: ChangeTrackingVersion | 'Original' | 'Current'
+  ): ClientResult<string> {
+    const target = `${this.path.label}.getReviewedText`;
+    const version = reviewedTextVersion(changeTrackingVersion, target);
+    this.requireUsablePath();
+    const { result, fill } = clientResult<string>(target);
+    this.read(
+      target,
+      () => ({ op: 'getReviewedText', span: { paragraph: this.#handle() }, version }),
+      (value) => fill(hydratedText(value, target))
+    );
+    return result;
+  }
+
+  /** Start a new independent bullet list with this paragraph. Sync before using the returned list. */
+  startNewList(): List {
+    const target = `${this.path.label}.startNewList`;
+    const created = List.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'startNewList', paragraph: this.#handle() }),
+      (value) => {
+        created.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
+      }
+    );
+    return created;
+  }
+
+  /** Join an existing list at a zero-based nesting level. */
+  attachToList(listId: number, level: number): List {
+    const target = `${this.path.label}.attachToList`;
+    if (
+      !Number.isSafeInteger(listId) ||
+      listId <= 0 ||
+      !Number.isInteger(level) ||
+      level < 0 ||
+      level > 8
+    ) {
+      fail({ code: 'InvalidArgument', target });
+    }
+    const joined = List.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'attachToList', paragraph: this.#handle(), listId, level }),
+      (value) => {
+        joined.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
+      }
+    );
+    return joined;
+  }
+
+  /** Remove numbering while preserving the paragraph's text and other formatting. */
+  detachFromList(): void {
+    const target = `${this.path.label}.detachFromList`;
+    this.commandAnswering(
+      target,
+      () => ({ op: 'detachFromList', paragraph: this.#handle() }),
+      (value) => {
+        hydratedApplied(value, target);
+      }
+    );
+  }
+
   /** Where this paragraph sits in its list. Reading `level` on a paragraph in none refuses. */
   get listItem(): ListItem {
     this.#listItem ??= ListItem.of(this.context, `${this.path.label}.listItem`, this.path);
@@ -224,35 +442,67 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   /** Empty this paragraph's text, leaving the paragraph itself where it is. */
   clear(): void {
-    const handle = this.#handle();
     this.commandDiscarding('clear', () => ({
       op: 'replaceSpan',
-      span: { paragraph: handle },
+      span: { paragraph: this.#handle() },
       text: '',
     }));
   }
 
-  /** Remove this paragraph and everything in it. */
+  /**
+   * Remove this paragraph and everything in it.
+   *
+   * With `document.changeTrackingMode = 'TrackMineOnly'`, this records a tracked deletion of the
+   * paragraph's text and its paragraph mark. Accepting it removes the paragraph; rejecting it
+   * restores the paragraph.
+   *
+   * A tracked deletion refuses with `NotSupported` for the last paragraph of a story, table
+   * cell, or content control; a paragraph directly before a table or block content control; a
+   * paragraph whose mark ends a section; a paragraph with an inline content control; a
+   * paragraph with a complex field boundary whose matching boundary is in another paragraph;
+   * and a paragraph that nests inline content more than 64 levels deep. It refuses with
+   * `NotImplemented` when the paragraph has your own pending change or another author's pending
+   * paragraph mark, formatting, move, or structural change, and when the start of the next
+   * paragraph has any pending change. Delete adjacent paragraphs in one sync:
+   * a later sync beside your own pending deletion refuses, because the two would review as one
+   * decision. A refusal refuses the whole sync.
+   */
   delete(): void {
-    const handle = this.#handle();
-    this.command('delete', () => ({ op: 'deleteParagraph', paragraph: handle }));
+    const target = `${this.path.label}.delete`;
+    this.commandAnswering(
+      target,
+      () => ({ op: 'deleteParagraph', paragraph: this.#handle() }),
+      // A permanent deletion answers `applied`; a tracked one answers the struck span.
+      (value) => {
+        if (value.kind !== 'applied' && value.kind !== 'span')
+          fail({ code: 'GeneralException', target });
+      }
+    );
   }
 
   /** Write text over this paragraph or at either edge of it. Answers the written text's range. */
-  insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
+  insertText(
+    text: string,
+    insertLocation:
+      | InsertLocation.replace
+      | InsertLocation.start
+      | InsertLocation.end
+      | 'Replace'
+      | 'Start'
+      | 'End'
+  ): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
     const where = paragraphTextLocation(insertLocation, target);
-    const handle = this.#handle();
     const created = Range.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () =>
         where === 'Replace'
-          ? { op: 'replaceSpan', span: { paragraph: handle }, text: written }
+          ? { op: 'replaceSpan', span: { paragraph: this.#handle() }, text: written }
           : {
               op: 'insertText',
-              at: { paragraph: handle, at: where === 'Start' ? 'start' : 'end' },
+              at: { paragraph: this.#handle(), at: where === 'Start' ? 'start' : 'end' },
               text: written,
             },
       (value) => {
@@ -267,13 +517,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.insertParagraph`;
     const written = insertableText(paragraphText, target);
     const where = besideLocation(insertLocation, target);
-    const handle = this.#handle();
     const created = Paragraph.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () => ({
         op: 'insertParagraph',
-        anchor: { paragraph: handle },
+        anchor: { paragraph: this.#handle() },
         where: where === 'Before' ? 'before' : 'after',
         text: written,
       }),
@@ -298,13 +547,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const chosen = requireDelimiters(delimiters, target);
     const dropDelimiters = requireFlag(trimDelimiters, `${target}.trimDelimiters`);
     const dropSpacing = requireFlag(trimSpacing, `${target}.trimSpacing`);
-    const handle = this.#handle();
     const pieces = RangeCollection.answered(this.context, target, this.path);
     this.commandAnswering(
       target,
       () => ({
         op: 'splitParagraph',
-        paragraph: handle,
+        paragraph: this.#handle(),
         delimiters: chosen,
         ...(dropDelimiters ? { trimDelimiters: true } : {}),
         ...(dropSpacing ? { trimSpacing: true } : {}),
@@ -319,16 +567,18 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'uniqueLocalId', ...FORMAT_FIELDS]);
-    const handle = this.#handle();
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({
         op: 'getText',
-        target: handle,
+        target: this.#handle(),
         projection: this.revisionTextView(),
       }));
     }
     if (selected.includes('uniqueLocalId')) {
-      this.loadTextInto('uniqueLocalId', () => ({ op: 'getParagraphId', paragraph: handle }));
+      this.loadTextInto('uniqueLocalId', () => ({
+        op: 'getParagraphId',
+        paragraph: this.#handle(),
+      }));
     }
     const format = FORMAT_FIELDS.filter((field) => selected.includes(field));
     if (format.length === 0) return;
@@ -338,7 +588,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const label = `${this.path.label}.paragraphFormat`;
     this.read(
       label,
-      () => ({ op: 'getParagraphFormat', paragraph: { paragraph: handle } }),
+      () => ({ op: 'getParagraphFormat', paragraph: { paragraph: this.#handle() } }),
       (value) => {
         const read = hydratedParagraphFormat(value, label);
         for (const field of format) this.setLoadedProperty(field, read[field]);
@@ -351,37 +601,41 @@ export class Paragraph extends ModelObject implements PromisedItem {
    *
    * Same reason as `Font`: a paragraph-property op carries the paragraph's whole authored bag so it
    * can replace the container, and the host refuses a second one in the same batch because it would
-   * have been built from the tree the first already changed. The bag is snapshotted and cleared at
-   * dispatch, so what is assigned after a sync belongs to the next one.
+   * have been built from the tree the first already changed. The bag is detached when sync captures
+   * the queue, so later assignments belong to the next sync.
    */
   #authorFormat(field: FormatField, value: unknown): void {
-    this.requireAddressable();
+    this.requireUsablePath();
     if (this.#format) {
       this.#format[field] = value;
       return;
     }
     const pending: Record<string, unknown> = { [field]: value };
     this.#format = pending;
-    const handle = this.#handle();
     const label = `${this.path.label}.${field}`;
     this.commandAnswering(
       `${this.path.label}.paragraphFormat`,
       () => {
-        this.#format = undefined;
-        return { op: 'setParagraphFormat', paragraph: { paragraph: handle }, format: pending };
+        return {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: this.#handle() },
+          format: pending,
+        };
       },
       (answer) => {
         hydratedApplied(answer, label);
+      },
+      () => {
+        if (this.#format === pending) this.#format = undefined;
       }
     );
   }
 
   #listAt(label: string): List {
-    const handle = this.#handle();
     const found = List.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getParagraphList', paragraph: handle }),
+      () => ({ op: 'getParagraphList', paragraph: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, label) });
       }
@@ -405,6 +659,7 @@ const FORMAT_FIELDS = [
   'lineSpacing',
   'spaceBefore',
   'spaceAfter',
+  'readingOrder',
 ] as const;
 
 type FormatField = (typeof FORMAT_FIELDS)[number];
@@ -427,6 +682,14 @@ function requireAlignment(value: unknown, target: string): ParagraphAlignment {
     fail({ code: 'InvalidArgument', target });
   }
   return value as ParagraphAlignment;
+}
+
+/** A direction a write may name. Any other value is refused before anything is sent. */
+function requireReadingOrder(value: unknown, target: string): ParagraphReadingOrder {
+  if (value !== 'LeftToRight' && value !== 'RightToLeft') {
+    fail({ code: 'InvalidArgument', target });
+  }
+  return value;
 }
 
 function requirePoints(value: unknown, target: string): number {

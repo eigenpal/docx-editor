@@ -89,14 +89,24 @@ export function anchorLineY(
   paragraphId: string,
   offset: number
 ): number {
-  const line = anchor.lines?.find((entry) => {
+  for (const entry of anchor.lines ?? []) {
     const spans = entry.spans;
-    if (!spans) return offset < entry.range.end;
-    const owned = spans.filter((span) => span.range.paragraphId === paragraphId);
-    if (owned.length === spans.length) return offset < entry.range.end;
-    return owned.length > 0 && offset < owned[owned.length - 1]!.range.end;
-  });
-  return line ? line.box.y : anchor.fragmentY;
+    if (!spans) {
+      if (offset < entry.range.end) return entry.box.y;
+      continue;
+    }
+    // Counted, not filtered: every card asks this of every line above its own.
+    let owned = 0;
+    let lastOwnedEnd = 0;
+    for (const span of spans) {
+      if (span.range.paragraphId !== paragraphId) continue;
+      owned += 1;
+      lastOwnedEnd = span.range.end;
+    }
+    if (owned === spans.length ? offset < entry.range.end : owned > 0 && offset < lastOwnedEnd)
+      return entry.box.y;
+  }
+  return anchor.fragmentY;
 }
 
 /**
@@ -217,6 +227,9 @@ export function reviewItemGeometry(
   if (!range) return null;
   const anchor = index.get(range.start.paragraphId);
   if (!anchor) return null;
+  // An untouched page hands back the same anchor, so its cards keep their geometry.
+  const cached = geometries.get(item);
+  if (cached?.anchor === anchor) return cached.geometry;
   // TWO coordinate spaces meet here. A fragment's box is relative to the page CONTENT box;
   // a page's content box is absolute in the sheet stack. Using the fragment's own y alone
   // put every card from page two onwards at the top of the rail, all of them claiming to
@@ -224,8 +237,18 @@ export function reviewItemGeometry(
   //
   // The LINE the range starts on, not the paragraph's top: a comment on the last line of a
   // twelve-line paragraph belongs beside that line, which is where Word puts it.
-  return {
+  const geometry = {
     pageIndex: anchor.pageIndex,
     y: anchor.contentY + anchorLineY(anchor, range.start.paragraphId, range.start.offset),
   };
+  geometries.set(item, { anchor, geometry });
+  return geometry;
 }
+
+const geometries = new WeakMap<
+  ReviewItem,
+  {
+    readonly anchor: ReviewParagraphAnchor;
+    readonly geometry: { readonly pageIndex: number; readonly y: number };
+  }
+>();

@@ -68,6 +68,7 @@ interface PassProducerEntry {
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly pageNumberFormat: string | undefined;
+  readonly compatibilityMode: number | undefined;
   readonly producer: string;
 }
 
@@ -88,7 +89,8 @@ function passProducerEntryMatches(
   defaultTabStopPt: number | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter: RevisionAuthorFilter | undefined,
-  pageNumberFormat: string | undefined
+  pageNumberFormat: string | undefined,
+  compatibilityMode: number | undefined
 ): entry is PassProducerEntry {
   return (
     entry != null &&
@@ -97,7 +99,8 @@ function passProducerEntryMatches(
     entry.defaultTabStopPt === defaultTabStopPt &&
     entry.displayMode === displayMode &&
     entry.authorFilter === authorFilter &&
-    entry.pageNumberFormat === pageNumberFormat
+    entry.pageNumberFormat === pageNumberFormat &&
+    entry.compatibilityMode === compatibilityMode
   );
 }
 
@@ -106,12 +109,11 @@ function passProducerEntryMatches(
  * page-number-format tokens.
  *
  * `pageNumberFormat` is the section's `w:pgNumType/@w:fmt` as the body flow MEASURES against
- * it. It belongs in the producer, not only in the section context string, because it changes
- * what a paragraph EMITS: it decides the text of a body page-field placeholder and whether the
- * atom carries its `\#` picture to finalize at all. The context governs session resume; the
- * producer is what reaches `paragraphLayoutKey`, and a cache hit returns the frozen lines
- * before the field walk runs — so a format edit would otherwise serve a stale placeholder and a
- * stale marker until that paragraph was edited for some other reason.
+ * it, the format the body page-field context carries. Body placeholders and their finalize
+ * markers depend only on the field's own switches today, so this is conservative: it keeps a
+ * paragraph laid out under one format from serving a pass under another. The context governs
+ * session resume; the producer is what reaches `paragraphLayoutKey`, and a cache hit returns
+ * the frozen lines before the field walk runs.
  *
  * A multi-section pass derives this once per SECTION; rebuilding a content-equal
  * multi-kilobyte string per section made every downstream `===` a memcmp.
@@ -123,7 +125,8 @@ export function passProducerOf(
   defaultTabStopPt: number | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  pageNumberFormat?: string
+  pageNumberFormat?: string,
+  compatibilityMode?: number
 ): string {
   const entry = styleCascade ? passProducersByCascade.get(styleCascade) : cascadeFreeProducerSlot;
   if (
@@ -134,7 +137,8 @@ export function passProducerOf(
       defaultTabStopPt,
       displayMode,
       authorFilter,
-      pageNumberFormat
+      pageNumberFormat,
+      compatibilityMode
     )
   ) {
     return entry.producer;
@@ -146,7 +150,8 @@ export function passProducerOf(
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
     (authorFilter ? `|reviewers:${authorFilter.cacheKey}` : '') +
-    (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '');
+    (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '') +
+    (compatibilityMode !== undefined ? `|compat:${compatibilityMode}` : '');
   const fresh: PassProducerEntry = {
     base,
     noteMarks,
@@ -154,6 +159,7 @@ export function passProducerOf(
     displayMode,
     authorFilter,
     pageNumberFormat,
+    compatibilityMode,
     producer,
   };
   if (styleCascade) passProducersByCascade.set(styleCascade, fresh);

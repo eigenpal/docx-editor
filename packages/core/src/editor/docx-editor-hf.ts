@@ -115,6 +115,7 @@ export function applyLifecycle(
     | { op: 'linkToPrevious' }
     | { op: 'unlinkFromPrevious' }
     | { op: 'setSectionFurnitureOptions' }
+    | { op: 'setDocumentProtection' }
   >
 ): ExecResult {
   if (typeof mounted.applyHeaderFooterLifecycle !== 'function') {

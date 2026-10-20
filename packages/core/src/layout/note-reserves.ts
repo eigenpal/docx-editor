@@ -135,3 +135,24 @@ export function footnoteReservesFingerprint(reserves: ReadonlyMap<number, number
     .sort()
     .join(',');
 }
+
+/** Seed reserves a multi-section pass moved to its own page indices, per layout session. */
+const movedSeedReserves = new WeakMap<object, ReadonlyMap<number, number>>();
+
+/** Record the reserves a seeded pass actually used, at the page indices it laid out. */
+export function recordMovedSeedReserves(
+  session: object,
+  reserves: ReadonlyMap<number, number>
+): void {
+  movedSeedReserves.set(session, reserves);
+}
+
+/** The reserves the last seeded pass on `session` used, once; undefined when none moved. */
+export function takeMovedSeedReserves(
+  session: object | undefined
+): ReadonlyMap<number, number> | undefined {
+  if (!session) return undefined;
+  const moved = movedSeedReserves.get(session);
+  movedSeedReserves.delete(session);
+  return moved;
+}

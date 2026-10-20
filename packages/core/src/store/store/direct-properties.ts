@@ -29,6 +29,10 @@ import {
 } from './formattable-runs.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 import {
+  containerIsComplexScript,
+  withComplexScriptCompanions,
+} from './complex-script-companions.ts';
+import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   type OoxmlProperty,
@@ -85,10 +89,17 @@ export function authoredProperties(
   if (!container || container.kind === 'textValue') return [];
   const properties: OoxmlProperty[] = [];
   for (const child of container.children) {
-    if (child.kind === 'textValue' || !authorable.has(child.localName)) continue;
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== WML_NAMESPACE_URI ||
+      !authorable.has(child.localName)
+    )
+      continue;
     // Null-prototype: these keys come from the file (D14).
     const attributes = nullRecord<string>();
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
+    for (const entry of child.attributes) {
+      if (entry.namespaceUri === WML_NAMESPACE_URI) attributes[entry.localName] = entry.value;
+    }
     properties.push(
       Object.keys(attributes).length > 0
         ? { localName: child.localName, attributes }
@@ -269,6 +280,16 @@ export function mergedMultiSettingProperty(
   return { localName: 'u', attributes: { ...existing, ...(incoming.attributes ?? {}) } };
 }
 
+/** Internal style context; direct formatting remains the only write base. */
+export type ComplexScriptContext = (
+  paragraph: OoxmlNode,
+  container: OoxmlNode | undefined,
+  mark: boolean,
+  part: OoxmlPart,
+  displayMode?: FormattingDisplayMode,
+  authorFilter?: FormattingRevisionAuthorFilter
+) => boolean;
+
 /**
  * A paragraph MARK's own properties with one write merged in, per attribute where it counts.
  *
@@ -277,31 +298,104 @@ export function mergedMultiSettingProperty(
  * Asian face while the text beside it kept one. Lives here because BOTH lanes write the mark:
  * the editor's toolbar and the automation object model.
  */
+
 export function mergedParagraphMarkProperties(
   part: OoxmlPart,
   paragraphId: string,
   incoming: OoxmlProperty | readonly OoxmlProperty[]
 ): OoxmlProperty[] {
+  return mergedParagraphMarkPropertiesWithContext(part, paragraphId, incoming);
+}
+
+export function mergedParagraphMarkPropertiesWithContext(
+  part: OoxmlPart,
+  paragraphId: string,
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  context?: ComplexScriptContext
+): OoxmlProperty[] {
   const authored = directParagraphMarkProperties(part, paragraphId);
-  const additions = Array.isArray(incoming)
-    ? (incoming as readonly OoxmlProperty[])
-    : [incoming as OoxmlProperty];
-  return mergedProperties(
-    authored,
-    additions.map((property) => mergedMultiSettingProperty(authored, property))
-  );
+  const pPr = propertyContainer(findNode(part, paragraphId), 'paragraphProperties', 'pPr');
+  const paragraph = findNode(part, paragraphId);
+  const container = propertyContainer(pPr, 'runProperties', 'rPr');
+  const complex =
+    context && paragraph
+      ? context(paragraph, container, true, part)
+      : containerIsComplexScript(container);
+  return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+}
+
+/**
+ * A run write merged over the run's own properties the way a range write merges it:
+ * multi-setting elements per attribute, and the complex-script companions on a `w:rtl`
+ * or `w:cs` run. The caret's armed formatting lands through this, so typing after Bold
+ * matches bolding a selection.
+ */
+export function mergedRunWrite(
+  authored: readonly OoxmlProperty[],
+  incoming: readonly OoxmlProperty[],
+  complex: boolean
+): OoxmlProperty[] {
+  return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
+}
+
+/**
+ * Whether the run the caret at `offset` types into is a complex-script run: the run ending
+ * at the caret, else the one starting there, else the paragraph mark — the same owner
+ * `authoredRunPropertiesAt` reads the typing format from.
+ */
+export function complexScriptAt(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number,
+  context?: ComplexScriptContext,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return false;
+  const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
+  const container = owner
+    ? propertyContainer(owner, 'runProperties', 'rPr')
+    : propertyContainer(
+        propertyContainer(paragraph, 'paragraphProperties', 'pPr'),
+        'runProperties',
+        'rPr'
+      );
+  return context
+    ? context(paragraph, container, false, part, displayMode, authorFilter)
+    : containerIsComplexScript(container);
+}
+
+/** Internal shared caret owner for authored properties and effective formatting lanes. */
+export function formattingRunAt(
+  paragraph: OoxmlNode,
+  offset: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
+): OoxmlNode | null {
+  if (paragraph.kind !== 'paragraph') return null;
+  const ranges = runAddressRanges(paragraph);
+  let left: OoxmlNode | null = null;
+  let right: OoxmlNode | null = null;
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
+    const range = ranges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    if (range.start < offset && offset <= range.end) left = run;
+    if (!right && range.start <= offset && offset < range.end) right = run;
+  }
+  return left ?? right;
 }
 
 function withMultiSettingsKept(
   authored: readonly OoxmlProperty[],
-  incoming: OoxmlProperty | readonly OoxmlProperty[]
-): OoxmlProperty | readonly OoxmlProperty[] {
-  if (Array.isArray(incoming)) {
-    return (incoming as readonly OoxmlProperty[]).map((property) =>
-      mergedMultiSettingProperty(authored, property)
-    );
-  }
-  return mergedMultiSettingProperty(authored, incoming as OoxmlProperty);
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  complex: boolean
+): readonly OoxmlProperty[] {
+  const additions = withComplexScriptCompanions(
+    complex,
+    Array.isArray(incoming) ? (incoming as readonly OoxmlProperty[]) : [incoming as OoxmlProperty]
+  );
+  return additions.map((property) => mergedMultiSettingProperty(authored, property));
 }
 
 /**
@@ -324,6 +418,27 @@ export function runPropertyEdits(
   displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
   authorFilter?: FormattingRevisionAuthorFilter
 ): readonly RunPropertyEdit[] {
+  return runPropertyEditsWithContext(
+    part,
+    paragraphId,
+    start,
+    end,
+    incoming,
+    displayMode,
+    authorFilter
+  );
+}
+
+export function runPropertyEditsWithContext(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number,
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter,
+  context?: ComplexScriptContext
+): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
@@ -341,14 +456,15 @@ export function runPropertyEdits(
     displayMode,
     authorFilter
   )) {
-    const authored = authoredProperties(
-      propertyContainer(covered.run, 'runProperties', 'rPr'),
-      AUTHORABLE_RUN_PROPERTIES
-    );
+    const container = propertyContainer(covered.run, 'runProperties', 'rPr');
+    const authored = authoredProperties(container, AUTHORABLE_RUN_PROPERTIES);
+    const complex = context
+      ? context(paragraph, container, false, part, displayMode, authorFilter)
+      : containerIsComplexScript(container);
     edits.push({
       start: covered.start,
       end: covered.end,
-      properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming)),
+      properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex)),
       ...(formatOwned.has(covered.run.id) ? { targetRunIds: [covered.run.id] } : {}),
     });
   }

@@ -10,7 +10,10 @@
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import fs from 'node:fs';
 import path from 'node:path';
-import { evaluateForgottenExportPolicy } from './api-extractor-forgotten-exports.mjs';
+import {
+  evaluateForgottenExportPolicy,
+  nextForgottenExportBaseline,
+} from './api-extractor-forgotten-exports.mjs';
 import { canonicalizeApiReport } from './api-snapshot-canonicalize.mjs';
 import { collectNamedExports } from './named-exports.mjs';
 
@@ -59,6 +62,8 @@ function entriesFromExports(packageRoot, exportsMap) {
  *   buildHint: string,
  *   tsconfigPath?: string,
  *   emitDocModel?: boolean,
+ *   forgottenExportBaselinePath?: string,
+ *   recordForgottenExports?: boolean,
  *   forgottenExports?:
  *     | 'none'
  *     | 'warning'
@@ -67,6 +72,7 @@ function entriesFromExports(packageRoot, exportsMap) {
  *         logLevel?: 'none' | 'warning' | 'error',
  *         allowlist?: Record<string, string[]>,
  *         protectedExportFiles?: string[],
+ *         crossEntry?: Record<string, string[]>,
  *       },
  * }} options
  */
@@ -78,16 +84,19 @@ export function runApiExtractor(options) {
     buildHint,
     tsconfigPath = path.join(packageRoot, 'tsconfig.json'),
     emitDocModel = false,
+    forgottenExportBaselinePath,
+    recordForgottenExports = false,
     forgottenExports = 'none',
   } = options;
 
   const forgottenExportConfig =
     typeof forgottenExports === 'string'
-      ? { logLevel: forgottenExports, allowlist: {}, protectedExportFiles: [] }
+      ? { logLevel: forgottenExports, allowlist: {}, protectedExportFiles: [], crossEntry: {} }
       : {
           logLevel: forgottenExports.logLevel ?? 'none',
           allowlist: forgottenExports.allowlist ?? {},
           protectedExportFiles: forgottenExports.protectedExportFiles ?? [],
+          crossEntry: forgottenExports.crossEntry ?? {},
         };
   const protectedForgottenSymbols = new Set(
     forgottenExportConfig.protectedExportFiles.flatMap((relativePath) => [
@@ -118,12 +127,12 @@ export function runApiExtractor(options) {
   const tsdocMessageReporting = {
     'tsdoc-undefined-tag': { logLevel: 'none' },
   };
-  // `ae-forgotten-export`: silenced by default because re-export-heavy barrels and
-  // non-rolled-up dist trees (Vue's vite-plugin-dts emits per-file `.d.ts`)
-  // surface every internal helper as "forgotten." A package that rolls its
-  // entries up into one `.d.ts` each opts in through `forgottenExports`, where
-  // the message means a real thing: a type a public signature hands out that a
-  // consumer cannot import in order to name it.
+  // `ae-forgotten-export`: the message means a type a public signature hands out that a
+  // consumer cannot import in order to name it. `api:check` turns it on for every package
+  // (`scripts/api-extractor.mjs`); other callers, like the docs JSON build, leave it off.
+  // Warnings that predate the gate live in the committed baseline
+  // (`forgottenExportBaselinePath`); reviewed exceptions live in the package's
+  // `forgottenExports.allowlist`. A new one fails the run.
   // `ae-missing-release-tag`: warning instead of the default error, so
   // undocumented `@public` exports increment warningCount but don't fail CI.
   const extractorMessageReporting = {
@@ -190,6 +199,8 @@ export function runApiExtractor(options) {
     additionalEntryPoints,
   });
 
+  /** @type {{ nextForgottenExportBaseline?: Record<string, string[]> }} */
+  const runResult = {};
   let totalErrors = 0;
   let totalWarnings = 0;
   const driftedEntries = [];
@@ -253,27 +264,66 @@ export function runApiExtractor(options) {
   console.log(`  warnings: ${totalWarnings}`);
   if (skipped.length > 0) console.log(`  skipped: ${skipped.length}`);
   if (forgotten.length > 0) {
+    // The count only: baselined and allowlisted warnings are known, and the policy below lists
+    // every one that needs action.
     console.log(`  types a public signature hands out but does not export: ${forgotten.length}`);
-    for (const message of forgotten) console.log(`    ${message}`);
   }
 
   if (forgottenExportConfig.logLevel !== 'none') {
+    const baselineFile = forgottenExportBaselinePath
+      ? readForgottenExportBaselineFile(forgottenExportBaselinePath)
+      : {};
+    const baseline = baselineFile[pkg.name] ?? {};
     const policy = evaluateForgottenExportPolicy({
       packageName: pkg.name,
       isLocal,
       allowlist: forgottenExportConfig.allowlist,
+      baseline,
       messages: forgotten,
       protectedSymbols: [...protectedForgottenSymbols],
+      crossEntry: forgottenExportConfig.crossEntry,
     });
+    if (recordForgottenExports) {
+      // The caller writes the baseline once, after every package has run.
+      runResult.nextForgottenExportBaseline = nextForgottenExportBaseline({
+        baseline,
+        policy,
+        record: true,
+      });
+      policy.unallowlisted = [];
+      policy.staleBaseline = [];
+    } else if (isLocal && policy.staleBaseline.length > 0) {
+      // `api:extract` only reports stale entries and leaves the file alone: a local build's
+      // declarations can differ from the next one's. `api:check` (CI mode) fails on them, and
+      // the pre-commit hook runs `api:check`, so a stale entry also blocks a local commit until
+      // `node scripts/api-extractor.mjs --local --record-forgotten-exports` prunes it.
+      console.log(
+        `  forgotten-export baseline: ${policy.staleBaseline.length} entr${policy.staleBaseline.length === 1 ? 'y no longer warns' : 'ies no longer warn'}. ` +
+          'Run `node scripts/api-extractor.mjs --local --record-forgotten-exports` to prune.'
+      );
+      policy.staleBaseline = [];
+    }
     if (
       policy.unallowlisted.length > 0 ||
       policy.staleAllowlist.length > 0 ||
-      policy.forbiddenAllowlist.length > 0
+      policy.staleBaseline.length > 0 ||
+      policy.forbiddenAllowlist.length > 0 ||
+      policy.crossEntryNotPublic.length > 0
     ) {
       console.error(`\nForgotten export policy failure in ${pkg.name}:`);
       if (policy.unallowlisted.length > 0) {
-        console.error(`  New or unallowlisted forgotten exports:`);
+        console.error(
+          `  New forgotten exports (export these types from the entry point, or after review run \`node scripts/api-extractor.mjs --local --record-forgotten-exports\`):`
+        );
         for (const item of policy.unallowlisted) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      if (policy.staleBaseline.length > 0) {
+        console.error(
+          '  Baseline entries no longer reported (run `node scripts/api-extractor.mjs --local --record-forgotten-exports` to prune them):'
+        );
+        for (const item of policy.staleBaseline) {
           console.error(`    - ${item.entry}: ${item.symbol}`);
         }
       }
@@ -288,6 +338,14 @@ export function runApiExtractor(options) {
           `  Allowlist contains package-owned public exports that must be fixed instead:`
         );
         for (const item of policy.forbiddenAllowlist) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      if (policy.crossEntryNotPublic.length > 0) {
+        console.error(
+          `  Cross-entry symbols that no protected export file of the package exports:`
+        );
+        for (const item of policy.crossEntryNotPublic) {
           console.error(`    - ${item.entry}: ${item.symbol}`);
         }
       }
@@ -320,4 +378,10 @@ export function runApiExtractor(options) {
   if (totalErrors > 0) {
     process.exit(1);
   }
+  return runResult;
+}
+
+function readForgottenExportBaselineFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }

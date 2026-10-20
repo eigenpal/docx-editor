@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The Add comment control reported enabled whenever the review module was installed and a range was selected, even when nothing could open a comment draft.",
+  "after": "The Add comment control is enabled only while comment draft chrome is registered, and its press opens that chrome.",
+  "reason": "Only local chrome registration and enabled state change. No shared document state, operation, or serialized format changes, so released clients share rooms as before.",
+  "tests": [
+    "packages/core/src/editor/__tests__/comment-draft-chrome.test.ts"
+  ],
+  "changeset": "comment-draft-chrome",
+  "migration": null
+}

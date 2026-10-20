@@ -14,6 +14,7 @@ import type { PlannedOperation } from './plan.ts';
 import type { AutomationErrorCode, AutomationValue } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
+import { revisionDateNow } from './revision-date.ts';
 
 const PARAGRAPH_BREAKING = /[\r\n\u2028\u2029]/u;
 const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
@@ -62,11 +63,15 @@ export function validatePlannedCommentFields(input: {
   return null;
 }
 
-/** Canonical `@w:date` for a staged comment write, after validation succeeded. */
-export function stagedCommentDate(date: unknown): string | undefined {
-  if (date === undefined) return undefined;
+/**
+ * Canonical `@w:date` for a staged comment write, after validation succeeded. A write that
+ * names no date is stamped with the current time, as a tracked change is, so every comment the
+ * automation layer creates records when it was written.
+ */
+export function stagedCommentDate(date: unknown): string {
+  if (date === undefined) return revisionDateNow();
   const normalized = normalizeCommentDateValue(date);
-  return normalized.ok ? normalized.value : undefined;
+  return normalized.ok ? normalized.value : revisionDateNow();
 }
 
 /** Innermost table cell containing a paragraph, or null for ordinary story flow. */
@@ -106,6 +111,10 @@ export function planInsertComment(
     return refuse('invalid-handle', 'an empty story has no comment anchor');
   const story = storyOfSpanRef(operation.span, handles, packageReads);
   if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+  // A text box story cannot hold a comment: the selection there offers no comment, and a
+  // comment anchored there is dropped when the file opens.
+  if (story.value.story.kind === 'textbox')
+    return refuse('unsupported-content', 'a comment cannot be anchored in a text box');
   const range = resolved.value;
   if (
     tableCellOf(story.value, range.start.paragraphId) !==
@@ -128,7 +137,7 @@ export function planInsertComment(
     },
     text: operation.text,
     author: operation.author,
-    ...(date === undefined ? {} : { date }),
+    date,
   };
   return {
     ok: true,

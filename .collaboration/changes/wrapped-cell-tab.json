@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A cell tab beyond the line edge can lose its advance when following text wraps.",
+  "after": "Supported left tabs continue from the next cell line before following text.",
+  "reason": "Only layout changes. Source ranges, canonical OOXML, operations, and collaboration formats remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/wrapped-cell-tab.test.ts"],
+  "changeset": "wrapped-cell-tab",
+  "migration": null
+}

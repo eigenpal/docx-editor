@@ -21,10 +21,24 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
+  ScrollPlacement,
   ReviewItemPlacement,
   ReviewItemQuery,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/types';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
+import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
+import { stackReviewPositions } from '../review/rail-stack.ts';
+import {
+  reviewAuthorFilterKey,
+  reviewRefusalStore,
+  type ReviewWriteAction,
+  type ReviewWriteRefusal,
+} from '../review/review-refusal.ts';
+
+export type { ReviewAdoptOptions };
 
 /**
  * Collapse an input burst into one rail refresh.
@@ -36,6 +50,38 @@ import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react'
  * must yield ({@link notificationYieldsToTask}) — moves the refresh to a task so queued
  * events share it and React's maximum-update-depth guard never sees an unbroken chain.
  */
+let pendingFlushes: (() => void)[] = [];
+let flushChannel: MessageChannel | null = null;
+/**
+ * Run `task` in a later task through a message, not a timer: the script's timers belong to
+ * the opener when the editor renders into a pop-out window, and a hidden opener throttles
+ * them to one run a second.
+ */
+function yieldTask(task: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    globalThis.setTimeout(task, 0);
+    return;
+  }
+  if (!flushChannel) {
+    flushChannel = new MessageChannel();
+    flushChannel.port1.onmessage = () => {
+      const tasks = pendingFlushes;
+      pendingFlushes = [];
+      for (const run of tasks) {
+        try {
+          run();
+        } catch (error) {
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
+      }
+    };
+  }
+  pendingFlushes.push(task);
+  if (pendingFlushes.length === 1) flushChannel.port2.postMessage(null);
+}
+
 function deferredReviewNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
@@ -45,10 +91,10 @@ function deferredReviewNotifier(onStoreChange: () => void): () => void {
       return;
     }
     scheduled = true;
-    setTimeout(() => {
+    yieldTask(() => {
       scheduled = false;
       onStoreChange();
-    }, 0);
+    });
   };
 }
 
@@ -68,15 +114,13 @@ export type ReviewItemView = ReviewItemPlacement;
  * Re-exported here so a host taking this hook can name what it passes without reaching past
  * the adapter into the engine's contract module.
  */
-export type { ReviewActivationOptions };
+export type { ReviewActivationOptions, ScrollPlacement };
+/** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
+export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 
-function reviewAuthorFilterKey(editor: Editor): string {
-  const snapshot = (
-    editor as Editor & {
-      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
-    }
-  ).snapshot?.();
-  return JSON.stringify(snapshot?.hiddenReviewAuthors ?? []);
+/** What the review state depends on: the queue, the editing mode and the author filter. */
+function reviewVersionOf(editor: Editor): string {
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
 }
 
 /**
@@ -87,8 +131,17 @@ function reviewAuthorFilterKey(editor: Editor): string {
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];
-  /** The item the caret is in, or null. */
+  /** The CARET-ACTIVE item: the one the caret is in, or null. */
   readonly activeKey: string | null;
+  /**
+   * The key of the ACTIVATED item: the one {@link setActive}, Next Change, or Previous Change
+   * made active, while the caret stays in it. `null` when only a caret move made an item
+   * active. {@link activeKey} is the caret-active item instead: the one the caret is in,
+   * however it got there. The key follows this hook's query, so a paired replacement reports
+   * the pair's key under `pairReplacements: true`. The same value as the editor's
+   * `getActivatedReviewItemKey(query)`, read on every selection change.
+   */
+  readonly activatedKey: string | null;
   /**
    * Card to document: puts the caret at the start of the item's range and scrolls to it. Nothing is selected; the open item draws its own highlight.
    *
@@ -101,6 +154,22 @@ export interface UseReviewReturn {
    * `options.reveal` picks where the item lands, or turns the engine's scroll off entirely
    * for a host whose own list already drives it. Default is centred when it has to travel,
    * still when it is already on screen.
+   *
+   * With `{ announce: true }`, a call that lands fires the editor's `reviewItemReveal` event
+   * with `source: 'host'`, also when the item was already active. The packaged review UI then
+   * opens the item's balloon, or opens a closed pane at its card when the pane's `opening`
+   * setting is `'auto'`. Without it, the call fires no event. A `null` key closes the card.
+   *
+   * @example
+   * ```tsx
+   * const { setActive } = useReview();
+   * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
+   * setActive(key); // fires nothing
+   * setActive(key, { announce: true }); // fires 'reviewItemReveal'
+   * setActive(key, { reveal: false }); // opens the item without scrolling
+   * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   /**
@@ -109,10 +178,32 @@ export interface UseReviewReturn {
    * False for an item whose `readOnly` is true, and equally for a resolution the engine
    * refuses on other grounds — a document open for viewing refuses every one. A caller
    * that assumed success drew a live button that did nothing.
+   *
+   * For headless or server use, see `Revision.accept()` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   readonly accept: (item: ReviewItemView) => boolean;
-  /** Reject a revision. Reports whether it landed, on the same terms as {@link accept}. */
+  /**
+   * Reject a revision. Reports whether it landed, on the same terms as {@link accept}.
+   *
+   * For headless or server use, see `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   */
   readonly reject: (item: ReviewItemView) => boolean;
+  /**
+   * Adopt tracked changes as the reviewer's own: they record the reviewer as their author
+   * and stay pending for the next reviewer.
+   *
+   * Takes one item or a list, and ignores comment items. The default author is
+   * `DocxEditorConfig.author`; `options.author` records someone else, and `options.date`
+   * records a new date. All the changes update in one undo step. Reports whether it landed:
+   * false when no revision was passed, when no author is known, or when the editor refuses
+   * the write, as it does in viewing mode or under document protection.
+   */
+  readonly adopt: (
+    items: ReviewItemView | readonly ReviewItemView[],
+    options?: ReviewAdoptOptions
+  ) => boolean;
   /** Resolve a comment thread. Repeating this on a resolved thread succeeds without a write. */
   readonly resolve: (item: ReviewItemView) => boolean;
   /** Reopen a resolved comment thread. Repeating this on an open thread is likewise idempotent. */
@@ -140,6 +231,8 @@ export interface UseReviewReturn {
    * neither rather than writing an empty attribute — which is why this REPORTS whether the
    * reply landed. A box that cleared itself on a refusal would throw the text away and show
    * nothing, and the writer would not learn their reply never existed.
+   *
+   * For headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
   /**
@@ -148,8 +241,39 @@ export interface UseReviewReturn {
    * From the engine, not from the DOM — the same rule the card anchors follow.
    */
   readonly selectionAnchorY: number | null;
-  /** Comment on the current selection. Reports whether it landed, like {@link reply}. */
+  /**
+   * Comment on the current selection. Reports whether it landed, like {@link reply}.
+   *
+   * To comment on found text, select it first with `editor.findMatches` and
+   * `editor.selectMatch`. For headless or server use, see `Range.insertComment` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @example
+   * ```tsx
+   * const [match] = editor.findMatches('Effective Date', { wholeWord: true });
+   * if (match && editor.selectMatch(match).ok) comment('Define this term.');
+   * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
+   */
   readonly comment: (text: string, author?: string) => boolean;
+  /**
+   * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
+   *
+   * Shared by every `useReview()` over the same editor, so a custom card sees a refusal the
+   * packaged rail recorded. Set by a refused write and cleared by the next one that lands, and
+   * by a change to the document, the editing mode, editability, the collaboration status or
+   * the author filter. A caret move keeps it. The packaged cards show it as a sentence; a
+   * custom card reads `key` to place it and `code`, the public diagnostic code, to word it.
+   *
+   * @example
+   * ```tsx
+   * const { lastRefusal } = useReview();
+   * // The packaged rail announces it; this only shows it.
+   * return lastRefusal?.key === item.key ? <p>{lastRefusal.code}</p> : null;
+   * ```
+   */
+  readonly lastRefusal: ReviewWriteRefusal | null;
   /** Whether the pane shows cards. Engine state: the toolbar's comments button toggles it. */
   readonly paneOpen: boolean;
   /** Open or close the pane — the same toggle the toolbar button runs. */
@@ -163,6 +287,11 @@ export interface UseReviewReturn {
  *
  * Subscribes to the editor's own change stream, so the list re-derives when the document does
  * and not on every render.
+ *
+ * This is the browser review API: comment, reply, accept, reject, and open items from your own
+ * UI. For headless, server, or agent pipelines, use `@docx-editor.dev/editor-api` instead.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes | Which API for which job}
  */
 export function useReview(query?: ReviewItemQuery): UseReviewReturn {
   const editor = useDocxEditor();
@@ -199,11 +328,28 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     subscribe,
     // Editing mode is part of the public action state even when the queue itself is unchanged:
     // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
-    () =>
-      editor
-        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`
-        : 'none',
+    () => (editor ? reviewVersionOf(editor) : 'none'),
     () => 'none'
+  );
+
+  // One store per EDITOR, so every hook over it, the packaged rail's included, sees the same
+  // refusal. The store clears it once the state it was refused in changes.
+  const subscribeRefusal = useCallback(
+    (onChange: () => void) =>
+      editor ? reviewRefusalStore(editor).subscribe(onChange) : () => undefined,
+    [editor]
+  );
+  const lastRefusal = useSyncExternalStore(
+    subscribeRefusal,
+    () => (editor ? reviewRefusalStore(editor).get() : null),
+    () => null
+  );
+  const settle = useCallback(
+    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
+      if (editor) reviewRefusalStore(editor).record(action, key, result);
+      return result.ok;
+    },
+    [editor]
   );
 
   const items = useMemo<readonly ReviewItemView[]>(
@@ -223,6 +369,25 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
+  // Read on every selection change, not on the deferred review tick: a balloon decides in the
+  // same frame whether the item was opened on purpose.
+  const subscribeSelection = useCallback(
+    (notify: () => void) => {
+      if (!editor) return () => undefined;
+      const offSelection = editor.on('selectionChange', notify);
+      const offChange = editor.on('change', notify);
+      return () => {
+        offSelection();
+        offChange();
+      };
+    },
+    [editor]
+  );
+  const activatedKey = useSyncExternalStore(
+    subscribeSelection,
+    () => (editor ? editor.getActivatedReviewItemKey(query) : null),
+    () => null
+  );
 
   const setActive = useCallback(
     (key: string | null, options?: ReviewActivationOptions): boolean => {
@@ -239,33 +404,39 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const accept = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-      return editor.acceptReviewItem(item.key).ok;
+      return settle('accept', item.key, editor.acceptReviewItem(item.key));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reject = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-      return editor.rejectReviewItem(item.key).ok;
+      return settle('reject', item.key, editor.rejectReviewItem(item.key));
     },
+    [editor, settle]
+  );
+
+  const adopt = useCallback(
+    (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions): boolean =>
+      adoptReviewItems(editor, items, options),
     [editor]
   );
 
   const resolve = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'comment') return false;
-      return editor.setCommentResolved(item.key, true).ok;
+      return settle('resolve', item.key, editor.setCommentResolved(item.key, true));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reopen = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'comment') return false;
-      return editor.setCommentResolved(item.key, false).ok;
+      return settle('reopen', item.key, editor.setCommentResolved(item.key, false));
     },
-    [editor]
+    [editor, settle]
   );
 
   const commentResolutionDisabledReason =
@@ -278,17 +449,17 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       // put a refusal in the console for a button a surface should not have drawn.
       if (item.kind === 'custom') return false;
       if (item.kind === 'revision' && item.readOnly) return false;
-      return editor.deleteReviewItem(item.key).ok;
+      return settle('remove', item.key, editor.deleteReviewItem(item.key));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
-      return editor.replyToReviewItem(item.key, text, author).ok;
+      return settle('reply', item.key, editor.replyToReviewItem(item.key, text, author));
     },
-    [editor]
+    [editor, settle]
   );
 
   const selectionAnchorY = useMemo(
@@ -301,9 +472,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const comment = useCallback(
     (text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
-      return editor.addComment(text, author).ok;
+      return settle('comment', null, editor.addComment(text, author));
     },
-    [editor]
+    [editor, settle]
   );
 
   const paneOpen = useMemo(
@@ -328,9 +499,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => ({
       items,
       activeKey,
+      activatedKey,
       setActive,
       accept,
       reject,
+      adopt,
       resolve,
       reopen,
       commentResolutionDisabledReason,
@@ -338,6 +511,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       reply,
       selectionAnchorY,
       comment,
+      lastRefusal,
       paneOpen,
       setPaneOpen,
       // Not merely "an editor exists": the instance is constructed before any bytes arrive,
@@ -352,9 +526,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [
       items,
       activeKey,
+      activatedKey,
       setActive,
       accept,
       reject,
+      adopt,
       resolve,
       reopen,
       commentResolutionDisabledReason,
@@ -362,6 +538,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       reply,
       selectionAnchorY,
       comment,
+      lastRefusal,
       paneOpen,
       setPaneOpen,
       editor,
@@ -379,15 +556,29 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
  *
  * Takes anything with a key and an anchor, not only cards: a compose box competes for the
  * same column and has to be stacked WITH them or it lands on top of the card whose text was
- * just re-selected. Entries must arrive in document order — the run is a single sweep.
+ * just re-selected. Entries must arrive in document order.
+ *
+ * An entry with `isActive: true`, as a review placement has while its card is open, stays at
+ * its own anchor. The entries before it move up to make room, so Next Change never leaves the
+ * open card below the visible rail. Pass placements through as they are to keep this.
  *
  * UNITS. Anchors are in layout POINTS, because that is what the engine publishes; measured
  * heights are in CSS PIXELS, because that is what the DOM reports. Pass `scale` so the two
  * can be added. Without it a 330px card advanced the run by 330 POINTS — 440px — and two
  * comments on adjacent lines of one paragraph sat a third of a page apart.
+ *
+ * Returns each card's top in layout points. `useReviewRailMetrics` supplies `scale` and the
+ * pixel offset of the first page: a card's CSS `top` is `metrics.top + position * metrics.scale`.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
  */
 export function useStackedReviewPositions(
-  items: readonly { readonly key: string; readonly anchorY: number | null }[],
+  items: readonly {
+    readonly key: string;
+    readonly anchorY: number | null;
+    /** Keep this entry at its own anchor; the entries before it move up. */
+    readonly isActive?: boolean;
+  }[],
   heights: ReadonlyMap<string, number>,
   options: { readonly gap?: number; readonly scale?: number; readonly defaultHeight?: number } = {}
 ): ReadonlyMap<string, number> {
@@ -398,25 +589,10 @@ export function useStackedReviewPositions(
   // an estimate so cards it has not measured yet (or has virtualized out of the DOM) still
   // hold a card's worth of room instead of painting over each other.
   const defaultHeight = options.defaultHeight ?? 0;
-  return useMemo(() => {
-    const positions = new Map<string, number>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of items) {
-      // An entry with no geometry YET — its page has not produced a placement — is placed
-      // after the card before it rather than dropped. Dropped, it got no `top` at all and
-      // fell back into normal flow at the top of the container, underneath the absolutely
-      // positioned cards. The packaged rail has always done this; the exported hook is the
-      // same math, so it does it too.
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      // Pixels to points before they meet an anchor.
-      cursor = top + ((heights.get(entry.key) ?? defaultHeight) + gap) / scale;
-    }
-    return positions;
-  }, [items, heights, gap, scale, defaultHeight]);
+  // The packaged rail's math, so an entry with no geometry yet keeps its place after the card
+  // before it, and an open entry (`isActive: true`) stays at its anchor.
+  return useMemo(
+    () => stackReviewPositions(items, heights, { gap, scale, defaultHeight }),
+    [items, heights, gap, scale, defaultHeight]
+  );
 }

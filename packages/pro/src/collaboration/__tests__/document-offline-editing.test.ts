@@ -16,10 +16,12 @@ const proseBytes = (): Uint8Array => collaborationDocx();
 
 const offlineHarness = createPeerHarness('offline-editing', { offlineEditing: true });
 const defaultHarness = createPeerHarness('offline-editing-default');
+const pausedHarness = createPeerHarness('offline-editing-paused', { offlineEditing: false });
 
 afterEach(() => {
   offlineHarness.cleanup();
   defaultHarness.cleanup();
+  pausedHarness.cleanup();
 });
 
 function insertTextOp(paragraphId: string, offset: number, text: string): TreeDocOp {
@@ -71,12 +73,23 @@ describe('offline editing', () => {
     ).toBe('collaboration-session-not-ready');
   });
 
-  test('the default still refuses edits while disconnected', async () => {
+  test('the default keeps admitting edits while disconnected, as Yjs editors do', async () => {
     const { alice } = await defaultHarness.pair(proseBytes());
     alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
     expect(
       alice.room.session.gateOperations(
         [insertTextOp(defaultHarness.paragraphIdAt(alice, 0), 0, 'x')],
+        { kind: 'body' }
+      )
+    ).toBeNull();
+  });
+
+  test('offlineEditing: false refuses edits while disconnected', async () => {
+    const { alice } = await pausedHarness.pair(proseBytes());
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
+    expect(
+      alice.room.session.gateOperations(
+        [insertTextOp(pausedHarness.paragraphIdAt(alice, 0), 0, 'x')],
         { kind: 'body' }
       )
     ).toBe('collaboration-session-not-ready');

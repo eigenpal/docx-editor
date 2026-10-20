@@ -1,6 +1,6 @@
 // Deterministic monospace measurer for tests and headless layout.
 
-import { type ResolvedRunStyle } from './run-style.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
 /** Default advance used by the deterministic fallback, in points at 11pt. @public */
@@ -30,13 +30,13 @@ export function createFixedMeasurer(
       // Advance, then horizontal scaling, then character spacing — the order Word applies
       // them, and the order that makes `w:spacing` an absolute per-character addition
       // rather than something the scale multiplies.
-      const advance = text.length * charWidth * scale(style);
+      const advance = text.length * charWidth * scale(style) * glyphSizeFactorOf(style);
       const scaled = advance * (style.horizontalScalePercent / 100);
       return scaled + text.length * style.characterSpacingPt;
     },
     lineMetrics: (style) => {
       // Super/subscript draw smaller, so they need less line height than their nominal size.
-      const shrink = style.verticalAlign === 'baseline' ? 1 : 0.75;
+      const shrink = glyphSizeFactorOf(style);
       const height = lineHeight * scale(style) * shrink;
       return { height, baseline: height * 0.8 };
     },

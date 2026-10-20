@@ -1,3 +1,4 @@
+import { supportedFontFamilies } from './supported-font-families.ts';
 // Font configuration composition — the ONE documented way the three font origins
 // (explicit app bytes, embedded document faces, substitute packages) become a single
 // immutable `FontConfiguration`.
@@ -29,6 +30,8 @@ import { HARD_MAX_FONT_BYTES, fontRequestKey } from './font-resource.ts';
  * same way.
  */
 export interface FontConfigurationFragment {
+  /** Selectable provider families, independent of loaded bytes. Listing them performs no fetch. */
+  readonly supportedFamilies?: readonly string[];
   readonly sources?: readonly FontSource[];
   readonly substitutions?: readonly FontSourceSubstitution[];
 }
@@ -93,8 +96,8 @@ export interface FontResolutionRequest {
 /**
  * Resolve fonts once the document's needs are known, instead of ahead of them.
  *
- * Called once per load, AFTER the file is parsed and mounted, with the families it
- * declares; whatever it returns composes exactly like a statically supplied fragment.
+ * Called after the file is mounted and again when editing requests a new family.
+ * Results compose with previously supplied faces; resolvedFaces identifies that coverage.
  * Returning nothing is a valid answer — it means "I cover none of this", and the
  * document stays on the fixed measurer.
  *
@@ -135,11 +138,14 @@ export function normalizeFontResolverResult(
  */
 export const MAX_RESOLVER_FAMILIES = 64;
 
-/** Word's document default when nothing else says otherwise: Calibri at 11pt. */
-export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
+/** The document default font when nothing else says otherwise: Calibri at 11pt. */
+export const DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
   family: 'Calibri',
   sizeHalfPoints: 22,
 });
+
+/** @deprecated Use {@link DEFAULT_FONT}. */
+export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = DEFAULT_FONT;
 
 /**
  * Merge a base and any number of fragments into one frozen `FontConfiguration`.
@@ -185,12 +191,16 @@ export function composeFontConfiguration(
     }
   }
 
+  const supportedFamilies = supportedFontFamilies(
+    origins.map((origin) => origin.supportedFamilies)
+  );
   return Object.freeze({
+    ...(supportedFamilies.length ? { supportedFamilies } : {}),
     epoch: base.epoch ?? 0,
     maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
     sources: Object.freeze(sources),
     ...(substitutions.length > 0 ? { substitutions: Object.freeze(substitutions) } : {}),
-    defaultFont: base.defaultFont ?? WORD_DEFAULT_FONT,
+    defaultFont: base.defaultFont ?? DEFAULT_FONT,
     ...(base.language !== undefined ? { language: base.language } : {}),
   });
 }
@@ -200,7 +210,7 @@ export function composeFontConfiguration(
  * sync by value because each module re-validates at its own boundary. Every name this
  * module emits can end up in a CSS `font-family` declaration.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** A configuration in either public spelling — full or fragment-with-defaults. */
 export type FontCatalogConfiguration = FontConfiguration | FontConfigurationBase;
@@ -211,5 +221,5 @@ export type FontCatalogConfiguration = FontConfiguration | FontConfigurationBase
  */
 export function configuredDefaultFontFamily(configuration?: FontCatalogConfiguration): string {
   const family = configuration?.defaultFont?.family;
-  return family !== undefined && FONT_NAME.test(family) ? family : WORD_DEFAULT_FONT.family;
+  return family !== undefined && FONT_NAME.test(family) ? family : DEFAULT_FONT.family;
 }

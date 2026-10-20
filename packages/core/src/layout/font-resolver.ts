@@ -1,3 +1,4 @@
+import { supportedFontFamilies } from './supported-font-families.ts';
 // Telling an ON-DEMAND font resolver apart from a zero-argument font LOADER.
 //
 // Both are functions, and structurally TypeScript cannot separate them: `() => Fragment`
@@ -188,13 +189,56 @@ export type FontOrigin =
   | Promise<FontConfiguration | FontConfigurationFragment | undefined>
   | undefined;
 
-/** One font origin that could not contribute a valid fragment. @public */
+/**
+ * Internal request {@link composeFontOriginsInternal} hands each origin.
+ *
+ * Extends the public resolution request with bounded bytes earlier origins already
+ * committed. `committedSourceBytes` is absent, not zero, when nothing is committed yet.
+ * A resolver that ignores it still composes correctly; the document-embedded origin
+ * subtracts it from the shared aggregate ceiling before admission so overflow reports as
+ * `droppedEmbeddedFonts` and is never hashed.
+ *
+ * Extra fields stay optional so a public {@link FontResolutionRequest} or fonts-package
+ * `FontOriginRequest` literal remains assignable.
+ *
+ * @internal
+ */
+export interface FontOriginCompositionRequest extends FontResolutionRequest {
+  /** Bytes earlier origins in this composition already committed. Absent when none. */
+  readonly committedSourceBytes?: number;
+}
+
+/** A failed font origin or a partial failure in an otherwise usable fragment. @public */
 export interface FontOriginFailure {
   /** Zero-based position in the first-wins origin list. */
   readonly originIndex: number;
   /** Resolver function name when one is safely available. */
   readonly originName?: string;
   readonly cause: unknown;
+}
+
+/** Execution-only rejection with validated face identity. @internal */
+export class ExecutionFontLimitError extends RangeError {
+  constructor(
+    readonly request: FontFaceRequest,
+    byteLength: number,
+    ceiling: number
+  ) {
+    super(
+      `Font source ${request.family} (${byteLength} bytes) exceeds the shaping byte ceiling (${ceiling} bytes)`
+    );
+  }
+}
+
+/** All rejected candidates from one bounded origin answer. @internal */
+export class FontOriginAdmissionError extends AggregateError {
+  readonly causes: readonly unknown[];
+
+  constructor(causes: readonly unknown[]) {
+    const bounded = Object.freeze(causes.slice(0, HARD_MAX_FONT_SOURCES * 2));
+    super(bounded, `Font origin rejected all ${bounded.length} face and substitution candidates`);
+    this.causes = bounded;
+  }
 }
 
 /** Diagnostics hook for ordered font-origin composition. @public */
@@ -300,6 +344,8 @@ export async function composePreparedFontOrigins(
 
 /** Internal ownership hook used to reserve process bytes before copying an origin. @internal */
 export interface ComposePreparedFontOriginsOptions extends ComposeFontOriginsOptions {
+  /** Execution ceiling of the shaping owner; admission must not exceed it. */
+  readonly maxExecutionFontBytes?: number;
   readonly reserveOwnedBytes?: (byteLength: number) => () => void;
   readonly instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>;
 }
@@ -309,11 +355,20 @@ async function composeFontOriginsInternal(
   request: FontResolutionRequest,
   options: ComposePreparedFontOriginsOptions
 ): Promise<FontConfigurationFragment | undefined> {
+  const executionCeiling = options.maxExecutionFontBytes ?? HARD_MAX_FONT_BYTES;
+  if (
+    !Number.isSafeInteger(executionCeiling) ||
+    executionCeiling <= 0 ||
+    executionCeiling > HARD_MAX_FONT_BYTES
+  ) {
+    throw new RangeError('Font execution byte ceiling is outside the supported range');
+  }
   // Promise origins may already be running. Observe every one immediately so a rejection behind
   // a slow earlier resolver cannot become an unhandled process-level rejection; results are still
   // consumed and committed strictly in authored order below.
   const observed = origins.map(observePromiseOrigin);
   let base: FontConfiguration | FontConfigurationFragment | undefined;
+  const catalogs: (readonly string[])[] = [];
   const winningSources: FontSource[] = [];
   const sourceFaces = new Map<string, FontFaceRequest>();
   const committedSourceKeys = new Set<string>();
@@ -341,11 +396,7 @@ async function composeFontOriginsInternal(
       } else if (typeof origin === 'function') {
         const outcome = await awaitObservedOrigin(
           Promise.resolve(
-            origin({
-              ...request,
-              defaultFamily,
-              ...(covered.length > 0 ? { resolvedFaces: covered } : {}),
-            })
+            origin(fontOriginRequest(request, defaultFamily, covered, committedSourceBytes))
           ).then(
             (value) => ({ ok: true as const, value }),
             (cause) => ({ ok: false as const, cause })
@@ -377,35 +428,52 @@ async function composeFontOriginsInternal(
         continue;
       }
       const answerFailures = 'failures' in answer ? answer.failures : undefined;
+      // A partial origin can keep its usable faces while reporting failed fetches. Snapshot
+      // bounded diagnostics before notifying hosts; never spread an unbounded caller array.
+      const partialFailures: unknown[] = [];
+      if (Array.isArray(answerFailures)) {
+        const count = Math.min(answerFailures.length, HARD_MAX_FONT_SOURCES);
+        for (let i = 0; i < count; i++) partialFailures.push(answerFailures[i]);
+        if (answerFailures.length > count) {
+          partialFailures.push(new Error('Additional font-origin failures were omitted'));
+        }
+      } else if (answerFailures !== undefined) partialFailures.push(answerFailures);
       // Read the whole answer BEFORE committing any of it. A malformed source — no
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and
       // break composition later, outside anyone's catch.
-      const sampledOrigin = validateOriginAnswer(
-        answer,
-        committedSourceKeys,
-        committedSourceBytes,
-        committedSubstitutionKeys,
-        base
-          ? 'maxFontBytes' in base && base.maxFontBytes !== undefined
-            ? base.maxFontBytes
-            : HARD_MAX_FONT_BYTES
-          : undefined,
-        options.reserveOwnedBytes,
-        options.instrumentation
-      );
+      let sampledOrigin: ReturnType<typeof validateOriginAnswer>;
+      try {
+        sampledOrigin = validateOriginAnswer(
+          answer,
+          committedSourceKeys,
+          committedSourceBytes,
+          committedSubstitutionKeys,
+          base
+            ? 'maxFontBytes' in base && base.maxFontBytes !== undefined
+              ? base.maxFontBytes
+              : HARD_MAX_FONT_BYTES
+            : undefined,
+          options.reserveOwnedBytes,
+          options.instrumentation,
+          executionCeiling
+        );
+      } catch (cause) {
+        // Explicit resolver failures remain relevant when every returned candidate drops.
+        for (const failure of new Set(partialFailures)) {
+          reportOriginFailure(options, origin, originIndex, failure);
+        }
+        throw cause;
+      }
       sampledAnswer = sampledOrigin;
       // A dropped face degraded alone; its siblings still compose below. Report each drop the
       // same way a whole-origin failure is reported, so hosts see exactly what went missing.
-      for (const cause of sampledOrigin.dropped) {
+      for (const cause of new Set([...sampledOrigin.dropped, ...partialFailures])) {
         reportOriginFailure(options, origin, originIndex, cause);
       }
       const sampled = sampledOrigin.fragment;
-      if (Array.isArray(answerFailures)) {
-        failures.push(...answerFailures);
-      } else if (answerFailures !== undefined) {
-        failures.push(answerFailures);
-      }
+      if (sampled.supportedFamilies) catalogs.push(sampled.supportedFamilies);
+      failures.push(...partialFailures);
       const faces = (sampled.sources ?? []).map((source) => {
         fontRequestKey(source.request);
         return [faceKey(source.request), source.request] as const;
@@ -452,6 +520,7 @@ async function composeFontOriginsInternal(
   if (!base) return undefined;
   const { epoch: _perLoad, ...merged } = composeFontConfiguration({
     ...base,
+    supportedFamilies: supportedFontFamilies(catalogs),
     sources: winningSources,
     substitutions,
   });
@@ -515,7 +584,8 @@ function validateOriginAnswer(
   committedSubstitutionKeys: ReadonlySet<string>,
   effectiveMaxFontBytes: number | undefined,
   reserveOwnedBytes?: (byteLength: number) => () => void,
-  instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>
+  instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>,
+  executionCeiling = HARD_MAX_FONT_BYTES
 ): {
   readonly fragment: FontConfiguration | FontConfigurationFragment;
   readonly sourceKeys: readonly string[];
@@ -552,7 +622,7 @@ function validateOriginAnswer(
       `Font byte ceiling must be a positive safe integer no greater than ${HARD_MAX_FONT_BYTES}`
     );
   }
-  const sourceByteCeiling = effectiveMaxFontBytes ?? configuredMax;
+  const sourceByteCeiling = Math.min(effectiveMaxFontBytes ?? configuredMax, executionCeiling);
   let aggregateBytes = 0;
   const sourceKeys: string[] = [];
   const candidateKeys = new Set<string>();
@@ -564,11 +634,12 @@ function validateOriginAnswer(
     const sourceInputValue = sourceInput[sourceIndex]!;
     try {
       const request = snapshotFontFaceRequest(sourceInputValue.request);
+      const key = fontRequestKey(request);
+      if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
       const availability = sourceInputValue.availability;
       const faceIndex = sourceInputValue.faceIndex;
       const hash = sourceInputValue.hash;
       const id = sourceInputValue.id;
-      const key = fontRequestKey(request);
       if (
         availability !== undefined &&
         availability !== 'available' &&
@@ -590,7 +661,12 @@ function validateOriginAnswer(
         bytes = sourceInputValue.bytes;
         const byteLength = fontByteLength(bytes);
         if (byteLength > sourceByteCeiling) {
-          throw new RangeError('Font source exceeds the effective base byte ceiling');
+          if (byteLength <= (effectiveMaxFontBytes ?? configuredMax)) {
+            throw new ExecutionFontLimitError(request, byteLength, executionCeiling);
+          }
+          throw new RangeError(
+            `Font source ${request.family} (${byteLength} bytes) exceeds the effective base byte ceiling (${sourceByteCeiling} bytes)`
+          );
         }
         if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
         if (committedSourceBytes + aggregateBytes + byteLength > HARD_MAX_AGGREGATE_FONT_BYTES) {
@@ -672,7 +748,7 @@ function validateOriginAnswer(
     }
   }
   // An answer whose every face and substitution dropped contributes nothing. Failing it
-  // wholesale (with the first drop as the reason) keeps base selection intact: an empty
+  // wholesale keeps every rejection and base selection intact: an empty
   // fragment must not become the composition base and poison later origins' byte ceiling.
   if (
     (sourceCount > 0 || substitutionCount > 0) &&
@@ -680,7 +756,7 @@ function validateOriginAnswer(
     substitutions.length === 0 &&
     droppedFaces.length > 0
   ) {
-    throw droppedFaces[0];
+    throw droppedFaces.length === 1 ? droppedFaces[0] : new FontOriginAdmissionError(droppedFaces);
   }
   let retainedCommittedSubstitutions = committedSubstitutionKeys.size;
   for (const key of candidateKeys) {
@@ -731,6 +807,7 @@ function validateOriginAnswer(
   }
   return {
     fragment: Object.freeze({
+      supportedFamilies: supportedFontFamilies([answer.supportedFamilies]),
       sources: Object.freeze(sources),
       substitutions: Object.freeze(substitutions),
       ...(epochInput !== undefined ? { epoch: epochInput } : {}),
@@ -742,6 +819,28 @@ function validateOriginAnswer(
     ownedBytes: aggregateBytes,
     dropped: Object.freeze(droppedFaces),
     releaseOwnedBytes: releaseReservation,
+  };
+}
+
+function boundCommittedSourceBytes(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) return 0;
+  return value > HARD_MAX_AGGREGATE_FONT_BYTES ? HARD_MAX_AGGREGATE_FONT_BYTES : value;
+}
+
+/** Strip any inbound committed-byte field and publish this composition's own total. */
+function fontOriginRequest(
+  request: FontResolutionRequest,
+  defaultFamily: string,
+  covered: readonly FontFaceRequest[],
+  committedSourceBytes: number
+): FontOriginCompositionRequest {
+  const { committedSourceBytes: _inbound, ...rest } = request as FontOriginCompositionRequest;
+  const boundedCommitted = boundCommittedSourceBytes(committedSourceBytes);
+  return {
+    ...rest,
+    defaultFamily,
+    ...(covered.length > 0 ? { resolvedFaces: covered } : {}),
+    ...(boundedCommitted > 0 ? { committedSourceBytes: boundedCommitted } : {}),
   };
 }
 
@@ -769,6 +868,13 @@ function reportOriginFailure(
     if (typeof origin === 'function' && origin.name.length > 0) originName = origin.name;
   } catch {
     // Hostile function proxies do not get to turn diagnostics into another failure.
+  }
+  try {
+    // Format the stack now. Until it is read, the error keeps every frame's closure, which
+    // reaches the document being laid out; a report that outlives the export kept it all.
+    if (cause instanceof Error) void cause.stack;
+  } catch {
+    // A hostile error proxy cannot make reporting the original origin failure throw.
   }
   const failure: FontOriginFailure = Object.freeze({
     originIndex,

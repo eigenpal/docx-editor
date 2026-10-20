@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Open failures, refused edits, skipped tracked changes, and font failures had no anonymous event.",
+  "after": "The editor emits anonymous diagnostic events with stable codes to modules and to editor.on('diagnostic').",
+  "reason": "Diagnostics are local notifications. They read refusal reasons and do not change document operations, shared state, or the collaboration format.",
+  "tests": ["packages/core/src/editor/__tests__/editor-diagnostics.test.ts"],
+  "changeset": "editor-diagnostics-channel",
+  "migration": null
+}

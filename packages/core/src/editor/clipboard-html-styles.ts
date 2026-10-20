@@ -64,7 +64,8 @@ export function wordParagraphStyleId(element: Element, wordHtml: boolean): strin
   return headingTag ? `Heading${headingTag[1]}` : undefined;
 }
 
-export type HtmlParagraphAlign = 'left' | 'center' | 'right' | 'both';
+/** `left`/`right` are PHYSICAL CSS sides; `start`/`end` follow the paragraph direction. */
+export type HtmlParagraphAlign = 'left' | 'center' | 'right' | 'both' | 'start' | 'end';
 
 /** Cap on `<style>` text scanned for Word class `text-align`. Generous — a
  *  corporate template routinely passes 32 KiB, and skipping only part of a
@@ -86,10 +87,10 @@ const WORD_PARAGRAPH_CLASSES: ReadonlySet<string> = new Set([
 
 const ALIGN_VALUES: ReadonlyMap<string, HtmlParagraphAlign> = new Map([
   ['left', 'left'],
-  ['start', 'left'],
+  ['start', 'start'],
   ['center', 'center'],
   ['right', 'right'],
-  ['end', 'right'],
+  ['end', 'end'],
   ['justify', 'both'],
 ]);
 
@@ -774,9 +775,9 @@ export function applyElementRunProps(base: HtmlRunProps, element: Element): Html
 
 export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, string>): void {
   const align = style.get('text-align')?.toLowerCase();
-  if (align === 'left' || align === 'start') para.jc = 'left';
-  else if (align === 'center') para.jc = 'center';
-  else if (align === 'right' || align === 'end') para.jc = 'right';
+  if (align === 'left' || align === 'right' || align === 'start' || align === 'end') {
+    para.jc = align;
+  } else if (align === 'center') para.jc = 'center';
   else if (align === 'justify') para.jc = 'both';
   if (style.get('direction')?.trim().toLowerCase() === 'rtl') para.bidi = true;
   // Classic Word paragraphs carry the `margin` SHORTHAND ('margin:0in;

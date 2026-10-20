@@ -18,6 +18,7 @@ import { isValidParaId, paraIdOf } from '../package/para-id.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { MAX_TABLE_COLUMNS } from '../store/table-constraints.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 
 const W = WML_NAMESPACE_URI;
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -530,7 +531,7 @@ describe('insertTableColumn', () => {
     ).toBe('table-has-merge');
   });
 
-  test('refuses merged tables with hMerge and vMerge', () => {
+  test('refuses legacy hMerge tables and accepts vMerge tables', () => {
     const partH = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr><w:hMerge w:val="1"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`
@@ -560,7 +561,7 @@ describe('insertTableColumn', () => {
         gridColumnId: colV!,
         where: 'left',
       })
-    ).toBe('table-has-merge');
+    ).toBeNull();
   });
 
   test('refuses irregular rows and grid/cell count mismatch', () => {
@@ -796,22 +797,14 @@ describe('table column ops history', () => {
     const [, col2] = gridColIds(store.part, table.id);
     const beforeParagraph = collectByKind(part.root, 'paragraph')[0]!;
 
-    const applied = applyTreeOp(part, {
-      op: 'insertTableColumn',
-      tableId: table.id,
-      gridColumnId: col2!,
-      where: 'left',
-    });
-    expect(applied.ok).toBe(true);
-    if (!applied.ok) return;
-
     const result = store.transact((tx) => {
       tx.selectionBefore({ paragraphId: beforeParagraph.id, start: 0, end: 0 });
       tx.apply({ op: 'insertTableColumn', tableId: table.id, gridColumnId: col2!, where: 'left' });
     });
     expect(result.ok).toBe(true);
+    const inserted = collectByKind(store.part.root, 'paragraph')[1]!;
     expect(result.change?.caret).toEqual({
-      paragraphId: applied.effect.caret!.paragraphId,
+      paragraphId: inserted.id,
       start: 0,
       end: 0,
     });
@@ -820,7 +813,7 @@ describe('table column ops history', () => {
     store.undo();
     expect(store.part).toBe(part);
     expect(store.selectionForRedo()).toEqual({
-      paragraphId: applied.effect.caret!.paragraphId,
+      paragraphId: inserted.id,
       start: 0,
       end: 0,
     });
@@ -1389,5 +1382,39 @@ describe('insertTableColumn paraId', () => {
     expect(
       diffSemanticDigests(semanticDigest([result.part]), semanticDigest([reopened.part]))
     ).toEqual([]);
+  });
+
+  test('two actors inserting a column at one place mint different paraIds', () => {
+    // The seed comes from the table's structure, so two collaborators inserting the same
+    // column from the same snapshot minted one paraId for two paragraphs, and a caret
+    // published against it showed on the wrong one.
+    const opened = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${TABLE(ROW(CELL('a1'), CELL('a2')))}</w:body></w:document>`,
+      {
+        name: '/word/document.xml',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+      }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    const part = opened.part;
+    const table = firstTable(part);
+    const [col1] = gridColIds(part, table.id);
+    const before = new Set(collectParagraphParaIds(part));
+    const mintedBy = (actor: string): string[] =>
+      runWithTransactionActor(actor, () => {
+        const result = applyTreeOp(part, {
+          op: 'insertTableColumn',
+          tableId: table.id,
+          gridColumnId: col1!,
+          where: 'right',
+        });
+        if (!result.ok) throw new Error(result.reason);
+        return collectParagraphParaIds(result.part).filter((id) => !before.has(id));
+      });
+    const alice = mintedBy('alice');
+    expect(alice).toHaveLength(1);
+    expect(mintedBy('bob')).not.toContain(alice[0]!);
+    expect(mintedBy('alice')).toEqual(alice);
   });
 });

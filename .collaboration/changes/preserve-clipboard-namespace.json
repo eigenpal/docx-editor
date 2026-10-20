@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Rich paste can lose local namespace declarations when it removes paragraph or display-equation wrappers.",
+  "after": "Pasted children retain namespace declarations from removed wrappers.",
+  "reason": "The repair uses existing namespace bindings and canonical insert operations. Shared fields and operation formats stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/equation-copy-paste.test.ts",
+    "packages/core/src/store/__tests__/edit-namespace-scope.test.ts",
+    "packages/core/src/store/__tests__/clipboard-fragment.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-equation.test.ts"
+  ],
+  "changeset": "clipboard-local-equation-namespaces",
+  "migration": null
+}

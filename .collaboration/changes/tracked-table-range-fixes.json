@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Inserted table rows had empty paragraphs, formatting inside an author's own proposed row recorded property changes, tracked deletions refused to start where the author's own pending insertion ends, and endpoints read before an edit could address moved text.",
+  "after": "Inserted rows copy source paragraph formatting and only the source paragraph mark's run properties, own proposed rows record no property changes, tracked deletions may start where the author's own pending insertion ends, and hosts refuse endpoints whose text moved since they were read, including spans whose middle paragraphs another participant changed, inserted, or removed.",
+  "reason": "Replicas exchange the resulting tree content of each committed transaction, not the planned operation, so the copied formatting and the absence of property records replicate as ordinary content. The endpoint read revision is local to one automation host and never enters shared state, so no shared field, operation shape, or protocol message changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-row-insertion.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-row-formatting.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-adjacent-proposals.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-stale-ranges.test.ts",
+    "packages/core/src/automation/__tests__/automation-stale-spans.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-stale-span-automation.test.ts",
+    "packages/core/src/editor/__tests__/empty-paragraph-mark-style-typing.test.ts"
+  ],
+  "changeset": "tracked-table-range-fixes",
+  "migration": null
+}

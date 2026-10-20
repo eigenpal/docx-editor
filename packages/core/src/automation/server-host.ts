@@ -1,3 +1,10 @@
+import { headlessViewOfStore } from '../store/headless-document-view.ts';
+import { documentReads } from './reads.ts';
+import {
+  paginationContextFor,
+  type AutomationPaginationProvider,
+  type AutomationPaginationSnapshot,
+} from './pagination.ts';
 // The headless automation host.
 //
 // It owns what a browser session owns and nothing more: a package it opened through the
@@ -29,6 +36,8 @@ import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
 import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
+import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
@@ -80,6 +89,7 @@ export type ServerAutomationHostResult =
   | {
       readonly ok: false;
       readonly reason: ServerAutomationHostRejection;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
       readonly detail?: string;
     };
 
@@ -89,11 +99,14 @@ export type ServerAutomationHostResult =
  * @public
  */
 export interface ServerAutomationHostOptions {
+  /** Optional real pagination for PAGE/NUMPAGES updates. */
+  readonly pagination?: AutomationPaginationProvider;
   /**
-   * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
+   * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
-   * Exposed because a server opening documents it did not author is exactly where a caller
-   * may want smaller limits than the defaults. Omitted means the engine's own defaults.
+   * Omitted means the engine defaults. Lower budgets for untrusted input, or raise
+   * `xml.maxElements` for larger documents when the host has sufficient memory.
+   * Engine ceilings still apply.
    */
   readonly limits?: OoxmlPackageLimits;
   /**
@@ -101,6 +114,11 @@ export interface ServerAutomationHostOptions {
    * not attach a replica.
    */
   readonly collaborationModel?: CollaborationModuleContribution;
+  /**
+   * Opt-in relaxation of `w:lock` for run-property writes (`setFont`): content-locked controls
+   * can be restyled but not retyped. Absent, they refuse both.
+   */
+  readonly contentLockPolicy?: ContentLockPolicy;
 }
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' as const });
@@ -120,6 +138,7 @@ export function createServerAutomationHost(
     return {
       ok: false,
       reason: loaded.reason,
+      ...(loaded.limit === undefined ? {} : { limit: loaded.limit }),
       ...(loaded.detail ? { detail: loaded.detail } : {}),
     };
   }
@@ -131,10 +150,35 @@ export function createServerAutomationHost(
       detail: loaded.package.mainDocumentPart,
     };
   }
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  const store = new TreePackageStore(
+    loaded.package,
+    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main)),
+    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
+  );
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
   const port = packageStorePort(store, collaboration, () => detachCollaboration());
+  if (options.pagination) {
+    let snapshot: AutomationPaginationSnapshot | undefined;
+    let atRevision = -1;
+    const provider = options.pagination;
+    port.prepare = async (request) => {
+      if (!request.operations.some((operation) => operation.op === 'updateFieldResult')) return;
+      snapshot = undefined;
+      const revision = store.packageRevision;
+      const prepared = await provider(headlessViewOfStore(store));
+      if (store.packageRevision === revision) {
+        snapshot = prepared;
+        atRevision = revision;
+      }
+    };
+    port.fieldPageContext = (story, paragraphId, fieldNodeId) => {
+      if (store.packageRevision !== atRevision) return null;
+      const reads = documentReads(store.currentPackage()).story(story);
+      return reads ? paginationContextFor(snapshot, reads.part, paragraphId, fieldNodeId) : null;
+    };
+  }
+
   const host = createAutomationHost({
     port,
     capabilities: SERVER_AUTOMATION_CAPABILITIES,
@@ -224,9 +268,16 @@ export function packageStorePort(
     return result;
   };
   return {
+    localChangeTracking: true,
+    collaborative: () => !!collaboration,
+    allocationActor: () => collaboration?.identity.actorId,
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
-    apply(staged: AutomationStagedOps, scope: StoryScope = BODY): AutomationPortApplyResult {
+    apply(
+      staged: AutomationStagedOps,
+      scope: StoryScope = BODY,
+      packageEdits = []
+    ): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
       // BUILT HERE, not by the planner: minting the relationship an external link names changes the
       // package, and this host has no mode to refuse a write, so "here" is as late as it gets — a
@@ -246,6 +297,7 @@ export function packageStorePort(
       const result = store.transact(
         scope,
         (ctx) => {
+          for (const edit of packageEdits) ctx.applyPackage(edit);
           for (const op of ops) ctx.apply(op);
           if (partName) {
             ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));

@@ -65,8 +65,31 @@ function isDead(ctx: ContestContext, id: LogicalId): boolean {
  * has two positions. `null` means the parent reaches no root at all: a cycle, an orphan, or a
  * tombstoned ancestor, none of which the walk lets claim a child.
  */
+/**
+ * Sibling indexes for one resolution call. A contest climbs through the body root, which
+ * lists every block, so scanning its child array once per contested id made every
+ * structural edit cost the number of contests times the number of blocks.
+ */
+class SiblingIndexes {
+  private readonly byParent = new Map<LogicalId, Map<LogicalId, number>>();
+  constructor(private readonly ctx: ContestContext) {}
+
+  indexOf(parent: LogicalId, child: LogicalId): number {
+    let indexes = this.byParent.get(parent);
+    if (!indexes) {
+      indexes = new Map();
+      childrenOf(this.ctx, parent).forEach((id, index) => {
+        if (!indexes!.has(id)) indexes!.set(id, index);
+      });
+      this.byParent.set(parent, indexes);
+    }
+    return indexes.get(child) ?? -1;
+  }
+}
+
 function rankOf(
   ctx: ContestContext,
+  siblings: SiblingIndexes,
   rootRank: ReadonlyMap<LogicalId, number>,
   pending: ReadonlySet<LogicalId>,
   startId: LogicalId
@@ -82,7 +105,9 @@ function rankOf(
     rootIndex = rootRank.get(node);
     const parent = ctx.parentIndex.get(node);
     if (rootIndex !== undefined) {
-      if (parent !== undefined) return 'fallback';
+      // A part root some child array also lists has two positions. A pending one has had its
+      // parent entry cleared for this call, so the missing parent does not prove it has none.
+      if (parent !== undefined || pending.has(node)) return 'fallback';
       break;
     }
     if (parent === undefined) return pending.has(node) ? 'deferred' : null;
@@ -93,7 +118,7 @@ function rankOf(
   let current = node;
   for (let at = chain.length - 1; at >= 0; at -= 1) {
     const child = chain[at]!;
-    const index = childrenOf(ctx, current).indexOf(child);
+    const index = siblings.indexOf(current, child);
     if (index < 0) return null;
     path.push(index);
     current = child;
@@ -108,16 +133,24 @@ function rankOf(
  * for that parent's decision. A round that decides nothing is a contest that depends on
  * itself — an id listed inside its own subtree — and only the walk untangles that.
  */
-export function resolveContestedPlacements(
-  ctx: ContestContext,
-  multi: readonly LogicalId[]
-): boolean {
+function resolveContestedPlacements(ctx: ContestContext, multi: readonly LogicalId[]): boolean {
   const pending = new Set(multi);
   for (const id of pending) ctx.parentIndex.delete(id);
   const rootRank = new Map<LogicalId, number>();
   ctx.partRoots.forEach((root, index) => {
     if (!rootRank.has(root)) rootRank.set(root, index);
   });
+  const siblings = new SiblingIndexes(ctx);
+  // A decided rank never changes within one call: only pending ids move, and a chain through
+  // one of them is `deferred`, which is not kept.
+  const ranks = new Map<LogicalId, Rank | 'fallback' | null>();
+  const rankOfLister = (parent: LogicalId): Rank | 'deferred' | 'fallback' | null => {
+    const known = ranks.get(parent);
+    if (known !== undefined) return known;
+    const rank = rankOf(ctx, siblings, rootRank, pending, parent);
+    if (rank !== 'deferred') ranks.set(parent, rank);
+    return rank;
+  };
   let remaining = [...pending];
   while (remaining.length > 0) {
     const deferred: LogicalId[] = [];
@@ -126,14 +159,14 @@ export function resolveContestedPlacements(
       let defer = false;
       for (const parent of ctx.listings.get(id) ?? []) {
         if (parent === id) continue;
-        const rank = rankOf(ctx, rootRank, pending, parent);
+        const rank = rankOfLister(parent);
         if (rank === 'fallback') return false;
         if (rank === 'deferred') {
           defer = true;
           continue;
         }
         if (rank === null) continue;
-        const index = childrenOf(ctx, parent).indexOf(id);
+        const index = siblings.indexOf(parent, id);
         if (index < 0) continue;
         const full = [...rank, index];
         if (!best || compareRanks(full, best.rank) < 0) best = { rank: full, parent };
@@ -203,5 +236,30 @@ export function assignFirstReachableParents(
         stack.push({ id: pending[at]!, parent: id, exit: false });
       }
     }
+  }
+}
+
+/**
+ * Give each of `ids` its parent: none when nothing lists it, its one lister when one does, and
+ * for a child two parents list, the contest rules above, or the first-preorder walk when they
+ * cannot decide.
+ */
+export function placeParents(context: ContestContext, ids: ReadonlySet<LogicalId>): void {
+  const multi: LogicalId[] = [];
+  for (const id of ids) {
+    const listed = context.listings.get(id);
+    if (!listed || listed.size === 0) {
+      context.parentIndex.delete(id);
+      continue;
+    }
+    if (listed.size === 1) {
+      context.parentIndex.set(id, [...listed][0]!);
+      continue;
+    }
+    multi.push(id);
+  }
+  if (multi.length === 0) return;
+  if (!resolveContestedPlacements(context, multi)) {
+    assignFirstReachableParents(context, new Set(multi));
   }
 }

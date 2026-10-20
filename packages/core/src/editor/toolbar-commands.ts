@@ -1,3 +1,8 @@
+import {
+  toolbarFormattingValue,
+  type ToolbarValueSlot,
+  type ToolbarValueMap,
+} from './toolbar-values.ts';
 // Toolbar command wiring (interactive-paginated-editing M4.0 / M5.1).
 //
 // Shared by both adapters: the can-before-exec rule is one implementation, so
@@ -18,8 +23,10 @@
 
 import type {
   CanResult,
+  DocumentEditingMode,
   Editor,
   EditorCommand,
+  EditorExecOptions,
   ExecResult,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
@@ -36,6 +43,8 @@ import {
 } from './table-chrome.ts';
 import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawing-projection.ts';
 import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
+
+import { NO_COMMENT_DRAFT_VIEW, commentDraftRequestsOf } from './comment-draft-chrome.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -55,7 +64,23 @@ function surfaceOf(editor: Editor): PaginatedSurface | null {
 const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // A VIEW toggle, wired here like any other button so its pressed state comes from
   // `isActive` rather than from a flag each host keeps for itself.
+  'review.revisionMarkup': { type: 'openRevisionMarkupDialog' },
   'review.comments': { type: 'toggleReviewPane' },
+  'review.paragraphMarks': { type: 'toggleParagraphMarks' },
+  'review.bookmarks': { type: 'toggleBookmarks' },
+  // Opens the host's Bookmark dialog, the `bookmark` popup; disabled while none is registered.
+  'insert.bookmark': { type: 'openBookmarkDialog' },
+  // Opens the host's Go To UI, the Go to tab of the navigation pane; disabled without one.
+  'insert.goToBookmark': { type: 'openGoTo' },
+  'review.protectDocument': { type: 'toggleDocumentProtection' },
+  'review.simpleMarkup': { type: 'setReviewDisplayMode', mode: 'simple-markup' },
+  'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
+  'review.noMarkup': { type: 'setReviewDisplayMode', mode: 'proposed' },
+  'review.original': { type: 'setReviewDisplayMode', mode: 'original' },
+  'review.previousChange': { type: 'navigateReviewChange', direction: 'previous' },
+  'review.nextChange': { type: 'navigateReviewChange', direction: 'next' },
+  'review.acceptAllChanges': { type: 'resolveAllReviewChanges', action: 'accept' },
+  'review.rejectAllChanges': { type: 'resolveAllReviewChanges', action: 'reject' },
   'history.undo': { type: 'undo' },
   'history.redo': { type: 'redo' },
   'text.bold': { type: 'toggleMark', mark: 'bold' },
@@ -69,10 +94,13 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'alignment.center': { type: 'setAlignment', align: 'center' },
   'alignment.right': { type: 'setAlignment', align: 'right' },
   'alignment.justify': { type: 'setAlignment', align: 'justify' },
+  'direction.ltr': { type: 'setParagraphDirection', direction: 'ltr' },
+  'direction.rtl': { type: 'setParagraphDirection', direction: 'rtl' },
   'list.bullet': { type: 'toggleList', kind: 'bullet' },
   'list.numbered': { type: 'toggleList', kind: 'ordered' },
   'list.indent': { type: 'adjustIndent', direction: 'increase' },
   'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
+  'insert.textBox': { type: 'insertTextBox' },
   'insert.footnote': { type: 'insertNote', noteKind: 'footnote' },
   'insert.endnote': { type: 'insertNote', noteKind: 'endnote' },
   'insert.pageNumber': { type: 'insertPageField', field: 'PAGE' },
@@ -87,6 +115,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
   // the special cases in `toolbarCommandState` / `runToolbarCommand`.
   'contentControl.remove': { type: 'removeContentControl' },
+  'table.mergeCells': { type: 'mergeCells' },
 };
 
 /**
@@ -117,11 +146,22 @@ const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
   (c) => c.charCodeAt(0)
 );
 
+/**
+ * Why a dialog slot cannot run as a command, naming the public way to open the dialog. The
+ * engine can judge the slot, but the values come from a dialog the host renders.
+ */
+const DIALOG_SLOT_REASONS: Partial<Record<ChromeSlotId, string>> = {
+  'file.pageSetup':
+    'page setup is not a command; render DocxEditor.PageSetupDialog with open and onClose',
+  'paragraph.dialog':
+    'the paragraph dialog is not a command; render DocxEditor.ParagraphDialog with open and onClose',
+};
+
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
   // Both carry a real command whose ARGUMENTS come from chrome the registry does not own —
   // bytes from a file picker, a size from the insert grid. The probe asks the engine whether
-  // a well-formed one would be honoured AT THE CARET, which is exactly the enabled question;
+  // a well-formed one would be honored AT THE CARET, which is exactly the enabled question;
   // the values below are the smallest well-formed pair and are never executed. Picking a real
   // size still runs its own `can` first, so a 6×6 refused where a 1×1 was not cannot slip
   // through.
@@ -143,6 +183,12 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // question, which values is the dialog's. One field so `classifyCommand`'s "requires at
   // least one field" gate passes; never executed.
   'paragraph.dialog': { type: 'setParagraphFormat', alignment: 'left' },
+  // The Watermark dialog: whether the document's headers can carry a watermark is the
+  // engine's question, which text or picture is the dialog's. Never executed.
+  'insert.watermark': { type: 'setWatermark', watermark: { text: 'DRAFT' } },
+  // The Split Cells dialog: whether the cell splits is the engine's question, into how many
+  // rows and columns is the dialog's. Never executed.
+  'table.splitCell': { type: 'splitCell', rows: 1, cols: 2 },
 };
 
 /**
@@ -167,7 +213,7 @@ const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: strin
 /**
  * Known-valid probe values, so `toolbarCommandState` can ask `Editor.can` about a
  * value-typed slot without having a value yet. The probe never executes: it only
- * answers "would a well-formed value be honoured right now" — which is the editable
+ * answers "would a well-formed value be honored right now" — which is the editable
  * gate, exactly what enables the picker. The style probe passes the SHAPE gate on any
  * document (existence is an exec-time check), which is exactly right: the picker's
  * options come from `getDocumentStyles`, so a real pick always exists.
@@ -226,9 +272,9 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   if (slotId === 'styles.style') {
     return { type: 'setParagraphStyle', styleId: value as string };
   }
-  // The line-spacing picker's value is a MULTIPLE (Word's 1.0 / 1.15 / 1.5 / 2.0 menu).
-  // `exact` and `atLeast` are the paragraph dialog's, not a one-number dropdown's, so a
-  // host that wants them builds `setLineSpacing` itself.
+  // The slot's one-number value is a MULTIPLE (the 1.0 / 1.15 / 1.5 / 2.0 menu). `exact`
+  // and `atLeast` need a rule beside the number, so a host that sets them builds
+  // `setLineSpacing` itself, as each `lineSpacingMenuRows` row's `spacing` already is.
   if (slotId === 'list.lineSpacing') {
     return { type: 'setLineSpacing', rule: 'multiple', value: value as number };
   }
@@ -302,6 +348,33 @@ export function tableChromeToolbarState(
     : { id: slot, enabled: false, disabledReason: result.reason, active: false };
 }
 
+const EDITING_MODES: readonly DocumentEditingMode[] = ['editing', 'suggesting', 'viewing'];
+
+/**
+ * Whether a comment could be started at the selection: the review module is installed, the
+ * document is not open for viewing, chrome is registered to open the draft, and the selection
+ * is on the page. The click does not run an engine command; the registered chrome (the review
+ * rail, or the host's own, through `setCommentDraftChrome`) opens the draft, the way the link
+ * popover owns `text.link`.
+ */
+function addCommentState(editor: Editor): ToolbarCommandState {
+  const id: ChromeSlotId = 'review.addComment';
+  const refuse = (reason: string): ToolbarCommandState => ({
+    id,
+    enabled: false,
+    disabledReason: reason,
+    active: false,
+  });
+  const review = editor.can({ type: 'toggleReviewPane' });
+  if (!review.ok) return refuse(review.reason);
+  if ((editor.getEditingMode?.() ?? 'editing') === 'viewing') {
+    return refuse('the document is open for viewing');
+  }
+  if (!commentDraftRequestsOf(editor)?.canOpen()) return refuse(NO_COMMENT_DRAFT_VIEW);
+  if (editor.getSelectionPlacement() === null) return refuse('a comment needs a selected range');
+  return { id, enabled: true, disabledReason: null, active: false };
+}
+
 /**
  * Ask the engine whether one control should be enabled.
  *
@@ -314,15 +387,19 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   }
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
-    // Enabled state comes from the ENGINE, like every other control: a document opened
-    // read-only refuses the switch, and the control must say so rather than look live.
-    const probe = editor.can(
-      commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
+    // Enabled state comes from the ENGINE, like every other control — but the pill is how a
+    // reader LEAVES a mode as much as enters one, so it probes every other mode and is live
+    // while any can be entered. Gating it on suggesting alone locked a reader with no
+    // review module, or no author, out of Viewing; each menu item carries its own refusal.
+    const probes = EDITING_MODES.filter((other) => other !== mode).map((other) =>
+      editor.can(commandForSlotValue(id, other)!)
     );
+    const reachable = probes.some((probe) => probe.ok);
+    const refused = probes.find((probe) => !probe.ok);
     return {
       id,
-      enabled: probe.ok,
-      disabledReason: probe.ok ? null : probe.reason,
+      enabled: reachable,
+      disabledReason: !reachable && refused && !refused.ok ? refused.reason : null,
       active: false,
       value: mode,
     };
@@ -393,6 +470,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           active: false,
         };
   }
+  if (id === 'review.addComment') return addCommentState(editor);
   if (id === 'review.authors') {
     const capability = editor.can({ type: 'toggleReviewPane' });
     if (!capability.ok) {
@@ -418,7 +496,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   const command = commandForSlot(id);
   if (!command) {
     // A value-typed slot has no fixed command, but it still has an honest enabled
-    // state: whether a well-formed value would be honoured right now. `active` stays
+    // state: whether a well-formed value would be honored right now. `active` stays
     // false — "the selection is Arial" is a VALUE for the picker to show, not a
     // pressed state.
     const probe = VALUE_SLOT_PROBES[id];
@@ -439,7 +517,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           ? selected?.wrap
           : id === 'image.altText'
             ? selected?.description
-            : undefined;
+            : toolbarFormattingValue(editor, id);
       return canApply.ok
         ? {
             id,
@@ -493,6 +571,21 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           ? { id, enabled: true, disabledReason: null, active: false }
           : { id, enabled: false, disabledReason: judged.reason, active: false };
       }
+      // The Split cells dialog supplies the counts. A cell too narrow for two columns may
+      // still split into rows: two, or as many as a merged cell spans when two does not
+      // divide them.
+      if (id === 'table.splitCell' && shapeProbe.type === 'splitCell') {
+        let judged: CanResult = editor.can(shapeProbe);
+        const limits = judged.ok ? null : editor.query({ type: 'splitCellConfig' });
+        for (const rows of limits ? [2, limits.maxRows] : []) {
+          if (judged.ok || rows < 2) break;
+          const byRows = editor.can({ type: 'splitCell', rows, cols: 1 });
+          if (byRows.ok) judged = byRows;
+        }
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
       // The Paragraph dialog is the same shape once more: the VALUES come from the form the
       // chrome owns, so an allowed probe means the row can act — not that it is unwired.
       // Without this branch the only route to the dialog reads "not connected to an editor
@@ -507,11 +600,30 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       if (!judged.ok) {
         return { id, enabled: false, disabledReason: judged.reason, active: false };
       }
+      const dialogReason = DIALOG_SLOT_REASONS[id];
+      if (dialogReason) return { id, enabled: false, disabledReason: dialogReason, active: false };
     }
     // Save is wired — just not as a command. Reporting it "not wired to an editor
     // command" told a host the capability is missing when what is actually missing is a
     // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching
     // on the registry's `kind: 'save'`. Say which of the two it is.
+    if (id === 'file.exportMarkdown' || id === 'file.exportPdf') {
+      return {
+        id,
+        enabled: false,
+        active: false,
+        disabledReason:
+          'export is not a command; run it with runChromeExport(editor, format, handlers)',
+      };
+    }
+    if (id === 'file.print') {
+      return {
+        id,
+        enabled: false,
+        active: false,
+        disabledReason: 'print is not a command; run it with runChromePrint(editor, handlers)',
+      };
+    }
     if (id === 'file.save') {
       return {
         id,
@@ -557,7 +669,15 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
   if (slotId === 'format.painter') return true;
   const command = commandForSlot(slotId);
-  return command?.type === 'toggleMark' || command?.type === 'setAlignment';
+  return (
+    command?.type === 'toggleMark' ||
+    command?.type === 'toggleParagraphMarks' ||
+    command?.type === 'toggleBookmarks' ||
+    command?.type === 'toggleDocumentProtection' ||
+    command?.type === 'setReviewDisplayMode' ||
+    command?.type === 'setAlignment' ||
+    command?.type === 'setParagraphDirection'
+  );
 }
 
 /**
@@ -615,19 +735,81 @@ export function runTableChromeCommand(
 }
 
 /**
+ * Slots `runToolbarCommand` runs on the surface or through host chrome directly, so `exec`
+ * options do not apply.
+ */
+const SURFACE_RUN_SLOTS: ReadonlySet<ChromeSlotId> = new Set<ChromeSlotId>([
+  'format.painter',
+  'contentControl.showAll',
+  'contentControl.formFill',
+  'contentControl.inspector',
+  'contentControl.remove',
+  'review.addComment',
+]);
+
+/**
  * Run a toolbar control: `can` first, then `exec` only if it said yes. Returns
  * the engine's refusal untouched when it said no, so a caller cannot mistake a
  * declined command for a no-op.
  *
  * @public
  */
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: Exclude<ChromeSlotId, ToolbarValueSlot>,
+  options: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand<K extends keyof ToolbarValueMap>(
+  editor: Editor | null,
+  id: K,
+  value: ToolbarValueMap[NoInfer<K>],
+  options?: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: TableChromeSlotId,
+  value: unknown,
+  options?: EditorExecOptions
+): ExecResult;
+/** @public */
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: ChromeSlotId,
+  value: undefined,
+  options: EditorExecOptions
+): ExecResult;
 export function runToolbarCommand(
   editor: Editor | null,
   id: ChromeSlotId,
   /** The chosen value, for a slot whose command carries one (the editing-mode pill). */
-  value?: unknown
+  value?: unknown,
+  /** Forwarded to `exec` for a slot that resolves to a command; a live control names its gesture here. */
+  options?: EditorExecOptions
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  if (
+    value &&
+    typeof value === 'object' &&
+    ('historyGroup' in value || 'scope' in value || Object.keys(value).length === 0)
+  ) {
+    if (options || VALUE_SLOT_PROBES[id] !== undefined || isTableChromeSlot(id))
+      return {
+        ok: false,
+        code: 'invalidArgs',
+        reason: 'pass a toolbar value before command options',
+      };
+    options = value as EditorExecOptions;
+    value = undefined;
+  }
+  // These slots run on the surface and never reach `exec`, so the option cannot be honored
+  // there; refused rather than dropped, so a caller is never told a group it did not get.
+  if (options?.historyGroup !== undefined && SURFACE_RUN_SLOTS.has(id)) {
+    return { ok: false, code: 'unsupported', reason: `${id} does not take a history group` };
+  }
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
@@ -653,6 +835,21 @@ export function runToolbarCommand(
     return surface.formatPainter.press()
       ? { ok: true, changed: false }
       : { ok: false, code: 'notFound', reason: NOTHING_TO_COPY_FORMATTING };
+  }
+  if (id === 'review.addComment') {
+    // Can before exec, with the same answer the enabled state gives; then the registered
+    // chrome opens the draft. Nothing about the document moves until the comment is posted.
+    const state = addCommentState(editor);
+    if (!state.enabled) {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: state.disabledReason ?? NO_COMMENT_DRAFT_VIEW,
+      };
+    }
+    return commentDraftRequestsOf(editor)?.open()
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: NO_COMMENT_DRAFT_VIEW };
   }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);
@@ -696,13 +893,24 @@ export function runToolbarCommand(
           reason: surface.state().lastRejection ?? 'removeContentControl was refused',
         };
   }
-  const command =
-    value === undefined
-      ? commandForSlot(id)
-      : (commandForSlotValue(id, value) ?? commandForSlot(id));
+  const command = value === undefined ? commandForSlot(id) : commandForSlotValue(id, value);
   if (!command) {
     if (value !== undefined) {
       return { ok: false, code: 'unsupported', reason: 'invalid value for toolbar command' };
+    }
+    if (id === 'file.exportMarkdown' || id === 'file.exportPdf') {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'export is not a command; run it with runChromeExport(editor, format, handlers)',
+      };
+    }
+    if (id === 'file.print') {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'print is not a command; run it with runChromePrint(editor, handlers)',
+      };
     }
     if (id === 'file.save') {
       return {
@@ -718,11 +926,13 @@ export function runToolbarCommand(
         reason: 'open is not a command; run it with editor.load(bytes)',
       };
     }
+    const dialogReason = DIALOG_SLOT_REASONS[id];
+    if (dialogReason) return { ok: false, code: 'unsupported', reason: dialogReason };
     return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
   }
-  const allowed = editor.can(command);
+  const allowed = editor.can(command, options);
   if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-  return editor.exec(command);
+  return editor.exec(command, options);
 }
 
 /**
@@ -760,9 +970,13 @@ export function tableCommandToolbarState(
  *
  * @public
  */
-export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult {
+export function runTableCommand(
+  editor: Editor | null,
+  command: EditorCommand,
+  options?: EditorExecOptions
+): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-  const allowed = editor.can(command);
+  const allowed = editor.can(command, options);
   if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-  return editor.exec(command);
+  return editor.exec(command, options);
 }

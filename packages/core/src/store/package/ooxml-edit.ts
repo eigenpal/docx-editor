@@ -1,3 +1,5 @@
+import type { FieldResultsMode } from './field-result-mode.ts';
+import { bindConflictingPrefixes } from './edit-namespace-scope.ts';
 // Atomic canonical-tree edit primitives (typed-ooxml-paragraph-editor task 4.5).
 //
 // The ONLY sanctioned way to mutate an `OoxmlPart`. Every primitive is pure — it returns a
@@ -38,6 +40,25 @@ export type OoxmlEditResult =
   | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };
 
 /**
+ * An opt-in relaxation of `ST_Lock` for hosts that protect WHAT a control says, not how it looks.
+ *
+ * ECMA-376 `contentLocked` forbids editing the control's contents and Word reads formatting as
+ * part of that, which is the default here. A host that puts protected text in a control (a
+ * template placeholder the user must not retype) but lets authors style it sets
+ * `allowFormattingInLockedContent`: a run-property write (bold, colour, font, size, highlight …),
+ * on runs or on a paragraph mark, then passes the CONTENT half of the lock. The exception never
+ * admits a property that hides text (`w:vanish`, `w:specVanish`, `w:webHidden`), which the
+ * run-property vocabulary refuses today anyway. Text edits, deletion of the content, paragraph properties,
+ * removal of a `sdtLocked` wrapper and `w:dataBinding` refusals are unchanged.
+ *
+ * @public
+ */
+export interface ContentLockPolicy {
+  /** Let run formatting pass a content lock; text and removal stay refused. Default `false`. */
+  readonly allowFormattingInLockedContent?: boolean;
+}
+
+/**
  * How an edit primitive validates its result.
  *
  * By default every primitive runs the full-part invariant validation before handing its
@@ -49,6 +70,11 @@ export type OoxmlEditResult =
  */
 export interface EditOptions {
   readonly deferValidation?: boolean;
+  /**
+   * How a content control's `w:lock` is read for ops that only restyle text. Absent means
+   * the default: `contentLocked` / `sdtContentLocked` refuse every write, formatting included.
+   */
+  readonly contentLockPolicy?: ContentLockPolicy;
   /**
    * A shared minter for `@w:id` on a NEW revision, for the ops of one transaction.
    *
@@ -63,6 +89,44 @@ export interface EditOptions {
    * caller outside a transaction gets.
    */
   readonly revisionIds?: () => string;
+  /**
+   * The transaction's revision-id bookkeeping for the tracked TEXT ops, where `revisionIds`
+   * above hands the property ops one shared id for their whole group.
+   *
+   * Absent means "mint your own and remember nothing", which is what a caller outside a
+   * transaction gets: every applier falls back to its own walk of the part.
+   */
+  readonly trackedRevisionIds?: TransactionRevisionIds;
+  /**
+   * How the op addresses saved field results (`field-result-mode.ts`). Absent keeps the mode
+   * of the enclosing store call, which is `atomic` outside any editable transaction.
+   */
+  readonly fieldResults?: FieldResultsMode;
+}
+
+/**
+ * What one transaction knows about the revision ids its tracked text ops write.
+ *
+ * TWO questions, and they are the same bookkeeping. `nextRevisionId` walks the whole part, so
+ * a replacement — a `deleteText` and an `insertText` in one transaction — walked it twice, and
+ * on a five-hundred-page document that doubled the cost of every one. And an insertion aimed
+ * at the front edge of a deletion relocates past it only when that deletion is THIS
+ * transaction's own: typing over a selection. Backspace, then a keystroke, is two
+ * transactions, and there the typed text belongs in FRONT of the struck character, as Word
+ * writes it. Adjacency alone cannot tell the two apart; the ids can.
+ */
+export interface TransactionRevisionIds {
+  /** A fresh `@w:id`, from this transaction's one walk of the part. */
+  mint(): string;
+  /**
+   * Record a wrapper this transaction wrote, by its FULL `CT_TrackChange` identity — id,
+   * author and date, as `revisionKey` spells it. Not by the id alone: that number comes out
+   * of the file, nothing makes it unique, and a strike joining `w:id="3"` in one paragraph
+   * would otherwise claim an unrelated `w:id="3"` elsewhere as this edit's own.
+   */
+  wrote(key: string): void;
+  /** Whether this transaction wrote a wrapper with that identity. */
+  wroteUnder(key: string): boolean;
 }
 
 /**
@@ -79,11 +143,16 @@ export interface EditOptions {
  */
 interface PartIndex {
   readonly nodes: Map<string, OoxmlNode>;
+  uniqueIds: boolean;
   /**
    * Child id to PARENT ID — the id, not the object. A rebuilt ancestor keeps its id, so
    * the thousands of untouched siblings under it keep valid parent entries with no work
    * at all; storing the parent object meant every rebuild of a wide element (the body,
    * on every paragraph edit) had to rewrite one entry per child.
+   *
+   * Only parents a node's id does not already name are stored: a parsed id is a path
+   * (`…#0.1.2` sits in `…#0.1`), so most nodes need no entry. Read through `parentIdOf`,
+   * write through `setParentId`.
    */
   readonly parents: Map<string, string>;
   /**
@@ -93,13 +162,63 @@ interface PartIndex {
    * each allocator resumes where the last one stopped. Restarting at zero made every mint
    * probe the whole run of previously minted ids: in a document built by editing, that was
    * millions of taken-id checks per paste. Monotone, so freed counters are never reused,
-   * which no correctness property depends on. A rebuilt index starts at zero again and
-   * pays one skip-forward walk on its first allocation.
+   * which prevents reuse of identities retained by collaboration. Rebuilt indexes share
+   * the frontier with every root in the same edit lineage.
    */
-  mintFrontier: number;
+  readonly mintState: { frontier: number };
 }
 
 const partIndexes = new WeakMap<OoxmlElement, PartIndex>();
+
+/** The parent a path id names (`…#0.1.2` → `…#0.1`), or undefined for any other id. */
+function derivedParentId(id: string): string | undefined {
+  const dot = id.lastIndexOf('.');
+  return dot > id.lastIndexOf('#') && id.lastIndexOf('#') >= 0 ? id.slice(0, dot) : undefined;
+}
+
+/** A parent narrower than this answers its leaves by a scan, so they need no entry. */
+const LEAF_SCAN_WIDTH = 16;
+
+/**
+ * Whether `node` needs no entry of its own: a leaf whose id names `parent`, which is narrow
+ * enough to scan. Such a node is found through its parent (`indexedNode`), and most nodes of
+ * a parsed part are such leaves: run and paragraph property elements, and text.
+ */
+function readThroughParent(node: OoxmlNode, parent: OoxmlNode): boolean {
+  return (
+    (node.kind === 'textValue' || node.children.length === 0) &&
+    parent.kind !== 'textValue' &&
+    parent.children.length < LEAF_SCAN_WIDTH &&
+    derivedParentId(node.id) === parent.id
+  );
+}
+
+/** The indexed node with `id`: its own entry, or a leaf read through its named parent. */
+function indexedNode(index: PartIndex, id: string): OoxmlNode | undefined {
+  const stored = index.nodes.get(id);
+  if (stored !== undefined) return stored;
+  const parentId = derivedParentId(id);
+  const parent = parentId === undefined ? undefined : index.nodes.get(parentId);
+  if (!parent || parent.kind === 'textValue') return undefined;
+  for (const child of parent.children) if (child.id === id) return child;
+  return undefined;
+}
+
+/** The parent id of an indexed node, or undefined for the root and unknown ids. */
+function parentIdOf(index: PartIndex, id: string): string | undefined {
+  const stored = index.parents.get(id);
+  if (stored !== undefined) return stored;
+  return indexedNode(index, id) ? derivedParentId(id) : undefined;
+}
+
+/** Record `parentId` as `id`'s parent, storing it only when the id does not name it. */
+function setParentId(index: PartIndex, id: string, parentId: string): void {
+  if (derivedParentId(id) === parentId) index.parents.delete(id);
+  else index.parents.set(id, parentId);
+}
+// Preview edits and undo can revisit an old root after its index moved. Keep allocations
+// monotone across that lineage: collaboration retains identities for removed nodes too.
+const mintStates = new WeakMap<OoxmlElement, { frontier: number }>();
 
 let nodeIndexCompleteBuilds = 0;
 let nodeIndexCompleteVisits = 0;
@@ -127,27 +246,64 @@ export function nodeIndexTestRecorder(): {
 function nodeIndexFor(root: OoxmlElement): PartIndex {
   const cached = partIndexes.get(root);
   if (cached) return cached;
-  nodeIndexCompleteBuilds += 1;
+  nodeIndexBuilder(root)(() => false);
+  return partIndexes.get(root)!;
+}
+
+/**
+ * Build `root`'s node index in steps, in document order. A step runs until `stop()` answers
+ * true (asked every thousand nodes; the store lane has no clock), and answers true once the
+ * index is installed, or when another read installed it first. A long part's index took about
+ * a second in one task, so a large open builds it in short ones.
+ */
+export function nodeIndexSteps(root: OoxmlElement): (stop: () => boolean) => boolean {
+  const build = nodeIndexBuilder(root);
+  return (stop) => partIndexes.has(root) || build(stop);
+}
+
+function nodeIndexBuilder(root: OoxmlElement): (stop: () => boolean) => boolean {
   const nodes = new Map<string, OoxmlNode>();
   const parents = new Map<string, string>();
-  const walk = (node: OoxmlNode, parentId: string | null): void => {
-    nodeIndexCompleteVisits += 1;
-    if (!nodes.has(node.id)) {
-      nodes.set(node.id, node);
-      if (parentId !== null) parents.set(node.id, parentId);
+  let uniqueIds = true;
+  // Parallel stacks, children pushed in reverse: the same order a recursive walk visits.
+  const pending: OoxmlNode[] = [root];
+  const pendingParents: (OoxmlNode | null)[] = [null];
+  return (stop) => {
+    let visits = 0;
+    while (pending.length > 0) {
+      const node = pending.pop()!;
+      const parent = pendingParents.pop()!;
+      nodeIndexCompleteVisits += 1;
+      if (nodes.has(node.id)) uniqueIds = false;
+      else if (!parent || !readThroughParent(node, parent)) {
+        nodes.set(node.id, node);
+        if (parent && derivedParentId(node.id) !== parent.id) parents.set(node.id, parent.id);
+      }
+      if (node.kind !== 'textValue') {
+        for (let index = node.children.length - 1; index >= 0; index -= 1) {
+          pending.push(node.children[index]!);
+          pendingParents.push(node);
+        }
+      }
+      if ((++visits & 1023) === 0 && stop()) return false;
     }
-    if (node.kind === 'textValue') return;
-    for (const child of node.children) walk(child, node.id);
+    nodeIndexCompleteBuilds += 1;
+    const mintState = mintStates.get(root) ?? { frontier: 0 };
+    mintStates.set(root, mintState);
+    partIndexes.set(root, { nodes, parents, mintState, uniqueIds });
+    return true;
   };
-  walk(root, null);
-  const index: PartIndex = { nodes, parents, mintFrontier: 0 };
-  partIndexes.set(root, index);
-  return index;
 }
 
 /** Every node id currently present in the part. */
 export function collectNodeIds(part: OoxmlPart): Set<string> {
-  return new Set(nodeIndexFor(part.root).nodes.keys());
+  const ids = new Set<string>();
+  const visit = (node: OoxmlNode): void => {
+    ids.add(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
 }
 
 /**
@@ -158,11 +314,8 @@ export function collectNodeIds(part: OoxmlPart): Set<string> {
  * can never coincide, and the counter skips anything already taken so repeated edits in one
  * session stay unique.
  *
- * The collision check only sees nodes that are IN the tree. A caller that clones a subtree
- * and attaches it LATER — after other ops have replaced the root and reset the counter —
- * must mint in its own `family`: two `new`-family allocators over different roots can hand
- * out the same id, one to a detached clone and one to the tree, and the clone's insertion
- * then fails the duplicate-id invariant.
+ * Allocators share reservations across edited roots and restored roots. Preview edits,
+ * detached nodes, and undo branches must not reuse an identity that collaboration retains.
  *
  * Checks the part's node index directly rather than copying every id into a fresh set: the
  * copy was O(document) per op, and an allocator is created for every op.
@@ -171,12 +324,25 @@ export function createNodeIdAllocator(
   part: OoxmlPart,
   family: 'new' | 'paste' = 'new'
 ): () => string {
+  return allocatorIn(part, family);
+}
+
+/**
+ * Ids for the property containers a paragraph-mark stamp creates. Resolving the mark removes
+ * containers of this family only, so containers the source already had stay.
+ */
+export function createMarkContainerIdAllocator(part: OoxmlPart): () => string {
+  return allocatorIn(part, 'mark');
+}
+
+function allocatorIn(part: OoxmlPart, family: string): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
-  let counter = index.mintFrontier;
+  let counter = index.mintState.frontier;
   return () => {
+    counter = Math.max(counter, index.mintState.frontier);
     let id = `${part.name}#${family}:${counter}`;
-    while (index.nodes.has(id) || minted.has(id)) {
+    while (indexedNode(index, id) || minted.has(id)) {
       counter += 1;
       id = `${part.name}#${family}:${counter}`;
     }
@@ -184,7 +350,7 @@ export function createNodeIdAllocator(
     counter += 1;
     // Published back, so the next allocator — this op's successor in the same transaction,
     // or the next transaction entirely — starts past everything ever taken.
-    index.mintFrontier = counter;
+    index.mintState.frontier = counter;
     return id;
   };
 }
@@ -195,13 +361,13 @@ function pathToNode(root: OoxmlNode, nodeId: string): OoxmlNode[] | null {
   // The recursive walk this replaces visited every node in every preceding subtree on
   // every lookup, which multiplied by ops-per-transaction made big pastes quadratic.
   const index = nodeIndexFor(root as OoxmlElement);
-  const target = index.nodes.get(nodeId);
+  const target = indexedNode(index, nodeId);
   if (!target) return null;
   const path: OoxmlNode[] = [target];
   let current: OoxmlNode | undefined = target;
   while (current && current !== root) {
-    const parentId = index.parents.get(current.id);
-    current = parentId === undefined ? undefined : index.nodes.get(parentId);
+    const parentId = parentIdOf(index, current.id);
+    current = parentId === undefined ? undefined : indexedNode(index, parentId);
     if (current) path.push(current);
   }
   if (current !== root) return null;
@@ -211,20 +377,26 @@ function pathToNode(root: OoxmlNode, nodeId: string): OoxmlNode[] | null {
 
 /** Whether a node id exists in the part. */
 export function hasNode(part: OoxmlPart, nodeId: string): boolean {
-  return nodeIndexFor(part.root).nodes.has(nodeId);
+  return indexedNode(nodeIndexFor(part.root), nodeId) !== undefined;
 }
 
 /** Read a node back out of a part by id. */
 export function findNode(part: OoxmlPart, nodeId: string): OoxmlNode | null {
-  return nodeIndexFor(part.root).nodes.get(nodeId) ?? null;
+  return indexedNode(nodeIndexFor(part.root), nodeId) ?? null;
+}
+
+/** Use an existing unique-id index without allocating one for untrusted input. */
+export function cachedUniqueNode(root: OoxmlElement, nodeId: string): OoxmlNode | null | undefined {
+  const index = partIndexes.get(root);
+  return index?.uniqueIds ? (indexedNode(index, nodeId) ?? null) : undefined;
 }
 
 /** The element that holds a node, or null for the root and for unknown ids. */
 export function parentNodeOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   const index = nodeIndexFor(part.root);
-  if (!index.nodes.has(nodeId)) return null;
-  const parentId = index.parents.get(nodeId);
-  const parent = parentId === undefined ? undefined : index.nodes.get(parentId);
+  if (!indexedNode(index, nodeId)) return null;
+  const parentId = parentIdOf(index, nodeId);
+  const parent = parentId === undefined ? undefined : indexedNode(index, parentId);
   return parent && parent.kind !== 'textValue' ? (parent as OoxmlElement) : null;
 }
 
@@ -246,18 +418,21 @@ function withChildren(element: OoxmlElement, children: readonly OoxmlNode[]): Oo
  * with document size.
  *
  * The old index is STOLEN — mutated in place and re-keyed to the new root. The old root's
- * entry is dropped; a later lookup against it (undo walking history) rebuilds by full walk.
+ * entry is dropped; a later independent lookup against it rebuilds by full walk.
  * Removals are processed before additions at each level, so a node MOVED between siblings
  * in one rebuild (a join re-parenting runs) is never deleted after being re-added.
  * Exactness is guaranteed for trees without duplicate ids, which is an invariant the
  * commit-boundary validation enforces before any tree is published.
  */
 function stealPatchedIndex(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
+  const mintState = mintStates.get(oldRoot);
+  if (mintState) mintStates.set(newRoot, mintState);
   const index = partIndexes.get(oldRoot);
   if (!index) return;
   partIndexes.delete(oldRoot);
   diffPatch(index, oldRoot, newRoot, null);
   partIndexes.set(newRoot, index);
+  mintStates.set(newRoot, index.mintState);
 }
 
 /**
@@ -277,6 +452,15 @@ export function carryIndexToRebuiltRoot(oldRoot: OoxmlElement, newRoot: OoxmlEle
   stealPatchedIndex(oldRoot, newRoot);
 }
 
+/** Reuse lookup storage only when history restores a root from the same edit lineage. */
+export function carryIndexToHistoryRoot(oldRoot: OoxmlElement, restoredRoot: OoxmlElement): void {
+  const lineage = mintStates.get(oldRoot);
+  // Package replacement can introduce a separately parsed tree with the same structural ids.
+  // Such a tree keeps its own allocation reservations and lookup storage.
+  if (!lineage || lineage !== mintStates.get(restoredRoot)) return;
+  stealPatchedIndex(oldRoot, restoredRoot);
+}
+
 function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
   // Only when the entry still names THIS object: a moved node re-indexed under its new
   // parent must survive the removal sweep of its old position.
@@ -289,8 +473,9 @@ function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
 }
 
 function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parentId: string): void {
+  if (index.nodes.has(node.id)) index.uniqueIds = false;
   index.nodes.set(node.id, node);
-  index.parents.set(node.id, parentId);
+  setParentId(index, node.id, parentId);
   if (node.kind === 'textValue') return;
   for (const child of node.children) addIndexedSubtree(index, child, node.id);
 }
@@ -305,8 +490,8 @@ function diffPatch(
     // Identical subtree: every entry inside it is already right. Even its own parent EDGE
     // usually is — the parent kept its id through the rebuild — so only a genuine move to a
     // differently-identified parent writes anything.
-    if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
-      index.parents.set(newNode.id, newParentId);
+    if (newParentId !== null && parentIdOf(index, newNode.id) !== newParentId) {
+      setParentId(index, newNode.id, newParentId);
     }
     return;
   }
@@ -316,8 +501,8 @@ function diffPatch(
     return;
   }
   index.nodes.set(newNode.id, newNode);
-  if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
-    index.parents.set(newNode.id, newParentId);
+  if (newParentId !== null && parentIdOf(index, newNode.id) !== newParentId) {
+    setParentId(index, newNode.id, newParentId);
   }
   const oldChildren = oldNode.kind === 'textValue' ? [] : oldNode.children;
   const newChildren = newNode.kind === 'textValue' ? [] : newNode.children;
@@ -347,7 +532,11 @@ function diffPatch(
     if (!oldById.has(child.id)) oldById.set(child.id, child);
   }
   const kept = new Set<string>();
-  for (let at = first; at < newPast; at += 1) kept.add(newChildren[at]!.id);
+  for (let at = first; at < newPast; at += 1) {
+    const id = newChildren[at]!.id;
+    if (kept.has(id)) index.uniqueIds = false;
+    kept.add(id);
+  }
   // REMOVALS FIRST: a node moved between siblings appears in both a removed child's old
   // position and a new child's subtree, and deleting after adding would strip it.
   for (const [id, child] of oldById) if (!kept.has(id)) removeIndexedSubtree(index, child);
@@ -417,7 +606,8 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
  */
 function knownIdsIfCapturing(
   part: OoxmlPart,
-  introduced: readonly OoxmlNode[]
+  introduced: readonly OoxmlNode[],
+  kept?: ReadonlySet<OoxmlNode>
 ): Set<string> | undefined {
   if (!isCanonicalPrimitiveCaptureActive()) return undefined;
   const preEdit = nodeIndexFor(part.root).nodes;
@@ -427,8 +617,23 @@ function knownIdsIfCapturing(
     if (node.kind === 'textValue') return;
     for (const child of node.children) walk(child);
   };
-  for (const node of introduced) walk(node);
+  // A child kept by identity lowers as no change, so lowering never asks about its subtree.
+  for (const node of introduced) if (!kept?.has(node)) walk(node);
   return known;
+}
+
+/** In-scope declarations at the destination, nearest ancestor wins. */
+function namespaceScopeAt(part: OoxmlPart, node: OoxmlNode | null): Map<string, string> {
+  const scope = new Map<string, string>();
+  const ancestors: OoxmlElement[] = [];
+  while (node && node.kind !== 'textValue') {
+    ancestors.push(node);
+    node = parentNodeOf(part, node.id);
+  }
+  for (let i = ancestors.length - 1; i >= 0; i -= 1)
+    for (const binding of ancestors[i]!.namespaceBindings)
+      scope.set(binding.prefix, binding.namespaceUri);
+  return scope;
 }
 
 /** Replace one node's children wholesale. */
@@ -442,7 +647,15 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  const knownIds = knownIdsIfCapturing(part, children);
+  const scope = namespaceScopeAt(part, target);
+  // A child this node already holds already lives in exactly this scope, so only the
+  // introduced ones can need a binding. Enter and Backspace replace the whole body's child
+  // list; walking every kept paragraph again made each one cost the size of the document.
+  const kept = new Set<OoxmlNode>(target.children);
+  children = children.map((child) =>
+    kept.has(child) ? child : bindConflictingPrefixes(child, scope)
+  );
+  const knownIds = knownIdsIfCapturing(part, children, kept);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
   if (result.ok) captureReplaceChildren(target, children, knownIds);
   return result;
@@ -460,6 +673,8 @@ export function insertChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  const scope = namespaceScopeAt(part, target);
+  children = children.map((child) => bindConflictingPrefixes(child, scope));
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
   const knownIds = knownIdsIfCapturing(part, children);
@@ -479,6 +694,10 @@ export function replaceNode(
   if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  replacement = bindConflictingPrefixes(
+    replacement,
+    namespaceScopeAt(part, parentNodeOf(part, nodeId))
+  );
   const knownIds = knownIdsIfCapturing(part, [replacement]);
   const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
   const result = finish(rebuild(part, nodeId, replacement), options);

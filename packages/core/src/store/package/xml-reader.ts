@@ -7,6 +7,7 @@
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { isValidXmlText } from './sinks.ts';
+import { DEFAULT_LIMITS, HARD_CEILINGS } from '../runtime/limits.ts';
 
 /**
  * One parsed XML node, preserving significant order, whitespace and raw lexical values.
@@ -49,7 +50,10 @@ export type XmlRejection =
 export const MAX_XML_DEPTH = 256;
 const MAX_DEPTH = MAX_XML_DEPTH;
 export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
-export const XML_HARD_MAX_ELEMENTS = 1_000_000;
+// Share the engine's resource policy instead of imposing a second, smaller ceiling.
+// These are defensive budgets, not a guarantee that every document fits the host's memory.
+export const XML_DEFAULT_MAX_ELEMENTS = DEFAULT_LIMITS.maxElementCount;
+export const XML_HARD_MAX_ELEMENTS = HARD_CEILINGS.maxElementCount;
 
 /**
  * Decode ONLY the five predefined XML entities and numeric character references.
@@ -59,6 +63,15 @@ export const XML_HARD_MAX_ELEMENTS = 1_000_000;
  * Without this, run text keeps its escaped lexical form and a re-serialize
  * double-escapes it.
  */
+/**
+ * A copy of `value` that does not point into the part's XML text. V8 keeps a substring of 13 or
+ * more characters as a view of its parent, so one long attribute or run kept the whole decoded
+ * part alive for as long as the tree. Shorter strings are already copies.
+ */
+function ownString(value: string): string {
+  return value.length < 13 ? value : (value + ' ').slice(0, -1);
+}
+
 function decodeXmlEntities(s: string): string {
   const decoded =
     s.indexOf('&') < 0
@@ -93,7 +106,7 @@ function decodeXmlEntities(s: string): string {
             }
           }
         });
-  return validateXmlText(decoded);
+  return ownString(validateXmlText(decoded));
 }
 
 function validateXmlText(value: string): string {
@@ -285,6 +298,7 @@ function preflightDepth(xml: string): XmlRejection | undefined {
 /** Per-part caps on size, element count and depth. Clamped into the hard ceilings. */
 export interface XmlLimits {
   readonly maxBytes: number;
+  /** Element budget; may raise or lower the engine default, up to its hard ceiling. */
   readonly maxElements?: number;
 }
 
@@ -300,7 +314,70 @@ const parser = new XMLParser({
   cdataPropName: '#cdata', // distinguish literal CDATA from entity-bearing text
   ignoreDeclaration: true,
   ignorePiTags: true,
+  // No callback reads a tag path. The default built one string per element and attribute
+  // list, a noticeable share of reading a long part.
+  jPath: false,
 });
+
+/** What the whole-part checks leave a read: the element budget, or a rejection. */
+export type XmlChecked =
+  | { readonly ok: true; readonly maxElements: number }
+  | { readonly ok: false; readonly reason: XmlRejection };
+
+/**
+ * The bounded checks `readXml` runs over a whole part before parsing: limits, size, forbidden
+ * constructs, element count, and depth. Well-formedness is {@link validateWholeXml}.
+ *
+ * @internal Split out so a long part can run them in tasks of their own.
+ */
+export function preflightXml(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): XmlChecked {
+  const steps = preflightXmlSteps(xml, limits);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** @internal {@link preflightXml}, yielding between its whole-part scans. */
+export function* preflightXmlSteps(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): Generator<void, XmlChecked> {
+  if (
+    !validLimit(limits.maxBytes) ||
+    (limits.maxElements !== undefined && !validLimit(limits.maxElements))
+  )
+    return { ok: false, reason: 'invalid-limits' };
+  const maxBytes = Math.min(limits.maxBytes, XML_HARD_MAX_BYTES);
+  const maxElements = Math.min(
+    limits.maxElements ?? XML_DEFAULT_MAX_ELEMENTS,
+    XML_HARD_MAX_ELEMENTS
+  );
+  if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
+  const forbidden = preflightForbiddenXml(xml);
+  if (forbidden) return { ok: false, reason: forbidden };
+  yield;
+  const preflight = preflightElementCount(xml, maxElements);
+  if (preflight) return { ok: false, reason: preflight };
+  yield;
+  const depthPreflight = preflightDepth(xml);
+  if (depthPreflight) return { ok: false, reason: depthPreflight };
+  return { ok: true, maxElements };
+}
+
+/** @internal Whether the whole part is well-formed, as `readXml` decides it. */
+export function validateWholeXml(xml: string): boolean {
+  return XMLValidator.validate(xml) === true;
+}
+
+/** An element budget shared by every fragment of one part. */
+export interface XmlElementBudget {
+  count: number;
+  readonly maxElements: number;
+}
 
 /** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
 /**
@@ -313,22 +390,47 @@ export function readXml(
   xml: string,
   limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
 ): XmlResult {
-  if (
-    !validLimit(limits.maxBytes) ||
-    (limits.maxElements !== undefined && !validLimit(limits.maxElements))
-  )
-    return { ok: false, reason: 'invalid-limits' };
-  const maxBytes = Math.min(limits.maxBytes, XML_HARD_MAX_BYTES);
-  const maxElements = Math.min(limits.maxElements ?? XML_HARD_MAX_ELEMENTS, XML_HARD_MAX_ELEMENTS);
-  if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
-  const forbidden = preflightForbiddenXml(xml);
-  if (forbidden) return { ok: false, reason: forbidden };
-  const preflight = preflightElementCount(xml, maxElements);
-  if (preflight) return { ok: false, reason: preflight };
-  const depthPreflight = preflightDepth(xml);
-  if (depthPreflight) return { ok: false, reason: depthPreflight };
-  if (XMLValidator.validate(xml) !== true) return { ok: false, reason: 'parse-error' };
+  const checked = preflightXml(xml, limits);
+  if (!checked.ok) return checked;
+  if (!validateWholeXml(xml)) return { ok: false, reason: 'parse-error' };
+  return parseChecked(xml, 0, { count: 0, maxElements: checked.maxElements }, false);
+}
 
+/**
+ * Parse one run of sibling content from a part that already passed {@link preflightXml} and
+ * {@link validateWholeXml} whole, at `depth`, against the part's shared `budget`. The run
+ * must be a balanced content sequence; it is read inside a neutral wrapper element.
+ *
+ * @internal For reading a long part in tasks of its own.
+ */
+export function readXmlFragment(
+  fragment: string,
+  depth: number,
+  budget: XmlElementBudget
+): XmlResult {
+  const wrapped = `<r>${fragment}</r>`;
+  // The parser builds a tree from an unbalanced run without complaint, so a cut in the wrong
+  // place must fail here rather than read as different content.
+  if (XMLValidator.validate(wrapped) !== true) return { ok: false, reason: 'parse-error' };
+  return parseChecked(wrapped, depth, budget, true);
+}
+
+/**
+ * Parse a whole document that already passed {@link preflightXml} and {@link validateWholeXml}
+ * (or a document assembled from such a part), against `budget`.
+ *
+ * @internal For reading a long part in tasks of its own.
+ */
+export function readCheckedXml(xml: string, budget: XmlElementBudget): XmlResult {
+  return parseChecked(xml, 0, budget, false);
+}
+
+function parseChecked(
+  xml: string,
+  depth: number,
+  budget: XmlElementBudget,
+  wrapped: boolean
+): XmlResult {
   let raw: unknown;
   try {
     raw = parser.parse(xml);
@@ -336,10 +438,13 @@ export function readXml(
     return { ok: false, reason: 'parse-error' };
   }
   try {
-    return {
-      ok: true,
-      nodes: convert(raw as FxpNode[], 0, { count: 0, maxElements }),
-    };
+    let items = raw as FxpNode[];
+    if (wrapped) {
+      const wrapper = items.length === 1 ? items[0]!['r'] : undefined;
+      if (!Array.isArray(wrapper)) return { ok: false, reason: 'parse-error' };
+      items = wrapper as FxpNode[];
+    }
+    return { ok: true, nodes: convert(items, depth, budget) };
   } catch (e) {
     return {
       ok: false,
@@ -375,11 +480,7 @@ function cdataText(value: unknown): string {
     .join('');
 }
 
-function convert(
-  items: FxpNode[],
-  depth: number,
-  budget: { count: number; maxElements: number }
-): XmlNode[] {
+function convert(items: FxpNode[], depth: number, budget: XmlElementBudget): XmlNode[] {
   if (depth > MAX_DEPTH) throw new DepthError();
   const out: XmlNode[] = [];
   for (const item of items) {
@@ -391,20 +492,33 @@ function convert(
       continue;
     }
     if ('#cdata' in item) {
-      out.push({ type: 'text', value: validateXmlText(cdataText(item['#cdata'])) });
+      out.push({ type: 'text', value: ownString(validateXmlText(cdataText(item['#cdata']))) });
       continue;
     }
-    const attrs = (item[':@'] as Record<string, unknown> | undefined) ?? {};
-    const tagKey = Object.keys(item).find((k) => k !== ':@');
+    const attrs = item[':@'] as Record<string, unknown> | undefined;
+    // Plain loops: this runs once per element and attribute of every part, and the
+    // array-building helpers cost a noticeable share of reading a long document.
+    const keys = Object.keys(item);
+    let tagKey: string | undefined;
+    for (const key of keys) {
+      if (key !== ':@') {
+        tagKey = key;
+        break;
+      }
+    }
     if (!tagKey) continue;
     budget.count += 1;
     if (budget.count > budget.maxElements) throw new ElementCountError();
     const attributes = Object.create(null) as Record<string, string>;
-    for (const [k, v] of Object.entries(attrs)) {
-      // Fail closed on non-scalars: `String({})` is "[object Object]", which would
-      // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
-      // then round-trip as if that garbage were source text.
-      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(requireXmlStringScalar(v, 'attribute'));
+    if (attrs) {
+      for (const k of Object.keys(attrs)) {
+        // Fail closed on non-scalars: `String({})` is "[object Object]", which would
+        // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
+        // then round-trip as if that garbage were source text.
+        attributes[k.startsWith('@_') ? k.slice(2) : k] = decodeXmlEntities(
+          requireXmlStringScalar(attrs[k], 'attribute')
+        );
+      }
     }
     out.push({
       type: 'element',

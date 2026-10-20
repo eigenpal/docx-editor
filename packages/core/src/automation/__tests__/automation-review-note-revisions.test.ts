@@ -116,3 +116,61 @@ describe('duplicate note identities fail closed before handles exist', () => {
     expect(savedPartBytes(host, 'word/footnotes.xml')).toBe(before);
   });
 });
+
+for (const action of ['accept', 'reject'] as const) {
+  test(`batch ${action} scopes repeated note identities without consuming sibling changes`, () => {
+    const host = collidingReviewedNotes('ins');
+    const [first] = noteBodies(host);
+    const response = host.execute({
+      operations: [{ op: 'resolveRevisionBatch', body: first!, action }],
+    });
+    expect(response.ok).toBe(true);
+    if (!response.ok) throw new Error('batch refused');
+    expect(response.results[0]).toMatchObject({
+      status: 'ok',
+      value: { kind: 'revisionBatch', result: { remaining: 0, skipped: [] } },
+    });
+    const next = reopen(host);
+    const notesXml = savedPartBytes(next.host, 'word/footnotes.xml');
+    expect(notesXml.match(/<w:ins\b/g) ?? []).toHaveLength(1);
+    expect(notesXml).toContain('sibling');
+    expect(notesXml.includes('target')).toBe(action === 'accept');
+  });
+}
+
+test('an explicit batch refuses a revision handle from another note atomically', () => {
+  const host = open(
+    richDocx({
+      body: `<w:p>${noteReference('footnote', 1)}${noteReference('footnote', 2)}</w:p>`,
+      rels: [{ id: 'rId4', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+      parts: [
+        notesPart(
+          'footnote',
+          [1, 2].map((id) => ({
+            id,
+            xml: `<w:p><w:ins w:id="${id}" w:author="Ada"><w:r><w:t>note${id}</w:t></w:r></w:ins></w:p>`,
+          }))
+        ),
+      ],
+    })
+  );
+  const [first, second] = noteBodies(host);
+  const local = revisionsOf(host, first!);
+  const foreign = revisionsOf(host, second!);
+  expect(local).toHaveLength(1);
+  expect(foreign).toHaveLength(1);
+  const before = savedPartBytes(host, 'word/footnotes.xml');
+  const result = host.execute({
+    operations: [
+      {
+        op: 'resolveRevisionBatch',
+        body: first!,
+        action: 'accept',
+        revisions: [...local, ...foreign],
+      },
+    ],
+  });
+  expect(errorAt(result, 0)).toBe('invalid-handle');
+  expect(result.changed).toBe(false);
+  expect(savedPartBytes(host, 'word/footnotes.xml')).toBe(before);
+});

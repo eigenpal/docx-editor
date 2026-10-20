@@ -52,7 +52,7 @@ describe('table chrome i18n catalogue (Task 9 fix round 1)', () => {
     expect(keyExists(en, 'table.insertColumnRight')).toBe(true);
   });
 
-  test('stable slot ids remain five border/fill controls beyond insert', () => {
+  test('stable slot ids: five border/fill controls, then merge and split', () => {
     const tableGroup = CHROME_GROUPS.find((g) => g.id === 'table');
     expect(tableGroup).toBeDefined();
     expect(TABLE_CHROME_SLOT_IDS).toEqual([
@@ -63,6 +63,10 @@ describe('table chrome i18n catalogue (Task 9 fix round 1)', () => {
       'table.cellFill',
     ]);
     const slots = tableGroup!.controls.map((c) => chromeSlotId(tableGroup!, c));
-    expect(slots.slice(1)).toEqual([...TABLE_CHROME_SLOT_IDS]);
+    expect(slots.slice(1)).toEqual([
+      ...TABLE_CHROME_SLOT_IDS,
+      'table.mergeCells',
+      'table.splitCell',
+    ]);
   });
 });

@@ -46,7 +46,11 @@ export interface ToolbarPartComponent {
  */
 export interface ToolbarSlotPartProps {
   className?: string;
-  /** Render nothing — inside the default arrangement this removes the slot. */
+  /**
+   * Render nothing: inside the default arrangement this removes the slot in place. A named
+   * part is shorthand for the slot override, so `<Toolbar.Bold hidden />` is
+   * `<Toolbar.Slot slotId="text.bold" hidden />`.
+   */
   hidden?: boolean;
 }
 
@@ -57,7 +61,7 @@ export interface ToolbarSlotPartComponent {
 }
 
 function definePart(slot: ChromeSlotId): ToolbarPartComponent {
-  const Part = (props: ToolbarPartProps) => <ToolbarButton slot={slot} {...props} />;
+  const Part = (props: ToolbarPartProps) => <ToolbarButton slotId={slot} {...props} />;
   return Object.assign(Part, { docxSlot: slot });
 }
 
@@ -74,12 +78,15 @@ export const ToolbarAlignLeft = definePart('alignment.left');
 export const ToolbarAlignCenter = definePart('alignment.center');
 export const ToolbarAlignRight = definePart('alignment.right');
 export const ToolbarAlignJustify = definePart('alignment.justify');
+export const ToolbarLeftToRight = definePart('direction.ltr');
+export const ToolbarRightToLeft = definePart('direction.rtl');
 export const ToolbarBulletList = definePart('list.bullet');
 export const ToolbarNumberedList = definePart('list.numbered');
 export const ToolbarOutdent = definePart('list.outdent');
 export const ToolbarIndent = definePart('list.indent');
 export { ToolbarImageInsert, ToolbarImageProperties, ToolbarImageWrap, ToolbarImageAltText };
-export const ToolbarTableInsert = definePart('table.insert');
+export { ToolbarTableInsert } from './TableInsert';
+export { ToolbarAddComment } from './AddComment';
 export const ToolbarComments = definePart('review.comments');
 
 /**

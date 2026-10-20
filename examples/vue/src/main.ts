@@ -9,7 +9,12 @@ const fixtureParam = params.get('fixture') ?? '';
 const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_DOCUMENT;
 
 void (async () => {
-  const ComposedEditorDemo = (await import('./ComposedEditorDemo.vue')).default;
+  const ComposedEditorDemo =
+    params.get('refresh') === '1'
+      ? (await import('./RefreshDemo.vue')).default
+      : params.get('dialogs') === '1'
+        ? (await import('./DialogCustomizationDemo.vue')).default
+        : (await import('./ComposedEditorDemo.vue')).default;
   createApp({
     setup() {
       const fixtureUrl = `${base}${documentName}`;

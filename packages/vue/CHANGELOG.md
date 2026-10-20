@@ -1,5 +1,424 @@
 # @docx-editor.dev/vue
 
+## 2.31.0
+
+### Minor Changes
+
+- f2b71d4: Add `useReviewRailMetrics` for React and Vue to position custom review columns.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/i18n@2.31.0
+
+## 2.30.0
+
+### Minor Changes
+
+- f09b44b: Add the `fontShaping` option, which sets the largest font file that text shaping accepts, separately from font loading limits.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.30.0, @docx-editor.dev/i18n@2.30.0
+
+## 2.29.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.29.0, @docx-editor.dev/i18n@2.29.0
+
+## 2.28.0
+
+### Minor Changes
+
+- 9535470: The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.
+- 9535470: Toolbar and menu popups close when focus moves elsewhere, such as to the find field, and the navigation pane stays docked beside a scrolling review column. `Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take `slotId`; `slot` is deprecated and still works with a development warning, and on `MenuItemProps` and `MenuSubmenuProps` both `slot` and `labelKey` are optional, because `slotId` and `label` can take their place.
+- 9535470: Add toolbar host groups, slot replacement, an Add comment control, and a table-size grid for the toolbar's table button, and make the menu bar move menus that do not fit into one "⋯" menu instead of wrapping by default (set `overflow={false}` to keep wrapping). The context-menu row id `review.comments` is deprecated in favor of `review.addComment`, and the old id still works with a development warning.
+
+### Patch Changes
+
+- 9535470: The page number indicator now stays in view when you place it inside the viewport instead of beside it.
+- 9535470: Editor popups close when focus moves into a host's own modal dialog, and the Vue table toolbar keeps its menus in server-rendered apps after the selection leaves a table and returns.
+- 9535470: Close toolbar dropdowns, pickers, and the More panel when you press Escape in the document, and keep Escape in your own inputs working. Fixes #1151
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/i18n@2.28.0
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.27.0, @docx-editor.dev/i18n@2.27.0
+
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.26.0, @docx-editor.dev/i18n@2.26.0
+
+## 2.25.0
+
+### Patch Changes
+
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+  - @docx-editor.dev/i18n@2.25.0
+
+## 2.24.0
+
+### Patch Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- Updated dependencies [3a8853f]
+- Updated dependencies [de3aac8]
+- Updated dependencies [79d8bc1]
+- Updated dependencies [997814e]
+- Updated dependencies [de3aac8]
+- Updated dependencies [567c1e5]
+  - @docx-editor.dev/core@2.24.0
+  - @docx-editor.dev/i18n@2.24.0
+
+## 2.23.0
+
+### Patch Changes
+
+- 4fafb7c: Some inferred union types in the published declarations list their members in a different order. The types themselves are unchanged.
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [b981ea6]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [0e42c85]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d04902a]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [a2951cf]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [5981e48]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ab460dc]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e633def]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [cee5764]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [390c177]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ae1afe0]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [bf776f2]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d6c75d2]
+- Updated dependencies [2eea4de]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e040ff8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [aab4053]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [9afb832]
+- Updated dependencies [6794f4d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [3b95523]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+  - @docx-editor.dev/core@2.23.0
+  - @docx-editor.dev/i18n@2.23.0
+
+## 2.22.0
+
+### Patch Changes
+
+- 95c792f: Ctrl+S and Ctrl+O now work in the Vue menu bar when the editor is ready before the menu mounts.
+- Updated dependencies [139688b]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [abc656b]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9912e81]
+- Updated dependencies [7ff2004]
+- Updated dependencies [fe66ece]
+- Updated dependencies [ac84ccf]
+- Updated dependencies [cde01d8]
+- Updated dependencies [648f13c]
+- Updated dependencies [95c792f]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [23093e9]
+- Updated dependencies [edfb06d]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [07718bd]
+- Updated dependencies [d98b6d8]
+- Updated dependencies [e6616fe]
+- Updated dependencies [1bb2434]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [139688b]
+- Updated dependencies [a893c05]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [9db7eb3]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+- Updated dependencies [07718bd]
+  - @docx-editor.dev/core@2.22.0
+  - @docx-editor.dev/i18n@2.22.0
+
+## 2.21.1
+
+### Patch Changes
+
+- Updated dependencies [6a7b93a]
+  - @docx-editor.dev/i18n@2.21.1
+
+## 2.21.0
+
+### Patch Changes
+
+- Updated dependencies [ab9548d]
+- Updated dependencies [db1b50c]
+- Updated dependencies [be94e1c]
+- Updated dependencies [f30cd6a]
+- Updated dependencies [424a121]
+- Updated dependencies [87b8b3d]
+- Updated dependencies [06b79d7]
+- Updated dependencies [06b79d7]
+- Updated dependencies [40ef065]
+- Updated dependencies [14a3468]
+- Updated dependencies [424a121]
+- Updated dependencies [2d4e0e7]
+  - @docx-editor.dev/core@2.21.0
+  - @docx-editor.dev/i18n@2.21.0
+
+## 2.20.0
+
+### Patch Changes
+
+- Updated dependencies [a9034d4]
+- Updated dependencies [c10916a]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+- Updated dependencies [a9034d4]
+  - @docx-editor.dev/core@2.20.0
+  - @docx-editor.dev/i18n@2.20.0
+
+## 2.19.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.19.1
+
+## 2.19.0
+
+### Patch Changes
+
+- @docx-editor.dev/core@2.19.0
+  - @docx-editor.dev/i18n@2.19.0
+
+## 2.18.0
+
+### Patch Changes
+
+- 90ea211: Preserve the document's scroll position and text selection when picking or typing a font size, or dismissing the font-size input with Escape. Restore the saved selection when returning focus to the editor from toolbar inputs.
+- Updated dependencies [ded420d]
+- Updated dependencies [d2d3824]
+- Updated dependencies [b5bf09f]
+- Updated dependencies [10a3d41]
+- Updated dependencies [e78dc17]
+- Updated dependencies [84c4622]
+- Updated dependencies [564182f]
+- Updated dependencies [f2dfcac]
+- Updated dependencies [758551b]
+- Updated dependencies [452312f]
+- Updated dependencies [5598465]
+- Updated dependencies [60b9163]
+- Updated dependencies [59520ce]
+- Updated dependencies [95db5eb]
+- Updated dependencies [1e36856]
+- Updated dependencies [6eb1eb4]
+- Updated dependencies [37be540]
+- Updated dependencies [9198848]
+- Updated dependencies [2cea799]
+- Updated dependencies [f23f974]
+- Updated dependencies [7c2b4aa]
+- Updated dependencies [90ea211]
+- Updated dependencies [f10341d]
+- Updated dependencies [040e653]
+  - @docx-editor.dev/core@2.18.0
+  - @docx-editor.dev/i18n@2.18.0
+
+## 2.17.0
+
+### Minor Changes
+
+- d1d8043: Let `navigation` on `<DocxEditor>` pass through pane props so hosts can control open state and the active tab, and focus the find input when that tab is shown.
+
+### Patch Changes
+
+- Updated dependencies [332494b]
+  - @docx-editor.dev/core@2.17.0
+  - @docx-editor.dev/i18n@2.17.0
+
+## 2.16.2
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.16.2
+
+## 2.16.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.16.1
+
+## 2.16.0
+
+### Minor Changes
+
+- 2c7a3c9: Use `locale` for regional date input in text form fields, including dotted dates and year-first patterns. Remove the unreleased `dateInputOrder` prop and setter. Preserve existing dates when locale changes.
+
+  Form-field dialogs and accessibility labels now honor `i18n`, including live catalogue changes.
+
+### Patch Changes
+
+- 0a75175: Preserve pending form values when moving or remounting the editor. Add `PaginatedSurface.save()` to validate pending input and refresh REF fields before serialization. Browser automation and paginated React and Vue refs use this save path. Synchronous saves refuse active edits and destroyed surfaces. Field-exit callbacks can throw or remount the editor without changing date interpretation.
+
+  Preserve nested simple-field results in clipboard HTML. Reject partial field quotes in the server-agent review example before an edit can affect additional text. Refuse tracked deletion or replacement of simple fields with nested result structures instead of leaving old text behind.
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/i18n@2.16.0
+
+## 2.15.1
+
+### Patch changes
+
+- @docx-editor.dev/i18n@2.15.1
+
+## 2.15.0
+
+### Patch changes
+
+- Updated dependencies [5284df5]
+- Updated dependencies [e9baf4d]
+- Updated dependencies [087bb78]
+- Updated dependencies [0d81033]
+- Updated dependencies [a3819aa]
+- Updated dependencies [a53f75c]
+- Updated dependencies [36c1f04]
+- Updated dependencies [8e6133f]
+- Updated dependencies [678fe91]
+- Updated dependencies [cfe3fe1]
+- Updated dependencies [0e1360d]
+- Updated dependencies [2a8e57e]
+  - @docx-editor.dev/core@2.15.0
+  - @docx-editor.dev/i18n@2.15.0
+
 ## 2.14.1
 
 ### Patch Changes

@@ -140,8 +140,7 @@ body {
 }
 
 .agent-thinking,
-.agent-error,
-.capability-note {
+.agent-error {
   font-size: 11px;
   line-height: 1.4;
   color: var(--doc-text-muted, #64748b);
@@ -149,13 +148,6 @@ body {
 
 .agent-error {
   color: #b91c1c;
-}
-
-.capability-note {
-  padding: 9px 14px;
-  border-top: 1px solid var(--doc-border, #e2e8f0);
-  background: #fffbeb;
-  color: #92400e;
 }
 
 .agent-composer {
@@ -210,4 +202,26 @@ body {
     border-top: 1px solid var(--doc-border, #e2e8f0);
     border-left: 0;
   }
+}
+
+.agent-composer > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+}
+
+.agent-composer select {
+  padding: 4px 8px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+}
+
+.agent-tool[data-failed='true'] .agent-tool-dot {
+  background: var(--doc-text-muted);
 }

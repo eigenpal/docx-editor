@@ -1,11 +1,25 @@
 import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
+import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
+import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
+import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
+import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
+import { DocxEditorNotesContextMenu } from '../editor/note-popup-parts';
+import { DocxEditorNotePreview } from '../editor/note-popup-parts';
+import { DocxEditorNotePropertiesDialog } from '../editor/DocxEditorNotes';
+import { DocxEditorImagePropertiesDialog } from '../editor/images/ImageProperties';
+import { DocxEditorImageAltTextPopup } from '../editor/images/ImageAltText';
+import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvalidTextFormFieldDialog';
+import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
+import { createPackagedPopups } from '../editor/popup-config';
+import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
-import { DocxEditorLoading } from '../editor/DocxEditorLoading';
+import { DocxEditorWindow } from '../editor/DocxEditorWindow';
+import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import {
   DocxEditorAuthorStyle,
   DocxEditorColorByChangeType,
@@ -19,17 +33,18 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
-import {
-  ContextMenu as DocxEditorContextMenuCompound,
-  DocxEditorContextMenu,
-} from '../editor/contextmenu';
+import { ContextMenu as DocxEditorContextMenuCompound } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { LocaleProvider, useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -216,6 +231,12 @@ function DocxEditorRefBridge({ forwardedRef }: { forwardedRef: React.Ref<DocxEdi
   return null;
 }
 
+/** Joins class names, dropping empty ones; `undefined` when none remain. */
+function joinClassNames(...names: (string | undefined)[]): string | undefined {
+  const joined = names.filter(Boolean).join(' ');
+  return joined === '' ? undefined : joined;
+}
+
 /**
  * The frame itself. Separated from the exported component only so the `i18n` prop can
  * publish its catalogue ABOVE this body: `useTranslation()` below reads the context its
@@ -226,6 +247,8 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     const {
       document: doc,
       fonts,
+      fontShaping,
+      imageDecodePort,
       className,
       t,
       chrome = true,
@@ -233,6 +256,8 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       onTitleChange,
       renderTitleBarLeft,
       renderTitleBarRight,
+      renderOpenFailureActions,
+      loadingIndicator,
       colorMode = 'light',
       author,
       locale,
@@ -243,6 +268,12 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       modules,
       zoom,
       zoomMode,
+      revisionMarkup,
+      onRevisionMarkupChange,
+      reviewDisplayMode,
+      fieldResults,
+      contentLockPolicy,
+      lockedControlNavigation,
       onReady,
       onChange,
       onFontError,
@@ -252,8 +283,11 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       contextMenu = true,
       menu = true,
       navigation = true,
+      openFailure = true,
       rulers = true,
     } = props;
+    if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
+    warnOpenFailureActions(openFailure, renderOpenFailureActions !== undefined);
 
     // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
     // root's `.dark` class moves — the
@@ -300,20 +334,10 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {chrome ? <DocxEditorHeaderFooterChrome /> : null}
         {chrome ? <DocxEditorNotesChrome /> : null}
         <DocxEditorContent />
-        <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
-        <DocxEditorEquation />
-        {contextMenu === false ? null : (
-          <DocxEditorContextMenu
-            t={translate}
-            {...(typeof contextMenu === 'object' ? contextMenu : {})}
-          />
-        )}
-        <DocxEditorContentControl />
         {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
-          twin it belongs inside the scroller. aria-hidden: it carries no
-          operable handles, unlike the horizontal one's indent sliders. */}
+          twin it belongs inside the scroller. Its margin handles remain accessible. */}
         {rulers && chrome ? (
-          <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
+          <div style={VERTICAL_RULER_STYLE}>
             <DocxEditorVerticalRuler />
           </div>
         ) : null}
@@ -391,7 +415,12 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
           leaves the page alone until the window is too narrow to hold both. Without a
           pane this wrapper is an inert flex row around the same viewport. */}
         <div style={WORKSPACE_STYLE}>
-          {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
+          {navigation === false ? null : (
+            <DocxEditorNavigationCompound
+              t={translate}
+              {...(typeof navigation === 'object' ? navigation : {})}
+            />
+          )}
           {viewport}
           <PageNumberTranslationContext.Provider value={translate}>
             <DocxEditorPageNumber />
@@ -401,7 +430,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
             one opens — the engine mounts big files behind one painted frame so this
             overlay can paint instead of the page freezing — and renders nothing
             otherwise, so it costs the loaded editor nothing. */}
-          <DocxEditorLoading overlay />
+          <DocxEditorLoading overlay indicator={loadingIndicator} />
         </div>
       </div>
     ) : (
@@ -413,18 +442,27 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       [translate]
     );
 
-    // Root owns the facade: created once per document/fonts identity, zoom follows
-    // through `setZoom`, callbacks are read at their latest identity.
+    // Root owns the facade: created once per document identity, fonts follow
+    // through `setFonts` and zoom through `setZoom`; callbacks are read at their latest identity.
     return (
       <DocxEditorRoot
+        popups={createPackagedPopups(props.popups, hyperlinkPopup, contextMenu, translate)}
         {...(doc !== undefined ? { document: doc } : {})}
         {...(fonts ? { fonts } : {})}
+        {...(fontShaping ? { fontShaping } : {})}
+        {...(imageDecodePort ? { imageDecodePort } : {})}
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}
         mode={mode}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}
+        revisionMarkup={revisionMarkup}
+        onRevisionMarkupChange={onRevisionMarkupChange}
+        reviewDisplayMode={reviewDisplayMode}
+        {...(fieldResults !== undefined ? { fieldResults } : {})}
+        {...(contentLockPolicy !== undefined ? { contentLockPolicy } : {})}
+        {...(lockedControlNavigation !== undefined ? { lockedControlNavigation } : {})}
         {...(zoomMode !== undefined ? { zoomMode } : {})}
         tableInteractionLabel={tableInteractionLabel}
         {...(onReady ? { onReady } : {})}
@@ -435,6 +473,19 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
           With `chrome={false}` there is none, so the parts must self-scope. */}
         <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
+        {/* A modal, so it shows with or without chrome: a refused open leaves blank pages. */}
+        {openFailure === false ? null : (
+          <DocxEditorOpenFailure
+            t={translate}
+            {...(typeof openFailure === 'object' ? openFailure : {})}
+            {...(renderOpenFailureActions ? { actions: renderOpenFailureActions } : {})}
+            // Outside the chrome wrapper, so the dialog carries the colour mode itself.
+            className={joinClassNames(
+              isDark ? 'dark' : undefined,
+              typeof openFailure === 'object' ? openFailure.className : undefined
+            )}
+          />
+        )}
       </DocxEditorRoot>
     );
   }
@@ -468,6 +519,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  /** The editor panel in a pop-out window while `open`; see the pop-out guide. */
+  readonly Window: typeof DocxEditorWindow;
   readonly Toolbar: typeof DocxEditorToolbar;
   /**
    * The menu bar — File · Format · Insert · Help — with its parts as statics (`.File`,
@@ -478,6 +531,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+  readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
+  readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
@@ -492,14 +547,30 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * default; `navigation={false}` removes it.
    */
   readonly Navigation: typeof DocxEditorNavigationCompound;
+  /** File export progress and errors, configured through popups.export. */
+  readonly ExportDialog: typeof DocxEditorExportDialog;
+  /** File print progress and errors, configured through popups.print. */
+  readonly PrintDialog: typeof DocxEditorPrintDialog;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** Watermark dialog — none, picture or text — applied as one undo step. */
+  readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
+  /** Bookmark dialog — list, add, delete and go to bookmarks. */
+  readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+  /** Split cells dialog — split the cell at the selection into columns and rows. */
+  readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
   /** Word-style notice when document fonts render in substitute faces. */
   readonly FontNotice: typeof DocxEditorFontNotice;
+  /**
+   * The dialog that explains a file the editor refused to open. Mounted by default;
+   * `openFailure={false}` removes it.
+   */
+  readonly OpenFailure: typeof DocxEditorOpenFailure;
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
@@ -522,6 +593,13 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * remove-keeping-content. Mounted by default inside the viewport; opens from the
    * `contentControl.inspector` chrome slot.
    */
+  readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
+  readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
+  readonly ImageAltTextPopup: typeof DocxEditorImageAltTextPopup;
+  readonly ImagePropertiesDialog: typeof DocxEditorImagePropertiesDialog;
+  readonly NotePropertiesDialog: typeof DocxEditorNotePropertiesDialog;
+  readonly NotePreview: typeof DocxEditorNotePreview;
+  readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
 }
 
@@ -529,24 +607,41 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Window: DocxEditorWindow,
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
   ColorByChangeType: DocxEditorColorByChangeType,
+  RevisionMarkup: DocxEditorRevisionMarkup,
+  RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
   UnsupportedElement: DocxEditorUnsupportedElement,
   AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigationCompound,
+  ExportDialog: DocxEditorExportDialog,
+  PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  WatermarkDialog: DocxEditorWatermarkDialog,
+  BookmarkDialog: DocxEditorBookmarkDialog,
+  SplitCellDialog: DocxEditorSplitCellDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
+  OpenFailure: DocxEditorOpenFailure,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   Equation: DocxEditorEquation,
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenuCompound,
+  ContentControlWidget: DocxEditorContentControlWidget,
+  InvalidTextFormFieldDialog: DocxEditorInvalidTextFormFieldDialog,
+  ImageAltTextPopup: DocxEditorImageAltTextPopup,
+  ImagePropertiesDialog: DocxEditorImagePropertiesDialog,
+  NotePropertiesDialog: DocxEditorNotePropertiesDialog,
+  NotePreview: DocxEditorNotePreview,
+  NotesContextMenu: DocxEditorNotesContextMenu,
   ContentControl: DocxEditorContentControl,
 });

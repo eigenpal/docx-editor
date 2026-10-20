@@ -46,11 +46,18 @@ export function openTreeSession(bytes: Uint8Array, options?: OpenTreeSessionOpti
 export type OpenTreeSessionResult = {
     readonly ok: true;
     readonly session: TreeDocxSession;
-} | {
+} | Extract<OoxmlPackageResult, {
+    readonly ok: false;
+}> | {
     readonly detail?: string;
     readonly ok: false;
-    readonly reason: TreeSessionRejection;
+    readonly reason: 'no-main-document-tree';
 };
+
+// @public
+export interface PackageWriteOptions {
+    readonly historyToken?: HistoryGroup;
+}
 
 // @public
 export interface ParagraphAttrs {
@@ -90,7 +97,15 @@ export type StoryScope = {
 export type StoryTargetRejection = 'unknown-scope' | 'dangling-relationship' | 'wrong-relationship-type' | 'external-relationship' | 'bad-relationship-target' | 'missing-part' | 'not-a-story-part' | 'too-many-story-stores';
 
 // @public
-export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'>;
+export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'> & {
+    readonly historyGroup?: HistoryGroup;
+    readonly historyToken?: HistoryGroup;
+    readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+    readonly partOps?: readonly {
+        readonly ops: readonly TreeDocOp[];
+        readonly partName: string;
+    }[];
+};
 
 // @public
 export interface TreeApplyResult {
@@ -133,11 +148,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
-    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;
         readonly parentCommentId?: string;
-    }[], scope?: StoryScope, noteId?: number): boolean;
+    }[], scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
@@ -156,11 +171,12 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     ensureListDefinition(kind: ListKind): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
     findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+    findText(queries: readonly string[], options?: DocumentSearchOptions): readonly DocumentSearchResult[];
     hasReviewContent(): boolean;
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
-    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope, options?: PackageWriteOptions): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     nodeIdOf(paraId: string): string | null;
     numberingRoot(): OoxmlElement | null;
@@ -188,12 +204,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
         start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope,
-    actorId?: string): string | null;
+    actorId?: string, options?: PackageWriteOptions): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
-    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    saveSteps(): Generator<void, Uint8Array>;
+    setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;
@@ -201,6 +218,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
     sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
+    symbolFontFamilies(): readonly string[];
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }
@@ -244,7 +262,5 @@ export interface TreeSurfaceState {
 
 // @public
 export function treeToDoc(part: OoxmlPart): Node_2;
-
-// (No @packageDocumentation comment for this package)
 
 ```

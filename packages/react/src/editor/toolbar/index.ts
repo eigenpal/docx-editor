@@ -7,6 +7,7 @@ export {
 } from './DocxEditorToolbar';
 export { ToolbarButton, type ToolbarButtonProps } from './ToolbarButton';
 export { ToolbarAction, type ToolbarActionProps } from './ToolbarAction';
+export { type DocxEditorToolbarGroupProps, type DocxEditorToolbarSlotProps } from './ToolbarGroup';
 export {
   ToolbarSeparator,
   type ToolbarPartComponent,
@@ -50,6 +51,7 @@ export {
   type TableChromePartProps,
 } from './TableControls';
 export { TableChromeProvider } from './useTableChrome';
+export { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 export type { ToolbarTranslate } from './toolbar-context';
 export type { ToolbarReviewersProps } from './Reviewers';
 export {

@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Enter, Backspace, and typing re-walk whole-document structures on every edit, and a geometry read inside a commit paints twice.",
+  "after": "The same edits produce the same trees, operations, and digests, and reuse memoized per-node and per-geometry results.",
+  "reason": "Every change is a cache or a paint-scheduling change. Namespace binding returns identical nodes, stableHash keeps the same 64-bit digest, and no operation, update, or serialized field changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/edit-namespace-scope.test.ts",
+    "packages/core/src/store/__tests__/comparators.test.ts",
+    "packages/core/src/store/__tests__/comment-anchor-memo.test.ts"
+  ],
+  "changeset": "faster-structural-edits",
+  "migration": null
+}

@@ -59,7 +59,64 @@ describe('inserting text at a position', () => {
     expect(paragraphTexts(host, body)).toEqual(['<one', 'two>']);
   });
 
-  test('two inserts into one paragraph shift each other, as two sequential edits would', () => {
+  test('uses raw endpoints around a field while display reads show its result', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const paragraph = `<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`;
+
+    for (const [at, expected] of [
+      ['start', '<A1 January 2030Z'],
+      ['end', 'A1 January 2030Z>'],
+    ] as const) {
+      const host = open(docx(paragraph));
+      const body = bodyOf(host);
+      const [handle] = paragraphsOf(host, body);
+      const response = host.execute({
+        operations: [
+          { op: 'insertText', at: { paragraph: handle!, at }, text: at === 'start' ? '<' : '>' },
+        ],
+      });
+
+      expect(response.ok).toBe(true);
+      expect(paragraphTexts(host, body)).toEqual([expected]);
+    }
+
+    const host = open(docx(paragraph));
+    const body = bodyOf(host);
+    const [handle] = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { paragraph: handle! }, text: 'replacement' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['replacement']);
+  });
+
+  test('replaces the field atom behind a visible search result', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(docx(`<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`));
+    const body = bodyOf(host);
+    const [match] = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: 'January' }] }),
+      0
+    );
+
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: match!, text: 'new' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['AnewZ']);
+  });
+
+  test('two inserts retain their positions in the batch snapshot', () => {
     const host = open(docx(p('abcd')));
     const body = bodyOf(host);
     const [first] = paragraphsOf(host, body) as [AutomationHandle];
@@ -70,9 +127,9 @@ describe('inserting text at a position', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    // Both offsets were planned against `abcd`; applied in order, the second lands after the
-    // first has already shifted it. That is one transaction, not two independent writes.
-    expect(paragraphTexts(host, body)).toEqual(['1abc2d']);
+    // Both offsets address `abcd`. Rebase the later operation so its source end
+    // remains the end after the first insertion changes the live paragraph.
+    expect(paragraphTexts(host, body)).toEqual(['1abcd2']);
   });
 
   test('refuses text carrying a paragraph mark rather than writing a character that lies', () => {

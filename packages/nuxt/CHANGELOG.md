@@ -1,5 +1,57 @@
 # @docx-editor.dev/nuxt
 
+## 2.19.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.19.0
+
+## 2.18.0
+
+### Patch Changes
+
+- Updated dependencies [90ea211]
+  - @docx-editor.dev/vue@2.18.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [d1d8043]
+  - @docx-editor.dev/vue@2.17.0
+
+## 2.16.2
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.16.2
+
+## 2.16.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.16.1
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [0a75175]
+  - @docx-editor.dev/vue@2.16.0
+
+## 2.15.1
+
+### Patch changes
+
+- @docx-editor.dev/vue@2.15.1
+
+## 2.15.0
+
+### Patch changes
+
+- @docx-editor.dev/vue@2.15.0
+
 ## 2.14.1
 
 ### Patch Changes

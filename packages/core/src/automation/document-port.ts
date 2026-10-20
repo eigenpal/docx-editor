@@ -15,6 +15,7 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
+import type { AutomationStoryId } from './stories.ts';
 
 export type { InsertCustomNodeWrite };
 
@@ -82,7 +83,34 @@ export type AutomationStagedOps = (
   relate: (url: string) => string | null
 ) => readonly TreeDocOp[] | null;
 
+/** Pure package updates committed atomically with the batch's tree operations. */
+export type AutomationPackageEdit = (pkg: OoxmlPackage) => OoxmlPackage;
+
 export interface AutomationDocumentPort {
+  prepare?(request: import('./protocol.ts').AutomationBatchRequest): Promise<void>;
+  fieldPageContext?(
+    story: import('./stories.ts').AutomationStoryId,
+    paragraphId: string,
+    fieldNodeId: string
+  ): { pageNumber: number; pageNumberText?: string; pageCount: number } | null;
+  /** This owner supports host-local Office-shaped tracking independently of browser UI modes. */
+  readonly localChangeTracking?: true;
+  /** True when a live collaboration session replicates package edits. */
+  readonly collaborative?: () => boolean;
+  /**
+   * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
+   *
+   * Return exactly the actor that `apply` binds for its transaction (`TransactOptions.actorId`
+   * or `runWithTransactionActor`). The host plans each operation under it, because a planner
+   * previews package allocations (a picture's `wp:docPr/@id`, relationship id and media part
+   * name) that the commit then makes again. A different actor makes those commits refuse as
+   * `package-changed`.
+   */
+  readonly allocationActor?: () => string | undefined;
+  /** False when concurrent character insertion cannot retain tracked replacement coverage. */
+  readonly trackedRangeReplacement?: () => boolean;
+  /** The owner UI requires edits to be tracked even when this automation runtime is Off. */
+  readonly suggesting?: () => boolean;
   /**
    * Monotonic document revision. One committed batch moves it exactly once.
    *
@@ -110,6 +138,15 @@ export interface AutomationDocumentPort {
    */
   revisionDisplayMode?(): FormattingDisplayMode;
   /**
+   * Where a replacement for `[start, end)` of a paragraph lands under the owner's editing
+   * mode, or null when the edit would not be tracked — the surface's own landing rule.
+   *
+   * A scripted `Replace` in suggesting mode strikes the words and must put the new text after
+   * them, as typing does; the planner has no editing mode of its own, so it asks. Absent on a
+   * headless owner, which writes nothing tracked.
+   */
+  replacementLanding?(paragraphId: string, start: number, end: number): number | null;
+  /**
    * Commit ops as ONE transaction against ONE story.
    *
    * Ordered and atomic is the port's contract, not the caller's convention: on any rejection
@@ -123,7 +160,12 @@ export interface AutomationDocumentPort {
    * The ops arrive as {@link AutomationStagedOps} so the relationship an external hyperlink needs is
    * minted here, INSIDE the owner's write gate, rather than while the batch was still being planned.
    */
-  apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult;
+  apply(
+    staged: AutomationStagedOps,
+    scope: StoryScope,
+    packageEdits?: readonly AutomationPackageEdit[],
+    requiresReview?: boolean
+  ): AutomationPortApplyResult;
   /**
    * Commit ONE package-level op — a note or furniture lifecycle — as its own transaction.
    *
@@ -179,7 +221,13 @@ export interface AutomationDocumentPort {
       readonly end: { readonly paragraphId: string; readonly offset: number };
     },
     mode: 'select' | 'start' | 'end'
-  ): void;
+  ): boolean;
+  /**
+   * Why `select` cannot place a caret at this paragraph of this story now, or null. A host that
+   * cannot open a header, footer or note (a read-only editor, or one no page shows) answers
+   * here, so the sync refuses with a reason rather than moving nothing.
+   */
+  selectRefusal?(story: AutomationStoryId, paragraphId: string): string | null;
   /** Fires once per committed change. */
   subscribe(listener: () => void): () => void;
   /** Release what the port holds. Idempotent. */

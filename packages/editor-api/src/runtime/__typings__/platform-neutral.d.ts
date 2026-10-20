@@ -40,6 +40,10 @@ declare class TextEncoder {
 
 declare class URL {
   constructor(url: string, base?: string);
+  readonly search: string;
+  readonly hash: string;
+  readonly host: string;
+  readonly pathname: string;
   readonly protocol: string;
   readonly username: string;
   readonly password: string;
@@ -51,6 +55,20 @@ declare class AbortSignal {
   readonly aborted: boolean;
   readonly reason: unknown;
   throwIfAborted(): void;
-  addEventListener(type: 'abort', listener: () => void): void;
+  addEventListener(
+    type: 'abort',
+    listener: () => void,
+    options?: { readonly once?: boolean }
+  ): void;
   removeEventListener(type: 'abort', listener: () => void): void;
 }
+
+// Optional measured pagination owns cancellation and bounded resource-wait timers.
+// These standard globals exist in workers and server runtimes; no DOM elements are declared.
+declare class AbortController {
+  readonly signal: AbortSignal;
+  abort(reason?: unknown): void;
+}
+declare function setTimeout(callback: () => void, delay?: number): number;
+declare function clearTimeout(handle: number): void;
+declare const console: { warn(...values: unknown[]): void };

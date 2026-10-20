@@ -1,0 +1,121 @@
+---
+title: 'Editor mount modes'
+description: 'Mount one editor inline, in an iframe, or in a pop-out window, keep it detached, or run it without a DOM, and move it between places without losing state.'
+category: 'Reference'
+seoTitle: 'Editor mount modes'
+---
+
+An editor instance holds its document, undo history, selection, and collaboration session. Where it paints is separate from that state. You can create the instance before it has a place to paint, attach it to an element, take it out again, and attach it somewhere else, including another window. The state stays with the instance throughout.
+
+This page describes where an editor can live. It is not about the editing, suggesting, and viewing modes that control how edits are written. For more information about those, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+## Choose a mount mode
+
+The following table lists the places an editor can live and what you call for each one:
+
+| Mode | When to use it | What to call | What survives |
+| --- | --- | --- | --- |
+| Inline | The editor renders in your page. | `attach(element)`, or `container` at creation | Everything, while it stays mounted |
+| Not yet mounted | You create the editor before its element exists, as the React and Vue adapters do. | `createDocxEditor()` without `container`, then `attach(element)` | The document waits and opens on the first `attach` |
+| Detached | The editor leaves one place before it enters another. | `detach()` | Document, undo history, selection, and collaboration session |
+| Iframe | The editor renders in a same-origin iframe. | `attach(element)` with an element of the iframe's document | Everything, across the move |
+| Pop-out window | The editor renders in its own browser window. | `DocxEditor.Window`, `DocxEditorWindow`, or `openEditorWindow()` | Everything, across the move |
+| Without a DOM | A server or a job edits the document with no page. | `DocxEditor.createServer()` from `@docx-editor.dev/editor-api` | Not applicable: there is nothing to mount |
+
+A detached editor still saves, runs commands, and receives collaboration edits. It paints again on the next `attach`. A `load` while the editor is detached replaces the kept document.
+
+## Move between modes
+
+Call `attach(element)` on an editor that already has an open document to move it. The editor moves the painted pages into `element` instead of reopening the document from saved bytes. The following move with it:
+
+- The undo history, the selection, and other editing state such as an armed format painter.
+- Any collaboration session. Remote edits keep arriving during and after the move.
+- The reading position. The editor scrolls the new viewport to the place the reader was.
+- Keyboard focus, when the pages had it before the move or the `detach()`. They also count as focused when they lost focus a moment before the move to a control that is not a text field, such as a **Pop out** button. Pass `attach(element, { focus: false })` to leave focus where it is, or `{ focus: true }` to always focus the pages.
+- Listeners, timers, and observers for focus, selection, pointer drags, scrolling, and resizing. They follow the new element's window.
+- The font faces the editor registers, such as embedded fonts.
+
+A move ends anything that belongs to the old window: open menus and popovers, the revision markup settings dialog, a picture picker, and a pointer drag in progress.
+
+The following table summarizes the lifecycle calls:
+
+| Call                        | Effect                                                         |
+| --------------------------- | -------------------------------------------------------------- |
+| `attach(element, options?)` | Mounts the document, or moves the open one into `element`      |
+| `detach()`                  | Takes the editor out of its element and keeps all of its state |
+| `destroy()`                 | Releases the editor. It cannot be attached again               |
+
+An element whose window has closed, or that has no window, is refused with an `invalidTarget` error, and the editor stays where it is.
+
+## Move an editor without an adapter
+
+The following example creates an editor, shows it in the page, and then moves it into an element of a same-origin iframe. The undo history and the selection come with it:
+
+```ts
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+
+declare const bytes: Uint8Array;
+declare const frame: HTMLIFrameElement;
+
+const editor = createDocxEditor({ document: bytes });
+editor.attach(document.getElementById('editor')!);
+
+// Later: move the same editor into the iframe.
+const slot = frame.contentDocument!.createElement('div');
+frame.contentDocument!.body.append(slot);
+editor.detach();
+editor.attach(slot);
+```
+
+You can also call `attach(slot)` without the `detach()`. Both forms move the editor. The iframe needs the editor stylesheet. To copy your page's styles into it, call `copyEditorStyles(document, frame.contentDocument!)`.
+
+For more information about pop-out windows, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+
+## Build chrome that works in every mode
+
+In a pop-out window or an iframe, your script's global `document` and `window` belong to the opener, not to the document the editor paints in. Custom chrome that listens on the document, reads focus, measures the viewport, runs timers, or uses the clipboard must use the editor's window instead:
+
+| Need | Use |
+| --- | --- |
+| The document or window of an element you render | `hostDocumentOf(element)`, `hostWindowOf(element)` |
+| The document, window, or element the editor is mounted in | `editorHostDocument(editor)`, `editorHostWindow(editor)`, `editorHostElement(editor)` |
+| Timers and frames that follow the editor's window | `hostTimers(() => element)` |
+| A notice when the editor changes document | The `hostChange` event |
+| A reactive document in React or Vue | `useEditorHostDocument()` |
+| A type check for an element or event from any window | `isElementNode`, `isHTMLElementNode`, `isKeyboardEvent`, `isPointerEvent` |
+
+A check such as `node instanceof HTMLElement` is `false` for an element of another window, so use the type checks instead. The helpers come from `@docx-editor.dev/core/editor`, and the hooks come from the React and Vue adapters.
+
+The following example binds a keyboard shortcut to the editor's current document and moves it when the editor moves:
+
+```ts
+import { editorHostElement, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+
+declare const editor: DocxEditorInstance;
+declare function onShortcut(event: KeyboardEvent): void;
+
+let bound: Document | null = null;
+function bind(document: Document | null) {
+  bound?.removeEventListener('keydown', onShortcut);
+  bound = document;
+  bound?.addEventListener('keydown', onShortcut);
+}
+
+const unsubscribe = editor.on('hostChange', ({ document }) => bind(document));
+bind(editorHostElement(editor)?.ownerDocument ?? null);
+
+// Call when your custom chrome unmounts.
+function dispose() {
+  unsubscribe();
+  bind(null);
+}
+```
+
+While the editor is detached, `hostChange` reports `null`.
+
+## Limits
+
+- The other document must have the same origin as your page. The browser blocks scripts from rendering into a cross-origin window or iframe.
+- An iframe or a pop-out starts without styles. Copy them yourself, or use `copyEditorStyles()`. `DocxEditor.Window`, `DocxEditorWindow`, and `openEditorWindow()` do this for you.
+- In Vue, move the editor by remounting the content, for example with `v-if`. A `Teleport` that only changes its `to` target moves the pages, but a popover or menu that is open at that moment keeps listening to the old window until it closes.
+- A detached editor keeps its document and layout in memory. Call `destroy()` to release them.

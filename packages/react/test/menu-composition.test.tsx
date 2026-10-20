@@ -15,6 +15,7 @@ import './dom-setup.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+import { MenuParagraphDialog } from '../src/editor/menu/parts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
@@ -171,14 +172,14 @@ describe('the default bar', () => {
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
-  test('the File menu is Open · Save · Page setup, and never Print', () => {
+  test('the File menu is Open · Save · Print · Page setup', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.file');
     const slots = [...view.container.querySelectorAll('[role="menu"] [data-slot]')].map((element) =>
       element.getAttribute('data-slot')
     );
-    expect(slots).toEqual(['file.open', 'file.save', 'file.pageSetup']);
-    expect(view.container.textContent).not.toContain(label('toolbar.print' as TranslationKey));
+    expect(slots).toEqual(['file.open', 'file.save', 'file.print', 'file.pageSetup']);
+    expect(view.container.textContent).toContain(label('toolbar.print' as TranslationKey));
   });
 
   test('a menu child overrides its menu IN PLACE; `hidden` removes it', () => {
@@ -710,7 +711,16 @@ describe('chrome contracts', () => {
     // The whole registry arrangement is still there, TOC still in its own position.
     // Table is absent from this list because it is a live size grid, which is a submenu and
     // carries no row slot of its own — the arrangement around it is what this pins down.
-    expect(slots).toEqual(['image.insert', 'insert.footnote', 'insert.endnote', 'insert.toc']);
+    expect(slots).toEqual([
+      'image.insert',
+      'insert.textBox',
+      'insert.footnote',
+      'insert.endnote',
+      'insert.toc',
+      'insert.bookmark',
+      'insert.goToBookmark',
+      'insert.watermark',
+    ]);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.
     expect(view.container.textContent).toContain('Clause library');
@@ -795,5 +805,105 @@ describe('chrome contracts', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+});
+
+test('File > Export reports missing converters after the menu closes', async () => {
+  const { view } = mountMenu(<DocxEditorMenu />);
+  for (const [slot, packageName] of [
+    ['file.exportMarkdown', 'docx-to-markdown'],
+    ['file.exportPdf', 'docx-to-pdf'],
+  ]) {
+    openMenu(view, 'toolbar.file');
+    openSubmenu(view, 'toolbar.export');
+    await act(async () => {
+      fireEvent.click(row(view, slot!));
+    });
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(packageName!);
+    expect(view.container.querySelector('[data-menu="file"] [role="menu"]')).toBeNull();
+    act(() => fireEvent.click(view.container.querySelector('[data-docx-dialog="export"] button')!));
+  }
+});
+
+test('File row overrides reach export submenu slots without duplicate rows', () => {
+  const { view } = mountMenu(
+    <DocxEditorMenu>
+      <DocxEditorMenu.File>
+        <DocxEditorMenu.ExportPdf hidden />
+        <DocxEditorMenu.ExportMarkdown className="custom-export" />
+      </DocxEditorMenu.File>
+    </DocxEditorMenu>
+  );
+  openMenu(view, 'toolbar.file');
+  openSubmenu(view, 'toolbar.export');
+  expect(view.container.querySelectorAll('[data-slot="file.exportPdf"]')).toHaveLength(0);
+  const rows = view.container.querySelectorAll('[data-slot="file.exportMarkdown"]');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.classList.contains('custom-export')).toBe(true);
+  expect(rows[0]?.closest('.docx-menubar__submenu')).not.toBeNull();
+});
+
+test('Markdown export shows a dismissible dialog and reports a later failure', async () => {
+  let fail!: (reason: Error) => void;
+  const conversion = new Promise<never>((_resolve, reject) => {
+    fail = reject;
+  });
+  const { view } = mountMenu(<DocxEditorMenu exporters={{ markdown: () => conversion }} />);
+  openMenu(view, 'toolbar.file');
+  openSubmenu(view, 'toolbar.export');
+  await act(async () => {
+    fireEvent.click(row(view, 'file.exportMarkdown'));
+  });
+  expect(view.getByRole('dialog').getAttribute('aria-label')).toBe('Exporting Markdown…');
+  act(() => {
+    fireEvent.click(view.getByRole('button', { name: 'Continue editing' }));
+  });
+  expect(view.queryByRole('dialog')).toBeNull();
+  await act(async () => {
+    fail(new Error('Conversion unavailable'));
+  });
+  expect(view.getByRole('alertdialog').getAttribute('aria-label')).toBe('Markdown export failed');
+  expect(view.getByRole('alert').textContent).toContain('Conversion unavailable');
+  act(() => {
+    fireEvent.click(view.getByRole('button', { name: 'Close' }));
+  });
+  expect(view.queryByRole('alertdialog')).toBeNull();
+});
+
+describe('direct menu actions', () => {
+  test('remain tabbable and update command state without reopening a menu', async () => {
+    const { view, editor } = mountMenu(
+      <DocxEditorMenu preset={false}>
+        <DocxEditorMenu.PageSetup />
+        <MenuParagraphDialog />
+        <DocxEditorMenu.File />
+      </DocxEditorMenu>
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const page = row(view, 'file.pageSetup');
+    const paragraph = row(view, 'paragraph.dialog');
+    for (const action of [page, paragraph]) {
+      expect(action.tabIndex).toBe(0);
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    }
+    await act(async () => {
+      editor().exec({ type: 'setEditingMode', mode: 'viewing' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).toBe('true');
+    await act(async () => {
+      editor().exec({ type: 'setEditingMode', mode: 'editing' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    openMenu(view, 'toolbar.file');
+    const popup = view.container.querySelector('[role="menu"]')!;
+    expect(popup.querySelector<HTMLButtonElement>('[data-slot="file.pageSetup"]')!.tabIndex).toBe(
+      -1
+    );
   });
 });

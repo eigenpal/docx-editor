@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
@@ -14,19 +18,26 @@
 
 # @docx-editor.dev/react
 
-WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the real paginated
-layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion
-backend: parsing and serialization both happen client-side.
+A visual `.docx` editor for React. Open a DOCX document, edit its paginated layout, and save a DOCX file. Parsing and serialization run in the browser.
 
-Saving has a lossless semantic round-trip. Untouched content, unsupported OOXML, and package
-payloads survive editing and save. Two oracles gate that in CI, so opening a document here
-cannot quietly destroy it.
+Saving preserves untouched content, unsupported OOXML, and package payloads. Continuous integration (CI) checks document structure and save-and-reopen behavior.
+
+Install the adapter and its required engine peer:
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
+## Features
+
+- [Open, edit, and save documents](https://www.docx-editor.dev/docs/2.x/react/props).
+- [Compose your editor interface](https://www.docx-editor.dev/docs/2.x/react/composition).
+- [Connect controls through hooks](https://www.docx-editor.dev/docs/2.x/react/hooks).
+- [Translate editor controls](https://www.docx-editor.dev/docs/2.x/i18n).
+
 ## Quick start
+
+Import the stylesheet once and give the editor a container with a defined height:
 
 ```tsx
 import { useState } from 'react';
@@ -54,17 +65,13 @@ export function App() {
 }
 ```
 
-`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane,
-context menu, and the painted document. It fills its parent, so give it a box with a real
-height, and import the stylesheet once.
+`<DocxEditor>` includes the title bar, menu, toolbar, navigation pane, context menu, and document pages. It fills its parent container.
 
-> **Next.js / SSR:** the editor measures text in the DOM at mount, so render it client-side
-> (`dynamic(..., { ssr: false })`).
+For Next.js and server-side rendering (SSR), load the editor in the browser. Use `dynamic(..., { ssr: false })` inside a Client Component.
 
 ## Build your own UI
 
-The packaged chrome is one arrangement of public parts. Every packaged control uses the same
-hooks you would; there is no private API behind it.
+Use components and hooks to build your own controls. Packaged controls use the same public API.
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -78,7 +85,7 @@ function BoldButton() {
       disabled={!bold.isEnabled}
       data-active={bold.isActive || undefined}
     >
-      B
+      Bold
     </button>
   );
 }
@@ -95,38 +102,54 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`Root` owns the editor instance, `Viewport` is the scroll container, `Content` is where pages
-are painted. Everything else (toolbar, menu, rulers, navigation, link popover, context menu)
-is optional and placed by name.
+`Root` owns the editor instance. `Viewport` supplies scrolling, and `Content` displays pages. Add other controls as needed.
 
-The customization ladder, in order: `className` and `data-active` → the `icon` prop →
-`asChild` (merge behavior onto your own element) → in-place slot override (`hidden`,
-`preset={false}`) → the hooks.
+Use `className`, `data-active`, and `icon` for appearance changes. Use `asChild` to apply behavior to your own element. Use `hidden` or `preset={false}` to replace controls, or build controls with hooks.
 
 ## Hooks
 
-| Hook                                           | What it gives you                                    |
-| ---------------------------------------------- | ---------------------------------------------------- |
-| `useEditorCommand(slot)`                       | `execute`, `isActive`, `isEnabled`, `disabledReason` |
-| `useEditorState(selector)`                     | A memoized slice of the editor snapshot              |
-| `useDocxEditor()`                              | The editor instance, or `null` before mount          |
-| `useEditorEvent(event, fn)`                    | `change`, `selectionChange`, `error`                 |
-| `useFontFamily()` / `useParagraphStyle()`      | Value controls: current value, options, setter       |
-| `usePageSetup()`                               | Margins, orientation, paper size                     |
-| `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless                        |
-| `useContentControl()`                          | Word content controls at the caret                   |
+| Hook | What it gives you |
+| --- | --- |
+| `useEditorCommand(slot)` | `execute`, `isActive`, `isEnabled`, `disabledReason` |
+| `useEditorState(selector)` | A memoized slice of the editor snapshot |
+| `useDocxEditor()` | The editor instance, or `null` before mount |
+| `useEditorEvent(event, fn)` | `change`, `selectionChange`, `error` |
+| `useFontFamily()` / `useParagraphStyle()` | Value controls: current value, options, setter |
+| `usePageSetup()` | Margins, orientation, paper size |
+| `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless |
+| `useContentControl()` | Content controls at the caret |
 
-Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the
-engine. Read `isEnabled` and show `disabledReason`.
+Read `isEnabled` to set the disabled state. Show `disabledReason` when the command is unavailable.
 
 ## Companion packages
 
-- [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked
-  changes, comments, custom nodes
-- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) —
-  Office.js-compatible editing API, on a server or against an open editor
-- [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine
-  this adapter renders
+- [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked changes, comments, custom nodes
+- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — A supported subset of the Office.js API for server and browser editing
+- [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine this adapter renders
+
+## Which API for which job
+
+| Job | Use |
+| --- | --- |
+| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
+| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+
+| Task | Browser host (React or Vue) | Headless, server, or agent |
+| --- | --- | --- |
+| [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
+| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `proposeRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
+| [Open or reveal a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
+| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
+
+The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+
+This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
 
 ## Documentation
 
@@ -134,6 +157,8 @@ engine. Read `isEnabled` and show `disabledReason`.
 - [Composition](https://www.docx-editor.dev/docs/2.x/react/composition)
 - [Hooks](https://www.docx-editor.dev/docs/2.x/react/hooks)
 - [Props and ref](https://www.docx-editor.dev/docs/2.x/react/props)
+- [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export)
+- [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print)
 
 ## License
 

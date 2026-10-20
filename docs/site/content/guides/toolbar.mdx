@@ -1,13 +1,36 @@
 ---
 title: 'Toolbar'
-description: 'Customize the editor chrome in React or Vue: keep the packaged toolbar and title bar, override a single slot, or compose your own from the parts.'
+description: 'Compare toolbar designs, replace controls, and build custom editor interfaces in React and Vue.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The packaged host has two levels of chrome: a title bar (`title`, the title bar slots, and `menu`) and a formatting bar (the `Toolbar` part). Both the packaged host and the lower-level compounds live on the adapter package root.
+Keep the packaged toolbar, replace individual controls, or compose your own interface. Import components and hooks from your React or Vue adapter.
 
-<ToolbarLayoutDiagram />
+Text direction commands are in the **Format** menu. The default toolbar omits their shortcuts. You can add the `LeftToRight` and `RightToLeft` toolbar parts to a custom toolbar.
+
+## Build a toolbar with the composition API
+
+Compose named toolbar parts and style them with CSS. These examples show selected controls and application styles, not packaged presets. The source includes the selected composition and CSS.
+
+Hiding a control does not remove its editor API operation. The document state determines whether each command is available.
+
+<ToolbarCustomDemo />
+
+Choose an approach for your application:
+
+| Goal                                       | API                                      |
+| ------------------------------------------ | ---------------------------------------- |
+| Keep the default controls                  | `DocxEditor.Toolbar`                     |
+| Change a control's appearance              | `className`, `icon`, or `asChild`        |
+| Add your controls and keep them responsive | `Toolbar.Group`                          |
+| Replace one control with your own content  | `Toolbar.Slot`                           |
+| Remove a whole group                       | `Toolbar.Group` with `hidden`            |
+| Arrange selected controls                  | `preset={false}` and named toolbar parts |
+| Use your own buttons                       | `useEditorCommand(slotId)`               |
+| Change interface colors                    | `--doc-*` CSS properties                 |
+
+For toolbar placement and optional components, see [React composition](/docs/2.x/react/composition#arrange-editor-components) or [Vue composition](/docs/2.x/vue/composition#arrange-editor-components).
 
 ## Use the packaged chrome
 
@@ -39,50 +62,52 @@ Use these root props to configure the packaged frame:
 <FrameworkTabs variant="block">
 <Framework value="react">
 
-| Prop                                         | Type                                    | Description                                        |
-| -------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| `title`                                      | `string`                                | Document name shown in the title bar.              |
-| `onTitleChange`                              | `(title: string) => void`               | Makes the title editable.                          |
-| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title bar slots.                        |
-| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
-| `chrome`                                     | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.               |
-| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                  |
-| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
+| Prop | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document name shown in the title bar. |
+| `onTitleChange` | `(title: string) => void` | Makes the title editable. |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode` | Host-owned title bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggle or customize the packaged menu row. |
+| `chrome` | `boolean` | Set `false` to remove the packaged frame entirely. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggle or customize the packaged navigation pane. |
+| `hyperlinkPopup` | `boolean` | Toggle the packaged link popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu. |
 
 </Framework>
 <Framework value="vue">
 
-| API                                | Type                                    | Description                                        |
-| ---------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| `title`                            | `string`                                | Document name shown in the title bar.              |
-| `@title-change`                    | `(title: string) => void`               | Makes the title editable.                          |
-| `#titleBarLeft` / `#titleBarRight` | slot                                    | Host-owned title bar slots.                        |
-| `menu`                             | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
-| `chrome`                           | `boolean`                               | Set `false` to remove the packaged frame entirely. |
-| `navigation`                       | `boolean`                               | Toggle the packaged navigation pane.               |
-| `hyperlinkPopup`                   | `boolean`                               | Toggle the packaged link popover.                  |
-| `contextMenu`                      | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
+| API | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document name shown in the title bar. |
+| `@title-change` | `(title: string) => void` | Makes the title editable. |
+| `#titleBarLeft` / `#titleBarRight` | slot | Host-owned title bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggle or customize the packaged menu row. |
+| `chrome` | `boolean` | Set `false` to remove the packaged frame entirely. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggle or customize the packaged navigation pane. |
+| `hyperlinkPopup` | `boolean` | Toggle the packaged link popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu. |
 
 </Framework>
 </FrameworkTabs>
 
 ## Use the provider primitives
 
-When you want your own frame, use the same provider primitives the packaged host uses internally:
+Use provider primitives when your application owns the editor frame. Import the editor stylesheet once and give the container a height. Packaged controls and the viewport apply their own `.docx-editor` scope. Add that class to a wrapper when custom controls need editor styles and tokens.
+
+For complete wrappers, see [React composition](/docs/2.x/react/composition#primitives) or [Vue composition](/docs/2.x/vue/composition#primitives).
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
 
 function MyChrome({ bytes }: { bytes: Uint8Array }) {
+  const t = useChromeTranslate();
   return (
     <DocxEditor.Root document={bytes}>
-      <DocxEditor.Toolbar />
+      <DocxEditor.Toolbar t={t} />
       <DocxEditor.Viewport>
-        <DocxEditor.Navigation />
         <DocxEditor.Content />
         <DocxEditor.HyperLink />
         <DocxEditor.ContextMenu />
@@ -101,20 +126,20 @@ import {
   DocxEditorContent,
   DocxEditorContextMenu,
   DocxEditorHyperLink,
-  DocxEditorNavigation,
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
+  useChromeTranslate,
 } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
+const t = useChromeTranslate();
 </script>
 
 <template>
   <DocxEditorRoot :document="bytes">
-    <DocxEditorToolbar />
+    <DocxEditorToolbar :t="t" />
     <DocxEditorViewport>
-      <DocxEditorNavigation />
       <DocxEditorContent />
       <DocxEditorHyperLink />
       <DocxEditorContextMenu />
@@ -126,11 +151,183 @@ defineProps<{ bytes: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-The root owns the editor instance, the viewport is the scroll container, and the content part is the painted page surface. The other compounds layer on top of that same provider.
+If you use a locale provider, mount this component inside it so `useChromeTranslate()` reads its catalog.
+
+`Root` owns the editor instance. `Viewport` provides scrolling. `Content` displays editable pages. Other parts use the same provider.
+
+## Keep host controls responsive
+
+The preset toolbar stays on one row. When it runs out of width, it moves whole groups into the **More** (`⋯`) panel, and each moved group becomes a labeled section of the panel. Use `Toolbar.Group` to give your own controls the same behavior.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  {/* A host group: measured, collapsed by priority, and labeled in the panel. */}
+  <DocxEditor.Toolbar.Group id="review-nav" label="Review" priority={15}>
+    <DocxEditor.Toolbar.Action label="Previous change" icon={<UpIcon />} onSelect={previous} />
+    <DocxEditor.Toolbar.Action label="Next change" icon={<DownIcon />} onSelect={next} />
+  </DocxEditor.Toolbar.Group>
+
+  {/* A built-in id adds controls to that group. */}
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+
+  {/* `hidden` removes a whole built-in group and its separator. */}
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorToolbar>
+  <!-- A host group: measured, collapsed by priority, and labeled in the panel. -->
+  <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
+    <DocxEditorToolbar.Action label="Previous change" @select="previous" />
+    <DocxEditorToolbar.Action label="Next change" @select="next" />
+  </DocxEditorToolbar.Group>
+
+  <!-- A built-in id adds controls to that group. -->
+  <DocxEditorToolbar.Group id="review">
+    <DocxEditorToolbar.AddComment />
+  </DocxEditorToolbar.Group>
+
+  <!-- `hidden` removes a whole built-in group and its separator. -->
+  <DocxEditorToolbar.Group id="zoom" hidden />
+</DocxEditorToolbar>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`Toolbar.Group` takes these props:
+
+| Prop | Description |
+| --- | --- |
+| `id` | The group id. A built-in id changes that group. Any other id creates a host group. |
+| `labelKey` | A catalog key for a host group's panel heading and accessible name, such as `myApp.reviewNav`. It goes through the toolbar's `t` and the locale catalog. |
+| `label` | Literal text for a host group's panel heading and accessible name. It wins over `labelKey`. Without either, the heading is `id`. Built-in groups keep their own label. |
+| `priority` | The collapse priority. A lower number leaves the bar first. |
+| `pinned` | `true` keeps the group in the bar at every width. |
+| `after` | The id of the group that this group follows. Built-in groups keep their place and ignore it. |
+| `hidden` | Removes the group from the bar and the panel. |
+| `overflowContent` | A function that returns the group's panel content. Use it when the panel needs a different form than the bar. On a built-in id, it renders after the group's own rows, even when the group has no children. |
+
+### Placement
+
+Host groups follow the built-in groups in order of appearance. They come before the contextual table controls. Set `after` to place a group after a built-in group or another host group. Several groups with the same `after` keep their order of appearance.
+
+### Collapse order
+
+Built-in groups have these priorities. The review group is pinned and never collapses.
+
+| Group       | Priority |
+| ----------- | -------- |
+| `zoom`      | 10       |
+| `script`    | 20       |
+| `format`    | 30       |
+| `list`      | 40       |
+| `alignment` | 50       |
+| `styles`    | 60       |
+| `font`      | 70       |
+| `text`      | 80       |
+| `history`   | 90       |
+
+A host group without a `priority` collapses before every built-in group. If two groups have the same priority, the group further along the bar collapses first. A `priority` on a built-in id changes that group's priority.
+
+### Content in the panel
+
+In the panel, each `Toolbar.Action` becomes a full-width row with its icon and `label`. A press runs the action and closes the panel. Other content renders as written. Pass `overflowContent` to render a different form, for example a list in place of a popover.
+
+The panel stays inside the viewport with an 8 px margin. It lines up with the end of the **More** button, or with its start when the end does not fit, and it is never wider than the viewport less both margins.
+
+Loose children of `Toolbar`, outside a group, keep their earlier behavior. They render in one block after the groups and never collapse. A group whose children all render nothing is dropped, like a built-in group whose slots are all hidden.
+
+### Toolbar width
+
+The toolbar can fill its container or be as wide as its content, for example a floating bar with `width: max-content; max-width: 100%` centered in a flex row. A content-sized toolbar measures the room it can take, so collapsed groups come back when the container grows again.
+
+A toolbar is content-sized when its `width` is `auto`, `max-content`, `fit-content`, or `min-content`, and it does not grow as a flex item. Its room is the container's content width, less the toolbar's own margins and the siblings on the same line, capped by its `max-width`. This applies in two layouts:
+
+- A block-level toolbar in a `block`, `flow-root`, or flex column container.
+- An item of a single-line flex row. A sibling that grows, such as a `flex: 1` spacer, counts by its flex basis, and `auto` margins count as free space.
+
+In other layouts, the toolbar measures its own box. These include grid cells, table cells, floated bars, explicit widths, and calculated maximum widths. It also uses this measurement when siblings contain flexible content or CSS Typed Object Model support is unavailable.
+
+Controls collapse only when they exceed the bar's width. Groups return when space becomes available. The toolbar holds its width until the container changes if restored groups overflow again. This prevents repeated collapse and expansion.
+
+### Replace a slot's content
+
+Use `Toolbar.Slot` with `slotId` to replace a built-in control. Your content keeps the control's position and collapses with its group. Use `overflowContent` to provide a different view in the **More** panel.
+
+Set `hidden` to remove a control. Both `<DocxEditor.Toolbar.Slot slotId="text.bold" hidden />` and `<DocxEditor.Toolbar.Bold hidden />` remove **Bold**. Menu parts support the same pattern through `slotId` and `hidden`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Slot slotId="zoom.level" overflowContent={() => <ZoomList />}>
+    <ZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { h } from 'vue';
+import { DocxEditorToolbar } from '@docx-editor.dev/vue';
+import ZoomList from './ZoomList.vue';
+import ZoomPicker from './ZoomPicker.vue';
+
+const zoomList = () => h(ZoomList);
+</script>
+
+<template>
+  <DocxEditorToolbar>
+    <DocxEditorToolbar.Slot slot-id="zoom.level" :overflow-content="zoomList">
+      <ZoomPicker />
+    </DocxEditorToolbar.Slot>
+  </DocxEditorToolbar>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+### Development warnings
+
+The toolbar renders a misplaced part and prints a development warning that names it. Two checks decide whether a build is a development build, in this order. First, when the bundler provides `import.meta.env.DEV`, as Vite does, its value decides. Otherwise, the build counts as development when a `process` global exists and `process.env.NODE_ENV` is not `production`. A page with neither, such as a browser bundle that replaces neither value, prints no warnings.
+
+- A `Toolbar.Group` whose `after` names no group goes to the end of the bar.
+- A `Toolbar.Group` with a built-in id ignores `label`, `labelKey`, and `after`.
+- A `Toolbar.Group` whose id is `contextual-table` is ignored, because the toolbar uses that id for the table controls.
+- A `Toolbar.Slot` for a slot that the preset arrangement does not draw is appended after the groups. An id that is not a `ChromeSlotId` gets the same treatment.
+
+### Insert tables and add comments
+
+`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the toolbar, the grid stays inside the viewport. In the **More** panel, the grid opens inside the panel, and an insert also closes the panel. When focus leaves the grid, the grid closes.
+
+`Toolbar.AddComment` starts a comment draft on the selection in the review rail. Its slot is `review.addComment`, the same slot as the context menu's **Add a comment** row, and `toolbarCommandState` decides when it is enabled. Without the review module, in viewing mode, with nothing registered to open the draft, or with no selection on the page, it is disabled and its tooltip gives the reason. The review rail registers when it mounts. If you render your own comment UI, register it with `useCommentDraftRequest`. Without a mounted review rail, the packaged control is not rendered. The context menu row follows the same rule. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
+
+### Menu bar overflow
+
+The menu bar also stays on one line. When the menus do not fit, it moves them, from the end, into one `⋯` menu. Each moved menu becomes a submenu with the same rows. The bar keeps its keyboard behavior: the arrow keys move between the menus and the `⋯` menu, and `ArrowRight` opens a submenu.
+
+The `⋯` menu's panel stays inside the viewport, with the same placement as the toolbar's **More** panel. Host children that are not menus, such as a share button, stay in the bar at every width and never appear inside the `⋯` menu.
+
+The bar must be able to shrink for the measurement to work. In a flex row, give it `min-width: 0`. Set `overflow={false}` (`:overflow="false"` in Vue) to let the bar wrap onto more lines instead.
 
 ## Add root-level command buttons
 
-For small custom controls, call the shared command API from the package root:
+Use `useEditorCommand()` to connect a custom button to command availability, active state, and execution:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -145,6 +342,8 @@ function BoldButton() {
       onMouseDown={(e) => e.preventDefault()} // chrome must not steal the caret
       onClick={() => bold.execute()}
       disabled={!bold.isEnabled}
+      aria-pressed={bold.isActive}
+      title={bold.disabledReason ?? 'Bold'}
     >
       Bold
     </button>
@@ -164,70 +363,65 @@ const bold = useEditorCommand('text.bold');
 
 <template>
   <!-- chrome must not steal the caret -->
-  <button @mousedown.prevent @click="bold.execute()" :disabled="!bold.isEnabled.value">Bold</button>
+  <button
+    @mousedown.prevent
+    @click="bold.execute()"
+    :disabled="!bold.isEnabled.value"
+    :aria-pressed="bold.isActive.value"
+    :title="bold.disabledReason.value ?? 'Bold'"
+  >
+    Bold
+  </button>
 </template>
 ```
 
-`useEditorCommand` returns computed refs on a plain object, so read `isEnabled`,
-`isActive`, and `disabledReason` with `.value`.
+`useEditorCommand` returns computed refs on a plain object, so read `isEnabled`, `isActive`, and `disabledReason` with `.value`.
 
 </Framework>
 </FrameworkTabs>
 
-See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for every slot,
-its packaged surface, and the matching React and Vue toolbar part.
+The [Chrome slot reference](/docs/2.x/guides/chrome-slots) lists each slot and its React and Vue toolbar parts.
 
 ## Format painter
 
-The `format.painter` slot copies the formatting at the selection and applies it somewhere
-else. The text never moves.
+The `format.painter` slot copies formatting from the selection and applies it to another location. It leaves the text unchanged.
 
-- Click the control once to arm it for a single application, then select the text to
-  format.
-- Double-click the control to keep it on for repeated applications, and press `Esc` to
-  release it.
-- Press `Ctrl+Alt+C` to copy the formatting and `Ctrl+Alt+V` to apply it. On macOS, use
-  `Command` in place of `Ctrl`.
+- Click the control once to arm it for a single application, then select the text to format.
+- Double-click the control to keep it on for repeated applications, and press `Esc` to release it.
+- Press `Ctrl+Alt+C` to copy the formatting and `Ctrl+Alt+V` to apply it. On macOS, use `Command` in place of `Ctrl`.
 
-On macOS, browsers bind `Command+Option+C` to their own element inspector, and a web page
-can't override a browser shortcut. To copy formatting there, use the control or the
-right-click menu. `Command+Option+V` applies the formatting as expected.
+On macOS, browsers reserve `Command+Option+C` for their element inspector. Web pages cannot override that shortcut. Use the control or right-click menu to copy formatting. `Command+Option+V` applies formatting.
 
-On Windows and Linux keyboard layouts that put characters on the `AltGr` level of `C` — for
-example Polish — `Ctrl+Alt+C` types that character instead. Use the control or the
-right-click menu.
+Some Windows and Linux keyboard layouts assign a character to `AltGr+C`, including Polish. On those layouts, `Ctrl+Alt+C` types that character. Use the control or right-click menu.
 
 - Right-click the document and choose **Copy formatting** or **Paste formatting**.
 
-What the painter copies follows the selection. A selection inside one paragraph copies
-character formatting: font, size, color, and the character marks. A selection that covers
-the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
+The selection determines which formatting the painter copies. A selection inside one paragraph copies character formatting: font, size, color, and character marks. Including the paragraph mark also copies the paragraph style, alignment, spacing, and indents.
 
-The painter reads the formatting the reader sees, not only what the text states directly.
-Copying from a paragraph that takes its face from a style carries that face to the target.
-Three things stay on the target: paragraph borders (`w:pBdr`), a run's character style
-(`w:rStyle`), and character shading (`w:shd` on a run).
+The painter copies resolved formatting, including fonts inherited from styles. It preserves the target paragraph borders (`w:pBdr`), run character style (`w:rStyle`), and run shading (`w:shd`).
 
-To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting`
-commands. `pasteFormatting` reports a disabled reason until something is copied.
+To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting` commands. `pasteFormatting` reports a disabled reason until something is copied.
 
 ## Table editing
 
 When the caret or a rectangular cell selection is inside a table, the formatting toolbar shows contextual table controls:
 
-- **Resize**: hover a column divider or the table's right edge; drag to commit Word-compatible twip widths (inner divider resize preserves total table width; outer-right resize changes table width).
-- **Insert rows/columns**: hover the row band or column header band and click the `+` control, or use the table rows on the right-click menu.
-- **Borders and fill**: with one or more cells selected, choose a border target, style, width, and color, then pick a cell fill (clear fill removes direct shading).
+- **Resize**: drag a column divider or the table's right edge to set Word-compatible twip widths. Inner dividers preserve total width. The right edge changes total width.
+- **Insert rows/columns**: hover the row or column header band, then click `+`. You can also use the right-click menu.
+- **Borders and fill**: select cells, then choose a border target, style, width, color, and cell fill. Clearing fill removes direct shading.
 
-These controls target the **innermost** nested table under the pointer or selection. Merge and split remain unsupported; tables with merged cells refuse column resize/insert/delete with an explicit disabled reason.
+These controls target the innermost table under the pointer or selection. Merge and split operations are unsupported. Tables with merged cells refuse column resizing, insertion, and deletion with an explicit disabled reason.
 
-The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order,
-custom icons, and two host actions. See the
-[Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
+The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order, custom icons, and two host actions. See the [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
 
 ## Next steps
 
 - [Chrome slot reference](/docs/2.x/guides/chrome-slots)
+- [Custom styles and branding](/docs/2.x/guides/custom-styles)
 - [React package overview](/docs/2.x/react) and [Vue package overview](/docs/2.x/vue)
 - [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props)
 - [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples)
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

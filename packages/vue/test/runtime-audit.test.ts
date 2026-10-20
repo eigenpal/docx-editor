@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/rules-of-hooks -- Vue composables in defineComponent setup */
 
 import './dom-setup.ts';
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { createApp, createSSRApp, h, nextTick, ref } from 'vue';
@@ -10,7 +11,6 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorNotesChrome } from '../src/editor/DocxEditorNotes';
-import { editorScopeFor } from '../src/editor/editor-scope';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation';
 import { DocxEditorToolbar, ToolbarAction, ToolbarSeparator } from '../src/editor/toolbar';
 import {
@@ -23,7 +23,10 @@ import { useStableDocxId } from '../src/lib/stable-id';
 import { SOURCE, flush } from './helpers/fixtures';
 import { mountEditorTree } from './helpers/mount';
 
+/** Global stubs a test installs, undone after it so later files see the real ones. */
+const cleanupsAfterTest: (() => void)[] = [];
 afterEach(() => {
+  for (const cleanup of cleanupsAfterTest.splice(0)) cleanup();
   document.body.innerHTML = '';
 });
 
@@ -152,7 +155,7 @@ describe('controlled navigation props', () => {
   test('honours controlled tab prop', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const tab = ref<'headings' | 'find'>('headings');
+    const tab = ref<'headings' | 'find' | 'goto'>('headings');
     const app = createApp({
       setup() {
         return () =>
@@ -164,7 +167,7 @@ describe('controlled navigation props', () => {
                 h(DocxEditorNavigation, {
                   open: true,
                   tab: tab.value,
-                  onTabChange: (next: 'headings' | 'find') => {
+                  onTabChange: (next: 'headings' | 'find' | 'goto') => {
                     tab.value = next;
                   },
                 }),
@@ -184,6 +187,56 @@ describe('controlled navigation props', () => {
         'aria-selected'
       )
     ).toBe('false');
+    app.unmount();
+    container.remove();
+  });
+
+  test('the find input is focused when the find tab is shown', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () =>
+              h(DocxEditorNavigation, {
+                open: true,
+                tab: 'find',
+              }),
+          }
+        ),
+    });
+    app.mount(container);
+    await flush();
+    expect(document.activeElement).toBe(
+      container.querySelector('#docx-nav-panel-find .docx-nav__search-input')
+    );
+    app.unmount();
+    container.remove();
+  });
+
+  test('switching to the find tab focuses the query input', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () => h(DocxEditorNavigation, { open: true }),
+          }
+        ),
+    });
+    app.mount(container);
+    await flush();
+    const input = container.querySelector('#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).not.toBe(input);
+    (container.querySelector('#docx-nav-tab-find') as HTMLButtonElement).click();
+    await flush();
+    expect(document.activeElement).toBe(input);
     app.unmount();
     container.remove();
   });
@@ -213,6 +266,10 @@ describe('useDocxSource stale clearing', () => {
   });
 
   test('clears bytes on fetch failure', async () => {
+    const realFetch = globalThis.fetch;
+    cleanupsAfterTest.push(() => {
+      globalThis.fetch = realFetch;
+    });
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 404, statusText: 'missing' }))
     ) as unknown as typeof fetch;
@@ -290,8 +347,8 @@ describe('scoped notes DOM lookup', () => {
     expect(pagesRoots.length).toBe(2);
     const firstChrome = container.querySelector('.editor-one [data-docx-notes-chrome]');
     const secondChrome = container.querySelector('.editor-two [data-docx-notes-chrome]');
-    expect(editorScopeFor(firstChrome)).toBe(container.querySelector('.editor-one'));
-    expect(editorScopeFor(secondChrome)).toBe(container.querySelector('.editor-two'));
+    expect(editorInstanceScope(firstChrome)).toBe(container.querySelector('.editor-one'));
+    expect(editorInstanceScope(secondChrome)).toBe(container.querySelector('.editor-two'));
     expect(editors).toHaveLength(2);
     const scopeSpies = editors.map((editor) => spyOn(editor, 'setActiveScope'));
     const firstReference = document.createElement('button');

@@ -11,19 +11,34 @@ import type { UnsupportedContentRecord } from './unsupported-content.ts';
 
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
+import type { TextWrappingBreakClear } from './text-wrapping-break-clear.ts';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
+import {
+  eastAsiaHintScope,
+  hasEastAsiaSymbolHint,
+  hasTimesNewRomanEastAsiaException,
+  type EastAsiaHintScope,
+} from './east-asia-symbol-hint.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
-import type { RevisionAttribution } from './revision-projection.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import { isSymbolEncodedFamily } from './symbol-encoding.ts';
+import {
+  type PieceAttribution,
+  type RevisionAttribution,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+  resolvedChangeSites,
+} from './revision-projection.ts';
+import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
 
@@ -51,12 +66,37 @@ export interface PositionalTab {
  */
 export interface FieldAtomMarker {
   /**
+   * A plain REF cross-reference with no nested field (not PAGEREF or NOTEREF): its result,
+   * the target's text or number, never changes with pagination, so a justified line may treat
+   * it as an ordinary word.
+   */
+  readonly fixedResult?: true;
+  /**
    * A legacy form field: `w:fldChar/w:ffData` (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN).
    *
    * Word shades these on a different rule from ordinary fields — always, unless the document
    * turns it off — because they mark the blanks somebody is meant to fill in.
    */
   readonly formField: boolean;
+  /**
+   * A legacy form CONTROL the reader can operate, with the state it paints.
+   *
+   * Checkboxes carry their checked state; dropdowns carry their declared entries and index.
+   * Paint supplies a matching hit target without parsing the displayed text back.
+   */
+  readonly formControl?:
+    | {
+        readonly kind: 'checkbox';
+        readonly checked: boolean;
+        /** Plain accessible name; omitted for fields containing macro references. */
+        readonly accessibleName?: string;
+      }
+    | {
+        readonly kind: 'dropdown';
+        readonly entries: readonly string[];
+        readonly selectedIndex: number;
+        readonly accessibleName?: string;
+      };
   /**
    * A BODY PAGE / NUMPAGES / SECTIONPAGES atom whose value depends on pagination.
    *
@@ -69,6 +109,8 @@ export interface FieldAtomMarker {
     readonly kind: AllowlistedPageField;
     /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
     readonly picture?: string;
+    /** The field's `\*` number format, applied when finalize substitutes the value. */
+    readonly numberFormat?: PageFieldNumberFormat;
   };
   /**
    * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
@@ -79,6 +121,17 @@ export interface FieldAtomMarker {
    * first fragment, gated per field on the calibration verdict.
    */
   readonly pageRef?: PageRefFieldProjection;
+  /**
+   * The first model offset of the editable saved result this piece belongs to.
+   *
+   * Present only when saved results are laid out as text (`fieldResults: 'editable'`). The
+   * result is ordinary text then, so its pieces have their own offsets; every piece of one
+   * result shares this value, which keeps a multi-run link result one anchor and lets the
+   * caret find the whole result it is in.
+   */
+  readonly resultStart?: number;
+  /** The model offset just past the same result, beside {@link resultStart}. */
+  readonly resultEnd?: number;
 }
 
 /**
@@ -90,6 +143,8 @@ export interface FieldAtomMarker {
  * stays canonical-aligned for layout consumers.
  */
 export interface FieldAwarePiece {
+  /** Layout-only displacement of punctuation ink within its compressed advance. */
+  readonly glyphOffsetPt?: number;
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
   readonly style: ResolvedRunStyle;
@@ -107,6 +162,8 @@ export interface FieldAwarePiece {
   readonly positionalTab?: PositionalTab;
   /** Typed hard-break intent; model text remains one newline-compatible UTF-16 unit. */
   readonly breakKind?: HardBreakKind;
+  /** The floating objects a text wrapping break restarts below (`w:br w:clear`). */
+  readonly breakClear?: TextWrappingBreakClear;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
   /**
@@ -114,6 +171,8 @@ export interface FieldAwarePiece {
    * reservation). Paint still uses `text`.
    */
   readonly measureText?: string;
+  /** Inline rule represented by a separator atom inside a note separator story. */
+  readonly noteSeparator?: 'separator' | 'continuationSeparator';
   /** Note citation / mark navigation for paint (body ↔ note). */
   readonly noteNav?: {
     readonly scopeId: string;
@@ -140,6 +199,11 @@ export interface FieldAwarePiece {
    * decision about it.
    */
   readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The revisions a resolved view accepted into this piece, which paints as ordinary text;
+   * see {@link PieceAttribution.changeSites}. Simple Markup's change bar reads it.
+   */
+  readonly changeSites?: readonly RevisionAttribution[];
   /** Present when this piece is a field's displayed result; literal or projected. */
   readonly fieldAtom?: FieldAtomMarker;
   /**
@@ -158,6 +222,72 @@ export interface ModelRange {
 }
 
 export type MutableModelRange = { start: number; end: number };
+
+/**
+ * A model range whose content a resolved view removed, with the revisions that removed it.
+ *
+ * Kept apart from {@link MutableModelRange}: deleted ranges exist in every mode and are the
+ * caret's concern; a change site exists only where the view resolved a change the reviewer
+ * filter still shows, and is the change bar's concern.
+ */
+export type MutableChangeSite = {
+  start: number;
+  end: number;
+  revisions: readonly RevisionAttribution[];
+};
+
+/** Record a site for content the view removed. Empty attribution lists record nothing. */
+export function appendChangeSite(
+  sites: MutableChangeSite[],
+  start: number,
+  end: number,
+  revisions: readonly RevisionAttribution[]
+): void {
+  if (revisions.length === 0 || end <= start) return;
+  sites.push({ start, end, revisions });
+}
+
+/**
+ * The walk's recorder for content the view REMOVED: such content leaves no piece, so its
+ * site is recorded as it is skipped — the same reason `deletedRanges` is collected in the
+ * walk. Kept content carries its own sites on the piece. A walk with no site list gets a
+ * recorder that does nothing.
+ */
+export function removedSiteRecorder(
+  sites: MutableChangeSite[] | undefined,
+  mode: RevisionDisplayMode,
+  authorFilter: RevisionAuthorFilter | undefined
+): (start: number, end: number, removed: readonly RevisionAttribution[]) => void {
+  if (!sites) return () => {};
+  return (start, end, removed) =>
+    appendChangeSite(sites, start, end, resolvedChangeSites(removed, mode, authorFilter));
+}
+
+/**
+ * The attribution a field result flushes with: captured from its result run, formatting
+ * site included, or nothing when no run donated one (the live stack answers then).
+ */
+export function capturedResultAttribution(pending: {
+  readonly capturedResultRevisions: boolean;
+  readonly resultRevisions: readonly RevisionAttribution[];
+  readonly resultFormatSite: RevisionAttribution | null;
+}): Pick<PieceEmitExtras, 'revisionsOverride' | 'formatSiteOverride'> {
+  return pending.capturedResultRevisions
+    ? { revisionsOverride: pending.resultRevisions, formatSiteOverride: pending.resultFormatSite }
+    : {};
+}
+
+/**
+ * A kept piece's attribution with a run's accepted formatting change added as a site: the
+ * bar has to say the line changed when nothing inline can.
+ */
+export function withRunFormatSite(
+  published: PieceAttribution,
+  runFormatSite: RevisionAttribution | null
+): PieceAttribution {
+  if (!runFormatSite) return published;
+  return { ...published, changeSites: [...(published.changeSites ?? []), runFormatSite] };
+}
 
 /** Append a range, coalescing with the previous one when they touch or overlap. */
 export function appendModelRange(ranges: MutableModelRange[], start: number, end: number): void {
@@ -226,6 +356,36 @@ export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
 
 /**
+ * What a piece emitter may attach beyond text, style and range.
+ *
+ * The vocabulary of `push` in the paragraph walk (`field-projection.ts`), kept beside the
+ * piece it decorates.
+ */
+export interface PieceEmitExtras {
+  readonly positionalTab?: PositionalTab;
+  readonly breakKind?: HardBreakKind;
+  readonly breakClear?: TextWrappingBreakClear;
+  readonly measureText?: string;
+  readonly noteNav?: FieldAwarePiece['noteNav'];
+  readonly noteSeparator?: FieldAwarePiece['noteSeparator'];
+  readonly inlineDrawing?: InlineDrawingLayoutInput;
+  readonly anchoredAtom?: true;
+  readonly equation?: FieldAwarePiece['equation'];
+  readonly unsupported?: FieldAwarePiece['unsupported'];
+  /**
+   * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the walk
+   * has left the wrapper that owns it — an atomic field's flushed result is the case. Passing
+   * it here keeps the projection in one place.
+   */
+  readonly revisionsOverride?: readonly RevisionAttribution[];
+  /** With {@link revisionsOverride}: the captured run's formatting site, or none. */
+  readonly formatSiteOverride?: RevisionAttribution | null;
+  readonly linkOverride?: SpanLinkRecord;
+  /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
+  readonly fieldAtom?: FieldAtomMarker;
+}
+
+/**
  * Pending live or inert-cache projection for one atomic field unit.
  *
  * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
@@ -236,15 +396,17 @@ export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | 
  * `piecesOfParagraph`.
  */
 export interface PendingFieldProjection {
+  hasNestedField?: boolean;
+  characterStyleSpec?: import('./field-character-style.ts').CharacterStyleField | null;
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
   /**
-   * The `\#` numeric picture of {@link kind}, or null when the field states none.
+   * The `\#` picture and `\*` number format of {@link kind}; empty when the field states none.
    *
    * Captured beside the kind, and for the same reason the specs below are: the machine's
    * instruction buffer is reset before the flush runs.
    */
-  picture: string | null;
+  pageSwitches: PageFieldSwitches;
   /**
    * Parsed SYMBOL instruction, or null when the field is not one.
    *
@@ -311,6 +473,7 @@ export interface PendingFieldProjection {
    * ffData present with an unreadable payload still shades as a form field.
    */
   formData: LegacyFormFieldData | null;
+  formAccessibleName?: string;
   /**
    * Canonical node id of the field's begin `w:fldChar`.
    *
@@ -323,16 +486,22 @@ export interface PendingFieldProjection {
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */
   editableResult: boolean;
+  /** True when this closed field's saved result is laid out as text (`fieldResults` mode). */
+  savedResult: boolean;
   atomStart: number;
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;
   capturedResultStyle: boolean;
+  /** Direction-only style remains a fallback until visible result text arrives. */
+  capturedResultStyleIsDirectional?: boolean;
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
+  /** Drawing placeholders in the cached display, without additional atomic model units. */
+  cachedDrawings?: import('./field-result-drawings.ts').CachedFieldDrawing[];
   /**
    * True once result-phase content the current display mode KEEPS was seen — visible or
-   * vanish-hidden. Only content with model text sets it (result text, tab / break, `w:sym`);
-   * drawings, `w:ptab` and note references never do.
+   * vanish-hidden. Result text, tab / break, `w:sym`, and drawings set it;
+   * `w:ptab` and note references never do.
    *
    * `cachedText` alone cannot tell "the file cached no result" from "the file cached one and
    * hid it": both leave it empty. Synthesis (MACROBUTTON / GOTOBUTTON display text, the
@@ -371,6 +540,8 @@ export interface PendingFieldProjection {
    * the model does not have.
    */
   resultRevisions: readonly RevisionAttribution[];
+  /** The accepted formatting change of the run that donated {@link resultRevisions}. */
+  resultFormatSite: RevisionAttribution | null;
   /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
   capturedResultRevisions: boolean;
   /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
@@ -401,32 +572,31 @@ function fontSlotSlice(
   };
 }
 
+function projectedFontSlotSlice(
+  piece: FieldAwarePiece,
+  from: number,
+  to: number,
+  fontSlot: FieldAwarePiece['fontSlot']
+): FieldAwarePiece {
+  return {
+    ...piece,
+    text: piece.text.slice(from, to),
+    ...(fontSlot ? { fontSlot } : {}),
+  };
+}
+
 /**
- * Mark the text that resolves through the `eastAsia` font slot, after a paragraph's pieces
- * are all assembled.
+ * Resolve East Asian font slots for literal text and eligible cached fields.
  *
- * A post-pass over the WHOLE paragraph, not a per-piece one, because Common characters
- * inherit their slot from strong neighbours and `w:t`/run boundaries are not script
- * boundaries: a fullwidth comma alone in its own run between two CJK runs is East Asian
- * text, and only a pass that sees both neighbours can say so. Classification is
- * `eastAsiaRunsOfSegments`; this function owns which pieces participate and how the answer
- * lands on them:
- *
- * - Ordinary literal text (model range 1:1 with its text) is SPLIT into slot-homogeneous
- *   pieces. Piece boundaries are not break opportunities (`opensWord` in
- *   `paragraph-flow.ts` carries words across them), so the split changes which face a
- *   character resolves to and nothing else.
- * - Layout-owned text — projected results, field atoms, note marks, `measureText`
- *   reservations — stays WHOLE: its spans publish the piece's model range, and slicing
- *   that range would corrupt offsets. Such a piece takes the slot only when ALL of its
- *   text resolves eastAsia; a mixed one keeps the base face, which is what it painted
- *   before slots existed.
- * - Control pieces (tabs, breaks, drawings, equations) neither classify nor split.
- *
- * The style objects are untouched: a piece carries the run's real resolution and the slot
- * beside it, and the face is derived at the measurer/paint boundary via `styleForFontSlot`.
+ * Literal pieces keep their character-based model offsets. Projected cached
+ * atomic field results split into display font runs. Every display slice keeps
+ * the original shared start/end model range. Other layout-owned projections,
+ * note navigation, and measurement reservations retain whole-piece behavior.
  */
-export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
+export function applyEastAsiaFontSlots(
+  pieces: FieldAwarePiece[],
+  themeFonts?: ThemeFonts
+): FieldAwarePiece[] {
   // Nothing to resolve unless some run authors a DISTINCT East Asian face. This is the
   // cheap common-case exit for Latin-defaulted documents; documents whose docDefaults
   // author one for every run instead lean on the pure-ASCII prescan inside
@@ -443,6 +613,7 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
   /** Indices of the pieces whose text joins the classification, in paragraph order. */
   const streamed: number[] = [];
   const segments: string[] = [];
+  const hintedSegments: (false | EastAsiaHintScope)[] = [];
   for (let index = 0; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     if (piece.positionalTab || piece.breakKind || piece.inlineDrawing) continue;
@@ -450,8 +621,18 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     if (piece.text.length === 0) continue;
     streamed.push(index);
     segments.push(piece.text);
+    // Leave the special Times New Roman East Asian fallback to existing resolution, and never
+    // move a symbol-encoded face (Wingdings, Symbol, a `w:sym` piece): its glyphs live in
+    // the symbol font, and the East Asian face would paint them as notdef boxes.
+    const hinted =
+      hasEastAsiaSymbolHint(piece.props) &&
+      !isSymbolEncodedFamily(piece.style.fontFamily) &&
+      !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia, themeFonts);
+    hintedSegments.push(
+      hinted ? eastAsiaHintScope(piece.props, piece.style.fontFamilyEastAsia, themeFonts) : false
+    );
   }
-  const ranges = eastAsiaRunsOfSegments(segments);
+  const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);
   if (ranges.length === 0) return pieces;
 
   const rangesBySegment = new Map<number, { from: number; to: number }[]>();
@@ -486,7 +667,15 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;
-    if (!literal) {
+    // Cached atomic field results use one model unit for all displayed text.
+    // Split only the measured/painted font slots; retain the atomic source range.
+    const projectedAtom =
+      piece.projected === true &&
+      piece.fieldAtom != null &&
+      !piece.noteNav &&
+      piece.measureText === undefined;
+    const sliceFontSlot = projectedAtom ? projectedFontSlotSlice : fontSlotSlice;
+    if (!literal && !projectedAtom) {
       const whole =
         pieceRanges.length === 1 &&
         pieceRanges[0]!.from === 0 &&
@@ -496,12 +685,12 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     }
     let cursor = 0;
     for (const range of pieceRanges) {
-      if (range.from > cursor) out.push(fontSlotSlice(piece, cursor, range.from, undefined));
-      out.push(fontSlotSlice(piece, range.from, range.to, 'eastAsia'));
+      if (range.from > cursor) out.push(sliceFontSlot(piece, cursor, range.from, undefined));
+      out.push(sliceFontSlot(piece, range.from, range.to, 'eastAsia'));
       cursor = range.to;
     }
     if (cursor < piece.text.length) {
-      out.push(fontSlotSlice(piece, cursor, piece.text.length, undefined));
+      out.push(sliceFontSlot(piece, cursor, piece.text.length, undefined));
     }
   }
   return out;

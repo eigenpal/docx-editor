@@ -1,0 +1,215 @@
+---
+title: 'Document styles'
+description: 'Customize DOCX document styles with templates, paragraph style controls, themes, tables, and React and Vue style pickers.'
+category: 'Customization'
+---
+
+Load a DOCX template to define document fonts, headings, spacing, theme colors, and table styles. Interface CSS changes controls. Document style definitions change document content.
+
+The style picker lists paragraph styles from the document. It does not filter styles by `w:qFormat`, `w:hidden`, or `w:semiHidden`.
+
+Existing tables retain their styles. New tables use explicit borders and do not inherit the default table style.
+
+Select text in the contract preview and apply a paragraph style. The template already defines the styles shown in the picker.
+
+<CustomizationDemo topic="document-styles" />
+
+## Document style customization options
+
+The DOCX editor reads document formatting from the DOCX package. Use a template to define the starting document design, then expose supported formatting controls in your application.
+
+| Area | Template configuration | Editor controls |
+| --- | --- | --- |
+| Paragraph styles | Define style identifiers, names, inheritance, and gallery visibility. | `Toolbar.StylePicker` or `useParagraphStyle`. |
+| Text formatting | Define fonts, sizes, bold, italic, colors, and character styles. | Font and text toolbar parts. |
+| Paragraph layout | Define alignment, indentation, spacing, tabs, and paragraph borders. | Alignment, list spacing, indentation, and paragraph dialog controls. |
+| Theme | Define document theme fonts and colors. | Document formatting controls retain the document's theme resolution. |
+| Lists | Define numbering and bullet formatting. | Bullet, numbered list, and indentation controls. |
+| Tables | Define table styles, borders, cell fills, and conditional style regions. | Table insertion, border, and cell fill controls. |
+| Page layout | Define sections, page size, margins, headers, and footers. | Page setup and supported section controls. |
+
+These controls only apply operations the engine supports for the current selection and mode. For supported document features, see [Word feature support](/docs/2.x/word-fidelity).
+
+### Design the paragraph style gallery
+
+Give each style a stable `styleId` and a readable name. Use `w:basedOn` to inherit a shared document design. Gallery and hidden flags do not filter the built-in picker. Use a custom picker to restrict the options your application presents.
+
+The picker orders standard styles before other styles. It reads its options from the loaded document instead of an application-maintained style list. Each option contains `styleId`, `name`, and a `preview`. The preview includes `fontFamily`, `fontSizePt`, `bold`, `italic`, and `color`.
+
+`useParagraphStyle()` exposes `value`, `options`, `isEnabled`, and `setValue(styleId)`. Use an option's identifier when applying a style. The displayed name is a label. A mixed selection can return `null` for the current style. The `StylePicker.Trigger`, `StylePicker.Content`, and `StylePicker.Item` parts support a custom picker arrangement.
+
+### Document formatting and interface styling
+
+Applying a paragraph style changes the document. Changing an interface token only changes the viewer. Direct formatting can override the style's inherited text or paragraph properties. Use Clear Formatting when the engine permits that operation for the selection.
+
+Changing an application's CSS font does not supply font metrics for the document. Load the document's font faces through the font configuration. For more information, see [Fonts](/docs/2.x/customization/fonts).
+
+### Table and section templates
+
+Existing tables retain their style references and conditional style settings. The renderer resolves those settings from the document's table style and `w:tblLook`. A newly inserted table uses explicit borders. It does not automatically adopt a template's default table style. Use the table controls to set the inserted table's supported border and fill properties.
+
+Use document sections for page dimensions and margins. Application viewport width controls the display scale; it does not replace the document's page dimensions. Keep section and header definitions in your template when you need a consistent document design.
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar preset={false}>
+          <DocxEditor.Toolbar.StylePicker />
+          <DocxEditor.Toolbar.Bold />
+          <DocxEditor.Toolbar.Italic />
+        </DocxEditor.Toolbar>
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar :preset="false">
+        <DocxEditor.Toolbar.StylePicker />
+        <DocxEditor.Toolbar.Bold />
+        <DocxEditor.Toolbar.Italic />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Build an application picker
+
+Mount this picker inside `DocxEditor.Root` with the document surface. The hook reads the loaded document and checks whether the selection supports a change. A native select retains its normal keyboard and focus behavior.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useParagraphStyle } from '@docx-editor.dev/react';
+
+export function ContractStylePicker() {
+  const { value, options, isEnabled, setValue } = useParagraphStyle();
+  return (
+    <label>
+      Paragraph style
+      <select
+        aria-label="Paragraph style"
+        disabled={!isEnabled}
+        value={value ?? ''}
+        onChange={(event) => setValue(event.currentTarget.value)}
+      >
+        <option value="" disabled>
+          Mixed or default
+        </option>
+        {options.map((option) => (
+          <option key={option.styleId} value={option.styleId}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useParagraphStyle } from '@docx-editor.dev/vue';
+
+const { value, options, isEnabled, setValue } = useParagraphStyle();
+function onChange(event: Event) {
+  setValue((event.target as HTMLSelectElement).value);
+}
+</script>
+
+<template>
+  <label>
+    Paragraph style
+    <select
+      aria-label="Paragraph style"
+      :disabled="!isEnabled"
+      :value="value ?? ''"
+      @change="onChange"
+    >
+      <option value="" disabled>Mixed or default</option>
+      <option v-for="option in options" :key="option.styleId" :value="option.styleId">
+        {{ option.name }}
+      </option>
+    </select>
+  </label>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## More control
+
+See [Custom styles and branding](/docs/2.x/guides/custom-styles) for supported parts, types, and additional examples.

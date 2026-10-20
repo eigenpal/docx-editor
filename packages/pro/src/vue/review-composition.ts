@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { cloneVNode, Fragment, isVNode, type VNode } from 'vue';
+import { cloneVNode, Fragment, isVNode, type Slot, type VNode } from 'vue';
 
 const ROOT_PARTS = new Set(['List', 'Markers', 'AddComment', 'Draft', 'Balloon']);
 const LIST_PARTS = new Set(['Card', 'Empty']);
@@ -43,4 +43,43 @@ export function cloneReviewCard(card: VNode, rootClassName: string | undefined):
   return cloneVNode(card, {
     class: `${rootClassName}${ownClassName ? ` ${ownClassName}` : ''}`,
   });
+}
+
+/**
+ * Normalize what a raw slot function returned. A slot read from a vnode's `children` has
+ * not passed through the component's slot normalization, so it may return one vnode.
+ */
+export function slotNodes(result: unknown): VNode[] {
+  if (result === undefined || result === null) return [];
+  return (Array.isArray(result) ? result.flat(Infinity) : [result]) as VNode[];
+}
+
+/** The card template a host wrote inside the `List` part. */
+export interface ListCardTemplate {
+  /** The List part is hidden, so no card renders from it. */
+  readonly hidden: boolean;
+  readonly default: Slot | undefined;
+  readonly item: Slot | undefined;
+}
+
+/**
+ * Read the card template from a `List` part, for a card the rail renders OUTSIDE the list.
+ *
+ * The compact rail floats one card beside the marker strip. That card must use the same
+ * template the list uses, or the host's part overrides and extra children vanish whenever
+ * the gutter is narrow. Returns `null` when there is no List part, or when the part has no
+ * slots of its own, so the caller falls back to the root's children.
+ */
+export function listCardTemplate(listPart: VNode | undefined): ListCardTemplate | null {
+  if (!listPart) return null;
+  const hiddenProp = (listPart.props as { hidden?: unknown } | null)?.hidden;
+  const hidden = hiddenProp !== undefined && hiddenProp !== false;
+  const children = listPart.children as Record<string, unknown> | null;
+  const slot = (name: string): Slot | undefined => {
+    const value = children && typeof children === 'object' ? children[name] : undefined;
+    return typeof value === 'function' ? (value as Slot) : undefined;
+  };
+  const template = { hidden, default: slot('default'), item: slot('item') };
+  if (!hidden && !template.default && !template.item) return null;
+  return template;
 }

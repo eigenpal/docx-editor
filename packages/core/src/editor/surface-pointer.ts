@@ -29,18 +29,23 @@ import {
   deletedTextBoundaries,
   paragraphTextFromLayout,
   type SemanticPosition,
+  type CaretGeometry,
   type SemanticSelection,
 } from '../layout/semantic-interaction.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
+import {
+  absorbAtomicControls,
+  atomicRangeAt,
+  placeholderSelectionRange,
+  type PositionRange,
+} from './surface-atomic-controls.ts';
 import type {
-  BlockFragmentRecord,
   ContentControlBoundaryRecord,
-  LayoutBox,
-  ParagraphFragmentRecord,
   SemanticLayout,
   TextMeasurer,
 } from '../layout/semantic-records.ts';
-import { MAX_TABLE_NESTING } from '../layout/semantic-table.ts';
+import { hostTimers, isHTMLElementNode } from './host-realm.ts';
+import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 import {
   findEmptyFurnitureBandAtSheetPoint,
   findNoteAtSheetPoint,
@@ -48,6 +53,7 @@ import {
   hitTestStoryAtLocalPoint,
   isBodyContentPoint,
   scopedDocumentOrder,
+  storyHitYieldsToBody,
   storyMatchesBinding,
   type HeaderFooterScopeBinding,
 } from './surface-scope.ts';
@@ -69,7 +75,10 @@ export interface EnterHeaderFooterPointerRequest extends ActiveHeaderFooterPoint
 /** What the controller needs from the surface it drives. */
 export interface PointerHost {
   readonly pagesLayer: HTMLElement;
+  /** The element the pages are mounted in. Read per use: the surface can move to another one. */
   readonly container: HTMLElement;
+  /** Window-level listeners that follow the pages to another window. */
+  readonly listeners: SurfaceHostListeners;
   /**
    * Points to CSS pixels, read per gesture rather than captured.
    *
@@ -89,7 +98,7 @@ export interface PointerHost {
   layout(): SemanticLayout;
   measurer(): TextMeasurer | undefined;
   selection(): SemanticSelection;
-  setSelection(next: SemanticSelection): void;
+  setSelection(next: SemanticSelection, caret?: CaretGeometry): void;
   cellSelection(): CellSelection | null;
   setCellSelection(next: CellSelection | null): void;
   focus(): void;
@@ -122,6 +131,11 @@ export interface PointerHost {
    * Called after mousedown is prevented so the caret is not stolen.
    */
   onContentControlWidget?(controlId: string, kind: string): void;
+  /** A change bar was clicked: Word toggles Simple and All Markup. The caret stays put. */
+  onChangeBarToggle?(): void;
+  /** Options interaction on a legacy text form, before ordinary word selection. */
+  onTextFormDoubleClick?(event: PointerEvent): boolean;
+  onTextFormPointerUp?(event: PointerEvent): void;
   /**
    * A pointer selection gesture has settled — the press, drag and release are over and the
    * model selection is final.
@@ -131,8 +145,16 @@ export interface PointerHost {
    * rather than acted on here, because the pointer lane owns geometry and nothing else.
    */
   onSelectionSettled?(): void;
+  /**
+   * True while presses must not place a caret, make a selection or open a story scope.
+   *
+   * Viewing: the reader looks at the document, and a click that moved the selection made
+   * the toolbar report the formatting under it, as if the text were there to edit.
+   */
+  selectionLocked?(): boolean;
   /** Generated navigation paragraphs refuse caret placement and text selection. */
   isReadOnlyParagraph?(paragraphId: string): boolean;
+  isReadOnlyPosition?(position: SemanticPosition): boolean;
   /**
    * Select a content control's full addressable content atomically.
    *
@@ -152,6 +174,12 @@ export interface PointerControllerOptions {
    * not be tested in has somewhere to go that is not "downgrade the package".
    */
   readonly mode?: 'engine' | 'native';
+  /**
+   * `lockedControlNavigation: 'atomic'`: a press, a drag, a shift-press or a double click that
+   * lands INSIDE an inline control with locked content selects the control as a unit, the way
+   * it already does for a `w:showingPlcHdr` prompt. A press on an EDGE still places a caret.
+   */
+  readonly atomicInlineControls?: boolean;
 }
 
 export interface PointerController {
@@ -163,6 +191,8 @@ export interface PointerController {
    * through it.
    */
   dragging(): boolean;
+  /** End a gesture in progress where it stands: the surface is moving to another window. */
+  cancelGesture(): void;
   destroy(): void;
 }
 
@@ -177,13 +207,9 @@ const AUTO_SCROLL_MAX_PX = 12;
 
 type Granularity = 'character' | 'word' | 'paragraph';
 
-interface PositionRange {
-  readonly from: SemanticPosition;
-  readonly to: SemanticPosition;
-}
-
 interface Gesture {
   readonly pointerId: number;
+  caret?: CaretGeometry;
   readonly granularity: Granularity;
   /** What the press itself selected — a caret, a word, or a paragraph. */
   readonly anchorRange: PositionRange;
@@ -194,121 +220,6 @@ interface Gesture {
   /** Last client point, so autoscroll can keep extending while the pointer is still. */
   clientX: number;
   clientY: number;
-}
-
-function overlapArea(a: LayoutBox, b: LayoutBox): number {
-  const x0 = Math.max(a.x, b.x);
-  const y0 = Math.max(a.y, b.y);
-  const x1 = Math.min(a.x + a.width, b.x + b.width);
-  const y1 = Math.min(a.y + a.height, b.y + b.height);
-  if (x1 <= x0 || y1 <= y0) return 0;
-  return (x1 - x0) * (y1 - y0);
-}
-
-/** True when boxes share area, or a zero-width control box sits on `inner`. */
-function boxesTouch(outer: LayoutBox, inner: LayoutBox): boolean {
-  if (overlapArea(outer, inner) > 0) return true;
-  if (outer.width === 0) {
-    return (
-      inner.x <= outer.x &&
-      outer.x <= inner.x + inner.width &&
-      !(outer.y + outer.height < inner.y || inner.y + inner.height < outer.y)
-    );
-  }
-  return false;
-}
-
-function comparePositions(
-  layout: SemanticLayout,
-  a: SemanticPosition,
-  b: SemanticPosition
-): number {
-  const order = documentOrder(layout);
-  const rankA = order.indexOf(a.paragraphId);
-  const rankB = order.indexOf(b.paragraphId);
-  if (rankA !== rankB) return rankA - rankB;
-  return a.offset - b.offset;
-}
-
-/**
- * Document-order paragraph walk that descends table rows/cells within {@link MAX_TABLE_NESTING}.
- *
- * Header-repeat rows are skipped so each caret stop is considered once. Nested tables inside
- * cells share the same bound layout already uses when refusing deeper nesting.
- */
-function visitParagraphBlocks(
-  blocks: readonly BlockFragmentRecord[],
-  depth: number,
-  visit: (paragraph: ParagraphFragmentRecord) => void
-): void {
-  if (depth > MAX_TABLE_NESTING) return;
-  for (const block of blocks) {
-    if (block.kind === 'paragraph') {
-      visit(block);
-      continue;
-    }
-    if (depth >= MAX_TABLE_NESTING) continue;
-    for (const row of block.rows) {
-      if (row.isHeaderRepeat) continue;
-      for (const cell of row.cells) visitParagraphBlocks(cell.blocks, depth + 1, visit);
-    }
-  }
-}
-
-/**
- * Full addressable range of a placeholder control from layout-published boundary geometry.
- *
- * Block / row / cell controls cover whole paragraphs whose boxes touch a fragment (including
- * paragraphs nested under tables and nested block-control content that flattened into the
- * flow). Inline controls take the UTF-16 span of every painted span that touches a fragment.
- */
-export function placeholderSelectionRange(
-  layout: SemanticLayout,
-  control: ContentControlBoundaryRecord
-): PositionRange | null {
-  if (!control.placeholder || control.fragments.length === 0) return null;
-
-  let from: SemanticPosition | null = null;
-  let to: SemanticPosition | null = null;
-
-  const consider = (start: SemanticPosition, end: SemanticPosition): void => {
-    if (!from || comparePositions(layout, start, from) < 0) from = start;
-    if (!to || comparePositions(layout, end, to) > 0) to = end;
-  };
-
-  // Non-inline placeholders select whole paragraphs — row/cell wrappers are structural units
-  // the same way block wrappers are, so a mid-cell partial range must still absorb.
-  const wholeParagraphs = control.level !== 'inline';
-
-  for (const fragment of control.fragments) {
-    const page = layout.pages[fragment.pageIndex];
-    if (!page) continue;
-    visitParagraphBlocks(page.fragments, 0, (block) => {
-      if (!boxesTouch(fragment.box, block.box)) return;
-
-      if (wholeParagraphs) {
-        const length = paragraphTextFromLayout(layout, block.paragraphId).length;
-        consider(
-          { paragraphId: block.paragraphId, offset: 0 },
-          { paragraphId: block.paragraphId, offset: length }
-        );
-        return;
-      }
-
-      for (const line of block.lines) {
-        for (const span of line.spans) {
-          if (!boxesTouch(fragment.box, span.box)) continue;
-          consider(
-            { paragraphId: span.range.paragraphId, offset: span.range.start },
-            { paragraphId: span.range.paragraphId, offset: span.range.end }
-          );
-        }
-      }
-    });
-  }
-
-  if (!from || !to) return null;
-  return { from, to };
 }
 
 function controlById(
@@ -334,69 +245,27 @@ function placeholderAtHit(
   return control?.placeholder ? control : null;
 }
 
-/**
- * Expand a selection so every `w:showingPlcHdr` control it touches is selected as a unit.
- *
- * Used by pointer drag / shift-click, and exported so keyboard extend paths can share the
- * same atomic rule without duplicating geometry walks.
- */
-export function absorbPlaceholderControls(
-  layout: SemanticLayout,
-  selection: SemanticSelection
-): SemanticSelection {
-  const controls = layout.contentControls ?? [];
-  if (controls.length === 0) return selection;
-
-  let from =
-    comparePositions(layout, selection.anchor, selection.head) <= 0
-      ? selection.anchor
-      : selection.head;
-  let to =
-    comparePositions(layout, selection.anchor, selection.head) <= 0
-      ? selection.head
-      : selection.anchor;
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const control of controls) {
-      if (!control.placeholder) continue;
-      const range = placeholderSelectionRange(layout, control);
-      if (!range) continue;
-      const collapsed = comparePositions(layout, from, to) === 0;
-      const intersects = collapsed
-        ? comparePositions(layout, from, range.from) >= 0 &&
-          comparePositions(layout, from, range.to) < 0
-        : comparePositions(layout, from, range.to) < 0 &&
-          comparePositions(layout, to, range.from) > 0;
-      if (!intersects) continue;
-      if (comparePositions(layout, range.from, from) < 0) {
-        from = range.from;
-        changed = true;
-      }
-      if (comparePositions(layout, range.to, to) > 0) {
-        to = range.to;
-        changed = true;
-      }
-    }
-  }
-
-  // Preserve which end the user is dragging (head) relative to the original orientation.
-  const headIsEnd = comparePositions(layout, selection.anchor, selection.head) <= 0;
-  return headIsEnd ? { anchor: from, head: to } : { anchor: to, head: from };
-}
+/** Prompts a single press opens the value menu for, beside selecting them. */
+const LIST_PROMPT_TYPES: ReadonlySet<string> = new Set([
+  'dropdown',
+  'comboBox',
+  'date',
+  'buildingBlockGallery',
+]);
 
 export function createPointerController(
   host: PointerHost,
   options: PointerControllerOptions = {}
 ): PointerController {
   if (options.mode === 'native') {
-    return { dragging: () => false, destroy: () => {} };
+    return { dragging: () => false, cancelGesture: () => {}, destroy: () => {} };
   }
 
-  const { pagesLayer, container } = host;
-  const document = pagesLayer.ownerDocument;
-  const view = document.defaultView;
+  const { pagesLayer } = host;
+  const atomicInlineControls = options.atomicInlineControls === true;
+  const frames = hostTimers(() => pagesLayer);
+  /** The document a live gesture's release listeners are bound to. */
+  let gestureDocument: Document | null = null;
 
   let gesture: Gesture | null = null;
   /** Cached for the life of one gesture, and dropped whenever the page can have moved. */
@@ -580,21 +449,12 @@ export function createPointerController(
     const raw = isBefore(layout, headRange.from, anchorRange.from)
       ? { anchor: anchorRange.to, head: headRange.from }
       : { anchor: anchorRange.from, head: headRange.to };
-    return absorbPlaceholderControls(layout, raw);
+    return absorbAtomicControls(layout, raw, { atomic: atomicInlineControls });
   }
 
   // ---------------------------------------------------------------------------------
   // Autoscroll
   // ---------------------------------------------------------------------------------
-
-  /**
-   * The element the `scroll` listener is REGISTERED on, captured once.
-   *
-   * `destroy()` used to look the scroller up again, and `closest` returns null once the
-   * container has been unparented — so the listener stayed attached to an element that then
-   * retained the whole surface through this closure.
-   */
-  const scrollHost: HTMLElement | null = container.closest('.docx-editor__scroll-container');
 
   /**
    * The scroller to FOLLOW during a drag, looked up live.
@@ -605,7 +465,7 @@ export function createPointerController(
    * capture-phase listener on the window below.
    */
   function scroller(): HTMLElement | null {
-    return container.closest('.docx-editor__scroll-container');
+    return host.container.closest('.docx-editor__scroll-container');
   }
 
   /** How far the view should move this frame, from how deep into the edge zone the drag is. */
@@ -623,7 +483,7 @@ export function createPointerController(
 
   function stopAutoScroll(): void {
     if (autoScrollHandle === null) return;
-    view?.cancelAnimationFrame(autoScrollHandle);
+    frames.cancelAnimationFrame(autoScrollHandle);
     autoScrollHandle = null;
   }
 
@@ -638,7 +498,7 @@ export function createPointerController(
     autoScrollHandle = null;
     const active = gesture;
     const element = scroller();
-    if (!active || !element || !view) return;
+    if (!active || !element) return;
     const rect = element.getBoundingClientRect();
     const delta = autoScrollDelta(rect.top, rect.bottom, active.clientY);
     if (delta === 0) return;
@@ -648,16 +508,16 @@ export function createPointerController(
     // a second source of truth for where the pages are.
     layerRect = null;
     extendTo(active.clientX, active.clientY);
-    autoScrollHandle = view.requestAnimationFrame(tickAutoScroll);
+    autoScrollHandle = frames.requestAnimationFrame(tickAutoScroll);
   }
 
   function maybeAutoScroll(): void {
-    if (autoScrollHandle !== null || !view || !gesture) return;
+    if (autoScrollHandle !== null || !gesture) return;
     const element = scroller();
     if (!element) return;
     const rect = element.getBoundingClientRect();
     if (autoScrollDelta(rect.top, rect.bottom, gesture.clientY) === 0) return;
-    autoScrollHandle = view.requestAnimationFrame(tickAutoScroll);
+    autoScrollHandle = frames.requestAnimationFrame(tickAutoScroll);
   }
 
   // ---------------------------------------------------------------------------------
@@ -671,10 +531,16 @@ export function createPointerController(
     // An unresolvable move is a no-op, never a collapse: a pointer that has left the document
     // should leave the selection where it last was rather than throwing it away.
     if (!hit) return;
-    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) return;
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    )
+      return;
     if (extendCells(active, hit)) return;
+    active.caret = hit.caret;
     host.setSelection(
-      extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit)
+      extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit),
+      hit.caret
     );
   }
 
@@ -733,6 +599,17 @@ export function createPointerController(
     // Content-control widgets: prevent mousedown so chrome does not steal the caret, then
     // dispatch the engine-level interaction (checkbox toggle, dropdown menu, date picker).
     // (Furniture clicks continue below into the scoped header/footer / note enter paths.)
+    // A change bar is furniture in the margin with one job: Word toggles the view on a
+    // click. Prevented like a widget so the press never reaches the caret.
+    if (
+      host.onChangeBarToggle &&
+      (event.target as Element | null)?.closest?.('[data-docx-change-bar-toggle]')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      host.onChangeBarToggle();
+      return;
+    }
     const widget = (event.target as Element | null)?.closest?.(
       '[data-docx-cc-widget]'
     ) as HTMLElement | null;
@@ -745,6 +622,10 @@ export function createPointerController(
       if (controlId && kind) host.onContentControlWidget?.(controlId, kind);
       return;
     }
+    // Not prevented: nothing here claims the press, so outside-click handlers and link
+    // activation still see the ordinary mouse events, and the pages layer is not focusable
+    // while locked, so the press does not focus it either.
+    if (host.selectionLocked?.()) return;
     // Touch keeps the browser's own panning: claiming the gesture would stop the page
     // scrolling under a finger, which is a much worse trade than a less exact caret.
     if (event.pointerType === 'touch') return;
@@ -758,9 +639,24 @@ export function createPointerController(
     const sheet = sheetPoint(event.clientX, event.clientY);
     const active = host.activeHeaderFooter?.() ?? null;
     const activeNote = host.activeNote?.() ?? null;
-    const storyHit = findStoryAtSheetPoint(layout, sheet, host.pageOffsetX);
+    const bandHit = findStoryAtSheetPoint(layout, sheet, host.pageOffsetX);
+    // A story painted over body lines (negative vertical margin) gives the body precedence.
+    const yieldsToBody =
+      bandHit !== null &&
+      storyHitYieldsToBody(
+        layout,
+        bandHit,
+        sheet,
+        host.pageOffsetX,
+        active !== null && storyMatchesBinding(bandHit.story, scopeBinding(active)),
+        host.measurer()
+      );
+    const storyHit = yieldsToBody ? null : bandHit;
     const noteHit = findNoteAtSheetPoint(layout, sheet, host.pageOffsetX);
-    const furnitureDom = (event.target as Element | null)?.closest('[data-docx-hf]');
+    // The painted story can sit in front of the body text, so its element is the target too.
+    const furnitureDom = yieldsToBody
+      ? null
+      : (event.target as Element | null)?.closest('[data-docx-hf]');
     const onFurniture = Boolean(furnitureDom || storyHit);
     const target = event.target as Element | null;
     const noteRefEl = target?.closest<HTMLElement>('[data-docx-note-ref]');
@@ -862,7 +758,7 @@ export function createPointerController(
         event.preventDefault();
         host.focus();
         host.enterHeaderFooter?.(enterRequestFromStoryHit(storyHit, positionInStory(storyHit)));
-      } else if (furnitureDom instanceof HTMLElement) {
+      } else if (isHTMLElementNode(furnitureDom)) {
         const rId = furnitureDom.dataset.docxRId;
         const kindAttr = furnitureDom.dataset.docxHf;
         const pageAttr = furnitureDom.closest('[data-page-index]')?.getAttribute('data-page-index');
@@ -906,10 +802,15 @@ export function createPointerController(
 
     const hit = resolve(event.clientX, event.clientY);
     if (!hit) return;
-    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) {
+    if (
+      host.isReadOnlyPosition?.(hit.position) ??
+      host.isReadOnlyParagraph?.(hit.position.paragraphId)
+    ) {
       event.preventDefault();
       return;
     }
+
+    if (clicks() === 2 && host.onTextFormDoubleClick?.(event)) return;
 
     event.preventDefault();
     // Preventing the default cancels the browser's own focus transfer, and the surface only
@@ -926,9 +827,11 @@ export function createPointerController(
       // Capture is an optimisation, not a requirement — the document listeners below see the
       // rest of the gesture wherever the pointer goes.
     }
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-    document.addEventListener('pointercancel', onPointerUp);
+    // The pages' own document, read now: the surface may have moved since it was created.
+    gestureDocument = pagesLayer.ownerDocument;
+    gestureDocument.addEventListener('pointermove', onPointerMove);
+    gestureDocument.addEventListener('pointerup', onPointerUp);
+    gestureDocument.addEventListener('pointercancel', onPointerUp);
 
     const count = clicks();
     const granularity = event.shiftKey
@@ -937,7 +840,13 @@ export function createPointerController(
 
     const placeholder = placeholderAtHit(layout, hit);
     if (placeholder && !event.shiftKey) {
-      // Prefer the host's atomic select when wired (form-fill / selectControlContent); otherwise
+      // Select before opening: selection repaints chrome and replaces the popup anchor.
+      const openPromptWidget = () => {
+        if (count === 1 && LIST_PROMPT_TYPES.has(placeholder.controlType)) {
+          host.onContentControlWidget?.(placeholder.id, placeholder.controlType);
+        }
+      };
+      // Prefer the host's atomic select when wired (form-fill / selectContentControl); otherwise
       // expand from layout boundary geometry so placeholder presses never land mid-prompt.
       if (host.selectContentControl?.(placeholder.id)) {
         const selected = host.selection();
@@ -956,6 +865,7 @@ export function createPointerController(
           clientX: event.clientX,
           clientY: event.clientY,
         };
+        openPromptWidget();
         return;
       }
       const unit = placeholderSelectionRange(layout, placeholder);
@@ -970,6 +880,7 @@ export function createPointerController(
           clientY: event.clientY,
         };
         publish(() => host.setSelection({ anchor: unit.from, head: unit.to }));
+        openPromptWidget();
         return;
       }
     }
@@ -981,6 +892,7 @@ export function createPointerController(
       gesture = {
         pointerId: event.pointerId,
         granularity,
+        caret: hit.caret,
         anchorRange: { from: current.anchor, to: current.anchor },
         anchorCell: hit.cell,
         cellDragging: false,
@@ -995,14 +907,21 @@ export function createPointerController(
             hit.position,
             granularity,
             hit
-          )
+          ),
+          hit.caret
         )
       );
     } else {
-      const anchorRange = rangeAt(layout, hit.position, granularity);
+      // A double click INSIDE an atomic control takes the control, not a word that may run on
+      // past it ("ABC[Token]DEF" has no space to stop the word at).
+      const anchorRange =
+        (atomicInlineControls && granularity === 'word'
+          ? atomicRangeAt(layout, hit.position)
+          : null) ?? rangeAt(layout, hit.position, granularity);
       gesture = {
         pointerId: event.pointerId,
         granularity,
+        caret: hit.caret,
         anchorRange,
         anchorCell: hit.cell,
         cellDragging: false,
@@ -1011,7 +930,12 @@ export function createPointerController(
       };
       publish(() =>
         host.setSelection(
-          absorbPlaceholderControls(layout, { anchor: anchorRange.from, head: anchorRange.to })
+          absorbAtomicControls(
+            layout,
+            { anchor: anchorRange.from, head: anchorRange.to },
+            { atomic: atomicInlineControls }
+          ),
+          hit.caret
         )
       );
     }
@@ -1030,6 +954,8 @@ export function createPointerController(
   const onPointerMove = (event: PointerEvent): void => {
     const active = gesture;
     if (!active || event.pointerId !== active.pointerId) return;
+    // Viewing began mid-drag: the rest of the drag selects nothing.
+    if (host.selectionLocked?.()) return endGesture();
     event.preventDefault();
     active.clientX = event.clientX;
     active.clientY = event.clientY;
@@ -1052,7 +978,7 @@ export function createPointerController(
     // the text range it stands in for.
     const cells = host.cellSelection();
     if (cells) host.setCellSelection(cells);
-    else host.setSelection(host.selection());
+    else host.setSelection(host.selection(), active.caret);
     // Only a real RELEASE settles the selection. `pointercancel` is the browser taking the
     // gesture away — a system touch gesture, a device change — and the range under the
     // pointer at that moment is not one the user chose. Reporting it settled let an armed
@@ -1060,7 +986,10 @@ export function createPointerController(
     //
     // AFTER the re-assertion above, so anything acting on the settled selection sees the
     // model's answer rather than whatever the browser left behind mid-drag.
-    if (event.type === 'pointerup') host.onSelectionSettled?.();
+    if (event.type === 'pointerup') {
+      host.onTextFormPointerUp?.(event);
+      host.onSelectionSettled?.();
+    }
   };
 
   function endGesture(): void {
@@ -1074,9 +1003,10 @@ export function createPointerController(
     gesture = null;
     layerRect = null;
     stopAutoScroll();
-    document.removeEventListener('pointermove', onPointerMove);
-    document.removeEventListener('pointerup', onPointerUp);
-    document.removeEventListener('pointercancel', onPointerUp);
+    gestureDocument?.removeEventListener('pointermove', onPointerMove);
+    gestureDocument?.removeEventListener('pointerup', onPointerUp);
+    gestureDocument?.removeEventListener('pointercancel', onPointerUp);
+    gestureDocument = null;
   }
 
   // A scroll moves the pages under the pointer, so anything cached about where they are is
@@ -1086,22 +1016,22 @@ export function createPointerController(
   };
 
   pagesLayer.addEventListener('pointerdown', onPointerDown);
-  scrollHost?.addEventListener('scroll', onScroll, { passive: true });
-  // Anything that can move the layer under a live pointer invalidates the cached origin, not
-  // only the scroller this surface sits in: an ancestor or the window can scroll, and a
-  // resize re-centres the page stack. Capture phase, because a scroll on an inner element
-  // does not bubble.
-  view?.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  view?.addEventListener('resize', onScroll, { passive: true });
+  // Anything that can move the layer under a live pointer invalidates the cached origin: the
+  // scroller this surface sits in, an ancestor or the window can scroll, and a resize
+  // re-centres the page stack. Capture phase on the window, because a scroll on an inner
+  // element does not bubble but does pass the window on its way down.
+  const unlisten = [
+    host.listeners.onWindow('scroll', onScroll, { capture: true, passive: true }),
+    host.listeners.onWindow('resize', onScroll, { passive: true }),
+  ];
 
   return {
     dragging: () => gesture !== null,
+    cancelGesture: endGesture,
     destroy() {
       endGesture();
       pagesLayer.removeEventListener('pointerdown', onPointerDown);
-      scrollHost?.removeEventListener('scroll', onScroll);
-      view?.removeEventListener('scroll', onScroll, { capture: true });
-      view?.removeEventListener('resize', onScroll);
+      for (const remove of unlisten) remove();
     },
   };
 }

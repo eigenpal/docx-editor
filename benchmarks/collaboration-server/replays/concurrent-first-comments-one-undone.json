@@ -1,0 +1,40 @@
+{
+  "config": "textbox",
+  "seed": 4,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 1,
+          "end": 2
+        },
+        "paragraphs": [5]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 11,
+          "end": 15
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    }
+  ]
+}

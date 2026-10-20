@@ -2,7 +2,15 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // Paint equation geometry without parsing OMML or measuring DOM.
 
 import { markUnsupportedElement } from './unsupported-elements.ts';
-import type { EquationGeometry, EquationSpanRecord } from '@docx-editor.dev/core/layout';
+import type {
+  EquationGeometry,
+  EquationSpanRecord,
+  ResolvedRunStyle,
+  StyleSpanRecord,
+} from '@docx-editor.dev/core/layout';
+import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
+import { revisionMarkupStyle } from '../contracts/revision-markup.ts';
+import type { PaintContext } from './semantic-paint.ts';
 
 function place(
   element: HTMLElement,
@@ -58,7 +66,8 @@ function paintNode(
   parentX = 0,
   parentY = 0,
   ancestors: readonly string[] = [],
-  path = '0'
+  path = '0',
+  applyFace?: (element: HTMLElement, style: ResolvedRunStyle) => void
 ): void {
   const x = parentX + node.box.x;
   const y = parentY + node.box.y;
@@ -74,6 +83,11 @@ function paintNode(
       place(element, { x, y, width: node.box.width, height: node.box.height }, scale);
       element.textContent = node.text;
       element.style.display = 'block';
+      if (node.runStyle && applyFace) {
+        element.style.fontWeight = node.runStyle.bold ? 'bold' : 'normal';
+        element.style.fontStyle = node.runStyle.italic ? 'italic' : 'normal';
+        applyFace(element, node.runStyle);
+      }
       element.style.fontSize = `${node.fontSizePt * scale}px`;
       element.style.lineHeight = `${node.box.height * scale}px`;
       element.style.whiteSpace = 'pre';
@@ -107,7 +121,18 @@ function paintNode(
     }
     case 'row':
       for (const [index, child] of node.items.entries())
-        paintNode(document, host, child, equation, scale, x, y, classes, `${path}.${index}`);
+        paintNode(
+          document,
+          host,
+          child,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.${index}`,
+          applyFace
+        );
       break;
     case 'fraction':
       paintNode(
@@ -119,7 +144,8 @@ function paintNode(
         x,
         y,
         classes,
-        `${path}.numerator`
+        `${path}.numerator`,
+        applyFace
       );
       host.append(
         rule(
@@ -138,13 +164,36 @@ function paintNode(
         x,
         y,
         classes,
-        `${path}.denominator`
+        `${path}.denominator`,
+        applyFace
       );
       break;
     case 'radical':
-      paintNode(document, host, node.sign, equation, scale, x, y, classes, `${path}.sign`);
+      paintNode(
+        document,
+        host,
+        node.sign,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.sign`,
+        applyFace
+      );
       if (node.degree)
-        paintNode(document, host, node.degree, equation, scale, x, y, classes, `${path}.degree`);
+        paintNode(
+          document,
+          host,
+          node.degree,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.degree`,
+          applyFace
+        );
       host.append(
         rule(
           document,
@@ -153,10 +202,54 @@ function paintNode(
           scale
         )
       );
-      paintNode(document, host, node.radicand, equation, scale, x, y, classes, `${path}.radicand`);
+      paintNode(
+        document,
+        host,
+        node.radicand,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.radicand`,
+        applyFace
+      );
+      break;
+    case 'bar':
+      paintNode(
+        document,
+        host,
+        node.body,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.body`,
+        applyFace
+      );
+      host.append(
+        rule(
+          document,
+          'docx-equation-bar',
+          { ...node.bar, x: x + node.bar.x, y: y + node.bar.y },
+          scale
+        )
+      );
       break;
     case 'script':
-      paintNode(document, host, node.base, equation, scale, x, y, classes, `${path}.base`);
+      paintNode(
+        document,
+        host,
+        node.base,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.base`,
+        applyFace
+      );
       if (node.subscript)
         paintNode(
           document,
@@ -167,7 +260,8 @@ function paintNode(
           x,
           y,
           classes,
-          `${path}.subscript`
+          `${path}.subscript`,
+          applyFace
         );
       if (node.superscript)
         paintNode(
@@ -179,11 +273,23 @@ function paintNode(
           x,
           y,
           classes,
-          `${path}.superscript`
+          `${path}.superscript`,
+          applyFace
         );
       break;
     case 'nary':
-      paintNode(document, host, node.operator, equation, scale, x, y, classes, `${path}.operator`);
+      paintNode(
+        document,
+        host,
+        node.operator,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.operator`,
+        applyFace
+      );
       if (node.lowerLimit)
         paintNode(
           document,
@@ -194,7 +300,8 @@ function paintNode(
           x,
           y,
           classes,
-          `${path}.lowerLimit`
+          `${path}.lowerLimit`,
+          applyFace
         );
       if (node.upperLimit)
         paintNode(
@@ -206,9 +313,21 @@ function paintNode(
           x,
           y,
           classes,
-          `${path}.upperLimit`
+          `${path}.upperLimit`,
+          applyFace
         );
-      paintNode(document, host, node.body, equation, scale, x, y, classes, `${path}.body`);
+      paintNode(
+        document,
+        host,
+        node.body,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.body`,
+        applyFace
+      );
       break;
   }
 }
@@ -222,6 +341,7 @@ export function mountEquationGeometry(
     ownerPartName?: string;
   },
   scale: number,
+  applyFace?: (element: HTMLElement, style: ResolvedRunStyle) => void,
   source?: OoxmlElement | null,
   ownerPartName?: string
 ): void {
@@ -247,7 +367,12 @@ export function mountEquationGeometry(
     fragment,
     geometry,
     { ...equation, unsupportedSource: source ?? null, ...(ownerPartName ? { ownerPartName } : {}) },
-    scale
+    scale,
+    0,
+    0,
+    [],
+    '0',
+    applyFace
   );
   host.append(fragment);
 }
@@ -261,14 +386,72 @@ export function mountEquationForSpan(
     readonly scale: number;
     readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
     readonly unsupportedOwnerPartName?: (nodeId: string) => string;
-  }
+  },
+  applyFace?: (element: HTMLElement, style: ResolvedRunStyle) => void
 ): void {
   mountEquationGeometry(
     document,
     host,
     equation,
     context.scale,
+    applyFace,
     context.unsupportedSource?.(equation.sourceNodeId),
     context.unsupportedOwnerPartName?.(equation.sourceNodeId)
   );
+}
+
+/**
+ * The revision mark of an equation: its presentation, plus an explicit bar. The glyphs are
+ * absolutely positioned, and CSS never carries a text decoration to out-of-flow children, so
+ * a struck or underlined equation would otherwise show no line at all, and under a host's
+ * revision markup a deleted equation would look the same as an inserted one.
+ */
+export function applyEquationRevision(
+  document: Document,
+  host: HTMLElement,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): void {
+  applyRevisionPresentation(host, span, ctx);
+  const kind = host.dataset.revisionKind;
+  if (kind !== 'delete' && kind !== 'moveFrom' && kind !== 'insert' && kind !== 'moveTo') return;
+  const box = span.equation?.geometry.box;
+  if (!box) return;
+  // A host's revision markup decides the mark, as it does for the text beside the equation.
+  const mark = ctx.revisionMarkup
+    ? revisionMarkupStyle(ctx.revisionMarkup, kind).mark
+    : kind === 'delete' || kind === 'moveFrom'
+      ? 'strikethrough'
+      : 'underline';
+  const strike = mark === 'strikethrough' || mark === 'doubleStrikethrough';
+  if (!strike && mark !== 'underline' && mark !== 'doubleUnderline') return;
+  const doubled = mark === 'doubleStrikethrough' || mark === 'doubleUnderline';
+  if (strike) {
+    // Each glyph run is struck on its own, as struck text is. One bar across the box sat on
+    // the math axis, where a fraction bar already is, so a deleted fraction looked merely
+    // recoloured; striking the runs crosses the numerator and the denominator instead.
+    for (const glyph of host.querySelectorAll<HTMLElement>(
+      '.docx-equation-text, .docx-equation-fallback'
+    )) {
+      glyph.classList.add('docx-equation-revision-strike');
+      glyph.style.textDecorationLine = 'line-through';
+      glyph.style.textDecorationStyle = doubled ? 'double' : 'solid';
+      glyph.style.textDecorationColor = 'currentColor';
+    }
+    return;
+  }
+  const thickness = 0.75;
+  const ys = doubled
+    ? [box.height - 3 * thickness, box.height - thickness]
+    : [box.height - thickness];
+  for (const y of ys) {
+    host.append(
+      rule(
+        document,
+        'docx-equation-revision-underline',
+        { x: 0, y, width: box.width, height: thickness },
+        ctx.scale
+      )
+    );
+  }
 }

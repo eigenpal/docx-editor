@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A range selection whose end touched a tracked change or comment made that item active, so its highlight and card opened although none of its characters were selected.",
+  "after": "A range selection makes an item active only when the selection head holds selected characters of that item. A collapsed caret keeps the old rule.",
+  "reason": "The active review item is local surface state for each participant. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-selection-beside-revision.test.ts",
+    "packages/pro/src/__tests__/review-selection-activation.test.ts",
+    "packages/core/src/editor/__tests__/review-selection-activation.test.ts",
+    "packages/core/src/store/__tests__/review-items-at-selection.test.ts"
+  ],
+  "changeset": "selection-beside-review-item",
+  "migration": null
+}

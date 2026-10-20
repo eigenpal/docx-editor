@@ -10,6 +10,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { StrictMode } from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { act, cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -56,6 +58,7 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
 /** A session a test can drive into a terminal failure after the join has already succeeded. */
 function failableSession(documentId: string): EditorCollaborationSession & {
   fail(reason: CollaborationFailureCode): void;
+  heal(): void;
 } {
   const base = stubSession(documentId);
   let snapshot = base.statusSnapshot();
@@ -77,6 +80,14 @@ function failableSession(documentId: string): EditorCollaborationSession & {
       });
       for (const notify of [...listeners]) notify();
     },
+    heal() {
+      snapshot = Object.freeze({
+        status: 'ready' as const,
+        reason: undefined,
+        lastFailure: snapshot.lastFailure,
+      });
+      for (const notify of [...listeners]) notify();
+    },
   };
 }
 
@@ -89,6 +100,25 @@ interface StubRoom {
   readonly destroyed: boolean;
 }
 
+/** A provider stand-in with the unsynced-changes event the hook listens to. */
+function stubProvider() {
+  const listeners = new Set<() => void>();
+  return {
+    stub: 'provider',
+    unsyncedChanges: 0,
+    on(event: string, listener: () => void) {
+      if (event === 'unsyncedChanges') listeners.add(listener);
+    },
+    off(_event: string, listener: () => void) {
+      listeners.delete(listener);
+    },
+    setUnsynced(count: number) {
+      this.unsyncedChanges = count;
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
 function fakeRoom(documentId = 'room-1'): StubRoom {
   let destroyed = false;
   const bytes = new Uint8Array([1, 2, 3]);
@@ -97,7 +127,7 @@ function fakeRoom(documentId = 'room-1'): StubRoom {
     document: bytes,
     session,
     ydoc: { stub: 'ydoc' } as unknown as Y.Doc,
-    provider: { stub: 'provider' } as unknown as HocuspocusProvider,
+    provider: stubProvider() as unknown as HocuspocusProvider,
     destroy() {
       destroyed = true;
     },
@@ -168,6 +198,79 @@ describe('useHocuspocusCollaboration', () => {
     expect(latest?.error?.code).toBe('authentication-failed');
   });
 
+  test('a session that heals clears the error it reported', async () => {
+    // A degraded replica returns to `ready` on its own; the hook must not keep showing the
+    // failure over a session that is replicating again.
+    const session = failableSession('room-heal');
+    const createRoom = async () => {
+      await Promise.resolve();
+      return {
+        document: new Uint8Array([1, 2, 3]),
+        session,
+        destroy() {},
+        get destroyed() {
+          return false;
+        },
+      } as StubRoom;
+    };
+    let latest: UseHocuspocusCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      session.fail('remote-apply-failed');
+    });
+    expect(latest?.error?.code).toBe('remote-apply-failed');
+    await act(async () => {
+      session.heal();
+    });
+    expect(latest?.error).toBeNull();
+  });
+
+  test('two hydrated roots on one page keep a room each', async () => {
+    // Hydration gives `useId` the same value in two roots with the same tree, which is how a
+    // page with several server-rendered islands, one per tenant, mounts its editors.
+    const created: StubRoom[] = [];
+    const createRoom = async (options: UseHocuspocusCollaborationConnectOptions) => {
+      await Promise.resolve();
+      const room = fakeRoom(options.roomId);
+      created.push(room);
+      return room;
+    };
+    const states: (UseHocuspocusCollaborationReturn | undefined)[] = [undefined, undefined];
+    const Island = ({ index, roomId }: { index: number; roomId: string }) => {
+      const options = {
+        room: { ...CONNECT, roomId },
+        [HOCUSPOCUS_CREATE_ROOM_FOR_TESTS]: createRoom,
+      };
+      const value = useHocuspocusCollaboration(options);
+      states[index] = value;
+      return null;
+    };
+    const rooms = ['bbbbbbbbbbbbbbbbbbbbbbbbbb', 'cccccccccccccccccccccccccc'];
+    const containers = rooms.map((roomId, index) => {
+      const container = document.createElement('div');
+      container.innerHTML = renderToString(<Island index={index} roomId={roomId} />);
+      document.body.append(container);
+      return container;
+    });
+    const roots: ReturnType<typeof hydrateRoot>[] = [];
+    await act(async () => {
+      containers.forEach((container, index) =>
+        roots.push(hydrateRoot(container, <Island index={index} roomId={rooms[index]!} />))
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(created.filter((room) => !room.destroyed)).toHaveLength(2);
+    expect(states[0]?.session?.documentId).toBe(rooms[0]);
+    expect(states[1]?.session?.documentId).toBe(rooms[1]);
+    await act(async () => roots.forEach((root) => root.unmount()));
+    for (const container of containers) container.remove();
+  });
+
   test('StrictMode remount keeps a live room', async () => {
     const created: StubRoom[] = [];
     const createRoom = async () => {
@@ -190,6 +293,26 @@ describe('useHocuspocusCollaboration', () => {
     expect(live).toHaveLength(1);
     expect(latest?.session).toBe(live[0]?.session);
     expect(latest?.pending).toBe(false);
+  });
+
+  test('StrictMode starts one connect, so a creating replica seeds the room once', async () => {
+    // Two connects in flight both join an empty room, and with a `create` bootstrap both
+    // seed it: the room fails with `concurrent-seed`.
+    let started = 0;
+    const createRoom = async () => {
+      started += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return fakeRoom(`room-${started}`);
+    };
+    await act(async () => {
+      render(
+        <StrictMode>
+          <Probe createRoom={createRoom} onState={() => {}} />
+        </StrictMode>
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(started).toBe(1);
   });
 
   test('leave destroys the room and clears the session', async () => {
@@ -250,6 +373,26 @@ describe('useHocuspocusCollaboration', () => {
     });
     expect(latest?.ydoc).toBeNull();
     expect(latest?.provider).toBeNull();
+  });
+
+  test('unsyncedChanges follows the provider, so a host can warn before closing', async () => {
+    const created: StubRoom[] = [];
+    const createRoom = async () => {
+      const room = fakeRoom();
+      created.push(room);
+      return room;
+    };
+    let latest: UseHocuspocusCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
+      await Promise.resolve();
+    });
+    expect(latest?.unsyncedChanges).toBe(0);
+    const provider = created[0]!.provider as unknown as ReturnType<typeof stubProvider>;
+    await act(async () => provider.setUnsynced(3));
+    expect(latest?.unsyncedChanges).toBe(3);
+    await act(async () => provider.setUnsynced(0));
+    expect(latest?.unsyncedChanges).toBe(0);
   });
 
   test('rejoin leaves with the passed bytes and reconnects with bootstrap join', async () => {
@@ -463,6 +606,80 @@ describe('useHocuspocusCollaboration', () => {
     view.rerender(<Idle />);
     expect(seen[0]).toBe(hostModules);
     expect(seen[1]).toBe(hostModules);
+  });
+
+  test('a new room option leaves the old room and connects the new one', async () => {
+    const rooms: StubRoom[] = [];
+    const createRoom = async (options: UseHocuspocusCollaborationConnectOptions) => {
+      const created = fakeRoom(options.roomId);
+      rooms.push(created);
+      return created;
+    };
+    let latest: UseHocuspocusCollaborationReturn | undefined;
+    function RoomProbe({ room }: { room: UseHocuspocusCollaborationConnectOptions | null }) {
+      const options = { room, [HOCUSPOCUS_CREATE_ROOM_FOR_TESTS]: createRoom };
+      latest = useHocuspocusCollaboration(options);
+      return null;
+    }
+    const view = render(<RoomProbe room={CONNECT} />);
+    await act(async () => {});
+    expect(latest?.session?.documentId).toBe(CONNECT.roomId);
+    // A rejoin keeps the room under the `room` option.
+    await act(async () => {
+      await latest?.rejoin(new Uint8Array([9]));
+    });
+    expect(latest?.session?.documentId).toBe(CONNECT.roomId);
+
+    const other = { ...CONNECT, roomId: 'bbbbbbbbbbbbbbbbbbbbbbbbbb' };
+    await act(async () => {
+      view.rerender(<RoomProbe room={other} />);
+    });
+    expect(
+      rooms.filter((room) => room.session.documentId === CONNECT.roomId).every((r) => r.destroyed)
+    ).toBe(true);
+    expect(latest?.session?.documentId).toBe(other.roomId);
+
+    // No room at all leaves the room too.
+    await act(async () => {
+      view.rerender(<RoomProbe room={null} />);
+    });
+    expect(rooms.at(-1)?.destroyed).toBe(true);
+    expect(latest?.session).toBeNull();
+  });
+
+  test('a room the host opened with connect does not follow later room changes', async () => {
+    const rooms: StubRoom[] = [];
+    const createRoom = async (options: UseHocuspocusCollaborationConnectOptions) => {
+      const created = fakeRoom(options.roomId);
+      rooms.push(created);
+      return created;
+    };
+    let latest: UseHocuspocusCollaborationReturn | undefined;
+    function RoomProbe({ room }: { room: UseHocuspocusCollaborationConnectOptions | null }) {
+      const options = { room, [HOCUSPOCUS_CREATE_ROOM_FOR_TESTS]: createRoom };
+      latest = useHocuspocusCollaboration(options);
+      return null;
+    }
+    const view = render(<RoomProbe room={CONNECT} />);
+    await act(async () => {});
+    const manual = { ...CONNECT, roomId: 'cccccccccccccccccccccccccc' };
+    await act(async () => {
+      latest?.leave(new Uint8Array([7]));
+      await latest?.connect(manual);
+    });
+    expect(latest?.session?.documentId).toBe(manual.roomId);
+    // Two changes: the first must not quietly adopt the manual room as the configured one,
+    // or the second would leave it.
+    for (const roomId of ['dddddddddddddddddddddddddd', 'eeeeeeeeeeeeeeeeeeeeeeeeee']) {
+      await act(async () => {
+        view.rerender(<RoomProbe room={{ ...CONNECT, roomId }} />);
+      });
+      // The manual room stays; the host owns it now.
+      expect(rooms.find((room) => room.session.documentId === manual.roomId)?.destroyed).toBe(
+        false
+      );
+      expect(latest?.session?.documentId).toBe(manual.roomId);
+    }
   });
 
   test('connect from idle adopts the room', async () => {

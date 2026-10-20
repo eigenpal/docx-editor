@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "replaceMatch was refused in every mode, and activating a review item with reveal false still scrolled to it.",
+  "after": "replaceMatch replaces a match in place, as a tracked replacement in suggesting mode, without moving the selection; activation scrolls only through its reveal option.",
+  "reason": "The replacement commits ordinary deleteText and insertText ops through the existing surface commit lane, attributed the same way as other suggested edits. The collaboration schema, operation encoding, and shared state do not change. The activation change affects only the local viewport.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-replace-match.test.ts",
+    "packages/core/src/editor/__tests__/replace-match.test.ts",
+    "packages/core/src/editor/__tests__/review-activation-scroll.test.ts"
+  ],
+  "changeset": "replace-match-in-place",
+  "migration": null
+}

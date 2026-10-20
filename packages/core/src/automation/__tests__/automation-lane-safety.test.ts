@@ -17,11 +17,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const LANE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CORE_SRC = join(LANE, '..');
+/** Contract files this lane may name: DOM-free, types only. Paths are relative to `src`. */
+const NEUTRAL_CONTRACT_FILES = new Set(['contracts/editor-scope']);
 
 /** Every source file of the lane itself, tests excluded — the lane as it ships. */
 function laneFiles(): string[] {
@@ -87,7 +89,7 @@ function withoutComments(source: string): string {
 describe('the lane imports nothing that assumes a browser', () => {
   const files = laneFiles();
 
-  test('it reaches only the store and provider-neutral collaboration lanes', () => {
+  test('it reaches only provider-neutral store, collaboration, layout and export lanes', () => {
     // Every assertion below is over this list. Keep its setup guard on the actual graph test.
     expect(files.length).toBeGreaterThanOrEqual(6);
     expect(files.map((file) => file.split('/').pop())).toContain('server-host.ts');
@@ -101,6 +103,11 @@ describe('the lane imports nothing that assumes a browser', () => {
         if (target.startsWith(LANE)) continue;
         if (target.startsWith(join(CORE_SRC, 'store'))) continue;
         if (target.startsWith(join(CORE_SRC, 'collaboration'))) continue;
+        if (target.startsWith(join(CORE_SRC, 'layout'))) continue;
+        if (target.startsWith(join(CORE_SRC, 'export'))) continue;
+        // Contracts only where a file is DOM-free and holds no behavior: the history group
+        // handle types a headless runtime names. Most contract files name DOM types.
+        if (NEUTRAL_CONTRACT_FILES.has(relative(CORE_SRC, target).replace(/\.ts$/, ''))) continue;
         foreign.push(`${file.split('/').pop()} -> ${specifier}`);
       }
     }
@@ -159,7 +166,9 @@ describe('the lane touches no DOM and no unsafe sink', () => {
       /\bNode\s*\)/,
     ];
     for (const file of files) {
-      const source = withoutComments(readFileSync(file, 'utf8'));
+      const source = withoutComments(readFileSync(file, 'utf8'))
+        .replace(/'(?:\\.|[^'\\])*'/g, "''")
+        .replace(/"(?:\\.|[^"\\])*"/g, '""');
       for (const pattern of globals) {
         if (pattern.test(source)) hits.push(`${file.split('/').pop()} ${String(pattern)}`);
       }

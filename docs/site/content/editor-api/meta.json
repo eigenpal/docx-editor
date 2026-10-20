@@ -1,5 +1,22 @@
 {
   "title": "Editing API",
   "defaultOpen": true,
-  "pages": ["index", "office-js-api"]
+  "pages": [
+    "index",
+    "runtime",
+    "batching-and-errors",
+    "text-and-ranges",
+    "search-and-navigation",
+    "formatting",
+    "lists",
+    "tables",
+    "pictures",
+    "fields",
+    "page-layout-and-stories",
+    "content-controls",
+    "comments",
+    "revisions",
+    "reference",
+    "office-js-api"
+  ]
 }

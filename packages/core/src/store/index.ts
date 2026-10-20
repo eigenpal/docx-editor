@@ -48,6 +48,7 @@ export {
   TWIPS_PER_POINT,
   points,
   pointsToTwips,
+  readTwipsMeasure,
   twips,
   twipsToPoints,
   type Points,

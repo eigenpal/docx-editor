@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+// The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
+/** @jsxImportSource vue */
 
 import {
   cloneVNode,
@@ -26,11 +28,20 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from 'vue';
-import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import {
+  reviewPaneListsItem,
+  type DocxEditorInstance,
+  type ReviewAuthorInfo,
+  isDomNode,
+  isHTMLElementNode,
+  hostDocumentOf,
+  hostWindowOf,
+} from '@docx-editor.dev/core/editor';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import {
   ReviewRailContext,
   useDocxEditor,
+  useEditorEvent,
   useEditorState,
   useReviewAuthors,
   useReviewGutter,
@@ -40,24 +51,30 @@ import {
 } from '@docx-editor.dev/vue';
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
 import { provideEditorRenderRevision, useEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
+import {
+  cloneReviewCard,
+  listCardTemplate,
+  partitionReviewChildren,
+  slotNodes,
+} from './review-composition.ts';
+import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
   COLLAPSED_CARD_HEIGHT,
-  COMPACT_CARD_INSET,
   COMPACT_CARD_WIDTH,
   COMPOSE_KEY,
   DEFAULT_CARD_HEIGHT,
-  INITIAL_METRICS,
   NO_PLACEMENT_REVIEW_QUERY,
-  RAIL_GUTTER,
+  PAIRED_REVIEW_QUERY,
   RAIL_OVERSCAN,
   guardMousedown,
   idsOf,
   isThreadedReply,
+  selectCommentMarkers,
   selectDocumentAbsent,
   selectDocumentReadOnly,
-  type RailMetrics,
+  selectPaneOpening,
+  selectRevisionsIn,
 } from './review-shared.ts';
 import {
   ReviewContextKey,
@@ -66,6 +83,7 @@ import {
   type ReviewRailValue,
 } from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
+import { stackRailCards } from '../review/rail-stack.ts';
 import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
 import { resolveReviewAuthorInfo } from './review-author-styles.ts';
 import {
@@ -77,6 +95,8 @@ import {
   ReviewDraft,
   ReviewEmpty,
   ReviewReject,
+  ReviewRefusal,
+  ReviewRefusalAnnouncer,
   ReviewReopen,
   ReviewReplies,
   ReviewReply,
@@ -90,6 +110,9 @@ import {
   ReviewList,
   ReviewMarkers,
 } from './review-rail-parts.tsx';
+import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
+import { bindReviewRailMetrics, ReviewRailMetricsKey } from './useReviewRailMetrics.ts';
+import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 
 function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): VNode {
   if (!(key in parts)) return fallback;
@@ -113,9 +136,11 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
   return {
     items: list,
     activeKey: hook.activeKey.value,
+    activatedKey: hook.activatedKey.value,
     setActive: hook.setActive,
     accept: hook.accept,
     reject: hook.reject,
+    adopt: hook.adopt,
     resolve: hook.resolve,
     reopen: hook.reopen,
     commentResolutionDisabledReason: hook.commentResolutionDisabledReason.value,
@@ -123,6 +148,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
     reply: hook.reply,
     selectionAnchorY: hook.selectionAnchorY.value,
     comment: hook.comment,
+    lastRefusal: hook.lastRefusal.value,
     paneOpen: hook.paneOpen.value,
     setPaneOpen: hook.setPaneOpen,
     ready: hook.ready.value,
@@ -148,7 +174,7 @@ const ReviewRoot = defineComponent({
       type: Function as PropType<(item: ReviewItemView) => boolean>,
       default: undefined,
     },
-    structural: { type: Boolean, default: false },
+    structural: { type: Boolean, default: true },
     formatting: { type: Boolean, default: false },
   },
   setup(props, { slots }) {
@@ -156,6 +182,9 @@ const ReviewRoot = defineComponent({
     const editorRef = useDocxEditor();
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const readOnly = useEditorState(selectDocumentReadOnly);
+    // Viewer preferences, live: `setRevisionMarkup` re-renders the rail with the new layout.
+    const revisionsIn = useEditorState(selectRevisionsIn);
+    const commentMarkers = useEditorState(selectCommentMarkers);
     const editorRevision = useEditorRenderRevision();
 
     const excludeRevisionKinds = computed((): readonly ReviewRevisionKind[] | undefined => {
@@ -165,14 +194,18 @@ const ReviewRoot = defineComponent({
       return excluded.length > 0 ? excluded : undefined;
     });
 
-    const railQuery = computed(() =>
-      excludeRevisionKinds.value ? { excludeRevisionKinds: excludeRevisionKinds.value } : undefined
-    );
+    // The pane lists each half of a replacement as its own card, so each stays reviewable.
+    const railQuery = computed(() => ({
+      pairReplacements: false,
+      excludeRevisionKinds: excludeRevisionKinds.value?.filter((kind) => kind !== 'format'),
+    }));
 
     watch(
       [editorRef, excludeRevisionKinds],
       () => {
-        editorRef.value?.setReviewActivationExclusions(excludeRevisionKinds.value ?? null);
+        editorRef.value?.setReviewActivationExclusions(excludeRevisionKinds.value ?? null, {
+          formattingKinds: ['rPrChange', 'pPrChange'],
+        });
       },
       { immediate: true }
     );
@@ -181,7 +214,11 @@ const ReviewRoot = defineComponent({
     });
 
     provideEditorRenderRevision(editorRevision);
-    const allReview = useReviewWithRevision(NO_PLACEMENT_REVIEW_QUERY, editorRevision);
+    // `revisionsIn: 'balloons'` reads replacement pairs so a typed-over range is one decision.
+    const allReview = useReviewWithRevision(
+      () => (revisionsIn.value === 'balloons' ? PAIRED_REVIEW_QUERY : NO_PLACEMENT_REVIEW_QUERY),
+      editorRevision
+    );
     const reviewHook = useReviewWithRevision(() => railQuery.value, editorRevision);
     const { t: bundled } = useTranslation();
     const label = (key: string, params?: Record<string, string | number>) =>
@@ -216,19 +253,41 @@ const ReviewRoot = defineComponent({
     const open = computed(() => reviewHook.paneOpen.value);
     const gutter = useReviewGutter();
     const measuredGutterEnd = ref<number | null>(null);
-    const compact = computed(
-      () =>
-        open.value &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) > 0 &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) < REVIEW_PANE_GUTTER
+    const compact = computed(() =>
+      isCompactReviewColumn(
+        open.value,
+        measuredGutterEnd.value ?? gutter.value.inlineEnd,
+        REVIEW_PANE_GUTTER
+      )
     );
     const expanded = computed(() => open.value && !compact.value);
 
-    const items = computed(() =>
-      props.filter
-        ? reviewHook.items.value.filter((entry) => props.filter!(entry))
-        : reviewHook.items.value
+    // The engine's rule, applied before this rail's own filters. The engine decides whether the
+    // pane opens from the same rule over every item, so the rail lists what the engine counts,
+    // less what `structural`, `formatting`, and `filter` hide. `railQuery` removes the reply
+    // link of a comment on a hidden change, but the balloon still draws that reply under the
+    // change, so the rule reads the link from the unfiltered read.
+    const unfilteredById = computed(() =>
+      revisionsIn.value === 'balloons'
+        ? new Map(allReview.items.value.map((entry) => [entry.id, entry]))
+        : null
     );
+    const items = computed(() =>
+      reviewHook.items.value.filter(
+        (entry) =>
+          reviewPaneListsItem(revisionsIn.value, unfilteredById.value?.get(entry.id) ?? entry) &&
+          (props.formatting || !hasFormattingBalloon(entry)) &&
+          (!props.filter || props.filter(entry))
+      )
+    );
+    // A revealed card opens a closed pane, as a click on its marker does, unless the pane's
+    // `opening` setting leaves that to the host. A change that the balloon serves is not in
+    // `items`, so the balloon opens it instead.
+    const paneOpening = useEditorState(selectPaneOpening);
+    useEditorEvent('reviewItemReveal', ({ key }) => {
+      if (props.hidden || paneOpening.value === 'manual') return;
+      if (items.value.some((entry) => entry.key === key)) reviewHook.setPaneOpen(true);
+    });
     const expandedResolvedKey = ref<string | null>(null);
     watch(
       items,
@@ -243,7 +302,7 @@ const ReviewRoot = defineComponent({
       },
       { flush: 'sync' }
     );
-    const configuredAuthor = computed(() => editorRef.value?.getConfiguredAuthor() ?? null);
+    const configuredAuthor = useEditorState(() => editorRef.value?.getConfiguredAuthor() ?? null);
     const authorSlots = computed(() => {
       const slotsMap = new Map<string, number>();
       for (const entry of items.value) {
@@ -282,92 +341,26 @@ const ReviewRoot = defineComponent({
     };
     const observeSlot = useReviewSlotSizing(measureHeight);
 
-    const metrics = ref<RailMetrics>(INITIAL_METRICS);
-    let metricsCleanup: (() => void) | undefined;
-    watch(
-      [editorRef, items, documentAbsent, () => props.hidden, railRef, compact],
-      () => {
-        metricsCleanup?.();
-        metricsCleanup = undefined;
-        const rail = railRef.value;
-        const editor = editorRef.value;
-        if (!editor || !rail || documentAbsent.value || props.hidden) return;
-        const parent = rail.offsetParent as HTMLElement | null;
-        const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
-        const sync = (): void => {
-          if (parent) {
-            const reserved = Number.parseFloat(
-              getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
-            );
-            measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
-          } else {
-            measuredGutterEnd.value = null;
-          }
-          const box = surface && parent ? surface.getBoundingClientRect() : null;
-          const frame = box && parent ? parent.getBoundingClientRect() : null;
-          const left =
-            box && frame && parent
-              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
-              : null;
-          const next: RailMetrics = {
-            scale: editor.getRenderScale(),
-            top:
-              box && frame && parent
-                ? box.top - frame.top - parent.clientTop + parent.scrollTop
-                : 0,
-            left,
-            compactCardLeft:
-              left === null || !parent
-                ? null
-                : parent.scrollLeft +
-                  parent.clientWidth -
-                  left -
-                  COMPACT_CARD_WIDTH -
-                  COMPACT_CARD_INSET,
-          };
-          const previous = metrics.value;
-          if (
-            previous.scale !== next.scale ||
-            previous.top !== next.top ||
-            previous.left !== next.left ||
-            previous.compactCardLeft !== next.compactCardLeft
-          ) {
-            metrics.value = next;
-          }
-        };
-        sync();
-        const observer = new ResizeObserver(sync);
-        if (parent) observer.observe(parent);
-        if (surface) observer.observe(surface);
-        const mutationObserver =
-          parent && typeof MutationObserver !== 'undefined' ? new MutationObserver(sync) : null;
-        mutationObserver?.observe(parent!, { attributes: true, attributeFilter: ['style'] });
-        if (!compact.value || !parent) {
-          metricsCleanup = () => {
-            mutationObserver?.disconnect();
-            observer.disconnect();
-          };
-          return;
-        }
-        let frameId = 0;
-        const onScroll = () => {
-          if (frameId !== 0) return;
-          frameId = requestAnimationFrame(() => {
-            frameId = 0;
-            sync();
-          });
-        };
-        parent.addEventListener('scroll', onScroll, { passive: true });
-        metricsCleanup = () => {
-          if (frameId !== 0) cancelAnimationFrame(frameId);
-          parent.removeEventListener('scroll', onScroll);
-          mutationObserver?.disconnect();
-          observer.disconnect();
-        };
+    // Where the rail sits, from the shared `../review/rail-metrics.ts`. The viewport's
+    // reserved gutter is read on the same pass, so `compact` follows a style change at once.
+    const metrics = bindReviewRailMetrics({
+      rail: () => (documentAbsent.value || props.hidden ? null : railRef.value),
+      editor: () => editorRef.value,
+      trackScroll: () => compact.value,
+      remeasure: () => items.value,
+      beforeMeasure: (parent) => {
+        const reserved = parent
+          ? Number.parseFloat(
+              hostWindowOf(parent).getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
+            )
+          : Number.NaN;
+        measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
       },
-      { flush: 'post' }
+    });
+    provide(
+      ReviewRailMetricsKey,
+      computed(() => ({ ...metrics.value, compact: compact.value }))
     );
-    onUnmounted(() => metricsCleanup?.());
 
     let dismissCleanup: (() => void) | undefined;
     watch(
@@ -380,19 +373,40 @@ const ReviewRoot = defineComponent({
         if (!editor || !rail || documentAbsent.value || props.hidden) return;
         const onMouseDown = (event: MouseEvent): void => {
           const target = event.target;
-          if (!(target instanceof Node) || rail.contains(target)) return;
+          if (!isDomNode(target) || rail.contains(target)) return;
           const container = rail.offsetParent as HTMLElement | null;
           if (!container || !container.contains(target)) return;
           const surface = container.querySelector('.docx-paginated-surface');
           if (surface?.contains(target)) return;
           editor.setActiveReviewItem(null);
         };
-        document.addEventListener('mousedown', onMouseDown, true);
-        dismissCleanup = () => document.removeEventListener('mousedown', onMouseDown, true);
+        const doc = hostDocumentOf(rail);
+        doc.addEventListener('mousedown', onMouseDown, true);
+        dismissCleanup = () => doc.removeEventListener('mousedown', onMouseDown, true);
       },
       { flush: 'post' }
     );
     onUnmounted(() => dismissCleanup?.());
+
+    // A click on commented text opens the closed pane on its card, as a click on its marker
+    // does: a reader's own press, so the `opening` setting does not hold it back.
+    let commentClickCleanup: (() => void) | undefined;
+    watch(
+      [editorRef, documentAbsent, () => props.hidden, railRef],
+      () => {
+        commentClickCleanup?.();
+        commentClickCleanup = undefined;
+        const rail = railRef.value;
+        const editor = editorRef.value;
+        if (!editor || !rail || documentAbsent.value || props.hidden) return;
+        commentClickCleanup = listenForCommentClicks(rail, editor, (key) => {
+          if (reviewHook.paneOpen.value) return;
+          if (items.value.some((entry) => entry.key === key)) reviewHook.setPaneOpen(true);
+        });
+      },
+      { flush: 'post' }
+    );
+    onUnmounted(() => commentClickCleanup?.());
 
     const scrollWindow = ref<{ top: number; bottom: number } | null>(null);
     let scrollCleanup: (() => void) | undefined;
@@ -404,31 +418,40 @@ const ReviewRoot = defineComponent({
         const rail = railRef.value;
         const scroller = rail?.offsetParent as HTMLElement | null;
         if (!scroller || documentAbsent.value || props.hidden) return;
+        const win = hostWindowOf(scroller);
         let frame = 0;
+        const read = () => ({
+          top: scroller.scrollTop - RAIL_OVERSCAN,
+          bottom: scroller.scrollTop + scroller.clientHeight + RAIL_OVERSCAN,
+        });
+        // Read in the scroll event, while layout is clean. By the frame the editor has built
+        // the pages scrolled into view, and reading there forced a layout of the document.
+        let pending: { top: number; bottom: number } | null = null;
         const sync = (): void => {
           frame = 0;
-          const top = scroller.scrollTop - RAIL_OVERSCAN;
-          const bottom = scroller.scrollTop + scroller.clientHeight + RAIL_OVERSCAN;
+          const next = pending ?? read();
+          pending = null;
           const previous = scrollWindow.value;
           scrollWindow.value =
-            previous && previous.top === top && previous.bottom === bottom
+            previous && previous.top === next.top && previous.bottom === next.bottom
               ? previous
-              : { top, bottom };
+              : next;
         };
         let settle = 0;
         const onScroll = (): void => {
-          if (frame === 0) frame = requestAnimationFrame(sync);
+          pending = read();
+          if (frame === 0) frame = win.requestAnimationFrame(sync);
           rail?.setAttribute('data-scrolling', '');
-          window.clearTimeout(settle);
-          settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
+          win.clearTimeout(settle);
+          settle = win.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
         };
         sync();
         scroller.addEventListener('scroll', onScroll, { passive: true });
-        const observer = new ResizeObserver(onScroll);
+        const observer = new win.ResizeObserver(onScroll);
         observer.observe(scroller);
         scrollCleanup = () => {
-          if (frame !== 0) cancelAnimationFrame(frame);
-          window.clearTimeout(settle);
+          if (frame !== 0) win.cancelAnimationFrame(frame);
+          win.clearTimeout(settle);
           scroller.removeEventListener('scroll', onScroll);
           observer.disconnect();
         };
@@ -532,29 +555,25 @@ const ReviewRoot = defineComponent({
       return merged;
     });
 
+    // The open card stays beside its text; see `stackRailCards`.
     const stackedLayout = computed(() => {
-      const scale = metrics.value.scale;
-      const positions = new Map<string, number>();
-      const collapsed = new Set<string>();
-      let cursor = Number.NEGATIVE_INFINITY;
-      for (const entry of stackInput.value) {
-        const top =
-          entry.anchorY === null
-            ? Number.isFinite(cursor)
-              ? cursor
-              : 0
-            : Math.max(entry.anchorY, cursor);
-        positions.set(entry.key, top);
-        const displacedPx = entry.anchorY === null ? 0 : (top - entry.anchorY) * scale;
-        const isActive = 'isActive' in entry && entry.isActive;
-        const collapse =
-          displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
-        if (collapse) collapsed.add(entry.key);
-        const height = collapse
-          ? COLLAPSED_CARD_HEIGHT
-          : (estimatedHeights.value.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
-        cursor = top + (height + props.gap) / scale;
-      }
+      const { positions, collapsed } = stackRailCards(
+        stackInput.value.map((entry) => ({
+          key: entry.key,
+          anchorY: entry.anchorY,
+          isActive: 'isActive' in entry && entry.isActive,
+        })),
+        {
+          gap: props.gap,
+          scale: metrics.value.scale,
+          collapseAfterPx: COLLAPSE_DISPLACEMENT_PX,
+          heightOf: (key, folded) =>
+            folded
+              ? COLLAPSED_CARD_HEIGHT
+              : (estimatedHeights.value.get(key) ?? DEFAULT_CARD_HEIGHT),
+          collapsible: (entry) => entry.key !== COMPOSE_KEY,
+        }
+      );
       return { stacked: positions, collapsedKeys: collapsed };
     });
 
@@ -585,6 +604,8 @@ const ReviewRoot = defineComponent({
         cardClassName: props.card?.className,
         readOnly: readOnly.value,
         composeTop: composeTop.value,
+        composeLeft: compact.value ? metrics.value.compactCardLeft : null,
+        drafting: draftAnchorY.value !== null,
         review: reviewActions.value,
         allItems: allReview.items.value,
         authorSlots: authorSlots.value,
@@ -600,6 +621,8 @@ const ReviewRoot = defineComponent({
         setExpandedResolvedKey: (key) => {
           expandedResolvedKey.value = key;
         },
+        commentMarkers: commentMarkers.value,
+        revisionsIn: revisionsIn.value,
       };
     };
     const railValue = shallowRef<ReviewRailValue>(currentRailValue());
@@ -629,7 +652,7 @@ const ReviewRoot = defineComponent({
       void composeTop.value;
 
       const captureRailElement = (vnode: VNode) => {
-        railRef.value = vnode.el instanceof HTMLElement ? vnode.el : null;
+        railRef.value = isHTMLElementNode(vnode.el) ? vnode.el : null;
       };
       const shared = {
         onVnodeMounted: captureRailElement,
@@ -642,7 +665,7 @@ const ReviewRoot = defineComponent({
         'data-count': items.value.length,
         'data-open': expanded.value ? '' : undefined,
         'data-compact': compact.value ? '' : undefined,
-        role: 'complementary' as const,
+        role: 'region' as const,
         'aria-label': label('review.ariaLabel'),
         onMousedown: guardMousedown,
         style:
@@ -686,19 +709,30 @@ const ReviewRoot = defineComponent({
             : scrollWindow.value !== null
               ? scrollWindow.value.top + RAIL_OVERSCAN + 24
               : null;
-      const listParts = partitionReviewChildren(rootRest, 'list');
+      // The same card template the List renders: a host's List part (its item slot, its
+      // `Card` part, or part overrides plus extra children) must reach the floating card
+      // too, or compact silently swaps in the packaged parts the host hid or replaced. With
+      // no List template the root's children stand in, as they do for the implicit List.
+      const fromList = listCardTemplate(rootParts.List);
+      const itemSlot = fromList ? fromList.item : slots.item;
+      const listParts = partitionReviewChildren(
+        fromList ? slotNodes(fromList.default?.()) : rootRest,
+        'list'
+      );
       const compactCardInner =
-        activeRoot && slots.item
-          ? slots.item({ item: activeRoot })
-          : listParts.parts.Card
-            ? cloneReviewCard(listParts.parts.Card, props.card?.className)
-            : props.preset
-              ? h(
-                  ReviewCard,
-                  props.card?.className ? { className: props.card.className } : {},
-                  () => listParts.rest
-                )
-              : null;
+        fromList?.hidden || !activeRoot
+          ? null
+          : itemSlot
+            ? itemSlot({ item: activeRoot })
+            : listParts.parts.Card
+              ? cloneReviewCard(listParts.parts.Card, props.card?.className)
+              : props.preset || fromList
+                ? h(
+                    ReviewCard,
+                    props.card?.className ? { className: props.card.className } : {},
+                    () => listParts.rest
+                  )
+                : null;
       const compactCard =
         activeRoot &&
         compactTop !== null &&
@@ -772,6 +806,7 @@ const ReviewRoot = defineComponent({
         ...(props.preset || 'Balloon' in rootParts
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),
+        h(ReviewRefusalAnnouncer),
       ] as VNodeArrayChildren;
       const child = asChildHost;
       if (!child) return h('aside', shared, content);
@@ -809,11 +844,42 @@ const ReviewRoot = defineComponent({
 export { useReviewItem };
 export type {
   ReviewActionProps,
+  ReviewBalloonProps,
+  ReviewDraftProps,
   ReviewMarkersProps,
   ReviewPartProps,
   ReviewProps,
 } from './review-types.ts';
 
+/**
+ * The review rail: comments and tracked changes as a compound component. Requires
+ * `reviewModule()` in the editor's modules.
+ *
+ * PARTS AND SCOPES. The rail reads its parts from its own children, by element type. There are
+ * two scopes:
+ *
+ * - Root parts: `List`, `Markers`, `AddComment`, `Draft`, and `Balloon`. Put them as DIRECT
+ *   children of `DocxEditorReview` (fragments are transparent). The rail gives them the geometry
+ *   only it can compute: the comment button's and the compose box's `top`, and the markers'
+ *   scale and window. A root part inside a wrapper component is not seen as a part. It renders
+ *   as ordinary content, without that wiring.
+ * - Card parts: `Card`, `Empty`, and the parts inside a card (`Author`, `Summary`, `Accept`,
+ *   `Reject`, `Reply`, and the others). Put them inside `DocxEditorReview.List`, or as other
+ *   direct children, which become the card template.
+ *
+ * `:preset="false"` drops the packaged defaults. Root parts you pass still get their wiring, and
+ * every other child renders as is inside the rail, where `useReviewRailMetrics()` reads the
+ * rail's own measurement. To render your own cards, use `useReview().items`,
+ * `useStackedReviewPositions`, and `useReviewRailMetrics`. `Draft` without `top` sits where the
+ * packaged card stack puts it, so pass `top` from your own stack.
+ *
+ * In a browser host, this rail and `useReview()` are the way to build a review UI. For headless,
+ * server, or agent pipelines, use `@docx-editor.dev/editor-api`.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
+ *
+ * @public
+ */
 export const DocxEditorReview = Object.assign(ReviewRoot, {
   List: ReviewList,
   Empty: ReviewEmpty,
@@ -827,6 +893,7 @@ export const DocxEditorReview = Object.assign(ReviewRoot, {
   Resolve: ReviewResolve,
   Reopen: ReviewReopen,
   Delete: ReviewDelete,
+  Refusal: ReviewRefusal,
   Replies: ReviewReplies,
   Reply: ReviewReply,
   Markers: ReviewMarkers,

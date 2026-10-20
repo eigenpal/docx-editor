@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "changelog": "../scripts/changesets/changelog.mjs",
   "commit": false,
   "fixed": [
     [
@@ -8,16 +8,22 @@
       "@docx-editor.dev/react",
       "@docx-editor.dev/editor-api",
       "@docx-editor.dev/vue",
-      "@docx-editor.dev/nuxt",
       "@docx-editor.dev/i18n",
       "@docx-editor.dev/pro",
-      "@docx-editor.dev/fonts"
+      "@docx-editor.dev/fonts",
+      "@docx-editor.dev/fonts-cjk",
+      "@docx-editor.dev/docx-to-markdown",
+      "@docx-editor.dev/docx-to-pdf",
+      "@docx-editor.dev/telemetry"
     ]
   ],
   "linked": [],
-  "ignore": ["@docx-editor.dev/docx-to-markdown"],
+  "ignore": [],
   "access": "public",
-  "privatePackages": { "version": true, "tag": false },
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  },
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {

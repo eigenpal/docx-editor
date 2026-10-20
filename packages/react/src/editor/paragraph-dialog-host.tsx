@@ -1,3 +1,4 @@
+import { useDialogHost } from './dialog-host';
 // Who owns the Paragraph dialog's mount.
 //
 // Not the control that opens it. The line-spacing part moves between the formatting bar and
@@ -13,6 +14,8 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
+import { useNavigationViewportElement } from './navigation/navigation-layout';
+import { hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 interface ParagraphDialogHandle {
   /**
@@ -36,17 +39,26 @@ const ParagraphDialogContext = createContext<ParagraphDialogHandle | null>(null)
  * cannot find a host simply renders nothing rather than mounting a dialog that will vanish.
  */
 export function ParagraphDialogHost({ children }: { children: ReactNode }): ReactElement {
+  const dialogs = useDialogHost();
   const [open, setOpen] = useState(false);
   const openerRef = useRef<Element | null>(null);
+  // The editor's own document, which a pop-out window or an iframe does not share.
+  const viewport = useNavigationViewportElement();
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
 
   const handle = useMemo<ParagraphDialogHandle>(
     () => ({
       open: (returnFocusTo?: HTMLElement | null) => {
-        openerRef.current = returnFocusTo ?? document.activeElement;
+        if (dialogs) {
+          dialogs.open('paragraph', returnFocusTo);
+          return;
+        }
+        openerRef.current = returnFocusTo ?? hostDocumentOf(viewportRef.current).activeElement;
         setOpen(true);
       },
     }),
-    []
+    [dialogs]
   );
 
   const close = useCallback(() => {
@@ -57,7 +69,7 @@ export function ParagraphDialogHost({ children }: { children: ReactNode }): Reac
     // staying put beats focusing something the user cannot see.
     const opener = openerRef.current;
     openerRef.current = null;
-    if (opener instanceof HTMLElement && opener.isConnected) {
+    if (isHTMLElementNode(opener) && opener.isConnected) {
       opener.focus({ preventScroll: true });
     }
   }, []);

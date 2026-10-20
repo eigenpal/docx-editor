@@ -12,6 +12,30 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
+    name: '@docx-editor.dev/docx-to-pdf',
+    root: 'packages/docx-to-pdf',
+    pkgSlug: 'docx-editor-docx-to-pdf',
+    tsconfigPath: 'packages/docx-to-pdf/tsconfig.api.json',
+    // These nested types belong to Core. Package-owned types must remain exported.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        index: [
+          'FontBackedExportCapabilities',
+          'FontFaceRequest',
+          'FontLoadFailure',
+          'FontOrigin',
+          'FontResolver',
+          'FontSource',
+          'MarkedFontResolver',
+          'OoxmlPackageRejection',
+          'OpenFontBackedDocumentForExportOptions',
+          'OpenFontBackedDocumentForExportResult',
+        ],
+      },
+    },
+  },
+  {
     name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',
@@ -46,6 +70,9 @@ export const PACKAGES = [
     forgottenExports: {
       logLevel: 'warning',
       protectedExportFiles: ['src/runtime/public.ts', 'src/model/index.ts'],
+      // The agent entry's helpers take the object model's own `RequestContext` and `Paragraph`,
+      // which a consumer imports from the root entry. Its declarations name them from there.
+      crossEntry: { agent: ['Paragraph', 'RequestContext'] },
       allowlist: {
         index: [
           'CommentBase',
@@ -89,6 +116,23 @@ export const PACKAGES = [
     root: 'packages/core',
     pkgSlug: 'docx-editor-core',
     tsconfigPath: 'packages/core/tsconfig.api.json',
+    // Unsupported-content signatures reference types owned by the layout/store subpaths.
+    // Keep those graphs at their owning entry points, as with the existing facade escape hatches.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        editor: ['UnsupportedElementRule'],
+        index: ['UnsupportedElementRule'],
+        layout: ['UnsupportedContentRecord', 'UnsupportedContentResolver'],
+        output: [
+          'AnchoredDrawingRecord',
+          'EquationSpanRecord',
+          'InlineDrawingRecord',
+          'LayoutBox',
+          'OoxmlElement',
+        ],
+      },
+    },
   },
   {
     name: '@docx-editor.dev/pro',
@@ -115,7 +159,9 @@ export const PACKAGES = [
           'CollaborationAvatar',
           'CollaborationAvatars',
           'CollaborationCaretLabels',
+          'CollaborationStatusNotice',
           'CustomNodeDefinition',
+          'EditDiagnosticCode',
           'Editor',
           'EditorCollaborationSession',
           'EditorModule',
@@ -132,6 +178,7 @@ export const PACKAGES = [
           'ReviewItemQuery',
           'ReviewList',
           'ReviewMarkers',
+          'ReviewRefusal',
           'ReviewReject',
           'ReviewReopen',
           'ReviewResolve',
@@ -147,6 +194,7 @@ export const PACKAGES = [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
           'CustomNodeDefinition',
+          'EditDiagnosticCode',
           'Editor',
           'EditorCollaborationSession',
           'EditorModule',
@@ -234,6 +282,12 @@ export const PACKAGES = [
     tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
   {
+    name: '@docx-editor.dev/fonts-cjk',
+    root: 'packages/fonts-cjk',
+    pkgSlug: 'docx-editor-fonts-cjk',
+    tsconfigPath: 'packages/fonts-cjk/tsconfig.api.json',
+  },
+  {
     name: '@docx-editor.dev/docx-to-markdown',
     root: 'packages/docx-to-markdown',
     pkgSlug: 'docx-editor-docx-to-markdown',
@@ -244,6 +298,8 @@ export const PACKAGES = [
     forgottenExports: {
       logLevel: 'warning',
       allowlist: {
+        // The filesystem subpath consumes the result type exported by the main facade.
+        node: ['MarkdownExportResult'],
         index: [
           'BlockFragmentRecord',
           'ContentControlBoundaryRecord',
@@ -251,11 +307,19 @@ export const PACKAGES = [
           'DrawingClipFallback',
           'DrawingInsets',
           'DrawingPoint',
+          'DrawingImageEffects',
+          'DrawingTextArtRecord',
+          'FontFaceRequest',
+          'FontLoadFailure',
+          'FontResolver',
+          'FontSource',
+          'MarkedFontResolver',
           'FontOrigin',
           'HeaderFooterParts',
           'HeaderFooterSectionResolution',
           'HeadlessThemeFonts',
           'ImageResourceLimits',
+          'ListMarkerPictureRecord',
           'NoteAreaRecord',
           'OoxmlElement',
           'OoxmlPackage',
@@ -266,17 +330,73 @@ export const PACKAGES = [
           'RenderableImageMime',
           'ResolvedRunStyle',
           'RevisionKind',
+          'SectionBreakMarkRecord',
           'SemanticDrawingLayer',
           'SemanticRootStoryKind',
           'SemanticStoryKind',
           'SemanticStoryVisit',
           'StoryDrawingContext',
+          'StrikeoutStrokePt',
           'SupportedImageMime',
+          'TextOutline',
           'TextboxStoryFallbackReason',
           'ValidatedImageBytesHandle',
           'VectorShapeComponent',
           'relationshipTargetIn',
         ],
+      },
+    },
+  },
+  {
+    name: '@docx-editor.dev/telemetry',
+    root: 'packages/telemetry',
+    pkgSlug: 'docx-editor-telemetry',
+    tsconfigPath: 'packages/telemetry/tsconfig.api.json',
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        // Owned by `core` and imported from there, like the pro entries above.
+        index: ['CollaborationFailureCode', 'CollaborationStatus', 'EditorCommand', 'EditorModule'],
+        // The exporter contract lives in the main entry, which every exporter's user already
+        // imports `createTelemetry` from; each entry re-exports only what its calls take.
+        otel: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        sentry: [
+          'Attributes',
+          'EditorDiagnostic',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEventContext',
+          'TelemetryExporterContext',
+        ],
+        prometheus: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        server: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        hocuspocus: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        // The route re-exports `TelemetryEvent`, which the main entry and core define.
+        ingest: ['EditorDiagnostic', 'TelemetryEventContext'],
       },
     },
   },

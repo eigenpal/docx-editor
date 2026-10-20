@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Drawing projection ignored the existing DrawingML alphaModFix attribute when deriving raster image effects.",
+  "after": "Drawing projection exposes a bounded optional opacity multiplier for screen and PDF painting. The original OOXML and collaborative state remain unchanged.",
+  "reason": "This reads an existing source attribute into a derived rendering record. It introduces no stored fields, operations, journal primitives, or wire-format changes; older participants retain the same document bytes.",
+  "tests": [
+    "packages/core/src/layout/__tests__/drawing-geometry.test.ts",
+    "packages/docx-to-pdf/test/images.test.ts"
+  ],
+  "changeset": "pdf-image-opacity",
+  "migration": null
+}

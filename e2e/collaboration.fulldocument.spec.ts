@@ -7,6 +7,9 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 const PORT = process.env.COLLAB_E2E_PORT ?? '5276';
 const ORIGIN = `http://localhost:${PORT}`;
 const CONNECT = /^Connect$/;
+const INVITE_PATTERN = new RegExp(
+  `^http://localhost:${PORT}/\\?room=[a-f0-9]{48}#collab=[A-Za-z0-9_-]{32}$`
+);
 const SCROLLER = '.docx-editor__scroll-container';
 
 /**
@@ -73,6 +76,11 @@ async function createRoom(page: Page, name: string): Promise<string> {
     timeout: 45_000,
   });
   const invite = await connected.getByLabel('Invite link').inputValue();
+  expect(invite).toMatch(INVITE_PATTERN);
+  expect(new URL(invite).searchParams.get('room')).toBe(
+    new URL(page.url()).searchParams.get('room')
+  );
+  expect(new URL(invite).hash).toBe(new URL(page.url()).hash);
   await connected.getByRole('button', { name: 'Done' }).click();
   await expect(connected).toHaveCount(0);
   return invite;
@@ -83,8 +91,15 @@ async function joinRoom(page: Page, invite: string, name: string): Promise<void>
   const dialog = page.getByRole('dialog', { name: /Collaborate on this document/i });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Display name').fill(name);
+  await expect(dialog.getByLabel('Room ID or link')).toHaveValue(
+    new URL(invite).searchParams.get('room')!
+  );
   await dialog.getByRole('button', { name: 'Join room' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 45_000 });
+  const connected = page.getByRole('dialog', { name: 'Collaboration room' });
+  await expect(connected).toBeVisible({ timeout: 45_000 });
+  await connected.getByRole('button', { name: 'Done' }).click();
+  await expect(connected).toHaveCount(0);
 }
 
 async function expectParticipantCount(page: Page, count: number, timeout = 20_000): Promise<void> {

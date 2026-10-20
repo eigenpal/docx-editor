@@ -1,3 +1,19 @@
+import {
+  atomToken,
+  paragraphAtomsWithAnchors,
+  markdownAtoms,
+  sourceTextOf,
+  type MarkdownAtom,
+} from './markdown-atoms.ts';
+import {
+  anchorProjection,
+  createMediaRendering,
+  destination,
+  imageMarkdown,
+  remainingAnchors,
+} from './markdown-media.ts';
+import { markdownWarnings } from './markdown-warnings.ts';
+import type { MarkdownImageAsset } from './media-types.ts';
 // Record-only Markdown translation. No OOXML or package reads belong in this file.
 
 import {
@@ -6,13 +22,12 @@ import {
   type AnchoredDrawingRecord,
   type BlockFragmentRecord,
   type InlineDrawingRecord,
-  type LineSegment,
   type PageRecord,
   type ParagraphFragmentRecord,
   type SemanticLayout,
   type StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
-import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
+import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
 import {
   markdownSourceCaptureKey,
   MarkdownInlineWriter,
@@ -53,21 +68,8 @@ import {
   type NoteProjection,
 } from './markdown-notes.ts';
 import type { MarkdownExportResult, MarkdownPage } from './markdown-types.ts';
-export type {
-  MarkdownExportOptions,
-  MarkdownExportResult,
-  MarkdownPage,
-  MarkdownPaginationInfo,
-} from './markdown-types.ts';
 
 const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
-
-function destination(url: string): string {
-  return url.replace(
-    /[\u0000-\u0020\u007f<>()\\]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
-  );
-}
 
 /** Stable identity for one translated story, keyed the way capture consumers expect. */
 function markdownSourceScope(
@@ -90,20 +92,19 @@ function markdownSourceScope(
 }
 
 function drawingContentMarkdown(
-  _drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  _context: TranslationContext
-): string {
-  // Drawings still participate in Core layout so page boundaries remain faithful, but v1 does
-  // not project them into Markdown. Image transport and presentation need a stronger portable
-  // asset contract than ad-hoc URLs before they become part of this package's public output.
-  return '';
-}
-
-function drawingMarkdown(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   context: TranslationContext
 ): string {
-  return drawingContentMarkdown(drawing, context);
+  return imageMarkdown(drawing, context.media, context.tableCell);
+}
+
+function fallbackDrawings(context: TranslationContext): MappedMarkdown {
+  return concatMarkdown(
+    remainingAnchors(context.anchors, context.media, context.pageIndex).map((drawing) =>
+      mappedDrawingMarkdown(drawing, context, drawingContentMarkdown(drawing, context))
+    ),
+    '\n\n'
+  );
 }
 
 function capturesParagraph(context: TranslationContext, paragraphId: string): boolean {
@@ -163,13 +164,14 @@ function trimTokenWhitespace(tokens: readonly MarkdownTextToken[]): {
   for (let index = 0; index < content.length; index += 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
-    const match = /^\s+/.exec(token.sourceText);
-    if (!match) break;
-    leading.push({ ...token, sourceText: match[0] });
+    const kept = token.sourceText.trimStart();
+    const width = token.sourceText.length - kept.length;
+    if (width === 0) break;
+    leading.push({ ...token, sourceText: token.sourceText.slice(0, width) });
     content[index] = {
       ...token,
-      sourceText: token.sourceText.slice(match[0].length),
-      sourceOffset: (token.sourceOffset ?? 0) + match[0].length,
+      sourceText: kept,
+      sourceOffset: (token.sourceOffset ?? 0) + width,
     };
     if (content[index]!.sourceText.length > 0) break;
   }
@@ -177,16 +179,21 @@ function trimTokenWhitespace(tokens: readonly MarkdownTextToken[]): {
   for (let index = content.length - 1; index >= 0; index -= 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
-    const match = /\s+$/.exec(token.sourceText);
-    if (!match) break;
-    trailing.unshift({
+    // `trimEnd`, not `/\s+$/`: the same character set in linear time. The pattern retries
+    // from every position of a whitespace run that does not reach the end.
+    const kept = token.sourceText.trimEnd();
+    if (kept.length === token.sourceText.length) break;
+    trailing.push({
       ...token,
-      sourceText: match[0],
-      sourceOffset: (token.sourceOffset ?? 0) + token.sourceText.length - match[0].length,
+      sourceText: token.sourceText.slice(kept.length),
+      sourceOffset: (token.sourceOffset ?? 0) + kept.length,
     });
-    content[index] = { ...token, sourceText: token.sourceText.slice(0, -match[0].length) };
+    content[index] = { ...token, sourceText: kept };
     if (content[index]!.sourceText.length > 0) break;
   }
+  // Collected back to front; one reverse keeps a long whitespace-only tail linear, where
+  // `unshift` per token would move the whole array each time.
+  trailing.reverse();
   return { leading, content, trailing };
 }
 
@@ -218,10 +225,6 @@ function linkedSpansMarkdown(
       : EMPTY_MAPPED_MARKDOWN,
     after,
   ]);
-}
-
-function sourceTextOf(span: StyleSpanRecord): string {
-  return span.equation?.fallbackText ?? span.text;
 }
 
 function sameMarkdownLink(left: StyleSpanRecord['link'], right: StyleSpanRecord['link']): boolean {
@@ -274,13 +277,7 @@ function writeSpanAtoms(
       continue;
     }
     if (atom.span.link?.kind === 'external' && atom.span.link.href) {
-      const linked: MarkdownTextToken[] = [
-        {
-          span: atom.span,
-          paragraphId,
-          sourceText: sourceTextOf(atom.span),
-        },
-      ];
+      const linked: MarkdownTextToken[] = [atomToken(atom)];
       while (atoms[index + 1]?.kind === 'span') {
         const next = atoms[index + 1];
         if (
@@ -290,26 +287,18 @@ function writeSpanAtoms(
         ) {
           break;
         }
-        linked.push({
-          span: next.span,
-          paragraphId: next.span.range.paragraphId,
-          sourceText: sourceTextOf(next.span),
-        });
+        linked.push(atomToken(next));
         index += 1;
       }
       writer.writeMappedBoundary(linkedSpansMarkdown(linked, atom.span.link.href, context));
       continue;
     }
-    writer.writeText({
-      span: atom.span,
-      paragraphId,
-      sourceText: sourceTextOf(atom.span),
-    });
+    writer.writeText(atomToken(atom));
   }
 }
 
 function atomText(atom: MarkdownAtom | undefined): string {
-  return atom?.kind === 'span' ? sourceTextOf(atom.span) : '';
+  return atom?.kind === 'span' ? atomToken(atom).sourceText : '';
 }
 
 function omittedDrawingNeedsBoundary(atoms: readonly MarkdownAtom[], index: number): boolean {
@@ -319,31 +308,6 @@ function omittedDrawingNeedsBoundary(atoms: readonly MarkdownAtom[], index: numb
   const before = atomText(atoms[index - 1]);
   const after = atomText(atoms[nextIndex]);
   return /[\p{L}\p{N}_]\p{M}*$/u.test(before) && /^[\p{L}\p{N}_]\p{M}*/u.test(after);
-}
-
-type MarkdownAtom =
-  | {
-      readonly kind: 'span';
-      readonly start: number;
-      readonly order: number;
-      readonly span: StyleSpanRecord;
-    }
-  | {
-      readonly kind: 'drawing';
-      readonly start: number;
-      readonly order: number;
-      readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
-    };
-
-function markdownAtoms(segment: LineSegment): MarkdownAtom[] {
-  const atoms: MarkdownAtom[] = [];
-  for (const [index, span] of segment.spans.entries()) {
-    atoms.push({ kind: 'span', start: span.range.start, order: index * 2 + 1, span });
-  }
-  for (const [index, drawing] of segment.drawings.entries()) {
-    atoms.push({ kind: 'drawing', start: drawing.start, order: index * 2, drawing });
-  }
-  return atoms.sort((left, right) => left.start - right.start || left.order - right.order);
 }
 
 function paragraphBody(
@@ -357,7 +321,11 @@ function paragraphBody(
       for (const segment of lineSegments(line)) atoms.push(...markdownAtoms(segment));
     }
   }
-  writeSpanAtoms(atoms, context, writer);
+  writeSpanAtoms(
+    paragraphAtomsWithAnchors(atoms, context.anchors, fragments[0]?.paragraphId ?? ''),
+    context,
+    writer
+  );
   return writer.finishMapped();
 }
 
@@ -409,7 +377,9 @@ function paragraphMarkdown(
     context.listIndentByParagraphId.get(first.paragraphId) ?? (marker?.level ?? 0) * 4
   );
   let projected: MappedMarkdown;
-  if (!logical && first.fragmentIndex > 0) {
+  // A page's fragment without its own marker continues the item. That includes the line of a
+  // page break that opens the item, whose marker layout publishes with the text after it.
+  if (!logical && !first.marker && (first.fragmentIndex > 0 || marker)) {
     if (!marker) projected = body;
     else {
       const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;
@@ -536,22 +506,6 @@ function buildTranslationIndexes(
   return { listIndentByParagraphId, listMarkerByParagraphId, tablesById };
 }
 
-function documentAnchoredDrawings(
-  layout: SemanticLayout,
-  context: TranslationContext
-): MappedMarkdown {
-  return concatMarkdown(
-    layout.pages
-      .flatMap((page) => page.anchoredDrawings ?? [])
-      // Textbox stories are not linear body content. Their deliberate omission is documented;
-      // non-textbox drawings retain deterministic page/record order here.
-      .filter((drawing) => drawing.textboxStory === undefined)
-      .map((drawing) => mappedDrawingMarkdown(drawing, context, drawingMarkdown(drawing, context)))
-      .filter((value) => value.markdown.length > 0),
-    '\n\n'
-  );
-}
-
 function pageBody(
   page: PageRecord,
   context: TranslationContext
@@ -564,20 +518,16 @@ function pageBody(
   const pageContext = {
     ...context,
     pageIndex: page.index,
+    anchors: anchorProjection(page.anchoredDrawings ?? [], context.media),
     listIndentByParagraphId,
     listMarkerByParagraphId,
     emittedNoteLabels: noteLabels,
   };
   const markdown = renderLogicalBlocks(blocks, pageContext, false, true);
-  const anchored = (page.anchoredDrawings ?? [])
-    .filter((drawing) => drawing.textboxStory === undefined)
-    .map((drawing) =>
-      mappedDrawingMarkdown(drawing, pageContext, drawingMarkdown(drawing, pageContext))
-    )
-    .filter((value) => value.markdown.length > 0);
+  const anchored = fallbackDrawings(pageContext);
   return {
     value: concatMarkdown(
-      [markdown, ...anchored].filter((value) => value.markdown.length > 0),
+      [markdown, anchored].filter((value) => value.markdown.length > 0),
       '\n\n'
     ),
     noteLabels,
@@ -601,19 +551,14 @@ function storyMarkdown(
   const storyContext: TranslationContext = {
     ...context,
     sourceScope: markdownSourceScope(story.kind, story.partName, null),
+    anchors: anchorProjection(story.anchoredDrawings ?? [], context.media),
     listIndentByParagraphId,
     listMarkerByParagraphId,
     tablesById,
   };
   const body = renderLogicalBlocks(logicalBlocks(story.fragments), storyContext);
-  const drawings = (story.anchoredDrawings ?? [])
-    .filter((drawing) => drawing.textboxStory === undefined)
-    .map((drawing) =>
-      mappedDrawingMarkdown(drawing, storyContext, drawingMarkdown(drawing, storyContext))
-    )
-    .filter((value) => value.markdown.length > 0);
   return concatMarkdown(
-    [body, ...drawings].filter((value) => value.markdown.length > 0),
+    [body, fallbackDrawings(storyContext)].filter((value) => value.markdown.length > 0),
     '\n\n'
   );
 }
@@ -653,6 +598,8 @@ function noteDefinitions(
     const noteContext = {
       ...context,
       sourceScope: markdownSourceScope(note.kind, '', scopeId),
+      // Core note stories expose inline drawings only. Do not inherit body anchors.
+      anchors: undefined,
       listIndentByParagraphId,
       listMarkerByParagraphId,
     };
@@ -678,14 +625,24 @@ function withDefinitions(markdown: MappedMarkdown, definitions: MappedMarkdown):
 }
 
 /** Translate an immutable exporter-neutral layout snapshot without retaining its producer. @public */
-export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult {
+export function exportMarkdownLayout(
+  layout: ExportSemanticLayout,
+  assets?: readonly MarkdownImageAsset[],
+  imageSyntax: 'markdown' | 'html' = 'markdown'
+): MarkdownExportResult {
   // Core export sessions always publish the array. The fallback keeps detached layouts produced
   // by older/custom hosts translatable while preserving the same empty immutable contract.
   const reviewArtifacts = layout.reviewArtifacts ?? EMPTY_REVIEW_ARTIFACTS;
   const displayMode = layout.displayMode ?? 'all-markup';
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
+  const media = assets === undefined ? undefined : createMediaRendering(assets, imageSyntax);
   const context: TranslationContext = {
+    media,
+    anchors: anchorProjection(
+      layout.pages.flatMap((page) => page.anchoredDrawings ?? []),
+      media
+    ),
     noteLabelByScope: buildNoteLabels(layout),
     tableCell: false,
     displayMode,
@@ -695,10 +652,9 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExpo
   };
   const markdown = withDefinitions(
     concatMarkdown(
-      [
-        renderLogicalBlocks(bodyBlocks(layout), context),
-        documentAnchoredDrawings(layout, context),
-      ].filter((value) => value.markdown.length > 0),
+      [renderLogicalBlocks(bodyBlocks(layout), context), fallbackDrawings(context)].filter(
+        (value) => value.markdown.length > 0
+      ),
       '\n\n'
     ),
     noteDefinitions(notes.document, context)
@@ -752,7 +708,10 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExpo
       trackedChanges: Object.freeze(pageArtifacts?.trackedChanges ?? []),
     });
   });
+  const warnings = markdownWarnings(layout, media);
   return Object.freeze({
+    media: assets ?? Object.freeze([]),
+    warnings: Object.freeze(warnings),
     pages: Object.freeze(pages),
     reviewArtifacts,
     reviewBindings: buildMarkdownReviewBindings(reviewArtifacts, markdown, pageProjectionValues),
@@ -765,9 +724,4 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExpo
     }),
     markdown: markdown.markdown,
   });
-}
-
-/** Translate one shared semantic layout session to Markdown. @public */
-export async function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult> {
-  return exportMarkdownLayout(await session.layout());
 }

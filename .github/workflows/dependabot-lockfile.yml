@@ -29,14 +29,21 @@ jobs:
   refresh-and-verify:
     if: github.actor == 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
           # Default GITHUB_TOKEN can push to dependabot PR branches when
           # workflow-level `permissions: contents: write` is granted.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -72,7 +79,7 @@ jobs:
       - name: Upload SARIF
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: shipped-advisories.sarif
           category: shipped-advisories
@@ -94,8 +101,30 @@ jobs:
 
       - name: Build packages
         run: bun run build:packages
+
+      - name: Install Chromium for editor acceptance
+        run: bash scripts/install-ci-chromium.sh
+
+      - name: Editor acceptance tests (React and Vue)
+        run: bun run test:e2e:acceptance
+
+      - name: Save editor browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: editor-browser-failures-dependabot
+          path: test-results/
+          retention-days: 7
+
+      - name: Collaboration policy
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun run collaboration:check --base "$BASE_SHA"
+
+      - name: Collaboration published-release matrix
+        run: |
+          bun run notices:generate
+          bun run collaboration:test --all
 
       - name: API report check
         run: bun run api:check

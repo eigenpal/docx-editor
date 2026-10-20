@@ -1,4 +1,3 @@
- 
 // The Vue twin of `packages/react/test/paragraph-dialog.test.tsx`.
 //
 // The two dialogs share their field logic as a byte-identical module, so what is worth
@@ -9,19 +8,27 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createApp, h, nextTick, ref } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref, type VNode } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
-import { DocxEditorParagraphDialog } from '../src/editor/DocxEditorParagraphDialog';
+import {
+  DocxEditorParagraphDialog,
+  useParagraphDialog,
+} from '../src/editor/DocxEditorParagraphDialog';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -29,11 +36,16 @@ function docx(body: string): Uint8Array {
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -49,7 +61,7 @@ async function flush(): Promise<void> {
   await new Promise((r) => setTimeout(r, 150));
 }
 
-function mountDialog(body: string) {
+function mountDialog(body: string, customization?: { preset?: boolean; children: () => VNode[] }) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const open = ref(false);
@@ -67,12 +79,17 @@ function mountDialog(body: string) {
             h(DocxEditorViewport, null, {
               default: () => [
                 h(DocxEditorContent),
-                h(DocxEditorParagraphDialog, {
-                  open: open.value,
-                  onClose: () => {
-                    open.value = false;
+                h(
+                  DocxEditorParagraphDialog,
+                  {
+                    preset: customization?.preset ?? true,
+                    open: open.value,
+                    onClose: () => {
+                      open.value = false;
+                    },
                   },
-                }),
+                  customization ? { default: customization.children } : undefined
+                ),
               ],
             }),
         }
@@ -294,7 +311,205 @@ describe('the Vue Paragraph dialog', () => {
       expect(formatting?.spaceBeforePt).toBe(18);
       // The line spacing the box merely SHOWED was never authored, so the paragraph still
       // takes it from the cascade rather than carrying a value of its own.
-      expect(formatting?.lineSpacing ?? null).toBeNull();
+      expect(formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1 });
+      expect(serializeOoxmlPart(editor().surface!.session.part())).not.toContain('w:line=');
+    } finally {
+      app.unmount();
+    }
+  });
+});
+
+describe('Vue dialog composition', () => {
+  test('replaces Apply with asChild while preserving the command and default fields', async () => {
+    const mounted = mountDialog(p('alpha'), {
+      children: () => [
+        h(
+          DocxEditorParagraphDialog.Apply,
+          { asChild: true },
+          { default: () => h('button', { 'data-custom-apply': '' }, 'Save paragraph') }
+        ),
+      ],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      const input = field(mounted.container, 'Before') as HTMLInputElement;
+      input.value = '18';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await flush();
+      expect(document.querySelectorAll('[data-docx-part="apply"]').length).toBe(1);
+      (document.querySelector('[data-custom-apply]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.open.value).toBe(false);
+      expect(mounted.editor().snapshot().formatting?.spaceBeforePt).toBe(18);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
+  test('custom layout and hook control preserve Apply and resolve mixed state', async () => {
+    const Custom = defineComponent({
+      setup() {
+        // Vue composables run in setup; this is not a React hook.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const dialog = useParagraphDialog();
+        return () =>
+          h(
+            'button',
+            { 'data-custom-control': '', onClick: () => dialog.setValue('alignment', 'right') },
+            dialog.values.value.alignment
+          );
+      },
+    });
+    const mounted = mountDialog(p('alpha'), {
+      preset: false,
+      children: () => [
+        h(DocxEditorParagraphDialog.Cancel),
+        h(Custom),
+        h(DocxEditorParagraphDialog.Field, { name: 'spaceBefore' }),
+        h(DocxEditorParagraphDialog.Apply),
+      ],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      expect(document.querySelector('[data-docx-part="header"]')).toBeNull();
+      const panel = document.querySelector('[data-docx-dialog="paragraph"]')!;
+      expect(panel.firstElementChild?.getAttribute('data-docx-part')).toBe('cancel');
+      (document.querySelector('[data-custom-control]') as HTMLButtonElement).click();
+      await flush();
+      (document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.editor().snapshot().formatting?.alignment).toBe('right');
+      expect(mounted.open.value).toBe(false);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
+
+  test('a custom layout reads and sets the direction through useParagraphDialog', async () => {
+    const Custom = defineComponent({
+      setup() {
+        // Vue composables run in setup; this is not a React hook.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const dialog = useParagraphDialog();
+        return () =>
+          h(
+            'button',
+            { 'data-custom-direction': '', onClick: () => dialog.setValue('direction', 'rtl') },
+            dialog.values.value.direction
+          );
+      },
+    });
+    const mounted = mountDialog(p('alpha'), {
+      preset: false,
+      children: () => [h(Custom), h(DocxEditorParagraphDialog.Apply)],
+    });
+    try {
+      await flush();
+      mounted.editor().surface!.selectAll();
+      await flush();
+      mounted.open.value = true;
+      await flush();
+      const control = document.querySelector('[data-custom-direction]') as HTMLButtonElement;
+      expect(control.textContent).toBe('ltr');
+      control.click();
+      await flush();
+      expect(control.textContent).toBe('rtl');
+      (document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement).click();
+      await flush();
+      expect(mounted.editor().snapshot().formatting?.direction).toBe('rtl');
+      expect(mounted.open.value).toBe(false);
+    } finally {
+      mounted.app.unmount();
+    }
+  });
+});
+
+test('a Paragraph draft cannot apply to a replacement document before the next render', async () => {
+  const mounted = mountDialog(p('first'));
+  try {
+    await flush();
+    mounted.editor().surface!.selectAll();
+    await flush();
+    mounted.open.value = true;
+    await flush();
+    const before = field(mounted.container, 'Before') as HTMLInputElement;
+    before.value = '18';
+    before.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    const apply = document.querySelector('[data-docx-part="apply"]') as HTMLButtonElement;
+    mounted.editor().load(docx(p('replacement')));
+    apply.click();
+    await flush();
+    expect(mounted.open.value).toBe(false);
+    mounted.editor().surface!.selectAll();
+    await flush();
+    expect(mounted.editor().snapshot().formatting?.spaceBeforePt).not.toBe(18);
+  } finally {
+    mounted.app.unmount();
+  }
+});
+
+describe('the Vue Paragraph dialog Direction field', () => {
+  const pick = (node: HTMLSelectElement, value: string) => {
+    node.value = value;
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  test('seeds the current direction, and OK writes the one you pick', async () => {
+    const { container, app, open, editor } = mountDialog(p('alpha', '<w:bidi/>'));
+    try {
+      await flush();
+      editor().surface!.selectAll();
+      await flush();
+      open.value = true;
+      await flush();
+
+      const direction = field(container, 'Direction') as HTMLSelectElement;
+      expect(direction.value).toBe('rtl');
+      pick(direction, 'ltr');
+      await flush();
+      okButton(container).click();
+      await flush();
+      expect(editor().snapshot().formatting?.direction).toBe('ltr');
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test('a mixed selection opens blank, stays mixed if untouched, and resolves when set', async () => {
+    const { container, app, open, editor } = mountDialog(p('one', '<w:bidi/>') + p('two'));
+    try {
+      await flush();
+      editor().surface!.selectAll();
+      await flush();
+      open.value = true;
+      await flush();
+      expect(editor().snapshot().formatting?.disagrees?.direction).toBe(true);
+      expect((field(container, 'Direction') as HTMLSelectElement).value).toBe('');
+
+      // Untouched: OK writes nothing, so the paragraphs keep their own directions.
+      okButton(container).click();
+      await flush();
+      expect(open.value).toBe(false);
+      expect(editor().snapshot().canUndo).toBe(false);
+
+      open.value = true;
+      await flush();
+      const direction = field(container, 'Direction') as HTMLSelectElement;
+      expect(direction.value).toBe('');
+      pick(direction, 'rtl');
+      await flush();
+      okButton(container).click();
+      await flush();
+      expect(editor().snapshot().formatting?.direction).toBe('rtl');
+      expect(editor().snapshot().formatting?.disagrees?.direction).toBe(false);
     } finally {
       app.unmount();
     }

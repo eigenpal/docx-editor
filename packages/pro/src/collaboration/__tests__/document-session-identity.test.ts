@@ -21,7 +21,7 @@ import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from '../document-session.ts';
-import { CollaborationSchemaError } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
 
 const DOCUMENT_ID = 'identity-room';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

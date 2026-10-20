@@ -1,3 +1,5 @@
+import { sectionProgress } from './section-progress.ts';
+import { characterHeaderPageToken } from './character-header-pages.ts';
 // Per-section incremental layout for multi-section documents.
 //
 // A single LayoutSession cannot resume across section boundaries: each section has its own
@@ -10,12 +12,17 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
+import { recordMovedSeedReserves } from './note-reserves.ts';
+import { sectionReadCollector } from './note-reserve-resume.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
+import { currentFinal } from './published-story-projections.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import { numericPictureApplies } from './field-page-furniture.ts';
+import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
+import type { ContinuedPageHost } from './continued-page-zones.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
+  replaceLayoutSession,
   type LayoutSession,
   type MultiSectionLayoutState,
   type SectionStackSpan,
@@ -24,8 +31,11 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,
   type DocumentSection,
+  sectionLineGridPt,
   type SectionColumns,
 } from './section-properties.ts';
+import { pageBordersFingerprint } from './page-borders.ts';
+import { sectionMarksJoiningBreakSheet } from './section-mark-break.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
 import {
@@ -34,6 +44,12 @@ import {
   type PageContentInsets,
 } from './page-furniture-insets.ts';
 import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
+import {
+  paritySheetAt,
+  registerParityPlan,
+  sectionNeedsParitySheet,
+  type SectionSheetStart,
+} from './page-parity-sheet.ts';
 
 type MultiSectionLayoutFieldRole = 'constructed' | 'post-processed';
 
@@ -46,6 +62,7 @@ const MULTI_SECTION_LAYOUT_FIELD_ROLES = {
   reviewArtifacts: 'post-processed',
   contentControls: 'post-processed',
   controlContextToken: 'post-processed',
+  sectionBreaks: 'post-processed',
 } as const satisfies Record<keyof SemanticLayout, MultiSectionLayoutFieldRole>;
 
 void MULTI_SECTION_LAYOUT_FIELD_ROLES;
@@ -64,18 +81,28 @@ export interface SectionLayoutResult {
   readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
 }
 
+/** {@link LayoutSectionFn} as steps that may pause between pages. */
+export type LayoutSectionStepsFn = (
+  ...args: Parameters<LayoutSectionFn>
+) => LayoutSteps<SectionLayoutResult>;
+
 export type LayoutSectionFn = (
   bodies: readonly OoxmlElement[],
   revision: number,
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
     readonly sectionColumns?: SectionColumns;
+    readonly paragraphLineUnitPt?: number;
     readonly lineCounterStart?: number;
     readonly flowStartY?: number;
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
+    readonly furniturePageNumberStart?: number;
     readonly balanceColumns?: boolean;
+    readonly sectionMarkCollapses?: boolean;
+    readonly markJoinsBreakSheet?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
+    readonly continuedPageFurniture?: ContinuedPageHost;
     readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
@@ -108,7 +135,7 @@ function furnitureStoryEntries(
  */
 function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')};cs:${characterHeaderPageToken(furniture)}`;
 }
 
 /**
@@ -118,7 +145,7 @@ function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): str
  */
 export function furnitureFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')};cs:${characterHeaderPageToken(furniture)}`;
 }
 
 export function furnitureForSection(
@@ -145,7 +172,15 @@ export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
   options: SemanticLayoutOptions
 ): string {
-  const entries = sections.map((section, index) => {
+  return framedTokenJoin(multiSectionKeys(sections, options));
+}
+
+/** Each section's part of {@link multiSectionStructureKey}, in section order. */
+function multiSectionKeys(
+  sections: readonly DocumentSection[],
+  options: SemanticLayoutOptions
+): string[] {
+  return sections.map((section, index) => {
     const geometry = geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, index, sections.length);
     const pn = section.properties.pageNumbering;
@@ -158,6 +193,9 @@ export function multiSectionStructureKey(
       ? `pn:${framedTokenJoin([pn.start ?? '', pn.fmt ?? '', pn.chapStyle ?? '', pn.chapSep ?? ''].map(String))}`
       : 'pn:';
     const columns = section.properties.columns;
+    // The frame is not in `geometry`, and no per-block key moves when it changes, so without
+    // this a `w:pgBorders` edit reuses every section's previous sheets with the old frame.
+    const bordersKey = `pgb:${pageBordersFingerprint(section.properties.pageBorders)}`;
     const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
     return framedTokenJoin(
       [
@@ -173,29 +211,30 @@ export function multiSectionStructureKey(
         furnitureGeometryFingerprint(furniture),
         pnKey,
         columnsKey,
+        bordersKey,
       ].map(String)
     );
   });
-  return framedTokenJoin(entries);
 }
 
 function ensureMultiState(
   session: LayoutSession | undefined,
-  structureKey: string,
-  sectionCount: number
+  sectionKeys: readonly string[]
 ): MultiSectionLayoutState | null {
   if (!session) return null;
+  const structureKey = framedTokenJoin(sectionKeys);
   const existing = session.multi;
   if (
     existing &&
     existing.structureKey === structureKey &&
-    existing.sections.length === sectionCount
+    existing.sections.length === sectionKeys.length
   ) {
     return existing;
   }
   const fresh: MultiSectionLayoutState = {
     structureKey,
-    sections: Array.from({ length: sectionCount }, () => createLayoutSession()),
+    sectionKeys,
+    sections: sectionKeys.map((key, index) => carriedSectionSession(session, existing, key, index)),
     spans: [],
     previousRemapped: [],
     previousFinalized: null,
@@ -207,11 +246,39 @@ function ensureMultiState(
 }
 
 /**
+ * The child session section `index` starts from when the section list changes.
+ *
+ * A sliced open reveals sections one slice at a time, and an edit can add or remove one: in
+ * both cases the sections before the change keep their geometry, so their previous sessions
+ * still answer. A section whose own key moved starts fresh. Before the first multi-section
+ * pass, section 0 adopts the single-section session it was laid out with. Every reused
+ * session is still checked by its own per-block keys and context, so a stale one only misses.
+ */
+function carriedSectionSession(
+  session: LayoutSession,
+  existing: MultiSectionLayoutState | null,
+  key: string,
+  index: number
+): LayoutSession {
+  if (existing) {
+    const previous = existing.sections[index];
+    return previous && existing.sectionKeys[index] === key ? previous : createLayoutSession();
+  }
+  const fresh = createLayoutSession();
+  if (index === 0 && session.prepass !== null) {
+    replaceLayoutSession(fresh, session);
+    fresh.multi = null;
+  }
+  return fresh;
+}
+
+/**
  * Whether an empty section still needs its own sheet.
  *
- * Default/`nextPage` (and deferred-parity `evenPage`/`oddPage`) start on a new page even with
- * no body blocks — Word keeps that blank sheet for geometry and furniture. `continuous`
- * shares the previous sheet, so an empty continuous section must not manufacture a page.
+ * Default/`nextPage`/`evenPage`/`oddPage` start on a new page even with no body blocks: that
+ * sheet carries the section's geometry and furniture, after any parity sheet in front of it.
+ * `continuous` shares the previous sheet, so an empty continuous section must not manufacture
+ * a page.
  */
 export function emptySectionNeedsBlankPage(
   breakType: DocumentSection['properties']['breakType']
@@ -315,7 +382,10 @@ interface PublishedPageMemo {
   readonly format: string | undefined;
   readonly published: PageRecord;
 }
-const publishedPageMemos = new WeakMap<PageRecord, PublishedPageMemo>();
+// A few per page: a footnote reserve search can publish a page at alternating places in its
+// rounds, and one entry made each round remap the page again.
+const publishedPageMemos = new WeakMap<PageRecord, PublishedPageMemo[]>();
+const PUBLISHED_PER_PAGE = 3;
 
 function publishSectionPage(
   page: PageRecord,
@@ -325,27 +395,24 @@ function publishSectionPage(
   sectionPageCount: number,
   format: string | undefined
 ): PageRecord {
-  const memo = publishedPageMemos.get(page);
-  if (
-    memo &&
-    memo.globalIndex === globalIndex &&
-    memo.sheetY === sheetY &&
-    memo.pageNumber === pageNumber &&
-    memo.sectionPageCount === sectionPageCount &&
-    memo.format === format
-  ) {
-    return memo.published;
-  }
+  const memos = publishedPageMemos.get(page);
+  const memo = memos?.find(
+    (entry) =>
+      entry.globalIndex === globalIndex &&
+      entry.sheetY === sheetY &&
+      entry.pageNumber === pageNumber &&
+      entry.sectionPageCount === sectionPageCount &&
+      entry.format === format
+  );
+  if (memo) return memo.published;
   const remapped = remapPage(page, globalIndex, sheetY);
   const published = withPageFieldSources([remapped], pageNumber, sectionPageCount, format)[0]!;
-  publishedPageMemos.set(page, {
-    globalIndex,
-    sheetY,
-    pageNumber,
-    sectionPageCount,
-    format,
-    published,
-  });
+  const entry = { globalIndex, sheetY, pageNumber, sectionPageCount, format, published };
+  if (!memos) publishedPageMemos.set(page, [entry]);
+  else {
+    if (memos.length >= PUBLISHED_PER_PAGE) memos.shift();
+    memos.push(entry);
+  }
   return published;
 }
 
@@ -355,7 +422,8 @@ function publishSectionPage(
  * `w:type` on a section (default `nextPage`) controls whether that section starts on a new
  * sheet relative to the previous one. Continuous sections keep flowing on the current sheet
  * only when the previous section left no open page — after a normal flush they still start
- * cleanly. Odd/even page types currently behave like nextPage (blank-page skipping deferred).
+ * cleanly. A section that needs a page parity gets one blank sheet in front of it first
+ * (`page-parity-sheet.ts`).
  *
  * An empty final section is still laid out when its break type requires a new sheet: that
  * materializes the blank page Word keeps for the section's geometry and furniture.
@@ -367,9 +435,31 @@ export function layoutMultiSectionDocument(
   options: SemanticLayoutOptions,
   layoutSection: LayoutSectionFn
 ): SemanticLayout {
+  return drainLayoutSteps(
+    layoutMultiSectionDocumentSteps(
+      blocks,
+      sections,
+      revision,
+      options,
+      function* (bodies, sectionRevision, sectionOptions) {
+        return layoutSection(bodies, sectionRevision, sectionOptions);
+      }
+    )
+  );
+}
+
+/** {@link layoutMultiSectionDocument} as steps that report the pages completed so far. */
+export function* layoutMultiSectionDocumentSteps(
+  blocks: readonly OoxmlElement[],
+  sections: readonly DocumentSection[],
+  revision: number,
+  options: SemanticLayoutOptions,
+  layoutSectionSteps: LayoutSectionStepsFn
+): LayoutSteps<SemanticLayout> {
   const { session, ...rest } = options;
-  const structureKey = multiSectionStructureKey(sections, options);
-  const multi = ensureMultiState(session, structureKey, sections.length);
+  // A prefix pass of a sliced open: page fields finalize again when the full pass runs.
+  const provisional = options.bodyBlockLimit !== undefined;
+  const multi = ensureMultiState(session, multiSectionKeys(sections, options));
   // One retention pass over the UNION of every section's live keys. Retaining inside each
   // section's pass evicted every other section's entries — the multi-section break cache
   // was empty on every pass. The sweep runs on the retention stride; skipped passes hand
@@ -382,6 +472,23 @@ export function layoutMultiSectionDocument(
     if (retainKeys && !rest.retainKeys) rest.cache?.retain(retainKeys);
   };
 
+  // A notes pass seeds its first run with the reserves of the previous pass. When an edit
+  // added or removed pages, every later section starts at another page index, and the seed
+  // then gave each of those sections reserves at the wrong pages: they laid out again under
+  // a new context, and again on every round of the reserve search. Each section reads its
+  // own entries moved by how far its first page moved; with a section added or removed the
+  // seed stays as it is.
+  const seed =
+    options.pageBottomReservesFromPreviousPass &&
+    options.pageBottomReserves &&
+    multi &&
+    multi.spans.length > 0 &&
+    multi.spans.length === sections.length
+      ? options.pageBottomReserves
+      : undefined;
+  const movedSeed = seed ? new Map<number, number>() : undefined;
+  /** What each seeded section read, where it differs from what it was given. */
+  const sectionReads = sectionReadCollector();
   const pages: PageRecord[] = [];
   const remappedAll: PageRecord[] = [];
   const newSpans: SectionStackSpan[] = [];
@@ -400,20 +507,63 @@ export function layoutMultiSectionDocument(
     readonly at: (index: number, box: LayoutBox) => OverflowPageShell;
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
-  let previousFurnitureKey = '';
-  /** Next displayed PAGE value if the following section does not author `w:start`. */
+  /**
+   * The running displayed number: the PAGE value the next new sheet gets when its section
+   * does not author `w:start`. A continuous section shares its host sheet, so this can move
+   * past the host's own stamped number (a restart that ends on the shared sheet). The parity
+   * rules for unrestarted breaks and the notes pass read this value, never a stamp.
+   */
   let nextDisplayed = 1;
+  // Shared-sheet restarts change displayed numbers, but not the sheet sequence.
+  let nextParity = 1;
+  /** Each section's first own sheet, for the notes pass to decide parity again. */
+  const sheetStarts: SectionSheetStart[] = [];
+  /** The running number after a sheet, where it is not that sheet's stamped number + 1. */
+  const runningAfter = new Map<number, number>();
+  // A settings.xml flag. Without the document value, every section's furniture carries it.
+  const evenAndOddHeaders =
+    options.evenAndOddHeaders ??
+    sections.some(
+      (_, index) => furnitureForSection(options, index, sections.length)?.evenAndOddHeaders === true
+    );
+
+  const geometries = sections.map((section) => geometryOfSection(section.properties));
+  const marksJoinBreakSheet = sectionMarksJoiningBreakSheet(
+    sections,
+    blocks,
+    (index) =>
+      sections[index]!.properties.breakType === 'continuous' &&
+      samePageSize(geometries[index - 1]!, geometries[index]!)
+  );
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     const slice = blocks.slice(section.blockStart, section.blockEndExclusive);
-    const geometry = geometryOfSection(section.properties);
+    const geometry = geometries[sectionIndex]!;
     const furniture = furnitureForSection(options, sectionIndex, sections.length);
-    const startIndex = pages.length;
-    const startSheetY = sheetY;
     const prevSpan = multi?.spans[sectionIndex];
 
-    const furnitureKey = furnitureGeometryFingerprint(furniture);
+    const restart = section.properties.pageNumbering?.start;
+    const runningBefore = nextDisplayed;
+    const paritySheet = sectionNeedsParitySheet({
+      breakType: section.properties.breakType,
+      restart,
+      nextDisplayed,
+      nextParity,
+      sheetIndex: pages.length,
+      evenAndOddHeaders,
+    })
+      ? paritySheetAt(pages.length, sheetY, geometry, prevSpan?.paritySheet)
+      : undefined;
+    if (paritySheet) {
+      pages.push(paritySheet);
+      remappedAll.push(paritySheet);
+      sheetY = paritySheet.box.y + paritySheet.box.height + SHEET_GUTTER_PT;
+      // An unrestarted number counts the blank sheet, which is how it reaches the parity.
+      if (restart === undefined) nextDisplayed += 1;
+    }
+    const startIndex = pages.length;
+    const startSheetY = sheetY;
 
     // Empty continuous: share/continue — record a zero-page span so section indices stay
     // aligned for incremental reuse, and do not invent a blank sheet.
@@ -431,18 +581,20 @@ export function layoutMultiSectionDocument(
     // CONTINUOUS: `w:type` on THIS section's trailing `w:sectPr` says how the section starts
     // relative to the previous one (ECMA-376 §17.6.22 / ST_SectionMark). Absent type is
     // nextPage. When continuous, Word keeps the section on the page the last one ended,
-    // resuming the column immediately below its final paragraph — only when the sheet size
-    // and furniture push-down are unchanged (furniture belongs to the host sheet).
+    // resuming the column immediately below its final paragraph, when the sheet size is
+    // unchanged. Header and footer furniture belongs to the host sheet: a different height or
+    // `w:titlePg` does not start a new sheet. The host keeps its furniture and content box
+    // (`continuedPageInsets`), and the section's own furniture starts on its next sheet.
     const continues =
       sectionIndex > 0 &&
       section.properties.breakType === 'continuous' &&
       pages.length > 0 &&
       // A trailing page break already ended the previous sheet. Word puts the continued
-      // section after that break, not on top of the page it closed.
+      // section after that break, not on top of the page it closed. A break that kept its
+      // empty mark (`markJoinsBreakSheet`) leaves the sheet open for mark-only sections only.
       flowOpenPage &&
       previousGeometry !== null &&
-      samePageSize(previousGeometry, geometry) &&
-      previousFurnitureKey === furnitureKey;
+      samePageSize(previousGeometry, geometry);
 
     // Empty nextPage/even/odd: lay out zero blocks so the section still flushes one blank
     // page under its own geometry and furniture (Word-compatible trailing section break).
@@ -451,65 +603,87 @@ export function layoutMultiSectionDocument(
     // A multi-column section that ends in a continuous section break balances its columns
     // (ECMA-376 §17.6.4). The break that ENDS this section is the next section's `w:type`;
     // the document's last section has no such break, so it keeps the fill-first shape.
-    const balanceColumns =
-      section.properties.columns.count > 1 &&
-      sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+    const endsContinuous = sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+    const balanceColumns = section.properties.columns.count > 1 && endsContinuous;
+    // A page break and the empty mark after it advance one sheet when a later section opens
+    // the next sheet. Mark-only sections in between then continue on the break's sheet. A
+    // balanced section is left as it was: the balance search needs one open page.
+    const markJoinsBreakSheet = !balanceColumns && marksJoinBreakSheet[sectionIndex]!;
 
     // A continued section's local page 0 IS the host sheet, so it must flow against the box
     // that sheet already has. Its own variants describe a page it never opens: with `w:titlePg`
     // on both sections the host resolves `default` and this section would resolve `first`, and
     // the taller box packs content past the host's content bottom.
     const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
+    // For the same reason its text wraps around the drawings the host sheet paints, and around
+    // the floating tables and wrapping pictures earlier sections left there
+    // (`continued-page-zones.ts`). So the section starts below the host's last text line, not
+    // below those floats.
+    const continuedPageFurniture = continues ? pages[pages.length - 1] : undefined;
 
-    // The page-number format a body page-field placeholder is MEASURED against.
-    //
-    // Normally the section's own, so the placeholder matches the value that replaces it. A
-    // CONTINUED section is the exception: its local page 0 merges onto the host sheet, which
-    // keeps whatever format that sheet was stamped with, while its own sheets keep this
-    // section's. When those two disagree about whether a `\#` picture renders at all, no single
-    // measurement is right for both — so measure against whichever format SUPPRESSES the
-    // picture. That reserves the plain number's width, and a picture-rendered value overruns it
-    // exactly as an unpictured multi-digit value already does; the reverse would reserve a
-    // width the other pages never fill.
-    //
-    // Read off the HOST PAGE, not tracked across the loop. A continuous section that fits
-    // wholly on the host contributes no sheet of its own, so the sheet the next one merges onto
-    // is still stamped with an earlier section's format — and a loop variable would by then
-    // name the section that left no page behind.
-    const sectionPageNumberFormat = section.properties.pageNumbering?.fmt;
-    const hostPageNumberFormat = continues
-      ? pages[pages.length - 1]?.pageFieldSource?.format
-      : undefined;
-    const measuredPageNumberFormat =
-      continues && !numericPictureApplies('PAGE', hostPageNumberFormat)
-        ? hostPageNumberFormat
-        : sectionPageNumberFormat;
+    // The section's own page-number format, for the body flow's page-field context. A
+    // placeholder measures through the field's own switches, which render the same on every
+    // section, so a continued section that merges onto its host sheet needs no special case.
+    const measuredPageNumberFormat = section.properties.pageNumbering?.fmt;
 
-    const laid = layoutSection(slice, revision, {
-      ...rest,
-      retainKeys,
-      geometry,
-      furniture,
-      sectionColumns: section.properties.columns,
-      ...(balanceColumns ? { balanceColumns } : {}),
-      lineCounterStart: lineCounter,
-      // A continued section's local page 0 IS the host sheet, so its document page index
-      // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
-      pageIndexStart: continues ? startIndex - 1 : startIndex,
-      ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
-      ...(continuedPageInsets ? { continuedPageInsets } : {}),
-      ...(measuredPageNumberFormat !== undefined
-        ? { bodyPageNumberFormat: measuredPageNumberFormat }
-        : {}),
-      ...(sectionSession ? { session: sectionSession } : {}),
-    });
+    const sectionReserves =
+      seed && movedSeed && prevSpan
+        ? movedSectionSeed(
+            seed,
+            prevSpan,
+            startIndex,
+            continues ? startIndex - 1 : startIndex,
+            movedSeed
+          )
+        : undefined;
+    const progressStart = section.properties.pageNumbering?.start ?? nextDisplayed;
+    const laid: SectionLayoutResult = yield* sectionProgress(
+      layoutSectionSteps(slice, revision, {
+        ...rest,
+        ...(sectionReserves ? { pageBottomReserves: sectionReserves } : {}),
+        retainKeys,
+        geometry,
+        furniture,
+        sectionColumns: section.properties.columns,
+        paragraphLineUnitPt: sectionLineGridPt(section.properties),
+        ...(section.properties.pageBorders
+          ? { sectionPageBorders: section.properties.pageBorders }
+          : {}),
+        ...(balanceColumns ? { balanceColumns } : {}),
+        // The empty paragraph that carries this section's mark takes no flow height when the
+        // next section is continuous: the next section starts where the content ended.
+        ...(endsContinuous ? { sectionMarkCollapses: true } : {}),
+        ...(markJoinsBreakSheet ? { markJoinsBreakSheet } : {}),
+        lineCounterStart: lineCounter,
+        // A continued section's local page 0 IS the host sheet, so its document page index
+        // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
+        pageIndexStart: continues ? startIndex - 1 : startIndex,
+        furniturePageNumberStart:
+          section.properties.pageNumbering?.start ?? nextDisplayed - (continues ? 1 : 0),
+        // Paragraph spacing still collapses across a section boundary on a new sheet.
+        // Carry only the after-spacing budget there, never the prior sheet's cursor.
+        spaceBeforeCarry: flowSpaceAfter,
+        ...(continues ? { flowStartY: flowCursorY } : {}),
+        ...(continuedPageInsets ? { continuedPageInsets } : {}),
+        ...(continuedPageFurniture ? { continuedPageFurniture } : {}),
+        ...(measuredPageNumberFormat !== undefined
+          ? { bodyPageNumberFormat: measuredPageNumberFormat }
+          : {}),
+        ...(sectionSession ? { session: sectionSession } : {}),
+      }),
+      continues ? null : [...pages],
+      sheetY,
+      progressStart,
+      section.properties.pageNumbering?.fmt,
+      revision
+    );
     sectionShells.push({ startIndex, at: laid.overflowShellAt });
+    sectionReads.take(sectionSession);
     lineCounter = laid.lineCounter;
     flowCursorY = laid.endCursorY;
     flowSpaceAfter = laid.endSpaceAfter;
     flowOpenPage = laid.endsOpenPage;
     previousGeometry = geometry;
-    previousFurnitureKey = furnitureKey;
 
     if (sectionSession) {
       placed += sectionSession.stats.placed;
@@ -581,15 +755,19 @@ export function layoutMultiSectionDocument(
         built.push(next);
         sheetY = next.box.y + next.box.height + SHEET_GUTTER_PT;
       }
-      // Local page 0 lived on the host; overflow pages start at displayedStart + 1.
+      // Local page 0 lived on the host. Its running number is the restart, or the running
+      // number of the host sheet, which is one before the next new sheet's. The host's stamp
+      // is not used: an earlier restarted continuous section can have moved the running
+      // number past it. Overflow pages count on from the host's running number.
       // SECTIONPAGES counts the host contribution plus overflow sheets.
+      const hostNumber = numbering?.start ?? nextDisplayed - 1;
       const sectionPageCount = built.length + 1;
-      remapped = withPageFieldSources(built, displayedStart + 1, sectionPageCount, format);
+      remapped = withPageFieldSources(built, hostNumber + 1, sectionPageCount, format);
       for (const page of remapped) {
         pages.push(page);
         remappedAll.push(page);
       }
-      nextDisplayed = displayedStart + sectionPageCount;
+      nextDisplayed = hostNumber + sectionPageCount;
     } else if (localUnchanged && stackUnchanged && numberingUnchanged) {
       remapped = prevSpan.remappedPages;
       reusedPages += remapped.length;
@@ -621,25 +799,51 @@ export function layoutMultiSectionDocument(
       nextDisplayed = displayedStart + remapped.length;
     }
 
+    nextParity =
+      !continues && restart !== undefined
+        ? nextDisplayed
+        : nextParity + remapped.length + (paritySheet ? 1 : 0);
+
     newSpans.push({
       startIndex,
       pageCount: remapped.length,
       sheetY: startSheetY,
       remappedPages: remapped,
       sourcePages: laid.pages,
+      ...(paritySheet ? { paritySheet } : {}),
     });
+    if (remapped.length > 0) {
+      sheetStarts.push({
+        pageIndex: startIndex,
+        breakType: section.properties.breakType,
+        restart,
+        runningBefore,
+        continuesPreviousSheet: continues,
+        geometry,
+      });
+    }
+    const lastStamp = pages[pages.length - 1]?.pageFieldSource?.pageNumber;
+    if (lastStamp !== undefined && lastStamp + 1 !== nextDisplayed) {
+      runningAfter.set(pages.length - 1, nextDisplayed);
+    } else {
+      runningAfter.delete(pages.length - 1);
+    }
   }
 
   if (pages.length === 0) {
     const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
-    const laid = layoutSection([], revision, {
+    const laid: SectionLayoutResult = yield* layoutSectionSteps([], revision, {
       ...rest,
       retainKeys,
       geometry,
+      paragraphLineUnitPt: sectionLineGridPt(sections[0]?.properties),
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+      ...(sections[0]?.properties.pageBorders
+        ? { sectionPageBorders: sections[0].properties.pageBorders }
+        : {}),
     });
     retainOnce();
-    const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
+    const finalized = finalizePageFieldProjection({ revision, pages: laid.pages }, { provisional });
     registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
       laid.overflowShellAt(documentPageIndex, box)
     );
@@ -662,7 +866,7 @@ export function layoutMultiSectionDocument(
     return finalized;
   }
 
-  const freshlyFinalized = finalizePageFieldProjection({ revision, pages });
+  const freshlyFinalized = finalizePageFieldProjection({ revision, pages }, { provisional });
   let finalized = freshlyFinalized;
   const pageRefToken = pageRefAssignmentToken(pages);
 
@@ -677,12 +881,9 @@ export function layoutMultiSectionDocument(
   ) {
     const prevFinal = multi.previousFinalized.pages;
     const prevRemapped = multi.previousRemapped;
-    const merged = freshlyFinalized.pages.map((page, index) => {
-      if (remappedAll[index] === prevRemapped[index] && prevFinal[index]) {
-        return prevFinal[index]!;
-      }
-      return page;
-    });
+    const merged = freshlyFinalized.pages.map((page, index) =>
+      remappedAll[index] === prevRemapped[index] ? (currentFinal(prevFinal, index) ?? page) : page
+    );
     finalized = { ...freshlyFinalized, pages: merged };
   }
 
@@ -690,7 +891,8 @@ export function layoutMultiSectionDocument(
     multi.spans = newSpans;
     multi.previousRemapped = remappedAll;
     multi.previousFinalized = finalized;
-    multi.previousPageCount = finalized.pages.length;
+    // A provisional page may still show an earlier page count; never restore it as final.
+    multi.previousPageCount = provisional ? -1 : finalized.pages.length;
     multi.previousPageRefToken = pageRefToken;
   }
 
@@ -717,7 +919,33 @@ export function layoutMultiSectionDocument(
     const owner = chosen ?? sectionShells[sectionShells.length - 1];
     return owner?.at(documentPageIndex, box);
   });
+  registerParityPlan(finalized, evenAndOddHeaders, sheetStarts, runningAfter);
+  if (movedSeed && session) recordMovedSeedReserves(session, movedSeed);
+  sectionReads.report(session, movedSeed ?? options.pageBottomReserves);
 
   retainOnce();
   return finalized;
+}
+
+/**
+ * One section's seed entries: the reserves of the pages it had in the previous pass, moved to
+ * where its pages start now. Also adds them to `moved`, the map the whole pass used.
+ */
+function movedSectionSeed(
+  seed: ReadonlyMap<number, number>,
+  previous: SectionStackSpan,
+  startIndex: number,
+  pageIndexStart: number,
+  moved: Map<number, number>
+): ReadonlyMap<number, number> {
+  const shift = startIndex - previous.startIndex;
+  const previousStart = pageIndexStart - shift;
+  const previousEnd = previousStart + previous.sourcePages.length;
+  const own = new Map<number, number>();
+  for (const [pageIndex, height] of seed) {
+    if (pageIndex < previousStart || pageIndex >= previousEnd) continue;
+    own.set(pageIndex + shift, height);
+    moved.set(pageIndex + shift, height);
+  }
+  return own;
 }

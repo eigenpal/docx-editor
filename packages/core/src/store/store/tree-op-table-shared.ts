@@ -1,6 +1,12 @@
 // Shared WordprocessingML name helpers for table store modules.
 
-import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
+import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 
 export { WML_NAMESPACE_URI };
 
@@ -38,4 +44,13 @@ export function expandedNameMatches(
   namespaceUri: string = WML_NAMESPACE_URI
 ): boolean {
   return node.localName === localName && node.namespaceUri === namespaceUri;
+}
+
+/** The nearest `w:tbl` at or above `nodeId`, or null outside a table. */
+export function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
+  const node = findNode(part, nodeId);
+  if (!node || node.kind === 'textValue') return null;
+  let current: OoxmlElement | null = node;
+  while (current && current.kind !== 'table') current = parentNodeOf(part, current.id);
+  return current;
 }

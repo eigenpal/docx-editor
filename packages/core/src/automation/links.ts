@@ -77,7 +77,10 @@ function isHidden(name: string): boolean {
  * same bookmark, and last-wins would move a target when an edit far away happened to repeat a
  * name.
  */
-export function bookmarkReads(reads: AutomationStoryReads): readonly AutomationBookmarkRead[] {
+export function bookmarkReads(
+  reads: AutomationStoryReads,
+  options: { readonly includeHidden?: boolean } = {}
+): readonly AutomationBookmarkRead[] {
   /** Open starts by `@w:id`, waiting for the end that closes them. */
   const open = new Map<string, { name: string; start: AutomationMarkerPosition }>();
   const found: AutomationBookmarkRead[] = [];
@@ -95,7 +98,7 @@ export function bookmarkReads(reads: AutomationStoryReads): readonly AutomationB
         const name = wmlAttribute(node, 'name');
         if (id === undefined || name === undefined) return;
         if (name.length === 0 || name.length > MAX_BOOKMARK_NAME) return;
-        if (isHidden(name) || named.has(name) || open.has(id)) return;
+        if ((isHidden(name) && !options.includeHidden) || named.has(name) || open.has(id)) return;
         const at = offsets.spanOf(node)?.start ?? 0;
         open.set(id, { name, start: { paragraphId, offset: at } });
         return;

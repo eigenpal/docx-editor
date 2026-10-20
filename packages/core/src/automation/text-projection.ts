@@ -1,35 +1,112 @@
 // Text projections for automation reads and searches.
 //
-// Model offsets always include every addressable segment. A projection can hide text from a
-// caller, but it must map every visible match back to that same model-offset space. Otherwise a
-// search can return words that its range cannot read, select, or edit.
+// Model offsets always include every addressable segment. A projection can show text that the
+// model does not address one-for-one. Every visible match still maps to one editable model range.
 
 import type { AutomationTextProjection } from './operations.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { LINE_BREAK_TEXT } from '../store/store/tree-op-inline-elements.ts';
+import { withBreakReadText } from '../store/store/paragraph-model-text.ts';
+import {
+  identityProjection,
+  projectionFromPieces,
+  visibleParagraphPieces,
+  type ProjectedParagraphText,
+  type VisiblePiece,
+} from '../store/store/text-projection.ts';
 
-interface VisiblePiece {
-  readonly projectedStart: number;
-  readonly projectedEnd: number;
-  readonly rawStart: number;
-  readonly rawEnd: number;
+export {
+  identityProjection,
+  projectionFromPieces,
+  projectVisibleParagraphText,
+  visibleParagraphPieces,
+  type ProjectedParagraphText,
+  type VisiblePiece,
+} from '../store/store/text-projection.ts';
+
+export interface RawSpan {
+  readonly start: number;
+  readonly end: number;
 }
 
-/** One paragraph under a chosen text projection, with lossless links to model offsets. */
-export interface ProjectedParagraphText {
-  readonly text: string;
-  /** Map one model boundary into the projected UTF-16 offset space. */
-  projectedOffset(rawOffset: number): number;
-  /** Map a non-empty projected range back to one editable model range. */
-  rawRange(
-    start: number,
-    end: number
-  ): {
-    readonly start: number;
-    readonly end: number;
-  } | null;
-  /** Read a model range through this projection. */
-  sliceRaw(start: number, end: number): string;
+function clippedIdentityPiece(
+  piece: VisiblePiece,
+  start: number,
+  end: number
+): VisiblePiece | null {
+  if (start >= end) return null;
+  return {
+    text: piece.text.slice(start - piece.rawStart, end - piece.rawStart),
+    rawStart: start,
+    rawEnd: end,
+    // A clipped symbol is still a symbol, which search never matches.
+    ...(piece.symbol ? { symbol: true as const } : {}),
+    ...(piece.symbol && piece.symbolDisplays ? { symbolDisplays: piece.symbolDisplays } : {}),
+  };
+}
+
+/** Remove sorted hidden spans from sorted visible pieces with one forward-only cursor. */
+export function hideInsertionSpansFromPieces(
+  pieces: readonly VisiblePiece[],
+  hidden: readonly RawSpan[]
+): VisiblePiece[] {
+  const shown: VisiblePiece[] = [];
+  let hiddenIndex = 0;
+  for (const piece of pieces) {
+    while (hiddenIndex < hidden.length && hidden[hiddenIndex]!.end <= piece.rawStart) {
+      hiddenIndex += 1;
+    }
+    const rawLength = piece.rawEnd - piece.rawStart;
+    // A field result is one atom even when its text happens to be one character long, and it
+    // must keep its result runs and symbol offsets whole.
+    if (piece.text.length !== rawLength || piece.resultRuns || piece.symbolOffsets) {
+      // Whole-atom revision wrappers are hidden here. Insertions inside a field result are
+      // removed while its cached result text is built.
+      const span = hidden[hiddenIndex];
+      if (!span || span.start >= piece.rawEnd) shown.push(piece);
+      continue;
+    }
+
+    let rawCursor = piece.rawStart;
+    while (hiddenIndex < hidden.length) {
+      const span = hidden[hiddenIndex]!;
+      if (span.end <= rawCursor) {
+        hiddenIndex += 1;
+        continue;
+      }
+      if (span.start >= piece.rawEnd) break;
+      const visible = clippedIdentityPiece(piece, rawCursor, Math.min(span.start, piece.rawEnd));
+      if (visible) shown.push(visible);
+      rawCursor = Math.max(rawCursor, span.end);
+      if (span.end <= piece.rawEnd) hiddenIndex += 1;
+      if (rawCursor >= piece.rawEnd) break;
+    }
+    const tail = clippedIdentityPiece(piece, rawCursor, piece.rawEnd);
+    if (tail) shown.push(tail);
+  }
+  return shown;
+}
+
+/**
+ * A manual line break reads as `\v`, the character a write uses for one, so text read from a
+ * paragraph can be written back. The store's model text spells it `\n`; both are one UTF-16
+ * unit, so every offset in the projection stays the same.
+ */
+function withLineBreakText(
+  readText: string,
+  pieces: readonly VisiblePiece[]
+): readonly VisiblePiece[] {
+  return pieces.map((piece) => {
+    if (!piece.text.includes('\n')) return piece;
+    // A piece that shows its model text one-for-one takes each break's spelling from the
+    // model. A field result shows text of its own, where every break is a line break.
+    const identity = piece.text.length === piece.rawEnd - piece.rawStart && !piece.resultRuns;
+    const text = identity
+      ? piece.text.replaceAll('\n', (_char, index: number) => readText[piece.rawStart + index]!)
+      : piece.text.replaceAll('\n', LINE_BREAK_TEXT);
+    return { ...piece, text };
+  });
 }
 
 /** Build the projection once for one immutable paragraph node. */
@@ -38,105 +115,52 @@ export function projectParagraphText(
   rawText: string,
   projection: AutomationTextProjection
 ): ProjectedParagraphText {
-  if (projection === 'allMarkup') return identityProjection(rawText);
+  const readText = withBreakReadText(paragraph, rawText);
+  if (projection === 'model') return identityProjection(readText);
+  const base = visibleParagraphPieces(paragraph, rawText, projection);
+  if (projection === 'allMarkup') return projectionFromPieces(withLineBreakText(readText, base));
 
-  const hidden = hiddenInsertionSpans(paragraph);
-  if (hidden.length === 0) return identityProjection(rawText);
-
-  const pieces: VisiblePiece[] = [];
-  const text: string[] = [];
-  let raw = 0;
-  let projected = 0;
-  for (const span of hidden) {
-    if (raw < span.start) {
-      const value = rawText.slice(raw, span.start);
-      pieces.push({
-        projectedStart: projected,
-        projectedEnd: projected + value.length,
-        rawStart: raw,
-        rawEnd: span.start,
-      });
-      text.push(value);
-      projected += value.length;
-    }
-    raw = Math.max(raw, span.end);
-  }
-  if (raw < rawText.length) {
-    const value = rawText.slice(raw);
-    pieces.push({
-      projectedStart: projected,
-      projectedEnd: projected + value.length,
-      rawStart: raw,
-      rawEnd: rawText.length,
-    });
-    text.push(value);
-  }
-
-  return projectionFromPieces(text.join(''), pieces);
+  const hidden = hiddenRevisionSpans(paragraph, INSERTED_KINDS);
+  if (hidden.length === 0) return projectionFromPieces(withLineBreakText(readText, base));
+  const pieces = hideInsertionSpansFromPieces(base, hidden);
+  return projectionFromPieces(withLineBreakText(readText, pieces));
 }
 
-function identityProjection(text: string): ProjectedParagraphText {
-  return projectionFromPieces(
-    text,
-    text.length === 0
-      ? []
-      : [{ projectedStart: 0, projectedEnd: text.length, rawStart: 0, rawEnd: text.length }]
-  );
-}
-
-function projectionFromPieces(
-  text: string,
-  pieces: readonly VisiblePiece[]
+/**
+ * A paragraph as if every pending revision were accepted (`current`) or rejected (`original`).
+ *
+ * `current` drops pending deletions and move sources, including deleted text inside a field's
+ * saved result; `original` is the `original` projection. A field, equation, or other atom that
+ * a revision covers whole is hidden whole. Offsets still map back to the model.
+ */
+export function projectReviewedParagraphText(
+  paragraph: OoxmlParagraphNode,
+  rawText: string,
+  version: 'original' | 'current'
 ): ProjectedParagraphText {
-  return {
-    text,
-    projectedOffset(rawOffset) {
-      let offset = 0;
-      for (const piece of pieces) {
-        if (rawOffset <= piece.rawStart) return offset;
-        offset += Math.max(0, Math.min(rawOffset, piece.rawEnd) - piece.rawStart);
-        if (rawOffset <= piece.rawEnd) return offset;
-      }
-      return offset;
-    },
-    rawRange(start, end) {
-      const first = pieces.find(
-        (piece) => start >= piece.projectedStart && start < piece.projectedEnd
-      );
-      const last = pieces.find((piece) => end > piece.projectedStart && end <= piece.projectedEnd);
-      if (!first || !last || start >= end) return null;
-      return {
-        start: first.rawStart + start - first.projectedStart,
-        end: last.rawStart + end - last.projectedStart,
-      };
-    },
-    sliceRaw(start, end) {
-      if (start >= end) return '';
-      return pieces
-        .map((piece) => {
-          const from = Math.max(start, piece.rawStart);
-          const to = Math.min(end, piece.rawEnd);
-          return from < to
-            ? text.slice(
-                piece.projectedStart + from - piece.rawStart,
-                piece.projectedStart + to - piece.rawStart
-              )
-            : '';
-        })
-        .join('');
-    },
-  };
+  if (version === 'original') return projectParagraphText(paragraph, rawText, 'original');
+  const readText = withBreakReadText(paragraph, rawText);
+  const base = visibleParagraphPieces(paragraph, rawText, 'current');
+  const hidden = hiddenRevisionSpans(paragraph, REMOVED_KINDS);
+  const pieces = hidden.length === 0 ? base : hideInsertionSpansFromPieces(base, hidden);
+  return projectionFromPieces(withLineBreakText(readText, pieces));
 }
 
-/** Pending insertions and move destinations are absent from Word's Original review view. */
-function hiddenInsertionSpans(
-  paragraph: OoxmlParagraphNode
-): readonly { readonly start: number; readonly end: number }[] {
+/** Pending insertions and move destinations are absent from the original review view. */
+const INSERTED_KINDS: ReadonlySet<string> = new Set(['revisionInsert', 'revisionMoveTo']);
+/** Pending deletions and move sources are absent once every revision is accepted. */
+const REMOVED_KINDS: ReadonlySet<string> = new Set(['revisionDelete', 'revisionMoveFrom']);
+
+/** Sorted, merged model spans of the revision wrappers of the given kinds. */
+function hiddenRevisionSpans(
+  paragraph: OoxmlParagraphNode,
+  kinds: ReadonlySet<string>
+): readonly RawSpan[] {
   const index = paragraphOffsetIndex(paragraph);
-  const found: { start: number; end: number }[] = [];
+  const found: RawSpan[] = [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (depth > 64 || node.kind === 'textValue') return;
-    if (node.kind === 'revisionInsert' || node.kind === 'revisionMoveTo') {
+    if (kinds.has(node.kind)) {
       const span = index.spanOf(node);
       if (span && span.end > span.start) found.push({ start: span.start, end: span.end });
       return;

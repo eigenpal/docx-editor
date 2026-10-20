@@ -115,7 +115,7 @@ describe('representation spike harness', () => {
   test('spike sources stay outside the production export graph', async () => {
     const index = await Bun.file(new URL('../../index.ts', import.meta.url)).text();
     expect(index).not.toContain('representation-spike');
-    const session = await Bun.file(new URL('../../session.ts', import.meta.url)).text();
+    const session = await Bun.file(new URL('../../document-session.ts', import.meta.url)).text();
     expect(session).not.toContain('representation-spike');
   });
 });

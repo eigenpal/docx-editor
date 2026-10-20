@@ -17,6 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { DocumentRegistry } from './document/index.ts';
 import { NODE_DELETED_FIELD, isNodeMap } from './document/schema.ts';
+import { INLINE_FIELD } from './document/paragraph-text.ts';
 import { MAX_SHARED_BLOB_BYTES, SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
 
 /**
@@ -34,14 +35,27 @@ export interface CollaborationResourceUsage {
   readonly nodes: number;
   /** The subset of `nodes` that is tombstoned: permanent, and only compaction reclaims it. */
   readonly tombstonedNodes: number;
+  /** Node limit. Shared state over it is a terminal `too-many-nodes`. */
   readonly maxNodes: number;
+  /** Replicated relationship records. */
   readonly relationships: number;
+  /** Relationship limit. Shared state over it is a terminal `too-many-relationships`. */
   readonly maxRelationships: number;
+  /** Replicated package parts. */
   readonly parts: number;
+  /** Part limit. Shared state over it is a terminal `too-many-parts`. */
   readonly maxParts: number;
   /** Bytes in the shared blob map, unreferenced bytes included. */
   readonly blobBytes: number;
+  /** Blob byte limit. Shared state over it is a terminal `blob-store-full`. */
   readonly maxBlobBytes: number;
+  /**
+   * Formatting markers in paragraph text. Each formatting change leaves some, and deleting the
+   * text does not remove them, because a participant who edited offline may still depend on
+   * them. They have no cap, but every reader walks them, so a room whose count keeps growing
+   * far past its text is one to move to a new room.
+   */
+  readonly formattingMarkers: number;
 }
 
 /** Count tombstoned node records. One walk over the node map, so this is a probe, not a poll. */
@@ -51,6 +65,19 @@ function tombstoneCount(registry: DocumentRegistry): number {
     // The nodes map is peer-writable: a hostile update can plant a non-map value, and a
     // probe that throws on it takes the metrics scraper down with attacker-chosen input.
     if (isNodeMap(record) && record.get(NODE_DELETED_FIELD) === true) count += 1;
+  });
+  return count;
+}
+
+/** Live formatting markers in every paragraph's shared text. */
+function formattingMarkerCount(registry: DocumentRegistry): number {
+  let count = 0;
+  registry.schema.nodes.forEach((record) => {
+    const text = isNodeMap(record) ? record.get(INLINE_FIELD) : null;
+    if (!(text instanceof Y.Text)) return;
+    for (let item = text._start; item; item = item.right) {
+      if (!item.deleted && item.content instanceof Y.ContentFormat) count += 1;
+    }
   });
   return count;
 }
@@ -86,6 +113,7 @@ export function resourceUsageOf(
     maxParts: registry.limits.maxParts,
     blobBytes: blobs.totalByteLength(),
     maxBlobBytes: MAX_SHARED_BLOB_BYTES,
+    formattingMarkers: formattingMarkerCount(registry),
   });
 }
 

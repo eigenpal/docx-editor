@@ -3,7 +3,13 @@ import { type TimingSummary } from './edit-browser-bench-harness.js';
 import { type ScenarioReport, type SustainedReport } from './edit-browser-bench-probe.js';
 import { type BurstReport } from './edit-browser-burst.js';
 
-/** Matches headless `bench:edit` steady-middle-text on the synthetic fixture. */
+/**
+ * Paragraph/page work matches headless `bench:edit`. Browser startup performs one
+ * full layout: the open resolves fonts before the first layout, and a sliced open
+ * resumes each slice from the previous one, so the slices add up to that one pass.
+ * Typing must add no full passes (runEdit checks the before/after delta), and the
+ * pins below also bound cumulative startup work.
+ */
 export const EXPECTED_LAYOUT_WORK = {
   placed: 13,
   total: 3200,
@@ -59,13 +65,16 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
  * note-reserve reflow used to force a second full pass because the document-wide reserve
  * map was folded into every section's context key; the key now folds only the reserve
  * slots a section's own pass can read, so the reflow's second body pass reuses every
- * section and only the first pass is full — the same deliberate 2 -> 1 move as the
- * settle-bench gate.
+ * section. Fonts resolve before the first layout, so the open has one
+ * font-measurement phase and one full pass.
  */
 export const PINNED_HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
-  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
-  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
+  // Correcting the inherited paragraph-mark height moves the closing body text
+  // onto page 520. Page 521 becomes an endnote-overflow page, outside body-page
+  // reuse accounting. Total pages stay 521; placed/total/fullPasses stay unchanged.
+  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 1 },
+  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 1 },
+  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 516, fullPasses: 1 },
 };
 
 /**

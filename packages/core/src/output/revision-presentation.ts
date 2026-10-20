@@ -11,11 +11,8 @@
 // they are one decision and a reviewer resolving one half resolves both.
 
 import type { RevisionAttribution } from '../layout/revision-projection.ts';
-import {
-  paragraphFragmentsOfBlocks,
-  type BlockFragmentRecord,
-  type SemanticLayout,
-} from '../layout/semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout } from '../layout/semantic-records.ts';
+import { blockContentSummary } from './block-content-summary.ts';
 
 /** How many author slots the token ramp defines. */
 export const REVIEW_AUTHOR_SLOTS = 8;
@@ -40,6 +37,14 @@ export interface RevisionAuthorStyle {
   color?: string;
   /** Background wash behind this author's changes in the document. */
   background?: string;
+  /**
+   * Background of the highlight band over this author's OPEN change — the one the caret
+   * is in. Applied inline, so it outranks the `--doc-revision-*-active-bg` kind tokens,
+   * and the kind-coloured rule under the band goes with it: a custom background with a
+   * green or red rule beneath it would contradict the decoration it sits behind, and a
+   * `transparent` that left a floating rule would not read as cleared at all.
+   */
+  activeBackground?: string;
   /**
    * Class names added to every painted span of this author's changes, for styling the
    * typed fields do not cover. Keep the rules metric-safe (outlines, shadows, accents):
@@ -132,6 +137,11 @@ export interface ReviewAuthorInfo {
 const STYLE_KEY_REACH = {
   color: 'painted',
   background: 'painted',
+  // The band is its own layer with its own invalidation (the roster's identity), so the
+  // page key need not move for it — but the choice here is binary, and 'card-only' would
+  // claim a painted pixel it does move. A redundant page repaint on a host-driven style
+  // change is the safe direction for the one field that lands off the page layer.
+  activeBackground: 'painted',
   spanClassName: 'painted',
   avatarUrl: 'card-only',
 } as const satisfies Record<keyof Required<RevisionAuthorStyle>, 'painted' | 'card-only'>;
@@ -406,7 +416,7 @@ export interface RevisionPresentation {
 
 /**
  * Every author a block list attributes anything to, in reading order, MEMOISED on the
- * list's identity.
+ * list's identity (see `blockContentSummary`).
  *
  * The identity is what makes this cheap. Layout reuses block arrays it did not have to
  * rebuild — on a 200-page document a keystroke replaces a handful of pages and hands back
@@ -415,69 +425,8 @@ export interface RevisionPresentation {
  * roster derivation from a whole-document scan on every commit into a scan of what
  * actually changed.
  */
-const blockAuthorCache = new WeakMap<readonly BlockFragmentRecord[], readonly string[]>();
-
 function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[] {
-  const cached = blockAuthorCache.get(blocks);
-  if (cached) return cached;
-  const found: string[] = [];
-  const seen = new Set<string>();
-  const see = (author: string): void => {
-    // A MISSING `w:author` is not a person. `@w:author` is required by the schema and a
-    // malformed file can still omit it, and recording `''` made the blank a roster entry that
-    // took slot 0 — pushing the first real reviewer off the colour Word gives them, and
-    // putting an empty, colour-consuming chip in any legend built from the roster. The review
-    // queue's own walk already skips it, so recording it here made the two disagree.
-    if (author === '' || seen.has(author)) return;
-    seen.add(author);
-    found.push(author);
-  };
-  for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
-    for (const line of fragment.lines) {
-      for (const span of line.spans) {
-        // Index loops with an explicit guard: `?? []` allocated a throwaway array and an
-        // iterator for every untracked span, which is the overwhelming majority of them.
-        const revisions = span.revisions;
-        if (revisions !== undefined) {
-          for (let i = 0; i < revisions.length; i += 1) see(revisions[i]!.author);
-        }
-        // A tracked FORMAT change alters no characters, so it appears in neither list.
-        // Read inline rather than through `formatRevisionOf`, which builds an attribution
-        // object this walk would throw away once per revised span.
-        for (const property of span.props) {
-          if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') continue;
-          const author = property.attributes?.author;
-          // `formatRevisionOf` defaults a missing `@w:author` to the empty string, which
-          // `see` then drops: an anonymous change is not a person and must not take a ramp
-          // slot from one. It paints in slot 0's colour as any unknown author does — the
-          // alternative, a roster entry with no name in it, is worse everywhere the roster
-          // is read.
-          see(author ?? '');
-          break;
-        }
-      }
-    }
-    for (const line of fragment.lines) {
-      // Tracked inline DRAWINGS, after the line's spans: a reviewer whose only change is a
-      // picture is still a reviewer, and leaving them out silently painted their cue in
-      // slot 0's colour. A separate pass so a drawing mid-line cannot renumber the text
-      // authors around it relative to the pre-#479 assignment.
-      const drawings = line.drawings;
-      if (drawings === undefined) continue;
-      for (let i = 0; i < drawings.length; i += 1) {
-        const revisions = drawings[i]!.revisions;
-        if (revisions === undefined) continue;
-        for (let j = 0; j < revisions.length; j += 1) see(revisions[j]!.author);
-      }
-    }
-    // The paragraph MARK last: it carries no span of its own, and the pilcrow paints at the
-    // END of the fragment's final line. Reading it first gave a reviewer who only pressed
-    // Enter a lower slot than the author of the text beside them.
-    const marks = fragment.markRevisions;
-    if (marks) for (let i = 0; i < marks.length; i += 1) see(marks[i]!.author);
-  }
-  blockAuthorCache.set(blocks, found);
-  return found;
+  return blockContentSummary(blocks).authors;
 }
 
 /**
@@ -520,6 +469,7 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
       if (!area) continue;
       // The separator is an authored story too, and `paintPageNoteAreas` paints it.
       if (area.separator) fold(area.separator.fragments);
+      if (area.continuationNotice) fold(area.continuationNotice.fragments);
       for (const note of area.notes) fold(note.fragments);
     }
     // Text boxes: anchored on the page, and on the furniture stories that carry their own.
@@ -530,6 +480,8 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
     ]) {
       if (!anchored) continue;
       for (const drawing of anchored) {
+        // A hidden record (an MC wrap footprint) paints no revision cue, so it names no author.
+        if (drawing.accessibility.hidden) continue;
         // The anchored drawing's own tracked change, then any story inside it.
         const revisions = drawing.revisions;
         if (revisions !== undefined) {
@@ -639,12 +591,9 @@ export function revisionPresentationOf(
     // A deletion nested in an insertion still reads as removed: the strike wins over the
     // underline its container would have drawn.
     line: deleted && line === 'underline' ? 'line-through' : line,
-    // An insertion's rule is DASHED. A solid one is hard to tell from an authored `w:u`, which
-    // underlines plenty of ordinary text in a contract, so two different statements would be
-    // drawn identically. A strike has no such clash and stays solid; a move stays double,
-    // because it is one decision with two halves.
-    decorationStyle:
-      kind === 'moveFrom' || kind === 'moveTo' ? 'double' : kind === 'insert' ? 'dashed' : 'solid',
+    // An insertion follows Word with a solid rule. Colour and the revision wash distinguish it
+    // from an authored `w:u`; a move stays double because it is one decision with two halves.
+    decorationStyle: kind === 'moveFrom' || kind === 'moveTo' ? 'double' : 'solid',
     // Coloured by KIND, not by author: a reader scanning a page needs "added" and "removed"
     // to be the two things they can tell apart at a glance, and Word's own default view draws
     // them that way. The per-author ramp stays available for the review cards, where the

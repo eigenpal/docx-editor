@@ -1,3 +1,9 @@
+import { fieldResultIsDirectionOnly } from './field-result-style.ts';
+import {
+  characterStyleFieldValue,
+  parseCharacterStyleField,
+  hasNestedCharacterResult,
+} from './field-character-style.ts';
 // Display-text collection for `w:fldSimple` results.
 //
 // The outer simple field is one model unit; this module only decides what glyphs that unit
@@ -5,7 +11,8 @@
 // allowlisted page fields inside a non-page simple field (complex markers or another
 // `w:fldSimple`) evaluate live too — concatenating their cached digits would stamp one sheet's
 // number onto every page after detection had already requested a per-sheet context. Other
-// nested field instructions stay inert.
+// nested field instructions stay inert. Content inside any nested field's instruction is input
+// to that field and never displays; the store's saved-result text reads the same marker rule.
 
 import {
   fldSimpleInstr,
@@ -15,8 +22,14 @@ import {
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import {
+  simpleFieldMarkerScope,
+  type SimpleFieldMarkerScope,
+} from '../store/package/field-marker-scope.ts';
+import { MAX_FIELD_RESULT_NODES } from '../store/package/field-result-text.ts';
 import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
+import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
 import { parseAutonumInstruction } from './field-autonum.ts';
@@ -26,6 +39,7 @@ import {
   type RefFieldContext,
 } from './field-ref.ts';
 import {
+  hyphenDisplayOf,
   modelTextOfRunChild,
   runPropertiesOf,
   type RunPropertyCascader,
@@ -39,18 +53,20 @@ import {
   ingestInstrTextBounded,
   isFldChar,
   isInstrText,
+  MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   onFldCharBegin,
   onFldCharEnd,
   onFldCharSeparate,
   matchAllowlistedPageField,
-  type AllowlistedPageField,
+  type AllowlistedPageFieldMatch,
   type FieldScanBudget,
 } from './field-instruction.ts';
+import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
-  numericPictureApplies,
   PAGE_FIELD_PLACEHOLDER,
+  pageFieldMarker,
   pageFieldPlaceholder,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -120,6 +136,7 @@ export function collectSimpleFieldDisplay(args: {
   let text = '';
   let resultProps: readonly OoxmlProperty[] | undefined;
   let resultStyle: ResolvedRunStyle | undefined;
+  let resultStyleIsDirectional = false;
   let sawResultContent = false;
 
   const nested = createFieldParseState();
@@ -128,11 +145,24 @@ export function collectSimpleFieldDisplay(args: {
   // `w:fldSimple`, deeper levels are fields nested in ITS cached result, and the tracker skips
   // the tracked field's digits and appends the live value at that level's matching end only.
   const tracker = createNestedPageTracker();
+  // Saved-result visibility uses the store's marker scopes, so malformed markers hide exactly
+  // what the store's text hides. Each nested `w:fldSimple` opens its own scope under one node
+  // budget; past MAX_FIELD_NESTING the store reads plain text (`null` scope, always shown).
+  const scopeBudget = { left: MAX_FIELD_RESULT_NODES };
+  let scope: SimpleFieldMarkerScope | null = simpleFieldMarkerScope(simple, scopeBudget);
+  let scopeDepth = 0;
+  const displayed = (): boolean => scope === null || scope.visible();
 
-  const captureStyle = (props: readonly OoxmlProperty[], style: ResolvedRunStyle): void => {
-    if (resultProps) return;
+  const captureStyle = (
+    props: readonly OoxmlProperty[],
+    style: ResolvedRunStyle,
+    value?: string
+  ): void => {
+    const directionOnly = value !== undefined && fieldResultIsDirectionOnly(value);
+    if (resultProps && (!resultStyleIsDirectional || directionOnly)) return;
     resultProps = props;
     resultStyle = style;
+    resultStyleIsDirectional = directionOnly;
   };
 
   const collect = (node: OoxmlNode, nodeDepth: number, local: readonly RevisionAttribution[]) => {
@@ -147,6 +177,7 @@ export function collectSimpleFieldDisplay(args: {
           if (grand.kind === 'runProperties') continue;
 
           if (isFldChar(grand, 'begin')) {
+            scope?.consume(grand);
             onFldCharBegin(nested);
             if (nested.nesting === 1) tracker.reset();
             continue;
@@ -159,6 +190,7 @@ export function collectSimpleFieldDisplay(args: {
             continue;
           }
           if (isFldChar(grand, 'separate')) {
+            scope?.consume(grand);
             const separateLevel = nested.nesting;
             const separatePhase = nested.phase;
             const match = onFldCharSeparate(nested);
@@ -167,11 +199,15 @@ export function collectSimpleFieldDisplay(args: {
             // that content is not painted) and never past the nesting cap, matching what
             // `detectStoryPageFields` notes so detection and projection stay one story.
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
-              tracker.onSeparate(pageContext ? match : null, separateLevel);
+              // A field inside an enclosing instruction never arms: its value feeds that
+              // instruction and is not displayed.
+              const shown = displayed() && !isInsideOpenFieldInstruction(nested);
+              tracker.onSeparate(pageContext && shown ? match : null, separateLevel);
             }
             continue;
           }
           if (isFldChar(grand, 'end')) {
+            scope?.consume(grand);
             const appendedLive = tracker.onEnd(nested.nesting, pageContext);
             if (appendedLive !== null) text += appendedLive;
             onFldCharEnd(nested);
@@ -179,6 +215,8 @@ export function collectSimpleFieldDisplay(args: {
           }
 
           if (isFieldChrome(grand)) continue;
+          // Instruction content of a nested field is input to that field, not saved result.
+          if (!displayed()) continue;
 
           // A collected display string cannot carry a per-glyph font switch, so only a
           // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
@@ -201,7 +239,10 @@ export function collectSimpleFieldDisplay(args: {
             continue;
           }
 
-          const value = modelTextOfRunChild(grand);
+          // A field result paints its text, so a hyphen shows its glyph, not its model character.
+          // An optional hyphen paints nothing in a cached result, which is measured as one string.
+          const hyphen = hyphenDisplayOf(grand);
+          const value = hyphen ? (hyphen.measureText ?? hyphen.text) : modelTextOfRunChild(grand);
           if (value.length === 0) continue;
           const deleted = revisionsAreDeletion(local);
           const revisionSuppressed =
@@ -213,32 +254,29 @@ export function collectSimpleFieldDisplay(args: {
           const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
             tracker.noteResult(!suppressed);
-            if (!suppressed) captureStyle(props, style);
+            if (!suppressed) captureStyle(props, style, value);
             continue;
           }
           if (suppressed) continue;
-          captureStyle(props, style);
+          captureStyle(props, style, value);
           text += value;
         }
         continue;
       }
       if (isFldSimple(child)) {
-        // Inside a tracked complex field's skipped cache the simple field is part of the
-        // replaced result: descend so its runs are NOTED (visible cached content keeps the
-        // live replacement alive), never appended on their own.
-        // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
-        const simplePageField = tracker.active
-          ? null
-          : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
-        if (simplePageField && pageContext) {
-          if (!revisionsVisible(local, displayMode, args.authorFilter)) continue;
-          const beforeLen = text.length;
-          collect(child, nodeDepth + 1, local);
-          text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
-          continue;
-        }
-        collect(child, nodeDepth + 1, local);
+        // A simple field inside a nested instruction is input to that field: no text, no
+        // live page value, and no scan of its markers.
+        if (!displayed()) continue;
+        const parentScope = scope;
+        const parentDepth = scopeDepth;
+        scope =
+          parentScope === null || parentDepth >= MAX_FIELD_NESTING
+            ? null
+            : simpleFieldMarkerScope(child, scopeBudget);
+        scopeDepth = parentDepth + 1;
+        collectNestedSimple(child, nodeDepth, local);
+        scope = parentScope;
+        scopeDepth = parentDepth;
         continue;
       }
       if (child.kind === 'hyperlink') {
@@ -252,6 +290,29 @@ export function collectSimpleFieldDisplay(args: {
       }
       collect(child, nodeDepth + 1, local);
     }
+  };
+
+  const collectNestedSimple = (
+    child: OoxmlNode,
+    nodeDepth: number,
+    local: readonly RevisionAttribution[]
+  ): void => {
+    // Inside a tracked complex field's skipped cache the simple field is part of the
+    // replaced result: descend so its runs are NOTED (visible cached content keeps the
+    // live replacement alive), never appended on their own.
+    // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
+    const simplePageField = tracker.active
+      ? null
+      : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
+    if (simplePageField && pageContext) {
+      if (!revisionsVisible(local, displayMode, args.authorFilter)) return;
+      const beforeLen = text.length;
+      collect(child, nodeDepth + 1, local);
+      text = text.slice(0, beforeLen);
+      text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField);
+      return;
+    }
+    collect(child, nodeDepth + 1, local);
   };
 
   collect(simple, depth, revisions);
@@ -270,11 +331,7 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: {
-    readonly kind: AllowlistedPageField;
-    /** The field's `\#` numeric picture, carried to the substitute pass. */
-    readonly picture?: string;
-  };
+  readonly pageField?: AllowlistedPageFieldMatch;
   /**
    * Present when this is a BODY `PAGEREF`: the cached display paints now and document
    * finalize substitutes the number of the page the resolved target lands on.
@@ -322,17 +379,37 @@ export function projectSimpleFieldResult(args: {
   /** The story's resolved REF inputs; absent keeps a REF simple field on its cached result. */
   readonly refFields?: RefFieldContext;
 }): SimpleFieldProjection | null {
+  const result = projectSimpleFieldDisplay(args);
+  if (!result || args.currentLink) return result;
+  const instruction = fldSimpleInstr(args.simple) ?? '';
+  const spec = parseHyperlinkInstruction(instruction) ?? parseRefLinkInstruction(instruction);
+  const link = spec ? args.projectFieldLink?.(spec) : null;
+  return link ? { ...result, link } : result;
+}
+
+function projectSimpleFieldDisplay(
+  args: Parameters<typeof projectSimpleFieldResult>[0]
+): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
   const instr = fldSimpleInstr(simple) ?? '';
   const props = display.resultProps ?? inheritedRunProperties;
 
+  const characterSpec = parseCharacterStyleField(instr);
+  const characterValue = characterStyleFieldValue(
+    characterSpec && !hasNestedCharacterResult(simple) ? characterSpec : null,
+    pageContext
+  );
+  if (characterValue !== undefined) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    return style.hidden ? null : { text: characterValue, props, style };
+  }
   const pageField = matchAllowlistedPageField(instr);
   if (pageField && pageContext) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return {
-      text: projectPageFieldValue(pageField.kind, pageContext, pageField.picture),
+      text: projectPageFieldValue(pageField.kind, pageContext, pageField),
       props,
       style,
     };
@@ -349,18 +426,13 @@ export function projectSimpleFieldResult(args: {
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    // The same ONE decision the complex-field flush takes, recorded the same way: the picture
-    // travels to finalize only when this placeholder was measured through it.
-    const applied =
-      pageField.picture !== undefined &&
-      numericPictureApplies(pageField.kind, args.bodyPageFields.format);
-    const picture = applied ? pageField.picture : undefined;
+    // The same marker the complex-field flush records: finalize renders the value through
+    // the switches this placeholder was measured through.
     return {
-      text: pageFieldPlaceholder(pageField.kind, picture, args.bodyPageFields.format),
+      text: pageFieldPlaceholder(pageField),
       props,
       style,
-      pageField:
-        picture === undefined ? { kind: pageField.kind } : { kind: pageField.kind, picture },
+      pageField: pageFieldMarker(pageField.kind, pageField),
     };
   }
 
@@ -438,7 +510,5 @@ export function projectSimpleFieldResult(args: {
   // to inherited properties the same way a top-level simple PAGE does.
   const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
   if (style.hidden) return null;
-  const linkSpec = args.currentLink ? null : parseHyperlinkInstruction(instr);
-  const fieldLink = linkSpec ? (args.projectFieldLink?.(linkSpec) ?? null) : null;
-  return { text: display.text, props, style, ...(fieldLink ? { link: fieldLink } : {}) };
+  return { text: display.text, props, style };
 }

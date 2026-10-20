@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A first line taller than a fixed table row was omitted.",
+  "after": "A horizontal cell keeps the visible part of that line within its authored row height.",
+  "reason": "The change affects derived layout and paragraph clipping. It adds no canonical fields, operations, or collaboration data.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-exact-visible-line.test.ts",
+    "packages/core/src/output/__tests__/table-exact-visible-line-paint.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-row-visible-editors.test.ts"
+  ],
+  "changeset": "exact-row-visible-lines",
+  "migration": null
+}

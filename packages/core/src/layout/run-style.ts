@@ -1,3 +1,5 @@
+import { revisionMarkupSourcesEqual } from './revision-markup-style.ts';
+import { layoutDerivedSpacingSourcesEqual } from './layout-derived-spacing.ts';
 // The accepted run property boundary, resolved for layout (task 7.2).
 //
 // Raw `w:rPr` children are authored OOXML: half-points, twips, percentages, toggle elements
@@ -10,9 +12,14 @@
 // inheritance is a separate layer (the style resolver); this is the direct-formatting half,
 // which is what the D8 boundary covers.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
+import { resolveTextOutline } from './run-text-outline.ts';
+import { resolveRunLigatures } from './run-ligatures.ts';
+import { borderEdgeFromAttributes, type ParagraphBorderEdge } from './paragraph-style.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
 import { styleToggleIsOn as toggle } from './style-toggles.ts';
@@ -46,11 +53,50 @@ export interface ResolvedRunStyle {
    * slot-homogeneous pieces happens downstream (`piecesOfParagraph`).
    */
   readonly fontFamilyEastAsia: string | null;
+  /**
+   * Present only on a `w:rtl` or `w:cs` run: the LATIN lane that the complex-script values
+   * replaced in `fontFamily`, `fontSizePt`, `bold` and `italic`. Nothing draws with it; it
+   * lets a copy of the formatting (the format painter) write each lane back separately.
+   */
+  readonly latinLane?: {
+    readonly fontFamily: string | null;
+    readonly fontFamilyEastAsia: string | null;
+    readonly fontSizePt: number;
+    readonly bold: boolean;
+    readonly italic: boolean;
+  };
+  /**
+   * The complex-script lane as the cascade states it, on every resolved run: the values a
+   * `w:rtl` or `w:cs` run draws with, and what a copy of the formatting writes to `w:bCs`,
+   * `w:iCs`, `w:szCs` and `w:rFonts/@w:cs`. `fontFamily` is null when no level names a face.
+   */
+  readonly complexLane?: {
+    readonly fontFamily: string | null;
+    readonly fontSizePt: number;
+    readonly bold: boolean;
+    readonly italic: boolean;
+  };
+  /** Script and paragraph-resolved direction for shaping and visual placement. */
+  readonly shaping?: {
+    readonly script: string;
+    readonly direction: 'ltr' | 'rtl';
+    readonly level: number;
+    readonly baseLevel: number;
+    /** Resolved w:rtl context; absent when authored Unicode controls govern the paragraph. */
+    readonly runDirection?: 'ltr' | 'rtl';
+    readonly wordSpacingPt?: number;
+    /** Neighbouring text a joining script reads across a formatting-run boundary. */
+    readonly context?: import('./shaped-run.ts').ShapingContext;
+  };
   /** Points. `w:sz` is half-points, so 22 becomes 11. */
   readonly fontSizePt: number;
   /** RRGGBB, or null for the inherited/automatic colour. */
   readonly color: string | null;
   readonly bold: boolean;
+  /** Opaque solid `w14:textOutline`, in points; paint only, never a font-weight change. */
+  readonly textOutline?: { readonly widthPt: number; readonly color: string };
+  /** Character border; adjacent runs with matching edges share one outline. */
+  readonly border?: ParagraphBorderEdge;
   readonly italic: boolean;
   readonly underline: ResolvedUnderline | null;
   readonly strike: boolean;
@@ -73,8 +119,17 @@ export interface ResolvedRunStyle {
   readonly characterSpacingPt: number;
   /** `w:w`, as a percentage. 100 is unscaled. */
   readonly horizontalScalePercent: number;
-  /** `w:kern`, in points: the size at or above which kerning applies. 0 disables it. */
+  /** `w:kern`, in points: the size at or above which kerning applies. */
   readonly kerningMinPt: number;
+  /** Explicit kerning selection; a zero threshold disables it. Absent uses a positive threshold. */
+  readonly kerningEnabled?: boolean;
+  /** Resolved optional OpenType substitutions; required script ligatures are independent. */
+  readonly ligatures?: {
+    readonly standard: boolean;
+    readonly contextual: boolean;
+    readonly historical: boolean;
+    readonly discretionary: boolean;
+  };
   /**
    * `w:vanish` (ECMA-376 §17.3.2.45): the run is hidden text.
    *
@@ -143,6 +198,16 @@ export interface ThemeFonts {
   readonly majorEastAsia?: string | null;
   /** `a:minorFont` east asian typeface (`a:ea`) — body text. Optional for back-compat. */
   readonly minorEastAsia?: string | null;
+  /** Complex-script heading and body theme faces. */
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
+  /** Language-specific theme faces, keyed by ISO 15924 script. */
+  readonly majorSupplemental?: Readonly<Record<string, string>>;
+  readonly minorSupplemental?: Readonly<Record<string, string>>;
+  /** Lower-cased font table names that declare a Chinese character set. */
+  readonly chineseFontTableFaces?: readonly string[];
+  /** Lower-cased font table names that declare an East Asian character set. */
+  readonly eastAsianFontTableFaces?: readonly string[];
 }
 
 /** A document with no theme part: every theme reference falls back to its explicit name. */
@@ -152,6 +217,34 @@ export const NO_THEME_FONTS: ThemeFonts = {
   majorEastAsia: null,
   minorEastAsia: null,
 };
+
+/**
+ * Complex-script values when no level authors them. Word sizes an unsized complex-script
+ * run at 10pt whatever `w:sz` says, and draws it in Times New Roman when no level names a
+ * `w:cs` face or `w:cstheme` resolves to one.
+ */
+interface ComplexScriptLane {
+  fontFamily: string;
+  /** A level named the face, rather than the Times New Roman default standing in. */
+  fontFamilyAuthored: boolean;
+  fontSizePt: number;
+  bold: boolean;
+  italic: boolean;
+  /** `w:rtl` is on. */
+  rtl: boolean;
+  /** `w:cs` is on. */
+  forced: boolean;
+}
+
+const COMPLEX_SCRIPT_DEFAULTS: Readonly<ComplexScriptLane> = Object.freeze({
+  fontFamily: 'Times New Roman',
+  fontFamilyAuthored: false,
+  fontSizePt: 10,
+  bold: false,
+  italic: false,
+  rtl: false,
+  forced: false,
+});
 
 /**
  * Resolve one run's direct formatting.
@@ -172,8 +265,25 @@ export function resolveRunStyle(
     -readonly [K in keyof ResolvedRunStyle]: ResolvedRunStyle[K];
   } = { ...DEFAULT_RUN_STYLE };
 
+  // Theme references resolve through the document's theme language only; the run's own
+  // language never selects a theme face.
+  let hasLatinFontReference = false;
+  // The complex-script lane, resolved beside the Latin one and chosen at the end.
+  const complex: ComplexScriptLane = { ...COMPLEX_SCRIPT_DEFAULTS };
   for (const property of props) {
     switch (property.localName) {
+      case RUN_FONT_DEFAULTS: {
+        // The document's slot defaults, beneath every authored level. Only the ascii and East
+        // Asian slots are read here; `applyHAnsiFontSlots` reads the hAnsi one.
+        const attributes = property.attributes;
+        const family =
+          (themeFonts ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts) : null) ??
+          attributes?.eastAsia;
+        if (family && family.length <= 128) style.fontFamilyEastAsia = family;
+        if (attributes?.ascii && attributes.ascii.length <= 128)
+          style.fontFamily = attributes.ascii;
+        break;
+      }
       case 'rFonts': {
         // `w:ascii` is the Latin face; `w:hAnsi` is the fallback this lane uses when it is
         // the only one authored. A theme attribute OVERRIDES the explicit one beside it
@@ -182,12 +292,24 @@ export function resolveRunStyle(
         // An unresolvable theme slot falls back to that explicit name rather than to
         // nothing, because a stale face still beats no face at all.
         const attributes = property.attributes;
-        const themed = themeFonts
-          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts) ??
-            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts))
-          : null;
-        const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
+        hasLatinFontReference ||= ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+          Boolean(attributes?.[name])
+        );
+        // Each theme attribute overrides only its own slot: an explicit `w:ascii` keeps the
+        // ascii face beside an `w:hAnsiTheme`, which `applyHAnsiFontSlots` applies.
+        const theme = (token: string | undefined) =>
+          themeFonts ? themeFontFamilyOf(token, themeFonts) : null;
+        const family =
+          theme(attributes?.asciiTheme) ??
+          attributes?.ascii ??
+          theme(attributes?.hAnsiTheme) ??
+          attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
+        // A theme reference with no theme face to resolve to still replaces the format
+        // default beneath it, so the run takes the surface default face. (The reference
+        // application uses its built-in theme here, Aptos; probe n01.)
+        else if (attributes?.asciiTheme !== undefined || attributes?.hAnsiTheme !== undefined)
+          style.fontFamily = null;
         // The eastAsia slot resolves independently, on the same theme-over-explicit rule.
         // An rFonts that authors only Latin faces leaves an inherited eastAsia face alone,
         // which is how the docDefaults' `w:eastAsiaTheme` survives a style chain that only
@@ -199,6 +321,15 @@ export function resolveRunStyle(
         if (familyEastAsia && familyEastAsia.length <= 128) {
           style.fontFamilyEastAsia = familyEastAsia;
         }
+        const themedComplex = themeFonts
+          ? themeFontFamilyOf(attributes?.cstheme, themeFonts)
+          : null;
+        // `||`: an Office theme's `a:cs` is usually empty, which names no face.
+        const familyComplex = themedComplex || attributes?.cs;
+        if (familyComplex && familyComplex.length <= 128) {
+          complex.fontFamily = familyComplex;
+          complex.fontFamilyAuthored = true;
+        }
         break;
       }
       case 'sz': {
@@ -206,12 +337,35 @@ export function resolveRunStyle(
         if (halfPoints !== null && halfPoints > 0) style.fontSizePt = halfPoints / 2;
         break;
       }
+      case 'szCs': {
+        const halfPoints = integer(property.attributes?.val);
+        if (halfPoints !== null && halfPoints > 0) complex.fontSizePt = halfPoints / 2;
+        break;
+      }
+      case 'bCs':
+        complex.bold = toggle(property);
+        break;
+      case 'iCs':
+        complex.italic = toggle(property);
+        break;
+      case 'rtl':
+        complex.rtl = toggle(property);
+        break;
+      case 'cs':
+        complex.forced = toggle(property);
+        break;
       case 'color': {
         style.color = hexColor(property.attributes?.val);
         break;
       }
       case 'b':
         style.bold = toggle(property);
+        break;
+      case 'textOutline':
+        style.textOutline = resolveTextOutline(property);
+        break;
+      case 'bdr':
+        style.border = borderEdgeFromAttributes(property.attributes);
         break;
       case 'i':
         style.italic = toggle(property);
@@ -263,8 +417,11 @@ export function resolveRunStyle(
         // Twips, signed. Inside `w:rPr` this is CHARACTER spacing; the identically named
         // child of `w:pPr` is paragraph spacing, which is why the two are resolved by
         // different functions rather than one shared reader.
-        const twips = integer(property.attributes?.val, true);
-        if (twips !== null) style.characterSpacingPt = twips / 20;
+        const twips = readTwipsMeasure(property.attributes?.val);
+        // Seven digits, as every other run measurement here: a larger value is not spacing.
+        if (twips !== null && Math.abs(twips) <= 9_999_999) {
+          style.characterSpacingPt = twips / 20;
+        }
         break;
       }
       case 'w': {
@@ -274,7 +431,15 @@ export function resolveRunStyle(
       }
       case 'kern': {
         const halfPoints = integer(property.attributes?.val);
-        if (halfPoints !== null) style.kerningMinPt = halfPoints / 2;
+        if (halfPoints !== null && halfPoints >= 0) {
+          style.kerningMinPt = halfPoints / 2;
+          style.kerningEnabled = halfPoints > 0;
+        }
+        break;
+      }
+      case 'ligatures': {
+        const value = resolveRunLigatures(property.attributes?.val);
+        if (value) style.ligatures = value;
         break;
       }
       case 'vanish':
@@ -283,10 +448,39 @@ export function resolveRunStyle(
         style.hidden = toggle(property);
         break;
       default:
-        // `szCs`, `bCs`, `iCs` are the complex-script counterparts; they belong to the
-        // bidi lane, not to this one, and are preserved by the tree either way.
         break;
     }
+  }
+  // An omitted Latin slot inherits the body theme after all authored defaults/styles.
+  // Preserve the existing fallback for an authored but unresolved theme reference.
+  if (!hasLatinFontReference) style.fontFamily ??= themeFonts?.minor ?? null;
+  // A cascade that never names this slot, not even through the document defaults, takes
+  // the document body East Asian face.
+  style.fontFamilyEastAsia ??= themeFonts?.minorEastAsia ?? null;
+  style.complexLane = {
+    fontFamily: complex.fontFamilyAuthored ? complex.fontFamily : null,
+    fontSizePt: complex.fontSizePt,
+    bold: complex.bold,
+    italic: complex.italic,
+  };
+  if (complex.rtl || complex.forced) {
+    // Word formats a `w:rtl` or `w:cs` run ENTIRELY from its complex-script properties,
+    // Latin letters and digits included, and ignores `w:sz`, `w:b`, `w:i` and the Latin
+    // face there. A run with neither uses the Latin properties even for Arabic or Hebrew
+    // characters. Verified against Word 16 PDF output (`w:rtl w:val="0"` turns it off).
+    style.latinLane = {
+      fontFamily: style.fontFamily,
+      fontFamilyEastAsia: style.fontFamilyEastAsia,
+      fontSizePt: style.fontSizePt,
+      bold: style.bold,
+      italic: style.italic,
+    };
+    style.fontFamily = complex.fontFamily;
+    // The eastAsia split must not reclaim CJK characters from a complex-script run.
+    style.fontFamilyEastAsia = complex.fontFamily;
+    style.fontSizePt = complex.fontSizePt;
+    style.bold = complex.bold;
+    style.italic = complex.italic;
   }
   return style;
 }
@@ -319,14 +513,17 @@ export function withFontFamily(style: ResolvedRunStyle, family: string): Resolve
 
 /** The text as it is DRAWN, after case transforms. Measurement must use this, not the source. */
 export function displayText(text: string, style: ResolvedRunStyle): string {
-  if (style.caps) return text.toUpperCase();
+  // A literal U+00AD in `w:t` draws as a visible hyphen and is not a break opportunity. An
+  // optional hyphen element measures from its own empty `measureText` instead.
+  const shown = text.includes('\u00ad') ? text.replaceAll('\u00ad', '-') : text;
+  if (style.caps) return shown.toUpperCase();
   // Small caps changes glyph selection rather than the characters, so uppercasing here would
   // corrupt the text a copy produces. Resolving it belongs to the shaper, which requests the
   // `smcp` feature when the face carries small-cap glyphs and hands the run to the CSS
   // measurer when it does not (`shaped-measurer.ts`). That decision is per FACE, so a span
   // and every prefix of it measure from one source and the caret edges inside a run agree
   // with the painted span.
-  return text;
+  return shown;
 }
 
 /** Measure run text the way layout breaks lines and paints glyphs (caps/small-caps aware). */
@@ -341,10 +538,36 @@ export function measureDisplayText(
 /** Whether two resolved styles are identical, for span merging and cache keys. */
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (
+    revisionMarkupSourcesEqual(a, b) &&
+    layoutDerivedSpacingSourcesEqual(a, b) &&
+    a.shaping?.script === b.shaping?.script &&
+    a.shaping?.direction === b.shaping?.direction &&
+    a.shaping?.level === b.shaping?.level &&
+    a.shaping?.baseLevel === b.shaping?.baseLevel &&
+    a.shaping?.runDirection === b.shaping?.runDirection &&
+    a.shaping?.wordSpacingPt === b.shaping?.wordSpacingPt &&
+    a.shaping?.context?.before === b.shaping?.context?.before &&
+    a.shaping?.context?.after === b.shaping?.context?.after &&
     a.fontFamily === b.fontFamily &&
     a.fontFamilyEastAsia === b.fontFamilyEastAsia &&
+    a.latinLane?.fontFamily === b.latinLane?.fontFamily &&
+    a.latinLane?.fontFamilyEastAsia === b.latinLane?.fontFamilyEastAsia &&
+    a.latinLane?.fontSizePt === b.latinLane?.fontSizePt &&
+    a.latinLane?.bold === b.latinLane?.bold &&
+    a.latinLane?.italic === b.latinLane?.italic &&
+    a.complexLane?.fontFamily === b.complexLane?.fontFamily &&
+    a.complexLane?.fontSizePt === b.complexLane?.fontSizePt &&
+    a.complexLane?.bold === b.complexLane?.bold &&
+    a.complexLane?.italic === b.complexLane?.italic &&
     a.fontSizePt === b.fontSizePt &&
     a.color === b.color &&
+    a.textOutline?.widthPt === b.textOutline?.widthPt &&
+    a.textOutline?.color === b.textOutline?.color &&
+    a.border?.val === b.border?.val &&
+    a.border?.color === b.border?.color &&
+    a.border?.widthPt === b.border?.widthPt &&
+    a.border?.spacePt === b.border?.spacePt &&
+    a.border?.shadow === b.border?.shadow &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.strike === b.strike &&
@@ -358,6 +581,11 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.characterSpacingPt === b.characterSpacingPt &&
     a.horizontalScalePercent === b.horizontalScalePercent &&
     a.kerningMinPt === b.kerningMinPt &&
+    a.kerningEnabled === b.kerningEnabled &&
+    a.ligatures?.standard === b.ligatures?.standard &&
+    a.ligatures?.contextual === b.ligatures?.contextual &&
+    a.ligatures?.historical === b.ligatures?.historical &&
+    a.ligatures?.discretionary === b.ligatures?.discretionary &&
     a.hidden === b.hidden &&
     a.underline?.variant === b.underline?.variant &&
     a.underline?.color === b.underline?.color
@@ -375,4 +603,17 @@ export function baselineShiftPtOf(style: ResolvedRunStyle): number {
   if (style.verticalAlign === 'superscript') return style.baselineShiftPt + style.fontSizePt * 0.33;
   if (style.verticalAlign === 'subscript') return style.baselineShiftPt - style.fontSizePt * 0.16;
   return style.baselineShiftPt;
+}
+
+/**
+ * Shared glyph-size factor for baseline, superscript, and subscript text.
+ *
+ * The 65% script scale follows the common Word font metrics (Arial, Calibri, Times New
+ * Roman) and improves the saved Word reference at 10pt and 11pt. It is a uniform policy;
+ * per-face script metrics and Word's output-device rounding are not modeled here.
+ * Layout, surface paint, and exporters must apply the same factor to avoid caret drift.
+ * @public
+ */
+export function glyphSizeFactorOf(style: ResolvedRunStyle): number {
+  return style.verticalAlign === 'baseline' ? 1 : 0.65;
 }

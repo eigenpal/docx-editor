@@ -19,6 +19,7 @@ import {
 import { resolveRelationship } from './package/relationships.ts';
 import { type OoxmlElement, type OoxmlPart } from './package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from './package/para-id.ts';
+import { materializeGlossaryPlaceholders } from './store/placeholder-materialize.ts';
 import { relationshipTargetIn } from './package/hyperlink-part.ts';
 import { collectThemeSchemeFaces } from './package/theme-font-scheme.ts';
 import { TreePackageStore } from './store/tree-package-store.ts';
@@ -31,6 +32,12 @@ export interface HeadlessThemeFonts {
   readonly majorEastAsia?: string | null;
   /** East Asian body face; optional for backwards-compatible custom views. */
   readonly minorEastAsia?: string | null;
+  /** Complex-script heading and body theme faces. */
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
+  /** Language-specific theme faces, keyed by ISO 15924 script. */
+  readonly majorSupplemental?: Readonly<Record<string, string>>;
+  readonly minorSupplemental?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -73,6 +80,7 @@ const REL = Object.freeze({
   numbering: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering',
   settings: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings',
   theme: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme',
+  fontTable: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable',
   coreProperties:
     'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties',
   extendedProperties:
@@ -120,7 +128,15 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     };
   }
 
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  const store = new TreePackageStore(
+    loaded.package,
+    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main))
+  );
+  return { ok: true, view: headlessViewOfStore(store) };
+}
+
+/** Internal live read view over the canonical store, preserving node identities for field pagination. */
+export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentView {
   const currentPackage = (): OoxmlPackage => store.currentPackage();
   const mainPart = (): OoxmlPart => store.bodyStore().part;
   const rootOf = (relationshipType: string, fallbackName: string): OoxmlElement | null =>
@@ -143,7 +159,11 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
       const pkg = currentPackage();
       if (themeFontsPackage !== pkg) {
         themeFonts = Object.freeze(
-          collectThemeSchemeFaces(rootOf(REL.theme, '/word/theme/theme1.xml'))
+          collectThemeSchemeFaces(
+            rootOf(REL.theme, '/word/theme/theme1.xml'),
+            rootOf(REL.settings, '/word/settings.xml'),
+            rootOf(REL.fontTable, '/word/fontTable.xml')
+          )
         );
         themeFontsPackage = pkg;
       }
@@ -164,5 +184,5 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     relationshipTarget: (relationshipId: string) =>
       relationshipTargetIn(currentPackage(), mainPart().name, relationshipId),
   });
-  return { ok: true, view };
+  return view;
 }

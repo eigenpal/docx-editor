@@ -44,6 +44,7 @@ import { ImageTransformDropdown } from './ui/ImageTransformDropdown';
 import type { TableAction } from './ui/TableToolbar';
 import { cn } from '../lib/utils';
 import { EditorToolbarContext } from './EditorToolbarContext';
+import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 
 const ICON_SIZE = 18;
 
@@ -550,7 +551,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
     (twipsValue: number) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'lineSpacing', value: twipsValue });
-        requestAnimationFrame(() => onRefocusEditor?.());
+        hostWindowOf(barRef.current).requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
     [disabled, onFormat, onRefocusEditor]
@@ -571,7 +572,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
     (action: TableAction) => {
       if (!disabled && onTableAction) {
         onTableAction(action);
-        requestAnimationFrame(() => onRefocusEditor?.());
+        hostWindowOf(barRef.current).requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
     [disabled, onTableAction, onRefocusEditor]
@@ -649,9 +650,11 @@ export function Toolbar(explicitProps: ToolbarProps) {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    // The editor's own document: a pop-out window or an iframe has its own key events.
+    const doc = hostDocumentOf(editorRef?.current ?? barRef.current);
+    doc.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      doc.removeEventListener('keydown', handleKeyDown);
     };
   }, [enableShortcuts, handleFormat, handleAlignmentChange, editorRef]);
 
@@ -673,7 +676,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
   const handleBarMouseUp = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
-      const activeEl = document.activeElement as HTMLElement;
+      const activeEl = hostDocumentOf(target).activeElement as HTMLElement;
       const isSelectActive =
         target.tagName === 'SELECT' ||
         target.tagName === 'OPTION' ||
@@ -681,7 +684,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
 
       if (isSelectActive) return;
 
-      requestAnimationFrame(() => {
+      hostWindowOf(target).requestAnimationFrame(() => {
         onRefocusEditor?.();
       });
     },

@@ -34,7 +34,9 @@ export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+    readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
+    readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 // @public
@@ -45,8 +47,10 @@ export interface EditorModuleRegistry {
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
     readonly customNodes: readonly unknown[];
+    readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
     // (undocumented)
     readonly review: ReviewModuleContribution | null;
+    readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
 }
 
 // @public
@@ -100,6 +104,9 @@ export interface ReviewCustomItem {
 }
 
 // @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
 // @public
@@ -115,12 +122,15 @@ export interface ReviewModelInput {
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
     readonly reportCustomNodeDiagnostic?: ((diagnostic: unknown) => void) | undefined;
     readonly storyPart: OoxmlPart;
+    readonly stylesPart?: OoxmlPart | undefined;
 }
 
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
-    readonly displayModes: readonly RevisionDisplayMode[];
+    readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
+    readonly displayModes: readonly ReviewDisplayMode[];
+    readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 
@@ -150,6 +160,12 @@ export interface ReviewRevisionItem {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
@@ -163,17 +179,15 @@ export interface ReviewRevisionItem {
     readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     readonly text: string;
 }
 
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A deletion and an insertion that are one edit: text typed over a selection.
-*
-* Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-* without the other is never what the reviewer meant — accepting the deletion alone
-* leaves the replacement text unproposed, rejecting it alone leaves both.
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
@@ -195,6 +209,20 @@ export interface RevisionAddress {
 // @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
-// (No @packageDocumentation comment for this package)
+// @public
+export interface RevisionMarkupDialog {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    open(): void;
+}
+
+// @public
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
+    // (undocumented)
+    readonly container: HTMLElement;
+    // (undocumented)
+    readonly translate?: (key: string) => string | undefined;
+}
 
 ```

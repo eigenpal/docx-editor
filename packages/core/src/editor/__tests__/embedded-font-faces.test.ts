@@ -76,6 +76,22 @@ function fakeEnvironment(options: { failWhenFamilyMatches?: string } = {}) {
 }
 
 describe('registerEmbeddedFontFaces', () => {
+  test('reads each face once, and keeps the source rather than a copy of its bytes', async () => {
+    const env = fakeEnvironment();
+    let reads = 0;
+    const lazy: FontSource = {
+      ...source('Lazy'),
+      // A source that hands out a fresh copy per read, as the editor's validated fonts do.
+      get bytes() {
+        reads += 1;
+        return new Uint8Array([1, 2, 3]);
+      },
+    };
+    const registration = await registerEmbeddedFontFaces([lazy], env.environment);
+    expect(registration.installed).toBe(1);
+    expect(reads).toBe(1);
+  });
+
   test('a document-declared family NEVER reaches the FontFaceSet', async () => {
     const env = fakeEnvironment();
     const hostile = ['Segoe UI', 'Roboto', 'Material Symbols Outlined', 'Arial'];
@@ -117,6 +133,61 @@ describe('registerEmbeddedFontFaces', () => {
       fakeEnvironment().environment
     );
     expect(first.alias('Calibri')).not.toBe(second.alias('Calibri'));
+  });
+
+  test('case and surrounding whitespace share one alias across weights and styles', async () => {
+    const env = fakeEnvironment();
+    const sources = [
+      source('Brand Face'),
+      source(' brand face ', 700),
+      source('BRAND FACE', 400, 'italic'),
+    ];
+    const originalRequests = sources.map((face) => ({ ...face.request }));
+    const registration = await registerEmbeddedFontFaces(sources, env.environment);
+    const alias = registration.alias('brand face');
+    expect(alias).toMatch(/^docx-embedded-/);
+    expect(registration.installed).toBe(3);
+    expect(registration.alias(' Brand Face ')).toBe(alias);
+    expect(registration.alias('BRAND FACE')).toBe(alias);
+    expect(env.created.map((face) => face.family)).toEqual([alias, alias, alias]);
+    expect(env.created.map((face) => face.descriptors)).toEqual([
+      { weight: '400', style: 'normal' },
+      { weight: '700', style: 'normal' },
+      { weight: '400', style: 'italic' },
+    ]);
+    expect(sources.map((face) => face.request)).toEqual(originalRequests);
+    for (let index = 0; index < sources.length; index++) {
+      expect(env.created[index]!.bytes).toBe(sources[index]!.bytes);
+    }
+    registration.dispose();
+    registration.dispose();
+    expect(env.deleted).toEqual(env.added);
+    expect(env.deleted).toHaveLength(3);
+    expect(registration.alias(' Brand Face ')).toBeUndefined();
+    expect(registration.alias('brand face')).toBeUndefined();
+  });
+
+  test('substitution aliases normalize both families and preserve direct-face precedence', async () => {
+    const env = fakeEnvironment();
+    const face = (family: string) => ({ family, weight: 400, style: 'normal' as const });
+    const registration = await registerEmbeddedFontFaces(
+      [source(' Stand In '), source('DIRECT FACE')],
+      env.environment,
+      [
+        { from: face(' Authored Face '), to: face('STAND IN') },
+        { from: face(' direct face '), to: face('stand in') },
+        { from: face('Missing Alias'), to: face('ABSENT FACE') },
+      ]
+    );
+    expect(registration.alias('authored face')).toBe(registration.alias('stand in'));
+    expect(registration.alias(' AUTHORED FACE ')).toMatch(/^docx-embedded-/);
+    expect(registration.alias(' direct face ')).toMatch(/^docx-embedded-/);
+    expect(registration.alias('direct face')).not.toBe(registration.alias('stand in'));
+    expect(registration.alias('missing alias')).toBeUndefined();
+    registration.dispose();
+    expect(env.deleted).toEqual(env.added);
+    expect(registration.alias('authored face')).toBeUndefined();
+    expect(registration.alias('DIRECT FACE')).toBeUndefined();
   });
 
   test('a family whose every face fails to load advertises no alias', async () => {

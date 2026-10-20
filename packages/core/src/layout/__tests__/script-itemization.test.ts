@@ -73,7 +73,7 @@ describe('deterministic script itemization', () => {
     ]);
   });
 
-  test('fullwidth Latin stays Latin and splits from adjacent Han at exact boundaries', () => {
+  test('fullwidth Latin keeps its script but takes the East Asian slot beside Han', () => {
     const text = '漢ＡＺ字';
     expect(
       itemizeScriptFontSlots(text, 0, ltr(text)).map(({ from, to, script, slot }) => ({
@@ -83,17 +83,20 @@ describe('deterministic script itemization', () => {
       }))
     ).toEqual([
       { text: '漢', script: 'Hani', slot: 'eastAsia' },
-      { text: 'ＡＺ', script: 'Latn', slot: 'hAnsi' },
+      { text: 'ＡＺ', script: 'Latn', slot: 'eastAsia' },
       { text: '字', script: 'Hani', slot: 'eastAsia' },
     ]);
   });
 
-  test('fullwidth Latin boundaries exclude neighboring Common punctuation', () => {
+  test('full-width letters, digits and punctuation take the East Asian slot', () => {
     for (const [text, script, slot] of [
-      ['＠', 'Zyyy', 'hAnsi'],
-      ['Ａ', 'Latn', 'hAnsi'],
-      ['ｚ', 'Latn', 'hAnsi'],
-      ['｛', 'Zyyy', 'hAnsi'],
+      ['＠', 'Zyyy', 'eastAsia'],
+      ['Ａ', 'Latn', 'eastAsia'],
+      ['ｚ', 'Latn', 'eastAsia'],
+      ['｛', 'Zyyy', 'eastAsia'],
+      ['１', 'Zyyy', 'eastAsia'],
+      ['｡', 'Zyyy', 'eastAsia'],
+      ['￥', 'Zyyy', 'eastAsia'],
     ] as const) {
       expect(itemizeScriptFontSlots(text, 0, ltr(text))[0]).toMatchObject({ script, slot });
     }

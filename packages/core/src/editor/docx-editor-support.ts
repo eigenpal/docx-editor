@@ -5,6 +5,7 @@
 // source normalization, and the value-equality rules the cached snapshot uses to keep
 // sub-object references stable across re-derivations.
 
+import { watermarkRefusal } from './docx-editor-watermark.ts';
 import type {
   DocumentSource,
   EditorCommand,
@@ -19,9 +20,11 @@ import {
   MAX_INSERT_TABLE_COLUMNS,
   MAX_INSERT_TABLE_ROWS,
 } from '../store/store/table-constraints.ts';
+import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
+import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -100,10 +103,6 @@ export const HIGHLIGHT_NAMES: ReadonlySet<string> = new Set([
   'white',
 ]);
 
-/** The shape the CSS sink enforces on family names (semantic-paint.ts's `FONT_NAME`);
- *  applying it at the command boundary keeps an invalid name out of the tree entirely. */
-const FONT_FAMILY_VALUE = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
-
 const HEX_COLOR_VALUE = /^[0-9A-Fa-f]{6}$/;
 
 export type ResolvedMarkAttr =
@@ -131,11 +130,14 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
   const { mark, value } = command;
   switch (mark) {
     case 'fontFamily': {
-      if (typeof value !== 'string' || !FONT_FAMILY_VALUE.test(value)) {
+      // The same shape the font list and the CSS sink accept (semantic-paint.ts's
+      // `FONT_NAME`), so every listed name is selectable and an invalid name never
+      // reaches the tree. No quote, backslash, or control character; at most 64.
+      if (typeof value !== 'string' || fontFamilyName(value) === null) {
         return {
           ok: false,
           code: 'invalidArgs',
-          reason: 'fontFamily requires a family name of 1-64 letters, digits, or [ -.+_]',
+          reason: 'fontFamily requires a family name of 1-64 letters, digits, or [ -.+_,;]',
         };
       }
       return { ok: true, localName: 'rFonts', attributes: { ascii: value, hAnsi: value } };
@@ -274,6 +276,14 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     }
     case 'setAlignment':
       return { supported: true, mutating: true };
+    case 'setParagraphDirection':
+      return command.direction === 'ltr' || command.direction === 'rtl'
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            code: 'invalidArgs',
+            reason: "setParagraphDirection requires a direction of 'ltr' or 'rtl'",
+          };
     case 'clearFormatting':
       return { supported: true, mutating: true };
     // The painter's two halves gate differently, which is why they are two commands: copying
@@ -423,6 +433,9 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       ) {
         return { supported: false, code: 'invalidArgs', reason: 'unknown alignment' };
       }
+      if (command.direction !== undefined && !['ltr', 'rtl'].includes(command.direction)) {
+        return { supported: false, code: 'invalidArgs', reason: 'unknown direction' };
+      }
       if (command.tabStops !== undefined) {
         if (command.tabStops.length > 64) {
           return {
@@ -569,6 +582,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       }
       return { supported: true, mutating: true };
     }
+    case 'replaceMatch': {
+      const refusal = replaceMatchArgumentRefusal(command);
+      return refusal
+        ? { supported: false, code: 'invalidArgs', reason: refusal }
+        : { supported: true, mutating: true };
+    }
     case 'proposeDeletion':
       return command.author !== undefined && command.author.trim().length === 0
         ? {
@@ -657,6 +676,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           };
     case 'insertToc':
       return { supported: true, mutating: true };
+    case 'editTextFormField':
+      return { supported: true, mutating: false };
     case 'refreshToc':
       if (
         command.mode !== undefined &&
@@ -825,6 +846,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             reason:
               'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
           };
+    case 'insertTextBox':
+      return { supported: true, mutating: true };
     case 'insertImage':
       return command.data instanceof Uint8Array &&
         (command.mime === 'image/png' ||
@@ -873,12 +896,27 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'setImageProperties':
       return { supported: true, mutating: true };
+    case 'insertBookmark':
+    case 'deleteBookmark':
+    case 'keepFirstBookmark':
+    case 'goToBookmark':
+      return typeof command.name === 'string' && command.name.length > 0
+        ? { supported: true, mutating: command.type !== 'goToBookmark' }
+        : { supported: false, code: 'invalidArgs', reason: `${command.type} needs a name` };
+    case 'setWatermark': {
+      const refusal = watermarkRefusal(command.watermark);
+      return refusal
+        ? { supported: false, code: 'invalidArgs', reason: refusal }
+        : { supported: true, mutating: true };
+    }
     default:
-      return {
-        supported: false,
-        reason: `command '${command.type}' is not supported by the tree editor`,
-      };
+      return { supported: false, reason: unknownCommandReason(command.type) };
   }
+}
+
+/** The classifier's refusal for a command type it has no case for. */
+export function unknownCommandReason(type: string): string {
+  return `command '${type}' is not supported by the tree editor`;
 }
 
 // ---------------------------------------------------------------------------------------

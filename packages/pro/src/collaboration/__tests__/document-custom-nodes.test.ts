@@ -115,6 +115,45 @@ describe('inserting a custom node replicates the store, the node, and the bound 
   });
 });
 
+describe('a custom node proposed as a tracked insertion', () => {
+  const REVISION = { author: 'Alice', date: '2026-01-02T03:04:05Z' };
+  const insertTracked = (peer: Peer, nodeId: string) => {
+    const result = insertPackageCustomNode(peer.store, {
+      paragraphId: peers.paragraphIdAt(peer, 0),
+      offset: 6,
+      tag: 'acme:citation',
+      text: '(Smith 2024)',
+      lock: 'contentLocked',
+      payload: { namespaceUri: NS, rootLocalName: ROOT, nodeId, label: '(Smith 2024)', data: DATA },
+      revision: REVISION,
+    });
+    if (!result.ok) throw new Error(String(result.reason));
+    peer.port.flushPendingJournals();
+  };
+
+  for (const [decision, kept] of [
+    ['rejectAllRevisions', 0],
+    ['acceptAllRevisions', 1],
+  ] as const) {
+    test(`replicates, and ${decision} on the other peer converges`, async () => {
+      const { alice, bob, pause, resume } = await peers.pair(emptyBytes());
+      insertTracked(alice, 'cx-tracked');
+      expectCustomNodeOnPeer(bob, 'cx-tracked');
+      pause();
+      peers.apply(bob, [{ op: decision }]);
+      peers.apply(alice, [
+        { op: 'insertText', paragraphId: peers.paragraphIdAt(alice, 1), offset: 0, text: 'A' },
+      ]);
+      resume();
+      alice.port.flushPendingJournals();
+      bob.port.flushPendingJournals();
+      peers.expectConverged(alice, bob);
+      expect(contentControlsIn(alice.store.bodyStore().part.root)).toHaveLength(kept);
+      expect(contentControlsIn(bob.store.bodyStore().part.root)).toHaveLength(kept);
+    });
+  }
+});
+
 describe('concurrent custom-node inserts', () => {
   test('both first inserts survive when neither replica has a customXml part yet', async () => {
     const { alice, bob, pause, resume } = await peers.pair(emptyBytes());

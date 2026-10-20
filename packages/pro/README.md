@@ -1,37 +1,38 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@docx-editor.dev/pro"><img src="https://img.shields.io/npm/v/@docx-editor.dev/pro.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
-  <a href="https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md"><img src="https://img.shields.io/badge/license-EigenPal_Pro_Evaluation_1.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md"><img src="https://img.shields.io/badge/license-EigenPal_Pro_License-blue.svg?style=flat-square&color=3B5BDB" alt="EigenPal Pro License" /></a>
   <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-3B5BDB?style=flat-square&logo=vercel&logoColor=white" alt="Demo" /></a>
   <a href="https://www.docx-editor.dev/docs/2.x/pro"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
 # @docx-editor.dev/pro
 
-Four capabilities for the [docx-editor.dev](https://docx-editor.dev) React and
-Vue editors:
+Add review, collaboration, and custom content to the [docx-editor.dev](https://docx-editor.dev) React and Vue editors. The package provides these capabilities:
 
-- **Tracked changes**: Suggesting mode, markup rendering, accept, and reject.
-- **Comments**: Threads anchored to a range, with replies.
-- **Collaboration**: Provider-neutral sessions with WebRTC and Hocuspocus helpers.
-- **Custom nodes**: Inline node types stored as Word content controls.
+- [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes): Suggesting mode, markup rendering, accept, and reject.
+- [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.
+- [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration): Provider-neutral sessions with WebRTC and Hocuspocus helpers.
+- [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as content controls.
 
 ```bash
-npm install @docx-editor.dev/react @docx-editor.dev/pro
+npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at
-`@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
 ## Register a module
 
-Capabilities are modules passed to the editor root. Registration happens at construction, so
-the array identity must be stable. Build it outside render, or the editor rebuilds every time.
+Pass capability modules to the editor root. Keep the module array stable across renders to avoid rebuilding the editor.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -53,17 +54,13 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`author` is what lands in `w:author`. OOXML requires it, so the engine refuses a comment or
-reply with no author rather than writing an empty attribute.
+Set `author` to the name stored in `w:author`. The engine requires an author to create comments or replies.
 
-Without a review module the editor still opens a document containing revisions and comments and
-still saves them back untouched. It renders revisions in their final state and offers no review
-UI; the module is what makes them visible and actionable.
+Without a review module, the editor preserves revisions and comments when saving. It displays final revision content. Add the review module to display markup and review controls.
 
 ## Collaboration
 
-Use `collaborationModule` with a Yjs 13 provider. The package includes WebRTC and
-Hocuspocus helpers for React and Vue.
+Use `collaborationModule` with a Yjs 13 provider. The package includes WebRTC and Hocuspocus helpers for React and Vue.
 
 Install the peer package for your transport:
 
@@ -72,16 +69,11 @@ npm install @docx-editor.dev/pro yjs y-webrtc
 npm install @docx-editor.dev/pro yjs @hocuspocus/provider
 ```
 
-Start with the
-[real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration).
-Use the
-[collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration)
-for room lifecycles, presence, recovery, and limits.
+Start with the [real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration). Use the [collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration) for room lifecycles, presence, recovery, and limits.
 
 ## Chrome or hooks
 
-Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for
-Word-like cards out of the box, or the hook to render your own markup.
+Use the packaged sidebar to display review cards. Use `useReview()` to build your own review interface.
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';
@@ -114,15 +106,11 @@ function ChangeList() {
 }
 ```
 
-Items come from the document tree rather than from what is currently painted, and each anchor
-comes from layout records rather than measured DOM, so a sidebar built on this does not lag a
-repaint behind the page or break during pagination.
+Items come from the document tree. Anchors come from layout records. These sources keep your sidebar aligned with the document during pagination.
 
 ## Custom nodes
 
-An inline node type you define (a citation, a mention, a merge field) stored as a Word content
-control whose `w:tag` carries your identity and attributes. Word opens the document, shows the
-node's text, and gives it back unchanged.
+Define inline nodes such as citations, mentions, and merge fields. Each node uses a content control with its identity and attributes in `w:tag`. Other DOCX editors display the node's text and preserve the control.
 
 ```ts
 import { defineCustomNode, customNodesModule } from '@docx-editor.dev/pro';
@@ -140,15 +128,37 @@ const MODULES = [customNodesModule({ nodes: [Citation] })];
 
 Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `text` as untrusted.
 
-`insertCustomNode`, `updateCustomNode`, and `removeCustomNode` author them from code, and
-`customNodeXml` builds the same content control on a server with no editor and no DOM.
+`insertCustomNode`, `updateCustomNode`, and `removeCustomNode` author them from code, and `customNodeXml` builds the same content control on a server with no editor and no DOM.
+
+## Which API for which job
+
+| Job | Use |
+| --- | --- |
+| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
+| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+
+| Task | Browser host (React or Vue) | Headless, server, or agent |
+| --- | --- | --- |
+| [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
+| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `proposeRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
+| [Open or reveal a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
+| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
+
+The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+
+This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
 
 ## Licensing
 
-This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
-Both module factories accept an optional `licenseKey`. Construction never validates it and never
-touches the network.
+`reviewModule`, `customNodesModule`, and `collaborationModule` accept an optional `licenseKey`. Construction never validates it and never touches the network.
 
 ## Documentation
 

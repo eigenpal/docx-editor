@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { LogicalIdAllocator, type LogicalId } from './document/index.ts';
+import { asLogicalId } from './document/identity.ts';
 import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
@@ -30,7 +31,7 @@ export class LogicalIdentityMap {
    * known id renames that node in place, so it must keep the id it already has.
    */
   constructor(
-    private readonly knows: (logicalId: string) => boolean,
+    private readonly knows: (logicalId: LogicalId) => boolean,
     replicaId?: string
   ) {
     this.allocator = new LogicalIdAllocator(replicaId);
@@ -59,8 +60,8 @@ export class LogicalIdentityMap {
   }
 
   /** Baseline and remote ids resolve to themselves; locally minted ones to their logical id. */
-  resolve(canonicalId: string): string {
-    return this.toLogical.get(canonicalId) ?? canonicalId;
+  resolve(canonicalId: string): LogicalId {
+    return this.toLogical.get(canonicalId) ?? asLogicalId(canonicalId);
   }
 
   /**

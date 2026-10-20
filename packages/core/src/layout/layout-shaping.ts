@@ -20,10 +20,14 @@ import {
 } from './harfbuzz-shaper.ts';
 import { FIXED_MEASURER_FINGERPRINT } from './fixed-measurer.ts';
 import {
-  LAYOUT_HARFBUZZ_SHAPER_POLICY,
   layoutShaperExecutionPolicyFingerprint,
   type LayoutHarfBuzzShaperPolicy,
 } from './layout-shaper-policy.ts';
+import {
+  fontShapingPolicy,
+  withFontShapingPolicy,
+  type FontShapingOptions,
+} from './font-shaping-policy.ts';
 import type { LayoutShapingOptions } from './shaped-measurer.ts';
 
 // The shipped browser adapter called createShapedMeasurer without explicit OpenType features.
@@ -551,7 +555,8 @@ async function createLayoutShapingInternal(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   instrumentation: LayoutShapingInstrumentation | undefined,
   sharedShaper: LayoutShapingOptions['shaper'] | undefined,
-  shaperPolicy: LayoutHarfBuzzShaperPolicy
+  shaperPolicy: LayoutHarfBuzzShaperPolicy,
+  documentLigatures = false
 ): Promise<LayoutShapingOptions> {
   // Sample every caller-owned value before the asynchronous initialization boundary. A host
   // mutating its configuration while HarfBuzz loads must not create a half-old, half-new
@@ -586,12 +591,17 @@ async function createLayoutShapingInternal(
     normalization: NORMALIZATION_POLICY,
     language,
     features: FEATURES,
+    ...(documentLigatures ? { documentLigatures: true } : {}),
     fixedPointScale: FIXED_POINT_SCALE,
     roundingMode: ROUNDING_MODE,
   });
   return Object.freeze({
     fonts,
-    shaper: sharedShaper ?? createHarfBuzzTextShaper(shaperPolicy),
+    shaper: withFontShapingPolicy(
+      sharedShaper ?? createHarfBuzzTextShaper(shaperPolicy),
+      shaperPolicy,
+      sharedShaper === undefined
+    ),
     defaultFont,
     environment,
     ligatureCaretPolicy: LIGATURE_CARET_POLICY,
@@ -608,13 +618,14 @@ async function createLayoutShapingInternal(
 /** Build one shaped-layout environment without importing an editor or DOM lane. @public */
 export async function createLayoutShaping(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  execution?: FontShapingOptions
 ): Promise<LayoutShapingOptions> {
   return createLayoutShapingInternal(
     configuration,
     instrumentation,
     undefined,
-    LAYOUT_HARFBUZZ_SHAPER_POLICY
+    fontShapingPolicy(execution)
   );
 }
 
@@ -623,9 +634,16 @@ export async function createLayoutShapingWithTextShaper(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
   shaper: LayoutShapingOptions['shaper'],
   shaperPolicy: LayoutHarfBuzzShaperPolicy,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  documentLigatures = false
 ): Promise<LayoutShapingOptions> {
-  return createLayoutShapingInternal(configuration, instrumentation, shaper, shaperPolicy);
+  return createLayoutShapingInternal(
+    configuration,
+    instrumentation,
+    shaper,
+    shaperPolicy,
+    documentLigatures
+  );
 }
 
 /** Release native resources held by a shaping environment. @public */

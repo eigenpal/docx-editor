@@ -1,3 +1,16 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+  FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  LockedControlNavigation,
+} from '@docx-editor.dev/core/editor';
+import { formControlTranslateKey } from './form-control-translate';
+import { warnFieldResultsChanged } from './field-results-warning';
+import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import {
   UnsupportedElementRegistryContext,
   createUnsupportedElementRegistry,
@@ -27,6 +40,8 @@ import {
   createDocxEditor,
   defaultTableLabel,
   resolveZoomMode,
+  resolveRevisionMarkup,
+  runToolbarCommand,
   sameZoomMode,
   type DocxEditorInstance,
   type EditorModule,
@@ -38,6 +53,7 @@ import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import {
   docxEditorKey,
+  editorContentElementKey,
   editorStateTickKey,
   ReviewRailContext,
   type ReviewRailRegistry,
@@ -52,15 +68,60 @@ import {
 
 /** @public */
 export interface DocxEditorRootProps {
+  popups?: import('./popup-config').DocxEditorPopups;
   document?: DocumentSource;
+  /** Font sources. A new value replaces them in place (`setFonts`), keeping edits and history. */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling; a changed maxFontBytes value remounts. */
+  fontShaping?: FontShapingOptions;
+  /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
+  /**
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * For UI translations, wrap Root and its chrome in LocaleProvider with an i18n catalog.
+   */
   locale?: string;
+  /** Live drawing and form-control labels. Defaults to the active catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
+  /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];
+  /** Live host mode. Omit it to let document tracking settings select the mode. */
   mode?: 'edit' | 'view' | 'suggesting';
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
+
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
   onReady?: (editor: Editor) => void;
@@ -80,6 +141,7 @@ export interface DocxEditorRootEmit {
   ready: (editor: Editor) => void;
   change: (change: DocumentChange) => void;
   fontError: (error: EditorFontError) => void;
+  revisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
@@ -105,9 +167,20 @@ export function useDocxEditorRootOwner(
   translateResolver: ComputedRef<(key: string, params?: Record<string, string | number>) => string>;
 } {
   const editorRef = shallowRef<DocxEditorInstance | null>(null);
+  /** The `fieldResults` the current instance was created with. */
+  let createdFieldResults: DocxEditorRootProps['fieldResults'];
+  /** The `contentLockPolicy` the current instance was created with. */
+  let createdContentLockPolicy: DocxEditorRootProps['contentLockPolicy'];
+  /** The `lockedControlNavigation` the current instance was created with. */
+  let createdLockedControlNavigation: DocxEditorRootProps['lockedControlNavigation'];
+  /** The `fonts` the current instance holds: created with, or last handed to `setFonts`. */
+  let createdFonts: DocxEditorRootProps['fonts'];
+  const markupRevision = shallowRef(0);
+  let applyingMarkup = false;
   const tick = shallowRef(0);
   provide(docxEditorKey, editorRef);
   provide(editorStateTickKey, tick);
+  provide(editorContentElementKey, shallowRef<HTMLElement | null>(null));
   provide(navigationLayoutKey, createNavigationLayoutStore());
   provide(docxEditorRootOwnerKey, true);
   const unsupportedRegistry = createUnsupportedElementRegistry();
@@ -115,40 +188,61 @@ export function useDocxEditorRootOwner(
   const revisionStyleRegistry = createRevisionStyleRegistry();
   provide(RevisionStyleRegistryContext, revisionStyleRegistry);
 
-  const { t: catalogT, catalogue } = useTranslation();
+  const translation = useTranslation();
   const translateResolver = computed(() => {
-    catalogue.value;
+    translation.catalogue.value;
     const custom = toValue(props).translate;
-    if (custom) return custom;
-    const t = catalogT;
     return (key: string, params?: Record<string, string | number>) =>
-      t(key as TranslationKey, params);
+      custom ? custom(key, params) : translation.t(key as TranslationKey, params);
   });
 
+  provide(formControlTranslateKey, translateResolver);
+
   const railCount = shallowRef(0);
-  const commentDraftHandlers: Array<() => void> = [];
-  const registerCommentDraft = (handler: () => void) => {
-    commentDraftHandlers.push(handler);
+  const gutterCount = shallowRef(0);
+  const reserveGutter = () => {
+    gutterCount.value++;
     return () => {
-      const index = commentDraftHandlers.indexOf(handler);
-      if (index !== -1) commentDraftHandlers.splice(index, 1);
+      gutterCount.value = Math.max(0, gutterCount.value - 1);
     };
   };
+  const commentDraftHandlers: Array<() => void> = [];
+  const commentDraftCount = shallowRef(0);
+  const registerCommentDraft = (handler: () => void) => {
+    commentDraftHandlers.push(handler);
+    commentDraftCount.value++;
+    return () => {
+      const index = commentDraftHandlers.indexOf(handler);
+      if (index === -1) return;
+      commentDraftHandlers.splice(index, 1);
+      commentDraftCount.value = Math.max(0, commentDraftCount.value - 1);
+    };
+  };
+  // The engine decides whether Add comment is enabled, so the handlers registered here reach
+  // it as one registration, while any exists. The latest handler receives each request.
+  watch(
+    [() => editorRef.value, () => commentDraftCount.value > 0],
+    ([editor, serving], _previous, onCleanup) => {
+      if (!editor || !serving) return;
+      onCleanup(editor.setCommentDraftChrome({ onRequest: () => commentDraftHandlers.at(-1)?.() }));
+    },
+    { immediate: true }
+  );
   const requestCommentDraft = () => {
-    const handler = commentDraftHandlers.at(-1);
-    if (!handler) return false;
-    handler();
-    return true;
+    const editor = editorRef.value;
+    return editor !== null && runToolbarCommand(editor, 'review.addComment').ok;
   };
   const railRegistry = shallowRef<ReviewRailRegistry>({
     mounted: 0,
     register: () => () => {},
+    gutters: 0,
+    reserveGutter,
     registerCommentDraft,
     requestCommentDraft,
   });
   watch(
-    railCount,
-    (mounted) => {
+    [railCount, gutterCount],
+    ([mounted, gutters]) => {
       railRegistry.value = {
         mounted,
         register: () => {
@@ -157,6 +251,8 @@ export function useDocxEditorRootOwner(
             railCount.value = Math.max(0, railCount.value - 1);
           };
         },
+        gutters,
+        reserveGutter,
         registerCommentDraft,
         requestCommentDraft,
       };
@@ -169,7 +265,7 @@ export function useDocxEditorRootOwner(
   let readyFired = false;
 
   const destroyEditor = () => {
-    if (cleanups.length >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
+    if (cleanups.length >= 4) facadeListenerCount = Math.max(0, facadeListenerCount - 4);
     for (const off of cleanups.splice(0)) off();
     const instance = editorRef.value;
     if (instance) {
@@ -196,16 +292,28 @@ export function useDocxEditorRootOwner(
   };
 
   const createEditor = () => {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
     destroyEditor();
     const p = toValue(props);
+    createdFieldResults = p.fieldResults;
+    createdContentLockPolicy = p.contentLockPolicy;
+    createdLockedControlNavigation = p.lockedControlNavigation;
+    createdFonts = p.fonts;
     const instance = createDocxEditor({
       unsupportedElementRules: unsupportedRegistry.current(),
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
+      ...(p.fontShaping ? { fontShaping: p.fontShaping } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate: translateResolver.value,
+      ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
+      ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
+      ...(p.lockedControlNavigation !== undefined
+        ? { lockedControlNavigation: p.lockedControlNavigation }
+        : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
         ? { revisionStyles: revisionStyleRegistry.current() }
@@ -220,10 +328,18 @@ export function useDocxEditorRootOwner(
     const notify = deferredTick(() => {
       tick.value++;
     });
-    facadeListenerCount += 3;
+    facadeListenerCount += 4;
     cleanups.push(
       instance.on('change', (change) => {
         fireChange(change);
+        notify();
+      })
+    );
+    cleanups.push(
+      instance.on('revisionMarkupChange', (settings) => {
+        if (applyingMarkup) return;
+        emit.revisionMarkupChange?.(settings);
+        markupRevision.value++;
         notify();
       })
     );
@@ -253,19 +369,30 @@ export function useDocxEditorRootOwner(
     );
   });
 
-  if (typeof window !== 'undefined') {
+  if (typeof globalThis.window !== 'undefined') {
     watch(
-      () =>
-        [
-          toValue(props).document,
-          toValue(props).fonts,
-          catalogue.value,
-          toValue(props).imageDecodePort,
-        ] as const,
+      [
+        () => toValue(props).document,
+        () => toValue(props).fontShaping?.maxFontBytes,
+        () => toValue(props).imageDecodePort,
+      ],
       createEditor,
       { immediate: true, flush: 'post' }
     );
   }
+
+  // A new `fonts` value replaces the instance's fonts in place. The instance a remount just
+  // created already has them, so only a change after creation reaches `setFonts`.
+  watch(
+    () => [editorRef.value, toValue(props).fonts] as const,
+    ([editor, fonts]) => {
+      if (!editor || createdFonts === fonts) return;
+      createdFonts = fonts;
+      // Rejects only after destroy; font failures report through `fontError`.
+      editor.setFonts(fonts).catch(() => {});
+    },
+    { flush: 'post' }
+  );
 
   onUnmounted(destroyEditor);
 
@@ -295,6 +422,95 @@ export function useDocxEditorRootOwner(
         applied.mode = zoomMode!;
         editor.setZoomMode(zoomMode!);
       }
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).author] as const,
+    ([editor, author]) => {
+      if (editor) editor.setAuthor(author);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).revisionMarkup, markupRevision.value] as const,
+    ([editor, settings]) => {
+      if (!editor || settings === undefined) return;
+      const resolved = resolveRevisionMarkup(settings);
+      if (JSON.stringify(resolved) === JSON.stringify(editor.snapshot().revisionMarkup)) return;
+      applyingMarkup = true;
+      try {
+        editor.setRevisionMarkup(resolved);
+      } finally {
+        applyingMarkup = false;
+      }
+    },
+    { deep: true, flush: 'post' }
+  );
+
+  const appliedHostMode = {
+    editor: null as DocxEditorInstance | null,
+    value: undefined as 'edit' | 'view' | 'suggesting' | undefined,
+  };
+  watch(
+    () => [editorRef.value, toValue(props).mode] as const,
+    ([editor, mode]) => {
+      if (!editor) return;
+      if (appliedHostMode.editor !== editor) {
+        appliedHostMode.editor = editor;
+        appliedHostMode.value = mode;
+        return;
+      }
+      if (appliedHostMode.value === mode) return;
+      appliedHostMode.value = mode;
+      editor.setMode(mode);
+    },
+    { flush: 'post', immediate: true }
+  );
+
+  watch(
+    () => [editorRef.value, translateResolver.value] as const,
+    ([editor, translate]) => {
+      if (editor) editor.setTranslate(translate);
+    },
+    { flush: 'post' }
+  );
+
+  // Read once at creation; a later change is ignored and reported in development.
+  watch(
+    () => [editorRef.value, toValue(props).fieldResults] as const,
+    ([editor, fieldResults]) => {
+      if (editor) warnFieldResultsChanged(createdFieldResults, fieldResults);
+    },
+    { flush: 'post' }
+  );
+
+  // Compared by value, so an inline policy object re-created on each render does not warn.
+  watch(
+    () => [editorRef.value, toValue(props).contentLockPolicy] as const,
+    ([editor, contentLockPolicy]) => {
+      if (editor) warnContentLockPolicyChanged(createdContentLockPolicy, contentLockPolicy);
+    },
+    { flush: 'post' }
+  );
+
+  // Read once at creation, like `fieldResults`.
+  watch(
+    () => [editorRef.value, toValue(props).lockedControlNavigation] as const,
+    ([editor, lockedControlNavigation]) => {
+      if (editor) {
+        warnLockedControlNavigationChanged(createdLockedControlNavigation, lockedControlNavigation);
+      }
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).locale] as const,
+    ([editor, locale]) => {
+      if (editor) editor.setLocale(locale);
     },
     { flush: 'post' }
   );

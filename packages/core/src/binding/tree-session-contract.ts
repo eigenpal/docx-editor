@@ -14,14 +14,15 @@ import type {
   OoxmlElement,
   OoxmlPackage,
   OoxmlPart,
-  ReviewItem,
-  SelectionMark,
-  StoryScope,
-  StoryTargetRejection,
-  TreeDocOp,
-  TreeModelChange,
-  TreeTransactOptions,
 } from '@docx-editor.dev/core/store';
+import type { ReviewItem } from '../store/store/review-items.ts';
+import type {
+  SelectionMark,
+  TreeModelChange,
+  TransactOptions as TreeTransactOptions,
+} from '../store/store/tree-store.ts';
+import type { StoryScope, StoryTargetRejection } from '../store/store/tree-package-store.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 import type { CollaborationDocumentPort } from '../collaboration/replication.ts';
 import type {
@@ -37,6 +38,7 @@ import type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
 import type { RunPropertyLike, StyleRunDefaults } from './document-run-defaults.ts';
 import type { DocumentTrackingSettings } from '../store/package/tracking-settings.ts';
 import type { DocumentProperties } from '../store/package/document-properties.ts';
+import type { HistoryGroup } from '../store/store/history-group.ts';
 
 /**
  * What applying ops produced: whether it committed, and why not when it did not.
@@ -52,11 +54,26 @@ export interface TreeApplyResult {
   readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
 
-/** Optional collaboration attribution for a direct tree-op transaction. */
+/** Optional collaboration attribution and history grouping for a direct tree-op transaction. */
 export type TreeApplyOptions = Pick<
   TreeTransactOptions,
   'origin' | 'actorId' | 'operationId' | 'recordsHistory'
->;
+> & {
+  /** The store token of the commit's history group, as `commitReviewOps` hands it over. */
+  readonly historyToken?: HistoryGroup;
+  /** @deprecated Use `historyToken`, the same store token under its one name. */
+  readonly historyGroup?: HistoryGroup;
+  /** Package resources committed in the same transaction as the tree operations. */
+  readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
+  /** Canonical operations on related package parts, committed in the same undo unit. */
+  readonly partOps?: readonly { readonly partName: string; readonly ops: readonly TreeDocOp[] }[];
+};
+
+/** History grouping for a comment or custom-node write: frames of one group share one undo step. */
+export interface PackageWriteOptions {
+  /** The store token of the commit's history group, as `commitReviewOps` hands it over. */
+  readonly historyToken?: HistoryGroup;
+}
 
 /**
  * One open document: the canonical tree, and the only write path into it.
@@ -156,6 +173,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
   /**
+   * {@link save} in steps a caller can pause between. The package is captured at the call, so
+   * the bytes describe the document as it was then, whatever happens between steps.
+   */
+  saveSteps(): Generator<void, Uint8Array>;
+  /**
    * The resolved header/footer parts of the section, by variant (phase 2).
    *
    * Returns the FINAL section's effective parts after OOXML inheritance. Prefer
@@ -192,6 +214,16 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * into documents that never render a character in them.
    */
   renderedFontFamilies(): readonly string[];
+  /**
+   * Font families named by a `w:sym/@w:font`, over the same roots
+   * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
+   *
+   * Separate from both other answers on purpose. It is not a DECLARATION, so it does not
+   * join `documentFonts`, and it is not a face TEXT renders in, so the substitution notice
+   * must not report it — but a font resolver has to hear about it, or an app cannot supply
+   * the face a private-use glyph needs.
+   */
+  symbolFontFamilies(): readonly string[];
   /**
    * Whether the document puts any literal character on a page, over the same roots
    * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
@@ -298,7 +330,8 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     date?: string,
     scope?: StoryScope,
     /** Binds id allocation to one actor, so two peers cannot mint the same comment id. */
-    actorId?: string
+    actorId?: string,
+    options?: PackageWriteOptions
   ): string | null;
   /**
    * Resolve a comment thread, or reopen it. False when the document holds no such comment.
@@ -307,7 +340,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * `commentsExtended.xml`, a part a document with no thread does not have, so the state and the
    * part that records it commit together.
    */
-  setCommentResolved(commentId: string, resolved: boolean): boolean;
+  setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
   /**
    * Delete a comment thread outright — body, thread state and story markers.
    *
@@ -316,7 +349,12 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * shared notes part. False when the document holds no such comment, or when the removal was
    * refused.
    */
-  deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+  deleteComment(
+    commentId: string,
+    scope?: StoryScope,
+    noteId?: number,
+    options?: PackageWriteOptions
+  ): boolean;
   /**
    * Delete several comment objects as one package transaction and one undo unit.
    *
@@ -326,7 +364,8 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   deleteComments(
     comments: readonly { readonly commentId: string; readonly parentCommentId?: string }[],
     scope?: StoryScope,
-    noteId?: number
+    noteId?: number,
+    options?: PackageWriteOptions
   ): boolean;
   /**
    * Insert a custom node, with the payload it carries, as ONE transaction.
@@ -339,7 +378,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * to live in its `w:tag` needs.
    */
   /** `scope` names the story the paragraph is in, and defaults to the body. */
-  insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+  insertCustomNode(
+    write: InsertCustomNodeWrite,
+    scope?: StoryScope,
+    options?: PackageWriteOptions
+  ): CustomNodeWriteResult;
   /**
    * Remove a custom node and, in the same transaction, the payload it bound.
    *
@@ -360,15 +403,19 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    */
   sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
   /**
-   * Every occurrence of `query` in the BODY story, in document order, addressed in the
-   * same offset vocabulary the tree ops and the surface selection use — so a match can be
-   * handed straight to `setSelection` without re-deriving anything.
+   * Every occurrence of `query` across editable stories, in navigation order. Each match uses
+   * the same offset vocabulary as tree operations and surface selections.
    *
-   * Memoized one deep, keyed on the revision AND the question asked: a find panel asks the
+   * Memoized one deep, keyed on the package revision AND the question asked: a find panel asks the
    * same question on every tick, and a different query replaces the entry rather than
    * growing a cache the session would have to bound.
    */
   findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+  /** Many queries in one walk of the document, one result per query in the same order. */
+  findText(
+    queries: readonly string[],
+    options?: DocumentSearchOptions
+  ): readonly DocumentSearchResult[];
   /**
    * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
    * deobfuscated — the only font source that needs neither a substitute nor a network.

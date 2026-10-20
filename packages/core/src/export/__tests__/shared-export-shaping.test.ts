@@ -127,7 +127,14 @@ test('shares font admission and HarfBuzz initialization across repeated concurre
   expect(first.producer).toMatch(/shaping:sha256:[0-9a-f]{64}/);
   expect(first.producer).toContain('fallback:fixed:char-width=6:line-height=14');
   expect(first.producer).toContain('producer:1');
-  expect(counters).toEqual({ copies: 1, hashes: 1, admissions: 1 });
+  expect(counters.copies).toBe(1);
+  expect(counters.hashes).toBe(1);
+  // Byte-identical fonts may already be admitted by another exporter in this process.
+  // Concurrent acquisition must perform at most one admission, and reuse adds none.
+  expect(counters.admissions).toBeLessThanOrEqual(1);
+  const admissions = counters.admissions;
+  expect(await acquireSharedExportShaping(prepared, instrumentation)).toBe(first);
+  expect(counters.admissions).toBe(admissions);
 });
 
 test('uses one aggregate-bounded shaper across process-wide exporter substrates', async () => {
@@ -167,6 +174,7 @@ test('binds browser and shared exporters to one fingerprinted execution policy',
   const cacheOnlyVariant = Object.freeze({
     ...LAYOUT_HARFBUZZ_SHAPER_POLICY,
     maxCachedShapes: 1,
+    maxCachedFontBytes: 1,
   }) satisfies LayoutHarfBuzzShaperPolicy;
   const refusalVariant = Object.freeze({
     ...LAYOUT_HARFBUZZ_SHAPER_POLICY,

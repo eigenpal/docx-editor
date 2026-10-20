@@ -211,11 +211,13 @@ describe('the end of a soft-wrapped line', () => {
     expect(lines[0]!.range.end).toBe(75);
   });
 
-  test('the space that caused the wrap is not part of the line the caret can reach', () => {
-    // Landing on it would draw the caret at the start of the NEXT line, which reads as the
-    // click having missed entirely.
-    expect(lineEndOffset(layout, lines[0]!)).toBe(74);
-    expect(hit(layout, 9999, 5)!.position.offset).toBe(74);
+  test('past the end, the caret lands after the wrap space and stays on the clicked line', () => {
+    // The offset after the space also starts the next line. The hit names the clicked line,
+    // which the caret keeps as its affinity, so the click does not appear to miss.
+    expect(lineEndOffset(layout, lines[0]!)).toBe(75);
+    const landed = hit(layout, 9999, 5)!;
+    expect(landed.position.offset).toBe(75);
+    expect(landed.caret.lineId).toBe(lines[0]!.id);
   });
 
   test('the LAST line of a paragraph has no wrap space to discount', () => {
@@ -422,9 +424,14 @@ describe('a press always resolves, whatever the table holds', () => {
   // A click has to put the caret somewhere. Every case here produced NO position at all,
   // which the pointer lane turns into a dead press: no caret, no focus, nothing.
   test('a page of nothing but vertical-merge continuations is still clickable', () => {
-    const rows = Array.from({ length: 120 }, () => tr(tc('', '<w:tcPr><w:vMerge/></w:tcPr>'))).join(
-      ''
-    );
+    // Continuation-only rows have no implicit text height. Author a row height so this
+    // hit-test fixture still exercises pages containing only continuation cells.
+    const rows = Array.from({ length: 120 }, () =>
+      tr(
+        tc('', '<w:tcPr><w:vMerge/></w:tcPr>'),
+        '<w:trPr><w:trHeight w:val="280" w:hRule="exact"/></w:trPr>'
+      )
+    ).join('');
     const layout = lay(
       `<w:tbl>${tr(tc(p('origin'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>'))}${rows}</w:tbl>`
     );

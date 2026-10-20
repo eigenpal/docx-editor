@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Release checks do not exercise published collaboration clients.",
+  "after": "Release checks require compatibility decisions and published-client evidence.",
+  "reason": "This change adds policy, tests, and CI without changing document APIs or the collaboration format.",
+  "tests": ["scripts/collaboration/policy.test.ts"],
+  "changeset": null,
+  "migration": null
+}

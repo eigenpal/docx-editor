@@ -82,7 +82,23 @@ export interface ShapeInput {
   /** Exact UAX #9 embedding/isolate level; direction is its parity projection. */
   readonly bidiLevel: number;
   readonly environment: ShapingEnvironment;
+  /**
+   * Logical text around `text` that the shaper reads for contextual forms but never
+   * shapes: HarfBuzz pre- and post-context. A word split across two formatting runs joins
+   * across the split only when each half sees the other's letters. At most
+   * {@link MAX_SHAPING_CONTEXT} UTF-16 units each; glyphs and clusters cover `text` alone.
+   */
+  readonly context?: ShapingContext;
 }
+
+/** Pre- and post-context for one shaping call. See {@link ShapeInput.context}. @public */
+export interface ShapingContext {
+  readonly before: string;
+  readonly after: string;
+}
+
+/** Longest context on either side, in UTF-16 units. Joining needs only the nearest letters. @public */
+export const MAX_SHAPING_CONTEXT = 16;
 
 /**
  * One positioned glyph.
@@ -93,6 +109,8 @@ export interface ShapeInput {
  */
 export interface ShapedGlyph {
   readonly id: number;
+  /** Optional synthetic glyph-size factor; positions and advances already include it. */
+  readonly drawScale?: number;
   /** UTF-16 text offset identifying the cluster that produced this glyph. */
   readonly cluster: number;
   /** Pen origin before this glyph's shaping offsets, in fixed-point run coordinates. */
@@ -170,6 +188,19 @@ export interface ShapedRun {
   readonly clusters: readonly ShapedCluster[];
   readonly fontSpans: readonly ShapedFontSpan[];
   readonly metrics: ShapedVerticalMetrics;
+  /**
+   * The same horizontal advances as `glyphs[i].advanceX`, in the same fixed-point units, but
+   * BEFORE the per-glyph rounding to the fixed-point grid. Parallel to `glyphs`.
+   *
+   * Measurement and line breaking read `advanceX` and must keep doing so: pagination is decided
+   * on those numbers, and two runs shaped identically have to compare equal. A painter that
+   * gives every glyph its own absolute position sums the advances instead, and a sum of ROUNDED
+   * advances drifts by up to half a fixed-point unit per glyph — an error that only grows along
+   * a line. Summing these and rounding once, at the position actually written, does not.
+   *
+   * Absent on runs an assembly path cannot state exactly; a reader falls back to `originX`.
+   */
+  readonly exactAdvancesX?: readonly number[];
 }
 
 /**
@@ -206,6 +237,24 @@ export interface ShapedRunComparatorInputs {
  */
 export interface TextShaper {
   shape(input: ShapeInput): ShapedRun;
+}
+
+const facePreservingShapers = new WeakSet<TextShaper>();
+
+/**
+ * Record that `shaper` shapes every run in its environment's own face: with no fallback order,
+ * each span of its runs carries that face. A shaper that substitutes a face for text the face
+ * cannot draw (the export glyph fallback) is never marked, and neither is a host's own shaper.
+ * @internal
+ */
+export function markFacePreservingShaper<T extends TextShaper>(shaper: T): T {
+  facePreservingShapers.add(shaper);
+  return shaper;
+}
+
+/** Whether `shaper` was marked by {@link markFacePreservingShaper}. @internal */
+export function preservesShapingFace(shaper: TextShaper): boolean {
+  return facePreservingShapers.has(shaper);
 }
 
 /**
@@ -299,6 +348,8 @@ const freezeSubstitution = (
     : undefined;
 
 const shapingValidatedFonts = new WeakSet<object>();
+const createdEnvironments = new WeakSet<object>();
+const environmentFingerprints = new WeakMap<object, string>();
 
 const assertFont = (font: ResolvedFont): void => {
   assertValidatedResolvedFont(font);
@@ -342,6 +393,9 @@ const fontFingerprintInputs = (font: ResolvedFont): FontFingerprintInputs => {
  * @throws TypeError on a malformed tag, name, or axis value.
  */
 export const createShapingEnvironment = (input: ShapingEnvironmentInput): ShapingEnvironment => {
+  // An environment this function built is deeply frozen, so validating it again yields an equal
+  // object. Shaping re-enters here several times per call; the pass-through keeps that free.
+  if (createdEnvironments.has(input)) return input as ShapingEnvironment;
   assertNonBlank(input.shapingLibrary.name, 'shaping library name');
   assertNonBlank(input.shapingLibrary.version, 'shaping library version');
   assertNonBlank(input.unicodeDataVersion, 'Unicode data version');
@@ -378,7 +432,7 @@ export const createShapingEnvironment = (input: ShapingEnvironmentInput): Shapin
     if (seenFallbacks.has(key)) throw new TypeError('fallback order contains a duplicate font');
     seenFallbacks.add(key);
   }
-  return Object.freeze({
+  const environment: ShapingEnvironment = Object.freeze({
     font,
     variationAxes: sortedNumericRecord(input.variationAxes, 'variation axis', false),
     shapingLibrary: Object.freeze({
@@ -395,6 +449,8 @@ export const createShapingEnvironment = (input: ShapingEnvironmentInput): Shapin
     fixedPointScale: input.fixedPointScale,
     roundingMode: input.roundingMode,
   });
+  createdEnvironments.add(environment);
+  return environment;
 };
 
 /**
@@ -429,8 +485,14 @@ export const shapingEnvironmentFingerprintInputs = (
 };
 
 /** Canonical serialization of every shaping variable, including byte hash and provenance. */
-export const shapingEnvironmentFingerprint = (environment: ShapingEnvironmentInput): string =>
-  JSON.stringify(shapingEnvironmentFingerprintInputs(environment));
+export const shapingEnvironmentFingerprint = (environment: ShapingEnvironmentInput): string => {
+  const cached = environmentFingerprints.get(environment);
+  if (cached !== undefined) return cached;
+  const fingerprint = JSON.stringify(shapingEnvironmentFingerprintInputs(environment));
+  // Only a frozen environment built here can keep its fingerprint; a caller's input may change.
+  if (createdEnvironments.has(environment)) environmentFingerprints.set(environment, fingerprint);
+  return fingerprint;
+};
 
 const assertIndex = (value: number, name: string): void => {
   if (!Number.isSafeInteger(value) || value < 0) {
@@ -518,6 +580,10 @@ export const createShapedRun = (
       offsetX: checkedFixedPoint(glyph.offsetX),
       offsetY: checkedFixedPoint(glyph.offsetY),
       outline,
+      // A synthesized small-caps glyph already has its advance scaled; the painter scales the
+      // outline by this. Dropping it here painted full-size letters on 0.8 advances after a
+      // mixed-face fallback rebuilt the run.
+      ...(glyph.drawScale !== undefined ? { drawScale: glyph.drawScale } : {}),
     });
   });
   const fontSpans = input.fontSpans.map((span) => {
@@ -554,15 +620,11 @@ export const createShapedRun = (
     throw new RangeError('Font spans must cover every glyph exactly once');
   }
   const clusters = input.clusters.map((cluster) => {
-    for (const [name, value] of [
-      ['cluster text start', cluster.textStart],
-      ['cluster text end', cluster.textEnd],
-      ['cluster glyph start', cluster.glyphStart],
-      ['cluster glyph end', cluster.glyphEnd],
-      ['cluster font span', cluster.fontSpan],
-    ] as const) {
-      assertIndex(value, name);
-    }
+    assertIndex(cluster.textStart, 'cluster text start');
+    assertIndex(cluster.textEnd, 'cluster text end');
+    assertIndex(cluster.glyphStart, 'cluster glyph start');
+    assertIndex(cluster.glyphEnd, 'cluster glyph end');
+    assertIndex(cluster.fontSpan, 'cluster font span');
     if (
       cluster.textEnd <= cluster.textStart ||
       cluster.textEnd > input.text.length ||
@@ -576,9 +638,13 @@ export const createShapedRun = (
       throw new RangeError('Shaped cluster does not belong to its declared font span');
     }
     return Object.freeze({
-      ...cluster,
+      textStart: cluster.textStart,
+      textEnd: cluster.textEnd,
+      glyphStart: cluster.glyphStart,
+      glyphEnd: cluster.glyphEnd,
       advance: checkedFixedPoint(cluster.advance),
       caretEdges: Object.freeze(cluster.caretEdges.map(checkedFixedPoint)),
+      fontSpan: cluster.fontSpan,
     });
   });
   const metrics = Object.freeze({
@@ -586,6 +652,17 @@ export const createShapedRun = (
     descent: checkedFixedPoint(input.metrics.descent),
     lineGap: checkedFixedPoint(input.metrics.lineGap),
   });
+  // Refused rather than dropped: an assembly path that reorders or regroups glyphs and forgets
+  // to say so would otherwise paint one glyph's advance under another's.
+  const exact = input.exactAdvancesX;
+  if (exact !== undefined) {
+    if (exact.length !== glyphs.length) {
+      throw new RangeError('Exact advances must be parallel to the shaped glyphs');
+    }
+    if (exact.some((value) => !Number.isFinite(value))) {
+      throw new RangeError('Exact advance must be a finite number');
+    }
+  }
   return Object.freeze({
     text: input.text,
     direction: input.direction,
@@ -594,6 +671,7 @@ export const createShapedRun = (
     clusters: Object.freeze(clusters),
     fontSpans: Object.freeze(fontSpans),
     metrics,
+    ...(exact === undefined ? {} : { exactAdvancesX: Object.freeze([...exact]) }),
   });
 };
 

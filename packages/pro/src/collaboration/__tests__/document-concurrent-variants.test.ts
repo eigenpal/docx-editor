@@ -58,6 +58,23 @@ function bodyText(peer: Peer): string {
   return texts.join('');
 }
 
+/** Each body paragraph as `<pPr and its jc/ind children>|<text>`. */
+function paragraphDump(peer: Peer): string[] {
+  const out: string[] = [];
+  walk(peer.store.bodyStore().part.root, (node) => {
+    if (node.kind !== 'paragraph') return;
+    let text = '';
+    const props: string[] = [];
+    walk(node, (child) => {
+      if (child.kind === 'textValue') text += child.value;
+      else if (child.localName === 'pPr') props.push('pPr');
+      else if (child.localName === 'jc' || child.localName === 'ind') props.push(child.localName);
+    });
+    out.push(`${props.join(',')}|${text}`);
+  });
+  return out;
+}
+
 function hasElement(peer: Peer, localName: string): boolean {
   let present = false;
   walk(peer.store.bodyStore().part.root, (node) => {
@@ -214,6 +231,38 @@ describe('concurrent variant edits converge', () => {
     harness.expectConverged(alice, bob);
   });
 
+  test('making a drawing inline while a peer wraps its anchor keeps a valid drawing', async () => {
+    // The placement element is one record whose kind is inline or anchor. One peer makes it
+    // inline; the other gives the anchor a new wrap. Merged, an inline drawing held a wrap
+    // element, which the schema refuses, and every replica stopped applying updates.
+    const { alice, bob, pause, resume } = await harness.pair(proseDoc());
+    const inserted = await alice.store.insertImage(BODY, {
+      paragraphId: harness.paragraphIdAt(alice, 0),
+      offset: 0,
+      bytes: PNG,
+      mime: 'image/png',
+      widthPoints: 12,
+      heightPoints: 12,
+      decodePort,
+      expectedPackageRevision: alice.store.packageRevision,
+    });
+    if (!inserted.ok) throw new Error(inserted.detail ?? inserted.reason);
+    alice.port.flushPendingJournals();
+    harness.apply(alice, [
+      { op: 'setDrawingWrap', drawingNodeId: drawingId(alice), wrap: 'square' },
+    ]);
+    pause();
+    harness.apply(alice, [
+      { op: 'setDrawingWrap', drawingNodeId: drawingId(alice), wrap: 'inline' },
+    ]);
+    harness.apply(bob, [{ op: 'setDrawingWrap', drawingNodeId: drawingId(bob), wrap: 'tight' }]);
+    resume();
+    for (const peer of [alice, bob]) {
+      expect(peer.room.session.statusSnapshot().status).toBe('ready');
+    }
+    harness.expectConverged(alice, bob);
+  });
+
   test('a shared paragraph property and a concurrent text edit', async () => {
     // Different concerns on one paragraph — a property rebuild and a text insert. They
     // converge with the text intact (jc present, the inserted X kept, no duplication).
@@ -236,10 +285,9 @@ describe('concurrent variant edits converge', () => {
     );
   });
 
-  test('same-paragraph property rebuilds are a known non-convergence (#579)', async () => {
-    // Pinning the current boundary, not endorsing it: two peers rebuilding the SAME `w:pPr`
-    // concurrently each realign to their own edit and escalate to `error`. When #579 makes
-    // this converge, this expectation flips and the assertion is updated.
+  test('same-paragraph property rebuilds converge (#579)', async () => {
+    // Two peers rebuilding the SAME `w:pPr` each write one `w:ind`. Every replica shows the
+    // first in shared child order, so both stay `ready` and agree on one indent.
     const { alice, bob, pause, resume } = await harness.pair(proseDoc());
     pause();
     harness.apply(alice, [
@@ -257,12 +305,73 @@ describe('concurrent variant edits converge', () => {
       },
     ]);
     resume();
-    // Pin the reason too, so this cannot start passing on some unrelated future error.
-    const aliceSnap = alice.room.session.statusSnapshot();
-    const bobSnap = bob.room.session.statusSnapshot();
-    expect(aliceSnap.status).toBe('error');
-    expect(bobSnap.status).toBe('error');
-    expect(aliceSnap.reason?.code).toBe('remote-apply-failed');
-    expect(bobSnap.reason?.code).toBe('remote-apply-failed');
+    expect(alice.room.session.statusSnapshot().status).toBe('ready');
+    expect(bob.room.session.statusSnapshot().status).toBe('ready');
+    harness.expectConverged(alice, bob);
   });
+
+  for (const formatted of [true, false]) {
+    const label = formatted ? 'with paragraph properties' : 'of plain paragraphs';
+    test(`same-position multi-paragraph pastes ${label} converge (#579)`, async () => {
+      // Each paste rebuilds the host paragraph with the fragment's first paragraph. Two peers
+      // pasting at one offset both rebuild that paragraph from one snapshot.
+      const fragment = (author: string) =>
+        zipDocument(
+          (formatted ? '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' : '<w:p>') +
+            `<w:r><w:t>${author} one</w:t></w:r></w:p>` +
+            (formatted ? '<w:p><w:pPr><w:ind w:start="720"/></w:pPr>' : '<w:p>') +
+            `<w:r><w:t>${author} two</w:t></w:r></w:p>`
+        );
+      const paste = (peer: Peer, author: string) => {
+        const pasted = peer.store.applyFragmentPaste(BODY, {
+          paragraphId: harness.paragraphIdAt(peer, 0),
+          offset: 5,
+          fragmentBytes: fragment(author),
+          lastMarkCovered: true,
+        });
+        if (!pasted.ok) throw new Error(pasted.detail ?? pasted.reason);
+        peer.port.flushPendingJournals();
+      };
+      const { alice, bob, pause, resume } = await harness.pair(proseDoc());
+      pause();
+      paste(alice, 'Alice');
+      paste(bob, 'Bob');
+      resume();
+      expect(alice.room.session.statusSnapshot().status).toBe('ready');
+      expect(bob.room.session.statusSnapshot().status).toBe('ready');
+      harness.expectConverged(alice, bob);
+      for (const peer of [alice, bob]) {
+        const text = bodyText(peer);
+        for (const piece of ['Alice one', 'Alice two', 'Bob one', 'Bob two', 'Alpha']) {
+          expect(text).toContain(piece);
+        }
+        expect(text).toContain('bravo canvas delta editor');
+        expect(text).toContain('Second paragraph');
+        // One property container per paragraph, and nothing lost or doubled.
+        const paragraphs = paragraphDump(peer);
+        for (const paragraph of paragraphs) {
+          expect(
+            paragraph
+              .split('|')[0]!
+              .split(',')
+              .filter((name) => name === 'pPr').length
+          ).toBeLessThanOrEqual(1);
+        }
+        expect(text.split('Alpha').length).toBe(2);
+        expect(text.split('bravo').length).toBe(2);
+        // The host text stays first, both first pasted paragraphs follow it in one order, and
+        // the head paragraph keeps one of the two pasted formats.
+        expect(['AlphaAlice oneBob one', 'AlphaBob oneAlice one']).toContain(
+          paragraphs[0]!.split('|')[1]!
+        );
+        if (formatted) expect(paragraphs[0]!.split('|')[0]).toBe('pPr,jc');
+      }
+      // Both peers can still edit and replicate after the merge.
+      harness.apply(alice, [
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 0, text: '!' },
+      ]);
+      harness.expectConverged(alice, bob);
+      expect(bodyText(bob).startsWith('!')).toBe(true);
+    });
+  }
 });

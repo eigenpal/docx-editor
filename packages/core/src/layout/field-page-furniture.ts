@@ -11,9 +11,18 @@
 // (`field-projection` re-exports these so existing importers keep one import site), so the two
 // shared types live here rather than there.
 
-import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
+import type {
+  AllowlistedPageField,
+  AllowlistedPageFieldMatch,
+  StoryPageFieldNeeds,
+} from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
 import { formatNumericPicture } from './field-numeric-picture.ts';
+import {
+  formatPageFieldNumber,
+  isPageFieldNumberFormat,
+  type PageFieldSwitches,
+} from './field-page-switches.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type {
   BlockFragmentRecord,
@@ -23,7 +32,16 @@ import type {
   SemanticLayout,
   StyleSpanRecord,
 } from './semantic-records.ts';
-import { isOutOfFlowTableFragment } from './table-float-position.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
+import {
+  completedStories,
+  deferLiveStory,
+  furnitureWaits,
+  pageFieldContextOf,
+  sameFieldPageContext,
+  storyStale,
+  strippedStoryProjections,
+} from './published-story-projections.ts';
 
 /**
  * Placeholder a body PAGE/NUMPAGES/SECTIONPAGES atom paints during measurement.
@@ -44,8 +62,8 @@ export const PAGE_FIELD_PLACEHOLDER = '0';
 /**
  * What the BODY flow knows about page numbering while it MEASURES a page-field placeholder.
  *
- * Carried instead of a bare boolean because the placeholder and the value it is replaced by
- * have to agree about whether the picture applies at all, and only the section knows that.
+ * The section's `w:pgNumType/@w:fmt` binds a PAGE field with no `\#` picture and no `\*`
+ * number format. A field that states either renders through it on every section.
  */
 export interface BodyPageFieldContext {
   /** The section's `w:pgNumType/@w:fmt`; absent when the section authors none. */
@@ -53,43 +71,46 @@ export interface BodyPageFieldContext {
 }
 
 /**
- * Whether a `\#` picture renders a `kind` value under `format`.
+ * The placeholder a body page field with `switches` should be MEASURED at.
  *
- * ONE decision, read by the placeholder and by the value, or the two disagree about how wide
- * the field is: a non-decimal page format has no digits for a numeric picture to place, and a
- * placeholder measured through the picture would then reserve a width the roman numeral that
- * replaces it never fills.
- *
- * `w:pgNumType/@w:fmt` binds PAGE ALONE. NUMPAGES and SECTIONPAGES are counts, not page
- * numbers, and stay decimal whatever the section's format says — so their picture applies
- * either way, and gating them on the format would measure `{ NUMPAGES \# "000" }` at one digit
- * and then paint three.
+ * The switches decide how wide the substituted value is, and finalize swaps the text in
+ * without re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it
+ * at one would overprint whatever follows it on the line. Rendering zero through the picture
+ * gives a placeholder the same shape as every value it can be replaced by — `0#` measures
+ * `00`, the width of `02` — and a number format measures its rendering of one, so
+ * `\* ArabicDash` reserves `- 1 -`. A field with neither keeps the historical single digit.
  */
-export function numericPictureApplies(
-  kind: AllowlistedPageField,
-  format: string | undefined
-): boolean {
-  return kind !== 'PAGE' || !format || format === 'decimal';
+export function pageFieldPlaceholder(switches: PageFieldSwitches = {}): string {
+  let shape: string;
+  if (switches.numberFormat !== undefined) {
+    shape =
+      switches.numberFormat === 'decimal'
+        ? PAGE_FIELD_PLACEHOLDER
+        : formatPageFieldNumber(1, switches.numberFormat);
+  } else if (switches.picture === undefined) {
+    return PAGE_FIELD_PLACEHOLDER;
+  } else {
+    shape = formatNumericPicture(0, switches.picture) ?? PAGE_FIELD_PLACEHOLDER;
+  }
+  // No-break spaces keep the placeholder one word. A space would split it into several spans
+  // that all carry the same field marker, and finalize would paint the value into each one.
+  return shape.replaceAll(' ', NO_BREAK_SPACE);
 }
 
+const NO_BREAK_SPACE = '\u00a0';
+
 /**
- * The placeholder a body page field with `picture` should be MEASURED at.
- *
- * A picture decides how wide the substituted value is, and finalize swaps the text in without
- * re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it at one
- * would overprint whatever follows it on the line. Rendering zero through the picture gives a
- * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
- * width of `02` — while a pictureless field keeps the historical single digit.
+ * The finalize marker for a body page field: its kind and only the switches it states.
  */
-export function pageFieldPlaceholder(
+export function pageFieldMarker(
   kind: AllowlistedPageField,
-  picture: string | undefined,
-  format?: string
-): string {
-  if (picture === undefined || !numericPictureApplies(kind, format)) {
-    return PAGE_FIELD_PLACEHOLDER;
-  }
-  return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
+  switches: PageFieldSwitches
+): AllowlistedPageFieldMatch {
+  return {
+    kind,
+    ...(switches.picture !== undefined ? { picture: switches.picture } : {}),
+    ...(switches.numberFormat !== undefined ? { numberFormat: switches.numberFormat } : {}),
+  };
 }
 
 /**
@@ -97,18 +118,24 @@ export function pageFieldPlaceholder(
  *
  * `pageNumber` is the displayed PAGE value after section `w:pgNumType/@w:start` (1-based).
  * `pageCount` is document NUMPAGES. `sectionPageCount` is SECTIONPAGES for the attached
- * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE.
+ * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE. `sheetNumber` is
+ * the 1-based physical sheet, which a restart does not renumber: it decides which margin an
+ * `inside` or `outside` header frame takes.
  *
  * A new field here must also join `sameFieldPageContext` below, or finalize compares two
  * contexts that differ in it as equal and keeps a reused story's stale text.
  */
 export interface FieldPageContext {
+  /** Local character-style results for one physical page. @internal */
+  readonly characterStyleValues?: ReadonlyMap<string, string>;
   readonly pageNumber: number;
   readonly pageCount: number;
   /** SECTIONPAGES; defaults to `pageCount` when omitted (single-section callers). */
   readonly sectionPageCount?: number;
   /** Authored ST_NumberFormat for PAGE; absent → decimal. */
   readonly format?: string;
+  /** 1-based physical sheet; absent → `pageNumber` (single-section callers). */
+  readonly sheetNumber?: number;
 }
 
 /**
@@ -130,33 +157,38 @@ export function formatPageNumber(value: number, format: string | undefined): str
 /**
  * Digit / formatted string for an allowlisted page field under a page context.
  *
- * `picture` is the field's `\#` switch. It renders the computed value and outranks nothing
- * else: an unusable picture falls back to the plain number, never to the cached result. A
- * NON-DECIMAL `w:pgNumType/@w:fmt` on PAGE wins instead, because a roman or alphabetic page
- * number has no digits for a numeric picture to place. An authored `w:fmt="decimal"` — which
- * Word writes — is decimal, so the picture still applies.
+ * `switches` are the field's own. A `\*` number format renders the value first; the parser
+ * already dropped a `\#` picture it outranks. Otherwise a `\#` picture renders it, and an
+ * unusable picture falls back to the plain number, never to the cached result. Either one
+ * outranks the section's `w:pgNumType/@w:fmt`, which binds a PAGE field without switches
+ * only. NUMPAGES and SECTIONPAGES are counts and ignore the section format.
  */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
   context: FieldPageContext,
-  picture?: string
+  switches: PageFieldSwitches = {}
 ): string {
-  if (kind === 'PAGE') {
-    if (picture !== undefined && numericPictureApplies(kind, context.format)) {
-      const painted = formatNumericPicture(context.pageNumber, picture);
-      if (painted !== null) return painted;
-    }
-    return formatPageNumber(context.pageNumber, context.format);
-  }
   const value =
-    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
-  // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
+    kind === 'PAGE'
+      ? context.pageNumber
+      : kind === 'NUMPAGES'
+        ? context.pageCount
+        : (context.sectionPageCount ?? context.pageCount);
+  // Layout-derived values are already bounded by pagination; still refuse non-finite junk.
   if (!Number.isFinite(value) || value < 0) return '';
-  if (picture !== undefined) {
-    const painted = formatNumericPicture(value, picture);
+  if (switches.numberFormat !== undefined) {
+    return formatPageFieldNumber(value, switches.numberFormat);
+  }
+  if (switches.picture !== undefined) {
+    const painted = formatNumericPicture(value, switches.picture);
     if (painted !== null) return painted;
   }
-  return formatDecimal(Math.floor(value));
+  if (kind !== 'PAGE') return formatDecimal(Math.floor(value));
+  // A roman or letter section format follows the page-field rules, not the list-marker ones:
+  // thousands repeat `M`, letters repeat one letter, and zero is a space.
+  return context.format !== undefined && isPageFieldNumberFormat(context.format)
+    ? formatPageFieldNumber(value, context.format)
+    : formatPageNumber(value, context.format);
 }
 
 /**
@@ -169,9 +201,11 @@ export interface PageFieldSource {
   readonly format?: string;
 }
 
-/** True when any allowlisted page field is present. */
+/** True when any allowlisted page field is present, or the story places by page parity. */
 export function storyNeedsPageFields(needs: StoryPageFieldNeeds): boolean {
-  return needs.hasPage || needs.hasNumPages || needs.hasSectionPages;
+  return (
+    needs.hasPage || needs.hasNumPages || needs.hasSectionPages || needs.hasPageParity === true
+  );
 }
 
 /**
@@ -195,6 +229,8 @@ export function fieldPageContextToken(
   }
   if (needs.hasNumPages) parts.push(`n${context.pageCount}`);
   if (needs.hasSectionPages) parts.push(`s${context.sectionPageCount ?? context.pageCount}`);
+  // The sheet's parity, not the PAGE value's: a restart shows one value on sheets of both.
+  if (needs.hasPageParity) parts.push(`o${(context.sheetNumber ?? context.pageNumber) & 1}`);
   return `|fld:${parts.join('/')}`;
 }
 
@@ -290,7 +326,7 @@ export function summarizeFlushedPage(
   let usedBottom = regionTop;
   let hasBodyPageFields = false;
   for (const fragment of fragments) {
-    if (!isOutOfFlowTableFragment(fragment)) {
+    if (!isOutOfFlowFragment(fragment)) {
       usedBottom = Math.max(usedBottom, fragment.box.y + fragment.box.height);
     }
     if (!hasBodyPageFields && blockHasBodyPageField(fragment)) hasBodyPageFields = true;
@@ -462,15 +498,22 @@ export function pageRefAssignmentToken(pages: readonly PageRecord[]): string {
  * already paints. The span's model `range` stays its reserved one-unit width whatever the
  * substituted text length is — paint and the offset accounting clamp to that width, so a
  * multi-digit page number never lengthens the model.
+ *
+ * A page-field placeholder can still reach layout as several spans (a font or script change
+ * inside a picture's literal text, or a break inside it). They all carry the same marker, so
+ * only the first paints the value and the rest paint nothing. `previous` is the last span of
+ * the line before, so a placeholder that continues onto this line is recognized too.
  */
 function substituteBodyPageFieldLine(
   line: LineRecord,
   context: FieldPageContext,
-  pageRefs?: PageRefSubstitution
+  pageRefs: PageRefSubstitution | undefined,
+  previous: StyleSpanRecord | undefined
 ): LineRecord {
   let spans: StyleSpanRecord[] | null = null;
   for (let index = 0; index < line.spans.length; index += 1) {
     const span = line.spans[index]!;
+    const before = index > 0 ? line.spans[index - 1] : previous;
     const pageRef = span.fieldAtom?.pageRef;
     if (pageRef) {
       // The target never placed (deleted target, or a bookmark in furniture): keep the cache.
@@ -496,12 +539,23 @@ function substituteBodyPageFieldLine(
     }
     const marker = span.fieldAtom?.pageField;
     if (!marker) continue;
-    const text = projectPageFieldValue(marker.kind, context, marker.picture);
+    const text = samePageFieldAtom(before, span)
+      ? ''
+      : projectPageFieldValue(marker.kind, context, marker);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };
   }
   return spans ? { ...line, spans } : line;
+}
+
+/** True when `before` is an earlier piece of the same body page-field atom as `span`. */
+function samePageFieldAtom(before: StyleSpanRecord | undefined, span: StyleSpanRecord): boolean {
+  return (
+    before?.fieldAtom?.pageField !== undefined &&
+    before.range.paragraphId === span.range.paragraphId &&
+    before.range.start === span.range.start
+  );
 }
 
 /**
@@ -533,7 +587,8 @@ export function substituteBodyPageFields(
       let mutatedLines: LineRecord[] | null = null;
       for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex += 1) {
         const line = block.lines[lineIndex]!;
-        const nextLine = substituteBodyPageFieldLine(line, context, pageRefs);
+        const previous = block.lines[lineIndex - 1]?.spans.at(-1);
+        const nextLine = substituteBodyPageFieldLine(line, context, pageRefs, previous);
         if (nextLine === line) continue;
         if (!mutatedLines) mutatedLines = block.lines.slice();
         mutatedLines[lineIndex] = nextLine;
@@ -564,63 +619,12 @@ export function substituteBodyPageFields(
   return next ?? blocks;
 }
 
-/** Story projector retained past finalize, with the context its published text was projected under. */
-interface RetainedStoryProjection {
-  readonly context: FieldPageContext;
-  readonly projector: (context: FieldPageContext) => HeaderFooterStoryRecord;
-  /**
-   * Cumulative sheet-stack Y offset between where the projector places the story and where
-   * the published record sits. A NUMBER, not a composed closure: a sheet that survives many
-   * tail shifts folds each shift into this one value, so re-projection stays one projector
-   * call plus one translation however long the reuse lineage gets.
-   */
-  readonly dy: number;
-}
-
-/**
- * Projectors of PUBLISHED story records, keyed on the stripped record finalize minted.
- *
- * Finalize strips `pageFieldProjector` from what it publishes, but incremental layout reuses
- * published sheets whole: a later pass that changes the page count hands those stripped
- * records straight back to finalize, which then has nothing to re-project NUMPAGES through —
- * the reused footer kept the old `of Y` text. Retaining the projector on the side (with the
- * context it last ran under) lets finalize keep an unchanged-context story by identity and
- * re-project it when the pagination moved underneath it. Weak on the story record, so a story
- * that falls out of the layout takes its projector with it. The retained closure keeps its
- * minting pass's scope alive for as long as the sheet is reused — the same retention profile
- * the multi-section span cache already has for LIVE projectors on `previousRemapped` pages.
- *
- * INVARIANT: anything that CLONES a published field-bearing story record must carry this
- * entry onto the clone ({@link carryStrippedPageFieldProjection}) — a published story leaves
- * no data trace of its field needs, so an orphaned clone silently keeps stale text.
- * `remapPage` is the one cloner today.
- */
-const strippedStoryProjections = new WeakMap<HeaderFooterStoryRecord, RetainedStoryProjection>();
-
 /** Release incremental page-field projectors attached to an exported layout. */
 export function releasePageFieldProjectionState(layout: SemanticLayout): void {
   for (const page of Array.isArray(layout.pages) ? layout.pages : []) {
     if (page.header) strippedStoryProjections.delete(page.header);
     if (page.footer) strippedStoryProjections.delete(page.footer);
   }
-}
-
-/**
- * True when two projection contexts substitute identical values for every page field.
- *
- * Compares EVERY dimension of {@link FieldPageContext}, so it must grow in lockstep with
- * that interface: a context field this misses compares as "same context" and finalize keeps
- * a reused story's stale text. Needs-blind on purpose — finalize does not know which fields
- * a published story reads, so it re-projects on any moved dimension; the story layout's own
- * per-token cache absorbs the re-layout when the story's text did not actually change.
- */
-function sameFieldPageContext(a: FieldPageContext, b: FieldPageContext): boolean {
-  return (
-    a.pageNumber === b.pageNumber &&
-    a.pageCount === b.pageCount &&
-    (a.sectionPageCount ?? a.pageCount) === (b.sectionPageCount ?? b.pageCount) &&
-    a.format === b.format
-  );
 }
 
 /**
@@ -659,10 +663,43 @@ export function carryStrippedPageFieldProjection(
  * field — and then threw 555 of those fresh records away when the previous finalized
  * identities were restored. Same idiom as `publishedPageMemos` in `multi-section-layout.ts`.
  */
-const finalizedPageMemos = new WeakMap<
-  PageRecord,
-  { pageCount: number; pageRefToken: string; result: PageRecord }
->();
+const finalizedPageMemos = new WeakMap<PageRecord, FinalizedPageMemo[]>();
+
+interface FinalizedPageMemo {
+  readonly pageCount: number;
+  readonly pageRefToken: string;
+  readonly result: PageRecord;
+}
+
+/**
+ * Finalized answers kept per page. A footnote reserve search lays the body out several times
+ * for one edit, and its page count can alternate between rounds; with one answer per page,
+ * each round projected every sheet's furniture again under a count it had already seen.
+ */
+const FINALIZED_PER_PAGE = 3;
+
+function finalizedMemoOf(
+  page: PageRecord,
+  provisional: boolean,
+  pageCount: number,
+  pageRefToken: string
+): FinalizedPageMemo | undefined {
+  const memos = finalizedPageMemos.get(page);
+  if (!memos) return undefined;
+  // A provisional pass keeps whatever this page was last finalized as.
+  if (provisional) return memos[memos.length - 1];
+  return memos.find((memo) => memo.pageCount === pageCount && memo.pageRefToken === pageRefToken);
+}
+
+function rememberFinalized(page: PageRecord, memo: FinalizedPageMemo): void {
+  const memos = finalizedPageMemos.get(page);
+  if (!memos) {
+    finalizedPageMemos.set(page, [memo]);
+    return;
+  }
+  if (memos.length >= FINALIZED_PER_PAGE) memos.shift();
+  memos.push(memo);
+}
 
 /**
  * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES once the document page count is known.
@@ -672,10 +709,23 @@ const finalizedPageMemos = new WeakMap<
  * context — {@link PageFieldSource} when present (section restart + SECTIONPAGES + fmt), else the
  * physical 1-based index and the whole document as one section (empty-`pgNumType` behaviour).
  * Pages and stories with no page field are returned by identity.
+ *
+ * A `provisional` pass (one prefix of a sliced open) keeps a page it already finalized, even
+ * when the page count or the PAGEREF assignments have moved since. Every prefix adds pages, so
+ * without this each prefix re-projected the furniture of every earlier page, and a long
+ * document paid for its footers once per slice. The full pass that ends the open is not
+ * provisional: its count differs from every stale memo, so each page is projected once more.
  */
-export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLayout {
+export function finalizePageFieldProjection(
+  layout: SemanticLayout,
+  options?: { readonly provisional?: boolean }
+): SemanticLayout {
   const pageCount = layout.pages.length;
   if (pageCount === 0) return layout;
+  const provisional = options?.provisional === true;
+  // A provisional pass leaves furniture unprojected, so its memo must never pass for a final
+  // one: the full finalize that ends an open has to project every sheet it kept.
+  const memoCount = provisional ? -1 : pageCount;
 
   // PAGEREF values are a function of the WHOLE pagination, not of the page they paint on, so
   // the assignment token joins the per-page memo key: a page reused by identity while its
@@ -685,22 +735,22 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
 
   let changed = false;
   const pages = layout.pages.map((page) => {
-    const memo = finalizedPageMemos.get(page);
-    if (memo && memo.pageCount === pageCount && memo.pageRefToken === pageRefToken) {
+    const memo = finalizedMemoOf(page, provisional, pageCount, pageRefToken);
+    if (memo) {
       if (memo.result !== page) changed = true;
       return memo.result;
     }
-    const source = page.pageFieldSource;
-    const context: FieldPageContext = {
-      pageNumber: source?.pageNumber ?? page.index + 1,
-      pageCount,
-      sectionPageCount: source?.sectionPageCount ?? pageCount,
-      ...(source?.format ? { format: source.format } : {}),
-    };
+    const context = pageFieldContextOf(page, pageCount);
+    /** Set when a story keeps its earlier text for now: the page is not final, so not memoized. */
+    let later = false;
     const project = (
       story: HeaderFooterStoryRecord | undefined
     ): HeaderFooterStoryRecord | undefined => {
-      if (!story) return story;
+      // A provisional pass (a growing prefix of an opening document) keeps the furniture it
+      // laid out under its own page context. Projecting it again under each prefix's page
+      // count laid every footer of the document out once per prefix, and the opening layout's
+      // final pass projects every page under the real count anyway.
+      if (!story || provisional) return story;
       let projector = story.pageFieldProjector;
       let dy = 0;
       if (!projector) {
@@ -710,8 +760,28 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
         // moved under the reused sheet. No retained entry means the story never carried a
         // page field.
         if (!retained || sameFieldPageContext(retained.context, context)) return story;
+        const done = completedStories.get(story);
+        if (done && !storyStale(done, context)) {
+          changed = true;
+          return done;
+        }
+        if (furnitureWaits(page.index)) {
+          later = true;
+          return story;
+        }
         projector = retained.projector;
         dy = retained.dy;
+      } else {
+        const done = completedStories.get(story);
+        if (done && !storyStale(done, context)) {
+          changed = true;
+          return done;
+        }
+        if (furnitureWaits(page.index)) {
+          later = true;
+          changed = true;
+          return deferLiveStory(story, projector);
+        }
       }
       changed = true;
       const projected = projector(context);
@@ -746,7 +816,7 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     // carries a `pageFieldProjector`. A story kept by identity because its RETAINED
     // projection context still holds is already published text under this exact context.
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
-      finalizedPageMemos.set(page, { pageCount, pageRefToken, result: page });
+      if (!later) rememberFinalized(page, { pageCount: memoCount, pageRefToken, result: page });
       return page;
     }
     if (fragments !== page.fragments) changed = true;
@@ -756,7 +826,7 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
       ...(footer !== undefined ? { footer } : {}),
       ...(fragments !== page.fragments ? { fragments } : {}),
     };
-    finalizedPageMemos.set(page, { pageCount, pageRefToken, result });
+    if (!later) rememberFinalized(page, { pageCount: memoCount, pageRefToken, result });
     return result;
   });
 

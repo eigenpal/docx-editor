@@ -1,3 +1,4 @@
+import { containsClipboardObject } from './clipboard-object-policy.ts';
 // Clipboard fragment extraction: a semantic range becomes a minimal, valid
 // WordprocessingML package (rich-clipboard-fidelity tasks 1.2-1.6).
 //
@@ -16,7 +17,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
-import type { ContentTypeIndex } from '../package/content-types.ts';
+import { standardImageType, type ContentTypeIndex } from '../package/content-types.ts';
 import { resolveContentTypeOf, relationshipsOf } from '../package/package-edit.ts';
 import { resolveInternalTarget, validateExternalTarget } from '../package/opc-names.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
@@ -24,6 +25,7 @@ import { escapeXmlAttribute } from '../package/sinks.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { writeZip, strToU8 } from '../package/zip.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
+import { explicitDocDefaults } from '../package/application-doc-defaults.ts';
 import { paragraphLength } from './tree-op-segments.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
 import {
@@ -88,7 +90,8 @@ export type FragmentExtractRejection =
   | 'unknown-part'
   | 'empty-range'
   | 'trim-refused'
-  | 'resource-limit';
+  | 'resource-limit'
+  | 'unsupported-content';
 
 export type FragmentExtractResult =
   | {
@@ -125,6 +128,20 @@ function findParagraph(node: OoxmlNode, id: string): OoxmlElement | null {
     if (found) return found;
   }
   return null;
+}
+
+/** A `w:styles` root for a fragment whose source has no styles part. */
+function emptyStylesRoot(): OoxmlElement {
+  return {
+    id: 'fragment#styles',
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'styles',
+    prefix: 'w',
+    namespaceBindings: [{ prefix: 'w', namespaceUri: WML_NAMESPACE_URI }],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlElement;
 }
 
 function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): OoxmlElement {
@@ -553,6 +570,10 @@ export function extractFragmentPackage(
   const endnotes = includedNotes(endnotesPart, 'endnote', endnoteIds);
   const noteBodies: OoxmlNode[] = [...footnotes, ...endnotes];
 
+  if (containsClipboardObject(blocks) || containsClipboardObject(noteBodies)) {
+    return { ok: false, reason: 'unsupported-content' };
+  }
+
   // Closure inputs: blocks plus note bodies.
   const closureNodes: OoxmlNode[] = [...blocks, ...noteBodies];
   const styleIds = new Set<string>();
@@ -592,8 +613,17 @@ export function extractFragmentPackage(
   const literalStyles = styles.map(
     (style) => literalizeThemeReferences(style, fonts) as OoxmlElement
   );
-  const literalDocDefaults = stylesIndex.docDefaults
-    ? (literalizeThemeReferences(stylesIndex.docDefaults, fonts) as OoxmlElement)
+  // Omitted default halves travel as the application's values the source painted, so the
+  // receiver can tell them from content that carries no defaults at all.
+  const sourceStylesRoot =
+    stylesIndex.part && isElementNode(stylesIndex.part.root) ? stylesIndex.part.root : null;
+  const docDefaults = explicitDocDefaults(
+    sourceStylesRoot,
+    stylesIndex.docDefaults,
+    'fragment#doc-defaults'
+  );
+  const literalDocDefaults = docDefaults
+    ? (literalizeThemeReferences(docDefaults, fonts) as OoxmlElement)
     : null;
   blocks = blocks.map((block) => literalizeThemeReferences(block, fonts));
   const literalFootnotes = footnotes.map(
@@ -652,7 +682,12 @@ export function extractFragmentPackage(
     droppable: ReadonlySet<string>
   ): OoxmlNode | null => {
     if (node.kind === 'textValue') return node;
-    if (node.kind === 'drawing') {
+    // An embedded object's part never travels, so the object drops as a whole.
+    if (
+      node.kind === 'drawing' ||
+      (node.namespaceUri === WML_NAMESPACE_URI &&
+        (node.localName === 'pict' || node.localName === 'object'))
+    ) {
       const ids = new Set<string>();
       collectRelationshipIds([node], ids);
       for (const id of ids) if (droppable.has(id)) return null;
@@ -762,8 +797,8 @@ export function extractFragmentPackage(
   addXmlPart('/word/document.xml', DOCUMENT_CT, documentRoot);
 
   // styles.xml — the closure plus materialized (theme-literal) docDefaults.
-  if (stylesIndex.part && (literalStyles.length > 0 || literalDocDefaults)) {
-    const stylesRoot = withChildren(stylesIndex.part.root as OoxmlElement, [
+  if (literalStyles.length > 0 || literalDocDefaults) {
+    const stylesRoot = withChildren(sourceStylesRoot ?? emptyStylesRoot(), [
       ...(literalDocDefaults ? [literalDocDefaults] : []),
       ...literalStyles,
     ]);
@@ -811,7 +846,12 @@ export function extractFragmentPackage(
     entries.set(name.slice(1), bytes);
     const ext = mediaExtensionOf(name);
     if (ext && !mediaExtensions.has(ext)) {
-      mediaExtensions.set(ext, resolveContentTypeOf(pkg, name) ?? 'application/octet-stream');
+      // The fragment names the standard type, so a reader that ignores `image/.png` still
+      // admits the picture.
+      mediaExtensions.set(
+        ext,
+        standardImageType(resolveContentTypeOf(pkg, name) ?? 'application/octet-stream')
+      );
     }
   }
 

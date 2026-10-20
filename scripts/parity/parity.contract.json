@@ -7,8 +7,11 @@
       "chrome",
       "colorMode",
       "contextMenu",
+      "popups",
       "document",
       "fonts",
+      "fontShaping",
+      "imageDecodePort",
       "hyperlinkPopup",
       "i18n",
       "locale",
@@ -16,11 +19,17 @@
       "mode",
       "modules",
       "navigation",
+      "openFailure",
       "rulers",
       "t",
       "title",
       "zoom",
-      "zoomMode"
+      "zoomMode",
+      "revisionMarkup",
+      "reviewDisplayMode",
+      "fieldResults",
+      "contentLockPolicy",
+      "lockedControlNavigation"
     ],
     "deferredInVue": {},
     "reactCallbacksAsVueEmits": {
@@ -29,12 +38,15 @@
       "onFontError": "fontError",
       "onSave": "save",
       "onOpen": "open",
-      "onTitleChange": "titleChange"
+      "onTitleChange": "titleChange",
+      "onRevisionMarkupChange": "revisionMarkupChange"
     },
     "reactRenderPropsAsVueSlots": {
       "children": "default",
       "renderTitleBarLeft": "titleBarLeft",
-      "renderTitleBarRight": "titleBarRight"
+      "renderTitleBarRight": "titleBarRight",
+      "loadingIndicator": "loadingIndicator",
+      "renderOpenFailureActions": "openFailureActions"
     },
     "reactClassNameAsVueClass": {
       "className": "class"
@@ -58,6 +70,8 @@
     "pairedViaInheritance": {},
     "vueExclusive": {}
   },
+  "adapterMemberCheckedInterfacesComment": "Interfaces exported by both adapter entries whose member names must match. Only member names are compared, not their types.",
+  "adapterMemberCheckedInterfaces": ["ReviewRailRegistry"],
   "pro": {
     "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list. webrtcExports covers the separate {react,vue}-webrtc.api.md pair and hocuspocusExports the {react,vue}-hocuspocus.api.md pair, which the review entries do not include.",
     "webrtcExports": {
@@ -99,12 +113,15 @@
         "CollaborationIdentity",
         "CollaborationIdentityUpdate",
         "CollaborationModuleOptions",
+        "CollaborationNoticeKind",
         "CollaborationParticipant",
         "CollaborationRemoteSelection",
         "CollaborationRemoteSelectionAddress",
         "CollaborationSelectionKind",
         "CollaborationSession",
         "CollaborationStatus",
+        "CollaborationStatusNoticeProps",
+        "CollaborationStatusNoticeRenderProps",
         "CollaborationStatusSnapshot",
         "CreateDocumentCollaborationOptions",
         "CustomNodeChrome",
@@ -119,11 +136,24 @@
         "ResolvedCustomNodeActivation",
         "ReviewActionProps",
         "ReviewActivationOptions",
+        "ReviewAdoptOptions",
+        "ReviewItemRevealEvent",
+        "ReviewItemRevealSource",
+        "ReviewBalloonProps",
+        "ReviewDraftProps",
         "ReviewItemView",
         "ReviewMarkersProps",
         "ReviewModuleOptions",
+        "ReviewPaneOpening",
+        "ReviewPaneOptions",
+        "ReviewPaneOverflow",
+        "RevisionDisplay",
+        "CommentMarkerStyle",
         "ReviewPartProps",
         "ReviewProps",
+        "ReviewRailMetrics",
+        "ResolvedReviewPane",
+        "ScrollPlacement",
         "UseCollaborationStatusReturn",
         "CollaborationRootSource",
         "DocxEditorCollaborationRoot",
@@ -131,6 +161,7 @@
         "UseDocumentCollaborationConnectOptions",
         "UseDocumentCollaborationOptions",
         "UseDocumentCollaborationReturn",
+        "UseReviewRailMetricsOptions",
         "UseReviewReturn",
         "activatedCustomNodeOf",
         "collaborationModule",
@@ -145,12 +176,16 @@
         "useReviewAuthor",
         "useReviewItem",
         "useReviewOf",
-        "useStackedReviewPositions"
+        "useReviewRailMetrics",
+        "useStackedReviewPositions",
+        "ReviewWriteAction",
+        "ReviewWriteRefusal"
       ],
       "deferredInVue": {},
       "vueExclusive": {
         "UseCollaborationParticipantsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the participants array directly, so only Vue exports this type.",
-        "UseCollaborationSessionReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the session directly, so only Vue exports this type."
+        "UseCollaborationSessionReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the session directly, so only Vue exports this type.",
+        "UseReviewRailMetricsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the metrics directly, so only Vue exports this type."
       }
     },
     "reviewParts": {
@@ -166,6 +201,7 @@
         "Empty",
         "List",
         "Markers",
+        "Refusal",
         "Reject",
         "Reopen",
         "Replies",
@@ -178,11 +214,13 @@
       "vueExclusive": {}
     },
     "collaborationParts": {
-      "paired": ["Avatar", "Avatars", "CaretLabels"],
+      "paired": ["Avatar", "Avatars", "CaretLabels", "Status"],
       "deferredInVue": {},
       "vueExclusive": {}
     },
     "memberCheckedInterfaces": [
+      "ReviewRailMetrics",
+      "UseReviewRailMetricsOptions",
       "CollaborationAvatarProps",
       "CollaborationRootSource",
       "CollaborationAvatarRenderProps",
@@ -192,6 +230,8 @@
       "CollaborationCaretLabelRenderProps",
       "CollaborationCaretLabelsProps",
       "CollaborationFailure",
+      "CollaborationStatusNoticeProps",
+      "CollaborationStatusNoticeRenderProps",
       "CollaborationIdentity",
       "CollaborationIdentityUpdate",
       "CollaborationModuleOptions",
@@ -207,16 +247,27 @@
       "ResolvedCustomNodeActivation",
       "ReviewActionProps",
       "ReviewActivationOptions",
+      "ReviewAdoptOptions",
+      "ReviewBalloonProps",
+      "ReviewDraftProps",
+      "ReviewItemRevealEvent",
       "ReviewMarkersProps",
       "ReviewModuleOptions",
+      "ReviewPaneOptions",
       "ReviewPartProps",
       "ReviewProps",
+      "ResolvedReviewPane",
       "UseCollaborationStatusReturn",
       "UseDocumentCollaborationOptions",
       "UseDocumentCollaborationReturn",
-      "UseReviewReturn"
+      "UseReviewReturn",
+      "ReviewWriteRefusal"
     ],
     "interfaceMemberExceptions": {
+      "CollaborationStatusNoticeProps": {
+        "reactOnly": ["children"],
+        "reason": "React takes the custom notice as a children render function. Vue takes it as the default slot, which a props interface does not declare."
+      },
       "ReviewMarkersProps": {
         "vueOnly": ["asChild", "children"],
         "reason": "Vue declares ReviewMarkersProps as extending ReviewPartProps, so asChild and children appear in the type although the markers part does not wire them. React declares only the wired members."

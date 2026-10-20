@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A continuous section can resume at the final column cursor even when an earlier column on the same last page extends lower.",
+  "after": "The successor starts below the maximum in-flow column extent on the preceding section final page; existing explicit page breaks and single-page balancing stay unchanged.",
+  "reason": "Only derived layout continuation coordinates change. Source XML, field ranges, canonical format versions and replication operations are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/multipage-column-continuation.test.ts",
+    "packages/core/src/layout/__tests__/multi-column-layout.test.ts",
+    "packages/core/src/layout/__tests__/section-column-geometry.test.ts"
+  ],
+  "changeset": "multipage-column-continuation",
+  "migration": null
+}

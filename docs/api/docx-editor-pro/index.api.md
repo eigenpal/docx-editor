@@ -26,9 +26,11 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-    // (undocumented)
     readonly session: EditorCollaborationSession;
 }
+
+// @public
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
@@ -304,11 +306,37 @@ export interface RecognizedCustomNode {
 export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWriteOutcome;
 
 // @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkerStyle;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionDisplay;
+}
+
+// @public
 export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkerStyle;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionDisplay;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
 export function saveForExport(editor: Editor, options?: SaveForExportOptions): Promise<DocumentExportResult>;
@@ -355,7 +383,5 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 
 // @public
 export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, nodeId: string, update?: CustomNodeUpdate<Schema>): CustomNodeWriteOutcome;
-
-// (No @packageDocumentation comment for this package)
 
 ```

@@ -1,17 +1,30 @@
-// Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
-// layout inputs (marker text, effective indent, marker face) for one story walk.
+import { registerListGeometry, rememberListItemShape } from './list-marker-reuse.ts';
+import { walkStoryParagraphs } from './story-paragraph-walk.ts';
+import { mergeListIndent } from './list-indent-merge.ts';
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
+import { markerMeasureToken } from './list-marker-measure-key.ts';
+import {
+  numberingParagraphProperties,
+  numberingParagraphToken,
+  withNumberingParagraphProperties,
+} from './numbering-paragraph-properties.ts';
+// Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
-import { flattenContentControls } from '@docx-editor.dev/core/store';
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,
   expandCountersOf,
+  loadListCounters,
+  numberLevelsOf,
+  saveListCounters,
   type FullContextNumberSource,
+  type ListCounterSnapshot,
 } from './list-counters.ts';
+import { resolvePictureBullet, type ResolvedPictureBullet } from './numbering-picture-bullet.ts';
 import {
   EMPTY_NUMBERING_INDEX,
-  MAX_LEVEL_INDENT_PT,
   resolveNumberingStyleLinks,
   type ListMarkerAlign,
   type ListSuffix,
@@ -25,15 +38,16 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { EMPTY_TAB_STOPS, nextTabDestination, type ResolvedTabStops } from './paragraph-tabs.ts';
-import { mapSymbolPuaText } from './symbol-encoding.ts';
-import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
-import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
+import { mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
+import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import { propertiesOf } from './paragraph-flow.ts';
+import { numberingLevelTiers } from './numbering-level-tier.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
+import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
 
 interface ListResolveChangeEvidence {
   readonly preservesNumberedSequence: boolean;
@@ -41,6 +55,7 @@ interface ListResolveChangeEvidence {
 
 const listResolveEvidenceBySession = new WeakMap<LayoutSession, ListResolveChangeEvidence>();
 let listResolveBlockVisits = 0;
+let listResolveBlockScans = 0;
 
 /** @internal Read session-scoped list resolve memo for tests. */
 export function listResolveSessionMemoListItemsForTest(
@@ -52,14 +67,20 @@ export function listResolveSessionMemoListItemsForTest(
 /** @internal Warm-path recorder for list resolve block walks. */
 export function listResolveBlockVisitTestRecorder(): {
   readonly blockVisits: number;
+  /** Blocks whose numbered paragraphs were read again rather than reused. */
+  readonly blockScans: number;
   reset(): void;
 } {
   return {
     get blockVisits() {
       return listResolveBlockVisits;
     },
+    get blockScans() {
+      return listResolveBlockScans;
+    },
     reset() {
       listResolveBlockVisits = 0;
+      listResolveBlockScans = 0;
     },
   };
 }
@@ -91,23 +112,6 @@ function consumeListResolveChangeEvidence(
   return evidence;
 }
 
-/** Fields of {@link ResolvedRunStyle} that change a marker's measured width. */
-function markerMeasureToken(style: ResolvedRunStyle): string {
-  return [
-    style.fontFamily ?? '',
-    style.fontSizePt,
-    style.bold ? 1 : 0,
-    style.italic ? 1 : 0,
-    style.characterSpacingPt,
-    style.horizontalScalePercent,
-    style.verticalAlign,
-    style.hidden ? 1 : 0,
-    style.kerningMinPt,
-    style.caps ? 1 : 0,
-    style.smallCaps ? 1 : 0,
-  ].join(',');
-}
-
 /**
  * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
  *
@@ -128,6 +132,17 @@ export interface ResolvedListItem {
   /** Effective indent after merging level + paragraph indents, in points. */
   readonly indent: NumberingLevelIndent;
   readonly markerStyle: ResolvedRunStyle;
+  /**
+   * The image marker a `w:lvlPicBulletId` level resolved to, absent on every other item.
+   *
+   * Present means the marker is an IMAGE: it occupies `width` x `height` points in the
+   * hanging slot and `markerText` is only what a sink that cannot draw the image falls back
+   * to. The extent is the AUTHORED `v:shape` size scaled by the marker font size — see
+   * {@link resolvePictureBullet}, which also decides when the answer is no picture at all.
+   * Absent means the level declared none, named one the part does not declare, declared one
+   * this projection could not read, or resolved to a size nothing can paint.
+   */
+  readonly picBullet?: ResolvedPictureBullet;
   /** Fingerprint for layout cache keys (indent, marker text, marker face). */
   readonly cacheToken: string;
 }
@@ -286,135 +301,14 @@ export function withNumberingStyleLinks(
   return linked;
 }
 
-/** Bound a file-derived indent both ways — negative is legal, unbounded is not. */
-function clampIndentPt(pt: number): number {
-  if (!Number.isFinite(pt)) return 0;
-  if (pt > MAX_LEVEL_INDENT_PT) return MAX_LEVEL_INDENT_PT;
-  if (pt < -MAX_LEVEL_INDENT_PT) return -MAX_LEVEL_INDENT_PT;
-  return pt;
-}
-
-/** The first-line slot as one `w:ind` states it, or null when it states neither spelling. */
-function firstLineOffsetOf(
-  props: readonly OoxmlProperty[]
-): { hanging: number; firstLine: number } | null {
-  let found: { hanging: number; firstLine: number } | null = null;
-  for (const property of props) {
-    if (property.localName !== 'ind') continue;
-    const h = property.attributes?.hanging;
-    const f = property.attributes?.firstLine;
-    // Mutually exclusive (§17.3.1.10, §17.3.1.12): one signed first-line offset, two spellings,
-    // so an `w:ind` stating either replaces both. `w:firstLine` is read SIGNED because Word
-    // keeps a negative value as a hang. A bare `w:left` states neither and leaves them alone.
-    if (h === undefined && f === undefined) continue;
-    found = {
-      hanging: h !== undefined && /^\d{1,9}$/.test(h) ? clampIndentPt(Number(h) / 20) : 0,
-      firstLine: f !== undefined && /^-?\d{1,9}$/.test(f) ? clampIndentPt(Number(f) / 20) : 0,
-    };
-  }
-  return found;
-}
-
-/** Whether any `w:ind` in the list states left (or its `w:start` spelling). */
-function statesLeft(props: readonly OoxmlProperty[]): boolean {
-  return props.some(
-    (property) =>
-      property.localName === 'ind' &&
-      (property.attributes?.left !== undefined || property.attributes?.start !== undefined)
-  );
-}
-
-function statesRight(props: readonly OoxmlProperty[]): boolean {
-  return props.some(
-    (property) =>
-      property.localName === 'ind' &&
-      (property.attributes?.right !== undefined || property.attributes?.end !== undefined)
-  );
-}
-
-/**
- * The effective indent of a list paragraph: STYLE, then the numbering LEVEL, then DIRECT.
- *
- * Word applies a level's `w:pPr/w:ind` between the paragraph style and the paragraph's own
- * formatting, per attribute — and the ordering matters on real documents. A converted
- * agreement numbers its `(a)` items with a level stating `left=1512 hanging=738` under a
- * `ListParagraph` style stating `left=775 hanging=624`, and states only `hanging="737"` on
- * the paragraph itself. Reading the flattened cascade as "the paragraph's indent" gave the
- * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
- * indent step to the left of where Word puts it.
- *
- * `inherited` is the cascade WITHOUT the paragraph's own `w:pPr` (defaults, table cell style,
- * style chain); `direct` is that `w:pPr` alone.
- */
-export function mergeListIndent(
-  levelIndent: NumberingLevelIndent,
-  inherited: readonly OoxmlProperty[],
-  direct: readonly OoxmlProperty[] = []
-): NumberingLevelIndent {
-  // A level built by hand (a unit test, not a file) carries no presence record; it then
-  // states nothing and the style still wins, which is the behaviour those callers had.
-  const levelStates = levelIndent.stated ?? {
-    left: false,
-    right: false,
-    firstLineOffset: false,
-  };
-  const inheritedIndent = paragraphIndent(inherited);
-  const directIndent = paragraphIndent(direct);
-  const levelOffset = { hanging: levelIndent.hanging, firstLine: levelIndent.firstLine };
-
-  const left = statesLeft(direct)
-    ? directIndent.left
-    : levelStates.left
-      ? levelIndent.left
-      : statesLeft(inherited)
-        ? inheritedIndent.left
-        : levelIndent.left;
-  const right = statesRight(direct)
-    ? directIndent.right
-    : levelStates.right
-      ? levelIndent.right
-      : statesRight(inherited)
-        ? inheritedIndent.right
-        : levelIndent.right;
-  const firstLineOffset =
-    firstLineOffsetOf(direct) ??
-    (levelStates.firstLineOffset ? levelOffset : (firstLineOffsetOf(inherited) ?? levelOffset));
-
-  return { left, right, ...firstLineOffset };
-}
+export { mergeListIndent } from './list-indent-merge.ts';
 
 /**
  * Collect paragraphs of a block list in document order, descending into tables.
  *
  * Caps nesting so a hostile nested-table document cannot recurse without bound.
  */
-export function walkStoryParagraphs(
-  blocks: readonly OoxmlElement[],
-  maxTableDepth = 8
-): OoxmlElement[] {
-  const out: OoxmlElement[] = [];
-  const visit = (blockList: readonly OoxmlElement[], depth: number): void => {
-    for (const block of blockList) {
-      if (block.kind === 'paragraph') {
-        out.push(block);
-        continue;
-      }
-      if (block.kind !== 'table' || depth >= maxTableDepth) continue;
-      for (const row of flattenContentControls(block.children)) {
-        if (row.kind !== 'tableRow') continue;
-        for (const cell of flattenContentControls(row.children)) {
-          if (cell.kind !== 'tableCell') continue;
-          // Flatten cell SDTs under the shared content-control budget; table nesting still
-          // uses `maxTableDepth` for the table walk itself.
-          const inner = collectFlowBlocks(cell.children);
-          visit(inner, depth + 1);
-        }
-      }
-    }
-  };
-  visit(blocks, 0);
-  return out;
-}
+export { walkStoryParagraphs } from './story-paragraph-walk.ts';
 
 /**
  * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
@@ -431,8 +325,9 @@ export function walkStoryParagraphs(
 interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
-  readonly inheritedParagraphProperties: readonly OoxmlProperty[];
-  readonly directProps: readonly OoxmlProperty[];
+  /** Properties below and above the numbering level, from `numberingLevelTiers`. */
+  readonly belowLevel: readonly OoxmlProperty[];
+  readonly aboveLevel: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
   readonly perLevel: WeakMap<
     object,
@@ -451,12 +346,27 @@ function paragraphListPrelude(
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
   const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+  const numPr = readNumPr(nodes);
+  // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
+  const tiers =
+    numPr && styleCascade && cascaded
+      ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
+      : { below: [], above: propertiesOf(pPr) };
+  const markProps = cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun);
+  // An admitted separator hides its mark, not its heading number. Content and level
+  // visibility remain independent, so an actually hidden list keeps its hidden marker.
+  const inheritedMarkProps = styleSeparatorMembersOf(paragraph)
+    ? [
+        ...markProps.filter((property) => property.localName !== 'vanish'),
+        ...(cascaded?.runProperties.filter((property) => property.localName === 'vanish') ?? []),
+      ]
+    : markProps;
   const prelude: ParagraphListPrelude = {
     styleCascade,
-    numPr: readNumPr(nodes),
-    inheritedParagraphProperties: cascaded?.inheritedParagraphProperties ?? [],
-    directProps: propertiesOf(pPr),
-    inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
+    numPr,
+    belowLevel: tiers.below,
+    aboveLevel: tiers.above,
+    inheritedMarkProps,
     perLevel: new WeakMap(),
   };
   paragraphListPreludes.set(paragraph, prelude);
@@ -475,14 +385,60 @@ export function resolveStoryListItems(
   styleCascade: StyleCascadeTable | undefined,
   isFontAvailable?: (family: string) => boolean
 ): ReadonlyMap<string, ResolvedListItem> {
-  const map = new Map<string, ResolvedListItem>();
-  if (index.nums.size === 0) return map;
+  if (index.nums.size === 0) return new Map();
+  return resolveListSequence(walkStoryParagraphs(blocks), index, styleCascade, isFontAvailable)
+    .items;
+}
 
+/** Numbered paragraphs between two saved counter states of a {@link ListSequenceResolve}. */
+const LIST_RESUME_STRIDE = 256;
+
+/** One list walk, with the counter state saved every {@link LIST_RESUME_STRIDE} paragraphs. */
+interface ListSequenceResolve {
+  readonly items: ReadonlyMap<string, ResolvedListItem>;
+  /** `states[k]` is the counter state before paragraph `k * LIST_RESUME_STRIDE`. */
+  readonly states: readonly ListCounterSnapshot[];
+}
+
+/**
+ * The list walk over `paragraphs` in story order. With `resume`, the walk starts from the last
+ * saved state at or before paragraph `from`, and takes the items before it from the previous
+ * walk: a number depends only on the paragraphs before it, and those are the same.
+ */
+function resolveListSequence(
+  paragraphs: readonly OoxmlElement[],
+  index: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined,
+  isFontAvailable: ((family: string) => boolean) | undefined,
+  resume?: { readonly from: number; readonly previous: ListSequenceResolve }
+): ListSequenceResolve {
+  const map = new Map<string, ResolvedListItem>();
   // A definition that delegates through `w:numStyleLink` has no levels of its own; resolving
   // the link here is what keeps those paragraphs from losing their markers entirely.
   const linked = withNumberingStyleLinks(index, styleCascade);
   const counters = createListCounterState(linked);
-  for (const paragraph of walkStoryParagraphs(blocks)) {
+  const states: ListCounterSnapshot[] = [];
+  let start = 0;
+  if (resume) {
+    const checkpoint = Math.min(
+      Math.floor(resume.from / LIST_RESUME_STRIDE),
+      resume.previous.states.length - 1
+    );
+    if (checkpoint > 0) {
+      start = checkpoint * LIST_RESUME_STRIDE;
+      states.push(...resume.previous.states.slice(0, checkpoint + 1));
+      loadListCounters(counters, resume.previous.states[checkpoint]!);
+      for (let position = 0; position < start; position += 1) {
+        const id = paragraphs[position]!.id;
+        const item = resume.previous.items.get(id);
+        if (item) map.set(id, item);
+      }
+    }
+  }
+  for (let position = start; position < paragraphs.length; position += 1) {
+    if (position % LIST_RESUME_STRIDE === 0 && states.length === position / LIST_RESUME_STRIDE)
+      states.push(saveListCounters(counters));
+    const paragraph = paragraphs[position]!;
     const prelude = paragraphListPrelude(paragraph, styleCascade);
     const numPr = prelude.numPr;
     if (!numPr) continue;
@@ -492,13 +448,8 @@ export function resolveStoryListItems(
 
     let levelDerived = prelude.perLevel.get(advanced.level);
     if (!levelDerived) {
-      // Split, not flattened: the level's indent outranks the STYLE's and is outranked by
-      // the paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
-      const indent = mergeListIndent(
-        advanced.level.indent,
-        prelude.inheritedParagraphProperties,
-        prelude.directProps
-      );
+      // Split, not flattened: the merge needs the tiers below and above the level apart.
+      const indent = mergeListIndent(advanced.level.indent, prelude.belowLevel, prelude.aboveLevel);
       const markerProps = cascadeRunProperties(
         prelude.inheritedMarkProps,
         advanced.level.runProperties,
@@ -510,42 +461,61 @@ export function resolveStoryListItems(
       };
       prelude.perLevel.set(advanced.level, levelDerived);
     }
-    const { indent, markerStyle } = levelDerived;
+    const { indent, markerStyle: authoredMarkerStyle } = levelDerived;
     // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same
     // string; doing it in the painter would size the marker box for a glyph nobody draws.
-    const markerText = mapSymbolPuaText(
+    const mapMarker = advanced.level.numFmt === 'bullet' ? mapSymbolBulletText : mapSymbolPuaText;
+    const markerText = mapMarker(
       advanced.markerText,
-      markerStyle.fontFamily,
+      authoredMarkerStyle.fontFamily,
       isFontAvailable
     );
+    // The marker keeps its authored face even when its glyph was translated to Unicode. An
+    // unavailable symbol face still sizes the line and the marker by its own metrics
+    // (`symbol-face-metrics.ts`), and paint draws the Unicode twin in a face that has it.
+    // Never mutate the cached level style.
+    const markerStyle = authoredMarkerStyle;
+    // `w:lvlPicBulletId` names a `w:numPicBullet` of the SAME part. A level naming one the
+    // part never declared, or one whose VML this projection could not read, keeps its
+    // `w:lvlText` — a missing image must never cost the reader the marker entirely.
+    const authoredPicBullet =
+      advanced.level.picBulletId === undefined
+        ? undefined
+        : linked.pictureBullets?.get(advanced.level.picBulletId);
+    const picBullet = authoredPicBullet
+      ? (resolvePictureBullet(authoredPicBullet, markerStyle.fontSizePt) ?? undefined)
+      : undefined;
     // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
     // carry any printable separator, so a separator join lets two different level
     // geometries serialize to one token and share a break-cache entry.
-    const cacheToken = framedTokenJoin(
-      [
-        advanced.numId,
-        advanced.ilvl,
-        advanced.level.numFmt,
-        advanced.level.lvlText,
-        indent.left,
-        indent.right,
-        indent.hanging,
-        indent.firstLine,
-        advanced.level.lvlJc,
-        advanced.level.suff,
-        advanced.level.vanish ? 1 : 0,
-        // The MARKER ITSELF, not its length. The first line starts where the marker ends
-        // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
-        // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
-        // served the previous marker's width to the new one, and the line wrapped a word late.
-        markerText,
-        // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
-        // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
-        markerMeasureToken(markerStyle),
-      ].map(String)
-    );
+    const tokenParts = [
+      advanced.numId,
+      advanced.ilvl,
+      advanced.level.numFmt,
+      advanced.level.lvlText,
+      indent.left,
+      indent.right,
+      indent.hanging,
+      indent.firstLine,
+      advanced.level.lvlJc,
+      advanced.level.suff,
+      advanced.level.vanish ? 1 : 0,
+      numberingParagraphToken(advanced.level),
+      // The MARKER ITSELF, not its length. The first line starts where the marker ends
+      // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+      // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+      // served the previous marker's width to the new one, and the line wrapped a word late.
+      markerText,
+      // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+      // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+      markerMeasureToken(markerStyle),
+      // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
+      // it decides both the first line's start and the first line's height.
+      picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
+    ].map(String);
+    const cacheToken = framedTokenJoin(tokenParts);
 
     const item: ResolvedListItem = {
       numId: advanced.numId,
@@ -560,17 +530,23 @@ export function resolveStoryListItems(
       suffix: advanced.level.suff,
       indent,
       markerStyle,
+      ...(picBullet ? { picBullet } : {}),
       cacheToken,
     };
+    withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
+    // Everything but the marker text (part 12), for keys that read its geometry instead.
+    rememberListItemShape(
+      item,
+      framedTokenJoin([...tokenParts.slice(0, 12), ...tokenParts.slice(13)])
+    );
     listItemNumberSources.set(item, {
-      index: linked,
-      numId: advanced.numId,
+      levels: numberLevelsOf(linked, advanced.numId),
       ilvl: advanced.ilvl,
       expandCounters: expandCountersOf(advanced),
     });
     map.set(paragraph.id, item);
   }
-  return map;
+  return { items: map, states };
 }
 
 interface ResolvedListItemsMemoEntry {
@@ -599,10 +575,27 @@ type WithResolvedListItemsOptions = {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   readonly styleCascade?: StyleCascadeTable;
   readonly isFontAvailable?: (family: string) => boolean;
+  /**
+   * The pass's measurer, read ONLY to learn which legacy symbol faces were admitted.
+   *
+   * A caller may still pass {@link isFontAvailable} explicitly and it wins; absent one, the
+   * measurer answers, because it is the only input that already knows the admitted faces and
+   * is already folded into every layout cache key. A caller with no measurer (the REF-refresh
+   * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
+   */
+  readonly measurer?: TextMeasurer;
 };
+
+/** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
+function listFontAvailability(
+  options: WithResolvedListItemsOptions
+): ((family: string) => boolean) | undefined {
+  return options.isFontAvailable ?? markerSymbolFontAvailability(options.measurer);
+}
 
 function resolvedListItemsMemoHit(
   options: WithResolvedListItemsOptions,
+  isFontAvailable: ((family: string) => boolean) | undefined,
   blocks: readonly OoxmlElement[],
   memoOwner: LayoutSession | undefined
 ): ResolvedListItemsMemoEntry | undefined {
@@ -613,7 +606,7 @@ function resolvedListItemsMemoHit(
     memo &&
     memo.rawIndex === options.numberingIndex &&
     memo.styleCascade === options.styleCascade &&
-    memo.isFontAvailable === options.isFontAvailable
+    memo.isFontAvailable === isFontAvailable
   ) {
     return memo;
   }
@@ -631,14 +624,17 @@ function rememberResolvedListItemsMemo(
 
 function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   options: T,
-  blocks: readonly OoxmlElement[],
+  flowBlocks: readonly OoxmlElement[],
   memoOwner: LayoutSession | undefined
 ): T & {
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
+  // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
+  const blocks = numberingFlowBlocks(flowBlocks);
+  const isFontAvailable = listFontAvailability(options);
   if (options.listItems === undefined) {
-    const memo = resolvedListItemsMemoHit(options, blocks, memoOwner);
+    const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
     if (memo && memoOwner === undefined) {
       return {
         ...options,
@@ -649,13 +645,13 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   }
   const memoBeforeResolve =
     options.listItems === undefined
-      ? resolvedListItemsMemoHit(options, blocks, memoOwner)
+      ? resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner)
       : undefined;
   const numberingIndex =
     memoBeforeResolve &&
     memoBeforeResolve.rawIndex === options.numberingIndex &&
     memoBeforeResolve.styleCascade === options.styleCascade &&
-    memoBeforeResolve.isFontAvailable === options.isFontAvailable
+    memoBeforeResolve.isFontAvailable === isFontAvailable
       ? memoBeforeResolve.linkedIndex
       : withNumberingStyleLinks(
           options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
@@ -669,7 +665,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
           options.numberingIndex,
           numberingIndex,
           options.styleCascade,
-          options.isFontAvailable,
+          isFontAvailable,
           memoOwner
         )
       : undefined);
@@ -677,7 +673,7 @@ function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
     rememberResolvedListItemsMemo(blocks, memoOwner, {
       rawIndex: options.numberingIndex,
       styleCascade: options.styleCascade,
-      isFontAvailable: options.isFontAvailable,
+      isFontAvailable,
       linkedIndex: numberingIndex,
       listItems,
     });
@@ -701,6 +697,7 @@ export function withResolvedListItems<
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly styleCascade?: StyleCascadeTable;
     readonly isFontAvailable?: (family: string) => boolean;
+    readonly measurer?: TextMeasurer;
   },
 >(
   options: T,
@@ -725,7 +722,9 @@ export function withResolvedListItemsForSession<T extends WithResolvedListItemsO
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  return withResolvedListItemsInternal(options, blocks, session);
+  const resolved = withResolvedListItemsInternal(options, blocks, session);
+  registerListGeometry(resolved.listItems, options.measurer);
+  return resolved;
 }
 
 /** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */
@@ -735,6 +734,17 @@ interface NumberedBlockMemo {
 }
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
 const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
+
+/**
+ * Whether any paragraph in `block` can carry a list item under `styleCascade`. Both list
+ * resolves give items only to these paragraphs, so a block without one has no list token.
+ */
+export function blockHasNumberedParagraphs(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): boolean {
+  return numberedParagraphsOfBlock(block, styleCascade).length > 0;
+}
 
 function numberedParagraphsOfBlock(
   block: OoxmlElement,
@@ -774,22 +784,28 @@ interface LastStoryResolve {
   readonly blocks: readonly OoxmlElement[];
   readonly numberedByBlock: readonly (readonly OoxmlElement[])[];
   readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+  /** The walk behind `listItems` and the numbered paragraphs it walked, for a resume. */
+  readonly walk?: {
+    readonly paragraphs: readonly OoxmlElement[];
+    readonly resolve: ListSequenceResolve;
+  };
 }
 const lastStoryResolvesByAnchor = new WeakMap<OoxmlElement, LastStoryResolve>();
 const lastStoryResolvesBySession = new WeakMap<LayoutSession, LastStoryResolve>();
 
+function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement | undefined) {
+  if (!previous || paragraph.id !== previous.id) return false;
+  const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const previousProperties = previous.children.find(
+    (child) => child.kind === 'paragraphProperties'
+  );
+  return properties === previousProperties;
+}
+
 function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
   return (
     a.length === b.length &&
-    a.every((paragraph, index) => {
-      const previous = b[index];
-      if (!previous || paragraph.id !== previous.id) return false;
-      const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-      const previousProperties = previous.children.find(
-        (child) => child.kind === 'paragraphProperties'
-      );
-      return properties === previousProperties;
-    })
+    a.every((paragraph, index) => sameNumberedParagraph(paragraph, b[index]))
   );
 }
 
@@ -825,13 +841,27 @@ function resolveStoryListItemsStable(
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable &&
     last.blocks.length === blocks.length;
+  // A paragraph added or removed shifts every block after it: match the unchanged tail from the
+  // end, so those blocks keep their scans instead of each being read again.
+  const shift = last ? last.blocks.length - blocks.length : 0;
+  let tail = 0;
+  if (last && shift !== 0) {
+    const shorter = Math.min(blocks.length, last.blocks.length);
+    while (
+      tail < shorter &&
+      blocks[blocks.length - 1 - tail] === last.blocks[last.blocks.length - 1 - tail]
+    )
+      tail += 1;
+  }
   for (let index = 0; index < blocks.length; index += 1) {
     listResolveBlockVisits += 1;
     const block = blocks[index]!;
+    const previousIndex = index >= blocks.length - tail ? index + shift : index;
+    // A style can number a paragraph, so a block's list holds only under the same cascade.
     const numbered =
-      last && last.blocks[index] === block
-        ? last.numberedByBlock[index]!
-        : numberedParagraphsOfBlock(block, styleCascade);
+      last && last.blocks[previousIndex] === block && last.styleCascade === styleCascade
+        ? last.numberedByBlock[previousIndex]!
+        : (listResolveBlockScans++, numberedParagraphsOfBlock(block, styleCascade));
     numberedByBlock[index] = numbered;
     if (
       numberedSequenceUnchanged &&
@@ -849,8 +879,41 @@ function resolveStoryListItemsStable(
     }
     return last.listItems;
   }
-  const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
-  const next = { rawIndex, styleCascade, isFontAvailable, blocks, numberedByBlock, listItems };
+  // Resume from the first numbered paragraph that changed: an Enter in a long numbered
+  // document otherwise renumbered every list item before it as well.
+  const paragraphs = numberedByBlock.flat();
+  const previous =
+    last?.walk &&
+    last.rawIndex === rawIndex &&
+    last.styleCascade === styleCascade &&
+    last.isFontAvailable === isFontAvailable
+      ? last.walk
+      : undefined;
+  let from = 0;
+  while (
+    previous &&
+    from < paragraphs.length &&
+    sameNumberedParagraph(paragraphs[from]!, previous.paragraphs[from])
+  )
+    from += 1;
+  const resolve = resolveListSequence(
+    paragraphs,
+    linkedIndex,
+    styleCascade,
+    isFontAvailable,
+    previous ? { from, previous: previous.resolve } : undefined
+  );
+  const listItems = resolve.items;
+  const walk = { paragraphs, resolve };
+  const next = {
+    rawIndex,
+    styleCascade,
+    isFontAvailable,
+    blocks,
+    numberedByBlock,
+    listItems,
+    walk,
+  };
   if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
   else {
     if (first) lastStoryResolvesByAnchor.set(first, next);
@@ -859,112 +922,9 @@ function resolveStoryListItemsStable(
   return listItems;
 }
 
-/**
- * Horizontal marker box inside the first-line indent slot.
- *
- * Coordinates are relative to the same origin as paragraph content (`indent.left` is the
- * text start). Returns null when there is nothing to paint.
- *
- * `w:hanging` and a positive `w:firstLine` are one mutually exclusive slot
- * (§17.3.1.10, §17.3.1.12), so the marker has two placements, not an interaction:
- * a hanging level puts the marker BEFORE the text start (`left - hanging`); a
- * positive-firstLine level puts it AFTER (`left + firstLine`) — the standard legal
- * shape `w:ind w:left="0" w:firstLine="720"` numbers at 0.5" while continuation
- * lines return to the margin. Reading only the hanging model painted every such
- * marker at the left margin.
- */
-export function listMarkerBox(
-  item: ResolvedListItem,
-  markerWidth: number,
-  lineY: number,
-  lineHeight: number
-): { x: number; y: number; width: number; height: number } | null {
-  if (!item.markerText || (item.indent.hanging <= 0 && markerWidth <= 0)) {
-    if (!item.markerText) return null;
-  }
-  if (!item.markerText) return null;
-
-  const textLeft = item.indent.left;
-  const hanging = item.indent.hanging;
-  // The hanging spelling wins when a hostile file states both (Word's collapse); a
-  // NEGATIVE firstLine is the hang spelled the other way and stays on the hanging model.
-  const firstLine = hanging > 0 ? 0 : Math.max(0, item.indent.firstLine);
-  // Markers stop at the content origin — except for a paragraph the author pulled INTO the
-  // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
-  // the number to the RIGHT of the text it numbers.
-  const floor = Math.min(0, textLeft);
-  const slotLeft = firstLine > 0 ? textLeft + firstLine : Math.max(floor, textLeft - hanging);
-  const slotWidth = Math.max(hanging, markerWidth);
-  let x = slotLeft;
-  if (item.markerAlign === 'right') {
-    // The alignment anchor is the slot's right edge: the text start for a hanging level,
-    // the shifted slot's end for a first-line level.
-    x = firstLine > 0 ? slotLeft + slotWidth - markerWidth : textLeft - markerWidth;
-  } else if (item.markerAlign === 'center') {
-    x = slotLeft + (slotWidth - markerWidth) / 2;
-  }
-  if (x < floor) x = floor;
-  return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
-}
-
-/**
- * Where the FIRST line of a list paragraph starts, relative to `indent.left` (§17.9.30).
- *
- * A list paragraph's hanging indent is the marker's slot, so ordinarily the text starts at
- * `indent.left` and this is 0 — `w:suff="tab"` with a marker that fits is exactly that case.
- * The other three cases are where Word and a forced zero part company:
- *
- * - `w:suff="space"` — one space after the marker, then the text. Not a tab, not the indent.
- * - `w:suff="nothing"` — the text begins immediately after the marker.
- * - `w:suff="tab"` with a marker WIDER than its slot (`viii.`, `%1.%2.%3.`) — the suffix tab
- *   advances to the next tab stop past the marker, so the first line moves right instead of
- *   the marker being painted over its own first word.
- *
- * A positive-firstLine level's marker ends PAST the text start, so its suffix tab always
- * takes the stop lookup. `tabStops` is the PARAGRAPH's resolved stops: a `w:tab` the level
- * itself states (`w:num` at the next grid stop is the shape Word writes) is not folded in,
- * and the default half-inch grid lands on the same destination.
- */
-export function listFirstLineOffset(
-  item: ResolvedListItem,
-  measurer: TextMeasurer,
-  tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
-  rightEdge = Number.POSITIVE_INFINITY
-): number {
-  if (!item.markerText) return 0;
-  const markerWidth = measurer.measure(item.markerText, item.markerStyle);
-  const box = listMarkerBox(item, markerWidth, 0, 0);
-  if (!box) return 0;
-  const textLeft = item.indent.left;
-  const markerEnd = box.x + box.width;
-  if (item.suffix === 'nothing') return markerEnd - textLeft;
-  if (item.suffix === 'space') {
-    return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
-  }
-  // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
-  // to look further along the paragraph's own stops.
-  if (markerEnd <= textLeft) return 0;
-  return nextTabDestination(tabStops, markerEnd, rightEdge).positionPt - textLeft;
-}
-
-/**
- * First-line offset for ANY paragraph: `w:firstLine` right, `w:hanging` left — except a list
- * item, whose first line is placed by its marker and `w:suff` ({@link listFirstLineOffset}).
- */
-export function firstLineShift(
-  item: ResolvedListItem | undefined,
-  indent: { readonly left: number; readonly hanging: number; readonly firstLine: number },
-  measurer: TextMeasurer,
-  tabStops?: ResolvedTabStops,
-  available?: number
-): number {
-  if (item) {
-    return listFirstLineOffset(
-      item,
-      measurer,
-      tabStops,
-      available === undefined ? undefined : indent.left + available
-    );
-  }
-  return indent.hanging > 0 ? -indent.hanging : indent.firstLine;
-}
+export {
+  firstLineShift,
+  listFirstLineOffset,
+  listMarkerBox,
+  listMarkerWidth,
+} from './list-marker-geometry.ts';

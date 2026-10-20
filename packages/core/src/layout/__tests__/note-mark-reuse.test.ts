@@ -18,7 +18,8 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { enumerateDocumentSections } from '../section-properties.ts';
-import { layoutSemanticDocumentWithNotes, type NotesLayoutInput } from '../note-pagination.ts';
+import type { NotesLayoutInput } from '../note-pagination.ts';
+import { layoutSemanticDocumentWithNotes } from './notes-layout-drain.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The CT_Anchor gate compared its xsd:boolean flags against the raw attribute string, so a legal spelling that carried whitespace — behindDoc=\" 1 \" or allowOverlap=\"true\\n\" — failed validation and the whole floating drawing was dropped on import, even though the shape readers already collapsed the same values.",
+  "after": "The anchor gate reads those flags through a shared parseSchemaBoolean helper that applies the fixed whiteSpace=\"collapse\" facet of xsd:boolean, so word and digit spellings with surrounding whitespace validate and the drawing projects. Spellings the schema does not allow are still refused.",
+  "reason": "This is an import-side validation gate over OOXML bytes. It adds no stored field, operation, or journal primitive, and it does not change how any shared node, identity, or update is represented or interpreted. Released participants read the resulting collaborative state exactly as they do today; only the set of drawings that survive parsing widens, and it widens toward what Word already paints.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-projection.test.ts"
+  ],
+  "changeset": "anchor-onoff-words",
+  "migration": null
+}

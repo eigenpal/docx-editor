@@ -32,8 +32,8 @@
     // the workspace, one of which would hand the "neutral" program the Node globals this project
     // exists to prove are absent.
     "types": [],
-    "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/core/store": ["../../../core/src/store/index.ts"],
       "@docx-editor.dev/core/automation": ["../../../core/src/automation/index.ts"],
       "@docx-editor.dev/core/collaboration": ["../../../core/src/collaboration/index.ts"]
     }

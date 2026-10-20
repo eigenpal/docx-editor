@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Find marks no matches, and hosts cannot mark text ranges.",
+  "after": "Find marks every match, and setHighlights paints named sets of host ranges as local view state.",
+  "reason": "Highlights are local presentation over the layout. They never write tree operations, shared state, awareness, or saved parts. Remote edits only change which marks pass the local text check.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-text-highlights.test.ts",
+    "packages/core/src/editor/__tests__/text-highlights.test.ts"
+  ],
+  "changeset": "search-text-highlights",
+  "migration": null
+}

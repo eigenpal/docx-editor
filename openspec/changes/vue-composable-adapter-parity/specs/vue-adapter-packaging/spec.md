@@ -197,7 +197,7 @@ exists, and auto-imports fifteen pre-v2 composable names.
 
 ### Requirement: Dead lint overrides SHALL be removed
 
-`eslint.config.js` SHALL carry no `max-lines` override naming a path that does not exist.
+`.oxlintrc.json` SHALL carry no `max-lines` override naming a path that does not exist.
 
 Four globs name three pre-v2 Vue files: `packages/vue/src/components/DocxEditor.vue`,
 `packages/vue/src/composables/useDocxEditor.ts` and `packages/vue/src/components/Toolbar.vue`.
@@ -206,5 +206,5 @@ comes back.
 
 #### Scenario: Every override matches a file
 
-- **WHEN** each `files` glob in `eslint.config.js` is resolved against the working tree
+- **WHEN** each `files` glob in `.oxlintrc.json` is resolved against the working tree
 - **THEN** every glob naming a specific file matches an existing file

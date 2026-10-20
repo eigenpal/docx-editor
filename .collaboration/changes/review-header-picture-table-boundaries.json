@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Character-style headers can select the wrong source occurrence. Some grouped pictures and mixed table borders use unsupported visual geometry.",
+  "after": "Headers use source-owned page ranges and active occurrences. Grouped pictures refuse unsupported visual properties. Modern mixed table borders retain their full-stroke geometry.",
+  "reason": "These changes affect read-only projection and layout. They do not change tree operations, saved OOXML, shared identities, or synchronization messages.",
+  "tests": [
+    "packages/core/src/layout/__tests__/character-style-headers.test.ts",
+    "packages/core/src/layout/__tests__/legacy-table-side-rules.test.ts",
+    "packages/core/src/store/__tests__/drawing-group-picture.test.ts"
+  ],
+  "changeset": "review-header-picture-table-boundaries",
+  "migration": null
+}

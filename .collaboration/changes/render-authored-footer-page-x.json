@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Footer PAGE frames without a leading tab can ignore page-relative X and reserve an extra paragraph despite explicit floating exact-height text anchoring.",
+  "after": "Supported PAGE/empty-anchor frames honor authored page-X. Bounded explicit exact-height frames with signed text-anchor Y clip to the authored frame and reserve only the real empty anchor.",
+  "reason": "Only derived furniture geometry changes. Auto/atLeast, missing-Y, leading-tab and unsupported shapes retain their existing behavior. Canonical OOXML, ranges, fields and saved bytes stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/footer-page-x.test.ts",
+    "packages/core/src/layout/__tests__/legacy-footer-fixed-frame.test.ts",
+    "packages/core/src/layout/__tests__/legacy-footer-page-frame.test.ts",
+    "packages/core/src/layout/__tests__/legacy-footer-right-frame.test.ts",
+    "packages/core/src/layout/__tests__/legacy-footer-empty-frame.test.ts",
+    "packages/core/src/layout/__tests__/even-odd-header-parity.test.ts"
+  ],
+  "changeset": "render-authored-footer-page-x",
+  "migration": null
+}

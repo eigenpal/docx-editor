@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { FACES, FAMILY_PLANS, planFaceFile } from '../family-plans.ts';
 import {
   FONT_ASSET_MANIFEST,
-  WORD_DOCUMENT_DEFAULT_FAMILIES,
+  DEFAULT_FONT_FAMILIES,
   loadDefaultFonts,
   packagedFonts,
 } from '../index.ts';
@@ -40,7 +40,7 @@ function countingFetcher(): { fetcher: typeof fetch; requested: string[]; bytes:
 
 /**
  * What the EAGER loader spends by default: every face of every family in
- * {@link WORD_DOCUMENT_DEFAULT_FAMILIES}.
+ * {@link DEFAULT_FONT_FAMILIES}.
  *
  * Derived from the shipped plan rather than summed over the whole manifest. The manifest
  * now carries a family the eager loader deliberately does NOT load by default, so summing
@@ -48,7 +48,7 @@ function countingFetcher(): { fetcher: typeof fetch; requested: string[]; bytes:
  * first time the two lists diverged.
  */
 const byteLengthOf = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry.byteLength]));
-const EAGER_DEFAULT_BYTES = WORD_DOCUMENT_DEFAULT_FAMILIES.reduce(
+const EAGER_DEFAULT_BYTES = DEFAULT_FONT_FAMILIES.reduce(
   (total, family) =>
     total +
     FACES.reduce(
@@ -156,7 +156,7 @@ describe('packagedFonts', () => {
     });
 
     expect(forwards.families).toEqual(backwards.families);
-    // Written out rather than derived from ALL_WORD_DEFAULT_FAMILIES. Deriving it made the
+    // Written out rather than derived from ALL_DEFAULT_FONT_FAMILIES. Deriving it made the
     // assertion restate the implementation, and it also broke the moment that list grew:
     // a filter over the constant tracks new entries, while the three families this
     // document actually names do not.
@@ -213,6 +213,36 @@ describe('packagedFonts', () => {
 
     expect(fragment.families).toHaveLength(0);
     expect(requested).toHaveLength(0);
+  });
+
+  test('a family covered only under the SUBSTITUTE name still gets its substitutions', async () => {
+    const { fetcher, requested } = countingFetcher();
+    // A caller who registers all four Carlito faces by their own name has the bytes
+    // Calibri needs but has not said so. Nothing loads, but the mapping must still be
+    // reported or the Word name resolves to nothing.
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Calibri'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('Carlito'),
+    });
+
+    expect(fragment.families).toHaveLength(0);
+    expect(requested).toHaveLength(0);
+    expect(fragment.sources).toHaveLength(0);
+    expect(fragment.substitutions.map((entry) => [entry.from, entry.to])).toEqual(
+      FOUR_FACES.map((face) => [
+        { family: 'Calibri', ...face },
+        { family: 'Carlito', ...face },
+      ])
+    );
+
+    // Covered under the Word name itself, there is nothing left to map.
+    const direct = await packagedFonts({ fetcher, install: false })({
+      families: ['Calibri'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('Calibri'),
+    });
+    expect(direct.substitutions).toHaveLength(0);
   });
 
   test('a PARTLY covered family is loaded whole, so no face is left without bytes', async () => {

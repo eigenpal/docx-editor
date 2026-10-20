@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:sym had no model offset width. Paragraph text skipped it, the caret could not step over it, and only a deletion spanning it removed it.",
+  "after": "A w:sym is one model character that reads as \"(\". It selects and deletes like a hyphen element, and search never matches it.",
+  "reason": "Shared state is unchanged: a symbol stays a generic tree node with the same identity and journal operations, and text effects address textValue positions, which do not count it. Model offsets do count each symbol now. In a room that mixes released and current participants, a remote caret placed after a symbol in the same paragraph shows one position off; presence is ephemeral and the saved room is unaffected. Experimental per-paragraph text collaboration carries a symbol as \"(\" and cannot recreate it from text: an update that changes two separate regions of one paragraph replaces the text between them and turns a symbol there into a parenthesis. Before this change the same update deleted the symbol. That lane has its own contract and is not covered by the document format.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-inline-characters.test.ts",
+    "packages/pro/src/collaboration/__tests__/text-collaboration-hyphens.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-symbol-text.test.ts",
+    "packages/core/src/editor/__tests__/symbol-caret.test.ts"
+  ],
+  "changeset": "symbol-text",
+  "migration": null
+}

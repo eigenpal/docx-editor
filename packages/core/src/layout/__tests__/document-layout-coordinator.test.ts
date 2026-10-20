@@ -326,6 +326,89 @@ describe('shared document-layout coordinator invalidation', () => {
     expect(repeated[1]?.footers.get('default')).toBe(secondFooter);
   });
 
+  test('keeps a shared story per page geometry when sections alternate orientation', () => {
+    // Portrait, landscape, portrait: one header and one footer part serve all three.
+    const portrait = '<w:pgSz w:w="12240" w:h="15840"/>';
+    const landscape = '<w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>';
+    const references =
+      '<w:headerReference w:type="default" r:id="rHeader"/>' +
+      '<w:footerReference w:type="default" r:id="rFooter"/>';
+    const sectionBreak = (size: string) =>
+      `<w:p><w:pPr><w:sectPr>${references}${size}</w:sectPr></w:pPr></w:p>`;
+    const loaded = readOoxmlPackage(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+            '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rDoc" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}">` +
+            `<Relationship Id="rHeader" Type="${R}/header" Target="header1.xml"/>` +
+            `<Relationship Id="rFooter" Type="${R}/footer" Target="footer1.xml"/>` +
+            '</Relationships>'
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+            sectionBreak(portrait) +
+            sectionBreak(landscape) +
+            `<w:sectPr>${references}${portrait}</w:sectPr>` +
+            '</w:body></w:document>'
+        ),
+        'word/header1.xml': strToU8(
+          `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>shared header</w:t></w:r></w:p></w:hdr>`
+        ),
+        'word/footer1.xml': strToU8(
+          `<w:ftr xmlns:w="${W}"><w:p><w:r><w:t>shared footer</w:t></w:r></w:p></w:ftr>`
+        ),
+      })
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const pkg = loaded.package;
+    const view: HeadlessDocumentView = {
+      part: () => pkg.parts.get(pkg.mainDocumentPart)!,
+      currentPackage: () => pkg,
+      packageRevision: () => 0,
+      stylesRoot: () => null,
+      numberingRoot: () => null,
+      settingsRoot: () => null,
+      documentThemeFonts: () => ({ major: null, minor: null }),
+      documentProperties: () => ({}),
+      headerFooterPartsBySection: () => resolveHeaderFooterPartsBySection(pkg),
+      headerFooterResolutionBySection: () => resolveHeaderFooterResolutionBySection(pkg),
+      relationshipTarget: (relationshipId) =>
+        relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
+    };
+    const source = createDocumentFurnitureSource({
+      view,
+      measurer: createFixedMeasurer(6, 14),
+      producer: 'alternating-geometry',
+      cache: createParagraphLayoutCache<readonly PendingLine[]>(),
+      linkProjectors: createDocumentLinkProjectors(view),
+    });
+    const fragmentsOf = (all: ReturnType<typeof source.sectionFurniture>) =>
+      all.flatMap((entry) => [
+        entry?.headers.get('default')?.fragments,
+        entry?.footers.get('default')?.fragments,
+      ]);
+    const first = fragmentsOf(source.sectionFurniture());
+    expect(first).toHaveLength(6);
+    // The landscape section lays the shared parts out at its own width.
+    expect(first[2]).not.toBe(first[0]);
+    // The portrait sections share one layout, and a second pass re-lays nothing. With one
+    // memo slot per part, each section evicted the other geometry's layout, so every pass
+    // re-laid the shared header and footer once per section.
+    expect(first[4]).toBe(first[0]);
+    const repeated = fragmentsOf(source.sectionFurniture());
+    repeated.forEach((fragments, index) => expect(fragments).toBe(first[index]));
+  });
+
   test('refreshes a memoized furniture story when only its main-owner rId changes', () => {
     const firstPackage = packageWithTargets('one');
     const headerPart = firstPackage.parts.get('/word/header1.xml')!;

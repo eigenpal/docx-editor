@@ -15,7 +15,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-export { reviewModule, type ReviewModuleOptions } from '../review/review-module.ts';
+export {
+  reviewModule,
+  type CommentMarkerStyle,
+  type ResolvedReviewPane,
+  type ReviewModuleOptions,
+  type ReviewPaneOpening,
+  type ReviewPaneOptions,
+  type ReviewPaneOverflow,
+  type RevisionDisplay,
+} from '../review/review-module.ts';
 export {
   collaborationModule,
   type CollaborationModuleOptions,
@@ -26,19 +35,32 @@ export {
   useReviewItem,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
+  type ReviewBalloonProps,
+  type ReviewDraftProps,
   type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview.tsx';
 export { useReviewAuthor } from './review-context.ts';
 export {
+  useReviewRailMetrics,
+  type UseReviewRailMetricsOptions,
+  type UseReviewRailMetricsReturn,
+} from './useReviewRailMetrics.ts';
+export type { ReviewRailMetrics } from '../review/rail-metrics.ts';
+export {
   useReview,
   useReviewOf,
   useStackedReviewPositions,
   type ReviewActivationOptions,
+  type ScrollPlacement,
+  type ReviewAdoptOptions,
+  type ReviewItemRevealEvent,
+  type ReviewItemRevealSource,
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview.ts';
+export type { ReviewWriteAction, ReviewWriteRefusal } from '../review/review-refusal.ts';
 export {
   useCollaborationStatus,
   type UseCollaborationStatusReturn,
@@ -77,7 +99,7 @@ export type {
   CollaborationBootstrap,
   CollaborationIdentityUpdate,
   CollaborationSession,
-} from '../collaboration/session.ts';
+} from '../collaboration/types.ts';
 export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
 export {
   DocxEditorCollaboration,
@@ -88,6 +110,11 @@ export {
   type CollaborationCaretLabelsProps,
   type DocxEditorCollaborationNamespace,
 } from './DocxEditorCollaboration.ts';
+export type {
+  CollaborationStatusNoticeProps,
+  CollaborationStatusNoticeRenderProps,
+} from './CollaborationStatusNotice.ts';
+export type { CollaborationNoticeKind } from '../collaboration/status-notice.ts';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
 export {
   CustomNodeContextMenu,

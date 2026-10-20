@@ -20,11 +20,19 @@ import {
 } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import {
+  cellStructureOp,
+  cellStructureRejection,
+  outerColumnOfSelection,
+  outerRowOfSelection,
+  splitCellShapeRefusal,
+} from './table-cell-structure-plan.ts';
+import {
   MAX_TABLE_COLUMNS,
   MAX_TABLE_BORDER_SIZE_EIGHTHS,
   MIN_TABLE_BORDER_SIZE_EIGHTHS,
   MIN_TABLE_COLUMN_WIDTH_TWIPS,
 } from '../store/store/table-constraints.ts';
+import { tableInteractionIndex } from '../layout/semantic-table-interaction.ts';
 import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
@@ -42,6 +50,18 @@ import type {
   TreeOpRejection,
 } from '../store/store/tree-op-types.ts';
 import { TABLE_BORDER_STYLES } from '../store/table-border-style.ts';
+
+function isVisualRtlTable(layout: SemanticLayout, tableId: string): boolean {
+  return tableInteractionIndex(layout).occurrences.some(
+    (occ) =>
+      occ.table.tableId === tableId &&
+      occ.row.cells.some((cell) => cell.logicalGridColumn !== undefined)
+  );
+}
+
+function visualBorderTarget(target: TableBorderEdgeTarget, rtl: boolean): TableBorderEdgeTarget {
+  return rtl ? (target === 'left' ? 'right' : target === 'right' ? 'left' : target) : target;
+}
 
 let plannerCallCount = 0;
 
@@ -128,14 +148,20 @@ function refusal(code: 'unsupported' | 'invalidArgs' | 'locked', reason: string)
 }
 
 function mapStoreRejection(reason: TreeOpRejection, detail?: string): TableCommandPlan {
+  const cellStructure = cellStructureRejection(reason);
+  if (cellStructure) return refusal(cellStructure.code, cellStructure.reason);
   switch (reason) {
     case 'unknown-table':
     case 'unknown-row':
     case 'unknown-grid-column':
       return refusal('invalidArgs', 'the table target is no longer valid');
     case 'table-has-merge':
-      return refusal('unsupported', 'this table has merged cells');
+      return refusal(
+        'unsupported',
+        'this table uses a legacy horizontal merge the editor cannot change'
+      );
     case 'row-hides-cell':
+    case 'tree-invariant':
       return refusal('unsupported', 'this table has a cell the editor cannot place in the grid');
     case 'block-required':
       return refusal('unsupported', 'the table must keep at least one row or column');
@@ -273,6 +299,10 @@ function validateOptionalColumnTarget(command: Record<string, unknown>): boolean
 
 function validateTableCommandShape(command: EditorCommand): TableCommandPlan | null {
   switch (command.type) {
+    case 'splitCell': {
+      const invalid = splitCellShapeRefusal(command);
+      return invalid ? refusal('invalidArgs', invalid) : null;
+    }
     case 'insertRow':
       if (!isPlainObject(command) || command.type !== 'insertRow') {
         return refusal('invalidArgs', 'insertRow command shape is invalid');
@@ -619,22 +649,22 @@ function planResizeDivider(
     const reason = topo.reason === 'duplicate-node-id' ? 'unknown-table' : topo.reason;
     return mapStoreRejection(reason);
   }
-  if (topo.topology.hasMerge) return refusal('unsupported', 'this table has merged cells');
   const left = topo.topology.gridColumns.find((c) => c.id === target.leftGridColumnId);
   const right = topo.topology.gridColumns.find((c) => c.id === target.rightGridColumnId);
   if (!left || !right) return refusal('invalidArgs', 'the table target is no longer valid');
   const leftIndex = topo.topology.gridColumns.indexOf(left);
   const rightIndex = topo.topology.gridColumns.indexOf(right);
-  if (rightIndex !== leftIndex + 1) {
+  if (Math.abs(rightIndex - leftIndex) !== 1) {
     return refusal('invalidArgs', 'the column divider target is not adjacent');
   }
   const op: TreeDocOp = {
     op: 'setTableColumnWidths',
     tableId: target.tableId,
-    leftGridColumnId: target.leftGridColumnId,
-    rightGridColumnId: target.rightGridColumnId,
-    leftWidthTwips,
-    rightWidthTwips,
+    // Pointer targets use visual left/right; the store operates in document order.
+    leftGridColumnId: leftIndex < rightIndex ? target.leftGridColumnId : target.rightGridColumnId,
+    rightGridColumnId: leftIndex < rightIndex ? target.rightGridColumnId : target.leftGridColumnId,
+    leftWidthTwips: leftIndex < rightIndex ? leftWidthTwips : rightWidthTwips,
+    rightWidthTwips: leftIndex < rightIndex ? rightWidthTwips : leftWidthTwips,
   };
   return planValidated(input.part, [op], { kind: 'preserveSelection' });
 }
@@ -661,7 +691,6 @@ function planResizeRightEdge(
     const reason = topo.reason === 'duplicate-node-id' ? 'unknown-table' : topo.reason;
     return mapStoreRejection(reason);
   }
-  if (topo.topology.hasMerge) return refusal('unsupported', 'this table has merged cells');
   const last = topo.topology.gridColumns[topo.topology.gridColumns.length - 1];
   if (!last || last.id !== target.gridColumnId) {
     return refusal('invalidArgs', 'the resize target is not the table right edge');
@@ -711,10 +740,6 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
   }
 
   switch (command.type) {
-    case 'mergeCells':
-      return refusal('unsupported', 'cell merge is not supported yet');
-    case 'splitCell':
-      return refusal('unsupported', 'cell split is not supported yet');
     case 'toggleHeaderRow':
     case 'selectTableRegion':
     case 'setTableProperties':
@@ -770,12 +795,23 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
   }
 
   switch (command.type) {
+    case 'mergeCells':
+    case 'splitCell': {
+      if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
+      const planned = cellStructureOp(command, anchor, input.cellSelection !== null);
+      if (!planned.ok) return refusal(planned.code, planned.reason);
+      return planValidated(part, [planned.op], { kind: 'adoptCommittedCaret' });
+    }
     case 'insertRow': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
+      // Beside the selection's outer row: below a cell merged down several rows is below its
+      // last row, not inside the merge. An explicit occurrence target keeps its row.
+      const rowId =
+        (rowTarget ? null : outerRowOfSelection(part, anchor, command.where)) ?? anchor.rowId;
       const op: TreeDocOp = {
         op: 'insertTableRow',
         tableId: anchor.tableId,
-        rowId: anchor.rowId,
+        rowId,
         where: command.where,
       };
       return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
@@ -798,19 +834,28 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
     case 'insertColumn': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
       const tableId = columnTarget?.tableId ?? anchor.tableId;
+      const where = isVisualRtlTable(input.layout, tableId)
+        ? command.where === 'left'
+          ? 'right'
+          : 'left'
+        : command.where;
+      // Beside the selection's outer column on that side: right of a merged cell is right of
+      // the last column it spans, not inside it.
       const gridColumnId =
-        columnTarget?.gridColumnId ?? gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
+        columnTarget?.gridColumnId ??
+        outerColumnOfSelection(part, anchor, where) ??
+        gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
       const op: TreeDocOp = gridColumnId
         ? {
             op: 'insertTableColumn',
             tableId,
-            where: command.where,
+            where,
             gridColumnId,
           }
         : {
             op: 'insertTableColumn',
             tableId,
-            where: command.where,
+            where,
             referenceCellId: anchor.cellId,
           };
       return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
@@ -884,7 +929,10 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
           tableId: anchor.tableId,
           cellIds: anchor.cellIds,
           scope: 'none',
-          target: command.target as TableBorderEdgeTarget,
+          target: visualBorderTarget(
+            command.target as TableBorderEdgeTarget,
+            isVisualRtlTable(input.layout, anchor.tableId)
+          ),
         };
         return planValidated(part, [op], { kind: 'preserveSelection' });
       }
@@ -894,7 +942,7 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
         op: 'setTableCellBorders',
         tableId: anchor.tableId,
         cellIds: anchor.cellIds,
-        scope: command.scope,
+        scope: visualBorderTarget(command.scope, isVisualRtlTable(input.layout, anchor.tableId)),
         spec: lowered.spec,
       };
       return planValidated(part, [op], { kind: 'preserveSelection' });
@@ -926,10 +974,6 @@ export function tableCommandCanSupport(command: EditorCommand): {
     return { supported: false, reason: `command '${command.type}' is not a table command` };
   }
   switch (command.type) {
-    case 'mergeCells':
-      return { supported: false, reason: 'cell merge is not supported yet' };
-    case 'splitCell':
-      return { supported: false, reason: 'cell split is not supported yet' };
     case 'toggleHeaderRow':
     case 'selectTableRegion':
     case 'setTableProperties':

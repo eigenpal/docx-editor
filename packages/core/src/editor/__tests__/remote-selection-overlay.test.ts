@@ -418,8 +418,7 @@ describe('remote caret label host', () => {
 
   test('the facade re-applies the label host across detach and re-attach', () => {
     let editorRef: ReturnType<typeof createDocxEditor> | null = null;
-    // The remotes resolve against the CURRENT surface: a re-attach mounts a fresh session
-    // whose paragraph ids differ, and a caret pinned to the old ids would never paint.
+    // The remotes resolve against the CURRENT surface's paragraph ids.
     const { session, notify } = stubSession(() => {
       const ids = editorRef?.surface?.session.paragraphIds() ?? [];
       return ids.length === 0 ? [] : [bobAt(ids[0]!, 1)];
@@ -446,14 +445,14 @@ describe('remote caret label host', () => {
       expect(publishes.at(-1)!.some((anchor) => anchor.selection.actorId === 'bob')).toBe(true);
 
       editor.detach();
-      const before = publishes.length;
       editor.attach(el);
       notify();
-      // The registration survives the remount: the re-applied host publishes again, and the
-      // labels stay host-owned instead of falling back to the default name labels.
-      expect(publishes.length).toBeGreaterThan(before);
+      // The registration survives the move: the labels stay host-owned instead of falling back
+      // to the default name labels, and the anchors the host already holds are the same live
+      // elements, so nothing needs publishing again.
       const relabel = el.querySelector<HTMLElement>('.docx-remote-caret-label');
       expect(relabel).toBeTruthy();
+      expect(publishes.at(-1)!.some((anchor) => anchor.element === relabel)).toBe(true);
       expect(relabel!.textContent).toBe('');
       expect(relabel!.getAttribute('data-docx-remote-actor')).toBe('bob');
       expect(publishes.at(-1)!.some((anchor) => anchor.selection.actorId === 'bob')).toBe(true);

@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/react",
-  "version": "2.14.1",
+  "version": "2.31.0",
   "description": "React DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -15,18 +15,19 @@
   },
   "files": [
     "dist",
+    "docs",
     "src/styles",
     "!dist/metafile-*.json",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/check-built-siblings.mjs && tsup",
+    "typecheck": "bun check",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.14.0",
+    "@docx-editor.dev/core": "~2.31.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
@@ -40,7 +41,8 @@
   },
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",
@@ -65,7 +67,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@docx-editor.dev/i18n": "^2.14.1",
+    "@docx-editor.dev/i18n": "^2.31.0",
     "@radix-ui/react-select": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1"

@@ -22,8 +22,13 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
 import { strToU8, zipSync } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
+import type { DocxEditorInstance, RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+} from '@docx-editor.dev/react';
 import { DocxEditorReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';
 
@@ -84,7 +89,7 @@ const MIXED = zipSync({
   ),
 });
 
-async function mount() {
+async function mount(adaStyle?: RevisionAuthorStyle) {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
@@ -95,6 +100,7 @@ async function mount() {
         instance = editor as DocxEditorInstance;
       }}
     >
+      {adaStyle ? <DocxEditorAuthorStyle author="Ada Lovelace" {...adaStyle} /> : null}
       <DocxEditorViewport>
         <DocxEditorContent />
         <DocxEditorReview />
@@ -103,6 +109,20 @@ async function mount() {
   );
   await act(async () => {});
   return { view, editor: instance! };
+}
+
+async function putCaret(
+  editor: DocxEditorInstance,
+  paragraphIndex: number,
+  offset: number
+): Promise<void> {
+  const paragraphId = editor.surface!.session.paragraphIds()[paragraphIndex]!;
+  await act(async () => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset },
+      head: { paragraphId, offset },
+    });
+  });
 }
 
 /** The slot the CARD for this author draws in. */
@@ -249,5 +269,56 @@ describe('the comment band carries its author', () => {
     // The declaration has to survive the trip: the card and the text cannot disagree about a
     // colour the host set explicitly.
     expect(band!.style.getPropertyValue('--doc-review-author-current')).toBe('#0b7285');
+  });
+});
+
+describe("an author's active background", () => {
+  test('tints the open change and clears the kind rule', async () => {
+    const { view, editor } = await mount({ activeBackground: 'rgba(1, 2, 3, 0.25)' });
+    // Offset 7 sits inside Ada's "added".
+    await putCaret(editor, 0, 7);
+    const band = view.container.querySelector<HTMLElement>('.docx-revision-band--active');
+    expect(band).not.toBeNull();
+    expect(band!.dataset.reviewAuthor).toBe('Ada Lovelace');
+    expect(band!.style.backgroundColor).toBe('rgba(1, 2, 3, 0.25)');
+    expect(band!.style.boxShadow).toBe('none');
+  });
+
+  test('leaves comment bands and a parked caret on the kind treatment', async () => {
+    const { view, editor } = await mount({ activeBackground: 'rgba(1, 2, 3, 0.25)' });
+    // Inside Grace's "hello" comment: the active COMMENT band is not a revision band,
+    // so the revision field must not touch it.
+    await putCaret(editor, 1, 2);
+    const comment = view.container.querySelector<HTMLElement>(
+      '.docx-comment-band--active[data-review-author="Grace Hopper"]'
+    );
+    expect(comment).not.toBeNull();
+    expect(comment!.style.backgroundColor).toBe('');
+    // On untracked text: no band is open at all.
+    await putCaret(editor, 0, 1);
+    expect(view.container.querySelector('.docx-revision-band--active')).toBeNull();
+    expect(view.container.querySelector('.docx-comment-band--active')).toBeNull();
+  });
+
+  test('`transparent` clears the whole treatment, and applies live', async () => {
+    const { view, editor } = await mount();
+    await putCaret(editor, 0, 7);
+    expect(view.container.querySelector('.docx-revision-band--active')).not.toBeNull();
+    await act(async () => {
+      editor.setRevisionStyles({
+        authors: {
+          'Ada Lovelace': { background: 'transparent', activeBackground: 'transparent' },
+        },
+      });
+    });
+    // The pending wash on the run and the open band above it, both gone.
+    expect(
+      view.container.querySelector<HTMLElement>(
+        '.docx-revision-insert[data-review-author="Ada Lovelace"]'
+      )?.style.backgroundColor
+    ).toBe('transparent');
+    const band = view.container.querySelector<HTMLElement>('.docx-revision-band--active');
+    expect(band!.style.backgroundColor).toBe('transparent');
+    expect(band!.style.boxShadow).toBe('none');
   });
 });

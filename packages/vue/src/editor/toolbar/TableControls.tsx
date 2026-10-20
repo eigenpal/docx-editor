@@ -11,6 +11,7 @@ import {
   type Ref,
   type VNode,
 } from 'vue';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import type { TableBorderStyle } from '@docx-editor.dev/core/contracts/editor';
 import type { TableChromeDraft } from '@docx-editor.dev/core/editor';
 import {
@@ -28,8 +29,8 @@ import { ToolbarSeparator } from './parts';
 import { Slot } from './Slot';
 import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
+import { useDropdownClose } from './useDropdownClose';
 import {
-  useDropdownClose,
   useTableChromeTriggerA11y,
   useTableDialogKeyboard,
   useTableMenuKeyboard,
@@ -155,7 +156,12 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
       const setOpen = (v: boolean) => {
         open.value = v;
       };
-      useDropdownClose(open, setOpen, rootRef);
+      useDropdownClose(
+        open,
+        setOpen,
+        rootRef,
+        () => Boolean(props.hidden) || !chrome.visible.value
+      );
 
       provide(CtxKey, {
         get open() {
@@ -189,7 +195,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
         if (props.asChild) {
           return (
             <Slot {...shared} ref={rootRef}>
-              {body}
+              {{ default: () => body }}
             </Slot>
           );
         }
@@ -243,7 +249,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -281,7 +287,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
           class: `docx-table-chrome__panel${props.className ? ` ${props.className}` : ''}`,
           onMousedown: guardToolbarMousedown,
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <div {...shared}>{slots.default?.()}</div>;
       };
     },
@@ -327,7 +333,7 @@ const TableBorderTargetItem = defineComponent({
         },
       };
       const display = slots.default?.() ?? [tableIcon(option.icon)];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -336,17 +342,17 @@ const TableBorderTargetItem = defineComponent({
 const TableBorderTargetContent = defineComponent({
   name: 'TableBorderTargetContent',
   setup(_, { slots }) {
-    return () => (
-      <targetCompound.Content>
-        {slots.default?.() ?? (
-          <div class="docx-table-chrome__target-grid">
-            {TABLE_BORDER_TARGET_OPTIONS.map((option) => (
-              <TableBorderTargetItem key={option.value} value={option.value} />
-            ))}
-          </div>
-        )}
-      </targetCompound.Content>
-    );
+    return () =>
+      h(targetCompound.Content, null, {
+        default: () =>
+          slots.default?.() ?? (
+            <div class="docx-table-chrome__target-grid">
+              {TABLE_BORDER_TARGET_OPTIONS.map((option) => (
+                <TableBorderTargetItem key={option.value} value={option.value} />
+              ))}
+            </div>
+          ),
+      });
   },
 });
 
@@ -358,11 +364,11 @@ const TableBorderTargetRoot = defineComponent({
     asChild: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
-    return () => (
-      <targetCompound.Root {...props}>
-        {slots.default?.() ?? [<targetCompound.Trigger />, <TableBorderTargetContent />]}
-      </targetCompound.Root>
-    );
+    return () =>
+      h(targetCompound.Root, props, {
+        default: () =>
+          slots.default?.() ?? [<targetCompound.Trigger />, <TableBorderTargetContent />],
+      });
   },
 });
 
@@ -406,7 +412,7 @@ const TableBorderStyleItem = defineComponent({
         <span class={`docx-table-line ${option.previewClass}`} aria-hidden="true" />,
         <span>{label(option.labelKey)}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -418,18 +424,19 @@ export const ToolbarTableBorderStyle = Object.assign(
     name: 'ToolbarTableBorderStyle',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <styleCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <styleCompound.Trigger />,
-            <styleCompound.Content>
-              {TABLE_BORDER_STYLE_OPTIONS.map((option) => (
-                <TableBorderStyleItem key={option.value} value={option.value} />
-              ))}
-            </styleCompound.Content>,
-          ]}
-        </styleCompound.Root>
-      );
+      return () =>
+        h(styleCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <styleCompound.Trigger />,
+              h(styleCompound.Content, null, {
+                default: () =>
+                  TABLE_BORDER_STYLE_OPTIONS.map((option) => (
+                    <TableBorderStyleItem key={option.value} value={option.value} />
+                  )),
+              }),
+            ],
+        });
     },
   }),
   {
@@ -477,7 +484,7 @@ const TableBorderWidthItem = defineComponent({
         />,
         <span>{label(option.labelKey)}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -489,18 +496,19 @@ export const ToolbarTableBorderWidth = Object.assign(
     name: 'ToolbarTableBorderWidth',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <widthCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <widthCompound.Trigger />,
-            <widthCompound.Content>
-              {TABLE_BORDER_WIDTH_OPTIONS.map((option) => (
-                <TableBorderWidthItem key={option.size} value={String(option.size)} />
-              ))}
-            </widthCompound.Content>,
-          ]}
-        </widthCompound.Root>
-      );
+      return () =>
+        h(widthCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <widthCompound.Trigger />,
+              h(widthCompound.Content, null, {
+                default: () =>
+                  TABLE_BORDER_WIDTH_OPTIONS.map((option) => (
+                    <TableBorderWidthItem key={option.size} value={String(option.size)} />
+                  )),
+              }),
+            ],
+        });
     },
   }),
   {
@@ -534,7 +542,12 @@ function buildColorSplitCompound(
       const setLastHex = (v: string) => {
         lastHex.value = v;
       };
-      useDropdownClose(open, setOpen, rootRef);
+      useDropdownClose(
+        open,
+        setOpen,
+        rootRef,
+        () => Boolean(props.hidden) || !chrome.visible.value
+      );
       provide(CtxKey, {
         get open() {
           return open.value;
@@ -574,7 +587,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <Slot {...shared} ref={rootRef}>
-              {body}
+              {{ default: () => body }}
             </Slot>
           );
         }
@@ -621,7 +634,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -662,7 +675,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -731,7 +744,7 @@ function buildColorSplitCompound(
             />
           </>
         );
-        if (props.asChild) return <Slot {...shared}>{body}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => body }}</Slot>;
         return <div {...shared}>{body}</div>;
       };
     },
@@ -750,15 +763,15 @@ export const ToolbarTableBorderColor = Object.assign(
     name: 'ToolbarTableBorderColor',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <borderColorCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <borderColorCompound.Main />,
-            <borderColorCompound.Trigger />,
-            <borderColorCompound.Content clearFill={false} />,
-          ]}
-        </borderColorCompound.Root>
-      );
+      return () =>
+        h(borderColorCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <borderColorCompound.Main />,
+              <borderColorCompound.Trigger />,
+              <borderColorCompound.Content clearFill={false} />,
+            ],
+        });
     },
   }),
   {
@@ -781,15 +794,15 @@ export const ToolbarTableCellFill = Object.assign(
     name: 'ToolbarTableCellFill',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <fillCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <fillCompound.Main />,
-            <fillCompound.Trigger />,
-            <fillCompound.Content clearFill={true} />,
-          ]}
-        </fillCompound.Root>
-      );
+      return () =>
+        h(fillCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <fillCompound.Main />,
+              <fillCompound.Trigger />,
+              <fillCompound.Content clearFill={true} />,
+            ],
+        });
     },
   }),
   {
@@ -829,6 +842,11 @@ export const TableChromeGroup = defineComponent({
         <>
           {props.separator ? <ToolbarSeparator /> : null}
           {entries.map((Part) => {
+            const override = props.overrides.get(Part.docxSlot);
+            if (override) return <Fragment key={Part.docxSlot}>{override}</Fragment>;
+            return h(Part, { key: Part.docxSlot });
+          })}
+          {[ToolbarTableMergeCells, ToolbarTableSplitCell].map((Part) => {
             const override = props.overrides.get(Part.docxSlot);
             if (override) return <Fragment key={Part.docxSlot}>{override}</Fragment>;
             return h(Part, { key: Part.docxSlot });

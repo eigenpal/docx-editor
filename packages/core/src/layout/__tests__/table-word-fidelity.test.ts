@@ -202,7 +202,10 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
   });
 });
 
-describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule', () => {
+// A cell's nil clears its OWN side only. The neighbour that inherits the interior rule keeps
+// it: a column whose cells state `w:left w:val="nil"` beside a column that inherits
+// `insideV` still shows the rule between them in the reference rendering.
+describe('B11 — an explicit w:val="nil" clears only its own side of an interior rule', () => {
   const omitted: TableBorderSide = { state: 'omitted' };
   const none: TableBorderSide = { state: 'none' };
   const edge = (widthPt: number, color: string | null = null): TableBorderSide => ({
@@ -234,22 +237,32 @@ describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule
     mergeRowSpan: 1,
   });
 
-  test('nil on one cell removes the insideH rule the neighbour only inherits', () => {
+  test('nil on one cell keeps the insideH rule the neighbour inherits', () => {
     const resolved = resolveTableCellBorderGrid(
       [[gridCell(box({ bottom: none }))], [gridCell(box({}))]],
       tableWithInside,
       1
     );
-    expect(resolved[0]![0]!.bottom).toBeUndefined();
+    expect(resolved[0]![0]!.bottom).toMatchObject({ style: 'single', widthPt: 0.5 });
   });
 
-  test('nil on one cell removes the insideV rule the neighbour only inherits', () => {
+  test('nil on one cell keeps the insideV rule the neighbour inherits', () => {
     const resolved = resolveTableCellBorderGrid(
       [[gridCell(box({ right: none })), gridCell(box({}), 1)]],
       tableWithInside,
       2
     );
+    expect(resolved[0]![0]!.right).toMatchObject({ style: 'single', widthPt: 0.5 });
+  });
+
+  test('nil on both sides of a shared edge clears the inherited rule', () => {
+    const resolved = resolveTableCellBorderGrid(
+      [[gridCell(box({ right: none })), gridCell(box({ left: none }), 1)]],
+      tableWithInside,
+      2
+    );
     expect(resolved[0]![0]!.right).toBeUndefined();
+    expect(resolved[0]![1]!.left).toBeUndefined();
   });
 
   test('a neighbour that authors its own edge still wins over the nil', () => {
@@ -262,7 +275,7 @@ describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule
   });
 });
 
-describe('B8 — border conflict weighs width first, style only as a tie-break', () => {
+describe('B8 — border conflict uses Word weighted widths, then style precedence', () => {
   // Word-matching, not conformance: §17.4.39 / §17.4.66 specify no conflict algorithm.
   const edge = (
     style: 'single' | 'dashed' | 'dotted' | 'double',
@@ -270,15 +283,15 @@ describe('B8 — border conflict weighs width first, style only as a tie-break',
     color: string | null = null
   ): TableBorderSide => ({ state: 'edge', style, color, widthPt });
 
-  test('a wide dashed rule outweighs a hairline single', () => {
-    expect(borderWeight(edge('dashed', 6))).toBeGreaterThan(borderWeight(edge('single', 0.25)));
+  test('a wide dashed rule retains weight one and loses to a quarter-point single', () => {
+    expect(borderWeight(edge('dashed', 6))).toBeLessThan(borderWeight(edge('single', 0.25)));
     const winner = resolveBorderConflict(edge('dashed', 6, 'CC3333'), edge('single', 0.25));
-    expect(winner).toMatchObject({ style: 'dashed', widthPt: 6 });
+    expect(winner).toMatchObject({ style: 'single', widthPt: 0.25 });
   });
 
-  test('a 1pt single outweighs a half-point double', () => {
+  test('a half-point double outweighs a 1pt single', () => {
     const winner = resolveBorderConflict(edge('double', 0.5), edge('single', 1));
-    expect(winner).toMatchObject({ style: 'single', widthPt: 1 });
+    expect(winner).toMatchObject({ style: 'double', widthPt: 0.5 });
   });
 
   test('style ranks the tie only at equal width', () => {

@@ -1,4 +1,22 @@
 import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
+import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
+import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+  FieldResultsMode,
+  ContentLockPolicy,
+  LockedControlNavigation,
+} from '@docx-editor.dev/core/editor';
+import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
+import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
+import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
+import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvalidTextFormFieldDialog';
+import { DocxEditorImageAltTextPopup } from '../editor/images/ImageAltText';
+import { DocxEditorImagePropertiesDialog } from '../editor/images/ImageProperties';
+import { createPackagedPopups } from '../editor/popup-config';
+import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import {
   computed,
   defineComponent,
@@ -11,8 +29,6 @@ import {
   watch,
   type CSSProperties,
   type PropType,
-  type SlotsType,
-  type VNodeChild,
   type VNode,
 } from 'vue';
 import type { TranslationKey } from '../i18n';
@@ -21,20 +37,35 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
-import { DocxEditorLoading } from '../editor/DocxEditorLoading';
+import { DocxEditorWindow } from '../editor/DocxEditorWindow';
+import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorNavigation, Navigation } from '../editor/navigation';
+import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
+import type {
+  DocxEditorOpenFailureContext,
+  DocxEditorOpenFailureProps,
+} from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
-import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
+import {
+  DocxEditorNotesChrome,
+  DocxEditorNotePropertiesDialog,
+  DocxEditorNotesContextMenu,
+  DocxEditorNotePreview,
+} from '../editor/DocxEditorNotes';
 import { DocxEditorContextMenu, ContextMenu } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import {
@@ -147,26 +178,37 @@ const ScopedChrome = defineComponent({
   },
 });
 
-const docxEditorSlots = Object as SlotsType<{
-  default?: () => VNodeChild;
-  titleBarLeft?: () => VNodeChild;
-  titleBarRight?: () => VNodeChild;
-}>;
-
 /** @public */
 export interface DocxEditorNamespace {
-  (props: DocxEditorProps): VNode;
-  new (): {
-    $props: DocxEditorProps;
-    $slots: {
-      default?: () => VNodeChild;
-      titleBarLeft?: () => VNodeChild;
-      titleBarRight?: () => VNodeChild;
-    };
-  };
+  /**
+   * The packaged editor. The second parameter types its slots for templates:
+   * `#openFailureActions` receives the refused open, the packaged message, and `dismiss`.
+   */
+  (
+    props: DocxEditorProps,
+    context?: {
+      slots: {
+        default?: () => VNode[];
+        titleBarLeft?: () => VNode[];
+        titleBarRight?: () => VNode[];
+        loadingIndicator?: () => VNode[];
+        openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+      };
+    }
+  ): VNode;
+  readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
+  readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
+  readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
+  readonly ImageAltTextPopup: typeof DocxEditorImageAltTextPopup;
+  readonly ImagePropertiesDialog: typeof DocxEditorImagePropertiesDialog;
+  readonly NotePropertiesDialog: typeof DocxEditorNotePropertiesDialog;
+  readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
+  readonly NotePreview: typeof DocxEditorNotePreview;
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  /** The editor panel in a pop-out window while `open`; see the pop-out guide. */
+  readonly Window: typeof DocxEditorWindow;
   readonly Toolbar: typeof DocxEditorToolbar;
   readonly Menu: typeof DocxEditorMenu;
   readonly Loading: typeof DocxEditorLoading;
@@ -174,11 +216,23 @@ export interface DocxEditorNamespace {
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
   readonly Navigation: typeof Navigation;
+  /** File export progress and errors, configured through popups.export. */
+  readonly ExportDialog: typeof DocxEditorExportDialog;
+  /** File print progress and errors, configured through popups.print. */
+  readonly PrintDialog: typeof DocxEditorPrintDialog;
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+  /** Watermark dialog — none, picture or text — applied as one undo step. */
+  readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
+  /** Bookmark dialog — list, add, delete and go to bookmarks. */
+  readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+  /** Split cells dialog — split the cell at the selection into columns and rows. */
+  readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
+  /** The dialog that explains a file the editor refused to open. Mounted by default. */
+  readonly OpenFailure: typeof DocxEditorOpenFailure;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
   /** The default linear-math popover for a clicked Office Math equation. */
@@ -186,18 +240,29 @@ export interface DocxEditorNamespace {
   readonly HyperLink: typeof DocxEditorHyperLink;
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
+  readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
+  readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
   readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
 
 const docxEditorFrameProps = {
+  popups: Object as PropType<DocxEditorProps['popups']>,
   document: {
     type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocxEditorProps['document']>,
     default: undefined,
   },
   fonts: {
     type: [Object, Function] as PropType<DocxEditorProps['fonts']>,
+    default: undefined,
+  },
+  fontShaping: {
+    type: Object as PropType<DocxEditorProps['fontShaping']>,
+    default: undefined,
+  },
+  imageDecodePort: {
+    type: Object as PropType<DocxEditorProps['imageDecodePort']>,
     default: undefined,
   },
   class: { type: String, default: undefined },
@@ -211,10 +276,25 @@ const docxEditorFrameProps = {
     type: [Boolean, Object] as PropType<boolean | DocxEditorContextMenuProps>,
     default: undefined,
   },
-  navigation: { type: Boolean, default: undefined },
+  navigation: {
+    type: [Boolean, Object] as PropType<boolean | DocxEditorNavigationProps>,
+    default: undefined,
+  },
+  openFailure: {
+    type: [Boolean, Object] as PropType<boolean | DocxEditorOpenFailureProps>,
+    default: undefined,
+  },
   rulers: { type: Boolean, default: undefined },
   mode: { type: String as PropType<DocxEditorProps['mode']>, default: undefined },
   zoom: { type: Number, default: undefined },
+  revisionMarkup: Object as PropType<RevisionMarkupOptions>,
+  reviewDisplayMode: String as PropType<ReviewDisplayMode>,
+  fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+  contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
+  lockedControlNavigation: {
+    type: String as PropType<LockedControlNavigation>,
+    default: undefined,
+  },
   zoomMode: { type: [Object, String] as PropType<DocxEditorProps['zoomMode']>, default: undefined },
   locale: { type: String, default: undefined },
   author: { type: String, default: undefined },
@@ -240,10 +320,17 @@ const docxEditorSugarProps = {
 
 const DocxEditorFrame = defineComponent({
   name: 'DocxEditorFrame',
-  slots: docxEditorSlots,
   inheritAttrs: false,
   props: docxEditorFrameProps,
-  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
+  emits: [
+    'ready',
+    'change',
+    'revisionMarkupChange',
+    'fontError',
+    'save',
+    'open',
+    'titleChange',
+  ] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const hostSave = computed(
       () =>
@@ -265,6 +352,7 @@ const DocxEditorFrame = defineComponent({
     const chrome = computed(() => props.chrome ?? true);
     const menu = computed(() => props.menu ?? true);
     const navigation = computed(() => props.navigation ?? true);
+    const openFailure = computed(() => props.openFailure ?? true);
     const rulers = computed(() => props.rulers ?? true);
     const contextMenu = computed(() => props.contextMenu ?? true);
     const hyperlinkPopup = computed(() => props.hyperlinkPopup ?? true);
@@ -295,14 +383,18 @@ const DocxEditorFrame = defineComponent({
     );
 
     const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
-    const { t: catalogT } = useTranslation();
-    const translate = (key: string, params?: Record<string, string | number>) =>
-      props.t ? props.t(key, params) : catalogT(key as TranslationKey, params);
+    const translation = useTranslation();
+    const translate = computed(() => {
+      const custom = props.t;
+      const catalogT = translation.t;
+      return (key: string, params?: Record<string, string | number>) =>
+        custom ? custom(key, params) : catalogT(key as TranslationKey, params);
+    });
 
     const tableInteractionLabel = (key: 'table.insertRowBelow' | 'table.insertColumnRight') =>
-      translate(key);
+      translate.value(key);
 
-    provide(PageNumberTranslationContext, translate);
+    provide(PageNumberTranslationContext, (key) => translate.value(key));
 
     const handleRef = shallowRef<DocxEditorRef | null>(null);
     expose({
@@ -331,6 +423,9 @@ const DocxEditorFrame = defineComponent({
     });
 
     return () => {
+      if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
+      warnOpenFailureActions(openFailure.value, slots.openFailureActions !== undefined);
+      const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;
       const viewport = h(
@@ -345,19 +440,8 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorHeaderFooterChrome) : null,
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
-            h(DocxEditorHyperLink, { hidden: hyperlinkPopup.value === false }),
-            h(DocxEditorEquation),
-            contextMenu.value === false
-              ? null
-              : h(DocxEditorContextMenu, {
-                  t: translate,
-                  ...(typeof contextMenu.value === 'object' ? contextMenu.value : {}),
-                }),
-            h(DocxEditorContentControl),
             rulers.value && chrome.value
-              ? h('div', { style: VERTICAL_RULER_STYLE, 'aria-hidden': 'true' }, [
-                  h(DocxEditorVerticalRuler),
-                ])
+              ? h('div', { style: VERTICAL_RULER_STYLE }, [h(DocxEditorVerticalRuler)])
               : null,
             slots.default?.(),
           ],
@@ -380,9 +464,9 @@ const DocxEditorFrame = defineComponent({
                   h('div', { style: TITLE_BLOCK_STYLE }, [
                     hostTitleChange.value !== undefined
                       ? h('input', {
-                          'aria-label': translate('titleBar.documentNameAriaLabel'),
+                          'aria-label': t('titleBar.documentNameAriaLabel'),
                           value: props.title ?? '',
-                          placeholder: translate('titleBar.untitled'),
+                          placeholder: t('titleBar.untitled'),
                           style: TITLE_INPUT_STYLE,
                           onInput: (event: Event) => {
                             const value = (event.target as HTMLInputElement).value;
@@ -393,11 +477,11 @@ const DocxEditorFrame = defineComponent({
                       : h(
                           'span',
                           { style: { minWidth: 0, padding: '2px 6px' } },
-                          props.title ?? translate('titleBar.untitled')
+                          props.title ?? t('titleBar.untitled')
                         ),
                     menu.value !== false
                       ? h(DocxEditorMenu, {
-                          t: translate,
+                          t,
                           ...(props.title !== undefined ? { fileName: props.title } : {}),
                           ...(hostOpen.value !== undefined ? { openHandler: hostOpen.value } : {}),
                           ...(hostSave.value !== undefined ? { saveHandler: hostSave.value } : {}),
@@ -407,19 +491,28 @@ const DocxEditorFrame = defineComponent({
                   ]),
                   slots.titleBarRight?.(),
                 ]),
-                h('div', { style: TOOLBAR_ROW_STYLE }, [h(DocxEditorToolbar, { t: translate })]),
+                h('div', { style: TOOLBAR_ROW_STYLE }, [h(DocxEditorToolbar, { t })]),
               ]),
               rulers.value
                 ? h('div', { style: RULER_ROW_STYLE, 'data-testid': 'docx-editor-ruler-row' }, [
                     h(DocxEditorHorizontalRuler),
                   ])
                 : null,
-              h(DocxEditorFontNotice, { t: translate }),
+              h(DocxEditorFontNotice, { t }),
               h('div', { style: WORKSPACE_STYLE }, [
-                navigation.value ? h(DocxEditorNavigation, { t: translate }) : null,
+                navigation.value === false
+                  ? null
+                  : h(DocxEditorNavigation, {
+                      t,
+                      ...(typeof navigation.value === 'object' ? navigation.value : {}),
+                    }),
                 viewport,
                 h(DocxEditorPageNumber),
-                h(DocxEditorLoading, { overlay: true }),
+                h(
+                  DocxEditorLoading,
+                  { overlay: true },
+                  slots.loadingIndicator ? { indicator: slots.loadingIndicator } : undefined
+                ),
               ]),
             ]
           )
@@ -430,12 +523,26 @@ const DocxEditorFrame = defineComponent({
         {
           ...(props.document !== undefined ? { document: props.document } : {}),
           ...(props.fonts ? { fonts: props.fonts } : {}),
+          ...(props.fontShaping ? { fontShaping: props.fontShaping } : {}),
+          ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
           ...(props.author !== undefined ? { author: props.author } : {}),
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
-          translate,
+          popups: createPackagedPopups(props.popups, hyperlinkPopup.value, contextMenu.value, t),
+          translate: t,
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
+          revisionMarkup: props.revisionMarkup,
+          reviewDisplayMode: props.reviewDisplayMode,
+          ...(props.fieldResults !== undefined ? { fieldResults: props.fieldResults } : {}),
+          ...(props.contentLockPolicy !== undefined
+            ? { contentLockPolicy: props.contentLockPolicy }
+            : {}),
+          ...(props.lockedControlNavigation !== undefined
+            ? { lockedControlNavigation: props.lockedControlNavigation }
+            : {}),
+          onRevisionMarkupChange: (settings: ResolvedRevisionMarkup) =>
+            emit('revisionMarkupChange', settings),
           ...(props.zoomMode !== undefined ? { zoomMode: props.zoomMode } : {}),
           tableInteractionLabel,
           onReady: (editor: unknown) => emit('ready', editor),
@@ -446,6 +553,27 @@ const DocxEditorFrame = defineComponent({
           default: () => [
             h(RefBridge),
             h(ScopedChrome, { scoped: chrome.value }, { default: () => tree }),
+            // A modal, so it shows with or without chrome: a refused open leaves blank pages.
+            openFailure.value === false
+              ? null
+              : h(
+                  DocxEditorOpenFailure,
+                  {
+                    t,
+                    ...(typeof openFailure.value === 'object' ? openFailure.value : {}),
+                    // Outside the chrome wrapper, so the dialog carries the colour mode itself.
+                    className:
+                      [
+                        isDark.value ? 'dark' : undefined,
+                        typeof openFailure.value === 'object'
+                          ? openFailure.value.className
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined,
+                  },
+                  slots.openFailureActions ? { actions: slots.openFailureActions } : undefined
+                ),
           ],
         }
       );
@@ -455,10 +583,17 @@ const DocxEditorFrame = defineComponent({
 
 const DocxEditorImpl = defineComponent({
   name: 'DocxEditor',
-  slots: docxEditorSlots,
   inheritAttrs: false,
   props: docxEditorSugarProps,
-  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
+  emits: [
+    'ready',
+    'change',
+    'revisionMarkupChange',
+    'fontError',
+    'save',
+    'open',
+    'titleChange',
+  ] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const hostSaveProp = () =>
       props.saveHandler ??
@@ -505,6 +640,8 @@ const DocxEditorImpl = defineComponent({
               },
               onReady: (editor: unknown) => emit('ready', editor),
               onChange: (change: unknown) => emit('change', change),
+              onRevisionMarkupChange: (settings: ResolvedRevisionMarkup) =>
+                emit('revisionMarkupChange', settings),
               onFontError: (error: unknown) => emit('fontError', error),
               saveHandler:
                 hostSaveProp() !== undefined
@@ -532,6 +669,8 @@ const DocxEditorImpl = defineComponent({
               default: slots.default,
               titleBarLeft: slots.titleBarLeft,
               titleBarRight: slots.titleBarRight,
+              loadingIndicator: slots.loadingIndicator,
+              openFailureActions: slots.openFailureActions,
             }
           ),
       });
@@ -541,9 +680,18 @@ const DocxEditorImpl = defineComponent({
 
 /** @public */
 export const DocxEditor = Object.assign(DocxEditorImpl, {
+  TextFormFieldDialog: DocxEditorTextFormFieldDialog,
+  ContentControlWidget: DocxEditorContentControlWidget,
+  InvalidTextFormFieldDialog: DocxEditorInvalidTextFormFieldDialog,
+  ImageAltTextPopup: DocxEditorImageAltTextPopup,
+  ImagePropertiesDialog: DocxEditorImagePropertiesDialog,
+  NotePropertiesDialog: DocxEditorNotePropertiesDialog,
+  NotesContextMenu: DocxEditorNotesContextMenu,
+  NotePreview: DocxEditorNotePreview,
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Window: DocxEditorWindow,
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
@@ -551,16 +699,24 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigation,
+  ExportDialog: DocxEditorExportDialog,
+  PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  WatermarkDialog: DocxEditorWatermarkDialog,
+  BookmarkDialog: DocxEditorBookmarkDialog,
+  SplitCellDialog: DocxEditorSplitCellDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
+  OpenFailure: DocxEditorOpenFailure,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   Equation: DocxEditorEquation,
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,
+  RevisionMarkup: DocxEditorRevisionMarkup,
+  RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
   UnsupportedElement: DocxEditorUnsupportedElement,
   AuthorStyle: DocxEditorAuthorStyle,
   ColorByChangeType: DocxEditorColorByChangeType,

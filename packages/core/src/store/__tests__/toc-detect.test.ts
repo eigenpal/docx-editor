@@ -106,3 +106,22 @@ describe('detectBodyTocs memoization', () => {
     expect(detectBodyTocs(edited.part)).toBe(after);
   });
 });
+
+test('deep field overflow retains outer cached rows and recovers for following TOCs', () => {
+  const depth = 2048;
+  const nested =
+    '<w:fldChar w:fldCharType="begin"/>'.repeat(depth) +
+    '<w:instrText>TOC</w:instrText><w:fldChar w:fldCharType="separate"/>' +
+    '<w:t>Nested cache</w:t>'.repeat(depth) +
+    '<w:fldChar w:fldCharType="end"/>'.repeat(depth);
+  const part = load(
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>TOC</w:instrText><w:fldChar w:fldCharType="separate"/>' +
+      nested +
+      '<w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+      TOC
+  );
+  const found = detectBodyTocs(part);
+  expect(found).toHaveLength(2);
+  expect(found[0]!.resultParagraphIds).toEqual([found[0]!.beginParagraphId]);
+  expect(found[1]!.instruction.outlineEnd).toBe(2);
+});

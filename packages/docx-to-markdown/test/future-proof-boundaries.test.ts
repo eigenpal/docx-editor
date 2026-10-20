@@ -34,7 +34,8 @@ test('the Markdown translator remains a semantic-record-only consumer', () => {
 
 test('browser and exporter compose final layout through the same neutral coordinator', () => {
   for (const source of [browserSurfaceSource, exportSessionSource]) {
-    expect(source).toContain('layoutDocumentView(');
+    // The browser surface drives the same coordinator as steps, so an open can pause.
+    expect(source).toMatch(/\blayoutDocumentView(?:Steps)?\(/);
     expect(source).toContain(
       'satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>'
     );

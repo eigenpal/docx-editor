@@ -96,10 +96,11 @@ export function retainShellHyperlinks(
 export function mergePersistentPackageShell(
   snapshot: OoxmlPackage,
   live: OoxmlPackage,
-  shellHyperlinks: readonly OoxmlExternalTarget[] = []
+  shellHyperlinks: readonly OoxmlExternalTarget[] = [],
+  restoreNumbering = false
 ): OoxmlPackage {
   if (snapshot === live) return snapshot;
-  let next = mergeNumberingShell(snapshot, live);
+  let next = mergeNumberingShell(snapshot, live, restoreNumbering);
   next = mergeHyperlinkShell(next, live, shellHyperlinks);
   return next;
 }
@@ -140,11 +141,22 @@ export function pruneUnreachableHyperlinkShell(
   return next;
 }
 
-function mergeNumberingShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlPackage {
+function mergeNumberingShell(
+  snapshot: OoxmlPackage,
+  live: OoxmlPackage,
+  restoreNumbering: boolean
+): OoxmlPackage {
   const liveNumbering = live.parts.get(NUMBERING_PART);
   if (!liveNumbering) return snapshot;
 
-  let next: OoxmlPackage = withPart(snapshot, liveNumbering);
+  // Explicit numbering edits are history-owned. Keep their snapshot definitions, while
+  // retaining later shell allocations so unrelated paragraph references remain valid.
+  const oldNumbering = snapshot.parts.get(NUMBERING_PART);
+  const numbering =
+    restoreNumbering && oldNumbering
+      ? mergeMissingNumberingDefinitions(oldNumbering, liveNumbering)
+      : liveNumbering;
+  let next: OoxmlPackage = withPart(snapshot, numbering);
 
   const liveRel = (live.relationships.get(live.mainDocumentPart) ?? []).find(
     (record) => record.type === NUMBERING_REL_TYPE
@@ -167,6 +179,49 @@ function mergeNumberingShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
   }
 
   return next;
+}
+
+function mergeMissingNumberingDefinitions(snapshot: OoxmlPart, live: OoxmlPart): OoxmlPart {
+  const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const key = (node: OoxmlNode): string | null => {
+    if (node.kind === 'textValue' || node.namespaceUri !== ns) return null;
+    const attributeName =
+      node.localName === 'abstractNum'
+        ? 'abstractNumId'
+        : node.localName === 'num'
+          ? 'numId'
+          : node.localName === 'numPicBullet'
+            ? 'numPicBulletId'
+            : null;
+    if (!attributeName) return null;
+    const id = node.attributes.find(
+      (a) => a.namespaceUri === ns && a.localName === attributeName
+    )?.value;
+    return id === undefined ? null : `${node.localName}:${id}`;
+  };
+  const known = new Set(snapshot.root.children.map(key).filter(Boolean));
+  const nextId = createNodeIdAllocator(snapshot);
+  const order = ['numPicBullet', 'abstractNum', 'num', 'numIdMacAtCleanup'];
+  let result = snapshot;
+  for (const node of live.root.children) {
+    const id = key(node);
+    if (!id || known.has(id) || node.kind === 'textValue') continue;
+    const rank = order.indexOf(node.localName);
+    const at = result.root.children.findIndex(
+      (n) => n.kind !== 'textValue' && n.namespaceUri === ns && order.indexOf(n.localName) > rank
+    );
+    const changed = insertChildren(
+      result,
+      result.root.id,
+      at < 0 ? result.root.children.length : at,
+      [withFreshIds(node, nextId)]
+    );
+    if (changed.ok) {
+      result = changed.part;
+      known.add(id);
+    }
+  }
+  return result;
 }
 
 function mergeHyperlinkShell(

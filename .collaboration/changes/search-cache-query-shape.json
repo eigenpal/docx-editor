@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Single queries and batches can share incorrect cache entries. Search reports truncation when exactly 2000 matches exist.",
+  "after": "Search caches preserve query shapes and array boundaries. Built-in search reports truncation only when further matches exist.",
+  "reason": "The cache and metadata hold local derived search results. Search changes no shared operations, document content, or synchronization.",
+  "tests": [
+    "packages/core/src/binding/__tests__/document-search.test.ts",
+    "packages/core/src/editor/__tests__/document-search-session.test.ts"
+  ],
+  "changeset": "search-cache-query-shape",
+  "migration": null
+}

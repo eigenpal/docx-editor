@@ -1,3 +1,6 @@
+import { documentProtectionRefusal } from '../store/store/forms-protection.ts';
+import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
 // Content-control query derivation for the Editor facade.
 //
 // Projects typed `w:sdt` nodes — and generic WML `sdt` fallbacks until the canonical model
@@ -35,6 +38,8 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import { paragraphInlineLengthOf } from '../store/store/tree-op-segments.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
@@ -55,39 +60,11 @@ import { selectionMarkOf } from './surface-selection-ops.ts';
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 
-/** Nested inline control depth bound — matches layout `MAX_SDT_NESTING`. */
-const MAX_SDT_NESTING = 32;
-
 type ContentControlLike = OoxmlContentControlNode | OoxmlGenericElementNode;
 
 /** Shared walk predicate — WML namespace required for generic `sdt` fallback. */
 function isContentControlNode(node: OoxmlNode): node is ContentControlLike {
   return isContentControl(node);
-}
-
-function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
-  return node.kind === 'textValue' ? [] : node.children;
-}
-
-/**
- * Characters one inline node contributes to paragraph UTF-16 offsets.
- *
- * Mirrors the store segment model and the layout inline projection: text counts code units,
- * `w:tab` and `w:br` count one, properties and unmodelled generic nodes count nothing, and
- * inline controls flatten transparently through their `w:sdtContent`.
- */
-function addressableLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-  if (isContentControlNode(node)) {
-    let total = 0;
-    for (const inner of contentControlContentChildren(node)) total += addressableLength(inner);
-    return total;
-  }
-  let total = 0;
-  for (const child of elementChildren(node)) total += addressableLength(child);
-  return total;
 }
 
 function propertiesOf(control: OoxmlElement): OoxmlElement | undefined {
@@ -142,6 +119,7 @@ function mapTypeMarker(node: OoxmlNode): ContentControlType | undefined {
   }
   if (kind === 'contentControlDate' || localName === 'date') return 'date';
   if (localName === 'picture') return 'picture';
+  if (localName === 'docPartList') return 'buildingBlockGallery';
   if (kind === 'contentControlText' || localName === 'text') return 'plainText';
   if (localName === 'richText') return 'richText';
 
@@ -295,32 +273,40 @@ type InlineControlRange = {
  */
 function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
   const ranges: InlineControlRange[] = [];
+  if (paragraph.kind !== 'paragraph') return ranges;
 
   const walk = (
     children: readonly OoxmlNode[],
     offset: number,
     depth: number,
-    sdtDepth: number
+    containerDepth: number
   ): number => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return offset;
     let position = offset;
     for (const child of children) {
       if (child.kind === 'paragraphProperties') continue;
       if (child.kind === 'run') {
-        position += addressableLength(child);
+        position += paragraphInlineLengthOf(paragraph, child);
         continue;
       }
-      if (child.kind === 'hyperlink') {
-        position = walk(child.children, position, depth, sdtDepth);
+      if (isInlineRunContainer(child)) {
+        position = walk(child.children, position, depth, containerDepth + 1);
         continue;
       }
-      if (isContentControlNode(child) && sdtDepth < MAX_SDT_NESTING) {
+      if (isContentControlNode(child)) {
+        // A control reached at the shared container cap is opaque and contributes zero length.
         const start = position;
         const nextDepth = depth + 1;
-        position = walk(contentControlContentChildren(child), position, nextDepth, sdtDepth + 1);
+        position = walk(
+          contentControlContentChildren(child),
+          position,
+          nextDepth,
+          containerDepth + 1
+        );
         ranges.push({ control: child, start, end: position, depth: nextDepth });
         continue;
       }
-      position += addressableLength(child);
+      position += paragraphInlineLengthOf(paragraph, child);
     }
     return position;
   };
@@ -776,10 +762,12 @@ export function canContentControlCommand(
 
 /** What the store itself would say about this op, in the vocabulary `can` answers. */
 function storeVerdict(surface: PaginatedSurface, op: TreeDocOp, nodeId: string): CanResult {
-  const rejection = validateTreeOp(
-    partOfNodeId(surface.session, nodeId) ?? surface.session.part(),
-    op
-  );
+  const part = partOfNodeId(surface.session, nodeId) ?? surface.session.part();
+  const settings = settingsPartOf(surface.session.currentPackage());
+  const rejection =
+    documentProtectionRefusal(settings, op) ??
+    formsProtectionRefusal(part, settings, op) ??
+    validateTreeOp(part, op);
   if (rejection) {
     return {
       ok: false,

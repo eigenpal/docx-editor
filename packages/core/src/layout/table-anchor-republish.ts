@@ -10,6 +10,7 @@
 // file is at its line ceiling.
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { cellAnchorScope } from './cell-anchor-layout.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   publishAnchoredDrawingsForParagraph,
@@ -89,10 +90,13 @@ export function publishDeferredRowAnchors(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
         cellBox,
+        cellContentBox: { ...cellBox, x: pending.cellOriginX, width: pending.cellContentWidth },
         pageClip: deps.pageContentClip(),
+        cellAnchorScope: cellAnchorScope(true, deps),
         measurer: deps.measurer,
-        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+        ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
+        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
       })
     );
   }
@@ -102,7 +106,8 @@ export function republishAnchoredParagraphsInBlocks(
   blocks: readonly BlockFragmentRecord[],
   authoredBlocks: readonly OoxmlElement[],
   cellBox: LayoutBox,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellContentBox: LayoutBox
 ): void {
   if (
     !deps.onAnchorRepublish ||
@@ -131,10 +136,13 @@ export function republishAnchoredParagraphsInBlocks(
         frameBase: deps.anchorFrameBase(),
         columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
         cellBox,
+        cellContentBox,
         pageClip: deps.pageContentClip(),
+        cellAnchorScope: cellAnchorScope(true, deps),
         measurer: deps.measurer,
-        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+        ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
+        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
       })
     );
   }

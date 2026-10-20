@@ -5,16 +5,157 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
-export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
+export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
 
 // @public
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+
+// @public
+export type AutomationAuthoringOperation = {
+    readonly op: 'getFields';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly field: AutomationHandle;
+    readonly op: 'getField' | 'deleteField' | 'updateFieldResult';
+} | {
+    readonly code: string;
+    readonly field: AutomationHandle;
+    readonly op: 'setFieldCode';
+} | {
+    readonly fieldType?: string;
+    readonly location: 'Before' | 'After' | 'Start' | 'End' | 'Replace';
+    readonly op: 'insertField';
+    readonly removeFormatting?: boolean;
+    readonly span: AutomationSpanRef;
+    readonly text?: string;
+} | {
+    readonly op: 'getTables';
+    readonly scope: AutomationSpanRef;
+} | {
+    readonly op: 'getTable' | 'getTableRows';
+    readonly table: AutomationHandle;
+} | {
+    readonly op: 'getTableCells';
+    readonly row: AutomationHandle;
+} | {
+    readonly count: number;
+    readonly location: 'before' | 'after';
+    readonly op: 'insertTableRows';
+    readonly row: AutomationHandle;
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly cellIndex: number;
+    readonly op: 'getTableCell';
+    readonly rowIndex: number;
+    readonly table: AutomationHandle;
+}
+/** The cell a merge of this rectangle merges into, read before the merge applies. */
+| {
+    readonly bottomRow: number;
+    readonly firstCell: number;
+    readonly lastCell: number;
+    readonly op: 'getMergedTableCell';
+    readonly table: AutomationHandle;
+    readonly topRow: number;
+} | {
+    readonly cell: AutomationHandle;
+    readonly op: 'getTableCellProperties' | 'getTableCellBody';
+} | {
+    readonly mutation: Exclude<AutomationTableMutation, {
+        kind: 'cell';
+    } | {
+        kind: 'insertRows';
+    } | {
+        kind: 'splitCell';
+    }>;
+    readonly op: 'updateTable';
+    readonly table: AutomationHandle;
+} | {
+    readonly cell: AutomationHandle;
+    readonly op: 'updateTableCell';
+    readonly properties: Omit<Extract<AutomationTableMutation, {
+        kind: 'cell';
+    } | {
+        kind: 'insertRows';
+    }>, 'kind' | 'cellId'>;
+}
+/** Split one cell into `rowCount` by `columnCount` cells. */
+| {
+    readonly cell: AutomationHandle;
+    readonly columnCount: number;
+    readonly op: 'splitTableCell';
+    readonly rowCount: number;
+} | {
+    readonly columnCount: number;
+    readonly location: 'Before' | 'After';
+    readonly op: 'insertTable';
+    readonly rowCount: number;
+    readonly span: AutomationSpanRef;
+    readonly values?: readonly (readonly string[])[];
+}
+/** The floating shapes anchored in a span's paragraphs, in reading order. */
+| {
+    readonly op: 'getShapes';
+    readonly span: AutomationSpanRef;
+    readonly types?: readonly AutomationShapeType[];
+} | {
+    readonly op: 'getShape';
+    readonly shape: AutomationHandle;
+}
+/** A text box's own story. Any other shape has no body and refuses. */
+| {
+    readonly op: 'getShapeBody';
+    readonly shape: AutomationHandle;
+} | {
+    readonly op: 'getInlinePictures';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly op: 'getInlinePicture';
+    readonly picture: AutomationHandle;
+} | {
+    readonly op: 'setInlinePicture';
+    readonly picture: AutomationHandle;
+    readonly properties: AutomationInlinePictureWrite;
+} | {
+    readonly op: 'deleteInlinePicture';
+    readonly picture: AutomationHandle;
+} | {
+    readonly base64: string;
+    readonly location: 'Before' | 'After' | 'Start' | 'End' | 'Replace';
+    readonly op: 'insertInlinePicture';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly breakType: string;
+    readonly location: string;
+    readonly op: 'insertBreak';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly op: 'startNewList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly level: number;
+    readonly listId: number;
+    readonly op: 'attachToList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly op: 'detachFromList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly format: AutomationListLevelFormat;
+    readonly level: number;
+    readonly list: AutomationHandle;
+    readonly op: 'setListLevelFormat';
+} | {
+    readonly location: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After';
+    readonly op: 'getRange';
+    readonly span: AutomationSpanRef;
+};
 
 // @public
 export interface AutomationBatchRequest {
@@ -57,6 +198,8 @@ export type AutomationContentControlScope = {
     readonly body: AutomationHandle;
 } | {
     readonly contentControl: AutomationHandle;
+} | {
+    readonly span: AutomationSpanRef;
 };
 
 // @public
@@ -78,6 +221,23 @@ export type AutomationContentControlValue = {
 };
 
 // @public
+export interface AutomationCustomNodePayload {
+    readonly data: string;
+    readonly label: string;
+    readonly namespaceUri: string;
+    readonly nodeId: string;
+    readonly rootLocalName: string;
+}
+
+// @public
+export interface AutomationEndpoint {
+    // (undocumented)
+    readonly offset: number;
+    readonly paragraph: AutomationHandle;
+    readonly readAt?: number;
+}
+
+// @public
 export interface AutomationError {
     // (undocumented)
     readonly code: AutomationErrorCode;
@@ -87,7 +247,11 @@ export interface AutomationError {
 
 // @public
 export type AutomationErrorCode =
-/** `expectedRevision` did not match the host's current revision; nothing was applied. */
+/**
+* Nothing was applied because the request was built from an older read: `expectedRevision`
+* did not match the host's current revision, or an endpoint's `readAt` names a position
+* that moved since. Read again before retrying; resending the same endpoints fails again.
+*/
 'stale-revision'
 /** A handle this host never minted, or one naming a different kind of object. */
 | 'invalid-handle'
@@ -138,9 +302,19 @@ export interface AutomationFontRead {
     readonly bold: boolean | null;
     readonly color: string | null;
     // (undocumented)
+    readonly highlightColor: string | null;
+    // (undocumented)
     readonly italic: boolean | null;
     readonly name: string | null;
     readonly size: number | null;
+    // (undocumented)
+    readonly strikeThrough: boolean | null;
+    // (undocumented)
+    readonly subscript: boolean | null;
+    // (undocumented)
+    readonly superscript: boolean | null;
+    // (undocumented)
+    readonly underline: string | null;
 }
 
 // @public
@@ -150,11 +324,21 @@ export interface AutomationFontWrite {
     // (undocumented)
     readonly color?: string;
     // (undocumented)
+    readonly highlightColor?: string | null;
+    // (undocumented)
     readonly italic?: boolean;
     // (undocumented)
     readonly name?: string;
     // (undocumented)
     readonly size?: number;
+    // (undocumented)
+    readonly strikeThrough?: boolean;
+    // (undocumented)
+    readonly subscript?: boolean;
+    // (undocumented)
+    readonly superscript?: boolean;
+    // (undocumented)
+    readonly underline?: string;
 }
 
 // @public
@@ -176,19 +360,85 @@ export interface AutomationHost {
     readonly capabilities: AutomationCapabilities;
     dispose(): void;
     execute(request: AutomationBatchRequest): AutomationBatchResponse;
+    prepare?(request: AutomationBatchRequest): Promise<void>;
     revision(): number;
     save(): AutomationSaveResult;
     subscribe(listener: (event: AutomationChangeEvent) => void): AutomationUnsubscribe;
 }
 
-// @public
-export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl';
+// @public (undocumented)
+export interface AutomationInlinePictureRead {
+    // (undocumented)
+    readonly altTextDescription: string;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly lockAspectRatio: boolean;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public (undocumented)
+export interface AutomationInlinePictureWrite {
+    // (undocumented)
+    readonly altTextDescription?: string;
+    // (undocumented)
+    readonly height?: number;
+    // (undocumented)
+    readonly lockAspectRatio?: boolean;
+    // (undocumented)
+    readonly width?: number;
+}
+
+// @public (undocumented)
+export type AutomationListBullet = 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark';
+
+// @public (undocumented)
+export interface AutomationListLevelFormat {
+    // (undocumented)
+    readonly bullet?: AutomationListBullet;
+    // (undocumented)
+    readonly bulletNumberPictureIndent?: number;
+    // (undocumented)
+    readonly charCode?: number;
+    // (undocumented)
+    readonly fontName?: string;
+    // (undocumented)
+    readonly formatString?: readonly (string | number)[];
+    // (undocumented)
+    readonly numbering?: AutomationListNumbering;
+    // (undocumented)
+    readonly startingNumber?: number;
+    // (undocumented)
+    readonly textIndent?: number;
+}
+
+// @public (undocumented)
+export type AutomationListNumbering = 'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter';
 
 // @public
-export type AutomationOperation =
+export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
+
+// @public
+export type AutomationOperation = AutomationAuthoringOperation | {
+    readonly op: 'getChangeTrackingMode';
+} | {
+    readonly author?: string;
+    readonly mode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+    readonly op: 'setChangeTrackingMode';
+}
 /** The document itself — the root every other handle is reached through. */
-    {
+| {
     readonly op: 'getDocument';
+} | {
+    readonly op: 'removeDocumentInformation';
+    readonly removeDocInfoType: string;
+} | {
+    readonly name: DocumentPropertyName;
+    readonly op: 'getDocumentProperty';
+} | {
+    readonly op: 'setDocumentProperties';
+    readonly values: DocumentPropertyWrites;
 }
 /** The main story of a document. */
 | {
@@ -215,18 +465,51 @@ export type AutomationOperation =
 * Text of a body or a paragraph.
 *
 * A story reads as its paragraphs joined by a carriage return — one paragraph mark, one
-* `\r` — which is the separator Word's own text property uses.
+* `\r` — which is the separator Word's own text property uses. Display projections expand
+* fields, so clients must not derive model offsets from this text.
 */
 | {
     readonly op: 'getText';
     readonly projection?: AutomationTextProjection;
     readonly target: AutomationHandle;
 }
-/** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
+/**
+* Display text between two endpoints, with a carriage return at each paragraph boundary.
+* Use the `model` projection when a client needs text in the endpoint offset vocabulary.
+*/
 | {
     readonly op: 'getSpanText';
     readonly projection?: AutomationTextProjection;
     readonly span: AutomationSpanRef;
+}
+/**
+* A span split into ranges that each end after one of `endingMarks`, or at a paragraph end.
+*
+* Boundaries come from the model text, so a field, an equation, or another atom is never
+* split. `trimSpacing` removes spaces, tabs, and column breaks from each range's edges and
+* drops a range left empty. A range the projection shows no character of is not answered.
+*/
+| {
+    readonly endingMarks: readonly string[];
+    readonly op: 'getTextRanges';
+    readonly projection?: AutomationTextProjection;
+    readonly scope: AutomationSpanRef;
+    readonly trimSpacing?: boolean;
+}
+/** The smallest span covering both spans. Both must be in one story. */
+| {
+    readonly op: 'expandSpan';
+    readonly span: AutomationSpanRef;
+    readonly to: AutomationSpanRef;
+}
+/**
+* A span's text as if every pending revision were accepted (`current`) or rejected
+* (`original`), with a carriage return at each paragraph mark that view keeps.
+*/
+| {
+    readonly op: 'getReviewedText';
+    readonly span: AutomationSpanRef;
+    readonly version: 'original' | 'current';
 }
 /**
 * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
@@ -260,7 +543,23 @@ export type AutomationOperation =
 * the ones it was planned with. Addressing distinct paragraphs keeps a batch
 * order-independent.
 */
+/** Explicit inline Word revision, independent of a browser's editing mode. */
 | {
+    readonly author: string;
+    readonly op: 'proposeInsertion';
+    readonly span: AutomationSpanRef;
+    readonly text: string;
+    readonly where: 'Before' | 'After';
+} | {
+    readonly author: string;
+    readonly op: 'proposeDeletion';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly author: string;
+    readonly op: 'proposeReplacement';
+    readonly span: AutomationSpanRef;
+    readonly text: string;
+} | {
     readonly at: AutomationPoint;
     readonly op: 'insertText';
     readonly text: string;
@@ -404,9 +703,10 @@ export type AutomationOperation =
 /**
 * The header or footer story a section declares or inherits, as a BODY.
 *
-* A variant the document has neither declared nor inherited is refused: minting the part would
-* make a read write, and a header that exists only because it was asked about is a header the
-* document did not have.
+* A variant the document has neither declared nor inherited is still answered, as an empty
+* body: every read on it answers what it answers for an empty story. Asking does not create
+* the part. The first text written into the body creates it; any other write that would change
+* the body is refused until then.
 */
 | {
     readonly kind: 'header' | 'footer';
@@ -424,6 +724,7 @@ export type AutomationOperation =
     readonly document: AutomationHandle;
     readonly noteKind: NoteKind;
     readonly op: 'getNotes';
+    readonly scope?: AutomationHandle;
 }
 /** One note's story, as a BODY. Two notes in one part are two stories. */
 | {
@@ -590,6 +891,50 @@ export type AutomationOperation =
     readonly op: 'getBookmarkRange';
 }
 /**
+* The names of the bookmarks a span overlaps, in document order: `Range.getBookmarks`.
+*
+* A non-empty span holds a bookmark when the two share text, and a point bookmark when the
+* point is inside the span. An empty span holds the bookmarks around it. `includeAdjacent`
+* adds the bookmarks that only touch the span; `includeHidden` adds names starting with `_`.
+*/
+| {
+    readonly includeAdjacent: boolean;
+    readonly includeHidden: boolean;
+    readonly op: 'getBookmarkNames';
+    readonly scope: AutomationSpanRef;
+}
+/**
+* The range of the bookmark with this name, compared without case, in any story: main text
+* first, then headers, footers and notes. Answers no span when nothing declares the name.
+*/
+| {
+    readonly document: AutomationHandle;
+    readonly name: string;
+    readonly op: 'getBookmarkRangeByName';
+}
+/**
+* Add a bookmark around a span, or at a point. A bookmark any story declares under the same
+* name, compared without case, moves here in the same write.
+*/
+| {
+    readonly name: string;
+    readonly op: 'insertBookmark';
+    readonly span: AutomationSpanRef;
+}
+/**
+* Remove a bookmark: by name anywhere in the document, or the one a handle names. The text
+* stays. A name nothing declares is not an error and changes nothing.
+*/
+| {
+    readonly op: 'deleteBookmark';
+    readonly target: {
+        readonly document: AutomationHandle;
+        readonly name: string;
+    } | {
+        readonly bookmark: AutomationHandle;
+    };
+}
+/**
 * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
 *
 * A reply is reached through the comment it answers rather than listed beside it, because a flat
@@ -700,6 +1045,50 @@ export type AutomationOperation =
     readonly body: AutomationHandle;
     readonly op: 'getRevisions';
 }
+/**
+* The listed tracked changes whose characters a span overlaps, in document order. A collapsed
+* span lists the changes it touches. Handles are the story-wide listing's handles.
+*/
+| {
+    readonly op: 'getRevisions';
+    readonly scope: AutomationSpanRef;
+}
+/**
+* The listed tracked changes a review-queue key names: one, or the two halves of a paired
+* replacement. A key naming nothing answers no handles.
+*/
+| {
+    readonly key: string;
+    readonly op: 'getRevisions';
+}
+/**
+* The stretch a review-queue key names: `revision-<id>`, a paired `revision-replace:<a>+<b>`,
+* or `comment-<id>`. Answers `spans` holding one span covering every range of the item, or no
+* span when the key names nothing this document holds.
+*/
+| {
+    readonly key: string;
+    readonly op: 'getReviewItemRange';
+}
+/** Resolve eligible decisions in one story. Omit revisions to select every canonical decision. */
+| {
+    readonly action: 'accept' | 'reject';
+    readonly body: AutomationHandle;
+    readonly op: 'resolveRevisionBatch';
+    readonly revisions?: readonly AutomationHandle[];
+}
+/**
+* Attribute pending decisions in one story to another author, keeping them pending. Omit
+* revisions to select every canonical decision. `date` is `xsd:dateTime`; omitted keeps each.
+*/
+| {
+    readonly author: string;
+    readonly authors?: readonly string[];
+    readonly body: AutomationHandle;
+    readonly date?: string;
+    readonly op: 'setRevisionAuthorBatch';
+    readonly revisions?: readonly AutomationHandle[];
+}
 /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
 | {
     readonly op: 'getRevisionType';
@@ -749,6 +1138,24 @@ export type AutomationOperation =
     readonly op: 'rejectAllRevisions';
 } | {
     readonly document: AutomationHandle;
+    readonly op: 'rejectAllRevisions';
+}
+/**
+* Accept or reject every change a span overlaps, or the changes a review-queue key names, as
+* one transaction. Structural changes absent from listings are included. Refused whole when
+* any of them is read-only or cannot be resolved, and when the key names nothing.
+*/
+| {
+    readonly op: 'acceptAllRevisions';
+    readonly scope: AutomationSpanRef;
+} | {
+    readonly op: 'rejectAllRevisions';
+    readonly scope: AutomationSpanRef;
+} | {
+    readonly key: string;
+    readonly op: 'acceptAllRevisions';
+} | {
+    readonly key: string;
     readonly op: 'rejectAllRevisions';
 }
 /**
@@ -893,6 +1300,8 @@ export type AutomationOperation =
 }
 /** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
 | {
+    readonly cannotDelete?: boolean;
+    readonly cannotEdit?: boolean;
     readonly contentControl: AutomationHandle;
     readonly lock?: AutomationContentControlLock;
     readonly op: 'setContentControlProperties';
@@ -921,6 +1330,7 @@ export type AutomationOperation =
 /** Wrap a span in a new control of the named type. */
 | {
     readonly op: 'insertContentControl';
+    readonly returnHandle?: boolean;
     readonly span: AutomationSpanRef;
     readonly subtype: AutomationContentControlSubtype;
     readonly tag?: string;
@@ -1017,6 +1427,31 @@ export interface AutomationPageSetupWrite {
 }
 
 // @public
+export interface AutomationPaginationOptions {
+    // (undocumented)
+    readonly measurer: TextMeasurer;
+    // (undocumented)
+    readonly producer?: string;
+}
+
+// @public
+export type AutomationPaginationProvider = (view: HeadlessDocumentView) => Promise<AutomationPaginationSnapshot>;
+
+// @public
+export interface AutomationPaginationSnapshot {
+    // (undocumented)
+    readonly pageCount: number;
+    // (undocumented)
+    readonly ranges: readonly {
+        readonly end: number;
+        readonly pageNumber: number;
+        readonly pageNumberText: string;
+        readonly paragraphId: string;
+        readonly start: number;
+    }[];
+}
+
+// @public
 export interface AutomationParagraphFormatRead {
     // (undocumented)
     readonly alignment: AutomationAlignment;
@@ -1026,6 +1461,7 @@ export interface AutomationParagraphFormatRead {
     readonly leftIndent: number | null;
     // (undocumented)
     readonly lineSpacing: number | null;
+    readonly readingOrder: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent: number | null;
     // (undocumented)
@@ -1047,6 +1483,7 @@ export interface AutomationParagraphFormatWrite {
     readonly leftIndent?: number;
     // (undocumented)
     readonly lineSpacing?: number;
+    readonly readingOrder?: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent?: number;
     // (undocumented)
@@ -1076,6 +1513,9 @@ export type AutomationPoint = AutomationEndpoint | {
 };
 
 // @public
+export type AutomationReadingOrder = 'LeftToRight' | 'RightToLeft';
+
+// @public
 export type AutomationSaveResult = {
     readonly bytes: Uint8Array;
     readonly ok: true;
@@ -1101,6 +1541,28 @@ export interface AutomationSearchOptions {
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
 
 // @public
+export type AutomationShapeOwnerStory = {
+    readonly kind: 'body';
+} | {
+    readonly kind: 'header' | 'footer';
+    readonly sectionIndex: number;
+    readonly variant: HeaderFooterVariant;
+};
+
+// @public
+export interface AutomationShapeRead {
+    // (undocumented)
+    readonly id: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly type: AutomationShapeType;
+}
+
+// @public
+export type AutomationShapeType = 'TextBox' | 'GeometricShape' | 'Picture' | 'Group' | 'Canvas' | 'Unsupported';
+
+// @public
 export interface AutomationSpan {
     // (undocumented)
     readonly end: AutomationEndpoint;
@@ -1119,26 +1581,108 @@ export type AutomationSpanRef = {
 };
 
 // @public
-export type AutomationStoryId = {
-    readonly kind: 'body';
-} | {
-    readonly kind: 'header' | 'footer';
-    readonly sectionIndex: number;
-    readonly variant: HeaderFooterVariant;
-} | {
+export type AutomationStoryId = AutomationShapeOwnerStory | {
     readonly kind: 'note';
     readonly noteId: number;
     readonly noteKind: NoteKind;
+}
+/**
+* A text box: the `w:txbxContent` of the floating shape whose `wp:docPr/@id` is `shapeId`,
+* anchored in `owner`. Its paragraphs live in the owner's part and commit through its scope.
+*/
+| {
+    readonly kind: 'textbox';
+    readonly owner: AutomationShapeOwnerStory;
+    readonly shapeId: number;
+};
+
+// @public (undocumented)
+export type AutomationTableMutation = {
+    readonly count: number;
+    readonly kind: 'insertRows';
+    readonly location: 'before' | 'after';
+    readonly rowId: string;
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly kind: 'values';
+    readonly values: readonly (readonly string[])[];
+} | {
+    readonly count: number;
+    readonly kind: 'addRows' | 'addColumns';
+    readonly location: 'start' | 'end';
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly count: number;
+    readonly index: number;
+    readonly kind: 'deleteRows' | 'deleteColumns';
+} | {
+    readonly bottomRow: number;
+    readonly firstCell: number;
+    readonly kind: 'mergeCells';
+    readonly lastCell: number;
+    readonly topRow: number;
+} | {
+    readonly cellId: string;
+    readonly columnCount: number;
+    readonly kind: 'splitCell';
+    readonly rowCount: number;
+} | {
+    readonly kind: 'delete';
+} | {
+    readonly headerRowCount?: number;
+    readonly kind: 'properties';
+    readonly styleId?: string;
+} | {
+    readonly cellId: string;
+    readonly columnWidth?: number;
+    readonly kind: 'cell';
+    readonly shadingColor?: string;
+    readonly value?: string;
+    readonly verticalAlignment?: 'Top' | 'Center' | 'Bottom';
 };
 
 // @public
-export type AutomationTextProjection = 'allMarkup' | 'original';
+export type AutomationTextProjection = 'allMarkup' | 'original' | 'model';
 
 // @public
 export type AutomationUnsubscribe = () => void;
 
 // @public
 export type AutomationValue = {
+    readonly kind: 'revisionBatch';
+    readonly result: RevisionBatchResult;
+} | {
+    readonly kind: 'revisionAuthors';
+    readonly result: RevisionAuthorResult;
+} | {
+    readonly field: {
+        readonly code: string;
+    };
+    readonly kind: 'field';
+} | {
+    readonly kind: 'table';
+    readonly table: {
+        readonly columnCount: number;
+        readonly headerRowCount: number;
+        readonly rowCount: number;
+        readonly style: string;
+        readonly values: readonly (readonly string[])[];
+    };
+} | {
+    readonly cell: {
+        readonly columnWidth: number;
+        readonly shadingColor: string;
+        readonly value: string;
+        readonly verticalAlignment: 'Top' | 'Center' | 'Bottom';
+    };
+    readonly kind: 'tableCell';
+} | {
+    readonly kind: 'inlinePicture';
+    readonly picture: AutomationInlinePictureRead;
+} | {
+    readonly kind: 'shape';
+    readonly shape: AutomationShapeRead;
+} | {
     readonly handle: AutomationHandle;
     readonly kind: 'handle';
 } | {
@@ -1147,6 +1691,11 @@ export type AutomationValue = {
 } | {
     readonly kind: 'text';
     readonly text: string;
+}
+/** Several strings, in document order: the names of the bookmarks a range holds. */
+| {
+    readonly kind: 'texts';
+    readonly texts: readonly string[];
 } | {
     readonly kind: 'span';
     readonly span: AutomationSpan;
@@ -1202,10 +1751,124 @@ export type AutomationValue = {
 };
 
 // @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
+export function byteSizeBucket(bytes: number): ByteSizeBucket;
+
+// @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export interface ContentLockPolicy {
+    readonly allowFormattingInLockedContent?: boolean;
+}
+
+// @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
+export function countBucket(count: number): CountBucket;
+
+// @public
+export function createAutomationPaginationProvider(options: AutomationPaginationOptions): AutomationPaginationProvider;
+
+// @public
+export function createDiagnosticEmitter<E>(listeners: () => Iterable<(event: E) => unknown>, now?: () => number): DiagnosticEmitter<E>;
+
+// @public
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
 
 // @public
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export function diagnosticCause(reason: string | undefined): string | undefined;
+
+// @public
+export function diagnosticCauses(): readonly string[];
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+
+// @public
+export function diagnosticCodes(): readonly DiagnosticCode[];
+
+// @public
+export interface DiagnosticEmitter<E> {
+    deliver(payload: DiagnosticPayload<E>): void;
+    readonly editorSessionId: string;
+}
+
+// @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
+export function diagnosticErrorName(error: unknown): DiagnosticErrorName;
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
+
+// @public
+export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' | 'editorSessionId' | 'time'> : never;
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
+
+// @public
+export function documentPartKind(detail: string | undefined): DocumentPartKind | undefined;
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+
+// @public
+export function exceptionCause(): string;
+
+// @public
+export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
+
+// @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
+
+// @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
+
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
+    readonly state: 'open' | 'closed';
+}
+
+// @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
+}
 
 // @public
 export function isAutomationCommand(operation: AutomationOperation): boolean;
@@ -1214,12 +1877,90 @@ export function isAutomationCommand(operation: AutomationOperation): boolean;
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean;
 
 // @public
+export function openDiagnosticCode(reason: string, limit?: string): DocumentOpenDiagnosticCode;
+
+// @public
+export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginationSnapshot;
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
+// @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+
+// @public
+export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null;
+
+// @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
+export interface RevisionAuthorEntry extends RevisionBatchEntry {
+    readonly previousAuthor: string;
+    readonly previousKey: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
+export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revision';
+
+// @public
+export interface RevisionBatchEntry {
+    // (undocumented)
+    readonly author: string;
+    readonly formattingKind?: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionItem['revisionKind'];
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+}
+
+// @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
+
+// @public
 export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
 export interface ServerAutomationHostOptions {
     readonly collaborationModel?: CollaborationModuleContribution;
+    readonly contentLockPolicy?: ContentLockPolicy;
     readonly limits?: OoxmlPackageLimits;
+    readonly pagination?: AutomationPaginationProvider;
 }
 
 // @public
@@ -1231,10 +1972,12 @@ export type ServerAutomationHostResult = {
     readonly ok: true;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: ServerAutomationHostRejection;
 };
 
-// (No @packageDocumentation comment for this package)
+// @public
+export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null;
 
 ```

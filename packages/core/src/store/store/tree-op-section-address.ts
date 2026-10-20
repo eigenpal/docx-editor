@@ -7,6 +7,7 @@
 // uses today, which is exactly what the merged write will leave in place.
 
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 
@@ -114,17 +115,17 @@ export interface SectionMetrics {
   readonly gutterTwips: number;
 }
 
+// The same reads and clamps as the layout lane's `parseSectionProperties`, so automation
+// reports the page that layout paginates.
 const clampedTwips = (raw: string | undefined, fallback: number, max: number): number => {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0 || value > max) return fallback;
+  const value = readTwipsMeasure(raw);
+  if (value === null || value <= 0 || value > max) return fallback;
   return value;
 };
 
 const clampedMargin = (raw: string | undefined, fallback: number): number => {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || Math.abs(value) > 31680) return fallback;
+  const value = readTwipsMeasure(raw);
+  if (value === null || Math.abs(value) > 31680) return fallback;
   return value;
 };
 

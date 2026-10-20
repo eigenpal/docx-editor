@@ -170,6 +170,9 @@ const WHOLESALE_DELTA: RemotePackageDelta = Object.freeze({
 function wholesaleVerdict(changed: readonly [OoxmlPart, OoxmlPart][]): RemotePackageDelta {
   for (const [part, other] of changed) {
     if (!ooxmlTreesEqual(part, other)) return WHOLESALE_DELTA;
+    // Equal content under other ids still installs: a collaboration journal names the nodes
+    // the next edit touches by these ids.
+    if (!canonicalTreeDifference(other.root, part.root).idsPreserved) return WHOLESALE_DELTA;
   }
   return EQUAL_DELTA;
 }
@@ -208,7 +211,20 @@ export function remotePackageDelta(next: OoxmlPackage, current: OoxmlPackage): R
   }
   const difference = canonicalTreeDifference(other.root, part.root);
   if (difference.undecided) return wholesaleVerdict(changed);
-  if (difference.equal) return EQUAL_DELTA;
+  if (difference.equal && difference.idsPreserved) return EQUAL_DELTA;
+  // Equal content under other ids still installs: the ids are how a collaboration journal
+  // names the nodes the next edit touches. Only the renamed paragraphs need new layout.
+  if (difference.equal) {
+    if (difference.renamedOutsideParagraphs || difference.renamedParagraphIds.length === 0) {
+      return WHOLESALE_DELTA;
+    }
+    return {
+      equal: false,
+      dirty: difference.renamedParagraphIds,
+      dependencyKeys: [DEPENDENCY_KEY_IDS.story],
+      impact: 'text-local',
+    };
+  }
   // A narrowed impact tells layout it may keep what it has for every paragraph outside
   // `dirty`. That is only true when the paragraphs still exist under the same ids and no
   // block moved, so anything else falls back to the wholesale answer.

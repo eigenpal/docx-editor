@@ -4,10 +4,11 @@
     // `paths` below, and they use ES2022 features (`Array.prototype.at`, `Error.cause`).
     // An ES2020 floor only appears to work: `@types/bun` pulls in `@types/node`, whose
     // `compatibility/indexable.d.ts` back-declares `.at` for older libs, so the gap hides
-    // until something type-checks without those ambient types — such as the dts build.
+    // until something type-checks without those ambient types.
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -22,8 +23,9 @@
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"],
+      "@docx-editor.dev/i18n/*": ["../i18n/src/*.ts"],
       "@/*": ["./src/*"],
       // Every published subpath, mapped to source. The export map points at dist, so a subpath missing here resolves to built .d.ts while its siblings resolve to src, and the same type arrives under two identities.
       "@docx-editor.dev/core": ["../core/src/index.ts"],
@@ -46,6 +48,6 @@
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "test/popup-component-types.tsx", "test/open-failure-types.tsx"],
   "exclude": ["node_modules", "dist"]
 }

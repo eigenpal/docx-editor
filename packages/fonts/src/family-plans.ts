@@ -5,7 +5,7 @@
 // that its own literal round-trips; only reading the shipped plan can catch a wrong one.
 
 /** The common Word families this package can stand in for. */
-export type WordDefaultFamily =
+export type DefaultFontFamily =
   | 'Calibri'
   | 'Cambria'
   | 'Times New Roman'
@@ -47,7 +47,7 @@ export const planLineBox = (plan: FamilyPlan, weight: number): LineBox | undefin
       ? (plan.lineMetrics[700] ?? plan.lineMetrics[400])
       : plan.lineMetrics[400];
 
-export const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
+export const FAMILY_PLANS: ReadonlyMap<DefaultFontFamily, FamilyPlan> = new Map([
   ['Calibri', { substitute: 'Carlito', filePrefix: 'Carlito' }],
   ['Cambria', { substitute: 'Caladea', filePrefix: 'Caladea' }],
   ['Times New Roman', { substitute: 'Liberation Serif', filePrefix: 'LiberationSerif' }],
@@ -96,6 +96,6 @@ export const planFaceFile = (plan: FamilyPlan, suffix: string): string =>
  * metric-compatible answers for them (Carlito, Caladea, Tinos, Cousine). Arial's would be
  * Arimo, which google/fonts now ships variable-only.
  */
-export const PACKAGED_ONLY_FAMILIES: readonly WordDefaultFamily[] = Object.freeze([
+export const PACKAGED_ONLY_FAMILIES: readonly DefaultFontFamily[] = Object.freeze([
   'Century Gothic',
 ]);

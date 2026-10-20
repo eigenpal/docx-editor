@@ -1,0 +1,113 @@
+---
+title: 'Collaboration servers'
+description: 'Record rooms, connections, people, memory, and refusals on a Hocuspocus or custom Yjs collaboration server, and serve them to Prometheus or OpenTelemetry.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Record rooms, connections, people, room memory, load and store times, and refusals on a collaboration server. Metrics carry no room names. For how people and memory are counted, and for per-room detail, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms). For every metric, see [Metrics](/docs/2.x/telemetry/metrics). To see these metrics in Grafana, download the **Collaboration** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).
+
+## Hocuspocus
+
+Use `withCollaborationTelemetry` to wrap your Hocuspocus configuration. It requires `@hocuspocus/server` 4.6 or later.
+
+The wrapper times each load and store across all configured extensions and hooks. It also records connection and message refusals from your hooks and the extensions in `extensions`. Your hooks and extensions keep their arguments, return values, and errors. The wrapper does not observe extensions added later with `server.configure`.
+
+Hocuspocus flushes telemetry during shutdown. You do not need a separate signal handler.
+
+```ts
+import { Server } from '@hocuspocus/server';
+import { withCollaborationTelemetry } from '@docx-editor.dev/telemetry/hocuspocus';
+import { metricsHandler, prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
+
+const metrics = prometheusRegistry();
+const { config, rooms } = withCollaborationTelemetry(
+  { port: 1234, onAuthenticate, onLoadDocument, beforeHandleMessage, onStoreDocument },
+  { exporters: [metrics] }
+);
+const server = new Server(config);
+
+app.get('/metrics', metricsHandler(metrics));
+app.get('/admin/rooms', requireAdmin, (_request, response) => response.json(rooms.list()));
+```
+
+If the server has no web framework, serve the metrics from the Hocuspocus HTTP server with `serveMetrics`:
+
+```ts
+import { requireBearerToken, serveMetrics } from '@docx-editor.dev/telemetry/hocuspocus';
+
+const server = new Server({
+  ...config,
+  onRequest: serveMetrics(metrics, {
+    rooms: { telemetry: rooms, path: '/rooms' },
+    // Reject startup if METRICS_TOKEN is empty.
+    authorize: requireBearerToken(process.env.METRICS_TOKEN),
+  }),
+});
+```
+
+Pass every hook in the configuration you wrap. A hook set later, for example in the object you pass to `new Server`, is not observed.
+
+`serveMetrics` requires `authorize` when it serves the room list. To keep your own `onRequest`, pass it as `next`. `serveMetrics` calls it for every other path.
+
+### Classify refusals
+
+The wrapper reads the refusal reason from the error's `reason` property, then its `code`. It accepts the following metric labels:
+
+- Collaboration failure codes.
+- Common reasons: `unauthorized`, `forbidden`, `permission-denied`, `unknown-room`, and `rate-limited`.
+- Values you list in the `reasons` option.
+
+Other reasons become `other`, so arbitrary text cannot become a label. Hocuspocus's `Unauthorized` and `Forbidden` close events use the corresponding reason. Error messages that match common reasons, such as `new Error('Unauthorized')`, also use that reason. A rejection without an error counts as `permission-denied`, which matches the reason Hocuspocus sends to the client. An error without a recognized reason counts as `other`.
+
+If your errors contain arbitrary text, use `reasonOf` to map them to accepted reasons. Refusals from `onConnect`, `onAuthenticate`, and `onTokenSync` count as admission refusals.
+
+Hocuspocus writes hook error messages to the server console. Sentry's Node SDK records console output as breadcrumbs by default. Drop the `console` category in `beforeBreadcrumb` if those messages can name a user or a room.
+
+Room telemetry sends metrics only. Use `otelExporter` or `prometheusRegistry` on a server. An exporter without a `metric` method, such as `sentryExporter`, receives no room telemetry. The server warns about these exporters at startup.
+
+## Other Yjs servers
+
+Use `roomTelemetry` and call it from your own room lifecycle:
+
+```ts
+import { prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
+import { roomTelemetry } from '@docx-editor.dev/telemetry/server';
+
+const metrics = prometheusRegistry();
+const rooms = roomTelemetry({ exporters: [metrics] });
+
+const room = rooms.open(ydoc, { name: roomName, awareness });
+// Load through the handle: the saved state it applies is not counted as new edits.
+await room.time('load', () => loadRoom(ydoc));
+room.connected();
+// When that connection closes:
+room.disconnected();
+// When a connection is refused at admission:
+rooms.rejected(error);
+// When the server unloads the room:
+room.close();
+```
+
+## Serve Prometheus metrics
+
+`metricsHandler` serves Node-style servers, such as Node `http` and Express. `fetchMetricsHandler` serves Fetch-style servers, such as Next.js route handlers, Hono, Bun, and Deno. To serve your `prom-client` metrics from the same endpoint, pass `merge: [register]` to either one.
+
+```ts
+// Next.js: app/metrics/route.ts
+import { fetchMetricsHandler } from '@docx-editor.dev/telemetry/prometheus';
+import { metrics } from '@/lib/metrics';
+
+export const dynamic = 'force-dynamic'; // never serve cached metrics
+export const GET = fetchMetricsHandler(metrics);
+```
+
+For Fastify, call `reply.hijack()` and pass the raw Node objects. Without `hijack()`, Fastify tries to send a second response after the handler ends it.
+
+```ts
+fastify.get('/metrics', (request, reply) => {
+  reply.hijack();
+  return metricsHandler(metrics)(request.raw, reply.raw);
+});
+```

@@ -3,7 +3,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { caretAt } from '@docx-editor.dev/core/layout';
-import { docx, paragraph } from './paginated-surface-fixtures.ts';
+import { formatDefaultsDocx as docx, paragraph } from './paginated-surface-fixtures.ts';
 import {
   mountPaginatedSurface,
   setPaginatedSurfaceScale,

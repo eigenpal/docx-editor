@@ -11,17 +11,28 @@ import type { EditorModuleRegistry } from '../contracts/modules.ts';
  */
 export function customNodeDiagnosticReporter(
   modules: EditorModuleRegistry
-): (diagnostic: unknown) => void {
-  return (diagnostic) => {
-    for (const report of modules.customNodeDiagnostics) {
+): CustomNodeDiagnosticReporter {
+  const observers: ((diagnostic: unknown) => void)[] = [];
+  const report = (diagnostic: unknown) => {
+    for (const listener of [...modules.customNodeDiagnostics, ...observers]) {
       try {
-        report(diagnostic);
+        listener(diagnostic);
       } catch {
         /* the rest still hear it */
       }
     }
   };
+  return Object.assign(report, {
+    observe(listener: (diagnostic: unknown) => void) {
+      observers.push(listener);
+    },
+  });
 }
+
+/** Reports a custom-node diagnostic; `observe` adds the editor's own anonymous stream. */
+export type CustomNodeDiagnosticReporter = ((diagnostic: unknown) => void) & {
+  observe(listener: (diagnostic: unknown) => void): void;
+};
 
 /**
  * Collect payloads whose control is gone. Call on OPEN and nowhere else.

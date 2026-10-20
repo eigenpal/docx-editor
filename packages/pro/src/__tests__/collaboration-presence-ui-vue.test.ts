@@ -21,7 +21,7 @@ import type {
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { DocxEditorCollaboration } from '../vue/index.ts';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import { collaborationModule } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

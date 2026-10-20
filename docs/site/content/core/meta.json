@@ -1,4 +1,4 @@
 {
   "title": "Core",
-  "pages": ["index", "architecture"]
+  "pages": ["index", "mount-modes", "architecture"]
 }

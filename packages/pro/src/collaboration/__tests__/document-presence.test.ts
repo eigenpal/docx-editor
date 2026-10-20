@@ -143,6 +143,25 @@ function range(
 }
 
 describe('full-document presence selection', () => {
+  test('an editor that unmounts takes its caret off every peer screen', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const [first] = alice.port.paragraphs();
+    alice.room.session.setLocalSelection(
+      range(
+        { paragraphId: first!.paragraphId, offset: 2 },
+        { paragraphId: first!.paragraphId, offset: 2 }
+      )
+    );
+    syncAwareness(alice, bob);
+    expect(bob.room.session.remoteSelections()).toHaveLength(1);
+    alice.detach();
+    syncAwareness(alice, bob);
+    expect(bob.room.session.remoteSelections()).toHaveLength(0);
+    // The person is still in the room.
+    expect(bob.room.session.participants().map((p) => p.actorId)).toContain('alice');
+  });
+
   test('a two-paragraph selection replicates', async () => {
     const alice = await createPeer('alice');
     const bob = await joinPeer(alice, 'bob');
@@ -288,6 +307,84 @@ describe('full-document presence selection', () => {
     expect(painted).toEqual([...painted].sort((left, right) => left - right));
     expect(bob.port.paragraphByStableId(first.paragraphId)?.text).toBe(`${first.text}${digits}`);
     expect(bob.room.session.remoteSelections()[0]?.head.offset).toBe(offset);
+  });
+
+  test('a peer caret follows its character into a paragraph split off before the author republishes', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const second = alice.port.paragraphs()[1]!;
+    // "Bra|vo"
+    const at = { paragraphId: second.paragraphId, offset: 3 };
+    alice.room.session.setLocalSelection(range(at, at));
+    syncAwareness(alice, bob);
+    // Bob presses Enter after "B". Alice has not seen it, so her published caret still names
+    // "Bravo" at offset 3; the "a" it stands after now shows in the new paragraph.
+    const target = bob.port.paragraphByStableId(second.paragraphId)!;
+    const committed = bob.store.transact({ kind: 'body' }, (context) => {
+      context.apply({ op: 'splitParagraph', paragraphId: target.nodeId, offset: 1 });
+    });
+    if (!committed.ok) throw new Error(committed.detail ?? committed.reason);
+    bob.port.flushPendingJournals();
+    const split = bob.port.paragraphs()[2]!;
+    expect(split.text).toBe('ravo');
+    expect(bob.room.session.remoteSelections()[0]?.head).toEqual({
+      paragraphId: split.paragraphId,
+      nodeId: split.nodeId,
+      offset: 2,
+    });
+  });
+
+  test('a peer caret in a paragraph joined away stays beside its character', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const [first, second] = alice.port.paragraphs();
+    // "Bra|vo"
+    const at = { paragraphId: second!.paragraphId, offset: 3 };
+    alice.room.session.setLocalSelection(range(at, at));
+    syncAwareness(alice, bob);
+    // Bob joins "Bravo" into "Alpha": the paragraph Alice's caret names is gone on his replica.
+    const committed = bob.store.transact({ kind: 'body' }, (context) => {
+      context.apply({
+        op: 'joinParagraphs',
+        firstId: bob.port.paragraphByStableId(first!.paragraphId)!.nodeId,
+        secondId: bob.port.paragraphByStableId(second!.paragraphId)!.nodeId,
+      });
+    });
+    if (!committed.ok) throw new Error(committed.detail ?? committed.reason);
+    bob.port.flushPendingJournals();
+    const joined = bob.port.paragraphs()[0]!;
+    expect(joined.text).toBe('AlphaBravo');
+    expect(bob.port.paragraphByStableId(second!.paragraphId)).toBeNull();
+    expect(bob.room.session.remoteSelections()[0]?.head).toEqual({
+      paragraphId: joined.paragraphId,
+      nodeId: joined.nodeId,
+      offset: 8,
+    });
+  });
+
+  test('a hostile published character is dropped and the offset stands', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const first = alice.port.paragraphs()[0]!;
+    for (const character of [
+      { item: '__proto__', after: true },
+      { item: '1:2', after: 'yes' },
+      { item: `${'9'.repeat(40)}:1`, after: true },
+      'not-an-object',
+    ]) {
+      const point = { paragraphId: first.paragraphId, offset: 2, character };
+      alice.awareness.setLocalStateField('docxEditor', {
+        actorId: 'alice',
+        name: 'alice',
+        role: 'human',
+        selection: { anchor: point, head: point },
+      });
+      expect(() => syncAwareness(alice, bob)).not.toThrow();
+      expect(bob.room.session.remoteSelections()[0]?.head).toMatchObject({
+        paragraphId: first.paragraphId,
+        offset: 2,
+      });
+    }
   });
 
   test('presence does not emit a journal or a revision', async () => {

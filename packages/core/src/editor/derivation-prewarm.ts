@@ -48,8 +48,8 @@ export function scheduleDerivationPrewarm(options: DerivationPrewarmOptions): ()
   const schedule =
     options.schedule ??
     ((run: () => void, delayMs: number): (() => void) => {
-      const handle = setTimeout(run, delayMs);
-      return () => clearTimeout(handle);
+      const handle = globalThis.setTimeout(run, delayMs);
+      return () => globalThis.clearTimeout(handle);
     });
 
   let cancelled = false;

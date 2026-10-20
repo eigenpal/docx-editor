@@ -7,6 +7,7 @@ import {
 } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 
 /**
  * Whether a bounded row placement can consume authored content without publishing anything.
@@ -35,18 +36,20 @@ export function probeRowFragmentProgress(
   depth: number,
   deps: TableFlowDeps,
   cursors: readonly CellPlaceCursor[],
-  cellSpacingPt = 0
+  cellSpacingPt = 0,
+  options?: { readonly requireEveryCell?: boolean }
 ): boolean {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
-    cache: undefined,
+    // Reads only: a probe never retains a break, but it may reuse one placement measured.
+    cache: readOnlyBreakCache(deps.cache),
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,
     nextLineId: () => `probe-progress-${lineCounter++}`,
   };
-  return layoutRowFragmentBounded(
+  const placed = layoutRowFragmentBounded(
     row,
     cols,
     left,
@@ -58,5 +61,13 @@ export function probeRowFragmentProgress(
     probeDeps,
     cursors,
     cellSpacingPt
-  ).fitted;
+  );
+  return (
+    placed.fitted &&
+    (!options?.requireEveryCell ||
+      placed.record.cells.every(
+        (cell, index) =>
+          cell.vMergeContinue || row.cells[index]!.blocks.length === 0 || cell.blocks.length > 0
+      ))
+  );
 }

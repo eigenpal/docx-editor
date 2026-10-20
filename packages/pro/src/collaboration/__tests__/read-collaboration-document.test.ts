@@ -15,8 +15,16 @@ import { Awareness } from 'y-protocols/awareness';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration, readCollaborationDocument } from '../document-session.ts';
-import { CollaborationSchemaError } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
+import { DOCUMENT_COLLABORATION_VERSIONS } from '../document-compatibility.ts';
 import { SEED_RECORDS_KEY } from '../document-bootstrap.ts';
+import {
+  NODE_CHILDREN_FIELD,
+  PACKAGE_META_KEY,
+  PACKAGE_NODES_KEY,
+  readNodeShell,
+} from '../document/schema.ts';
+import { createPeerHarness } from './document-peer-support.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -76,6 +84,142 @@ async function seededRoom(text: string): Promise<{ ydoc: Y.Doc; destroy: () => v
 }
 
 describe('readCollaborationDocument', () => {
+  for (const [field, version, code] of [
+    ['sharedSchemaVersion', 3, 'schema-version-mismatch'],
+    ['sharedSchemaVersion', 6, 'schema-version-mismatch'],
+    ['protocolVersion', 0, 'protocol-version-mismatch'],
+    ['repairVersion', 1, 'schema-version-mismatch'],
+    ['repairVersion', 3, 'schema-version-mismatch'],
+    ['canonicalModelVersion', 2, 'schema-version-mismatch'],
+  ] as const) {
+    test(`refuses ${field} ${version} before interpreting persisted split metadata`, async () => {
+      const host = await seededRoom('shared text');
+      const observer = new Y.Doc();
+      try {
+        Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+        observer.getMap(PACKAGE_META_KEY).set(field, version);
+        // Incompatible schemas may encode this field differently. The version refusal
+        // must happen before a v3 parser tries to interpret those persisted records.
+        const record = new Y.Map<unknown>();
+        record.set('splitTextSource', 'legacy encoding');
+        observer.getMap(PACKAGE_NODES_KEY).set('legacy-node', record);
+        const before = Y.encodeStateVector(observer);
+        try {
+          readCollaborationDocument(observer);
+          throw new Error('export unexpectedly accepted an incompatible schema');
+        } catch (error) {
+          expect(error).toBeInstanceOf(CollaborationSchemaError);
+          expect((error as CollaborationSchemaError).code).toBe(code);
+          expect((error as CollaborationSchemaError).detail).toContain(`${field}: expected `);
+          expect((error as CollaborationSchemaError).detail).toContain(`received ${version}`);
+        }
+        expect(Y.encodeStateVector(observer)).toEqual(before);
+      } finally {
+        host.destroy();
+        observer.destroy();
+      }
+    });
+  }
+
+  for (const initialized of [false, undefined]) {
+    test(`refuses an incomplete persisted seed with initialized=${String(initialized)}`, async () => {
+      const host = await seededRoom('shared text');
+      const observer = new Y.Doc();
+      try {
+        Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+        const meta = observer.getMap(PACKAGE_META_KEY);
+        if (initialized === undefined) meta.delete('initialized');
+        else meta.set('initialized', initialized);
+        const before = Y.encodeStateVector(observer);
+        expect(() => readCollaborationDocument(observer)).toThrow('not-initialized');
+        expect(Y.encodeStateVector(observer)).toEqual(before);
+      } finally {
+        host.destroy();
+        observer.destroy();
+      }
+    });
+  }
+
+  test('refuses export when a record shared state removed would drop content', async () => {
+    const host = await seededRoom('must survive');
+    const observer = new Y.Doc();
+    try {
+      Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+      const nodes = observer.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+      // Runs live in their paragraph's shared text, so the removed record is a paragraph.
+      const entry = [...nodes].find(([, record]) => readNodeShell(record).kind === 'paragraph');
+      expect(entry).toBeDefined();
+      nodes.delete(entry![0]);
+      const before = Y.encodeStateVector(observer);
+      try {
+        readCollaborationDocument(observer);
+        throw new Error('export unexpectedly accepted dropped content');
+      } catch (error) {
+        expect(error).toBeInstanceOf(CollaborationSchemaError);
+        expect((error as CollaborationSchemaError).code).toBe('materialize-dropped-content');
+        expect((error as CollaborationSchemaError).detail).toContain('child-id-not-in-registry');
+      }
+      expect(Y.encodeStateVector(observer)).toEqual(before);
+    } finally {
+      host.destroy();
+      observer.destroy();
+    }
+  });
+
+  test('exports around a listed child whose record has not arrived', async () => {
+    // Yjs keeps an update with missing dependencies pending. A child listed before its record
+    // arrives is the same one level up: nothing of it is known yet, so nothing is dropped.
+    const host = await seededRoom('must survive');
+    const observer = new Y.Doc();
+    try {
+      Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+      const nodes = observer.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+      const paragraph = [...nodes.values()].find(
+        (record) => readNodeShell(record).kind === 'paragraph'
+      );
+      expect(paragraph).toBeDefined();
+      (paragraph!.get(NODE_CHILDREN_FIELD) as Y.Array<string>).insert(0, ['not-arrived-yet']);
+      const exported = readOoxmlPackage(readCollaborationDocument(observer));
+      expect(exported.ok).toBe(true);
+    } finally {
+      host.destroy();
+      observer.destroy();
+    }
+  });
+
+  test('compatible metadata without document parts cannot export an empty archive', () => {
+    const observer = new Y.Doc();
+    try {
+      const meta = observer.getMap(PACKAGE_META_KEY);
+      meta.set('initialized', true);
+      meta.set('documentId', DOCUMENT_ID);
+      for (const [field, value] of Object.entries(DOCUMENT_COLLABORATION_VERSIONS))
+        meta.set(field, value);
+      const before = Y.encodeStateVector(observer);
+      expect(() => readCollaborationDocument(observer)).toThrow('no-main-document-part');
+      expect(Y.encodeStateVector(observer)).toEqual(before);
+    } finally {
+      observer.destroy();
+    }
+  });
+
+  test('legitimate full deletion and undo remain exportable', async () => {
+    const harness = createPeerHarness('read-healthy-deletion');
+    try {
+      const { alice, bob } = await harness.pair(docx('hello'));
+      harness.apply(alice, [
+        { op: 'deleteText', paragraphId: harness.paragraphIdAt(alice, 0), start: 0, end: 5 },
+      ]);
+      for (const peer of [alice, bob])
+        expect(bodyText(readCollaborationDocument(peer.ydoc))).toBe('');
+      expect(alice.room.session.undo()).toBe(true);
+      for (const peer of [alice, bob])
+        expect(bodyText(readCollaborationDocument(peer.ydoc))).toBe('hello');
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('returns the room document from a replica that never joined', async () => {
     const host = await seededRoom('shared text');
 

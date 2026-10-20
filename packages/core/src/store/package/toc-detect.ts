@@ -3,6 +3,7 @@
 import { isContentControl, isContentControlContent } from './content-control-walk.ts';
 import { fldCharType, instrTextValue, isInstrTextNode } from './field-nodes.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import { MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from './ooxml-shared.ts';
 import {
   TOC_MAX_FIELD_NESTING,
   TOC_MAX_INSTRUCTION_CHARS,
@@ -33,6 +34,8 @@ interface OpenField {
   readonly resultParagraphIds: string[];
   instructionLength: number;
   separated: boolean;
+  separateNodeId?: string;
+  separateParagraphId?: string;
   invalid: boolean;
 }
 
@@ -50,20 +53,37 @@ function fieldTokens(paragraph: OoxmlElement): readonly OoxmlNode[] {
   const cached = fieldTokensByParagraph.get(paragraph);
   if (cached) return cached;
   const tokens: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode): void => {
+  const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue') return;
-    if (fldCharType(node) !== null || isInstrTextNode(node)) {
+    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    if (
+      fldCharType(node) !== null ||
+      isInstrTextNode(node) ||
+      node.kind === 'text' ||
+      node.kind === 'tab'
+    ) {
       tokens.push(node);
       return;
     }
-    for (const child of node.children) walk(child);
+    const nextDepth = nextInlineContainerDepth(node, depth);
+    for (const child of node.children) walk(child, nextDepth);
   };
-  for (const child of paragraph.children) walk(child);
+  for (const child of paragraph.children) walk(child, 0);
   fieldTokensByParagraph.set(paragraph, tokens);
   return tokens;
 }
 
-type DetectedTocCandidate = Omit<DetectedToc, 'id'>;
+interface TocFieldRange {
+  readonly separateNodeId: string;
+  readonly separateParagraphId: string;
+  readonly endNodeId: string;
+}
+const fieldRanges = new WeakMap<DetectedToc, TocFieldRange>();
+/** Internal inline boundaries, kept outside the public detection shape. */
+export function tocFieldRange(toc: DetectedToc): TocFieldRange | undefined {
+  return fieldRanges.get(toc);
+}
+type DetectedTocCandidate = Omit<DetectedToc, 'id'> & { readonly range: TocFieldRange };
 type ContainerTocResult = DetectedToc | DetectedTocCandidate;
 
 const EMPTY_TOCS: readonly DetectedToc[] = Object.freeze([]);
@@ -82,15 +102,26 @@ function detectTocsInContainer(
 ): readonly DetectedToc[] {
   const cached = detectedTocsByContainer.get(container);
   if (cached) return cached;
-  const stack: (OpenField | null)[] = [];
+  const stack: OpenField[] = [];
+  let overflowDepth = 0;
   const completed: ContainerTocResult[] = [];
 
   const processParagraph = (paragraph: OoxmlElement): void => {
     for (const token of fieldTokens(paragraph)) {
+      // Cached text can share either boundary paragraph. Record it before the
+      // end marker pops the field, without treating text after the field as a row.
+      if (token.kind === 'text' || token.kind === 'tab') {
+        for (const open of stack) {
+          if (open?.separated && open.resultParagraphIds.at(-1) !== paragraph.id) {
+            open.resultParagraphIds.push(paragraph.id);
+          }
+        }
+        continue;
+      }
       const type = fldCharType(token);
       if (type === 'begin') {
-        if (stack.length >= TOC_MAX_FIELD_NESTING) {
-          stack.push(null);
+        if (overflowDepth > 0 || stack.length >= TOC_MAX_FIELD_NESTING) {
+          overflowDepth += 1;
         } else {
           stack.push({
             beginNodeId: token.id,
@@ -107,6 +138,13 @@ function detectTocsInContainer(
         continue;
       }
 
+      // Retain only the supported nesting levels. A null placeholder per extra
+      // begin makes every following text token scan an arbitrarily large stack.
+      if (overflowDepth > 0) {
+        if (type === 'end') overflowDepth -= 1;
+        continue;
+      }
+
       const field = stack[stack.length - 1];
       if (isInstrTextNode(token)) {
         if (field && !field.separated) {
@@ -118,7 +156,11 @@ function detectTocsInContainer(
         continue;
       }
       if (type === 'separate') {
-        if (field) field.separated = true;
+        if (field && !field.separated) {
+          field.separated = true;
+          field.separateNodeId = token.id;
+          field.separateParagraphId = paragraph.id;
+        }
         continue;
       }
       if (type !== 'end' || stack.length === 0) continue;
@@ -129,11 +171,17 @@ function detectTocsInContainer(
         ended.separated &&
         !ended.invalid &&
         ended.containerId === container.id &&
-        ended.beginParagraphId !== paragraph.id
+        ended.separateNodeId &&
+        ended.separateParagraphId
       ) {
         const instruction = parseTocInstruction(ended.instructionChunks.join(''));
         if (instruction) {
           completed.push({
+            range: {
+              separateNodeId: ended.separateNodeId,
+              separateParagraphId: ended.separateParagraphId,
+              endNodeId: token.id,
+            },
             beginNodeId: ended.beginNodeId,
             beginParagraphId: ended.beginParagraphId,
             endParagraphId: paragraph.id,
@@ -151,7 +199,8 @@ function detectTocsInContainer(
         field &&
         field.separated &&
         field.beginParagraphId !== paragraph.id &&
-        field.containerId === container.id
+        field.containerId === container.id &&
+        field.resultParagraphIds.at(-1) !== paragraph.id
       ) {
         field.resultParagraphIds.push(paragraph.id);
       }
@@ -176,18 +225,19 @@ function detectTocsInContainer(
       controlCounts.set(toc.contentControlId, (controlCounts.get(toc.contentControlId) ?? 0) + 1);
     }
   }
-  const result = completed.map(
-    (toc): DetectedToc =>
-      'id' in toc
-        ? toc
-        : {
-            ...toc,
-            id:
-              toc.contentControlId && controlCounts.get(toc.contentControlId) === 1
-                ? toc.contentControlId
-                : toc.beginNodeId,
-          }
-  );
+  const result = completed.map((toc): DetectedToc => {
+    if ('id' in toc) return toc;
+    const { range, ...candidate } = toc;
+    const detected: DetectedToc = {
+      ...candidate,
+      id:
+        toc.contentControlId && controlCounts.get(toc.contentControlId) === 1
+          ? toc.contentControlId
+          : toc.beginNodeId,
+    };
+    fieldRanges.set(detected, range);
+    return detected;
+  });
   const immutable = result.length > 0 ? Object.freeze(result) : EMPTY_TOCS;
   detectedTocsByContainer.set(container, immutable);
   return immutable;

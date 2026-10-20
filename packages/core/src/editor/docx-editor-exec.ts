@@ -1,3 +1,12 @@
+import { insertTextbox } from './textbox-commands.ts';
+import { execSetWatermark } from './docx-editor-watermark.ts';
+import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
+import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
+import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
+import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
+import { isMissingAuthorRefusal } from './docx-editor-author.ts';
+import { isCollaborationFailureCode } from '../collaboration/index.ts';
+import { execReplaceMatch } from './docx-editor-replace-match.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -9,6 +18,7 @@
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardRich } from './clipboard-write.ts';
+import { hostElementOfEditor, hostWindowOf } from './host-realm.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-painter-contract.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
@@ -32,7 +42,11 @@ import {
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
-import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
+import {
+  execImageCommand,
+  isImageCommand,
+  resolveSelectedDrawingRecord,
+} from './docx-editor-images.ts';
 import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format-write.ts';
 
 /**
@@ -42,6 +56,20 @@ import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format
  * verb that changed nothing), and `null` when it completed normally — the caller then
  * derives `changed` from the model revision rather than trusting the verb.
  */
+/**
+ * A refused run format as a command result. A missing author or the generated table of
+ * contents is the caller's to fix, as `insertText` reports it; a collaboration session that
+ * is not ready is a retry, as the contract documents; anything else is a lock.
+ */
+function runFormatRefusal(reason: string): ExecResult {
+  if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
+  const callerFixable =
+    isMissingAuthorRefusal(reason) ||
+    reason === 'the table of contents is generated and read-only' ||
+    reason === FIELD_CODE_INPUT_REFUSAL;
+  return { ok: false, code: callerFixable ? 'invalidArgs' : 'locked', reason };
+}
+
 export function execEditorCommand(
   mounted: PaginatedSurface,
   command: EditorCommand,
@@ -56,7 +84,9 @@ export function execEditorCommand(
   switch (command.type) {
     case 'toggleMark': {
       const mark = MARKS.get(command.mark)!;
-      mounted.toggleRunProperty(mark.localName, mark.attributes);
+      // The document's refusal, in its own words: the reason names the cause.
+      const refused = mounted.toggleRunProperty(mark.localName, mark.attributes);
+      if (refused) return runFormatRefusal(refused);
       break;
     }
     case 'setMarkAttr': {
@@ -64,7 +94,8 @@ export function execEditorCommand(
       // again here keeps exec's write derived from the command, not from trust.
       const resolved = resolveMarkAttr(command);
       if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
-      mounted.setRunProperty(resolved.localName, resolved.attributes);
+      const refused = mounted.setRunProperty(resolved.localName, resolved.attributes);
+      if (refused) return runFormatRefusal(refused);
       break;
     }
     case 'clearFormatting':
@@ -131,9 +162,19 @@ export function execEditorCommand(
       break;
     case 'setAlignment':
       // The contract says `justify`; `w:jc` spells it `both`.
-      mounted.setParagraphProperty('jc', {
-        val: command.align === 'justify' ? 'both' : command.align,
-      });
+      // A physical edge, as the button shows it; the writer spells it per paragraph direction.
+      mounted.setParagraphProperties([
+        {
+          localName: 'jc',
+          attributes: { val: command.align === 'justify' ? 'both' : command.align },
+          physicalAlignment: true,
+        },
+      ]);
+      break;
+    case 'setParagraphDirection':
+      mounted.setParagraphProperties([
+        { localName: 'bidi', paragraphDirection: command.direction },
+      ]);
       break;
     case 'setParagraphStyle': {
       // The styleId must name a paragraph style the DOCUMENT defines: writing a dangling
@@ -171,6 +212,7 @@ export function execEditorCommand(
         ...(command.alignment !== undefined
           ? { alignment: command.alignment === 'justify' ? ('both' as const) : command.alignment }
           : {}),
+        ...(command.direction !== undefined ? { direction: command.direction } : {}),
         ...(command.spaceBeforePt !== undefined ? { spaceBeforePt: command.spaceBeforePt } : {}),
         ...(command.spaceAfterPt !== undefined ? { spaceAfterPt: command.spaceAfterPt } : {}),
         ...(command.lineSpacing !== undefined ? { lineSpacing: command.lineSpacing } : {}),
@@ -336,10 +378,21 @@ export function execEditorCommand(
         };
       }
       break;
+    case 'insertTextBox':
+      return insertTextbox(mounted);
     case 'insertText':
       mounted.type(command.text);
+      if (
+        mounted.state().lastRejection === 'the table of contents is generated and read-only' ||
+        mounted.state().lastRejection === FIELD_CODE_INPUT_REFUSAL
+      ) {
+        return { ok: false, code: 'invalidArgs', reason: mounted.state().lastRejection! };
+      }
       break;
     case 'deleteText':
+      if (resolveSelectedDrawingRecord(mounted)) {
+        return execImageCommand(mounted, { type: 'deleteImage' }, options?.editor);
+      }
       mounted.deleteSelection();
       break;
     case 'proposeInsertion':
@@ -373,6 +426,8 @@ export function execEditorCommand(
       }
       break;
     }
+    case 'replaceMatch':
+      return execReplaceMatch(mounted, command);
     case 'undo':
       mounted.undo();
       break;
@@ -397,6 +452,10 @@ export function execEditorCommand(
         };
       }
       break;
+    case 'editTextFormField':
+      return mounted.editTextFormField()
+        ? { ok: true, changed: false }
+        : { ok: false, code: 'unsupported', reason: 'field options are unavailable' };
     case 'refreshToc':
       if (!mounted.refreshToc(command.tocId, command.mode)) {
         return {
@@ -420,6 +479,13 @@ export function execEditorCommand(
       return execUnlinkHeaderFooter(mounted, command);
     case 'setHeaderFooterOptions':
       return execSetHeaderFooterOptions(mounted, command);
+    case 'setWatermark':
+      return execSetWatermark(mounted, command.watermark);
+    case 'insertBookmark':
+    case 'deleteBookmark':
+    case 'keepFirstBookmark':
+    case 'goToBookmark':
+      return execBookmarkCommand(mounted, command);
     case 'insertPageField':
       return execInsertPageField(mounted, command);
     case 'insertNote':
@@ -472,24 +538,32 @@ export function execEditorCommand(
     case 'copy': {
       // The gate already refused a collapsed selection, so this read is non-empty.
       const flavours = mounted.copyFlavours();
-      writeClipboardRich(flavours.text, flavours.html);
+      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
+      writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       return { ok: true, changed: false };
     }
     case 'cut': {
       // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
       const flavours = mounted.copyFlavours();
-      writeClipboardRich(flavours.text, flavours.html);
+      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
+      writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       mounted.deleteSelection();
       break;
     }
-    case 'paste':
+    case 'paste': {
       // Same fidelity routing as the paste event; a text-only call is the plain lane.
       // A payload that lands on no lane (empty text, unusable HTML) changed nothing.
-      if (!mounted.pasteRich(command.text, command.html ?? null)) {
+      const fragment = command.html ? fragmentFromHtml(command.html) : null;
+      if (fragment && fragmentContainsClipboardObject(fragment.bytes)) {
+        return { ok: false, code: 'unsupported', reason: 'unsupported-content' };
+      }
+      const result = mounted.pasteRich(command.text, command.html ?? null);
+      if (!result) {
         return { ok: true, changed: false };
       }
       break;
+    }
     case 'pasteWithoutFormatting':
       mounted.insertPlainText(command.text);
       break;
@@ -502,6 +576,10 @@ export function execEditorCommand(
       // already-visible target still and centres one it has to travel to, rather than
       // stopping the moment it clears the bottom edge.
       if ('range' in command && isSurfaceSelection(command.range)) {
+        // Open the story the range is in first, as the anchor form below does: a header,
+        // footer or note range selected from the body would otherwise strand the caret.
+        const entered = enterStoryForSelection(mounted, command.range);
+        if (!entered.ok) return entered;
         mounted.setSelection(command.range);
         mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.
@@ -549,6 +627,11 @@ export function execEditorCommand(
 }
 
 /** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
+/** The window whose clipboard a copy writes to: the editor's, a pop-out's when it is there. */
+function clipboardWindow(editor: object | undefined): Window | undefined {
+  return editor ? hostWindowOf(hostElementOfEditor(editor)) : undefined;
+}
+
 function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): string | null {
   for (const page of mounted.layout().pages) {
     for (const area of [page.footnotes, page.endnotes]) {

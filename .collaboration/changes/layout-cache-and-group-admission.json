@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Retained layout could reuse stale table measurements, repeat separator work, and omit unsupported group effects.",
+  "after": "Retained layout uses current field and numbering inputs, reuses separator classifications, and refuses unsupported group visuals.",
+  "reason": "These changes affect read-only layout and drawing projections. They do not change shared state, primitive operations, or canonical serialization.",
+  "tests": [
+    "packages/core/src/layout/__tests__/pagination-preparation-cache.test.ts",
+    "packages/core/src/layout/__tests__/table-keep-opening-cache.test.ts",
+    "packages/core/src/store/__tests__/drawing-group-picture.test.ts"
+  ],
+  "changeset": "layout-cache-and-group-admission",
+  "migration": null
+}

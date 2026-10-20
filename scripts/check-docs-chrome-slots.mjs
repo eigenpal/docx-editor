@@ -48,7 +48,7 @@ const documentedSlots = [...docs.matchAll(/^\|\s*`([a-z][A-Za-z0-9]*\.[A-Za-z0-9
 const expectedSlotSet = new Set(expectedSlots);
 const documentedSlotSet = new Set(documentedSlots);
 
-const helpers = new Set(['Button', 'Action', 'Separator']);
+const helpers = new Set(['Button', 'Action', 'Separator', 'Group', 'Slot']);
 const reactParts = toolbarParts(react, 'React').filter((part) => !helpers.has(part));
 const vueParts = toolbarParts(vue, 'Vue').filter((part) => !helpers.has(part));
 const documentedPartCells = [

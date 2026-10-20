@@ -297,3 +297,33 @@ describe('multi-section page identity and invalidation', () => {
     expect(session.multi).toBeNull();
   });
 });
+
+describe('page-break-before at a section start', () => {
+  test('a next-page section does not add a second break', () => {
+    const body =
+      paragraph('Cover', sectPr()) + paragraph('Contents', '<w:pageBreakBefore/>') + sectPr();
+    const session = createLayoutSession();
+    const part = load(body);
+    const first = lay(part, 1, session);
+    expect(first.pages).toHaveLength(2);
+    expect(first.pages.every((page) => page.fragments.length > 0)).toBe(true);
+    expect(shapeOf(lay(part, 2, session))).toBe(shapeOf(first));
+    const edited = load(body.replace('Cover', 'Edited cover'));
+    expect(shapeOf(lay(edited, 3, session))).toBe(shapeOf(lay(edited, 3)));
+  });
+
+  test('a continued section still breaks away from existing host content', () => {
+    const part = load(
+      paragraph('Cover', sectPr()) +
+        paragraph('Contents', '<w:pageBreakBefore/>') +
+        sectPr('<w:type w:val="continuous"/>')
+    );
+    expect(lay(part, 1).pages).toHaveLength(2);
+  });
+
+  test('a page-break-before on the first document paragraph does not add a blank sheet', () => {
+    expect(
+      lay(load(paragraph('Contents', '<w:pageBreakBefore/>') + sectPr()), 1).pages
+    ).toHaveLength(1);
+  });
+});

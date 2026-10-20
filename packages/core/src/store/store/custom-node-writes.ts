@@ -36,9 +36,10 @@ import {
   withCustomXmlDataPart,
 } from '../package/custom-xml-part.ts';
 import { contentControlsIn } from '../package/content-control-nodes.ts';
+import { parentNodeOf } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
-import type { TreeOpRejection } from './tree-op-validate.ts';
+import type { RevisionAttributionInput, TreeOpRejection } from './tree-op-types.ts';
 
 /**
  * The payload half of an insert: which store, which node, and what it holds.
@@ -87,6 +88,11 @@ export interface InsertCustomNodeWrite {
   readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
   /** Omitted authors an ordinary tagged control with no store — the pre-payload behaviour. */
   readonly payload?: CustomNodePayloadWrite;
+  /**
+   * Propose the node as a tracked insertion. A wrap (`replaceUntil`) or a rewrite
+   * (`replaceControlId`) has no tracked form yet, and refuses with a revision.
+   */
+  readonly revision?: RevisionAttributionInput;
 }
 
 /**
@@ -128,6 +134,19 @@ export const MAX_CUSTOM_NODE_PAYLOAD_LENGTH = 256 * 1024;
 /** The longest label a binding may paint. Word renders it as the control's whole content. */
 export const MAX_CUSTOM_NODE_LABEL_LENGTH = 4_096;
 
+/** Whether any wrapper between the node and its paragraph is a pending revision. */
+function insidePendingRevision(store: TreeDocumentStore, nodeId: string): boolean {
+  for (
+    let node = parentNodeOf(store.part, nodeId);
+    node;
+    node = parentNodeOf(store.part, node.id)
+  ) {
+    if (node.kind === 'paragraph') return false;
+    if (node.kind.startsWith('revision')) return true;
+  }
+  return false;
+}
+
 /**
  * Insert one custom node, with its payload, as a single transaction.
  *
@@ -158,6 +177,22 @@ export function insertCustomNodeWrite(
     if (payload.label.length > MAX_CUSTOM_NODE_LABEL_LENGTH) {
       return { ok: false, reason: 'payload-too-large', detail: 'label' };
     }
+  }
+
+  if (
+    write.revision &&
+    (write.replaceControlId !== undefined || write.replaceUntil !== undefined)
+  ) {
+    return { ok: false, reason: 'unsupported', detail: 'tracked custom node wrap or rewrite' };
+  }
+  const revision = write.revision ? { revision: write.revision } : {};
+  // A rewrite of a node that is itself a pending proposal would land the new control outside
+  // the proposal, untracked. Refused until a rewrite can keep the proposal around it.
+  if (
+    write.replaceControlId !== undefined &&
+    insidePendingRevision(store, write.replaceControlId)
+  ) {
+    return { ok: false, reason: 'unsupported', detail: 'custom node inside a pending revision' };
   }
 
   // Ids, not nodes: the transaction rebuilds the tree, so nothing else carries across it.
@@ -216,6 +251,7 @@ export function insertCustomNodeWrite(
         text: write.text,
         ...(write.alias === undefined ? {} : { alias: write.alias }),
         ...(write.lock === undefined ? {} : { lock: write.lock }),
+        ...revision,
       });
       return;
     }
@@ -280,6 +316,7 @@ export function insertCustomNodeWrite(
       ...(write.alias === undefined ? {} : { alias: write.alias }),
       ...(write.lock === undefined ? {} : { lock: write.lock }),
       dataBinding: binding,
+      ...revision,
     });
   });
 

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A tracked deletion over an equation committed, struck the text around it, and left the equation live.",
+  "after": "A tracked deletion over an equation writes the whole m:oMath or m:oMathPara inside the w:del. An equation inside the author's own pending insertion is removed, as their own text is.",
+  "reason": "Peers receive an ordinary w:del that holds an equation, which they read, accept, and reject like any deletion. No shared field or operation shape changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/tracked-equation-deletion.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-equation-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-equation-delete.test.ts"
+  ],
+  "changeset": "tracked-equation-delete",
+  "migration": null
+}

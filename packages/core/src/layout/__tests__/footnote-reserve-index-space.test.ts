@@ -188,7 +188,8 @@ describe('multi-section reserve index space (#460)', () => {
     });
     expect(sortedKeys(session.notePageBottomReserves!)).toEqual([2]);
 
-    const { part: grownPart, notes: grownNotes } = notesFor(docWith(30), 3);
+    // Hanging same-run separators let 30 paragraphs fit one page; 40 forces the shift.
+    const { part: grownPart, notes: grownNotes } = notesFor(docWith(40), 3);
     const incremental = layoutSemanticDocument(grownPart, 2, {
       measurer: grownNotes.measurer,
       notes: grownNotes,
@@ -205,16 +206,12 @@ describe('multi-section reserve index space (#460)', () => {
       expect((page.footnotes?.notes ?? []).filter((n) => n.continuation)).toEqual([]);
     }
 
-    // The reuse half of the local-slot key: section 2 holds no readable reserve entry at
-    // its old OR new position, so its key is '' in both and the shift must not re-lay it.
-    // (Sections 0 and 1 legitimately re-place — one changed, the other reads a changed
-    // reserve slice — so only section 2 pins the document-index-free key property.)
+    // The seed moves with each section's first page, so the notes pass settles in its first
+    // body pass: no reserve round re-lays a section. That pass places sections 0 and 1 (one
+    // changed, the other moved) and section 2, whose first page moved, once.
     const sections = enumerateDocumentSections(grownPart);
     expect(sections.length).toBe(3);
-    const reserveFreeSectionBlocks = sections[2]!.blockEndExclusive - sections[2]!.blockStart;
-    expect(reserveFreeSectionBlocks).toBeGreaterThan(0);
-    expect(session.stats.placed).toBe(session.stats.total - reserveFreeSectionBlocks);
-    expect(session.stats.reusedPages).toBeGreaterThanOrEqual(1);
+    expect(session.stats.placed).toBeLessThan(session.stats.total);
 
     const clean = layoutSemanticDocument(grownPart, 2, {
       measurer: grownNotes.measurer,
@@ -230,7 +227,8 @@ describe('multi-section reserve index space (#460)', () => {
     // reserve at the shared sheet's DOCUMENT page index, so the continued flow also stops
     // above the note area rather than filling the band the note needs.
     const bytes = zipFootnoteDoc(
-      paras('S0', 60, 18, 59) +
+      // Keep the citation on document page 2 after same-run separators can hang.
+      paras('S0', 80, 18, 79) +
         sectionBreak +
         paras('S1', 40, 18) +
         `<w:sectPr><w:type w:val="continuous"/>${SECT_GEOMETRY}</w:sectPr>`,

@@ -12,7 +12,7 @@ import {
   partNameKey,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import type { LogicalId } from './identity.ts';
+import { idOf, type LogicalId } from './identity.ts';
 import { isElementRecord, type ElementRecord, type EncodedRelationship } from './schema.ts';
 import type { DocumentRegistry } from './registry.ts';
 
@@ -135,7 +135,7 @@ export function planCustomXmlStores(
   const dataById = new Map<LogicalId, ElementRecord>();
   const propsById = new Map<LogicalId, ElementRecord>();
   for (const [name, part] of parts) {
-    const record = registry.record(part.root.id);
+    const record = registry.record(idOf(part.root));
     if (!record || !isElementRecord(record)) continue;
     if (isCustomXmlItemPartName(name)) dataById.set(record.logicalId, record);
     if (isCustomXmlPropsPartName(name)) propsById.set(record.logicalId, record);

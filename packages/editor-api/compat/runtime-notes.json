@@ -1,0 +1,810 @@
+{
+  "OfficeExtension.ClientRequestContext#sync": {
+    "status": "partial",
+    "notes": "Text and formatting writes in one atomic batch target one story. Mixed-story writes refuse with ConflictingChanges without committing that batch. Bookmark removal can share a batch with writes to another story. Inserting a bookmark can move an existing name from another story in that transaction. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
+  },
+  "Word.run": {
+    "status": "different",
+    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run. runtime.run(options, batch) is a DocxEditor extension with no Office.js equivalent: historyGroup joins an editor history group on the browser runtime only, and server and collaborative runtimes refuse it with NotSupported. A collaborative server runtime groups writes into one undo step through the collaboration session's beginUndoGroup() instead, which is collaboration infrastructure and not part of the runtime. runtime.preview(batch) is also a DocxEditor extension: it runs the batch against a private copy shown in the page, refuses unsupported writes with NotSupported, and commits by replaying the recorded batches as one undo step. A moved document refuses with StaleDocument unless commit({ rebase: true }) is used, which still refuses when replayed reads answer differently."
+  },
+  "Word.SearchOptions#ignorePunct": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.SearchOptions#ignoreSpace": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.SearchOptions#matchWildcards": {
+    "status": "partial",
+    "notes": "The option compiles, but true is refused with NotSupported."
+  },
+  "Word.Range#select": {
+    "status": "partial",
+    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument. A range in a header, footer or note opens that story first, so the selection and the editing scope agree; a bookmark's range from getBookmarkRangeOrNullObject selects this way in any story. A read-only editor selects in the main text and refuses another story with NotSupported. Selecting writes nothing, so it works in a read-only editor and does not take the batch's write story. A selection cannot share a sync with a write that must commit alone, such as creating a header; that batch refuses with ConflictingChanges and writes nothing. If the editor cannot place a selection that passed these checks, context.sync() rejects with NotSupported, and the selection stays where it was. Writes in the same sync have committed by then, so read again before you retry; do not replay them."
+  },
+  "Word.ContentControl#id": {
+    "status": "different",
+    "notes": "The file id is a string rather than a number. DOCX ids can be missing or repeated; do not use this value as unique identity."
+  },
+  "Word.Font#bold": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#italic": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#color": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#name": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#size": {
+    "status": "different",
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Range#insertComment": {
+    "status": "partial",
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Section#getHeader": {
+    "status": "partial",
+    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: every read answers as an empty story (text, paragraphs, lists, tables, shapes, pictures, fields, controls, comments, bookmarks, revisions, and search) without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Other writes that would change the body refuse until content exists; writes that change nothing succeed."
+  },
+  "Word.Section#getFooter": {
+    "status": "partial",
+    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: every read answers as an empty story (text, paragraphs, lists, tables, shapes, pictures, fields, controls, comments, bookmarks, revisions, and search) without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Other writes that would change the body refuse until content exists; writes that change nothing succeed."
+  },
+  "Word.Document#changeTrackingMode": {
+    "status": "partial",
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits, and tracked deletion of whole paragraphs, in collaboration too. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked deletion across paragraphs and Paragraph.delete strike text and paragraph marks, in collaboration too. Tracked table value replacement and tracked replacement across paragraphs refuse in collaboration. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after their deleted text; inside their insertion it splits the insertion into two halves that keep its revision identity, and the revision collection lists each half. The returned range names the new text where it lands, and each author's change stays a separate decision. NotImplemented, with debugInfo.innerError naming the rule: a deletion or replacement that covers only deleted text and no paragraph mark (edit.tracked-deleted-text-only); another author's paragraph mark, formatting, move, or structural change, or new text inside a link or content control within their insertion (edit.tracked-foreign-revision-unsupported); and covering or bordering your own pending change, including replacing a range that a tracked write returned (edit.tracked-own-pending-change). After a split, the other author's insertion is two revisions; decide both, or pass both to RevisionCollection.resolve. The same edits work in a collaboration session, and a concurrent accept or reject of the other author's change applies to all of that change and to nothing else."
+  },
+  "Word.Comment#creationDate": {
+    "status": "partial",
+    "notes": "Office.js declares Date, but OOXML makes w:date optional and untrusted files can contain an invalid lexical value. DocxEditor returns Date | null rather than inventing a timestamp or exposing Invalid Date; strict consumers must narrow null before using Date methods. Comments that Range.insertComment creates are stamped with the time they were written, to the second, so they read back a Date and save w:date."
+  },
+  "Word.CommentReply#creationDate": {
+    "status": "partial",
+    "notes": "Replies inherit the same nullable date getter as comments because they are CT_Comment records with the same optional, file-authored w:date. Replies that Comment.reply creates are stamped with the time they were written, to the second. The compatibility assertion removes only this documented null before comparing with Office.js Date."
+  },
+  "Word.Revision#date": {
+    "status": "partial",
+    "notes": "Office.js declares Date, while CT_TrackChange permits an absent w:date and untrusted input can contain an invalid one. DocxEditor returns Date | null and the compatibility assertion verifies that excluding the documented null leaves the upstream Date shape."
+  },
+  "Word.Comment#reply": {
+    "status": "partial",
+    "notes": "Office.js supplies the signed-in author through its host. DocxEditor has no ambient account identity, so createServer(bytes, { author }) and createBrowser(editor, { author }) carry the author explicitly. A missing or blank author refuses with NotSupported before queuing; browser sync can also refuse when the Pro review module, current editing mode, or live host does not permit the write. No static comment-write capability is published because those browser conditions are dynamic."
+  },
+  "Word.Revision#type": {
+    "status": "partial",
+    "notes": "The type union remains declared in full. The built-in reader emits Insert, Delete, Property, ParagraphProperty, MovedFrom, and MovedTo. Text replacements expose separate Insert and Delete revisions, including matching author, ID, and date. Replace remains declared but is not inferred from adjacent revisions. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+  },
+  "Word.List#insertParagraph": {
+    "status": "partial",
+    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "Word.ContentControl#getRange": {
+    "status": "partial",
+    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+  },
+  "Word.ContentControl#insertText": {
+    "status": "partial",
+    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "OfficeExtension.LoadOption#expand": {
+    "status": "partial",
+    "notes": "The expand query property remains in DocxEditor's public type for source compatibility, but navigation-property expansion is not implemented. Every non-empty value is rejected synchronously as InvalidArgument targeting the loaded object's .expand option; omitted and empty-array values preserve ordinary load behavior. This is explicit rather than accepting a request no model loader consumes."
+  },
+  "Word.Font#underline": {
+    "status": "partial",
+    "notes": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#highlightColor": {
+    "status": "partial",
+    "notes": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#strikeThrough": {
+    "status": "partial",
+    "notes": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#subscript": {
+    "status": "partial",
+    "notes": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Font#superscript": {
+    "status": "partial",
+    "notes": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Range#insertInlinePictureFromBase64": {
+    "status": "partial",
+    "notes": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse. Collaborative runtimes allocate the picture's ids and media part name from the participant's own range. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.InlinePicture#width": {
+    "status": "partial",
+    "notes": "Points. Under an aspect lock, changing one dimension updates the other proportionally. Simultaneous contradictory width/height writes refuse; unlock first for independent dimensions. Writes coalesce per proxy. Existing unrelated drawing settings survive."
+  },
+  "Word.InlinePicture#height": {
+    "status": "partial",
+    "notes": "See InlinePicture#width. Finite positive dimensions must fit OOXML coordinate limits."
+  },
+  "Word.InlinePicture#lockAspectRatio": {
+    "status": "partial",
+    "notes": "Writes the canonical noChangeAspect drawing lock and preserves other drawing locks. Disable the aspect lock to set independent width and height."
+  },
+  "Word.InlinePicture#altTextDescription": {
+    "status": "partial",
+    "notes": "Reads/writes drawing description; accepts empty text to clear. Preserves title and hyperlink. Invalid XML text and descriptions above 32767 characters refuse."
+  },
+  "Word.InlinePicture#delete": {
+    "status": "partial",
+    "notes": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use."
+  },
+  "Word.Range#insertTable": {
+    "status": "partial",
+    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Table#values": {
+    "status": "partial",
+    "notes": "Reads a row-major matrix. Writes require exactly the current rectangular dimensions. Values replace plain cell text while preserving cell properties. Multiline values, nested blocks, merged tables, and complex cell contents refuse. Cells remain reachable through getCell(), rows/cells, and cell.body. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+  },
+  "Word.Table#addRows": {
+    "status": "partial",
+    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+  },
+  "Word.TableRow#insertRows": {
+    "status": "partial",
+    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+  },
+  "Word.Table#addColumns": {
+    "status": "partial",
+    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. This structural mutation must be alone in its sync. In a table with w:gridSpan or w:vMerge cells, a new column inside a merged cell widens it, and one at its edge gives its row a new cell that copies the neighbor's vertical merge; values refuse there with InvalidArgument. A row that ends early keeps ending where it did. Legacy w:hMerge and authored w:gridBefore or w:gridAfter refuse. Tables without an explicit grid refuse with InvalidArgument."
+  },
+  "Word.Table#deleteRows": {
+    "status": "partial",
+    "notes": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Merged tables are supported: a vertical merge that starts in a deleted row restarts in the next row, or ends there when no further row continues it. A merged cell above the next row on the same grid columns takes it over instead. Rows with different cell counts are supported. TrackMineOnly keeps the merge unchanged until the deletion is accepted. Accepting the deletion applies the same merge rule as an untracked delete. Word's own accept can instead end the merge above and leave the next row unmerged. Rows the editor cannot place in the grid refuse with InvalidArgument. Invalid bounds refuse atomically. Structural mutations are solitary. TrackMineOnly retains deleted rows as native row deletion revisions. Each tracked deletion must leave a row without a pending deletion. Deleting the final surviving row refuses, including after earlier suggestions. Independent concurrent deletions can mark every row; bulk accept/reject resolves the combined result. Bulk accept/reject resolves complete rows. Tracked deletion refuses rows with pending row or cell structure revisions with NotImplemented; existing proposals and authors remain unchanged."
+  },
+  "Word.Table#deleteColumns": {
+    "status": "partial",
+    "notes": "Deletes count columns from a zero-based index; default count is one. Deleting every column removes the table. In a table with w:gridSpan or w:vMerge cells, a merged cell that spans the deleted column narrows instead of going, and a row that ends before it is unchanged. Invalid bounds, legacy w:hMerge, and authored w:gridBefore or w:gridAfter refuse. Structural mutations are solitary. Partial deletion without an explicit grid refuses with InvalidArgument; deleting every column still removes the table."
+  },
+  "Word.Table#delete": {
+    "status": "partial",
+    "notes": "Removes the table and its contents, including an existing merged table. Untouched neighboring blocks survive. Protected controls refuse. Deleted table/cell proxies become invalid."
+  },
+  "Word.Table#headerRowCount": {
+    "status": "partial",
+    "notes": "Authors contiguous repeated header rows from the first row. Zero clears header flags. Values must be an integer between zero and the row count. Other row properties survive."
+  },
+  "Word.Table#style": {
+    "status": "partial",
+    "notes": "Accepts the table style display name defined in the document, case-insensitively. Reads return that display name; OOXML stores the style ID. Unknown names and non-table styles refuse; no unformatted style definitions are invented."
+  },
+  "Word.TableCell#value": {
+    "status": "partial",
+    "notes": "Replaces ordinary single-paragraph cell text. Complex or multiline cell content refuses; use the cell body for supported targeted edits. Same-sync overlapping range/cell replacements refuse atomically. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+  },
+  "Word.TableCell#columnWidth": {
+    "status": "partial",
+    "notes": "Points. Changes the entire rectangular grid column, updates matching cell widths and total table width, and authors fixed table layout. Widths must meet canonical bounds. Merged or absent-grid topology refuses."
+  },
+  "Word.TableCell#shadingColor": {
+    "status": "partial",
+    "notes": "Reads/writes direct cell shading. Writes accept six-digit hexadecimal RGB, optional #, or auto to remove direct shading. Other cell properties survive. Named and theme colors are not resolved by this subset."
+  },
+  "Word.TableCell#verticalAlignment": {
+    "status": "partial",
+    "notes": "Top, Center, and Bottom write direct cell alignment. Mixed is a read-shape token and refuses as a setter. Other cell properties survive."
+  },
+  "Word.Paragraph#startNewList": {
+    "status": "partial",
+    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+  },
+  "Word.Paragraph#attachToList": {
+    "status": "partial",
+    "notes": "Joins a list already present in the same story, at a defined zero-based level from 0 through 8. Configure an undefined imported level before attaching to it. Returns the joined list. Unknown IDs and protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+  },
+  "Word.Paragraph#detachFromList": {
+    "status": "partial",
+    "notes": "Writes explicit numId 0 to suppress direct and style-inherited numbering while preserving other paragraph properties. It does not delete shared numbering definitions. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+  },
+  "Word.List#setLevelBullet": {
+    "status": "partial",
+    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+  },
+  "Word.List#setLevelNumbering": {
+    "status": "partial",
+    "notes": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+  },
+  "Word.List#setLevelStartingNumber": {
+    "status": "partial",
+    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+  },
+  "Word.List#setLevelIndents": {
+    "status": "partial",
+    "notes": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
+  },
+  "Word.Range#insertField": {
+    "status": "partial",
+    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Field#code": {
+    "status": "partial",
+    "notes": "Reads the raw inert instruction. Writes support PAGE and NUMPAGES on existing supported page fields, preserving field identity, result runs, run formatting, and unrelated fields. Simple fields and ordinary complex fields with sibling runs are supported; unsupported field shapes/code, protected fields, and tracked mutations refuse. Code writes do not compute cached results; call updateResult explicitly."
+  },
+  "Word.Field#updateResult": {
+    "status": "partial",
+    "notes": "Computes PAGE/NUMPAGES cached text from actual semantic pagination, including section page numbering formats. Headless runtimes require explicit pagination measurement options; browser runtimes use the current surface layout. Missing pagination, unsupported instructions or non-rewritable results refuse with NotSupported. Multiple result updates can share one sync, including one paragraph; mixing with other writes refuses atomically. Save/reopen retains computed cache text. Synthetic fixed measurers are used only in deterministic tests, not as a default capability claim."
+  },
+  "Word.Field#delete": {
+    "status": "partial",
+    "notes": "Deletes the addressed field atom and its cached result, preserving neighboring content and unrelated fields. Protected fields refuse. Deleted handles become stale. Fields inside unsupported structures remain preserved."
+  },
+  "Word.InlinePictureCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ParagraphCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.RangeCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.NoteItemCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.HtmlDivisionCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.XmlNodeCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.FieldCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ParagraphCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableCellCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.InlinePictureCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ListCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableOfAuthoritiesCategoryCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.BorderCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ContentControlCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.SectionCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.RepeatingSectionItemCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TrackedChangeCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableRowCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ReadabilityStatisticCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.BuildingBlockCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.PageCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableRowCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.AnnotationCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.PaneCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.PageCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.CommentReplyCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.PaneCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.Body#shapes": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. A standalone legacy VML shape (w:pict) has no wp:docPr id, so it is not listed and its text box story is not reachable through Shape.body. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Paragraph#shapes": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. A standalone legacy VML shape (w:pict) has no wp:docPr id, so it is not listed and its text box story is not reachable through Shape.body. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Shape#id": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@id. Read-only."
+  },
+  "Word.Shape#name": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@name. Writes are not published."
+  },
+  "Word.Shape#type": {
+    "status": "partial",
+    "notes": "TextBox for a wps shape that wps:cNvSpPr/@txBox marks as a text box, GeometricShape for any other wps shape, Picture, Group, Canvas, or Unsupported."
+  },
+  "Word.Shape#body": {
+    "status": "partial",
+    "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A shape without a story, such as a picture or a linked text box that continues another box, refuses with InvalidArgument. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. A comment cannot be inserted in a text box, because a comment there is not kept when the file opens; insertComment refuses with InvalidArgument. Edits save to the DrawingML story and to its VML fallback. The body becomes addressable after the sync that answers it."
+  },
+  "Word.ShapeCollection#getByTypes": {
+    "status": "partial",
+    "notes": "Filters the listing by type, keeping its order. Unknown type values refuse with InvalidArgument."
+  },
+  "Word.ShapeCollection#getFirst": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. A standalone legacy VML shape (w:pict) has no wp:docPr id, so it is not listed and its text box story is not reachable through Shape.body. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ListCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.CommentReplyCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.BuildingBlockEntryCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ShapeCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. A standalone legacy VML shape (w:pict) has no wp:docPr id, so it is not listed and its text box story is not reachable through Shape.body. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.BuildingBlockCategoryCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.NoteItemCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ListLevelCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TrackedChangeCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.WindowCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TableCellCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ContentControlListItemCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ContentControlCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ParagraphCollection#getLast": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.CommentCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.RangeCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ContentControlListItemCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.CommentCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ListLevelCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.FontNameCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.TemplateCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.FieldCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.SectionCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.BorderCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.ParagraphCollection#getLastOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.EditorCollection#getItemAt": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.WindowCollection#getFirst": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.AnnotationCollection#getFirstOrNullObject": {
+    "status": "partial",
+    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+  },
+  "Word.Body#insertParagraph": {
+    "status": "partial",
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "Word.Range#insertParagraph": {
+    "status": "partial",
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Body#insertText": {
+    "status": "partial",
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. When the paragraph's empty run already carries that style and its direction flags, the text takes that run's formatting instead, without hidden or revision properties. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "Word.Paragraph#insertText": {
+    "status": "partial",
+    "notes": "Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not inherit the mark's direct run properties. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "Word.Range#insertText": {
+    "status": "partial",
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline edits and replacements across adjacent sibling paragraphs. Body.insertText with Replace remains unsupported while tracking. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. An existing range refuses with StaleDocument when a later batch changed text before its end in its paragraph; edits after it and formatting changes keep it valid. Re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. When the paragraph's empty run already carries that style and its direction flags, the text takes that run's formatting instead, without hidden or revision properties. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries refuse. Ranges across paragraphs refuse in collaboration. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after their deleted text; inside their insertion it splits the insertion into two halves that keep its revision identity, and the revision collection lists each half. The returned range names the new text where it lands, and each author's change stays a separate decision. NotImplemented, with debugInfo.innerError naming the rule: a deletion or replacement that covers only deleted text and no paragraph mark (edit.tracked-deleted-text-only); another author's paragraph mark, formatting, move, or structural change, or new text inside a link or content control within their insertion (edit.tracked-foreign-revision-unsupported); and covering or bordering your own pending change, including replacing a range that a tracked write returned (edit.tracked-own-pending-change). After a split, the other author's insertion is two revisions; decide both, or pass both to RevisionCollection.resolve. The same edits work in a collaboration session, and a concurrent accept or reject of the other author's change applies to all of that change and to nothing else. Same-author insertion can extend pending insertions. Appends at the paragraph tail can follow the author's pending deletions; insertion at other deletion boundaries refuses. Within one paragraph, tracked replacements and deletions can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, or covering their pending text, refuse. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. Untracked Replace over text that encloses a whole bookmark removes that bookmark, as typing over it does; a bookmark the range only crosses keeps the part outside. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it."
+  },
+  "Word.Range#delete": {
+    "status": "partial",
+    "notes": "Deletes the addressed range contents. TrackMineOnly proposes the deletion: text becomes deleted runs, and each paragraph mark the range covers becomes a deleted paragraph mark, so accept removes whole paragraphs and reject restores them. Tracked deletion supports adjacent sibling paragraphs, in collaboration too; text another participant types into struck text joins the deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Table and wrapper boundaries refuse. A tracked deletion that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it. A deletion of another author's pending inserted text is recorded inside their insertion. A deletion that covers only deleted text and no paragraph mark refuses with NotImplemented (edit.tracked-deleted-text-only), and so does one that touches another author's paragraph mark, formatting, move, or structural change (edit.tracked-foreign-revision-unsupported). Within one paragraph, a tracked deletion can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, or covering their pending text, refuse. A range refuses with StaleDocument when a later batch changed text before its end in its paragraph. Each paragraph mark a tracked range deletion covers follows the Paragraph.delete rules: a mark that ends a section, an inline content control, or a paragraph containing a complex field boundary whose matching boundary is in another paragraph refuses with NotSupported. A tracked deletion or replacement that starts a paragraph whose previous mark the author already proposed deleting refuses with NotImplemented, because it would review as one decision with it. A tracked deletion that covers a whole content control locked with contentLocked proposes removing the control: accepting removes it, and rejecting restores it. This includes a deletion of the control's whole content range, which an untracked deletion refuses."
+  },
+  "Word.Paragraph#delete": {
+    "status": "partial",
+    "notes": "Deletes this paragraph through the canonical store; protected or unsupported structural boundaries refuse. TrackMineOnly records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark, in collaboration too. Accept removes the paragraph; reject restores it. Several adjacent paragraphs can be deleted in one sync. Position markers between them stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a paragraph containing a complex field boundary whose matching boundary is in another paragraph; inline content nested more than 64 levels deep. NotImplemented: the author's own pending change in the paragraph; another author's pending paragraph mark, formatting, move, or structural change in it; a pending change at the start of the next paragraph, including the author's own; or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync. In collaboration, text another participant types into struck text joins the deletion; accept removes it with no separate revision. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it."
+  },
+  "Word.Range#hyperlink": {
+    "status": "partial",
+    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Paragraph#style": {
+    "status": "partial",
+    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#alignment": {
+    "status": "partial",
+    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#leftIndent": {
+    "status": "partial",
+    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#rightIndent": {
+    "status": "partial",
+    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#firstLineIndent": {
+    "status": "partial",
+    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#lineSpacing": {
+    "status": "partial",
+    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#spaceBefore": {
+    "status": "partial",
+    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Paragraph#spaceAfter": {
+    "status": "partial",
+    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
+  },
+  "Word.Comment#resolved": {
+    "status": "partial",
+    "notes": "Updates the comment thread through canonical package review writes. Browser writes require the review module and an editable document; deleted or unsupported thread targets refuse. Unrelated threads survive."
+  },
+  "Word.Comment#delete": {
+    "status": "partial",
+    "notes": "Updates the comment thread through canonical package review writes. Browser writes require the review module and an editable document; deleted or unsupported thread targets refuse. Unrelated threads survive."
+  },
+  "Word.CommentReply#delete": {
+    "status": "partial",
+    "notes": "Deletes the addressed reply through package review writes while preserving the parent thread. Browser writes require the review module and an editable document; stale targets refuse."
+  },
+  "Word.Revision#accept": {
+    "status": "partial",
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document. Individual decisions resolve only the selected source revision sites. Matching deletion and insertion IDs do not combine their decisions. A text insertion or deletion nested in another pending text revision resolves on its own, also when several authors' changes share one insertion; nested groups with other revision kinds refuse. A revision inside text that a decision in the same sync removes (a rejected insertion or an accepted deletion) goes with that text, so any later decision on it in that sync is skipped, for collections and single revisions alike."
+  },
+  "Word.Revision#reject": {
+    "status": "partial",
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document. Individual decisions resolve only the selected source revision sites. Matching deletion and insertion IDs do not combine their decisions. A text insertion or deletion nested in another pending text revision resolves on its own, also when several authors' changes share one insertion; nested groups with other revision kinds refuse. A revision inside text that a decision in the same sync removes (a rejected insertion or an accepted deletion) goes with that text, so any later decision on it in that sync is skipped, for collections and single revisions alike."
+  },
+  "Word.Range#revisions": {
+    "status": "partial",
+    "notes": "Lists the typed revisions of the range's own story whose characters the range overlaps, using document positions, so revisionTextView does not change membership. A collapsed range lists the revisions it touches. A paragraph mark revision is listed only when the range continues into the next paragraph; Range spans cannot express a whole paragraph with its mark, so body.revisions reaches it. A partly covered revision is listed whole. Nested revisions and adjacent revisions by other authors are listed when overlapped. A replacement stored as a deletion and an insertion lists two members. Structural records and property changes that leave the resolved formatting unchanged are omitted from story collections and here too. A tracked edit over another author's unlisted property change still refuses with edit.tracked-foreign-revision-unsupported. RevisionCollection.resolve and setAuthor refuse with NotSupported on this collection."
+  },
+  "Word.RevisionCollection#acceptAll": {
+    "status": "partial",
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records and property changes that leave the resolved formatting unchanged, which are omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module. Malformed content revision wrappers preserve their content and refuse resolution, including wrappers that contain paragraphs. A collection from Range.revisions resolves every revision the range overlaps at sync time, whole, including characters outside the range and structural records omitted from items, and refuses the whole batch if one of them is read-only or unsupported. Decisions in one sync that reach the same revision resolve it once; contrary decisions refuse with ConflictingChanges. When such a range overlaps only part of a nested group, only the overlapped revisions resolve and the others stay pending. A revision inside text that a decision in the same sync removes (a rejected insertion or an accepted deletion) goes with that text, so any later decision on it in that sync is skipped, for collections and single revisions alike."
+  },
+  "Word.RevisionCollection#rejectAll": {
+    "status": "partial",
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records and property changes that leave the resolved formatting unchanged, which are omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module. Malformed content revision wrappers preserve their content and refuse resolution, including wrappers that contain paragraphs. A collection from Range.revisions resolves every revision the range overlaps at sync time, whole, including characters outside the range and structural records omitted from items, and refuses the whole batch if one of them is read-only or unsupported. Decisions in one sync that reach the same revision resolve it once; contrary decisions refuse with ConflictingChanges. When such a range overlaps only part of a nested group, only the overlapped revisions resolve and the others stay pending. A revision inside text that a decision in the same sync removes (a rejected insertion or an accepted deletion) goes with that text, so any later decision on it in that sync is skipped, for collections and single revisions alike."
+  },
+  "Word.ListItem#level": {
+    "status": "partial",
+    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+  },
+  "Word.Range#insertBreak": {
+    "status": "partial",
+    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.PageSetup#orientation": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#pageWidth": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#pageHeight": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#leftMargin": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#rightMargin": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#topMargin": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.PageSetup#bottomMargin": {
+    "status": "partial",
+    "notes": "Writes the addressed section page setup. Orientation is Portrait/Landscape; dimensions and margins use points with finite supported bounds. Assignments on one proxy coalesce, preserving other section properties. Runtime-local tracked layout edits refuse."
+  },
+  "Word.Range#insertContentControl": {
+    "status": "partial",
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. A range whose text moved since it was read refuses with StaleDocument. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
+  },
+  "Word.ContentControl#tag": {
+    "status": "partial",
+    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks. While tracking, only the author of a pending inserted control can write this property."
+  },
+  "Word.ContentControl#title": {
+    "status": "partial",
+    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks. While tracking, only the author of a pending inserted control can write this property."
+  },
+  "Word.ContentControl#delete": {
+    "status": "partial",
+    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
+  },
+  "Word.ContentControl#cannotEdit": {
+    "status": "partial",
+    "notes": "Writes one lock axis without requiring a prior load. Assignments on the same proxy coalesce and preserve the other axis. Effective ancestor locks and bound controls remain enforced; this is not a protection bypass. A browser runtime over an editor created with contentLockPolicy.allowFormattingInLockedContent lets untracked font writes pass a content lock; text writes and tracked font writes still refuse. The server runtime does not take this option and refuses both, as Word does."
+  },
+  "Word.ContentControl#cannotDelete": {
+    "status": "partial",
+    "notes": "Writes one lock axis without requiring a prior load. Assignments on the same proxy coalesce and preserve the other axis. Effective ancestor locks and bound controls remain enforced; this is not a protection bypass."
+  },
+  "Word.Paragraph#insertParagraph": {
+    "status": "partial",
+    "notes": "TrackMineOnly records inserted text and the paragraph mark as native revisions. Reject removes both after save and reopen. Anchors with foreign, structural, or move revisions refuse. Insertion can continue the runtime author's text, paragraph, and formatting proposals. Other supported behavior uses the standard Before/After insertion locations. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+  },
+  "Word.Body#footnotes": {
+    "status": "partial",
+    "notes": "Enumerates distinct notes referenced within this body in reference order, including table-cell bodies. Separators and unreferenced notes are excluded. Dangling references and ambiguous note identities refuse. Note creation remains unsupported."
+  },
+  "Word.Body#endnotes": {
+    "status": "partial",
+    "notes": "Enumerates distinct notes referenced within this body in reference order, including table-cell bodies. Separators and unreferenced notes are excluded. Dangling references and ambiguous note identities refuse. Note creation remains unsupported."
+  },
+  "Word.Document#properties": {
+    "status": "partial",
+    "notes": "Core string properties: author, title, subject, keywords, comments, category, and read-only lastAuthor. Other properties, dates, and individual custom properties are not exposed. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#author": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#title": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#subject": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#keywords": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#comments": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#category": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#lastAuthor": {
+    "status": "partial",
+    "notes": "Reads cp:lastModifiedBy after explicit load and sync. Missing values read as empty strings. This property has no setter."
+  },
+  "Word.Document#removeDocumentInformation": {
+    "status": "partial",
+    "notes": "Only DocumentProperties removes standard core, extended, and custom property parts and their package relationships. Other modes, TrackMineOnly, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous part topology refuses before mutation. Content, comments, revisions, and media remain unchanged; this operation does not anonymize document content."
+  },
+  "Word.Range#text": {
+    "status": "partial",
+    "notes": "Reads the range's text through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Search again after an edit before the range's end in its paragraph."
+  },
+  "Word.Range#font": {
+    "status": "partial",
+    "notes": "Reads and writes formatting through the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Range#getTextRanges": {
+    "status": "partial",
+    "notes": "Splits at the listed ending marks and at every paragraph end; a range never holds a paragraph mark. Boundaries use the model text that revisionTextView shows. Hidden text holds no ending mark, and ranges start and end at shown characters; hidden text between shown characters of one range stays inside it, so an edit through that range also changes it. A field, equation, picture, or note reference is one character that joins the word it touches; a field reads as its result text, and the others read as U+FFFC. A content control adds no boundary; a partial edit inside a content-locked control refuses with GeneralException and edit.protected-content, and a tracked deletion or replacement covering the whole control proposes removing it. Without trimSpacing each range keeps its trailing spacing, so plan deletions on those ranges, by index. trimSpacing removes spaces, tabs, and column breaks from range edges and drops ranges left empty. A tab ends a range only when listed. A range that view shows nothing of is omitted. At most 32 marks of at most 32 UTF-16 units. Each range is an exact span usable for insertText and delete in later syncs, also with TrackMineOnly, under the StaleDocument rule: edit from the end of a paragraph toward its start. Read ranges once before editing: after tracked edits, a range over pending revisions can join deleted and inserted text, and an edit that touches your own pending change refuses with NotImplemented and edit.tracked-own-pending-change. Read the proposed result with getReviewedText('Current'). Marks with an unpaired surrogate refuse with InvalidArgument."
+  },
+  "Word.Paragraph#getTextRanges": {
+    "status": "partial",
+    "notes": "Same rules as Word.Range#getTextRanges, over the whole paragraph."
+  },
+  "Word.Range#expandTo": {
+    "status": "partial",
+    "notes": "Answers the span from the earlier start to the later end, within one paragraph or across paragraphs of one story. Ranges in different stories refuse the sync with InvalidArgument. A range from another run refuses at the call with InvalidArgument. The answer follows the StaleDocument rule of Word.Body#getRange. expandToOrNullObject is not implemented."
+  },
+  "Word.Range#getRange": {
+    "status": "partial",
+    "notes": "Whole and Content answer the same span; Start and End answer a collapsed range at that endpoint. After refuses with NotSupported, because a snapshot range never owns the position after its end. The answer is usable by a text write in the same sync."
+  },
+  "Word.Range#getReviewedText": {
+    "status": "partial",
+    "notes": "Current drops pending deletions, move sources, and deleted paragraph marks; Original drops pending insertions, move destinations, and inserted paragraph marks. Kept paragraph marks read as a carriage return. Fields read as their displayed results. The default is Current. Formatting revisions do not change the text. Read-only; the document does not change."
+  },
+  "Word.Paragraph#getReviewedText": {
+    "status": "partial",
+    "notes": "Same rules as Word.Range#getReviewedText, over the paragraph's own text."
+  },
+  "Word.Range#search": {
+    "status": "partial",
+    "notes": "Searches within the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Each result range follows the same rule."
+  },
+  "Word.Range#clear": {
+    "status": "partial",
+    "notes": "Clears the range's content through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Body#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through paragraph identities and offsets. A range whose text moved since it was read refuses with StaleDocument. A range that spans paragraphs, such as body.getRange('Whole'), also refuses when its first paragraph changed, when a paragraph between its ends changed, or when a paragraph was inserted or removed there. Get the range again after such an edit. In a very long session, a range read long ago can also refuse with StaleDocument when its history record was dropped; then expectedRevision can equal actualRevision although the range did not move. Read the range again."
+  },
+  "Word.Paragraph#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through the paragraph identity and offsets. The range refuses with StaleDocument after an edit before its end in that paragraph. Get the range again after such an edit."
+  },
+  "OfficeExtension.Error#debugInfo": {
+    "status": "partial",
+    "notes": "DocxEditorError.debugInfo has code, message, errorLocation, and innerError. errorLocation is the consumer-facing path of the refused call. statement, surroundingStatements, and fullStatements are not provided."
+  },
+  "OfficeExtension.DebugInfo#innerError": {
+    "status": "different",
+    "notes": "innerError is present only when the engine names a specific reason. It is an object with a stable public diagnostic code, such as edit.tracked-operation-unsupported, and the fixed hint for that code as message. It never contains document content."
+  },
+  "Word.Range#insertBookmark": {
+    "status": "partial",
+    "notes": "Names compare without case and follow the authoring rules: a letter or underscore first, then letters, digits, and underscores, at most 40 characters; other names fail context.sync() with InvalidArgument, and the batch writes nothing. The call itself does not throw, so an argument error reports at the sync like every other batch error. Names are unique in the whole document: a same-name bookmark moves here, also from another story (header, footer, or note), in the same sync. With TrackMineOnly the markers are written directly, because bookmarks are not revisions. Moving or deleting markers inside content-locked or bound controls refuses the whole transaction."
+  },
+  "Word.Range#getBookmarks": {
+    "status": "partial",
+    "notes": "Answers names in document order. A non-empty range holds bookmarks it shares text with and point bookmarks inside it or at its start; an empty range holds the bookmark around it. includeAdjacent adds bookmarks that only touch an end; includeHidden adds names starting with an underscore. Markers between blocks (outside any paragraph) are not counted."
+  },
+  "Word.Document#deleteBookmark": {
+    "status": "partial",
+    "notes": "Searches the main text, then headers, footers, and notes, and selects the first bookmark with the name, compared without case. Removes all same-name marker pairs in that bookmark's XML part; copies in other parts remain. The text stays. A missing name changes nothing. The removal joins the batch's transaction in any story, so it can share a sync with writes to another story. Moving or deleting markers inside content-locked or bound controls refuses the whole transaction."
+  },
+  "Word.Document#getBookmarkRange": {
+    "status": "partial",
+    "notes": "Searches the main text, then headers, footers, and notes, compared without case. A missing name fails the sync with ItemNotFound. The range is a snapshot like every Range in this API."
+  },
+  "Word.Document#getBookmarkRangeOrNullObject": {
+    "status": "partial",
+    "notes": "As getBookmarkRange, but a missing name answers a null object instead of failing."
+  },
+  "Word.Bookmark#delete": {
+    "status": "partial",
+    "notes": "Removes same-name marker pairs in the bookmark's XML part and keeps the text. Copies in other parts remain. A bookmark the document no longer declares refuses with InvalidObjectPath."
+  },
+  "OfficeExtension.LoadOption#select": {
+    "status": "partial",
+    "notes": "Collections accept items/<property> paths in load(...) strings, arrays, and select. collection.load('text') is treated as collection.load('items/text'). Items and the selected item properties load in the same context.sync(). As with every read in a sync, item properties report the document from before that sync's writes. Only one navigation level is supported: deeper paths such as items/font/bold, and navigation paths on objects that are not collections, refuse with InvalidArgument and name the path in target. items/<navigation property> such as items/font also refuses; load font on each item. On the range collection that Paragraph#split returns, item paths, top, and skip apply to the split's answer after its sync; before it, they refuse with NotImplemented. The object form with boolean property flags and $all is not accepted; use select."
+  },
+  "Word.Paragraph#search": {
+    "status": "partial",
+    "notes": "Searches within one paragraph and accepts the same search options as Body#search. Text reads and matches use the runtime's revision text view. A paragraph from getFirst or getLast can be searched in the sync that resolves it."
+  },
+  "Word.Table#mergeCells": {
+    "status": "partial",
+    "notes": "Merges the rectangle that the cells at (topRow, firstCell) and (bottomRow, lastCell) span. Cell indexes count each row's own cells, as rows/cells list them, so a merged cell counts once in its row. bottomRow must not be above topRow; either cell can lie further left. The rectangle grows to whole merged cells. A cell that crosses its edge, or a rectangle of one cell, refuses with InvalidArgument and the diagnostic code edit.table-merge-not-rectangle. The top-left cell takes w:gridSpan and w:vMerge and keeps the content of every non-empty cell in reading order. Returns the merged cell, which takes edits in the same sync. Cells with a pending cell revision refuse with NotImplemented. A legacy w:hMerge table and rows the grid cannot place refuse with InvalidArgument. TrackAll and TrackMineOnly refuse with NotSupported, because a merge has no tracked form. Supports collaboration, undo/redo, reconnect, and save/reopen. Text a participant types into an empty cell while a peer merges it away is discarded, as text typed into an empty paragraph a peer deletes is. Concurrent merges, splits, and column edits of one table converge, but can leave a row that ends before the last grid column. Column edits keep that row ending where it does, and a merge or split that needs its missing part refuses."
+  },
+  "Word.TableCell#split": {
+    "status": "partial",
+    "notes": "Splits the cell into rowCount by columnCount cells, each from 1 to 63. Columns get equal widths: a new boundary within 20 twips of a grid boundary uses it, any other boundary cuts the grid column, and cells in other rows widen their w:gridSpan to keep their width. A cell merged over several rows splits only into a divisor of its rows; a one-row cell adds rows to the table, and the other cells of its row continue into them through w:vMerge. The first new cell keeps the content. Counts the cell cannot take refuse with InvalidArgument and the diagnostic code edit.table-split-unsupported: a row count that does not divide a merged cell's rows, columns narrower than the minimum column width, or, in a table without w:tblGrid, a column count that does not divide the columns the cell spans. Cells with a pending cell revision refuse with NotImplemented. TrackAll and TrackMineOnly refuse with NotSupported. Supports collaboration, undo/redo, reconnect, and save/reopen, with the concurrency limits described for Word.Table#mergeCells."
+  },
+  "Word.Range#contentControls": {
+    "status": "partial",
+    "notes": "Lists every content control the range overlaps, at any nesting depth, in document order: an inline control that shares at least one character with the range, a control that holds the whole range, and a block control that holds one of its paragraphs. A collapsed range lists the controls at or around its position. Load items/cannotEdit, items/tag, and items/text to learn what an edit through the range would touch. getById, getByTag, and getByTitle search the same list."
+  },
+  "Word.Paragraph#contentControls": {
+    "status": "partial",
+    "notes": "Same rules as Word.Range#contentControls over the whole paragraph: every inline control in it, at any depth, and each block control that holds it."
+  }
+}

@@ -10,6 +10,14 @@ Machine-readable copy:
 Drift test:
 `packages/core/src/store/__tests__/authorable-mutation-manifest.test.ts`.
 
+## Agent editing subset extension
+
+`agent-editing-subset` adds `authorTable`, `setTableProperties`, and `setFieldCode`.
+The JSON inventory now has 79 kinds, including 67 single-part apply operations.
+Each new kind has a successful canonical journal replay fixture.
+Replay compares independent replicas and their saved/reopened packages.
+The base inventory below remains historical.
+
 ## Base
 
 | Field                      | Value                                         |

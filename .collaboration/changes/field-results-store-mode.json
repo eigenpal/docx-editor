@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Every closed field is one offset unit in the store.",
+  "after": "The store keeps every field one unit by default. A new editable mode addresses saved field results as text. Store subscribers, including the collaboration port, always read in the default mode.",
+  "reason": "The default mode is unchanged, so paragraph text and the shared document format stay the same. A store edit in the editable mode changes ordinary result runs; the two-peer test shows a default-mode peer converging on it. The editor does not offer the editable mode in a collaboration session; that refusal ships with the editor change (issue #1197).",
+  "tests": [
+    "packages/core/src/store/__tests__/field-result-mode.test.ts",
+    "packages/pro/src/collaboration/__tests__/field-result-mode-sync.test.ts"
+  ],
+  "changeset": "editable-field-results-store",
+  "migration": null
+}

@@ -57,7 +57,8 @@ const cache = (hits: number, misses: number, size: number) => ({
 
 // 200-page, 4-section committed fixture: every editing scenario — including the two
 // structural keyboard edits, Enter and Backspace-join — stays bounded, and the break
-// cache survives across passes (nonzero hits, zero evictions).
+// cache survives across passes (nonzero hits, zero evictions). The cold pass checks the
+// terminal section mark ahead of placement, which adds one hit. Edit-pass work is unchanged.
 const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
   'steady-middle-text': {
     placed: 13,
@@ -66,7 +67,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3201, 3201),
+    cache: cache(13, 3201, 3201),
   },
   'wrap-middle-text': {
     placed: 13,
@@ -75,7 +76,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3201, 3201),
+    cache: cache(13, 3201, 3201),
   },
   'forced-middle-reflow': {
     placed: 13,
@@ -84,7 +85,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3201, 3201),
+    cache: cache(13, 3201, 3201),
   },
   'forced-early-reflow': {
     placed: 13,
@@ -93,7 +94,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3201, 3201),
+    cache: cache(13, 3201, 3201),
   },
   'enter-split-middle': {
     placed: 14,
@@ -102,7 +103,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3202, 3202),
+    cache: cache(13, 3202, 3202),
   },
   'backspace-join-middle': {
     placed: 12,
@@ -111,7 +112,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(11, 3201, 3201),
+    cache: cache(12, 3201, 3201),
   },
   'enter-split-early': {
     placed: 14,
@@ -120,7 +121,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(12, 3202, 3202),
+    cache: cache(13, 3202, 3202),
   },
   'page-break-middle': {
     placed: 13,
@@ -129,7 +130,7 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 205,
-    cache: cache(12, 3201, 3201),
+    cache: cache(13, 3201, 3201),
   },
 };
 
@@ -141,6 +142,8 @@ test('long-document edit work stays bounded', () => {
   expect(workByName(report)).toEqual(EXPECTED_DEFAULT);
 }, 120_000);
 
+// Ordinary row probes now provide placement records, so placement no longer repeats
+// their paragraph-cache reads. Misses, retained entries, and page reuse stay unchanged.
 // The 500+ page fixtures are generated on demand (they are too large to commit); the
 // generator is byte-deterministic, so the sha still pins the content.
 function ensureMassiveFixtures(): void {
@@ -174,7 +177,7 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3887, 12076, 12076),
+    cache: cache(422, 12076, 12076),
   });
   expect(work['backspace-join-middle']).toEqual({
     placed: 2,
@@ -183,7 +186,7 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3886, 12075, 12075),
+    cache: cache(421, 12075, 12075),
   });
   expect(work['enter-split-early']).toEqual({
     placed: 16,
@@ -192,7 +195,7 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3899, 12076, 12076),
+    cache: cache(434, 12076, 12076),
   });
   expect(work['steady-middle-text']!.placed).toBe(2);
   expect(work['wrap-middle-text']!.placed).toBe(41);
@@ -204,7 +207,7 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 631,
-    cache: cache(3887, 12075, 12075),
+    cache: cache(422, 12075, 12075),
   });
 }, 240_000);
 
@@ -225,7 +228,7 @@ test('500-page single-section: whole-page shifts reuse the tail', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3887, 11972, 11972),
+    cache: cache(422, 11972, 11972),
   });
   expect(work['backspace-join-middle']!.placed).toBe(2);
   expect(work['page-break-middle']).toEqual({
@@ -235,6 +238,6 @@ test('500-page single-section: whole-page shifts reuse the tail', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 631,
-    cache: cache(3887, 11971, 11971),
+    cache: cache(422, 11971, 11971),
   });
 }, 240_000);

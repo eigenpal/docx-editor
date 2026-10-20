@@ -160,6 +160,26 @@ function canonicalizeTypeText(text) {
   return out;
 }
 
+const IMPORT_LINE = /^import \{ ([\w$]+)(?: as ([\w$]+))? \} from '[^']+';$/;
+
+/**
+ * Drop `import` lines whose name the report never uses. API Extractor can emit them for an entry
+ * whose declarations name another entry's types through a shared chunk: the chunk's own imports
+ * come along, though nothing in the entry's report refers to them.
+ */
+function withoutUnusedImports(fenceText) {
+  const lines = fenceText.split('\n');
+  const body = lines.filter((line) => !IMPORT_LINE.test(line)).join('\n');
+  const tokens = new Set(body.match(/[\w$]+/g));
+  const used = (name) => tokens.has(name);
+  const kept = lines.filter((line) => {
+    const match = IMPORT_LINE.exec(line);
+    return !match || used(match[2] ?? match[1]);
+  });
+  // Removing a whole import block leaves two blank lines where it was; keep one.
+  return kept.join('\n').replace(/^\n{2,}/, '\n');
+}
+
 /**
  * Canonicalize an API Extractor `.api.md` report so its content does not
  * depend on the machine that emitted the dts rollup. Only the fenced ```ts
@@ -176,7 +196,7 @@ export function canonicalizeApiReport(reportText) {
       out.push(line);
     } else if (inFence && line.trim() === '```') {
       inFence = false;
-      out.push(canonicalizeTypeText(fence.join('\n')));
+      out.push(canonicalizeTypeText(withoutUnusedImports(fence.join('\n'))));
       fence = [];
       out.push(line);
     } else if (inFence) {

@@ -26,6 +26,7 @@
 // walk covers body, furniture, every normal note, separator and continuation-separator content,
 // and nested textboxes without making any one layout story model the store's authority.
 
+import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI,
@@ -34,14 +35,16 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 import {
   chargePart,
   createCommentScanBudget,
   walkCharged,
 } from '../package/comment-lifecycle-scan.ts';
 import { paragraphOffsetIndex, transientParagraphOffsetIndex } from './tree-op-segments.ts';
+import { contentControlContentOf, isContentControlNode } from './tree-op-nodes.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
+import { createSubtreeAggregateMemo, keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -146,8 +149,16 @@ function markersInParagraphWithPolicy(
   return points;
 }
 
+/**
+ * @internal The comment range markers inside one paragraph, with the offset each sits at; the
+ * same reading a full anchor pass takes of that paragraph.
+ */
+export function commentMarkersOfParagraph(paragraph: OoxmlParagraphNode): readonly MarkerPoint[] {
+  return markersInParagraphWithPolicy(paragraph, true);
+}
+
 /** Marker points per immutable paragraph node. */
-const markerPointsCache = new WeakMap<OoxmlParagraphNode, readonly MarkerPoint[]>();
+const markerPointsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly MarkerPoint[]>();
 
 function computeMarkersInParagraph(
   paragraph: OoxmlParagraphNode,
@@ -156,16 +167,16 @@ function computeMarkersInParagraph(
   // Nearly every paragraph has no marker. Check the exact bounded containers the real walk
   // descends before building a full node-offset index, which is the expensive retained value.
   const hasMarker = (children: readonly OoxmlNode[], depth: number): boolean => {
+    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return false;
     for (const child of children) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') return true;
-      if (
-        (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) &&
-        depth < 32 &&
-        hasMarker(child.children, depth + 1)
-      ) {
+      if (isInlineRunContainer(child) && hasMarker(child.children, depth + 1)) {
         return true;
       }
+      if (!isContentControlNode(child)) continue;
+      const content = contentControlContentOf(child);
+      if (content && hasMarker(content.children, depth + 1)) return true;
     }
     return false;
   };
@@ -175,6 +186,7 @@ function computeMarkersInParagraph(
     : transientParagraphOffsetIndex(paragraph);
   const points: MarkerPoint[] = [];
   const walk = (children: readonly OoxmlNode[], depth: number): void => {
+    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     for (const child of children) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') {
@@ -195,9 +207,13 @@ function computeMarkersInParagraph(
       // A link is a run container like a revision wrapper, and either can hold the other.
       // Depth is bounded for the same reason the layout walk bounds it: nesting is the
       // cheapest unbounded axis in an attacker-controlled file.
-      if ((child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) && depth < 32) {
+      if (isInlineRunContainer(child)) {
         walk(child.children, depth + 1);
+        continue;
       }
+      if (!isContentControlNode(child)) continue;
+      const content = contentControlContentOf(child);
+      if (content) walk(content.children, depth + 1);
     }
   };
   walk(paragraph.children, 0);
@@ -231,7 +247,10 @@ function commentAnchorsOfStoryWithPolicy(
   const anchors: CommentAnchor[] = [];
   let lastPosition: CommentPosition | null = null;
 
-  for (const paragraph of storyParagraphsOfPartWithPolicy(part, retainAcrossReads)) {
+  // Only a paragraph with markers can move `open`, `anchors` or `lastPosition`, so the
+  // retained path walks just those; the transient export path keeps its memo-free walk.
+  const paragraphs = retainAcrossReads ? markedParagraphsOfPart(part) : storyParagraphsOfPart(part);
+  for (const paragraph of paragraphs) {
     for (const point of markersInParagraphWithPolicy(paragraph, retainAcrossReads)) {
       const position: CommentPosition = { paragraphId: paragraph.id, offset: point.offset };
       lastPosition = position;
@@ -282,17 +301,10 @@ function commentAnchorsOfStoryWithPolicy(
  * provenance therefore scans the whole supplied story part, including normal notes, separators,
  * table cells, content controls, and nested textbox stories.
  */
-function storyParagraphsOfPartWithPolicy(
-  part: OoxmlPart,
-  retainAcrossReads: boolean
-): readonly OoxmlParagraphNode[] {
-  // Memoized on the immutable root: the enumeration is a pure function of the tree, and the
-  // anchor pass runs once per story part per derivation.
-  const cached = retainAcrossReads ? storyParagraphsCache.get(part.root) : undefined;
-  if (cached) return cached;
-  const found: OoxmlNode[] = [];
+function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+  const found: OoxmlParagraphNode[] = [];
   const collect = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return;
     if (node.kind === 'paragraph') found.push(node);
     // Comment ranges can live in a textbox story nested inside a host paragraph. Unlike the
     // editable root-story walk, anchor derivation must descend into that nested story while
@@ -301,17 +313,88 @@ function storyParagraphsOfPartWithPolicy(
     for (const child of node.children) collect(child, depth + 1);
   };
   collect(part.root, 0);
-  const paragraphs = found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
-  if (retainAcrossReads) storyParagraphsCache.set(part.root, paragraphs);
+  return found;
+}
+
+const MAX_STORY_WALK_DEPTH = 64;
+const NO_PARAGRAPHS: readonly OoxmlParagraphNode[] = Object.freeze([]);
+
+/**
+ * The root's answer, bounded to recent roots: the root and the story container are new on every
+ * edit, and the undo history retains old roots by reference, so their answers are kept here
+ * rather than per node.
+ */
+const markedParagraphsByRoot = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
+
+function markedParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+  const cached = markedParagraphsByRoot.get(part.root);
+  if (cached) return cached;
+  const paragraphs = markedParagraphsIn(part.root, 0, false);
+  markedParagraphsByRoot.set(part.root, paragraphs);
   return paragraphs;
 }
 
 /**
- * Story paragraphs per part root, bounded to recent roots: the undo history retains old
- * roots by reference, and a plain WeakMap would keep one O(document) array alive per
- * retained root.
+ * The root and the body are replaced by every body edit, so they are not memoized per node; see
+ * `markedParagraphsByRoot`. A header, footer or notes part keeps its blocks at depth 1, and
+ * those are walked again each pass, which stays cheap: their own children answer from the memo.
  */
-const storyParagraphsCache = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
+const MIN_MEMOIZED_DEPTH = 2;
+
+/**
+ * The paragraphs under `node` that carry comment markers, in the order
+ * `storyParagraphsOfPart` visits them, memoized per immutable node.
+ *
+ * An edit replaces only the nodes on the path to what it changed, so the next anchor pass
+ * re-walks that path and answers every untouched sibling from here — a keystroke no longer
+ * visits every paragraph of the story. The depth the answer was computed at is part of the
+ * key, because the walk's depth bound depends on where the node sits. Nothing inside a
+ * paragraph is memoized: it is only walked when its paragraph is new, and an entry per run,
+ * property and text element would cost more than the walk it saves.
+ */
+const markedParagraphsCache = createSubtreeAggregateMemo<{
+  readonly depth: number;
+  readonly paragraphs: readonly OoxmlParagraphNode[];
+}>();
+/** One shared entry per depth for the subtrees with no marked paragraph, which is most. */
+const NO_MARKED_ENTRIES = Array.from({ length: MAX_STORY_WALK_DEPTH + 1 }, (_, depth) =>
+  Object.freeze({ depth, paragraphs: NO_PARAGRAPHS })
+);
+
+function markedParagraphsIn(
+  node: OoxmlNode,
+  depth: number,
+  insideParagraph: boolean
+): readonly OoxmlParagraphNode[] {
+  if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return NO_PARAGRAPHS;
+  // A node of leaves answers from its children again; an entry per one costs more.
+  const memoize = !insideParagraph && depth >= MIN_MEMOIZED_DEPTH && keepsSubtreeMemo(node);
+  const cached = memoize ? markedParagraphsCache.get(node) : undefined;
+  if (cached && cached.depth === depth) return cached.paragraphs;
+  let found: OoxmlParagraphNode[] | null = null;
+  if (node.kind === 'paragraph' && markersInParagraphWithPolicy(node, true).length > 0) {
+    found = [node];
+  }
+  for (const child of node.children) {
+    const inner = markedParagraphsIn(
+      child,
+      depth + 1,
+      insideParagraph || node.kind === 'paragraph'
+    );
+    if (inner.length === 0) continue;
+    found ??= [];
+    for (const paragraph of inner) found.push(paragraph);
+  }
+  const paragraphs = found ?? NO_PARAGRAPHS;
+  if (memoize) {
+    markedParagraphsCache.set(
+      node,
+      paragraphs === NO_PARAGRAPHS ? NO_MARKED_ENTRIES[depth]! : { depth, paragraphs },
+      paragraphs.length
+    );
+  }
+  return paragraphs;
+}
 
 /**
  * The comments in `word/comments.xml`, in authored order.

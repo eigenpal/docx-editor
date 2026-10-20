@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -11,7 +12,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "allowImportingTsExtensions": true,
-    "baseUrl": ".",
     "paths": {
       // Keep every published core subpath on source. A missing entry falls through to dist,
       // mixing stale declarations with the source graph and making clean typechecks build-order

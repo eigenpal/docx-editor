@@ -140,6 +140,22 @@ is still moving.
 - [ ] 14.11 Add Vue table toolbar and context-menu parity.
 - [ ] 14.12 Prove browser behavior, save/reopen fidelity, and public release surface.
 
+## 15. Exact-height positioned paragraph frames
+
+- [x] 15.1 Parse bounded `w:h` only with `w:hRule="exact"` and keep unsupported frame forms in ordinary flow.
+- [x] 15.2 Publish one authored frame rectangle for adjacent matching paragraphs, clip their painted content, and use the rectangle for wrapping exclusion.
+- [x] 15.3 Add parser, grouped-layout, incremental-layout, and paint regression coverage.
+
+## 16. Complete bounded paragraph-frame properties
+
+- [x] 16.1 Type and parse every `CT_FramePr` attribute, including all height, alignment, wrap, drop-cap, and anchor-lock values.
+- [x] 16.2 Implement `auto`, `atLeast`, and `exact` height plus bounded automatic width for shared frame groups.
+- [x] 16.3 Implement numeric and relative page, margin, and text positioning, including sheet-relative inside/outside alignment and safe fallback for negative text-relative vertical offsets.
+- [x] 16.4 Implement all rectangular frame wrap modes through the shared exclusion scanline model.
+- [x] 16.5 Implement bounded left-to-right dropped caps, bidirectional margin drop caps, safe right-to-left dropped-cap fallback, and locked-anchor behavior across supported edits.
+- [x] 16.6 Add parser, layout, wrapping, drop-cap, edit, incremental, paint, and save/reopen coverage.
+- [x] 16.7 Update release and collaboration records and run focused and repository gates.
+
 ## 12. Verification and Completion
 
 - [x] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites. — All run. The bundle-graph suite the task names now EXISTS (`packages/core/src/__tests__/browser-bundle-graph.test.ts`), and the package-graph suite it names was superseded: the `engine-*` package topology it described was dissolved by 10.6, and its role is now filled by the lane DAG plus that bundle-graph walk. Note on invocation: passing many directory paths to `bun test` at once runs ~25x slower than the whole suite (2030s vs 80s) and two timing-sensitive perf guards can then exceed their limits; the guards pass in isolation and in the aggregate run, so the aggregate run is the reliable signal.

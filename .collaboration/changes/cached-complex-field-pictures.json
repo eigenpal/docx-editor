@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Cached complex fields omit embedded result pictures.",
+  "after": "Cached complex fields display embedded result pictures within their existing model range.",
+  "reason": "Only layout changes. Shared document data and operation formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/field-result-drawings.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-layout-continuation.test.ts"
+  ],
+  "changeset": "cached-complex-field-pictures",
+  "migration": null
+}

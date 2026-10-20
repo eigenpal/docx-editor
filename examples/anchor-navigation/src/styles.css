@@ -1,0 +1,129 @@
+/* Highlight colors for the sample presets. Highlight options accept CSS variables. */
+.docx-editor.anchor-example {
+  --anchor-example-amber: #f59e0b;
+  --anchor-example-amber-border: #b45309;
+  --anchor-example-green: #10b981;
+  --anchor-example-glow: rgba(16, 185, 129, 0.45);
+}
+
+.anchor-example {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  height: 100vh;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+}
+
+.anchor-example-glow {
+  box-shadow: 0 0 12px var(--anchor-example-glow);
+}
+
+.anchor-example-panel {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--doc-surface);
+  border-right: 1px solid var(--doc-border);
+}
+.anchor-example-panel h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.anchor-example-panel h2 {
+  margin: 20px 0 8px;
+  font-size: 14px;
+}
+.anchor-example-panel p {
+  margin: 8px 0 16px;
+  color: var(--doc-text-muted);
+  line-height: 1.45;
+}
+
+.anchor-example-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.anchor-example-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.anchor-example-field select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.anchor-example-field select,
+.anchor-example-actions button {
+  padding: 7px 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+}
+
+.anchor-example-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.anchor-example-actions button {
+  cursor: pointer;
+}
+.anchor-example-actions button:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+.anchor-example-actions .anchor-example-primary {
+  border-color: var(--doc-primary);
+  background: var(--doc-primary);
+  color: var(--doc-surface);
+}
+.anchor-example-actions .anchor-example-primary:hover:not(:disabled) {
+  background: var(--doc-primary);
+  opacity: 0.9;
+}
+.anchor-example-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.anchor-example-status {
+  min-height: 2.9em;
+}
+
+.anchor-example-panel pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-bg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.anchor-example-document {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.anchor-example :focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .anchor-example {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .anchor-example-panel {
+    max-height: 45vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--doc-border);
+  }
+}

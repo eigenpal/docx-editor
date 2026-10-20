@@ -39,7 +39,8 @@ import type {
   TreeOpEffect,
   TreeOpResult,
 } from './tree-op-types.ts';
-import { ownProposedMark, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { ownProposedParagraph, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { build } from './tree-op-tracked.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
@@ -201,7 +202,7 @@ export function applySetSectionProperties(
  * states. A paragraph without `w:numPr` is not a list item, so there is no level to move
  * and the edit is refused — Increase Indent on a plain paragraph is a different op.
  */
-export function applySetListLevel(
+function applySetListLevelUntracked(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   level: number,
@@ -239,7 +240,7 @@ export function applySetListLevel(
  * `w:pPr` after `w:pStyle` (17.3.1.26), so a new one is inserted there rather than
  * appended.
  */
-export function applySetListNumbering(
+function applySetListNumberingUntracked(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   numId: string | null,
@@ -344,24 +345,25 @@ export function applySetParagraphTabStops(
   const existingTabs = (existing?.children ?? []).filter(
     (child) => child.kind !== 'textValue' && child.localName === 'tab'
   );
+  // The position the reader reports: a decimal `w:pos` truncates to whole twips.
   const positionOf = (child: (typeof existingTabs)[number]): number =>
-    Math.round(Number(attributeValueOf(child, 'pos')));
+    readTwipsMeasure(attributeValueOf(child, 'pos')) ?? Number.NaN;
   /**
    * A `w:tab` this write cannot re-author, because the reader that feeds it never saw it.
    *
-   * A `clear` is never opaque even at a fractional position: it is regenerated below from
-   * `standingClears`, and counting it here too emitted the same suppression twice — once
-   * carried through at `1440.5` and once regenerated at `1441`, inventing a clear the
-   * document never had at a position an inherited stop might occupy.
+   * A `clear` is never opaque even at an unreadable position: it is regenerated below from
+   * `standingClears`, and counting it here too emitted the same suppression twice, inventing
+   * a clear the document never had at a position an inherited stop might occupy.
    */
   const isOpaque = (child: (typeof existingTabs)[number]): boolean =>
     attributeValueOf(child, 'val') !== 'clear' &&
     (OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
-      !Number.isInteger(Number(attributeValueOf(child, 'pos'))));
+      !Number.isFinite(positionOf(child)));
   // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
-  // a legacy list artefact — and a fractional `w:pos` is legal but rounded away on read. The
+  // a legacy list artefact — and a `w:pos` that is not a measurement is skipped on read. The
   // reader reports none of them and an editor cannot name them, so a wholesale replace would
   // delete, on the next unrelated tab edit, markup the user never saw. Carry them through.
+  // A decimal `w:pos` is not opaque: the reader reports it at its truncated position.
   const opaque = existingTabs.filter((child) => isOpaque(child) && !kept.has(positionOf(child)));
   // Clears the paragraph ALREADY carries. These are state, not something to re-derive: a
   // cleared stop is by definition absent from what is in force, so nothing downstream can
@@ -451,7 +453,9 @@ export function applySetParagraphTabStops(
     'tabs',
     [],
     [...authoredChildren, ...carried.map((child) => cloneWithNewIds(child, nextId))].sort(
-      (a, b) => Number(attributeValueOf(a, 'pos') ?? 0) - Number(attributeValueOf(b, 'pos') ?? 0)
+      (a, b) =>
+        (readTwipsMeasure(attributeValueOf(a, 'pos')) ?? 0) -
+        (readTwipsMeasure(attributeValueOf(b, 'pos')) ?? 0)
     )
   );
   if (existing) return fromEdit(replaceNode(part, existing.id, tabs, options), effect);
@@ -865,7 +869,7 @@ export function applySetParagraphMarkProperties(
   // Skipped on a mark THIS author proposed adding, the run rule one level up: rejecting that
   // `w:ins` runs the paragraph into the next one and takes the mark's properties with it, so
   // a record of what they used to be decides nothing. The mark never existed for anyone else.
-  if (revision && !ownProposedMark(prior, revision.author)) {
+  if (revision && !ownProposedParagraph(part, paragraph.id, prior, revision.author)) {
     children = withPropertyChangeRecord({
       container: 'runProperties',
       prior,
@@ -904,4 +908,71 @@ export function applySetParagraphMarkProperties(
   const created = build(nextId(), 'paragraphProperties', 'pPr', [], [rPr]);
   // `w:pPr` must be the paragraph's FIRST child per the schema.
   return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
+}
+
+function trackListProperties(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  result: TreeOpResult,
+  revision: RevisionAttributionInput | undefined,
+  options: EditOptions | undefined
+): TreeOpResult {
+  if (!revision || !result.ok) return result;
+  const prior = paragraphPropertiesNodeOf(paragraph);
+  if (
+    ownProposedParagraph(
+      part,
+      paragraph.id,
+      namedChild(prior, 'rPr')?.children ?? [],
+      revision.author
+    )
+  )
+    return result;
+  const changed = findNode(result.part, paragraph.id);
+  if (!changed || changed.kind !== 'paragraph') return result;
+  const current = paragraphPropertiesNodeOf(changed);
+  if (!current) return result;
+  const children = withPropertyChangeRecord({
+    container: 'paragraphProperties',
+    prior: prior?.children ?? [],
+    next: current.children,
+    revision,
+    mint: createNodeIdAllocator(result.part),
+    nextRevisionId: () => options?.revisionIds?.() ?? nextRevisionId(part)(),
+  });
+  return fromEdit(replaceChildren(result.part, current.id, children, options), result.effect);
+}
+
+export function applySetListLevel(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string,
+  revision?: RevisionAttributionInput
+): TreeOpResult {
+  return trackListProperties(
+    part,
+    paragraph,
+    applySetListLevelUntracked(part, paragraph, level, options, nextId),
+    revision,
+    options
+  );
+}
+export function applySetListNumbering(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  numId: string | null,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string,
+  revision?: RevisionAttributionInput
+): TreeOpResult {
+  return trackListProperties(
+    part,
+    paragraph,
+    applySetListNumberingUntracked(part, paragraph, numId, level, options, nextId),
+    revision,
+    options
+  );
 }

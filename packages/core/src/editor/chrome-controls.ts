@@ -1,3 +1,7 @@
+import { flattenChromeMenuSlots } from './chrome-menu-slots.ts';
+import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
+import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
+import type { ChromeMenu } from './chrome-menu-entries.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
 //
 // M6V.1 reproduces the complete user-visible legacy chrome from archaeology ref
@@ -81,7 +85,9 @@ export type ChromeControlState =
    * directions, and an adapter branching on `kind` must be able to tell them apart. Unlike
    * the deleted `parityOnly`, this one IS named by a control (`file.open`).
    */
-  | { readonly kind: 'load' };
+  | { readonly kind: 'load' }
+  /** Host conversion through `runChromeExport` or `runChromePrint`; not an editing command. */
+  | { readonly kind: 'export' };
 
 /**
  * The SHAPE a control renders as (task M6V.1).
@@ -353,6 +359,25 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    id: 'direction',
+    labelKey: 'formattingBar.groups.direction',
+    contextual: true,
+    controls: [
+      {
+        id: 'ltr',
+        labelKey: 'toolbar.leftToRight',
+        paths: GENERATED_ICON_PATHS['format_textdirection_l_to_r'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'rtl',
+        labelKey: 'toolbar.rightToLeft',
+        paths: GENERATED_ICON_PATHS['format_textdirection_r_to_l'],
+        state: { kind: 'command' },
+      },
+    ],
+  },
+  {
     id: 'list',
     labelKey: 'formattingBar.groups.listFormatting',
     controls: [
@@ -421,37 +446,7 @@ export const CHROME_GROUPS = [
       },
     ],
   },
-  {
-    id: 'review',
-    labelKey: 'formattingBar.commentsAndChanges',
-    controls: [
-      {
-        id: 'comments',
-        shape: 'icon',
-        labelKey: 'formattingBar.commentsAndChanges',
-        paths: GENERATED_ICON_PATHS['comment'],
-        state: { kind: 'command' },
-      },
-      {
-        // Packaged under Review > Markup Options > Reviewers; hosts may compose a shortcut.
-        id: 'authors',
-        shape: 'dropdown',
-        labelKey: 'reviewers.label',
-        paths: GENERATED_ICON_PATHS['visibility'],
-        defaultToolbar: false,
-        state: { kind: 'command' },
-      },
-      {
-        // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
-        id: 'editingMode',
-        shape: 'dropdown',
-        labelKey: 'editingMode.label',
-        valueKey: 'editingMode.editing',
-        paths: GENERATED_ICON_PATHS['edit_note'],
-        state: { kind: 'command' },
-      },
-    ],
-  },
+  REVIEW_CHROME_GROUP,
   {
     // Content-control authoring chrome (typed-content-controls). Show-all and form-fill are
     // surface toggles; inspector and remove are contextual to the caret control. Slot ids are
@@ -569,6 +564,19 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['format_color_fill'],
         state: { kind: 'value' },
       },
+      {
+        id: 'mergeCells',
+        labelKey: 'table.mergeCells',
+        paths: GENERATED_ICON_PATHS['call_merge'],
+        state: { kind: 'command' },
+      },
+      // Opens the Split Cells dialog, which supplies the counts; see `chromeProbeForSlot`.
+      {
+        id: 'splitCell',
+        labelKey: 'table.splitCell',
+        paths: GENERATED_ICON_PATHS['call_split'],
+        state: { kind: 'command' },
+      },
     ],
   },
   {
@@ -600,42 +608,7 @@ export const CHROME_GROUPS = [
       },
     ],
   },
-  {
-    // The File menu's controls. Contextual because none of them belong in the formatting
-    // bar: the chrome spec puts open, save and page setup in a menu above it.
-    //
-    // Print is deliberately absent. Printing a paginated document faithfully is a paint
-    // concern the engine does not own yet, and a menu row that can only ever be disabled
-    // is the "dead button for a capability that does not exist" this registry avoids.
-    id: 'file',
-    labelKey: 'toolbar.file',
-    contextual: true,
-    controls: [
-      {
-        id: 'open',
-        labelKey: 'toolbar.open',
-        paths: GENERATED_ICON_PATHS['file_upload'],
-        state: { kind: 'load' },
-      },
-      {
-        id: 'save',
-        labelKey: 'toolbar.saveShortcut',
-        paths: GENERATED_ICON_PATHS['file_download'],
-        state: { kind: 'save' },
-      },
-      {
-        // Page setup dispatches `setPageSetup` with the DIALOG's values, so like
-        // `text.link` it is command-shaped without a fixed command: its enabled state
-        // comes from `chromeProbeForSlot`, and the chrome that owns the dialog sends the
-        // real one. Deliberately absent from `SLOT_COMMANDS` for the reason recorded
-        // there — a row would enable it in an adapter that has grown no dialog.
-        id: 'pageSetup',
-        labelKey: 'toolbar.pageSetup',
-        paths: GENERATED_ICON_PATHS['settings'],
-        state: { kind: 'command' },
-      },
-    ],
-  },
+  FILE_CHROME_GROUP,
   {
     // The Insert menu's own controls: the ones that are not already slots elsewhere.
     // Image and table insertion live in the `image` and `table` groups above and are
@@ -645,6 +618,12 @@ export const CHROME_GROUPS = [
     labelKey: 'toolbar.insert',
     contextual: true,
     controls: [
+      {
+        id: 'textBox',
+        labelKey: 'toolbar.insertTextBox',
+        paths: GENERATED_ICON_PATHS['format_shapes'],
+        state: { kind: 'command' },
+      },
       {
         id: 'footnote',
         labelKey: 'toolbar.insertFootnote',
@@ -707,6 +686,27 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['toc'],
         state: { kind: 'command' },
       },
+      {
+        // Opens the Bookmark dialog; the dialog supplies the name.
+        id: 'bookmark',
+        labelKey: 'toolbar.bookmark',
+        paths: GENERATED_ICON_PATHS['bookmark'],
+        state: { kind: 'command' },
+      },
+      {
+        // Opens Go To on bookmarks (the Go to tab of the navigation pane).
+        id: 'goToBookmark',
+        labelKey: 'toolbar.goToBookmark',
+        paths: GENERATED_ICON_PATHS['bookmarks'],
+        state: { kind: 'command' },
+      },
+      {
+        // Opens the Watermark dialog; the dialog supplies the command's values.
+        id: 'watermark',
+        labelKey: 'toolbar.watermark',
+        paths: GENERATED_ICON_PATHS['branding_watermark'],
+        state: { kind: 'command' },
+      },
     ],
   },
 ] as const;
@@ -740,6 +740,7 @@ export type ChromeGroupId =
   | 'text'
   | 'script'
   | 'alignment'
+  | 'direction'
   | 'list'
   | 'format'
   | 'review'
@@ -777,6 +778,8 @@ export type ChromeSlotId =
   | 'alignment.center'
   | 'alignment.right'
   | 'alignment.justify'
+  | 'direction.ltr'
+  | 'direction.rtl'
   | 'list.bullet'
   | 'list.numbered'
   | 'list.outdent'
@@ -784,7 +787,20 @@ export type ChromeSlotId =
   | 'list.lineSpacing'
   | 'format.painter'
   | 'format.clear'
+  | 'review.revisionMarkup'
   | 'review.comments'
+  | 'review.addComment'
+  | 'review.paragraphMarks'
+  | 'review.bookmarks'
+  | 'review.protectDocument'
+  | 'review.simpleMarkup'
+  | 'review.allMarkup'
+  | 'review.noMarkup'
+  | 'review.original'
+  | 'review.previousChange'
+  | 'review.nextChange'
+  | 'review.acceptAllChanges'
+  | 'review.rejectAllChanges'
   | 'review.authors'
   | 'review.editingMode'
   | 'contentControl.showAll'
@@ -801,10 +817,16 @@ export type ChromeSlotId =
   | 'table.borderStyle'
   | 'table.borderWidth'
   | 'table.cellFill'
+  | 'table.mergeCells'
+  | 'table.splitCell'
   | 'file.open'
   | 'file.save'
+  | 'file.exportMarkdown'
+  | 'file.exportPdf'
+  | 'file.print'
   | 'paragraph.dialog'
   | 'file.pageSetup'
+  | 'insert.textBox'
   | 'insert.footnote'
   | 'insert.endnote'
   | 'insert.pageNumber'
@@ -814,7 +836,10 @@ export type ChromeSlotId =
   | 'insert.pageBreak'
   | 'insert.sectionBreakNextPage'
   | 'insert.sectionBreakContinuous'
-  | 'insert.toc';
+  | 'insert.toc'
+  | 'insert.bookmark'
+  | 'insert.goToBookmark'
+  | 'insert.watermark';
 
 /**
  * Every control id in the chrome, as a literal union. Unique WITHIN a group, not
@@ -897,75 +922,14 @@ export function formattingBarChromeGroups(image: ImageContext | null): readonly 
 // setup, breaks — because the formatting bar is derived from `defaultChromeGroups()` and
 // those groups are all `contextual`. Both structures read the SAME registry.
 
-/**
- * A row that runs one chrome slot.
- *
- * @public
- */
-export interface ChromeMenuItemEntry {
-  readonly kind: 'item';
-  readonly slot: ChromeSlotId;
-  /**
-   * Plain-label override for this row.
-   *
-   * A slot's own `labelKey` is a TOOLTIP key, and several of them fold the shortcut into
-   * the text (`formattingBar.boldShortcut` is "Bold (Ctrl+B)"). A menu puts the shortcut
-   * in its own right-hand column, so the row needs the bare noun. Both keys already exist
-   * in the catalogue — this points at the plain one rather than minting a duplicate.
-   */
-  readonly labelKey?: string;
-  /** i18n key of the shortcut shown right-aligned on the row (`toolbar.saveShortcut`). */
-  readonly shortcutKey?: string;
-  /**
-   * The row opens a size PICKER instead of firing on click — Word's insert-table grid.
-   * The slot still owns the label, the icon and the enabled state; only the dispatch
-   * differs, and the picked size is what the host sends.
-   */
-  readonly picker?: 'tableGrid';
-}
-
-/**
- * A row that opens a nested panel of rows (Insert › Break).
- *
- * It carries its own label and icon rather than a slot, because a submenu PARENT has no
- * command: clicking it opens the panel. Giving it a slot would mint a public id for a
- * control that can never be enabled, and `toolbarCommandState` would have to invent an
- * answer about it.
- *
- * @public
- */
-export interface ChromeMenuSubmenuEntry {
-  readonly kind: 'submenu';
-  readonly labelKey: string;
-  readonly paths: readonly string[] | null;
-  readonly items: readonly ChromeMenuEntry[];
-}
-
-/** A horizontal rule between groups of rows. @public */
-export interface ChromeMenuSeparatorEntry {
-  readonly kind: 'separator';
-}
-
-/** One row of a chrome menu. @public */
-export type ChromeMenuEntry =
-  | ChromeMenuItemEntry
-  | ChromeMenuSubmenuEntry
-  | ChromeMenuSeparatorEntry;
-
-/**
- * Every menu id, as a literal union. Stable public API; renaming one is a breaking change,
- * exactly like a group or slot id.
- *
- * @public
- */
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'review' | 'help';
-
-/** One menu of the menu bar. @public */
-export interface ChromeMenu {
-  readonly id: ChromeMenuId;
-  readonly labelKey: string;
-  readonly entries: readonly ChromeMenuEntry[];
-}
+export type {
+  ChromeMenu,
+  ChromeMenuEntry,
+  ChromeMenuId,
+  ChromeMenuItemEntry,
+  ChromeMenuSeparatorEntry,
+  ChromeMenuSubmenuEntry,
+} from './chrome-menu-entries.ts';
 
 /**
  * The menu bar the chrome shows above the toolbar, in bar order: File, Format, Insert, Review,
@@ -986,14 +950,20 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         shortcutKey: 'toolbar.saveShortcut',
       },
       { kind: 'separator' },
+      {
+        kind: 'submenu',
+        labelKey: 'toolbar.export',
+        paths: GENERATED_ICON_PATHS['file_download'],
+        items: [
+          { kind: 'item', slot: 'file.exportMarkdown' },
+          { kind: 'item', slot: 'file.exportPdf' },
+        ],
+      },
+      { kind: 'item', slot: 'file.print', shortcutKey: 'toolbar.printShortcut' },
       { kind: 'item', slot: 'file.pageSetup' },
     ],
   },
   {
-    // Every Format row is a WIRED engine command, which is why the direction pair
-    // (left-to-right / right-to-left) is not here: `w:bidi` is not in the command
-    // vocabulary, and two permanently refused rows would be the whole visible half of
-    // this menu.
     id: 'format',
     labelKey: 'toolbar.format',
     entries: [
@@ -1006,6 +976,9 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'alignment.center' },
       { kind: 'item', slot: 'alignment.right' },
       { kind: 'item', slot: 'alignment.justify' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'direction.ltr' },
+      { kind: 'item', slot: 'direction.rtl' },
       { kind: 'separator' },
       // A SECOND route to the Paragraph dialog, the way `file.pageSetup` sits in the File
       // menu. The line-spacing menu is its natural home, but that control collapses into
@@ -1030,6 +1003,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
     // still replaces one part, not a second registry.
     entries: [
       { kind: 'item', slot: 'image.insert' },
+      { kind: 'item', slot: 'insert.textBox' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
       { kind: 'item', slot: 'insert.footnote' },
@@ -1046,13 +1020,40 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         ],
       },
       { kind: 'item', slot: 'insert.toc' },
+      { kind: 'item', slot: 'insert.bookmark', shortcutKey: 'toolbar.bookmarkShortcut' },
+      { kind: 'item', slot: 'insert.goToBookmark' },
+      { kind: 'item', slot: 'insert.watermark' },
     ],
   },
   {
     // The adapters supply the document-dependent reviewer rows beneath Markup Options.
     id: 'review',
     labelKey: 'toolbar.review',
-    entries: [],
+    entries: [
+      {
+        kind: 'submenu',
+        labelKey: 'review.displayForReview',
+        paths: GENERATED_ICON_PATHS['visibility'],
+        items: [
+          { kind: 'item', slot: 'review.simpleMarkup' },
+          { kind: 'item', slot: 'review.allMarkup' },
+          { kind: 'item', slot: 'review.noMarkup' },
+          { kind: 'item', slot: 'review.original' },
+        ],
+      },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.revisionMarkup' },
+      { kind: 'item', slot: 'review.previousChange' },
+      { kind: 'item', slot: 'review.nextChange' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.acceptAllChanges' },
+      { kind: 'item', slot: 'review.rejectAllChanges' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.paragraphMarks' },
+      { kind: 'item', slot: 'review.bookmarks' },
+      { kind: 'separator' },
+      { kind: 'item', slot: 'review.protectDocument' },
+    ],
   },
   {
     // Help is host territory — a product's own docs, its own support channel. The one row
@@ -1071,15 +1072,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
  * @public
  */
 export function chromeMenuSlots(): readonly ChromeSlotId[] {
-  const slots: ChromeSlotId[] = [];
-  const walk = (entries: readonly ChromeMenuEntry[]): void => {
-    for (const entry of entries) {
-      if (entry.kind === 'item') slots.push(entry.slot);
-      else if (entry.kind === 'submenu') walk(entry.items);
-    }
-  };
-  for (const menu of CHROME_MENUS) walk(menu.entries);
-  return slots;
+  return flattenChromeMenuSlots(CHROME_MENUS);
 }
 
 /** Total controls, so a parity test can assert none were dropped. */
@@ -1087,10 +1080,5 @@ export function chromeControlCount(): number {
   return CHROME_GROUPS.reduce((n, g) => n + g.controls.length, 0);
 }
 
-/**
- * i18n key for the tooltip on a control an ADAPTER renders but cannot drive yet — a
- * value slot in a toolbar that has grown no picker for it, say. It is never the reason
- * a control is disabled: when the ENGINE refuses, the tooltip is the engine's own
- * `disabledReason`, never an adapter paraphrase.
- */
+/** Tooltip for adapter controls without a picker; command refusals use engine reasons. */
 export const CHROME_UNAVAILABLE_KEY = 'formattingBar.unavailableInPreview';

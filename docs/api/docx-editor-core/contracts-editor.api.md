@@ -5,6 +5,27 @@
 ```ts
 
 // @public
+export interface AnchorHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface AnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
+}
+
+// @public
 export interface AuthoredNoteNumbering {
     // (undocumented)
     readonly numFmt?: string;
@@ -20,6 +41,27 @@ export interface AuthoredNoteNumbering {
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type BookmarkPlace = 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+
+// @public
+export type BookmarkStory = 'body' | 'headerFooter' | 'note';
+
+// @public
+export interface BookmarkSummary {
+    readonly atSelection: boolean;
+    readonly duplicates: number;
+    readonly empty: boolean;
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly order: number;
+    readonly place: BookmarkPlace;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
 export type CanResult = {
     ok: true;
 } | {
@@ -27,6 +69,61 @@ export type CanResult = {
     ok: false;
     reason: string;
 };
+
+// @public
+export interface ClearAnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+}
+
+// @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export type CollaborationFailureCode =
+/** Edit refused by the session gate. The status does not change. Wait for `ready`. */
+'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'experimental-collaboration-body-text-only'
+/** Factory input rejected before joining. Fix the value the host passed. */
+| 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-session-id'
+/** Join or seed did not complete. Connect the provider, check the room id, and retry. */
+| 'already-initialized' | 'document-id-mismatch' | 'initialization-aborted' | 'initialization-timeout' | 'not-initialized'
+/** The seed document cannot seed a room. Fix the file. */
+| 'baseline-too-large' | 'blob-read' | 'invalid-baseline' | 'missing-local-blob' | 'no-main-document-part'
+/** This client and the room have different formats. Terminal. Save local work. */
+| 'collaboration-format-mismatch' | 'protocol-version-mismatch' | 'schema-version-mismatch'
+/** The room is unusable. Terminal. Create a new room from saved bytes. */
+| 'blob-digest-mismatch' | 'concurrent-seed' | 'port-already-attached'
+/** A remote update is not applied yet. Heals when a later update arrives. Wait. */
+| 'duplicate-paragraph-id' | 'invalid-relationships' | 'materialize-dropped-content' | 'missing-blob' | 'missing-root' | 'remote-apply-failed' | 'unknown-paragraph-id'
+/** Over a resource limit. A local edit realigns; shared state over a limit is terminal. */
+| 'blob-store-full' | 'blob-too-large' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-logical-id' | 'invalid-string' | 'prototype-key' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'tree-too-deep' | 'unknown-logical-id' | 'unsafe-part-name'
+/** Transport state. Only `transport-disconnected` recovers on its own. */
+| 'authentication-failed' | 'room-generation-changed' | 'transport' | 'transport-disconnected'
+/** Reserved for a room server that refuses a saved room. Passed through, never emitted. */
+| 'invalid-saved-room' | 'saved-room-unavailable'
+/** @deprecated Emitted by nothing. Kept for compatibility; do not branch on these. */
+| 'baseline-digest-mismatch' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'invalid-shared-metadata' | 'local-mirror-failed' | 'paragraph-set-mismatch' | 'shared-schema-invalid' | 'unsupported-root-key';
+
+// @public
+export interface CollaborationParticipantsDiagnostic extends DiagnosticBase {
+    readonly count: number;
+    // (undocumented)
+    readonly kind: 'collab.participants';
+}
+
+// @public
+export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+
+// @public
+export interface CollaborationStatusDiagnostic extends DiagnosticBase {
+    readonly code?: CollaborationDiagnosticCode;
+    readonly connectMs?: number;
+    // (undocumented)
+    readonly kind: 'collab.status';
+    readonly previous: CollaborationStatus | 'none';
+    readonly recovering: boolean;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
 
 // @public
 export type ColorValue = {
@@ -40,6 +137,9 @@ export type ColorValue = {
 } | {
     readonly kind: 'auto';
 };
+
+// @public
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export interface CommentRecord {
@@ -110,7 +210,56 @@ export interface ContentControlSummary {
 }
 
 // @public
-export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
+
+// @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export interface CustomNodeDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: CustomNodeDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'custom-node';
+}
+
+// @public
+export const DEFAULT_REVIEW_PANE: ResolvedReviewPane;
+
+// @public
+export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
+
+// @public
+export const DIAGNOSTIC_SCHEMA_VERSION = 1;
+
+// @public
+export interface DiagnosticBase {
+    readonly editorSessionId: string;
+    readonly schemaVersion: number;
+    readonly time: number;
+}
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+
+// @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
+
+// @public
+export interface DiagnosticFailureDetail {
+    readonly cause?: string;
+    readonly errorName?: DiagnosticErrorName;
+    readonly stage?: FailureStage;
+}
 
 // @public
 export interface DocAnchor {
@@ -384,6 +533,7 @@ export interface DocumentChange {
     // (undocumented)
     readonly dirty?: readonly string[];
     readonly revision: number;
+    readonly source?: 'load' | 'refresh' | 'recovery';
 }
 
 // @public
@@ -392,6 +542,73 @@ export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 // @public
 export interface DocumentHandle {
     readonly revision: number;
+}
+
+// @public
+export type DocumentOpenDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.open';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'opened';
+    readonly pagesBucket?: CountBucket;
+    readonly shape?: DocumentShape;
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
+    readonly sizeBucket?: ByteSizeBucket;
+}));
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export interface DocumentOpenFailure {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly reason: DocumentOpenFailureReason;
+}
+
+// @public
+export type DocumentOpenFailureReason = 'damaged' | 'not-docx' | 'too-large' | 'blocked' | 'unknown';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
+
+// @public
+export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+
+// @public
+export interface DocumentProtectionState {
+    readonly edit: DocumentProtectionEdit;
+    readonly enforced: boolean;
+    readonly password: boolean;
+}
+
+// @public
+export type DocumentSaveDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.save';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'saved';
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentSaveDiagnosticCode;
+    readonly durationMs: number;
+    readonly outcome: 'rejected';
+}));
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
+export interface DocumentShape {
+    // (undocumented)
+    readonly embeddedFonts: CountBucket;
+    // (undocumented)
+    readonly paragraphs: CountBucket;
+    readonly parts: CountBucket;
+    readonly reviewItems: CountBucket;
 }
 
 // @public
@@ -452,24 +669,25 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor {
-    acceptReviewItem(key: string): ExecResult;
-    addComment(text: string, author?: string): ExecResult;
-    can(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): CanResult;
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-merge-not-rectangle' | 'edit.table-split-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+
+// @public
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
+    acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
+    addComment(text: string, options?: HistoryGroupOptions): ExecResult;
+    addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
+    beginHistoryGroup(): HistoryGroup;
+    can(command: EditorCommand, options?: EditorExecOptions): CanResult;
     canExecuteImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>, options?: {
         scope?: EditorScope;
     }): CanResult;
-    deleteReviewItem(key: string): ExecResult;
+    deleteReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
     executeImageCommand(command: Extract<EditorCommand, {
         type: 'insertImage' | 'replaceImage';
     }>): Promise<ExecResult>;
@@ -477,8 +695,13 @@ export interface Editor {
         readonly matchCase?: boolean;
         readonly wholeWord?: boolean;
     }): readonly TextMatch[];
+    findMatches(queries: readonly string[], options?: {
+        readonly matchCase?: boolean;
+        readonly wholeWord?: boolean;
+    }): readonly (readonly TextMatch[])[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
+    getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
     // (undocumented)
     getActiveScope(): ViewScope;
     getAvailableFonts(): readonly string[];
@@ -490,6 +713,7 @@ export interface Editor {
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
     getCustomNodeDefinitions(): readonly unknown[];
     getDocumentFonts(): readonly string[];
+    // (undocumented)
     getDocumentHandle(): DocumentHandle;
     getDocumentStyles(): readonly {
         readonly name: string;
@@ -568,10 +792,7 @@ export interface Editor {
         readonly kind: string;
         readonly story?: 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
     }[];
-    getWatermark(): {
-        readonly kind: 'text' | 'image';
-        readonly text?: string;
-    } | null;
+    getWatermark(): WatermarkState | null;
     // (undocumented)
     getZoom(): number;
     getZoomMode(): ZoomMode;
@@ -588,27 +809,28 @@ export interface Editor {
     } & EditorQueries[K], options?: {
         scope?: EditorScope;
     }): EditorQueryResults[K];
-    // (undocumented)
-    rejectReviewItem(key: string): ExecResult;
+    rejectReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     relayout(options?: {
         sync?: boolean;
     }): void;
     releaseSelection(pin: SelectionPin): void;
-    replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+    replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+    replyToReviewItem(key: string, text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    // (undocumented)
-    scrollToBlock(blockId: string): boolean;
+    scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
-    setCommentResolved(key: string, resolved: boolean): ExecResult;
+    setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
+        readonly formattingKinds?: readonly string[];
+    }): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     setZoom(zoom: number): ExecResult;
@@ -620,6 +842,34 @@ export interface Editor {
 }
 
 // @public
+export interface EditorAnchorNavigation {
+    clearAnchorHighlight(options?: ClearAnchorHighlightOptions): void;
+    highlightAnchor(anchor: DocAnchor, options?: AnchorHighlightOptions): boolean;
+    scrollToAnchor(anchor: DocAnchor, options?: ScrollToAnchorOptions): boolean;
+}
+
+// @public
+export interface EditorBookmarkCommands {
+    deleteBookmark: {
+        name: string;
+    };
+    goToBookmark: {
+        name: string;
+    };
+    insertBookmark: {
+        name: string;
+    };
+    keepFirstBookmark: {
+        name: string;
+    };
+    openBookmarkDialog: Record<never, never>;
+    openGoTo: {
+        readonly fromShortcut?: boolean;
+    };
+    toggleBookmarks: Record<never, never>;
+}
+
+// @public
 export type EditorCommand = {
     [K in keyof EditorCommands]: {
         type: K;
@@ -627,7 +877,7 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 // @public
-export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands {
+export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands, EditorBookmarkCommands {
     clearFormatting: Record<never, never>;
     commitTableColumnDividerResize: {
         leftWidthTwips: number;
@@ -655,11 +905,13 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     };
     // (undocumented)
     deleteTable: Record<never, never>;
+    editTextFormField: Record<never, never>;
     // (undocumented)
     insertColumn: {
         target?: TableColumnOccurrenceTarget;
         where: 'left' | 'right';
     };
+    // (undocumented)
     insertImage: {
         data: Uint8Array;
         description?: string;
@@ -675,9 +927,14 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         target?: TableRowOccurrenceTarget;
         where: 'above' | 'below';
     };
+    insertTextBox: Record<never, never>;
     insertToc: Record<never, never>;
     // (undocumented)
     mergeCells: Record<never, never>;
+    navigateReviewChange: {
+        direction: 'next' | 'previous';
+    };
+    openRevisionMarkupDialog: Record<never, never>;
     paste: {
         html?: string;
         text: string;
@@ -711,11 +968,11 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         match: TextMatch;
         text: string;
     };
+    resolveAllReviewChanges: ResolveReviewChangesOptions;
     selectAll: Record<never, never>;
     selectTableRegion: {
         region: 'table' | 'row' | 'column';
     };
-    // (undocumented)
     setAlignment: {
         align: 'left' | 'center' | 'right' | 'justify';
     };
@@ -788,10 +1045,17 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         pageWidth?: number;
         scope?: 'document' | 'section';
     };
+    setParagraphDirection: {
+        direction: 'ltr' | 'rtl';
+    };
     setParagraphFormat: ParagraphFormatCommand;
     setParagraphSpacing: {
         afterPt?: number | null;
         beforePt?: number | null;
+    };
+    setReviewChangesAuthor: SetReviewChangesAuthorOptions;
+    setReviewDisplayMode: {
+        mode: ReviewDisplayMode;
     };
     setSelection: {
         anchor: DocAnchor;
@@ -813,7 +1077,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         width?: number | null;
         widthType?: string | null;
     };
-    // (undocumented)
     setWatermark: {
         watermark: Watermark | null;
     };
@@ -822,6 +1085,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         cols: number;
         rows: number;
     };
+    toggleDocumentProtection: Record<never, never>;
     // (undocumented)
     toggleHeaderRow: Record<never, never>;
     // (undocumented)
@@ -832,6 +1096,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     toggleMark: {
         mark: string;
     };
+    toggleParagraphMarks: Record<never, never>;
     toggleReviewPane: Record<never, never>;
     transformImage: {
         action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
@@ -856,6 +1121,12 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic | DocumentSaveDiagnostic | SessionDiagnostic;
+
+// @public
+export type EditorDiagnosticKind = EditorDiagnostic['kind'];
+
+// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -864,9 +1135,21 @@ export interface EditorError extends Error {
 // @public
 export interface EditorEvents {
     change: (change: DocumentChange) => void;
+    diagnostic: (event: EditorDiagnostic) => void;
     // (undocumented)
     error: (error: EditorError) => void;
+    // (undocumented)
+    historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    hostChange: (event: EditorHostChange) => void;
+    reviewItemReveal: (event: ReviewItemRevealEvent) => void;
+    revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
+}
+
+// @public
+export interface EditorExecOptions extends HistoryGroupOptions {
+    readonly historyGroup?: HistoryGroup;
+    readonly scope?: EditorScope;
 }
 
 // @public
@@ -921,6 +1204,23 @@ export interface EditorHeaderFooterCommands {
 }
 
 // @public
+export interface EditorHighlights {
+    clearHighlights(name?: string): void;
+    getHighlightsAt<R extends HighlightRange = HighlightRange>(clientX: number, clientY: number): readonly HighlightHit<R>[];
+    setHighlights(name: string, ranges: readonly HighlightRange[], options?: HighlightOptions): HighlightResult;
+}
+
+// @public
+export interface EditorHostChange {
+    readonly document: EditorHostDocument | null;
+}
+
+// @public
+export type EditorHostDocument = typeof globalThis extends {
+    readonly document: infer D;
+} ? D : object;
+
+// @public
 export interface EditorNoteCommands {
     convertAllNotes: {
         fromKind: NoteKind;
@@ -959,6 +1259,7 @@ export type EditorPosition = DocAnchor | SemanticPosition;
 
 // @public
 export interface EditorQueries extends DocQueries {
+    bookmarks: Record<never, never>;
     // (undocumented)
     contentControlAt: {
         filter?: ContentControlFilter;
@@ -998,6 +1299,8 @@ export type EditorQuery = {
 // @public
 export interface EditorQueryResults extends DocQueryResults {
     // (undocumented)
+    bookmarks: readonly BookmarkSummary[];
+    // (undocumented)
     contentControlAt: ContentControlSummary | null;
     // (undocumented)
     hyperlinkAt: HyperlinkInfo | null;
@@ -1023,6 +1326,12 @@ export interface EditorQueryResults extends DocQueryResults {
 }
 
 // @public
+export interface EditorReviewHits {
+    getReviewItemRects(key: string): readonly HighlightRect[];
+    getReviewItemsAt(clientX: number, clientY: number, query?: ReviewItemQuery): readonly ReviewItemHit[];
+}
+
+// @public
 export type EditorScope = {
     kind: 'body';
 } | {
@@ -1032,18 +1341,24 @@ export type EditorScope = {
 /**
 * A footnote/endnote region.
 *
-* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+* `id` encodes kind and signed note id as `footnote:<id>` or `endnote:<id>`. Use
+* `formatNoteScopeId` or `parseNoteScopeId` from the store package.
 */
 | {
     id: string;
     kind: 'note';
-}
-/** A text box or floating frame with its own content, addressed by id. */
-| {
+} | {
+    drawingNodeId: string;
+    hostParagraphId: string;
     id: string;
     kind: 'frame';
+    owner?: {
+        kind: 'headerFooter';
+        rId: string;
+    } | {
+        id: string;
+        kind: 'note';
+    };
 }
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
 | {
@@ -1062,6 +1377,7 @@ export interface EditorSnapshot {
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
     readonly collaborationStatus: CollaborationStatus | 'inactive';
+    readonly documentProtection?: DocumentProtectionState | null;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];
@@ -1075,6 +1391,7 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     readonly isOpening?: boolean;
     readonly lastRejection?: string | null;
+    readonly openFailure?: DocumentOpenFailure | null;
     // (undocumented)
     readonly page: {
         readonly current: number;
@@ -1083,12 +1400,17 @@ export interface EditorSnapshot {
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
+    readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly reviewPane: ResolvedReviewPane;
     readonly reviewPaneOpen?: boolean;
+    readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly showBookmarks?: boolean;
+    readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly table: TableContext | null;
     readonly tocContext: {
@@ -1100,16 +1422,35 @@ export interface EditorSnapshot {
 }
 
 // @public
+export interface EditRejectedDiagnostic extends DiagnosticBase, DiagnosticFailureDetail {
+    // (undocumented)
+    readonly code: EditDiagnosticCode;
+    readonly command?: EditorCommand['type'];
+    // (undocumented)
+    readonly kind: 'edit.rejected';
+    readonly origin: EditRejectionOrigin;
+    readonly tracked: boolean;
+}
+
+// @public
+export type EditRejectionOrigin = 'command' | 'input' | 'automation';
+
+// @public
 export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typeMismatch' | 'kindMismatch' | 'outOfBounds' | 'unsupported' | 'invalidArgs';
 
 // @public
 export type ExecResult = {
     changed: boolean;
+    history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
+    revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
+    revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
 
@@ -1120,6 +1461,9 @@ export interface Extent {
     // (undocumented)
     readonly widthEmu: number;
 }
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
 
 // @public
 export interface FontConfiguration {
@@ -1138,6 +1482,7 @@ export interface FontConfiguration {
     readonly sources: readonly FontSource[];
     // (undocumented)
     readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public
@@ -1149,6 +1494,9 @@ export interface FontDefinition {
 }
 
 // @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
 export interface FontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -1156,6 +1504,14 @@ export interface FontFaceRequest {
     readonly style: 'normal' | 'italic';
     // (undocumented)
     readonly weight: number;
+}
+
+// @public
+export interface FontFailedDiagnostic extends DiagnosticBase {
+    // (undocumented)
+    readonly code: FontDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'font.failed';
 }
 
 // @public
@@ -1201,6 +1557,9 @@ export interface FormatPainterSurfaceState {
 }
 
 // @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
+
+// @public
 export type FurnitureVariant = 'default' | 'first' | 'even';
 
 // @public
@@ -1240,6 +1599,104 @@ export interface HeaderFooterState {
     readonly sectionIndex: number;
     readonly titlePage?: boolean;
     readonly variant?: FurnitureVariant;
+}
+
+// @public
+export interface HighlightHit<R extends HighlightRange = HighlightRange> {
+    readonly active: boolean;
+    readonly index: number;
+    readonly length: number;
+    readonly name: string;
+    readonly range: R;
+    readonly rect: HighlightRect;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightOptions {
+    readonly activeColor?: string;
+    readonly activeIndex?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly priority?: number;
+}
+
+// @public
+export interface HighlightRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightRect {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface HighlightResult {
+    readonly applied: number;
+    readonly unavailable: number;
+}
+
+// @public
+export interface HistoryDiagnostic {
+    // (undocumented)
+    readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
+    // (undocumented)
+    readonly reason: string;
+}
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
+
+// @public
+export interface HistoryDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: HistoryDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'history';
+}
+
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
+    readonly state: 'open' | 'closed';
+}
+
+// @public
+export interface HistoryGroupOptions {
+    readonly historyGroup?: HistoryGroup;
+}
+
+// @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
 }
 
 // @public
@@ -1308,6 +1765,7 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
@@ -1406,6 +1864,7 @@ export interface Paragraph {
 export interface ParagraphDisagreements {
     // (undocumented)
     readonly alignment: boolean;
+    readonly direction: boolean;
     // (undocumented)
     readonly lineSpacing: boolean;
     // (undocumented)
@@ -1436,6 +1895,7 @@ export interface ParagraphFormatCommand {
     alignment?: 'left' | 'center' | 'right' | 'justify';
     // (undocumented)
     contextualSpacing?: boolean;
+    direction?: 'ltr' | 'rtl';
     indentFirstLineTwips?: number | null;
     // (undocumented)
     indentLeftTwips?: number | null;
@@ -1482,6 +1942,21 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface PerformanceDiagnostic extends DiagnosticBase {
+    readonly code?: PerformanceDiagnosticCode;
+    readonly interaction?: TimingSummary;
+    // (undocumented)
+    readonly kind: 'performance';
+    readonly layout?: TimingSummary;
+    readonly pagesBucket?: CountBucket;
+    readonly paint?: TimingSummary;
+    readonly windowMs: number;
+}
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -1520,8 +1995,69 @@ export interface ResolvedNoteNumbering {
 }
 
 // @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkerStyle;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionDisplay;
+}
+
+// @public
+export interface ResolvedRevisionMarkup {
+    // (undocumented)
+    readonly cells: {
+        readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    };
+    // (undocumented)
+    readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
+    // (undocumented)
+    readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly formatting: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly insertions: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly movedTo: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly trackFormatting: boolean;
+    // (undocumented)
+    readonly trackMoves: boolean;
+}
+
+// @public
+export interface ResolveReviewChangesOptions {
+    // (undocumented)
+    action: 'accept' | 'reject';
+    keys?: readonly string[];
+    scope?: 'visible' | 'document';
+    unsupported?: 'skip' | 'fail';
+}
+
+// @public
+export function resolveReviewPane(options: ReviewPaneOptions | undefined, base?: ResolvedReviewPane): ResolvedReviewPane;
+
+// @public
+export function resolveRevisionMarkup(input?: RevisionMarkupOptions, previous?: ResolvedRevisionMarkup): ResolvedRevisionMarkup;
+
+// @public
 export interface ReviewActivationOptions {
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly announce?: boolean;
+    readonly reveal?: ScrollPlacement | false;
+}
+
+// @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
+export interface ReviewChangesAttribution {
+    author?: string;
+    date?: string;
+    unsupported?: 'skip' | 'fail';
 }
 
 // @public
@@ -1580,7 +2116,19 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
 }
 
 // @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
+
+// @public
+export interface ReviewItemHit {
+    readonly placement: ReviewItemPlacement;
+    readonly rect: HighlightRect;
+}
 
 // @public
 export type ReviewItemPlacement = ReviewCommentPlacement | ReviewRevisionPlacement | ReviewCustomPlacement;
@@ -1606,10 +2154,46 @@ export interface ReviewItemPlacementBase {
 
 // @public
 export interface ReviewItemQuery {
-    // (undocumented)
     readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
+    readonly pairReplacements?: boolean;
     readonly placement?: boolean;
 }
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly pairKey?: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
+
+// @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
+export interface ReviewPaneItemFields {
+    readonly kind: 'revision' | 'comment' | 'custom';
+    readonly parentRevisionId?: string;
+}
+
+// @public
+export function reviewPaneListsItem(revisionsIn: RevisionDisplay, item: ReviewPaneItemFields): boolean;
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkerStyle;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionDisplay;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public
 export interface ReviewPosition {
@@ -1637,6 +2221,12 @@ export interface ReviewRevisionItem {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
@@ -1650,17 +2240,15 @@ export interface ReviewRevisionItem {
     readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     readonly text: string;
 }
 
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A deletion and an insertion that are one edit: text typed over a selection.
-*
-* Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-* without the other is never what the reviewer meant — accepting the deletion alone
-* leaves the replacement text unproposed, rejecting it alone leaves both.
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
@@ -1681,6 +2269,20 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
 }
 
 // @public
+export interface ReviewSkippedDiagnostic extends DiagnosticBase {
+    readonly cause?: string;
+    readonly changeKind?: ReviewChangeKind;
+    // (undocumented)
+    readonly code: ReviewDiagnosticCode;
+    readonly count: number;
+    readonly formattingKind?: FormattingChangeKind;
+    // (undocumented)
+    readonly kind: 'review.skipped';
+    readonly operation?: ReviewOperation;
+    readonly part?: DocumentPartKind;
+}
+
+// @public
 export interface Revision {
     // (undocumented)
     readonly author: string;
@@ -1692,6 +2294,9 @@ export interface Revision {
 }
 
 // @public
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
+
+// @public
 export interface RevisionAddress {
     // (undocumented)
     readonly author: string;
@@ -1699,6 +2304,125 @@ export interface RevisionAddress {
     // (undocumented)
     readonly id: string;
 }
+
+// @public
+export interface RevisionAuthorEntry extends RevisionBatchEntry {
+    readonly previousAuthor: string;
+    readonly previousKey: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
+export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revision';
+
+// @public
+export interface RevisionBatchEntry {
+    // (undocumented)
+    readonly author: string;
+    readonly formattingKind?: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionItem['revisionKind'];
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+}
+
+// @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public (undocumented)
+export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | 'outsideBorder';
+
+// @public (undocumented)
+export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
+
+// @public
+export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export interface RevisionMarkupChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
+
+// @public
+export function revisionMarkupColor(color: RevisionMarkupColor, authorColor: string, auto?: string): string;
+
+// @public
+export interface RevisionMarkupDialogSession {
+    apply(): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    cancel(): void;
+    get(): ResolvedRevisionMarkup;
+    reset(): void;
+    set(options: RevisionMarkupOptions): void;
+    readonly signal: AbortSignal;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupMark = 'none' | 'colorOnly' | 'bold' | 'italic' | 'underline' | 'doubleUnderline' | 'strikethrough' | 'doubleStrikethrough';
+
+// @public (undocumented)
+export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
+
+// @public
+export type RevisionMarkupOptions = {
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
+};
+
+// @public (undocumented)
+export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
+    // (undocumented)
+    readonly color: RevisionMarkupColor;
+    // (undocumented)
+    readonly mark: Mark;
+}
+
+// @public
+export function revisionMarkupStyle(settings: ResolvedRevisionMarkup, kind: 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format'): RevisionMarkupTextStyle<RevisionDeletionMark>;
+
+// @public
+export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
+    readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+}
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export type RevisionType = 'insert' | 'delete'
@@ -1727,6 +2451,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
@@ -1755,6 +2480,16 @@ export interface RunFormatting {
     readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly underline?: boolean;
+}
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
+export interface ScrollToAnchorOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: ScrollPlacement;
+    readonly offsetPx?: number;
 }
 
 // @public
@@ -1871,6 +2606,35 @@ export type SemanticTarget = {
     readonly objectId: string;
     readonly scope: ViewScope;
 };
+
+// @public
+export interface SessionActivity {
+    readonly activeMs: number;
+    readonly automationEdits: number;
+    readonly commandEdits: number;
+    readonly durationMs: number;
+    readonly inputEdits: number;
+}
+
+// @public
+export type SessionDiagnostic = DiagnosticBase & {
+    readonly kind: 'session';
+} & ({
+    readonly phase: 'start';
+} | (SessionActivity & {
+    readonly phase: 'active' | 'end';
+}));
+
+// @public
+export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
+    authors?: never;
+    keys: readonly string[];
+    scope?: never;
+} | {
+    authors?: readonly string[];
+    keys?: never;
+    scope?: 'visible' | 'document';
+});
 
 // @public
 export interface StyleDefinition {
@@ -2013,6 +2777,7 @@ export interface TextMatch {
     readonly runIndex: number;
     // (undocumented)
     readonly runOffset: number;
+    readonly scope?: ViewScope;
     readonly start: number;
     readonly text: string;
 }
@@ -2027,6 +2792,15 @@ export interface Theme {
 
 // @public
 export type ThemeColorScheme = Readonly<Record<string, string>>;
+
+// @public
+export interface TimingSummary {
+    readonly bands: readonly number[];
+    readonly count: number;
+    readonly maxMs: number;
+    readonly p50Ms: number;
+    readonly p95Ms: number;
+}
 
 // @public
 export type TrackedChangeFilterMode = 'accept' | 'reject';
@@ -2059,10 +2833,42 @@ export type ViewScope = Exclude<EditorScope, {
 
 // @public
 export interface Watermark {
-    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
     readonly imageData?: Uint8Array;
+    readonly italic?: boolean;
+    readonly layout?: WatermarkLayout;
+    readonly scale?: number | null;
+    readonly text?: string;
+    readonly transparency?: number;
+    readonly washout?: boolean;
+}
+
+// @public
+export type WatermarkLayout = 'diagonal' | 'horizontal';
+
+// @public
+export interface WatermarkState {
+    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    // (undocumented)
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
+    // (undocumented)
+    readonly italic?: boolean;
+    // (undocumented)
+    readonly kind: 'text' | 'image';
+    // (undocumented)
+    readonly layout?: WatermarkLayout;
     // (undocumented)
     readonly text?: string;
+    // (undocumented)
+    readonly transparency?: number;
+    // (undocumented)
+    readonly washout?: boolean;
 }
 
 // @public
@@ -2077,7 +2883,5 @@ export type ZoomMode = {
     readonly minZoom?: number;
     readonly type: 'fit';
 };
-
-// (No @packageDocumentation comment for this package)
 
 ```

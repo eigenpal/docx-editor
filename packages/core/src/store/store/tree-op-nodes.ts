@@ -5,12 +5,18 @@
 // half both of them need.
 
 import { findNode, parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
-import { readOnOffChild, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  readOnOffChild,
+  W14_NAMESPACE_URI,
+} from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
+  type OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
@@ -49,8 +55,8 @@ const SDT_PR_CHILD_NAMESPACE: Readonly<Record<string, string>> = {
 };
 
 /**
- * Shared nesting budget for transparent content-control walks (layout / binding / ops).
- * Beyond this depth the wrapper is treated as opaque rather than recursed.
+ * Nesting budget for control-only and block-control walks.
+ * Paragraph-inline walks use `MAX_INLINE_CONTAINER_DEPTH` across every transparent container.
  */
 export const MAX_CONTENT_CONTROL_NESTING = 32;
 
@@ -263,33 +269,43 @@ export function hasGlossaryPlaceholderRef(control: OoxmlNode): boolean {
 }
 
 /**
- * The innermost inline CONTAINER (hyperlink, field, content control) holding a run, within
- * one paragraph. Null for an ordinary top-level run.
+ * The inline CONTAINERS holding a descendant, innermost first, within one paragraph.
  */
-export function inlineContainerOf(
+export function inlineContainersOf(
   paragraph: { readonly children: readonly OoxmlNode[] },
-  runId: string
-): OoxmlNode | null {
-  let held: OoxmlNode | null = null;
-  const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
-    if (node.kind === 'textValue' || held) return;
-    if (node.id === runId) {
-      held = inside;
+  descendantId: string
+): readonly OoxmlNode[] {
+  let held: OoxmlNode[] | null = null;
+  const path: OoxmlNode[] = [];
+  const visit = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || held !== null) return;
+    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    if (node.id === descendantId) {
+      held = path.slice().reverse();
       return;
     }
-    const nested =
-      node.kind === 'hyperlink' ||
+    const counted =
       node.kind === 'fldSimple' ||
+      (node.kind === 'generic' && node.localName === 'fldSimple') ||
+      isInlineRunContainer(node) ||
       // A content control is a container the same way a link is: typing at its OUTER edge
       // must not join the run inside and grow the control (pro-review-and-custom-nodes 4.6).
-      node.kind === 'contentControl' ||
-      (node.kind === 'generic' && node.localName === 'fldSimple')
-        ? node
-        : inside;
-    for (const child of node.children) visit(child, nested);
+      isContentControlNode(node);
+    const nextDepth = counted ? depth + 1 : depth;
+    if (counted) path.push(node);
+    for (const child of node.children) visit(child, nextDepth);
+    if (counted) path.pop();
   };
-  for (const child of paragraph.children) visit(child, null);
-  return held;
+  for (const child of paragraph.children) visit(child, 0);
+  return held ?? [];
+}
+
+/** The innermost inline container holding a descendant, or null for a direct child. */
+export function inlineContainerOf(
+  paragraph: { readonly children: readonly OoxmlNode[] },
+  descendantId: string
+): OoxmlNode | null {
+  return inlineContainersOf(paragraph, descendantId)[0] ?? null;
 }
 
 /**
@@ -350,6 +366,21 @@ export function contentControlValueTypeOf(control: OoxmlNode): ContentControlVal
   return 'richText';
 }
 
+/**
+ * Whether typing can never enter this control: its content is locked (`contentLocked`,
+ * `sdtContentLocked`), bound to a data store (`w:dataBinding`), or a glyph or picture rather
+ * than text (`w14:checkbox`, `w:picture`).
+ *
+ * An unowned insertion at the outer edge of such a control lands beside it (`insertionSite`),
+ * and the keyboard never names one as the owner of a keystroke (`insertOwnerOf`). Entering it
+ * would be refused, or would write text into a checkbox glyph.
+ */
+export function refusesTypedContent(control: OoxmlNode): boolean {
+  if (declaredLockOf(control).content || isBoundContentControl(control)) return true;
+  const type = contentControlValueTypeOf(control);
+  return type === 'checkbox' || type === 'picture';
+}
+
 /** Ancestor content controls of a node, outermost first. */
 export function contentControlAncestorsOf(part: OoxmlPart, nodeId: string): OoxmlElement[] {
   const chain: OoxmlElement[] = [];
@@ -408,14 +439,14 @@ export function listItemsOf(control: OoxmlNode): readonly { displayText: string;
   return items;
 }
 
-/** `w14:checkbox` payload pieces. */
+/** `w14:checkbox` payload with the MS-DOCX §2.6.3.29 symbol defaults. */
 export function checkboxPayloadOf(control: OoxmlNode): {
   readonly checkbox: OoxmlElement;
   readonly checked: boolean;
   readonly checkedGlyph: string;
   readonly uncheckedGlyph: string;
-  readonly checkedFont: string | undefined;
-  readonly uncheckedFont: string | undefined;
+  readonly checkedFont: string;
+  readonly uncheckedFont: string;
 } | null {
   const checkbox = sdtPrChild(contentControlPropertiesOf(control), 'checkbox');
   if (!checkbox) return null;
@@ -446,8 +477,8 @@ export function checkboxPayloadOf(control: OoxmlNode): {
     checked,
     checkedGlyph: attributeValueOf(checkedState, 'val') ?? '2612',
     uncheckedGlyph: attributeValueOf(uncheckedState, 'val') ?? '2610',
-    checkedFont: attributeValueOf(checkedState, 'font'),
-    uncheckedFont: attributeValueOf(uncheckedState, 'font'),
+    checkedFont: attributeValueOf(checkedState, 'font') ?? 'MS Gothic',
+    uncheckedFont: attributeValueOf(uncheckedState, 'font') ?? 'MS Gothic',
   };
 }
 
@@ -695,4 +726,17 @@ export function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   // Served from the part's node index rather than a fresh full-tree walk: split and join
   // ask for a parent on every op, and the walk made each one O(document).
   return parentNodeOf(part, nodeId);
+}
+
+export function paragraphContainingNode(
+  part: OoxmlPart,
+  nodeId: string
+): OoxmlParagraphNode | null {
+  let current: OoxmlNode | null = findNode(part, nodeId);
+  while (current) {
+    if (current.kind === 'paragraph') return current as OoxmlParagraphNode;
+    const parent = parentOf(part, current.id);
+    current = parent;
+  }
+  return null;
 }

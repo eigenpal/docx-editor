@@ -7,9 +7,36 @@
 // NCName: a name with no ':' — starts with a letter/_ then name chars.
 const NCNAME = /^[A-Za-z_][A-Za-z0-9._-]*$/;
 
-/** Whether a string is a valid XML NCName — a name with no colon. */
+// XML 1.0 (Fifth Edition) NameStartChar and NameChar, without the colon. One character
+// class followed by one starred class, anchored at both ends: the match is linear and
+// cannot backtrack. The `u` flag makes the astral range count code points, not halves.
+const XML_NAME_START =
+  'A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF' +
+  '\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD' +
+  '\\u{10000}-\\u{EFFFF}';
+const XML_NAME_REST = `${XML_NAME_START}\\-.0-9\\u00B7\\u0300-\\u036F\\u203F-\\u2040`;
+const XML_NCNAME = new RegExp(`^[${XML_NAME_START}][${XML_NAME_REST}]*$`, 'u');
+
+/**
+ * Whether a string is a valid XML NCName in the strict ASCII profile — a name with no colon.
+ *
+ * This is the rule for names the engine itself writes or accepts from a caller. Names read
+ * from a document use {@link isXmlNCName}, which admits every XML 1.0 name.
+ */
 export function isValidNCName(name: string): boolean {
   return NCNAME.test(name);
+}
+
+/**
+ * Whether a string is an XML 1.0 (Fifth Edition) NCName: a `Name` with no colon.
+ *
+ * The rule for names READ from a document, and for writing those names back. It admits
+ * non-ASCII letters such as `Dátum`. No character it admits can end a name in markup:
+ * whitespace, quotes, `<`, `>`, `&`, `=` and `/` are all outside the ranges.
+ */
+export function isXmlNCName(name: string): boolean {
+  // Almost every name is ASCII; the Unicode-mode class runs only when that test fails.
+  return NCNAME.test(name) || XML_NCNAME.test(name);
 }
 
 /** A QName is an optional `prefix:` (both NCNames) — never attacker-derived. */

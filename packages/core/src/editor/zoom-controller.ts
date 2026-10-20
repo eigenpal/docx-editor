@@ -13,7 +13,13 @@
 
 import type { ZoomMode } from '../contracts/editor.ts';
 import { surfaceScroller } from './surface-pages.ts';
-import { fitZoom, isFitMode } from './zoom-fit.ts';
+import {
+  REVIEW_MARKERS_GUTTER_PX,
+  fitZoom,
+  isFitMode,
+  reviewPaneEntitledZoom,
+} from './zoom-fit.ts';
+import { hostTimers, hostWindowOf } from './host-realm.ts';
 
 /** What the controller needs from the editor it serves. */
 export interface ZoomControllerHost {
@@ -37,6 +43,11 @@ export interface ZoomControllerHost {
   zoom(): number;
   /** Apply a fitted scale. The editor routes this through the same path as `setZoom`. */
   applyZoom(zoom: number): void;
+  /**
+   * Whether the review pane scrolls beside the page instead of shrinking a capped fit
+   * (`overflow: 'scroll'`). Scoped to the review pane: the navigation pane still counts.
+   */
+  reviewPaneScrolls?(): boolean;
 }
 
 export interface ZoomController {
@@ -57,13 +68,46 @@ export interface ZoomController {
   detach(): void;
 }
 
-/** The scroller's content box, or null when it cannot be measured. */
-function availableWidth(container: HTMLElement): number | null {
+/**
+ * The closed review pane's marker strip on both edges, in CSS px. The fallback for a host
+ * that marks the pane but has not published `--docx-review-strip`, so an unmeasured first
+ * frame fits as a measured one does.
+ */
+const REVIEW_STRIP_FALLBACK_PX = 2 * REVIEW_MARKERS_GUTTER_PX;
+
+/**
+ * The scroller's content box, or null when it cannot be measured.
+ *
+ * `reviewPaneScrolls` (the review pane's `overflow: 'scroll'`) changes what the REVIEW pane
+ * takes from the fit, and nothing else. With a review rail mounted, the review pane takes
+ * only the closed pane's marker strip (`--docx-review-strip`), whether it is open or closed,
+ * so opening or closing it never relays the page out.
+ *
+ * The navigation pane keeps its docked behavior in every overflow mode: the room it takes
+ * at the start edge still shrinks a fit. That room is the start padding beyond the closed
+ * strip's own half — `--docx-nav-shift` plus `--docx-review-gutter-start`, less half the
+ * strip. Reading the shift alone would size the page differently with the review pane open
+ * and closed, because the shift is solved against the start reservation standing beside it
+ * (the page clearance while open, the strip while closed). The sum is the same in both.
+ *
+ * Without a rail the setting has nothing to act on, and the paddings count as always.
+ */
+function availableWidth(container: HTMLElement, reviewPaneScrolls = false): number | null {
   const scroller = surfaceScroller(container);
   if (!scroller) return null;
   const width = scroller.clientWidth;
   if (!Number.isFinite(width) || width <= 0) return null;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
+  if (reviewPaneScrolls && scroller.hasAttribute('data-review-pane')) {
+    const published = Number.parseFloat(style?.getPropertyValue('--docx-review-strip') ?? '');
+    const strip = Number.isFinite(published) ? published : REVIEW_STRIP_FALLBACK_PX;
+    const half = strip / 2;
+    const shift = Number.parseFloat(style?.getPropertyValue('--docx-nav-shift') ?? '');
+    const start = Number.parseFloat(style?.getPropertyValue('--docx-review-gutter-start') ?? '');
+    const navigation =
+      (Number.isFinite(shift) ? shift : 0) + (Number.isFinite(start) ? start : half) - half;
+    return Math.max(width - strip - Math.max(navigation, 0), 0);
+  }
   if (!style) return width;
   // PHYSICAL, not logical. `clientWidth` is content + padding in physical terms, so these are
   // the two that reduce it whichever way the text runs — and the chrome above uses both
@@ -94,14 +138,15 @@ function availableWidth(container: HTMLElement): number | null {
 export function createZoomController(host: ZoomControllerHost): ZoomController {
   let observer: ResizeObserver | null = null;
   let observed: HTMLElement | null = null;
+  // Cancelled on the window that issued it: the scroller can move to another one in between.
+  const frames = hostTimers(() => observed);
   let frame: number | null = null;
   /** The authored page width the last fit was computed against; see `refitIfPageResized`. */
   let fittedPageWidthTwips: number | null = null;
 
   function cancelFrame(): void {
     if (frame === null) return;
-    const view = observed?.ownerDocument.defaultView;
-    view?.cancelAnimationFrame(frame);
+    frames.cancelAnimationFrame(frame);
     frame = null;
   }
 
@@ -110,7 +155,11 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (!isFitMode(mode)) return;
     const container = host.container();
     if (!container) return;
-    const width = availableWidth(container);
+    // A capped fit keeps its size beside the review pane under `overflow: 'scroll'`. An
+    // uncapped fit still fills the padded box.
+    const reviewPaneScrolls =
+      host.reviewPaneScrolls?.() === true && reviewPaneEntitledZoom(mode, host.zoom()) !== null;
+    const width = availableWidth(container, reviewPaneScrolls);
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
     if (pageWidthPx === null) return;
@@ -123,19 +172,24 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
       ...(mode.maxZoom !== undefined ? { maxZoom: mode.maxZoom } : {}),
     });
     if (next === null || next === host.zoom()) return;
+    // A rescale keeps the viewport centre in place, which scrolls sideways once the page is
+    // wider than the box (`overflow: 'scroll'`). A reader at the start edge stays there.
+    const scroller = surfaceScroller(container);
+    const atStart = scroller !== null && scroller.scrollLeft === 0;
     host.applyZoom(next);
+    if (atStart && scroller && scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
   }
 
   function schedule(): void {
-    const view = observed?.ownerDocument.defaultView;
     // No rAF (headless, a detached document) means measure now. Losing the coalescing is a
     // performance cost; losing the fit is a correctness one.
-    if (!view?.requestAnimationFrame) {
+    if (!observed || typeof hostWindowOf(observed).requestAnimationFrame !== 'function') {
       refit();
       return;
     }
+    frames.migrate();
     if (frame !== null) return;
-    frame = view.requestAnimationFrame(() => {
+    frame = frames.requestAnimationFrame(() => {
       frame = null;
       refit();
     });
@@ -157,8 +211,10 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
       observed = scroller;
       // Absent in a headless host. The editor still fits on attach, load and mode change; it
       // just does not track a resize nobody can perform.
-      if (typeof ResizeObserver !== 'undefined') {
-        observer = new ResizeObserver(schedule);
+      // The scroller's own window: an observer from another one never reports its boxes.
+      const view = hostWindowOf(scroller);
+      if (typeof view.ResizeObserver === 'function') {
+        observer = new view.ResizeObserver(schedule);
         observer.observe(scroller);
       }
       refit();

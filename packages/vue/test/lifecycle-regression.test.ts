@@ -127,7 +127,7 @@ describe('DocxEditorRoot lifecycle regressions', () => {
     }
   });
 
-  test('nested LocaleProvider catalogue change rebuilds exactly once', async () => {
+  test('nested LocaleProvider catalogue change preserves the editor instance', async () => {
     const instances: DocxEditorInstance[] = [];
     const outer = { _lang: 'en', toolbar: { file: 'File' } } as Translations;
     const inner = ref({ _lang: 'de', toolbar: { file: 'Datei' } } as Translations);
@@ -170,8 +170,7 @@ describe('DocxEditorRoot lifecycle regressions', () => {
       await flush();
       inner.value = { _lang: 'fr', toolbar: { file: 'Fichier' } };
       await flush();
-      expect(instances.length).toBe(2);
-      expect(instances[0]).not.toBe(instances[1]);
+      expect(instances).toHaveLength(1);
     } finally {
       app.unmount();
       container.remove();

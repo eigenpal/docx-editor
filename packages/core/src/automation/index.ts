@@ -47,6 +47,7 @@ export type {
   AutomationSpan,
   AutomationUnsubscribe,
   AutomationValue,
+  AutomationEndpoint,
 } from './protocol.ts';
 
 // Sections: page geometry in points, and what a write may author on one section.
@@ -57,11 +58,27 @@ export type {
 } from './sections.ts';
 
 // Which story a handle names: the body, a header or footer variant, or one note.
-export { HEADER_FOOTER_VARIANTS, type AutomationStoryId } from './stories.ts';
+export {
+  HEADER_FOOTER_VARIANTS,
+  type AutomationStoryId,
+  type AutomationShapeOwnerStory,
+} from './stories.ts';
+
+// Reads and payloads the operation vocabulary hands back.
+export type { AutomationAuthoringOperation } from './authoring-operations.ts';
+export type { AutomationInlinePictureRead, AutomationInlinePictureWrite } from './pictures.ts';
+export type { AutomationShapeRead, AutomationShapeType } from './shapes.ts';
+export type {
+  AutomationListBullet,
+  AutomationListLevelFormat,
+  AutomationListNumbering,
+} from './list-authoring.ts';
+export type { AutomationTableMutation } from './tables.ts';
 
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
   AutomationAlignment,
+  AutomationReadingOrder,
   AutomationFontRead,
   AutomationFontWrite,
   AutomationParagraphFormatRead,
@@ -88,6 +105,7 @@ export {
   type AutomationSelectionMode,
   type AutomationSpanRef,
   type AutomationTextProjection,
+  type AutomationCustomNodePayload,
 } from './operations.ts';
 
 // The headless host. The browser host adapter ships from the editor subpath, because it takes
@@ -101,3 +119,74 @@ export {
   type ServerAutomationHostRejection,
   type ServerAutomationHostResult,
 } from './server-host.ts';
+// `ServerAutomationHostOptions.contentLockPolicy` takes it.
+export type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+
+export {
+  createAutomationPaginationProvider,
+  type AutomationPaginationOptions,
+  paginationSnapshotOf,
+  type AutomationPaginationSnapshot,
+  type AutomationPaginationProvider,
+} from './pagination.ts';
+
+export type {
+  RevisionBatchResult,
+  RevisionBatchEntry,
+  RevisionBatchSkipReason,
+  RevisionBatchSkipDetail,
+} from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorResult,
+  RevisionAuthorSkipReason,
+} from '../store/store/revision-author-change.ts';
+
+// Anonymous diagnostics: the store reasons' public codes and the delivery path both hosts share.
+export {
+  byteSizeBucket,
+  countBucket,
+  createDiagnosticEmitter,
+  openDiagnosticCode,
+  reviewDiagnosticCode,
+  storeEditDiagnosticCode,
+  type DiagnosticEmitter,
+  type DiagnosticPayload,
+} from './diagnostics.ts';
+export {
+  diagnosticCodes,
+  explainDiagnostic,
+  type DiagnosticExplanation,
+} from './diagnostic-hints.ts';
+export {
+  diagnosticCause,
+  diagnosticCauses,
+  diagnosticErrorName,
+  documentPartKind,
+  exceptionCause,
+} from './diagnostic-context.ts';
+export type {
+  ByteSizeBucket,
+  CollaborationDiagnosticCode,
+  CountBucket,
+  CustomNodeDiagnosticCode,
+  DiagnosticCode,
+  DiagnosticErrorName,
+  DocumentOpenDiagnosticCode,
+  DocumentPartKind,
+  DocumentSaveDiagnosticCode,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
+  EditDiagnosticCode,
+  FontDiagnosticCode,
+  HistoryDiagnosticCode,
+  PerformanceDiagnosticCode,
+  ReviewDiagnosticCode,
+} from './diagnostic-vocabulary.ts';
+
+// The editor's history group handle, by type only, so an automation runtime can name it
+// without depending on the editor lane.
+export type { HistoryGroup, HistoryGroupOutcome } from '../contracts/editor-scope.ts';

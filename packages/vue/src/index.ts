@@ -21,6 +21,7 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { DocxEditorWindow, type DocxEditorWindowProps } from './editor/DocxEditorWindow';
 export { DocxEditorEquation } from './editor/DocxEditorEquation';
 
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
@@ -50,6 +51,13 @@ export {
   type ImageWrapTarget,
 } from './editor/useEditorValueCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { useCommentDraftRequest } from './editor/useCommentDraftRequest';
+export {
+  useEditorHostDocument,
+  type UseEditorHostDocumentReturn,
+} from './editor/useEditorHostDocument';
+export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export { useHighlightAt } from './editor/useHighlightAt';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -109,20 +117,33 @@ export {
 export {
   NAVIGATION_PANE_GAP,
   NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_MIN_PAGE_ROOM,
   NAVIGATION_PANE_WIDTH,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
   useDocumentOutline,
   useDocumentSearch,
+  useGoToBookmark,
   useNavigationPane,
   useNavigationShift,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
   type NavigationShiftInput,
   type NavigationTabValue,
   type OutlineHeading,
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
+  type DocumentSearchFindOptions,
+  type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
@@ -146,6 +167,8 @@ export {
   type ParagraphStylePartProps,
   type ParagraphStyleProps,
   type ToolbarButtonProps,
+  type DocxEditorToolbarGroupProps,
+  type DocxEditorToolbarSlotProps,
   type ToolbarPartComponent,
   type ToolbarPartProps,
   type ToolbarReviewersProps,
@@ -192,6 +215,8 @@ export {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,
@@ -212,6 +237,7 @@ export {
   type MenuActionProps,
   type MenuGroupProps,
   type MenuId,
+  type MenuItemBaseProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
@@ -219,6 +245,7 @@ export {
   type MenuReviewersProps,
   type MenuRowProps,
   type MenuSeparatorProps,
+  type MenuSubmenuBaseProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './editor/menu';
@@ -227,6 +254,7 @@ export {
   DocxEditorNavigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -281,6 +309,19 @@ export {
 } from './editor/DocxEditorFontNotice';
 
 export {
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
+  useOpenFailure,
+  type DocxEditorOpenFailureActionProps,
+  type DocxEditorOpenFailureComponent,
+  type DocxEditorOpenFailureContext,
+  type DocxEditorOpenFailureMessage,
+  type DocxEditorOpenFailureProps,
+  type UseOpenFailureOptions,
+  type UseOpenFailureReturn,
+} from './editor/DocxEditorOpenFailure';
+
+export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
@@ -305,7 +346,11 @@ export {
   type NormalizedImagePayload,
 } from './editor/images';
 
-export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+export {
+  useScopedChromeAnchor,
+  type ScopedChromeAnchor,
+  type ScopedChromeAnchorPlacement,
+} from './editor/useScopedChromeAnchor';
 
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
@@ -319,6 +364,35 @@ export {
   DocxEditorParagraphDialog,
   type DocxEditorParagraphDialogProps,
 } from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorWatermarkDialog,
+  useWatermarkDialog,
+  type DocxEditorWatermarkDialogProps,
+  type UseWatermarkDialogReturn,
+  type WatermarkDialogFieldName,
+} from './editor/DocxEditorWatermark';
+export {
+  DEFAULT_WATERMARK_PRESETS,
+  type WatermarkDialogFields,
+  type WatermarkDialogKind,
+  type WatermarkDialogLayout,
+} from './editor/watermark-dialog-model';
+export { useWatermark, type UseWatermarkReturn } from './editor/useWatermark';
+export {
+  DocxEditorBookmarkDialog,
+  useBookmarkDialog,
+  type BookmarkDialogFields,
+  type DocxEditorBookmarkDialogProps,
+  type UseBookmarkDialogReturn,
+} from './editor/DocxEditorBookmark';
+export {
+  DocxEditorSplitCellDialog,
+  useSplitCellDialog,
+  type DocxEditorSplitCellDialogProps,
+  type SplitCellDialogFields,
+  type UseSplitCellDialogReturn,
+} from './editor/DocxEditorSplitCell';
+export { useBookmarks, type UseBookmarksReturn } from './editor/useBookmarks';
 
 export {
   PaginatedDocxEditor,
@@ -374,6 +448,7 @@ export type {
 } from './types';
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   composeFontOrigins,
@@ -404,17 +479,44 @@ export {
   type RulerUnit,
 } from './rulerTicks';
 
-export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarGroup,
+  type ToolbarProps,
+  type SelectionFormatting,
+  type FormattingAction,
+  type TableAction,
+  type ParagraphAlignment,
+} from './components/Toolbar';
+export type { ListState, ListType } from './lib/listState';
+export type { FontOption } from './lib/fontOptions';
+export type { DocumentStyleSummary } from './lib/stylePreview';
+export type { DocxEditorRefCallback } from './docx-editor-ref-callback';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 
 export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  DocumentOpenFailure,
+  DocumentOpenFailureReason,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
+  TextMatch,
   Editor,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,
   EditorScope,
   PageSetup,
+  ScrollToAnchorOptions,
+  Watermark,
+  WatermarkState,
 } from '@docx-editor.dev/core/contracts/editor';
 export type {
   ReviewAuthorInfo,
@@ -424,12 +526,132 @@ export type {
 } from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type UseTextFormFieldDialogReturn,
+  type DocxEditorTextFormFieldDialogProps,
+} from './editor/DocxEditorTextFormFieldDialog';
+export type { DocxEditorPopups } from './editor/popup-config';
+export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';
+
+export {
+  DocxEditorImageAltTextPopup,
+  type DocxEditorImageAltTextPopupProps,
+} from './editor/images/ImageAltText';
+export {
+  DocxEditorNotePropertiesDialog,
+  type DocxEditorNotePropertiesDialogProps,
+  DocxEditorNotePreview,
+  type DocxEditorNotePreviewProps,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotesContextMenuProps,
+} from './editor/DocxEditorNotes';
+
+export {
+  DocxEditorContentControlWidget,
+  type DocxEditorContentControlWidgetProps,
+  type DocxEditorContentControlWidgetNamespace,
+} from './editor/DocxEditorContentControlWidget';
+export {
+  useContentControlWidget,
+  type UseContentControlWidgetResult,
+  type ContentControlWidgetEntry,
+} from './editor/content-control-widget/context';
+export {
+  type DocxEditorContentControlWidgetPartProps,
+  type ContentControlWidgetDayProps,
+  type ContentControlWidgetItemProps,
+  type ContentControlWidgetPictureProps,
+} from './editor/content-control-widget/parts';
+export {
+  DocxEditorInvalidTextFormFieldDialog,
+  type DocxEditorInvalidTextFormFieldDialogProps,
+} from './editor/DocxEditorInvalidTextFormFieldDialog';
+export {
+  DocxEditorImageInsertErrorDialog,
+  type DocxEditorImageInsertErrorDialogProps,
+} from './editor/images/ImageInsertErrorDialog';
+
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
+
+export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
+
+export { createDocumentRefresh, DocumentRefreshError } from '@docx-editor.dev/core/editor';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
+} from '@docx-editor.dev/core/editor';
+
+export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorExportDialog,
+  type DocxEditorExportDialogProps,
+} from './editor/DocxEditorExportDialog';
+
+export {
+  DocxEditorPrintDialog,
+  type DocxEditorPrintDialogProps,
+} from './editor/DocxEditorPrintDialog';
+
+export {
+  DocxEditorRevisionMarkup,
+  type DocxEditorRevisionMarkupProps,
+} from './editor/DocxEditorRevisionMarkup';
+
+export type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  RevisionMarkupColor,
+  RevisionMarkupNamedColor,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorRevisionMarkupDialog,
+  useRevisionMarkupDialog,
+  type DocxEditorRevisionMarkupDialogProps,
+  type UseRevisionMarkupDialogReturn,
+} from './editor/DocxEditorRevisionMarkupDialog';
+export type {
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
+} from '@docx-editor.dev/core/editor';
+
 export type {
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,
 } from '@docx-editor.dev/core/output';
-
 export {
   DocxEditorUnsupportedElement,
   type DocxEditorUnsupportedElementProps,

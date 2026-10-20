@@ -13,6 +13,24 @@ import {
   selectionsEqual,
   semanticSelectionFromDom,
 } from '../dom-selection.ts';
+import { layoutContext, load } from '../../layout/__tests__/anchored-drawing-test-fixtures.ts';
+
+const PICTURE_NAMESPACES =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+
+/** An inline picture 100pt wide and 10pt tall. */
+const PICTURE =
+  '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  '<wp:extent cx="1270000" cy="127000"/><wp:docPr id="1" name="p1"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+  '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="127000"/></a:xfrm><a:prstGeom prst="rect"/>' +
+  '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>';
 
 /** A painted line: spans stamped with the source range they were laid out from. */
 function paintedLine(
@@ -331,6 +349,215 @@ describe('the empty-paragraph caret', () => {
   });
 });
 
+describe('the position just after an inline picture', () => {
+  /** A painted page whose one paragraph is `content`, with a 100pt inline picture in it. */
+  function painted(
+    content: string,
+    showParagraphMarks = false
+  ): { root: HTMLElement; paragraphId: string } {
+    const part = load(
+      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p>${content}</w:p></w:body></w:document>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1, showParagraphMarks });
+    document.body.append(root);
+    return {
+      root,
+      paragraphId: root.querySelector<HTMLElement>('.docx-line')!.dataset.paragraphId!,
+    };
+  }
+
+  /** Write `position` as a caret and read the browser's selection back. */
+  function roundTrip(root: HTMLElement, position: { paragraphId: string; offset: number }) {
+    expect(applySelectionToDom(root, { anchor: position, head: position }, getSelection())).toBe(
+      true
+    );
+    const selection = getSelection()!;
+    return positionFromDomPoint(selection.anchorNode!, selection.anchorOffset, root);
+  }
+
+  test('a picture alone in its paragraph keeps a caret on each side', () => {
+    // Its line paints no text. Writing the caret after the picture as the line's child index
+    // 0 read back as the paragraph start, so typing landed in front of the picture.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>`);
+    expect(root.querySelector('.docx-line [data-start]')).toBeNull();
+    for (const offset of [0, 1])
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    root.remove();
+  });
+
+  test('a range that ends after a lone picture is written whole', () => {
+    // Select All ending in such a paragraph: refusing that end drew no highlight at all.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>`);
+    const range = { anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 1 } };
+    expect(applySelectionToDom(root, range, getSelection())).toBe(true);
+    expect(semanticSelectionFromDom(root, getSelection())).toEqual(range);
+    root.remove();
+  });
+
+  test('a picture that ends a line of text keeps a caret after it', () => {
+    const { root, paragraphId } = painted(`<w:r><w:t>ab</w:t>${PICTURE}</w:r>`);
+    for (const offset of [2, 3])
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    root.remove();
+  });
+
+  test('a picture that opens a line of text keeps a caret before it', () => {
+    // No span starts at offset 0, so the caret there was not written at all: Home drew no
+    // native caret and a shift-extend from the paragraph start drew no highlight.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}<w:t>cd</w:t></w:r>`);
+    for (const offset of [0, 1, 2]) {
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    }
+    root.remove();
+  });
+
+  test('a picture that opens a wrapped line keeps the caret before it on that line', () => {
+    // The text before the picture fills the first line and ends at the picture's offset.
+    const words = 'abcd '.repeat(15);
+    const { root, paragraphId } = painted(
+      `<w:r><w:t xml:space="preserve">${words}</w:t>${PICTURE}</w:r>`
+    );
+    const lines = root.querySelectorAll('.docx-line');
+    expect(lines.length).toBe(2);
+    const offset = words.length;
+    expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    expect(lines[1]!.contains(getSelection()!.anchorNode)).toBe(true);
+    root.remove();
+  });
+
+  test('a position a paragraph of pictures cannot paint is not written at its start', () => {
+    // The hidden run after the picture paints nothing, so its end has no DOM place.
+    const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>xyz</w:t></w:r>';
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>${hidden}`);
+    const end = { paragraphId, offset: 4 };
+    expect(applySelectionToDom(root, { anchor: end, head: end }, getSelection())).toBe(false);
+    root.remove();
+  });
+
+  test('the caret after a picture reads back there when hidden text follows it', () => {
+    // The hidden run paints nothing, so the next painted text starts three offsets later.
+    const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>xyz</w:t></w:r>';
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>${hidden}<w:r><w:t>ab</w:t></w:r>`);
+    expect(roundTrip(root, { paragraphId, offset: 1 })).toEqual({ paragraphId, offset: 1 });
+    root.remove();
+  });
+
+  test('an endpoint on the picture spacer itself reads back on that side of the picture', () => {
+    const { root, paragraphId } = painted(`<w:r><w:t>ab</w:t>${PICTURE}<w:t>cd</w:t></w:r>`);
+    const spacer = root.querySelector('.docx-inline-drawing-advance')!;
+    expect(positionFromDomPoint(spacer, 0, root)).toEqual({ paragraphId, offset: 2 });
+    expect(positionFromDomPoint(spacer, 1, root)).toEqual({ paragraphId, offset: 3 });
+    root.remove();
+  });
+
+  test('an endpoint on the paragraph mark reads back at the end of its line', () => {
+    // The mark's seat is furniture after the line's content, not the paragraph's start.
+    for (const content of [`<w:r><w:t>ab</w:t>${PICTURE}</w:r>`, `<w:r><w:t>abc</w:t></w:r>`]) {
+      const { root, paragraphId } = painted(content, true);
+      const mark = root.querySelector('.docx-paragraph-mark')!;
+      expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId, offset: 3 });
+      expect(positionFromDomPoint(mark.firstChild!, 1, root)).toEqual({ paragraphId, offset: 3 });
+      root.remove();
+    }
+  });
+
+  test('an endpoint on a line-break mark reads back before the break', () => {
+    const { root, paragraphId } = painted('<w:r><w:t>ab</w:t><w:br/><w:t>cd</w:t></w:r>', true);
+    const mark = root.querySelector('.docx-line-break-mark')!;
+    expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId, offset: 2 });
+    expect(positionFromDomPoint(mark.firstChild!, 1, root)).toEqual({ paragraphId, offset: 2 });
+    root.remove();
+  });
+
+  test('an endpoint on the paragraph fragment resolves through the picture', () => {
+    // A triple-click or a drag past the line end can report the fragment, whose children are
+    // lines. Scanning those lines for text alone stepped over the picture at either end.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}<w:t>cd</w:t></w:r>`);
+    const fragment = root.querySelector('.docx-line')!.parentElement!;
+    expect(positionFromDomPoint(fragment, 0, root)).toEqual({ paragraphId, offset: 0 });
+    root.remove();
+    const alone = painted(`<w:r>${PICTURE}</w:r>`);
+    const lone = alone.root.querySelector('.docx-line')!.parentElement!;
+    expect(positionFromDomPoint(lone, lone.childNodes.length, alone.root)).toEqual({
+      paragraphId: alone.paragraphId,
+      offset: 1,
+    });
+    alone.root.remove();
+  });
+});
+
+test("an endpoint on a float's wrap jump spacer reads back beside it, not at the line start", () => {
+  const root = paintedLine([
+    { text: 'ab', paragraphId: 'p1', start: 0 },
+    { text: 'cd', paragraphId: 'p1', start: 2 },
+  ]);
+  const line = root.querySelector<HTMLElement>('.docx-line')!;
+  line.dataset.paragraphId = 'p1';
+  const jump = document.createElement('span');
+  jump.className = 'docx-wrap-advance';
+  jump.dataset.docxMarker = '';
+  line.insertBefore(jump, line.lastChild);
+  for (const offset of [0, 1]) {
+    expect(positionFromDomPoint(jump, offset, root)).toEqual({ paragraphId: 'p1', offset: 2 });
+  }
+});
+
+test('a picture spacer in an inert line is not a selection position', () => {
+  // A text box that is not being edited strips its lines' paragraph binding. A picture inside
+  // it must stay as inert as its text, or a drag past the body line lands in the text box.
+  const root = paintedLine([{ text: 'body', paragraphId: 'p1', start: 0 }]);
+  const line = root.querySelector<HTMLElement>('.docx-line')!;
+  line.dataset.paragraphId = 'p1';
+  const inert = document.createElement('div');
+  const spacer = document.createElement('span');
+  spacer.className = 'docx-inline-drawing-advance';
+  spacer.dataset.drawingParagraphId = 'textbox-p';
+  spacer.dataset.drawingStart = '0';
+  inert.append(spacer);
+  line.append(inert);
+  expect(positionFromDomPoint(line, line.childNodes.length, root)).toEqual({
+    paragraphId: 'p1',
+    offset: 4,
+  });
+  inert.dataset.paragraphId = 'textbox-p';
+  expect(positionFromDomPoint(line, line.childNodes.length, root)).toEqual({
+    paragraphId: 'textbox-p',
+    offset: 1,
+  });
+});
+
+describe('a paragraph that paints nothing at its end offset', () => {
+  test('a range ending there is still written', () => {
+    // Only a floating picture: offset 1 has no painted place. The range keeps its highlight
+    // by ending at the line, as it always has, rather than failing as a whole.
+    const part = load(
+      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p><w:r><w:drawing>` +
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" ' +
+        'locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+        '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0' +
+        '</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0' +
+        '</wp:posOffset></wp:positionV><wp:extent cx="127000" cy="127000"/><wp:wrapNone/>' +
+        '<wp:docPr id="1" name="float"/></wp:anchor></w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1 });
+    document.body.append(root);
+    const paragraphId = root.querySelector<HTMLElement>('.docx-line')!.dataset.paragraphId!;
+    const range = { anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 1 } };
+    expect(applySelectionToDom(root, range, getSelection())).toBe(true);
+    root.remove();
+  });
+});
+
 test('a model position with CSS delimiters in its id is mapped without parsing them', () => {
   const paragraphId = 'p"#]';
   const root = paintedLine([{ text: 'safe', paragraphId, start: 0 }]);
@@ -366,4 +593,59 @@ describe('selection equality', () => {
       )
     ).toBe(false);
   });
+});
+
+test('an endpoint on a line-break mark in an inert text box line resolves without throwing', () => {
+  // An inert text box keeps its runs' `data-start` but drops their paragraph ids.
+  const root = document.createElement('div');
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  for (const [start, text] of [
+    [0, 'ab'],
+    [2, 'cd'],
+    [4, '\n'],
+  ] as const) {
+    const run = document.createElement('span');
+    run.className = 'layout-run';
+    run.dataset.start = String(start);
+    run.dataset.end = String(start + text.length);
+    run.textContent = text;
+    line.append(run);
+  }
+  const seat = document.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
+  const mark = document.createElement('span');
+  mark.className = 'docx-line-break-mark';
+  mark.textContent = '↵';
+  seat.append(mark);
+  line.append(seat);
+  root.append(line);
+  expect(() => positionFromDomPoint(mark, 0, root)).not.toThrow();
+});
+
+test('an endpoint on a paragraph mark does not read back inside a text box on its line', () => {
+  // Inline drawings paint after the line's text, and an edited text box has runs of its own.
+  const root = paintedLine([{ text: 'ab', paragraphId: 'p', start: 0 }]);
+  const line = root.querySelector('.docx-line')!;
+  line.setAttribute('data-paragraph-id', 'p');
+  const box = document.createElement('div');
+  const boxLine = document.createElement('div');
+  boxLine.className = 'docx-line';
+  const boxRun = document.createElement('span');
+  boxRun.dataset.paragraphId = 'box';
+  boxRun.dataset.start = '0';
+  boxRun.dataset.end = '3';
+  boxRun.textContent = 'xyz';
+  boxLine.append(boxRun);
+  box.append(boxLine);
+  const seat = document.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
+  const mark = document.createElement('span');
+  mark.className = 'docx-paragraph-mark';
+  mark.textContent = '¶';
+  seat.append(mark);
+  line.append(box, seat);
+  expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId: 'p', offset: 2 });
 });

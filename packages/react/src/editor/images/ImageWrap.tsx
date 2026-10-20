@@ -10,6 +10,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 const WRAP_OPTIONS: readonly {
   readonly value: ImageWrapTarget;
@@ -62,7 +63,7 @@ export function ImageWrap({ className, hidden, asChild, children }: ImageWrapPro
     if (!open) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (root && isDomNode(event.target) && root.contains(event.target)) return;
       setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -71,11 +72,12 @@ export function ImageWrap({ className, hidden, asChild, children }: ImageWrapPro
       setOpen(false);
       triggerRef.current?.focus();
     };
-    document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown, true);
+    doc.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
 

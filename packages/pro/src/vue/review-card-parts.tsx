@@ -3,16 +3,20 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+// The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
+/** @jsxImportSource vue */
 
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   onBeforeUnmount,
   onMounted,
   type PropType,
   type VNode,
 } from 'vue';
+import { isDomNode, hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
@@ -20,8 +24,10 @@ import {
   REJECT_ICON,
   icon,
   resolvedCommentIcon,
+  reviewBadge,
 } from './review-icons.tsx';
-import { revisionLabelKey } from './review-labels.ts';
+import { revisionItemLabel } from './review-labels.ts';
+import { reviewRefusalFallbackKey, reviewRefusalLabelKey } from '../review/review-refusal.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -36,6 +42,7 @@ import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './revi
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
+import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useRail,
@@ -43,7 +50,7 @@ const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useLabel: useReviewLabel,
 });
 
-export const { ReviewDraft, ReviewReply } = createReviewComposeParts({
+export const { ReviewDraft, ReviewReply, ReviewBalloonReply } = createReviewComposeParts({
   useRail,
   useItem: useReviewItem,
   useLabel: useReviewLabel,
@@ -92,7 +99,7 @@ export const ReviewAvatar = markPart(
           'data-testid': 'review-avatar',
           'aria-hidden': true,
         };
-        if (props.asChild) return <Slot {...shared}>{custom}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => custom }}</Slot>;
         const avatarUrl = rail.value.authorInfo.get(entry.author)?.style?.avatarUrl;
         const face =
           custom ??
@@ -130,7 +137,7 @@ export const ReviewAuthor = markPart(
           class: `docx-review__author${props.className ? ` ${props.className}` : ''}`,
           'data-testid': 'review-author',
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <span {...shared}>{slots.default?.() ?? author}</span>;
       };
     },
@@ -157,7 +164,7 @@ export const ReviewTime = markPart(
           'data-testid': 'review-time',
           datetime: raw,
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <time {...shared}>{slots.default?.() ?? REVIEW_DATE_FORMAT.format(when)}</time>;
       };
     },
@@ -177,17 +184,14 @@ export const ReviewSummary = markPart(
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
         const text = entry.text;
-        const label =
-          entry.kind !== 'revision'
-            ? null
-            : t(revisionLabelKey(entry.revisionKind, entry.item.markDirection));
+        const label = entry.kind !== 'revision' ? null : revisionItemLabel(entry.item, t);
         const replaced = entry.kind === 'revision' && entry.revisionKind === 'replace';
         const shared = {
           class: `docx-review__summary${props.className ? ` ${props.className}` : ''}`,
           'data-testid': 'review-summary',
           'data-review-selectable': '',
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         const custom = slots.default?.();
         if (custom) return <div {...shared}>{custom}</div>;
         return (
@@ -269,7 +273,7 @@ function createActionPart(
                 disabledReason={disabledReason}
                 slotProps={shared}
               >
-                {slots.default?.()}
+                {{ default: () => slots.default?.() }}
               </ReviewActionSlot>
             );
           }
@@ -304,6 +308,78 @@ export const ReviewReject = createActionPart(
   (review, entry) => review.reject(entry),
   (entry) => entry.kind === 'revision' && !entry.readOnly
 );
+
+/**
+ * Why the card's last action did not land, when the editor refused it: an external refresh,
+ * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
+ * refused reply is shown by the reply line instead.
+ *
+ * Plain text, readable with the card: the rail's live region is what announces it, because a
+ * live region inside a `role="button"` card is not reliably announced. @public
+ */
+export const ReviewRefusal = markPart(
+  defineComponent({
+    name: 'ReviewRefusal',
+    props: { className: String, hidden: Boolean, asChild: Boolean },
+    setup(props, { slots }) {
+      const rail = useRail();
+      const entryRef = useReviewItem();
+      const t = useReviewLabel();
+      return () => {
+        const entry = entryRef.value;
+        const refusal = rail.value.review.lastRefusal;
+        if (props.hidden || !entry || !refusal) return null;
+        if (refusal.key !== entry.key || refusal.action === 'reply') return null;
+        const shared = {
+          class: `docx-review__refused${props.className ? ` ${props.className}` : ''}`,
+          'data-testid': 'review-refusal',
+          'data-refusal-code': refusal.code,
+        };
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
+        return (
+          <p {...shared}>
+            {slots.default?.() ??
+              t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused', refusal.final))}
+          </p>
+        );
+      };
+    },
+  }),
+  'Refusal'
+);
+
+/**
+ * The rail's one live region for refused review writes, so a screen reader hears the cause of
+ * any of them: a card action, a reply, or a new comment, from the packaged parts or from a
+ * host's own controls over `useReview()`.
+ *
+ * Re-keyed per refusal, so the same refusal twice is announced twice.
+ */
+export const ReviewRefusalAnnouncer = defineComponent({
+  name: 'ReviewRefusalAnnouncer',
+  setup() {
+    const rail = useRail();
+    const t = useReviewLabel();
+    return () => {
+      const refusal = rail.value.review.lastRefusal;
+      return (
+        <span class="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
+          {refusal ? (
+            <span key={refusal.sequence}>
+              {t(
+                reviewRefusalLabelKey(
+                  refusal.code,
+                  reviewRefusalFallbackKey(refusal.action),
+                  refusal.final
+                )
+              )}
+            </span>
+          ) : null}
+        </span>
+      );
+    };
+  },
+});
 
 /** @public */
 export const ReviewDelete = markPart(
@@ -348,7 +424,7 @@ export const ReviewDelete = markPart(
               disabledReason={disabledReason}
               slotProps={shared}
             >
-              {slots.default?.()}
+              {{ default: () => slots.default?.() }}
             </ReviewActionSlot>
           );
         }
@@ -358,6 +434,21 @@ export const ReviewDelete = markPart(
   }),
   'Delete'
 );
+
+/** A reply's own author hooks, so it draws in its author's colour inside another's card. */
+function replyAuthorAttributes(
+  author: string,
+  rail: ReturnType<typeof useRail>['value']
+): Record<string, unknown> {
+  if (!author) return {};
+  const info = rail.authorInfo.get(author);
+  const slot = rail.authorSlots.get(author) ?? 0;
+  return {
+    'data-review-author': author,
+    'data-review-author-slot': authorSlot(info, slot),
+    style: authorCardStyle(author, info, slot),
+  };
+}
 
 /** @public */
 export const ReviewReplies = markPart(
@@ -379,19 +470,28 @@ export const ReviewReplies = markPart(
           <ol class={`docx-review__replies${props.className ? ` ${props.className}` : ''}`}>
             {replies.map((reply) => (
               <ReviewReplyScope key={reply.key} entry={reply}>
-                <li class="docx-review__reply" data-testid="review-reply">
-                  <div class="docx-review__head">
-                    <ReviewAvatar />
-                    <div class="docx-review__meta">
-                      <ReviewAuthor />
-                      <ReviewTime />
-                    </div>
-                    <div class="docx-review__actions">
-                      <ReviewDelete />
-                    </div>
-                  </div>
-                  <ReviewSummary />
-                </li>
+                {{
+                  default: () => (
+                    <li
+                      class="docx-review__reply"
+                      data-testid="review-reply"
+                      // Each reply draws in its OWN author's colour, not the thread's.
+                      {...replyAuthorAttributes(reply.author, rail.value)}
+                    >
+                      <div class="docx-review__head">
+                        <ReviewAvatar />
+                        <div class="docx-review__meta">
+                          <ReviewAuthor />
+                          <ReviewTime />
+                        </div>
+                        <div class="docx-review__actions">
+                          <ReviewDelete />
+                        </div>
+                      </div>
+                      <ReviewSummary />
+                    </li>
+                  ),
+                }}
               </ReviewReplyScope>
             ))}
           </ol>
@@ -460,11 +560,12 @@ const ReviewCardPreset = defineComponent({
                 {take('Reject', <ReviewReject />)}
                 {take('Resolve', <ReviewResolve />)}
                 {take('Reopen', <ReviewReopen />)}
-                {take('Delete', <ReviewDelete />)}
+                {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
               </div>
             ) : null}
           </div>
           {take('Summary', <ReviewSummary />)}
+          {take('Refusal', <ReviewRefusal />)}
           {take('Replies', <ReviewReplies />)}
           {take('Reply', <ReviewReply />)}
           {overrides.value.__extra}
@@ -487,12 +588,14 @@ export const ReviewCard = markPart(
       let resolvedDetailsNode: HTMLDetailsElement | null = null;
       const bindResolvedDetails = (vnode: VNode) => {
         resolvedDetailsNode =
-          vnode.el instanceof HTMLDetailsElement ? vnode.el : resolvedDetailsNode;
+          isHTMLElementNode(vnode.el) && vnode.el.localName === 'details'
+            ? (vnode.el as HTMLDetailsElement)
+            : resolvedDetailsNode;
       };
       const closeOnOutsidePointer = (event: PointerEvent) => {
         if (
           resolvedDetailsNode?.open &&
-          event.target instanceof Node &&
+          isDomNode(event.target) &&
           !resolvedDetailsNode.contains(event.target)
         ) {
           rail.value.setExpandedResolvedKey(null);
@@ -500,15 +603,28 @@ export const ReviewCard = markPart(
           resolvedDetailsNode.open = false;
         }
       };
-      onMounted(() => document.addEventListener('pointerdown', closeOnOutsidePointer, true));
-      onBeforeUnmount(() =>
-        document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
-      );
+      // The card's own document: a rail in a pop-out window dismisses on presses there.
+      let listening: Document | null = null;
+      const instance = getCurrentInstance();
+      onMounted(() => {
+        listening = hostDocumentOf(instance?.proxy?.$el as Node | null);
+        listening.addEventListener('pointerdown', closeOnOutsidePointer, true);
+      });
+      onBeforeUnmount(() => {
+        listening?.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+        listening = null;
+      });
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
-        const { review, authorSlots, authorInfo, expandedResolvedKey, setExpandedResolvedKey } =
-          rail.value;
+        const {
+          review,
+          authorSlots,
+          authorInfo,
+          expandedResolvedKey,
+          setExpandedResolvedKey,
+          commentMarkers,
+        } = rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
         const resolvedCollapsible = !props.asChild && entry.kind === 'comment' && entry.resolved;
         const shared = {
@@ -536,19 +652,11 @@ export const ReviewCard = markPart(
           ...(!resolvedCollapsible
             ? {
                 onMousedown: (event: MouseEvent) => {
-                  if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) {
-                    return;
-                  }
+                  if (keepsPressFocus(event.target)) return;
                   (event.currentTarget as HTMLElement).focus({ preventScroll: true });
                 },
                 onClick: (event: MouseEvent) => {
-                  if (
-                    (event.target as HTMLElement | null)?.closest(
-                      'button, input, textarea, .docx-review__reply-box, [data-review-selectable]'
-                    )
-                  ) {
-                    return;
-                  }
+                  if (isCardControl(event.target)) return;
                   if (!entry.isActive) review.setActive(entry.key);
                 },
                 onKeydown: (event: KeyboardEvent) => {
@@ -560,7 +668,7 @@ export const ReviewCard = markPart(
               }
             : {}),
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         if (resolvedCollapsible) {
           return h(
             'details',
@@ -587,7 +695,7 @@ export const ReviewCard = markPart(
                 },
                 [
                   h('span', { class: 'docx-review__resolved-status' }, t('review.resolved')),
-                  resolvedCommentIcon(),
+                  commentMarkers === 'initials' ? reviewBadge('', 0, true) : resolvedCommentIcon(),
                 ]
               ),
               h(ReviewCardPreset, null, { default: () => slots.default?.() }),

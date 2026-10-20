@@ -10,12 +10,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // enclose, and a bookmark whose markers left with the text they surrounded refuses rather than
 // answering where they used to be.
 //
-// `start` AND `end` ARE NOT HERE, and `delete` is not either. The first two are document-wide
-// character offsets — the coordinate space already de-selected on `Range` for the same reason: this
-// engine addresses positions as a paragraph identity plus a UTF-16 offset, and a whole-document
-// counter would go stale under every edit above it. `delete` would have to remove a marker pair,
-// which is not an operation the canonical write path offers. Both are recorded as omissions in
-// `compat/manifest.json` rather than shipped as members that refuse.
+// `start` AND `end` ARE NOT HERE. They are document-wide character offsets — the coordinate space
+// already de-selected on `Range` for the same reason: this engine addresses positions as a
+// paragraph identity plus a UTF-16 offset, and a whole-document counter would go stale under
+// every edit above it. Both are recorded as omissions in `compat/manifest.json` rather than
+// shipped as members that refuse. `delete` removes the marker pair and keeps the text.
 
 import {
   ObjectPath,
@@ -41,9 +40,8 @@ import { Range } from './range.ts';
  * enclose. A bookmark whose markers left with the text they surrounded refuses rather than
  * answering where they used to be.
  *
- * `start`, `end` and `delete` are absent by design: the first two are document-wide character
- * offsets, the coordinate space this API does not maintain, and `delete` would have to remove a
- * marker pair, which the canonical write path does not offer.
+ * `start` and `end` are absent by design: they are document-wide character offsets, the
+ * coordinate space this API does not maintain.
  *
  * @public
  */
@@ -103,26 +101,39 @@ export class Bookmark extends ModelObject implements PromisedItem {
   select(selectionMode_?: SelectionMode): void {
     const target = `${this.path.label}.select`;
     const mode = selectionMode(selectionMode_, target);
-    this.requireAddressable();
+    this.requireUsablePath();
     if (!this.internals.capabilities.selection) fail({ code: 'NotSupported', target });
-    const bookmark = this.#handle();
     // One canonical operation: resolving the bookmark and moving the reader belong to the same
     // batch. A pending Range cannot be targeted until a previous sync makes it addressable.
     this.command('select', () => ({
       op: 'selectBookmark',
-      bookmark,
+      bookmark: this.#handle(),
       mode: mode === 'Select' ? 'select' : mode === 'Start' ? 'start' : 'end',
     }));
+  }
+
+  /**
+   * Delete this bookmark. The text it marks stays.
+   *
+   * @example
+   * ```ts
+   * const bookmark = context.document.body.bookmarks.getFirst();
+   * bookmark.delete();
+   * await context.sync();
+   * ```
+   */
+  delete(): void {
+    this.requireUsablePath();
+    this.command('delete', () => ({ op: 'deleteBookmark', target: { bookmark: this.#handle() } }));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['name']).includes('name')) return;
     const label = `${this.path.label}.name`;
-    const bookmark = this.#handle();
     this.read(
       label,
-      () => ({ op: 'getBookmarkName', bookmark }),
+      () => ({ op: 'getBookmarkName', bookmark: this.#handle() }),
       (value) => {
         this.setLoadedProperty('name', hydratedText(value, label));
       }
@@ -130,11 +141,10 @@ export class Bookmark extends ModelObject implements PromisedItem {
   }
 
   #rangeAt(label: string): Range {
-    const bookmark = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getBookmarkRange', bookmark }),
+      () => ({ op: 'getBookmarkRange', bookmark: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }

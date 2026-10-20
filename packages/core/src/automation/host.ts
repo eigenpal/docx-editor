@@ -16,11 +16,19 @@
 // failing operation with a code and everything else as `skipped`. There is no path through
 // this file that writes part of a batch.
 
+import {
+  trackingStep,
+  trackPlannedChanges,
+  supportsTrackedAutomationOperation,
+  type LocalTrackingState,
+} from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
 import { documentReads, type AutomationPackageReads } from './reads.ts';
+import { createReadTexts, stampEndpoints, staleEndpointDetail } from './stale-spans.ts';
 import type { AutomationOperation } from './operations.ts';
 import type {
   AutomationBatchRequest,
@@ -58,6 +66,21 @@ function automationError(
 
 /** Map a store story-transaction refusal onto the protocol code a caller can handle. */
 function storeTransactionError(reason: string): AutomationError {
+  if (
+    reason === 'review-module-required' ||
+    reason === 'automation-structural-tracking-unsupported'
+  )
+    return automationError(
+      'unsupported-capability',
+      'this edit requires a supported review mode',
+      reason
+    );
+  if (reason === 'unsupported-revision:foreign-insertion')
+    return automationError(
+      'unsupported-revision',
+      "the new text would land inside a container within another author's pending insertion",
+      reason
+    );
   const unsupported =
     reason === 'unsupported-revision' || reason.startsWith('unsupported-revision:');
   return automationError(
@@ -90,21 +113,37 @@ function refuse(
   };
 }
 
+/** The index of the `nth` select operation in a batch: the one a failed selection came from. */
+function nthSelect(operations: readonly AutomationOperation[], nth: number): number {
+  let seen = -1;
+  const index = operations.findIndex(
+    (operation) =>
+      (operation.op === 'selectSpan' || operation.op === 'selectBookmark') && ++seen === nth
+  );
+  return index < 0 ? 0 : index;
+}
+
 export function createAutomationHost(composition: AutomationHostComposition): AutomationHost {
   const { port } = composition;
   const capabilities = Object.freeze({ ...composition.capabilities });
   const handles = createHandleTable();
   const listeners = new Set<(event: AutomationChangeEvent) => void>();
   let disposed = false;
+  let tracking: LocalTrackingState = { mode: 'Off' };
+  let executing = 0;
+  let pendingEvent: AutomationChangeEvent | null = null;
   /** Reads keyed on package IDENTITY: packages are immutable, so an edit replaces the key. */
   let reads: { readonly pkg: OoxmlPackage; readonly value: AutomationPackageReads } | null = null;
+  /** What each answered endpoint's paragraph said, so a later use of it can be checked. */
+  const texts = createReadTexts();
 
   // Only wired when the host claims events. A capability that is false must not fire.
   const unsubscribePort = capabilities.events
     ? port.subscribe(() => {
         if (disposed) return;
         const event: AutomationChangeEvent = Object.freeze({ revision: port.revision() });
-        for (const listener of [...listeners]) listener(event);
+        if (executing > 0) pendingEvent = event;
+        else for (const listener of [...listeners]) listener(event);
       })
     : () => {};
 
@@ -115,7 +154,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     return value;
   };
 
-  const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
+  const executeBatch = (request: AutomationBatchRequest): AutomationBatchResponse => {
     const operations: readonly AutomationOperation[] = Array.isArray(request?.operations)
       ? request.operations
       : [];
@@ -153,14 +192,44 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
+    // Taken once, before any post-commit read, so the one-entry reads cache ends on the
+    // committed package the next batch starts from.
+    const start = readsOf(pkg);
+    // An endpoint read before its paragraph changed names other text now. Refuse it rather
+    // than edit whatever sits at the old offsets.
+    for (let index = 0; index < operations.length; index += 1) {
+      const detail = staleEndpointDetail(operations[index], revision, texts, handles, start);
+      if (detail)
+        return refuse(
+          operations,
+          index,
+          detail === 'invalid-read-revision'
+            ? automationError('invalid-offset', 'an endpoint carries an invalid readAt', detail)
+            : automationError(
+                'stale-revision',
+                'that range was read before its text changed',
+                detail
+              ),
+          revision
+        );
+    }
+
+    const allocationActor = port.allocationActor?.();
     const planner = createBatchPlanner({
       handles,
-      reads: readsOf(pkg),
+      reads: start,
       capabilities,
+      collaborative: port.collaborative?.() ?? false,
+      trackedRangeReplacement: port.trackedRangeReplacement?.() ?? true,
       // Read ONCE per batch: the formatting lanes must not answer one operation against
       // All Markup and the next against the resolved result.
       ...(port.revisionDisplayMode ? { displayMode: port.revisionDisplayMode() } : {}),
+      ...(port.replacementLanding
+        ? { replacementLanding: port.replacementLanding.bind(port) }
+        : {}),
+      ...(port.fieldPageContext ? { fieldPageContext: port.fieldPageContext.bind(port) } : {}),
       ...(port.select ? { select: port.select.bind(port) } : {}),
+      ...(port.selectRefusal ? { selectRefusal: port.selectRefusal.bind(port) } : {}),
     });
 
     // PLAN EVERYTHING FIRST. A query's answer is final here; a command's is a closure, because
@@ -177,6 +246,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     const stages: ((relate: (url: string) => string | null) => readonly TreeDocOp[] | null)[] = [];
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
+    const packageEdits: import('./document-port.ts').AutomationPackageEdit[] = [];
     /** Comment deletes can batch; reply/resolve remain solitary by planner rule. */
     const commentWrites: AutomationCommentWrite[] = [];
     let commentWriteScope: StoryScope | null = null;
@@ -185,11 +255,58 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     /** The one custom-node write a batch may hold, solitary and its own commit for the same reason. */
     let customNodeWrite: { write: InsertCustomNodeWrite; scope: StoryScope } | null = null;
     let firstCommand = -1;
+    let requiresReview = false;
+    let stagedTracking = tracking;
     for (let index = 0; index < operations.length; index += 1) {
-      const step = planner.plan(operations[index]!);
+      const operation = operations[index]!;
+      if (
+        port.suggesting?.() &&
+        operation.op !== 'replaceSpan' &&
+        (!supportsTrackedAutomationOperation(operation) ||
+          (!stagedTracking.author &&
+            [
+              'insertContentControl',
+              'setContentControlProperties',
+              'startNewList',
+              'setListLevelFormat',
+              'insertTable',
+              'insertTableRows',
+              'updateTable',
+              'updateTableCell',
+            ].includes(operation.op)))
+      )
+        return refuse(
+          operations,
+          index,
+          automationError(
+            'unsupported-capability',
+            'this operation has no supported tracked form in suggesting mode'
+          ),
+          revision
+        );
+      const policy = trackingStep(operation, port.localChangeTracking === true, stagedTracking);
+      const step =
+        policy?.step ??
+        trackPlannedChanges(
+          operation,
+          // Planned under the actor the commit binds. See `AutomationDocumentPort.allocationActor`.
+          runWithTransactionActor(allocationActor, () =>
+            planner.plan(operation, stagedTracking.author)
+          ),
+          stagedTracking.author
+        );
+      if (policy) stagedTracking = policy.state;
       if (!step.ok) return refuse(operations, index, step.error, revision);
       planned.push(step);
       if (step.kind === 'command') {
+        if (
+          stagedTracking.author &&
+          (step.packageEdits?.length || operation.op === 'setContentControlProperties')
+        )
+          requiresReview = true;
+        // Changing who a change belongs to is review authoring, tracked or not.
+        if (operation.op === 'setRevisionAuthorBatch') requiresReview = true;
+        if (step.packageEdits) packageEdits.push(...step.packageEdits);
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;
         else if (step.relate) {
@@ -280,7 +397,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
           }
           return built;
         },
-        planner.writeScope ?? { kind: 'body' }
+        planner.writeScope ?? { kind: 'body' },
+        packageEdits,
+        requiresReview
       );
       if (!applied.ok) {
         return refuse(
@@ -305,6 +424,23 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     }
     const post = readsOf(after);
     const settled = planner.settle(post);
+    if (!settled.ok && settled.selection !== undefined) {
+      // The caret could not be placed. Writes in the same batch HAVE committed, so the answer
+      // says so (`changed`, the new revision) and names the select: re-read, never replay.
+      tracking = stagedTracking;
+      const failed = refuse(
+        operations,
+        nthSelect(operations, settled.selection),
+        automationError(
+          'unsupported-capability',
+          'the host could not place the selection',
+          'selection'
+        ),
+        port.revision()
+      );
+      // Unlike every other refusal, the operations before this one DID publish: `changed` says so.
+      return { ...failed, changed };
+    }
     if (!settled.ok) {
       return refuse(
         operations,
@@ -318,22 +454,47 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
+    tracking = stagedTracking;
+    const committed = port.revision();
+    // Queries answered from the package the batch started with; commands from the result.
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
       value:
         step.kind === 'query'
-          ? step.value
-          : step.kind === 'customNodeWrite'
-            ? step.answer(post)
-            : step.answer(post, mintedComment),
+          ? stampEndpoints(step.value, revision, texts, handles, start)
+          : stampEndpoints(
+              step.kind === 'customNodeWrite'
+                ? step.answer(post)
+                : step.answer(post, mintedComment),
+              committed,
+              texts,
+              handles,
+              post
+            ),
     }));
-    return { ok: true, results, revision: port.revision(), changed };
+    return { ok: true, results, revision: committed, changed };
+  };
+
+  const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
+    executing += 1;
+    try {
+      return executeBatch(request);
+    } finally {
+      executing -= 1;
+      if (executing === 0 && pendingEvent) {
+        const event = pendingEvent;
+        pendingEvent = null;
+        // State and answers are final before an observer may read or write this host again.
+        for (const listener of [...listeners]) listener(event);
+      }
+    }
   };
 
   return {
     capabilities,
     revision: () => port.revision(),
     execute,
+    ...(port.prepare ? { prepare: port.prepare.bind(port) } : {}),
     save(): AutomationSaveResult {
       if (disposed) {
         return { ok: false, error: automationError('disposed', 'this host was disposed') };
@@ -367,6 +528,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       unsubscribePort();
       port.dispose();
       reads = null;
+      texts.clear();
     },
   };
 }

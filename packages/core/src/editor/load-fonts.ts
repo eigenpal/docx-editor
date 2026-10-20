@@ -50,6 +50,8 @@ export interface LoadFontsRequest {
   readonly fetcher?: typeof fetch;
   /** Per-font byte ceiling; defaults to the engine hard maximum. */
   readonly maxFontBytes?: number;
+  /** Cancels loading with `signal.reason`, without returning per-source failures. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -163,16 +165,22 @@ async function discardEntry(cache: Cache | null, url: string): Promise<void> {
  *
  * Fetches ONLY the URLs listed — never a default host or engine-chosen CDN — and never
  * rejects for a per-source failure: the result carries every admitted source and a
- * typed entry for every drop. Compose the result with `composeFontConfiguration`.
+ * typed entry for every drop. Cancellation instead rejects with `signal.reason`. Compose the result with `composeFontConfiguration`.
  */
 export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult> {
+  const checkAbort = (): void => {
+    if (request.signal?.aborted) throw request.signal.reason;
+  };
+  checkAbort();
   const fetcher = request.fetcher ?? fetch;
   const maxFontBytes = request.maxFontBytes ?? HARD_MAX_FONT_BYTES;
   const cache = await openCache(request.cacheName ?? 'docx-editor-fonts');
+  checkAbort();
 
   type Outcome = { readonly source: FontSource } | { readonly failure: FontLoadFailure };
 
   async function loadOne(source: FontUrlSource): Promise<Outcome> {
+    checkAbort();
     const faceRequest: FontFaceRequest = Object.freeze({
       family: source.family,
       weight: source.weight,
@@ -237,16 +245,22 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     // Cache first, revalidated by content hash. A poisoned or stale entry is discarded
     // and the URL refetched — a cache problem is never a hard failure by itself.
     const cached = await cachedBytes(cache, source.url);
+    checkAbort();
     if (cached) {
       const verdict = admit(cached, true);
       if (!('reason' in verdict)) return { source: verdict };
       await discardEntry(cache, source.url);
+      checkAbort();
     }
 
     let response: Response;
     try {
-      response = await fetcher(source.url);
+      response = request.signal
+        ? await fetcher(source.url, { signal: request.signal })
+        : await fetcher(source.url);
+      checkAbort();
     } catch (error) {
+      checkAbort();
       return {
         failure: {
           url: source.url,
@@ -269,7 +283,9 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     let bytes: Uint8Array;
     try {
       bytes = new Uint8Array(await response.arrayBuffer());
+      checkAbort();
     } catch (error) {
+      checkAbort();
       return {
         failure: {
           url: source.url,
@@ -282,6 +298,7 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     const verdict = admit(bytes, false);
     if ('reason' in verdict) return { failure: verdict };
     await storeBytes(cache, source.url, bytes);
+    checkAbort();
     return { source: verdict };
   }
 
@@ -289,6 +306,7 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
   // Results are reassembled in list order, so admission stays deterministic regardless of
   // which response lands first.
   const outcomes = await Promise.all(request.sources.map((source) => loadOne(source)));
+  checkAbort();
 
   const sources: FontSource[] = [];
   const failures: FontLoadFailure[] = [];

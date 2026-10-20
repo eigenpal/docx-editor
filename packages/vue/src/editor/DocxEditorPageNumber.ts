@@ -1,4 +1,5 @@
 import {
+  Teleport,
   defineComponent,
   h,
   inject,
@@ -8,15 +9,19 @@ import {
   type InjectionKey,
   type PropType,
 } from 'vue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
 import { useScopeClassName } from './scope-context';
+import { useViewportOverlayHost } from './viewport-context';
 
 const HIDE_DELAY_MS = 600;
-const selectTotalPages = (snapshot: EditorSnapshot): number => snapshot.page.total;
+// No count while a document opens: its layout is still partial, so a total would be wrong.
+const selectTotalPages = (snapshot: EditorSnapshot): number =>
+  snapshot.isOpening === true ? 0 : snapshot.page.total;
 
 /** Internal bridge from the batteries-included editor's `t` prop to this composition part. */
 export const PageNumberTranslationContext: InjectionKey<((key: string) => string) | null> = Symbol(
@@ -29,7 +34,28 @@ export interface DocxEditorPageNumberProps {
   style?: CSSProperties;
 }
 
-/** @public */
+/**
+ * Floating localized page readout for the active `DocxEditorViewport`.
+ *
+ * It appears while a multi-page document scrolls and fades after 600 ms of inactivity. It is
+ * positioned `absolute` against the nearest positioned ancestor, so give the element that holds
+ * the viewport `position: relative`.
+ *
+ * Place it as a sibling of the viewport or inside it. Inside the viewport, it renders into the
+ * viewport's parent element, so it stays in view while the pages scroll.
+ *
+ * @example
+ * ```vue
+ * <div style="position: relative; height: 100%">
+ *   <DocxEditorViewport>
+ *     <DocxEditorContent />
+ *   </DocxEditorViewport>
+ *   <DocxEditorPageNumber />
+ * </div>
+ * ```
+ *
+ * @public
+ */
 export const DocxEditorPageNumber = defineComponent({
   name: 'DocxEditorPageNumber',
   props: {
@@ -37,9 +63,11 @@ export const DocxEditorPageNumber = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const scopeClassName = useScopeClassName();
+    const ancestorScope = useScopeClassName();
     const editorRef = useDocxEditor();
     const viewport = useNavigationViewportElement();
+    // Inside the scroll container, an absolute overlay scrolls away with the pages.
+    const { inside, target: overlayTarget } = useViewportOverlayHost(viewport);
     const total = useEditorState(selectTotalPages);
     const { t } = useTranslation();
     const translate = inject(PageNumberTranslationContext, null);
@@ -52,19 +80,20 @@ export const DocxEditorPageNumber = defineComponent({
         visible.value = false;
         if (!editor || !vp || pageTotal <= 1) return;
         current.value = editor.getCurrentPage('viewport');
-        let hideTimer: ReturnType<typeof setTimeout> | null = null;
+        const win = hostWindowOf(vp);
+        let hideTimer: number | null = null;
         const onScroll = () => {
           current.value = editor.getCurrentPage('viewport');
           visible.value = true;
-          if (hideTimer) clearTimeout(hideTimer);
-          hideTimer = setTimeout(() => {
+          if (hideTimer) win.clearTimeout(hideTimer);
+          hideTimer = win.setTimeout(() => {
             visible.value = false;
           }, HIDE_DELAY_MS);
         };
         vp.addEventListener('scroll', onScroll, { passive: true });
         onCleanup(() => {
           vp.removeEventListener('scroll', onScroll);
-          if (hideTimer) clearTimeout(hideTimer);
+          if (hideTimer) win.clearTimeout(hideTimer);
         });
       },
       { flush: 'post' }
@@ -72,12 +101,19 @@ export const DocxEditorPageNumber = defineComponent({
 
     return () => {
       if (total.value <= 1) return null;
+      const target = overlayTarget.value?.host ?? null;
+      // The viewport scoped everything inside it; its parent may not be scoped.
+      const scopeClassName = target
+        ? overlayTarget.value?.scoped
+          ? ''
+          : 'docx-editor '
+        : ancestorScope;
       const label = translate
         ? translate('viewer.pageIndicator')
             .replace(/\{current\}/g, String(current.value))
             .replace(/\{total\}/g, String(total.value))
         : t('viewer.pageIndicator', { current: current.value, total: total.value });
-      return h(
+      const chip = h(
         'div',
         {
           class: `${scopeClassName}docx-editor-shell__page-indicator-chip docx-editor__page-number${
@@ -90,6 +126,9 @@ export const DocxEditorPageNumber = defineComponent({
         },
         label
       );
+      if (!inside) return chip;
+      // Before the viewport mounts its parent is unknown; render nothing until it is.
+      return target ? h(Teleport, { to: target }, [chip]) : null;
     };
   },
 });

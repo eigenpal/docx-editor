@@ -1,11 +1,14 @@
 import type { EquationExpression, LinearMathParseResult } from './omml-equation.ts';
 
 function reversible(value: EquationExpression): boolean {
+  // Compact syntax has no spelling for `m:ctrlPr` operator formatting.
+  if ('controlProperties' in value && value.controlProperties) return false;
   switch (value.kind) {
     case 'fallback':
+    case 'bar':
       return false;
     case 'text':
-      return !/[{}[\]^_√∑]/u.test(value.value);
+      return value.format === undefined && !/[{}[\]^_√∑]/u.test(value.value);
     case 'row':
       return value.items.every(reversible);
     case 'fraction':
@@ -36,6 +39,8 @@ function render(value: EquationExpression): string {
       return value.value;
     case 'fallback':
       return value.text;
+    case 'bar':
+      return render(value.body);
     case 'fraction':
       return `{${render(value.numerator)}}/{${render(value.denominator)}}`;
     case 'radical':

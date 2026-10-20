@@ -15,7 +15,8 @@ import {
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { layoutSemanticDocument, type SemanticLayoutOptions } from '../semantic-layout.ts';
-import { layoutSemanticDocumentWithNotes, type NotesLayoutInput } from '../note-pagination.ts';
+import type { NotesLayoutInput } from '../note-pagination.ts';
+import { layoutSemanticDocumentWithNotes } from './notes-layout-drain.ts';
 import { paragraphSectionIndexOf } from '../note-paragraph-section-index.ts';
 import { noteReferenceVisible } from '../note-reference-visibility.ts';
 import { revisionAuthorFilter } from '../revision-projection.ts';

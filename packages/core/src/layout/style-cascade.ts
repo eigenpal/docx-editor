@@ -1,3 +1,12 @@
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
+import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
+import { applicationRunDefaults } from './application-run-defaults.ts';
+import { applyLigatureCompatibility } from './run-ligatures.ts';
+import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
+import { numberingLevelRank } from './numbering-level-tier.ts';
+import { withLineGrid } from './line-grid.ts';
+import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
+import { cascadeCompatibility } from './compatibility/cascade-compatibility.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -15,12 +24,18 @@
 
 import {
   canonicalOoxmlFingerprint,
+  displayMathAlignment,
   twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
-  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
+import {
+  cjkTypographyFromSettings,
+  defaultsSelectEastAsianFace,
+  type CjkTypographySettings,
+} from './cjk-typography.ts';
 import {
   indentTwips,
   paragraphAlignment,
@@ -40,14 +55,13 @@ import {
   type ParagraphSpacing,
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
-import {
-  cascadedTabStops,
-  paragraphTabStops,
-  tabStopsFingerprint,
-  type ResolvedTabStops,
-} from './paragraph-tabs.ts';
+import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
+import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
+import { styleChain, styleIdFromProps } from './style-chain.ts';
+import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
+import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
 import {
   findParagraphProperties,
   findRunProperties,
@@ -60,10 +74,10 @@ import {
 } from './style-definition-reader.ts';
 
 export { isValidStyleId } from './style-definition-reader.ts';
+export { collapsingSpaceAfter } from './adjacent-paragraph-spacing.ts';
 export type { StyleDefinition } from './style-definition-reader.ts';
 
-/** Soft ceiling on `basedOn` chain length — enough for real templates, refuses hostile graphs. */
-export const MAX_STYLE_BASED_ON_DEPTH = 32;
+export { MAX_STYLE_BASED_ON_DEPTH } from './style-chain.ts';
 
 /** Soft ceiling on style definitions read from one styles part. */
 export const MAX_STYLE_DEFINITIONS = 4096;
@@ -75,6 +89,34 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  /** Keep floating tables that fit a full page together under the compatibility flag. */
+  readonly doNotBreakWrappedTables?: true;
+  /** Legacy or explicitly disabled optional OpenType substitutions. */
+  readonly disableOptionalLigatures?: true;
+  /** Legacy noExtraLineSpacing behavior, included in the producer fingerprint. */
+  readonly preserveExactLineBaseline?: true;
+  /** `w:adjustLineHeightInTable`: cell paragraphs snap to the section line grid too. */
+  readonly adjustLineHeightInTable?: true;
+  /** `w:doNotUseIndentAsNumberingTabStop`, carried onto each paragraph's tab stops. */
+  readonly ignoreIndentAsNumberingTabStop?: true;
+  /**
+   * `w:doNotUseHTMLParagraphAutoSpacing`: adjacent paragraph spacing adds up, and automatic
+   * spacing is a fixed 5pt before and 10pt after.
+   */
+  readonly fixedParagraphSpacing?: true;
+  /**
+   * `w:doNotExpandShiftReturn`: a justified line ending in a manual line break keeps its
+   * natural spacing, as a last line does.
+   */
+  readonly unstretchedManualBreakLines?: true;
+  /**
+   * Legacy modes: a justified line ending in a page or column break stretches to the measure
+   * unless it is the last line of its paragraph.
+   */
+  readonly pageBreakLinesStretch?: true;
+  /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
+  readonly strictTableStyleHierarchy?: boolean;
+  readonly typography?: CjkTypographySettings;
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
    * reuse breaks measured under another cascade. Computed once per table (FNV-1a hex).
@@ -115,12 +157,7 @@ export interface StyleCascadeTable {
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
   readonly paragraphProperties: readonly OoxmlProperty[];
-  /**
-   * The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits.
-   *
-   * Numbering needs the two tiers apart: a level's `w:pPr/w:ind` outranks the style's and is
-   * outranked by the paragraph's own, and a flattened list cannot say which is which.
-   */
+  /** The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits. */
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
@@ -133,7 +170,9 @@ export interface CascadedParagraphFormatting {
    */
   readonly runProperties: readonly OoxmlProperty[];
   /**
-   * Content cascade plus direct `w:pPr/w:rPr` — empty-line metrics and last-line mark height.
+   * Content cascade plus the mark's `w:pPr/w:rPr`, including its `w:rStyle` character style —
+   * empty-line metrics and the numbering marker. A line with content grows from the mark
+   * without that character style.
    */
   readonly markRunProperties: readonly OoxmlProperty[];
   /**
@@ -178,15 +217,19 @@ function conditionalTableFingerprint(
 export interface CascadedTableFormatting {
   readonly tablePropertyNodes: readonly OoxmlElement[];
   readonly tableRowPropertyNodes: readonly OoxmlElement[];
+  readonly tableCellPropertyNodes?: readonly OoxmlElement[];
   readonly paragraphPropertyNodes: readonly OoxmlElement[];
   readonly paragraphProperties: readonly OoxmlProperty[];
   readonly runProperties: readonly OoxmlProperty[];
   readonly conditional: ReadonlyMap<string, OoxmlElement>;
+  /** Base-first source layers preserve inherited conditional properties omitted by derived styles. */
+  readonly conditionalStyleLayers?: ReadonlyMap<string, readonly OoxmlElement[]>;
 }
 
 export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
   tablePropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   tableRowPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  tableCellPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphProperties: Object.freeze([]) as readonly OoxmlProperty[],
   runProperties: Object.freeze([]) as readonly OoxmlProperty[],
@@ -254,18 +297,25 @@ function flattenTableStyleChain(
   if (chain.length === 0) return null;
   const tablePropertyNodes: OoxmlElement[] = [];
   const tableRowPropertyNodes: OoxmlElement[] = [];
+  const tableCellPropertyNodes: OoxmlElement[] = [];
   const paragraphPropertyNodes: OoxmlElement[] = [];
   const paragraphProperties: OoxmlProperty[] = [];
   const runProperties: OoxmlProperty[] = [];
   const conditional = new Map<string, OoxmlElement>();
+  const conditionalStyleLayers = new Map<string, readonly OoxmlElement[]>();
   for (const style of chain) {
     if (style.tablePropertiesNode) tablePropertyNodes.push(style.tablePropertiesNode);
     if (style.tableRowPropertiesNode) tableRowPropertyNodes.push(style.tableRowPropertiesNode);
+    if (style.tableCellPropertiesNode) tableCellPropertyNodes.push(style.tableCellPropertiesNode);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
     paragraphProperties.push(...style.paragraphProperties);
     runProperties.push(...style.runProperties);
     for (const [conditionType, node] of style.conditionalTableFormats) {
       conditional.set(conditionType, node);
+      conditionalStyleLayers.set(
+        conditionType,
+        Object.freeze([...(conditionalStyleLayers.get(conditionType) ?? []), node])
+      );
     }
   }
   // Immutable because it is now SHARED by every table that names this style — and with the
@@ -279,10 +329,12 @@ function flattenTableStyleChain(
   return Object.freeze({
     tablePropertyNodes: Object.freeze(tablePropertyNodes) as readonly OoxmlElement[],
     tableRowPropertyNodes: Object.freeze(tableRowPropertyNodes) as readonly OoxmlElement[],
+    tableCellPropertyNodes: Object.freeze(tableCellPropertyNodes) as readonly OoxmlElement[],
     paragraphPropertyNodes: Object.freeze(paragraphPropertyNodes) as readonly OoxmlElement[],
     paragraphProperties: Object.freeze(paragraphProperties) as readonly OoxmlProperty[],
     runProperties: Object.freeze(runProperties) as readonly OoxmlProperty[],
     conditional: readonlyMapView(conditional),
+    conditionalStyleLayers: readonlyMapView(conditionalStyleLayers),
   });
 }
 
@@ -381,6 +433,29 @@ export function tableCellStyleFormatting(
 }
 
 /**
+ * The theme as cache-key material: every face present, `null` when the theme has none.
+ *
+ * `ThemeFonts` leaves the East Asian, complex-script, and supplemental faces optional,
+ * and a producer that reads a theme with no such scheme hands over `undefined` for
+ * them. The comparator behind `stableHash` refuses `undefined` by design, so a key built
+ * from the raw object failed layout for any document whose theme lacked one of those
+ * faces.
+ */
+function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
+  return {
+    major: themeFonts.major ?? null,
+    minor: themeFonts.minor ?? null,
+    majorEastAsia: themeFonts.majorEastAsia ?? null,
+    minorEastAsia: themeFonts.minorEastAsia ?? null,
+    majorBidi: themeFonts.majorBidi ?? null,
+    minorBidi: themeFonts.minorBidi ?? null,
+    majorSupplemental: themeFonts.majorSupplemental ?? null,
+    minorSupplemental: themeFonts.minorSupplemental ?? null,
+    chineseFontTableFaces: themeFonts.chineseFontTableFaces ?? null,
+  };
+}
+
+/**
  * Build a cascade table from a styles part root.
  *
  * Only direct `w:style` children of the root participate (bounded count). Duplicate
@@ -389,16 +464,40 @@ export function tableCellStyleFormatting(
  */
 export function buildStyleCascadeTable(
   stylesRoot: OoxmlElement | null,
-  themeFonts: ThemeFonts = NO_THEME_FONTS
+  themeFonts: ThemeFonts = NO_THEME_FONTS,
+  settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
+  let typography = cjkTypographyFromSettings(settingsRoot);
+  // One read of the compatibility profile; the cache token folds every rule it turns on.
+  const compatibility = compatibilityProfileFromSettings(settingsRoot);
+  const ligaturesEnabled = compatibility.has('optionalLigatures');
+  const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
+  const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
+  const settingsCompatibility = cascadeCompatibility(compatibility);
   const styles = new Map<string, StyleDefinition>();
+  const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
+    const runDefaults = applicationRunDefaults(null, ligaturesEnabled);
+    const paragraphDefaults = applicationParagraphDefaults(null);
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
-      cacheToken: stableHash({ empty: true, theme: themeFonts }),
-      docDefaultsRun: [],
-      docDefaultsParagraph: [],
+      cacheToken: stableHash({
+        empty: true,
+        dR: propertiesFingerprint(runDefaults),
+        dP: propertiesFingerprint(paragraphDefaults),
+        ...ligatureCompatibility,
+        theme,
+        typography,
+        strictTableHierarchy,
+        ...settingsCompatibility,
+      }),
+      ...settingsCompatibility,
+      ...ligatureCompatibility,
+      strictTableStyleHierarchy: strictTableHierarchy,
+      typography,
+      docDefaultsRun: runDefaults,
+      docDefaultsParagraph: paragraphDefaults,
       docDefaultsParagraphNode: undefined,
       defaultParagraphStyleId: null,
       defaultCharacterStyleId: null,
@@ -408,7 +507,14 @@ export function buildStyleCascadeTable(
     };
   }
 
-  const defaults = readDocDefaults(stylesRoot);
+  const authoredDefaults = readDocDefaults(stylesRoot);
+  const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
+  typography = Object.freeze({ ...typography, sourceEastAsianFont });
+  const defaults = {
+    ...authoredDefaults,
+    run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],
+    paragraph: [...applicationParagraphDefaults(stylesRoot), ...authoredDefaults.paragraph],
+  };
   let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
   let defaultTableStyleId: string | null = null;
@@ -436,6 +542,10 @@ export function buildStyleCascadeTable(
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
+    ...settingsCompatibility,
+    ...ligatureCompatibility,
+    strictTableHierarchy,
+    typography,
     dR: propertiesFingerprint(defaults.run),
     dP: propertiesFingerprint(defaults.paragraph),
     defP: defaultParagraphStyleId,
@@ -443,7 +553,7 @@ export function buildStyleCascadeTable(
     defT: defaultTableStyleId,
     // Retheming changes the face every theme-fonted run measures in while no style
     // material moves, so a break cached under the old theme must not be reused.
-    theme: themeFonts,
+    theme,
     styles: [...styles.values()].map((style) => ({
       id: style.styleId,
       type: style.type,
@@ -456,12 +566,17 @@ export function buildStyleCascadeTable(
       // the document table node, so all three table-style layers belong in the producer.
       tPr: styleNodeFingerprint(style.tablePropertiesNode),
       trPr: styleNodeFingerprint(style.tableRowPropertiesNode),
+      tcPr: styleNodeFingerprint(style.tableCellPropertiesNode),
       tblStylePr: conditionalTableFingerprint(style),
     })),
   });
 
   return {
     cacheToken,
+    ...settingsCompatibility,
+    ...ligatureCompatibility,
+    strictTableStyleHierarchy: strictTableHierarchy,
+    typography,
     docDefaultsRun: defaults.run,
     docDefaultsParagraph: defaults.paragraph,
     docDefaultsParagraphNode: defaults.paragraphNode,
@@ -471,50 +586,6 @@ export function buildStyleCascadeTable(
     themeFonts,
     styles,
   };
-}
-
-function styleIdFromProps(
-  directProps: readonly OoxmlProperty[],
-  localName: 'pStyle' | 'rStyle'
-): string | null {
-  let id: string | null = null;
-  for (const property of directProps) {
-    if (property.localName !== localName) continue;
-    const value = property.attributes?.val;
-    id = isValidStyleId(value) ? value : null;
-  }
-  return id;
-}
-
-/**
- * Resolve the `basedOn` chain base-first, stopping on missing ids, cycles, or depth.
- *
- * The tip must match `expectedType`; other types named by `w:pStyle` / `w:rStyle` contribute
- * nothing (Word ignores them for that inheritance axis).
- */
-function styleChain(
-  table: StyleCascadeTable,
-  styleId: string,
-  expectedType: 'paragraph' | 'character' | 'table'
-): readonly StyleDefinition[] {
-  const tip = table.styles.get(styleId);
-  if (!tip || tip.type !== expectedType) return [];
-
-  const tipFirst: StyleDefinition[] = [];
-  const seen = new Set<string>();
-  let current: string | null = styleId;
-  let depth = 0;
-  while (current !== null && depth < MAX_STYLE_BASED_ON_DEPTH) {
-    if (seen.has(current)) break;
-    if (!isValidStyleId(current)) break;
-    seen.add(current);
-    const definition = table.styles.get(current);
-    if (!definition) break;
-    tipFirst.push(definition);
-    current = definition.basedOn;
-    depth += 1;
-  }
-  return tipFirst.reverse();
 }
 
 /**
@@ -531,23 +602,47 @@ export function cascadeParagraphFormatting(
   directPPr: OoxmlNode | undefined,
   tableCellStyle?: TableCellStyleFormatting
 ): CascadedParagraphFormatting {
+  return cascadeParagraphWithNumbering(table, directPPr, tableCellStyle);
+}
+
+export function cascadeParagraphWithNumbering(
+  table: StyleCascadeTable,
+  directPPr: OoxmlNode | undefined,
+  tableCellStyle?: TableCellStyleFormatting,
+  numberingPPr?: OoxmlElement
+): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
+  // The level's `w:pPr` sits directly below the nearest `w:pPr` stating a `w:numPr`: above
+  // the whole chain when that is the paragraph's own. List indents use the same rank
+  // (`numberingLevelTiers`).
+  const levelRank = numberingPPr ? numberingLevelRank(chain, directPPr) : chain.length;
+  const styleProperties = (style: StyleDefinition, properties: readonly OoxmlProperty[]) =>
+    tableCellStyle &&
+    !table.strictTableStyleHierarchy &&
+    style.styleId === table.defaultParagraphStyleId
+      ? legacyTableDefaultProperties(properties, tableCellStyle.runProperties)
+      : properties;
 
+  const chainProperties = chain.map((style) => styleProperties(style, style.paragraphProperties));
   const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
-    ...chain.flatMap((style) => style.paragraphProperties),
+    ...chainProperties.slice(0, levelRank).flat(),
+    ...propertiesOf(numberingPPr),
+    ...chainProperties.slice(levelRank).flat(),
   ];
   const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
   if (tableCellStyle) paragraphPropertyNodes.push(...tableCellStyle.paragraphPropertyNodes);
-  for (const style of chain) {
+  chain.forEach((style, index) => {
+    if (index === levelRank && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
-  }
+  });
+  if (levelRank === chain.length && numberingPPr) paragraphPropertyNodes.push(numberingPPr);
   if (directPPr) paragraphPropertyNodes.push(directPPr);
 
   const directMarkRun = findRunProperties(
@@ -565,29 +660,23 @@ export function cascadeParagraphFormatting(
   const runProperties = combineStyleToggles([
     { properties: table.docDefaultsRun, role: 'defaults', emit: true },
     { properties: tableCellStyle?.runProperties ?? [], role: 'xor', emit: true },
-    { properties: chain.flatMap((style) => style.runProperties), role: 'xor', emit: true },
+    {
+      properties: chain.flatMap((style) => styleProperties(style, style.runProperties)),
+      role: 'xor',
+      emit: true,
+    },
   ]);
-  // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top, and that
-  // `w:rPr` is DIRECT formatting for the mark — absolute, either way it is stated.
-  //
-  // Combined rather than concatenated so the result carries its resolved toggle state like
-  // any other cascade output. `list-resolve.ts` resolves a numbering marker from this list,
-  // and a plain concatenation is a fresh array with nothing attached: the marker would fall
-  // back to reading the properties and could answer differently from the text of the very
-  // paragraph it belongs to.
-  const markRunProperties: readonly OoxmlProperty[] =
-    markProps.length === 0
-      ? runProperties
-      : combineStyleToggles([
-          { properties: runProperties, role: 'carried', emit: true },
-          { properties: markProps, role: 'direct', emit: true },
-        ]);
+  // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top: its
+  // `w:rStyle` chain at the character level, then its direct properties, which are absolute.
+  const markRunProperties = paragraphMarkRunProperties(table, runProperties, markProps, (props) =>
+    applyLigatureCompatibility(props, table.disableOptionalLigatures)
+  );
 
   return {
     paragraphProperties,
     inheritedParagraphProperties,
     paragraphPropertyNodes,
-    runProperties,
+    runProperties: applyLigatureCompatibility(runProperties, table.disableOptionalLigatures),
     markRunProperties,
     styleId: styleId ?? null,
   };
@@ -639,6 +728,8 @@ export function cascadeRunProperties(
   directRunProperties: readonly OoxmlProperty[],
   table?: StyleCascadeTable
 ): readonly OoxmlProperty[] {
+  const finish = (props: readonly OoxmlProperty[]) =>
+    applyLigatureCompatibility(props, table?.disableOptionalLigatures);
   let characterProps: readonly OoxmlProperty[] = [];
   if (table) {
     const rStyleId = styleIdFromProps(directRunProperties, 'rStyle');
@@ -651,7 +742,7 @@ export function cascadeRunProperties(
   }
 
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
-    return directRunProperties;
+    return finish(directRunProperties);
   }
   // Nothing to combine and nothing to append: hand back the SAME array.
   //
@@ -664,7 +755,7 @@ export function cascadeRunProperties(
   // the result immediately regardless. This line is unchanged from before the toggle cascade;
   // what is new is that it now has to stay.
   if (characterProps.length === 0 && directRunProperties.length === 0) {
-    return inheritedRunProperties;
+    return finish(inheritedRunProperties);
   }
   const styleProperties =
     characterProps.length === 0
@@ -697,8 +788,8 @@ export function cascadeRunProperties(
           { properties: inheritedRunProperties, role: 'carried', emit: true },
           { properties: characterProps, role: 'xor', emit: true },
         ]);
-  if (directRunProperties.length === 0) return styleProperties;
-  return [...styleProperties, ...directRunProperties];
+  if (directRunProperties.length === 0) return finish(styleProperties);
+  return finish([...styleProperties, ...directRunProperties]);
 }
 
 /** Everything the line breaker needs about one paragraph, already cascaded and converted. */
@@ -729,8 +820,8 @@ export interface ParagraphLayoutInputs {
   readonly shading: string | undefined;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   /**
-   * Paragraph-mark cascade (`inheritedRunProperties` + direct `w:pPr/w:rPr`).
-   * Empty-line sizing and last-line mark height — never content-run face.
+   * Paragraph-mark cascade (`inheritedRunProperties` + `w:pPr/w:rPr` and its `w:rStyle`).
+   * Empty-line sizing and last-line mark height (without the `w:rStyle`) — never content face.
    */
   readonly markRunProperties: readonly OoxmlProperty[];
   /** Cascaded custom tab stops + default interval for paragraph-flow breaking. */
@@ -757,6 +848,9 @@ export interface ParagraphLayoutInputs {
  *
  * `inTableCell` is asked for separately because a cell paragraph may have no table style to
  * inherit at all, and `w:beforeAutospacing` still needs to know it is in a cell.
+ *
+ * `lineUnitPt` is the section's ACTIVE line-grid pitch. It sizes line-unit paragraph margins
+ * and snaps the paragraph's lines to the grid; absent means no grid and the fixed 12pt unit.
  */
 export function resolveParagraphLayoutInputs(
   paragraph: OoxmlElement,
@@ -764,13 +858,20 @@ export function resolveParagraphLayoutInputs(
   styleCascade: StyleCascadeTable | undefined,
   listItem?: import('./list-resolve.ts').ResolvedListItem,
   tableCellStyle?: TableCellStyleFormatting,
-  inTableCell = false
+  inTableCell = false,
+  lineUnitPt?: number
 ): ParagraphLayoutInputs {
   const pPr = findParagraphProperties(paragraph);
+  const numberingPPr = numberingParagraphProperties(listItem);
   const cascaded = styleCascade
-    ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
+    ? cascadeParagraphWithNumbering(styleCascade, pPr, tableCellStyle, numberingPPr)
     : null;
-  const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
+  const nodes =
+    cascaded?.paragraphPropertyNodes ??
+    [numberingPPr, pPr].filter((node): node is OoxmlElement => node !== undefined);
+  const props = cascaded
+    ? [...cascaded.paragraphProperties]
+    : [...propertiesOf(numberingPPr), ...propertiesOf(pPr)];
   // Content vs mark: with a styles table, `cascaded.runProperties` is content-only and
   // `markRunProperties` carries direct `w:pPr/w:rPr`. Without styles, there is no style
   // face to inherit — content stays empty and the mark props size empty lines alone.
@@ -791,14 +892,9 @@ export function resolveParagraphLayoutInputs(
       // geometry unbounded — `w:hanging="999999999"` resolved to 50,000,000pt.
       const h = indentTwips(property.attributes?.hanging);
       const f = indentTwips(property.attributes?.firstLine);
-      // `w:hanging` and `w:firstLine` are MUTUALLY EXCLUSIVE (§17.3.1.10, §17.3.1.12): they
-      // are two spellings of one first-line offset, so an `w:ind` that states either one
-      // replaces BOTH. Accumulating them independently let a style's hanging indent survive a
-      // paragraph that explicitly cancelled it with `w:firstLine="0"` — the first line of
-      // every body paragraph then hung out into the left margin while the rest sat indented.
-      //
-      // An `w:ind` that states NEITHER (a bare `w:left`) leaves the inherited offset alone,
-      // which is why this is gated rather than reset on every `ind`.
+      // `w:hanging` and `w:firstLine` are mutually exclusive spellings of one offset.
+      // Either stated attribute replaces both; otherwise an inherited hanging may survive
+      // firstLine="0" and shift body text into the margin. An ind with neither keeps the offset.
       if (
         property.attributes?.hanging !== undefined ||
         property.attributes?.firstLine !== undefined
@@ -821,9 +917,20 @@ export function resolveParagraphLayoutInputs(
         firstLine,
       }
     : { left: baseIndent.left, right: baseIndent.right, hanging, firstLine };
-  const tabStops = cascaded
-    ? cascadedTabStops(cascaded.paragraphPropertyNodes)
-    : paragraphTabStops(pPr);
+  const separatorMembers = styleSeparatorMembersOf(paragraph);
+  const lastMember = separatorMembers?.at(-1)?.paragraph;
+  const lastInputs = lastMember
+    ? resolveParagraphLayoutInputs(
+        lastMember,
+        contentWidth,
+        styleCascade,
+        undefined,
+        tableCellStyle,
+        inTableCell,
+        lineUnitPt
+      )
+    : undefined;
+  const tabStops = withNumberingTabRule(cascadedTabStops(nodes), styleCascade);
   const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
   let outlineLevel: number | null = null;
   let sawOutlineProperty = false;
@@ -854,21 +961,36 @@ export function resolveParagraphLayoutInputs(
     props,
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
-    alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell }),
-    lineSpacing: paragraphLineSpacing(props),
+    alignment: displayMathAlignment(paragraph) ?? paragraphAlignment(props),
+    spacing: {
+      ...paragraphSpacing(props, {
+        inList: listItem !== undefined,
+        inTableCell,
+        lineUnitPt,
+        fixedAutoSpacing: styleCascade?.fixedParagraphSpacing === true,
+      }),
+      ...(lastInputs ? { after: lastInputs.spacing.after } : {}),
+    },
+    lineSpacing: withLineGrid(
+      {
+        ...paragraphLineSpacing(props),
+        ...(styleCascade?.preserveExactLineBaseline
+          ? { preserveExactBaseline: true as const }
+          : {}),
+      },
+      props,
+      lineUnitPt,
+      inTableCell,
+      styleCascade?.adjustLineHeightInTable === true
+    ),
     contextualSpacing: paragraphContextualSpacing(props),
     styleId,
     outlineLevel,
-    bottomBorder: cascaded
-      ? cascadedBottomBorder(cascaded.paragraphPropertyNodes)
-      : paragraphBorders(pPr).bottom,
-    borders: cascaded
-      ? cascadedParagraphBorders(cascaded.paragraphPropertyNodes)
-      : paragraphBorders(pPr),
+    bottomBorder: cascadedBottomBorder(nodes),
+    borders: cascadedParagraphBorders(nodes),
     shading: paragraphShading(props),
     inheritedRunProperties,
-    markRunProperties,
+    markRunProperties: lastInputs?.markRunProperties ?? markRunProperties,
     tabStops,
     tabStopsCacheToken: tabStopsFingerprint(tabStops),
     ...(listItem ? { listItem } : {}),

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": {
     "package": "docxeditor-declarations (compat/docxeditor/declarations.ts)",
-    "version": "2.14.1"
+    "version": "2.31.0"
   },
   "symbols": {
     "Body": {
@@ -33,6 +33,18 @@
             }
           ]
         },
+        "endnotes": {
+          "uid": "DocxEditor.Body#endnotes",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItemCollection"
+            }
+          ]
+        },
         "font": {
           "uid": "DocxEditor.Body#font",
           "kind": "property",
@@ -42,6 +54,18 @@
             {
               "params": [],
               "returns": "Font"
+            }
+          ]
+        },
+        "footnotes": {
+          "uid": "DocxEditor.Body#footnotes",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItemCollection"
             }
           ]
         },
@@ -171,6 +195,17 @@
       "kind": "class",
       "requirementSet": null,
       "members": {
+        "delete": {
+          "uid": "DocxEditor.Bookmark#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "name": {
           "uid": "DocxEditor.Bookmark#name",
           "kind": "property",
@@ -666,6 +701,17 @@
             }
           ]
         },
+        "changeTrackingMode": {
+          "uid": "DocxEditor.Document#changeTrackingMode",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Off\" | \"TrackAll\" | \"TrackMineOnly\""
+            }
+          ]
+        },
         "comments": {
           "uid": "DocxEditor.Document#comments",
           "kind": "property",
@@ -690,6 +736,54 @@
             }
           ]
         },
+        "deleteBookmark": {
+          "uid": "DocxEditor.Document#deleteBookmark",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "getBookmarkRange": {
+          "uid": "DocxEditor.Document#getBookmarkRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getBookmarkRangeOrNullObject": {
+          "uid": "DocxEditor.Document#getBookmarkRangeOrNullObject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
         "paragraphs": {
           "uid": "DocxEditor.Document#paragraphs",
           "kind": "property",
@@ -699,6 +793,43 @@
             {
               "params": [],
               "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "properties": {
+          "uid": "DocxEditor.Document#properties",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "DocumentProperties"
+            }
+          ]
+        },
+        "removeDocumentInformation": {
+          "uid": "DocxEditor.Document#removeDocumentInformation",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "RemoveDocInfoType"
+                }
+              ],
+              "returns": "void"
+            },
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "\"Comments\" | \"Revisions\" | \"Versions\" | \"RemovePersonalInformation\" | \"EmailHeader\" | \"RoutingSlip\" | \"SendForReview\" | \"DocumentProperties\" | \"Template\" | \"DocumentWorkspace\" | \"InkAnnotations\" | \"DocumentServerProperties\" | \"DocumentManagementPolicy\" | \"ContentType\" | \"TaskpaneWebExtensions\" | \"AtMentions\" | \"DocumentTasks\" | \"DocumentIntelligence\" | \"CommentReactions\" | \"All\""
+                }
+              ],
+              "returns": "void"
             }
           ]
         },
@@ -723,6 +854,91 @@
             {
               "params": [],
               "returns": "SectionCollection"
+            }
+          ]
+        }
+      }
+    },
+    "DocumentProperties": {
+      "uid": "DocxEditor.DocumentProperties",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "author": {
+          "uid": "DocxEditor.DocumentProperties#author",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "category": {
+          "uid": "DocxEditor.DocumentProperties#category",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "comments": {
+          "uid": "DocxEditor.DocumentProperties#comments",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "keywords": {
+          "uid": "DocxEditor.DocumentProperties#keywords",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "lastAuthor": {
+          "uid": "DocxEditor.DocumentProperties#lastAuthor",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subject": {
+          "uid": "DocxEditor.DocumentProperties#subject",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "title": {
+          "uid": "DocxEditor.DocumentProperties#title",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
             }
           ]
         }
@@ -1161,6 +1377,54 @@
             }
           ]
         },
+        "getReviewedText": {
+          "uid": "DocxEditor.Paragraph#getReviewedText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "DocxEditor.Paragraph#getTextRanges",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "DocxEditor.Paragraph#insertParagraph",
           "kind": "method",
@@ -1255,6 +1519,27 @@
             {
               "params": [],
               "returns": "number"
+            }
+          ]
+        },
+        "search": {
+          "uid": "DocxEditor.Paragraph#search",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
             }
           ]
         },
@@ -1389,6 +1674,17 @@
             }
           ]
         },
+        "clear": {
+          "uid": "DocxEditor.Range#clear",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "DocxEditor.Range#contentControls",
           "kind": "property",
@@ -1398,6 +1694,33 @@
             {
               "params": [],
               "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.Range#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "expandTo": {
+          "uid": "DocxEditor.Range#expandTo",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "range",
+                  "type": "Range"
+                }
+              ],
+              "returns": "Range"
             }
           ]
         },
@@ -1413,6 +1736,93 @@
             }
           ]
         },
+        "getBookmarks": {
+          "uid": "DocxEditor.Range#getBookmarks",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "includeHidden",
+                  "type": "boolean",
+                  "optional": true
+                },
+                {
+                  "name": "includeAdjacent",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string[]>"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "DocxEditor.Range#getRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "rangeLocation",
+                  "type": "\"Whole\" | \"Start\" | \"End\" | \"After\" | \"Content\"",
+                  "optional": true
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getReviewedText": {
+          "uid": "DocxEditor.Range#getReviewedText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "DocxEditor.Range#getTextRanges",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
         "hyperlink": {
           "uid": "DocxEditor.Range#hyperlink",
           "kind": "property",
@@ -1421,6 +1831,22 @@
             {
               "params": [],
               "returns": "string"
+            }
+          ]
+        },
+        "insertBookmark": {
+          "uid": "DocxEditor.Range#insertBookmark",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
             }
           ]
         },
@@ -1489,6 +1915,18 @@
             {
               "params": [],
               "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "revisions": {
+          "uid": "DocxEditor.Range#revisions",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "RevisionCollection"
             }
           ]
         },

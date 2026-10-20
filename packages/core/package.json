@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/core",
-  "version": "2.14.1",
+  "version": "2.31.0",
   "description": "Framework-agnostic core for docx-editor.dev: OOXML parse/serialize, the canonical document tree, layout and paint, and the Editor contract the adapters render.",
   "type": "module",
   "engines": {
@@ -87,16 +87,16 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup && node ../../scripts/build-core-styles.mjs",
-    "typecheck": "tsc --noEmit"
+    "build": "node ../../scripts/check-built-siblings.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup && node ../../scripts/build-core-declarations.mjs && node ../../scripts/build-core-styles.mjs",
+    "typecheck": "bun check"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.17",
-    "cssnano": "^7.1.9",
+    "cssnano": "^9.0.1",
     "postcss": "^8.5.13",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "license": "Apache-2.0",
   "repository": {
@@ -105,17 +105,17 @@
     "directory": "packages/core"
   },
   "dependencies": {
-    "@docx-editor.dev/i18n": "^2.14.1",
-    "bidi-js": "1.0.3",
+    "@docx-editor.dev/i18n": "^2.31.0",
+    "bidi-js": "1.1.0",
     "emf-converter": "2.0.2",
     "fast-xml-parser": "^5.10.1",
     "fflate": "^0.8.2",
-    "harfbuzzjs": "1.6.0",
+    "harfbuzzjs": "1.6.1",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.41.8",
+    "prosemirror-view": "^1.42.3",
     "utif2": "4.1.0"
   },
   "peerDependencies": {
@@ -132,6 +132,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "licenses",
     "!dist/metafile-*.json",
     "README.md",

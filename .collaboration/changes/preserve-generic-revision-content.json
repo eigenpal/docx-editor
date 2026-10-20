@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Malformed content revision wrappers could discard content during resolution.",
+  "after": "Unsupported content wrappers refuse resolution before mutation.",
+  "reason": "The refusal publishes no operations and changes no shared fields.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-generic-wrapper.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-generic-revision-refusal.test.ts"
+  ],
+  "changeset": "preserve-generic-revision-content",
+  "migration": null
+}

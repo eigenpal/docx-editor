@@ -5,6 +5,7 @@
 // deleted ranges; the walk owns the offset advance and the push itself.
 
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import {
@@ -28,7 +29,7 @@ export interface RunDrawingAtomPlan {
 
 /** True for the two run children this plan covers. */
 export function isRunDrawingAtom(node: OoxmlNode): boolean {
-  return node.kind === 'drawing' || isRunLevelMcAlternateContent(node);
+  return node.kind === 'drawing' || isRunLevelMcAlternateContent(node) || isLegacyVmlAtom(node);
 }
 
 export function runDrawingAtomPlan(options: {
@@ -48,7 +49,8 @@ export function runDrawingAtomPlan(options: {
   if (!projection || projection.kind !== 'inline') {
     // The marker only for a drawing that will actually PUBLISH: hidden anchors and failed
     // projections paint nothing, so they must cue no change bar either.
-    const anchored = projection?.kind === 'anchored' && !projection.hidden;
+    const anchored =
+      projection?.kind === 'anchored' && !projection.hidden && !projection.footprintOnly;
     return anchored
       ? { recordDeleted: false, emit: true, extras: { anchoredAtom: true } }
       : { recordDeleted: false, emit: true };

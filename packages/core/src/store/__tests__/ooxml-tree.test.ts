@@ -154,6 +154,42 @@ describe('canonical typed OOXML tree', () => {
     expect(
       readOoxmlPart('<x xmlns:a="urn:same" xmlns:b="urn:same" a:id="1" b:id="2"/>', metadata)
     ).toMatchObject({ ok: false, reason: 'duplicate-expanded-attribute' });
+    // Names are shared across reads; a duplicate in a later read of known names still fails.
+    for (let read = 0; read < 2; read += 1) {
+      expect(
+        readOoxmlPart('<x xmlns:a="urn:same" xmlns:b="urn:same" a:id="1" b:id="2"/>', metadata)
+      ).toMatchObject({ ok: false, reason: 'duplicate-expanded-attribute' });
+    }
+  });
+
+  test('a long attribute list finds duplicates in linear time', () => {
+    // File input sets the attribute count. A pairwise scan of 50,000 names took seconds.
+    const names = Array.from({ length: 50_000 }, (_, index) => `a${index}="x"`).join(' ');
+    const started = performance.now();
+    expect(readOoxmlPart(`<x ${names}/>`, metadata).ok).toBe(true);
+    // Two prefixes for one namespace: a duplicate only the expanded-name check sees.
+    const duplicate = `<x xmlns:a="urn:same" xmlns:b="urn:same" ${names} a:id="1" b:id="2"/>`;
+    expect(readOoxmlPart(duplicate, metadata)).toMatchObject({
+      ok: false,
+      reason: 'duplicate-expanded-attribute',
+    });
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  test('a rejected name stays rejected on every read', () => {
+    // The shared name table stores only names that passed, so a bad name is checked again.
+    for (let read = 0; read < 2; read += 1) {
+      expect(readOoxmlPart('<x a:b:c="1" xmlns:a="urn:a"/>', metadata)).toMatchObject({
+        ok: false,
+      });
+    }
+    const ok = readOoxmlPart('<x xmlns:a="urn:a" a:id="1"/>', metadata);
+    const again = readOoxmlPart('<x xmlns:a="urn:a" a:id="2"/>', metadata);
+    expect(ok.ok && again.ok).toBe(true);
+    if (!ok.ok || !again.ok) return;
+    expect(
+      again.part.root.attributes.map((attribute) => [attribute.localName, attribute.value])
+    ).toEqual([['id', '2']]);
   });
 
   test('inherits trust-boundary DTD, entity, size, depth, and element limits', () => {

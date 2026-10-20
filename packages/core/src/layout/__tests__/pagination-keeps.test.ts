@@ -158,15 +158,174 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
     expect(linesPerPage(lay(fillers(4) + one('heading') + one('body')).pages)).toEqual([5, 1]);
   });
 
+  test('a heading follows a three-line successor that widow control moves whole', () => {
+    const body = fillers(2) + one('heading', '<w:keepNext/>') + multi(3);
+    expect(linesPerPage(lay(body).pages)).toEqual([2, 4]);
+  });
+
+  test('a heading follows a successor whose keepLines requires the whole paragraph', () => {
+    const body = fillers(1) + one('heading', '<w:keepNext/>') + multi(4, '<w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([1, 5]);
+  });
+
+  test('a keepLines group fits after natural page movement suppresses heading space before', () => {
+    const body =
+      fillers(2) +
+      one('heading', '<w:keepNext/><w:spacing w:before="300"/>') +
+      multi(4, '<w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([2, 5]);
+  });
+
+  test('a short widow-controlled successor fits after heading space before is suppressed', () => {
+    const body = fillers(2) + multi(2, '<w:keepNext/><w:spacing w:before="300"/>') + multi(3);
+    expect(linesPerPage(lay(body).pages)).toEqual([2, 5]);
+  });
+
+  test('contextual heading space before does not make a kept group too large', () => {
+    const body =
+      fillers(2) +
+      one('heading', '<w:keepNext/><w:contextualSpacing/><w:spacing w:before="800"/>') +
+      multi(4, '<w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([2, 5]);
+  });
+
+  test('a group that fits beside its heading does not move for suppressed contextual spacing', () => {
+    const body =
+      fillers(1) +
+      one('heading', '<w:keepNext/><w:contextualSpacing/><w:spacing w:before="300"/>') +
+      multi(3, '<w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([5]);
+  });
+
+  test('current-page fit still includes unsuppressed heading space before', () => {
+    const body =
+      fillers(1) +
+      one('heading', '<w:keepNext/><w:spacing w:before="300"/>') +
+      multi(3, '<w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([1, 4]);
+  });
+
+  test('a section-leading group keeps its authored space before', () => {
+    const body =
+      one('heading', '<w:keepNext/><w:spacing w:before="300"/>') + multi(4, '<w:keepLines/>');
+    const pages = lay(body).pages;
+    expect(linesPerPage(pages)).toEqual([1, 4]);
+    const heading = pages[0]!.fragments[0]!;
+    expect(heading.kind === 'paragraph' && heading.spacing.before).toBe(15);
+  });
+
+  test('a four-line successor can still split with two lines beside its heading', () => {
+    const body = fillers(2) + one('heading', '<w:keepNext/>') + multi(4);
+    expect(linesPerPage(lay(body).pages)).toEqual([5, 2]);
+  });
+
+  test('turning off widow control permits a three-line successor to split', () => {
+    const body = fillers(2) + one('heading', '<w:keepNext/>') + multi(3, WIDOW_OFF);
+    expect(linesPerPage(lay(body).pages)).toEqual([5, 1]);
+  });
+
+  for (const kind of ['page', 'column']) {
+    test(`a ${kind} break ends the successor prefix priced for widow control`, () => {
+      const successor = multi(3).replace('<w:br/>', `<w:br w:type="${kind}"/>`);
+      expect(
+        linesPerPage(lay(fillers(2) + one('heading', '<w:keepNext/>') + successor).pages)
+      ).toEqual([4, 2]);
+    });
+
+    test(`widow pricing permits a two-line prefix before a later ${kind} break`, () => {
+      const successor = multi(4).replace(
+        '<w:t>l2</w:t><w:br/>',
+        `<w:t>l2</w:t><w:br w:type="${kind}"/>`
+      );
+      expect(
+        linesPerPage(lay(fillers(2) + one('heading', '<w:keepNext/>') + successor).pages)
+      ).toEqual([5, 1, 1]);
+    });
+
+    test(`keepLines does not price successor lines after a ${kind} break`, () => {
+      const successor = multi(3, '<w:keepLines/>').replace(
+        '<w:t>l1</w:t><w:br/>',
+        `<w:t>l1</w:t><w:br w:type="${kind}"/>`
+      );
+      expect(
+        linesPerPage(lay(fillers(2) + one('heading', '<w:keepNext/>') + successor).pages)
+      ).toEqual([5, 1]);
+    });
+
+    test(`an internal ${kind} break stops lookahead into later keep-chain members`, () => {
+      const successor = multi(3, '<w:keepNext/>').replace('<w:br/>', `<w:br w:type="${kind}"/>`);
+      const body = fillers(2) + one('heading', '<w:keepNext/>') + successor + multi(3);
+      expect(linesPerPage(lay(body).pages)).toEqual([4, 5]);
+    });
+  }
+
+  test('a later column break keeps the heading in the first column when two successor lines fit', () => {
+    const successor = multi(4).replace(
+      '<w:t>l2</w:t><w:br/>',
+      '<w:t>l2</w:t><w:br w:type="column"/>'
+    );
+    const body = fillers(2) + one('heading', '<w:keepNext/>') + successor;
+    const pages = lay(body + '<w:sectPr><w:cols w:num="2" w:space="400"/></w:sectPr>').pages;
+    expect(linesPerPage(pages)).toEqual([6, 1]);
+    const heading = pages[0]!.fragments.find(
+      (fragment) => fragment.kind === 'paragraph' && fragment.paragraphId.endsWith('.2')
+    );
+    expect(heading?.box.x).toBe(0);
+  });
+
+  test('a successor page break before ends the keep group', () => {
+    const body = fillers(2) + one('heading', '<w:keepNext/>') + multi(3, '<w:pageBreakBefore/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([3, 3]);
+  });
+
+  test('keepLines on a successor with page break before adds no extra heading page', () => {
+    const body =
+      fillers(1) + one('heading', '<w:keepNext/>') + multi(4, '<w:pageBreakBefore/><w:keepLines/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([2, 4]);
+  });
+
+  test('a successor page break before discards trailing paragraph spacing from the group', () => {
+    const body =
+      fillers(2) +
+      one('heading', '<w:keepNext/><w:spacing w:after="800"/>') +
+      multi(3, '<w:pageBreakBefore/>');
+    expect(linesPerPage(lay(body).pages)).toEqual([3, 3]);
+  });
+
+  test('a page break before an internal chain member ends the preceding group', () => {
+    const body =
+      fillers(2) +
+      one('h1', '<w:keepNext/>') +
+      one('h2', '<w:pageBreakBefore/><w:keepNext/>') +
+      multi(3);
+    expect(linesPerPage(lay(body).pages)).toEqual([3, 4]);
+  });
+
+  test('an ignored page break before an empty section mark does not end the keep group', () => {
+    const section =
+      '<w:sectPr><w:pgSz w:w="4000" w:h="2000"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>';
+    const mark =
+      '<w:p><w:pPr><w:pageBreakBefore/><w:rPr><w:sz w:val="22"/></w:rPr>' +
+      section +
+      '</w:pPr></w:p>';
+    const body = fillers(4) + one('heading', '<w:keepNext/>') + mark + one('next') + section;
+    expect(linesPerPage(lay(body).pages)).toEqual([4, 2, 1]);
+  });
+
   test('a chain of keepNext paragraphs moves together, not one at a time', () => {
     const body = fillers(4) + one('h1', '<w:keepNext/>') + one('h2', '<w:keepNext/>') + one('body');
     expect(linesPerPage(lay(body).pages)).toEqual([4, 3]);
   });
 
   test('a chain that cannot fit a page of its own is abandoned, and everything is still placed', () => {
-    // The kept-with paragraph is twelve lines: no page can hold the group.
-    const body = fillers(4) + one('h1', '<w:keepNext/>') + multi(12, '<w:keepNext/>') + one('end');
+    // The kept-with paragraph is twelve lines that may not split: no page can hold the group.
+    const body =
+      fillers(4) +
+      one('h1', '<w:keepNext/>') +
+      multi(12, '<w:keepNext/><w:keepLines/>') +
+      one('end');
     const layout = lay(body);
+    expect(linesPerPage(layout.pages)[0]).toBe(5);
     expect(linesPerPage(layout.pages).reduce((a, b) => a + b, 0)).toBe(4 + 1 + 12 + 1);
   });
 
@@ -174,10 +333,11 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
     expect(linesPerPage(lay(fillers(4) + one('tail', '<w:keepNext/>')).pages)).toEqual([5]);
   });
 
-  test('a keepNext paragraph followed by a table is left alone — a table cannot be priced', () => {
+  test('a keepNext paragraph followed by a table moves with the table opening', () => {
+    // The table's first row has no room beside the heading, so both start the next page.
     const table = `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
     const layout = lay(fillers(4) + one('heading', '<w:keepNext/>') + table);
-    expect(linesPerPage(layout.pages)[0]).toBe(5);
+    expect(linesPerPage(layout.pages)[0]).toBe(4);
   });
 });
 
@@ -247,6 +407,24 @@ describe('incremental layout still reuses pages by identity (task 9.4)', () => {
     const second = layoutSemanticDocument(part, 2, options);
     expect(second.pages).toBe(first.pages);
     for (const [index, page] of second.pages.entries()) expect(page).toBe(first.pages[index]!);
+  });
+
+  test('editing a successor between three and four lines repositions its heading', () => {
+    const part = (lines: number) =>
+      load(fillers(2) + one('heading', '<w:keepNext/>') + multi(lines));
+    const options = {
+      measurer,
+      geometry: SMALL,
+      session: session(),
+      cache: createParagraphLayoutCache(),
+    };
+    for (const [revision, lines] of [3, 4, 3].entries()) {
+      const document = part(lines);
+      const retained = layoutSemanticDocument(document, revision + 1, options);
+      const fresh = layoutSemanticDocument(document, revision + 1, { measurer, geometry: SMALL });
+      expect(linesPerPage(retained.pages)).toEqual(lines === 3 ? [2, 4] : [5, 2]);
+      expect(retained.pages).toEqual(fresh.pages);
+    }
   });
 
   test('editing the block a keepNext paragraph is kept WITH re-decides the keep', () => {
@@ -523,20 +701,20 @@ describe('keepNextFlowKeys folds over the other folds', () => {
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head splices in the AUGMENTED successor key, so a verdict flip under it moves
     // the head's own key too. Folded the other way round the head would carry a bare `p`.
-    expect(flow[0]).toBe('h~kn~p~cs~10');
+    expect(flow[0]).toBe('h~kn~7:p~cs~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its border-group verdict', () => {
     const folded = borderGroupFlowKeys(['h', 'p'], () => 'box');
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     // The head carries its OWN group verdict too, then the successor's whole folded key.
-    expect(flow[0]).toBe('h~bg~01~kn~p~bg~10');
+    expect(flow[0]).toBe('h~bg~01~kn~7:p~bg~10.');
   });
 
   test('a chain head carries the successor key INCLUDING its TOC verdict', () => {
     const folded = tocFieldFlowKeys(['h', 'p'], (index) => (index === 1 ? '110' : ''));
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
-    expect(flow[0]).toBe('h~kn~p~toc~110');
+    expect(flow[0]).toBe('h~kn~9:p~toc~110.');
   });
 });
 
@@ -557,6 +735,20 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(composeFlowKeys(keys, none)).toBe(keys);
   });
 
+  test('a terminal table group folds before keep-next and changes all member keys', () => {
+    const keys = ['lead', 'table', 'anchor'];
+    const fold = (token: string) =>
+      composeFlowKeys(keys, {
+        ...none,
+        terminalTableGroup: { start: 1, anchorIndex: 2, token },
+        keepsNextAt: (index) => index === 0,
+      });
+    const before = fold('empty');
+    const after = fold('bookmarked');
+    expect(before[0]).toBe(`lead~kn~${before[1]!.length}:${before[1]}`);
+    for (let index = 0; index < keys.length; index++) expect(after[index]).not.toBe(before[index]);
+  });
+
   test('a keep-next chain head carries its successor POST-fold — every other fold first', () => {
     // Block 0 keeps with block 1; block 1 carries a marker, a contextual verdict and a
     // border-group verdict. The head must splice block 1's FINISHED key: run keepNext
@@ -575,8 +767,9 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(successor).toContain('~bg~');
     expect(successor).toContain('~toc~110');
     expect(successor).toContain('~mk~M1');
-    // The whole finished successor key, spliced verbatim — the order test proper.
-    expect(composed[0]).toBe(`a~kn~${successor}`);
+    // The whole finished successor key, spliced verbatim — the order test proper. The
+    // trailing `.` records that the successor is the story's last block.
+    expect(composed[0]).toBe(`a~kn~${successor.length}:${successor}.`);
   });
 
   test('the composition equals the folds applied by hand with keepNext LAST', () => {
@@ -591,4 +784,17 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     });
     expect(composed).toEqual(byHand);
   });
+});
+
+test('keep-next keys carry the next ordinary chain through positioned frames', () => {
+  const fold = (tail: string) =>
+    keepNextFlowKeys(
+      ['heading', 'positioned', 'anchor', tail],
+      (index) => index === 0 || index === 2,
+      (index) => index === 1
+    );
+  const before = fold('short');
+  expect(before[0]).toBe('heading~kn~-6:anchor5:short.');
+  expect(before[1]).toBe('positioned');
+  expect(fold('long')[0]).not.toBe(before[0]);
 });

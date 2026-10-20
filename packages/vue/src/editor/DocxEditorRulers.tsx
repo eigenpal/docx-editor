@@ -99,7 +99,13 @@ function useIndentDrag(): IndentDrag {
     () =>
       pending.value ??
       (stored.value
-        ? { left: stored.value.left, right: stored.value.right, firstLine: stored.value.firstLine }
+        ? {
+            left: stored.value.left,
+            right: stored.value.right,
+            firstLine: stored.value.firstLine,
+            // A right-to-left paragraph's handles sit on the mirrored axis.
+            ...(stored.value.rtl ? { rtl: true } : {}),
+          }
         : null)
   );
 

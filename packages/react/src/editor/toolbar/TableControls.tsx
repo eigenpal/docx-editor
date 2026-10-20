@@ -29,11 +29,12 @@ import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';
 import { ToolbarSeparator } from './parts';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import { Slot } from './Slot';
 import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
+import { useDropdownClose } from './useDropdownClose';
 import {
-  useDropdownClose,
   useTableChromeTriggerA11y,
   useTableDialogKeyboard,
   useTableMenuKeyboard,
@@ -210,7 +211,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
-    useDropdownClose(open, setOpen, rootRef);
+    useDropdownClose(open, setOpen, rootRef, hidden || !visible);
 
     const value = useMemo<TableSlotContextValue>(
       () => ({ open, setOpen, enabled, disabledReason, apply, draft, triggerRef }),
@@ -557,7 +558,7 @@ function buildColorSplitCompound(
     const [lastHex, setLastHex] = useState(defaultHex);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
-    useDropdownClose(open, setOpen, rootRef);
+    useDropdownClose(open, setOpen, rootRef, hidden || !visible);
 
     const value = useMemo<TableSlotContextValue>(
       () => ({
@@ -887,6 +888,14 @@ export function TableChromeGroup({
           return <Fragment key={Part.docxSlot}>{override}</Fragment>;
         }
         return <Part key={Part.docxSlot} />;
+      })}
+      {[ToolbarTableMergeCells, ToolbarTableSplitCell].map((Part) => {
+        const override = overrides.get(Part.docxSlot);
+        return override ? (
+          <Fragment key={Part.docxSlot}>{override}</Fragment>
+        ) : (
+          <Part key={Part.docxSlot} />
+        );
       })}
     </>
   );

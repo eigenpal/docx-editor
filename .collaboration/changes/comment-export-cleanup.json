@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Saving retains emptied comment parts after the last comment deletion.",
+  "after": "Saving normalizes eligible empty comment parts from canonical content while live parts retain their stable addresses.",
+  "reason": "Export cleanup changes no shared operations or live state. Existing participants retain comment insertion and undo targets.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-comment-export.test.ts"],
+  "changeset": "empty-comment-export",
+  "migration": null
+}

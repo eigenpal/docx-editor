@@ -17,6 +17,7 @@
 // Resolved caches, dependency closure, shaping, convergent pagination, and the anchored
 // DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
 
+export { mapSymbolPuaText } from './symbol-encoding.ts';
 export {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,
@@ -53,6 +54,8 @@ export {
   type ShapingEnvironmentInput,
   type ShapingEnvironment,
   type ShapeInput,
+  type ShapingContext,
+  MAX_SHAPING_CONTEXT,
   type ShapedGlyph,
   type GlyphOutline,
   type ShapedCluster,
@@ -81,6 +84,7 @@ export {
   type HarfBuzzTextShaperOptions,
 } from './harfbuzz-shaper.ts';
 export { setHarfBuzzWasmUrl } from './harfbuzz-wasm-binary.ts';
+export type { FontShapingOptions } from './font-shaping-policy.ts';
 export {
   LayoutShapingConfigurationError,
   createLayoutShaping,
@@ -162,14 +166,22 @@ export {
   type BlockFragmentRecord,
   type ContentControlBoundaryRecord,
   type ContentControlGeometryFragment,
+  type ContentControlModelRange,
   type ContentControlLevel,
   type ContentControlLock,
   type ContentControlMappedType,
   type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
+  type PageBorderDisplay,
+  type PageBorderFrameRecord,
+  type PageBorderOffsetFrom,
+  type PageBorderSide,
+  type PageBorderStrokeRecord,
+  type PageBorderZOrder,
   type PageGeometry,
   type PageRecord,
+  type ListMarkerPictureRecord,
   type ListMarkerRecord,
   type NoteAreaRecord,
   type NoteStoryRecord,
@@ -180,6 +192,7 @@ export {
   type ParagraphFragmentRecord,
   type ParagraphIndent,
   type ParagraphSpacing,
+  type SectionBreakMarkRecord,
   type SemanticLayout,
   type SourceRange,
   type SpanLinkRecord,
@@ -188,12 +201,14 @@ export {
   type TableFragmentRecord,
   type TableRowFragmentRecord,
   type TextMeasurer,
+  type TextOutline,
 } from './semantic-records.ts';
 export type {
   SemanticArtifactRootStoryKind,
   SemanticArtifactStoryKind,
   SemanticCommentArtifactRecord,
   SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactOccurrenceGeometry,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,
@@ -214,14 +229,19 @@ export {
   type StoryDrawingContext,
   type StoryDrawingHost,
   type StoryParagraphFragmentContext,
+  type TextboxOwnerRecord,
 } from './export-traversal.ts';
 export { lineSegments, type LineSegment } from './line-segments.ts';
+export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export type {
   AnchoredDrawingLayoutFallback,
   AnchoredDrawingRecord,
+  DrawingGroupPictureRecord,
   InlineDrawingRecord,
 } from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';
+export type { DrawingTextArtRecord, TextArtFit } from './drawing-text-art.ts';
+export type { GroupTextboxStoryRecord } from './group-textbox-layout.ts';
 export type { TextboxStoryFallbackReason } from './textbox-story-layout.ts';
 export type {
   DrawingClipFallback,
@@ -349,6 +369,7 @@ export {
   type NumberingLevel,
   type NumberingLevelIndent,
 } from './numbering-index.ts';
+export type { NumberingPictureBullet, ResolvedPictureBullet } from './numbering-picture-bullet.ts';
 export {
   MAX_LVL_TEXT_LENGTH,
   MAX_MARKER_TEXT_LENGTH,
@@ -378,8 +399,10 @@ export {
   type ResolvedListItem,
 } from './list-resolve.ts';
 export { createFixedMeasurer } from './fixed-measurer.ts';
+export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
+  type EquationBarGeometry,
   type EquationFractionGeometry,
   type EquationGeometry,
   type EquationNaryGeometry,
@@ -565,6 +588,13 @@ export {
   type SectionPageNumbering,
   type SectionProperties,
 } from './section-properties.ts';
+export {
+  PAGE_BORDER_SIDES,
+  pageBordersFingerprint,
+  parsePageBorders,
+  type SectionPageBorders,
+} from './page-borders.ts';
+export { pageBorderFrame } from './page-border-frame.ts';
 export { pagesToMaterialize, type MaterializationInput, type ViewportWindow } from './viewport.ts';
 export {
   createParagraphLayoutCache,
@@ -583,6 +613,7 @@ export {
 export {
   DEFAULT_RUN_STYLE,
   baselineShiftPtOf,
+  glyphSizeFactorOf,
   displayText,
   measureDisplayText,
   resolveRunStyle,
@@ -591,6 +622,7 @@ export {
   type ResolvedUnderline,
   type VerticalAlign,
 } from './run-style.ts';
+export { runBorderStrokesForLine } from './run-border-strokes.ts';
 export {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,
@@ -685,6 +717,7 @@ export {
   type TableRowHeight,
   type TableRowHeightRule,
 } from './semantic-table.ts';
+export type { AutofitFieldContext, TableAutofitContext } from './table-autofit-widths.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,
@@ -723,3 +756,8 @@ export type {
   UnsupportedElementRule,
 } from './unsupported-content-types.ts';
 export { createUnsupportedContentProjector } from './unsupported-content.ts';
+
+export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
+export { tabLeaderPattern } from './tab-leader-pattern.ts';
+export { noteSeparatorRuleBox } from './note-separator-rule.ts';
+export type { StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';

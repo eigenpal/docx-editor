@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A full-column floating-table band displaces pure empty paragraph marks below the table.",
+  "after": "Pure empty paragraph marks keep their authored metrics beside floating tables. Content-bearing and decorated paragraphs keep ordinary wrapping.",
+  "reason": "Layout-only wrap selection correction. Canonical content, operations and document serialization do not change.",
+  "tests": ["packages/core/src/layout/__tests__/empty-line-full-width-table.test.ts"],
+  "changeset": "empty-paragraph-floating-table",
+  "migration": null
+}

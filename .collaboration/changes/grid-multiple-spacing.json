@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Multiple line spacing on a document line grid scales the snapped line, and at-least spacing ignores the grid.",
+  "after": "Multiple line spacing counts in grid lines with the text centered, and at-least spacing up to the grid line takes the grid line.",
+  "reason": "Only line geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/line-grid.test.ts",
+    "packages/core/src/layout/__tests__/grid-line-page-fit.test.ts"
+  ],
+  "changeset": "grid-multiple-spacing",
+  "migration": null
+}

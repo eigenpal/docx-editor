@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The OOXML reader kept whitespace between the children of a supported container when the element inherited xml:space=\"preserve\". A run, paragraph, table, content control, or picture written with indented XML then failed its own validation and was read as a generic node, so its text, no-break spaces, and tabs left the layout.",
+  "after": "xml:space=\"preserve\" keeps whitespace between children only for unsupported elements, text elements (w:t, w:delText, w:instrText), and the text-valued drawing position elements. Supported containers with element-only content drop that indentation (XML whitespace only: space, tab, carriage return, line feed) before typing, so the indented and compact spellings produce the same tree. Any other character data, including U+00A0, U+3000 and U+FEFF, still keeps every text node and the generic fallback.",
+  "reason": "This is an import-side canonicalization of OOXML bytes. It adds no stored field, operation, or journal primitive, and it does not change how any shared node, identity, or update is represented or interpreted. A room holds the tree its seeding participant read; released participants interpret typed runs and generic nodes in shared state exactly as they do today. Only the set of files whose indented containers open as typed content widens.",
+  "tests": [
+    "packages/core/src/store/__tests__/preserved-structural-whitespace.test.ts",
+    "packages/core/src/editor/__tests__/preserved-run-whitespace.test.ts"
+  ],
+  "changeset": "preserved-run-indentation",
+  "migration": null
+}

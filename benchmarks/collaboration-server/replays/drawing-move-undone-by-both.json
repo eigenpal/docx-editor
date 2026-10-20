@@ -1,0 +1,65 @@
+{
+  "config": "textbox",
+  "seed": 4,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "positionDrawing",
+          "drawingNodeId": "",
+          "position": {
+            "horizontalEmu": 2037550,
+            "verticalEmu": 197240
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "positionDrawing",
+          "drawingNodeId": "",
+          "position": {
+            "horizontalEmu": 8112,
+            "verticalEmu": 2423726
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 0
+    },
+    {
+      "kind": "undo",
+      "replica": 1
+    }
+  ]
+}

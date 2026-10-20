@@ -7,12 +7,11 @@
 // host's original mark on the trailing merge. A single-paragraph fragment whose source
 // mark was not covered splices inline and leaves host properties untouched.
 
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-  type OoxmlParagraphNode,
-  type OoxmlPart,
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
   carryIndexToRebuiltRoot,
@@ -22,8 +21,8 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { mintParaId, mintedParagraphIdentityAttributes, usedParaIds } from '../package/para-id.ts';
-import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { usedParaIds, w14PrefixInScopeAt, withFreshParaIds } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   cloneWithNewIds,
   paragraphPropertiesNodeOf,
@@ -38,6 +37,7 @@ import {
 } from './tree-op-segments.ts';
 import { rejectContentEdit } from './tree-op-validate-controls.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
+import { equationsOfAtom, isOmmlDisplay } from '../package/omml-display.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 import { recordSetNamespaceBinding } from '../package/canonical-primitive-capture.ts';
 
@@ -97,49 +97,6 @@ export function validateInsertFragment(
     if (refused) return refused;
   }
   return rejectContentEdit(part, paragraph as OoxmlParagraphNode, op.offset, op.offset);
-}
-
-/** Fresh `w14:paraId`/`w14:textId` on every cloned paragraph, deterministic per seat. */
-function withFreshParaIds(
-  node: OoxmlNode,
-  used: Set<string>,
-  seedBase: string,
-  counter: { value: number }
-): OoxmlNode {
-  if (node.kind === 'textValue') return node;
-  const element: OoxmlElement = node;
-  let attributes = element.attributes;
-  if (element.localName === 'p' && element.namespaceUri === WML_NAMESPACE_URI) {
-    const identity = element.attributes.find(
-      (attribute) =>
-        attribute.namespaceUri === W14_NAMESPACE_URI && attribute.localName === 'paraId'
-    );
-    // Re-mint whenever a `w14:paraId` is present, valid or not: a crafted fragment can
-    // carry a syntactically INVALID id shared across paragraphs, which would plant
-    // duplicate identities in the host. A fresh valid id replaces it either way.
-    if (identity) {
-      const minted = mintParaId(`${seedBase}:${counter.value}`, used);
-      counter.value += 1;
-      used.add(minted);
-      const kept = element.attributes.filter(
-        (attribute) =>
-          !(
-            attribute.namespaceUri === W14_NAMESPACE_URI &&
-            (attribute.localName === 'paraId' || attribute.localName === 'textId')
-          )
-      );
-      attributes = [
-        ...kept,
-        ...mintedParagraphIdentityAttributes(identity.prefix ?? 'w14', minted),
-      ] as typeof element.attributes;
-    }
-  }
-  const children = element.children.map((child) =>
-    withFreshParaIds(child, used, seedBase, counter)
-  );
-  const childrenChanged = children.some((child, index) => child !== element.children[index]);
-  if (attributes === element.attributes && !childrenChanged) return node;
-  return { ...element, attributes, children } as OoxmlNode;
 }
 
 /**
@@ -212,9 +169,38 @@ export function withRequiredNamespaceBindings(
   return Object.freeze({ ...part, root }) as OoxmlPart;
 }
 
+/** Keep local bindings when a paste removes the node's original parent. */
+function withParentBindings(node: OoxmlNode, parent: OoxmlElement): OoxmlNode {
+  if (node.kind === 'textValue' || parent.namespaceBindings.length === 0) return node;
+  const ownPrefixes = new Set(node.namespaceBindings.map((binding) => binding.prefix));
+  const inherited = parent.namespaceBindings.filter((binding) => !ownPrefixes.has(binding.prefix));
+  if (inherited.length === 0) return node;
+  return { ...node, namespaceBindings: [...inherited, ...node.namespaceBindings] };
+}
+
 function inlineChildrenOf(paragraph: OoxmlElement): readonly OoxmlNode[] {
   const pPr = paragraphPropertiesNodeOf(paragraph);
-  return paragraph.children.filter((child) => child !== pPr);
+  return paragraph.children
+    .filter((child) => child !== pPr)
+    .map((child) => withParentBindings(child, paragraph));
+}
+
+/**
+ * A display equation (`m:oMathPara`) is a paragraph of its own. Merged beside existing
+ * text, it becomes its inline equations, the same as Word pastes a display into a line.
+ */
+function besideText(
+  pasted: readonly OoxmlNode[],
+  neighbour: readonly OoxmlNode[]
+): readonly OoxmlNode[] {
+  const hasContent = (nodes: readonly OoxmlNode[]): boolean =>
+    paragraphLength({ children: nodes } as unknown as OoxmlParagraphNode) > 0;
+  if (!pasted.some(isOmmlDisplay) || !hasContent(neighbour)) return pasted;
+  return pasted.flatMap((node): OoxmlNode[] =>
+    isOmmlDisplay(node)
+      ? equationsOfAtom(node).map((equation) => withParentBindings(equation, node))
+      : [node]
+  );
 }
 
 function rebuiltParagraph(
@@ -245,12 +231,15 @@ export function applyInsertFragment(
   const nextId = createNodeIdAllocator(hostPart, 'paste');
   const paraIds = new Set(usedParaIds(hostPart.root as OoxmlElement));
   const counter = { value: 0 };
+  // The clones land beside the host paragraph (or inside it), so its scope decides the prefix.
+  const hostPrefix = w14PrefixInScopeAt(hostPart, host);
   const blocks = op.blocks.map((block, index) =>
     withFreshParaIds(
       cloneWithNewIds(block, nextId),
       paraIds,
-      `${op.paragraphId}:${op.offset}:${index}`,
-      counter
+      actorScopedSeed(`${op.paragraphId}:${op.offset}:${index}`),
+      counter,
+      hostPrefix
     )
   );
 
@@ -278,7 +267,10 @@ export function applyInsertFragment(
     const appended = replaceChildren(
       split.part,
       head.id,
-      [...head.children, ...inlineChildrenOf(first as OoxmlElement)],
+      [
+        ...head.children,
+        ...besideText(inlineChildrenOf(first as OoxmlElement), inlineChildrenOf(host)),
+      ],
       { ...options, deferValidation: true }
     );
     if (!appended.ok) return { ok: false, reason: 'tree-invariant' };
@@ -318,12 +310,18 @@ export function applyInsertFragment(
     middle.shift();
     const head = findNode(current, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-    const fragmentPPr = paragraphPropertiesNodeOf(first as OoxmlElement);
+    const sourcePPr = paragraphPropertiesNodeOf(first as OoxmlElement);
+    const fragmentPPr = sourcePPr
+      ? (withParentBindings(sourcePPr, first as OoxmlElement) as OoxmlElement)
+      : undefined;
     const headInline = inlineChildrenOf(head);
     const replaced = replaceChildren(
       current,
       head.id,
-      rebuiltParagraph(fragmentPPr, [...headInline, ...inlineChildrenOf(first as OoxmlElement)]),
+      rebuiltParagraph(fragmentPPr, [
+        ...headInline,
+        ...besideText(inlineChildrenOf(first as OoxmlElement), headInline),
+      ]),
       { ...options, deferValidation: true }
     );
     if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
@@ -346,7 +344,10 @@ export function applyInsertFragment(
     const replaced = replaceChildren(
       current,
       tail.id,
-      rebuiltParagraph(tailPPr, [...inlineChildrenOf(last as OoxmlElement), ...tailInline]),
+      rebuiltParagraph(tailPPr, [
+        ...besideText(inlineChildrenOf(last as OoxmlElement), tailInline),
+        ...tailInline,
+      ]),
       { ...options, deferValidation: true }
     );
     if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
@@ -371,6 +372,7 @@ export function applyInsertFragment(
     dirty: [host.id, tailId],
     created,
     deleted: [],
+    ...(op.lastMarkCovered === true ? { caret: { paragraphId: tailId } } : {}),
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
   };

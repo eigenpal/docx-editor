@@ -17,6 +17,7 @@ import type {
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { useCollaborationStatus } from '../../react/useCollaborationStatus.ts';
+import { DocxEditorCollaboration } from '../../react/DocxEditorCollaboration.tsx';
 
 afterEach(() => {
   cleanup();
@@ -24,6 +25,9 @@ afterEach(() => {
 
 function controllableSession(): EditorCollaborationSession & {
   failThenRecover(code: CollaborationFailureCode): void;
+  degrade(code: CollaborationFailureCode): void;
+  diverge(code: CollaborationFailureCode): void;
+  wait(waiting: boolean): void;
 } {
   const statusState = createCollaborationStatusTracker('ready');
   const listeners = new Set<
@@ -63,6 +67,18 @@ function controllableSession(): EditorCollaborationSession & {
       statusState.set('error', code);
       emit();
       statusState.set('ready');
+      emit();
+    },
+    degrade(code: CollaborationFailureCode) {
+      statusState.set('error', code, undefined, true);
+      emit();
+    },
+    diverge(code: CollaborationFailureCode) {
+      statusState.set('error', code);
+      emit();
+    },
+    wait(waiting: boolean) {
+      statusState.setWaiting(waiting);
       emit();
     },
   };
@@ -113,5 +129,102 @@ describe('useCollaborationStatus', () => {
     view.rerender(<Probe />);
     expect(seen.length).toBe(2);
     expect(seen[0]).toBe(seen[1]);
+  });
+});
+
+describe('repeated and self-healing failures', () => {
+  function Probe({ session }: { session: EditorCollaborationSession }) {
+    const snapshot = useCollaborationStatus(session);
+    return (
+      <div
+        data-failures={String(snapshot.failureCount)}
+        data-recovering={String(snapshot.recovering)}
+        data-diverged={String(snapshot.diverged)}
+      />
+    );
+  }
+
+  test('each refusal shows, also when it repeats the same code', () => {
+    const session = controllableSession();
+    const { container } = render(<Probe session={session} />);
+    const node = () => container.firstElementChild as HTMLElement;
+    act(() => session.failThenRecover('unknown-logical-id'));
+    expect(node().dataset.failures).toBe('1');
+    act(() => session.failThenRecover('unknown-logical-id'));
+    expect(node().dataset.failures).toBe('2');
+  });
+
+  test('an error that heals by itself is recovering, not diverged', () => {
+    const session = controllableSession();
+    const { container } = render(<Probe session={session} />);
+    act(() => session.degrade('remote-apply-failed'));
+    const node = container.firstElementChild as HTMLElement;
+    expect(node.dataset.recovering).toBe('true');
+    expect(node.dataset.diverged).toBe('false');
+  });
+});
+
+describe('DocxEditorCollaboration.Status', () => {
+  test('shows nothing while all is well, and a rejoin action when out of sync', () => {
+    const session = controllableSession();
+    let rejoined = 0;
+    const { container } = render(
+      <DocxEditorCollaboration.Status session={session} onRejoin={() => (rejoined += 1)} />
+    );
+    expect(container.querySelector('[data-collaboration-status]')).toBeNull();
+    act(() => session.degrade('remote-apply-failed'));
+    expect(
+      container
+        .querySelector('[data-collaboration-status]')
+        ?.getAttribute('data-collaboration-status')
+    ).toBe('syncing');
+    act(() => session.diverge('remote-apply-failed'));
+    const notice = container.querySelector('[data-collaboration-status="outOfSync"]');
+    expect(notice?.getAttribute('role')).toBe('status');
+    const button = notice?.querySelector('button');
+    expect(button?.textContent).toBe('Rejoin');
+    act(() => button!.click());
+    expect(rejoined).toBe(1);
+  });
+
+  test('keeps an empty live region mounted, and says when edits wait', () => {
+    const session = controllableSession();
+    const { container } = render(<DocxEditorCollaboration.Status session={session} />);
+    const region = container.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region?.textContent).toBe('');
+    act(() => session.wait(true));
+    expect(region?.getAttribute('data-collaboration-status')).toBe('waiting');
+    act(() => session.wait(false));
+    expect(region?.textContent).toBe('');
+  });
+
+  test('a format mismatch asks for an upgrade, with no rejoin action', () => {
+    const session = controllableSession();
+    const { container } = render(
+      <DocxEditorCollaboration.Status session={session} onRejoin={() => {}} />
+    );
+    act(() => session.diverge('schema-version-mismatch'));
+    const notice = container.querySelector('[data-collaboration-status="upgradeRequired"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.querySelector('button')).toBeNull();
+  });
+
+  test('a room that cannot continue asks for a new room, with no rejoin action', () => {
+    const session = controllableSession();
+    const { container } = render(
+      <DocxEditorCollaboration.Status session={session} onRejoin={() => {}} />
+    );
+    act(() => session.diverge('concurrent-seed'));
+    const notice = container.querySelector('[data-collaboration-status="newRoomRequired"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.querySelector('button')).toBeNull();
+  });
+
+  test('tells the user when the room refused an edit', () => {
+    const session = controllableSession();
+    const { container } = render(<DocxEditorCollaboration.Status session={session} />);
+    act(() => session.failThenRecover('unknown-logical-id'));
+    expect(container.querySelector('[data-collaboration-status="editRefused"]')).not.toBeNull();
   });
 });

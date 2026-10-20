@@ -1,3 +1,5 @@
+import { resolveTocSources } from './toc-sources.ts';
+import { TOC_SYMBOL_MARK, tocSymbolNode, type TocSymbol } from './toc-symbol-text.ts';
 // Build TOC result paragraphs and ensure heading bookmarks.
 
 import {
@@ -35,6 +37,8 @@ export interface TocEntryPlan {
   readonly headingParagraphId: string;
   readonly bookmarkName: string;
   readonly pageNumberText: string;
+  /** The heading's symbols, one per {@link TOC_SYMBOL_MARK} in `text`, in order. */
+  readonly symbols?: readonly TocSymbol[];
 }
 
 function wAttr(localName: string, value: string) {
@@ -70,7 +74,48 @@ function textNode(mint: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
-function runWithText(mint: () => string, text: string): OoxmlNode {
+/**
+ * Entry text from the outline shows a heading's non-breaking hyphen as U+2011. The row writes
+ * it back as a `w:noBreakHyphen`, as the heading has it.
+ */
+function textWithNonBreakingHyphens(mint: () => string, text: string): OoxmlNode[] {
+  if (!text.includes('\u2011')) return [textNode(mint, text)];
+  return text.split('\u2011').flatMap((piece, index) => [
+    ...(index > 0
+      ? [
+          {
+            id: mint(),
+            kind: 'generic',
+            namespaceUri: WML_NAMESPACE_URI,
+            localName: 'noBreakHyphen',
+            prefix: 'w',
+            namespaceBindings: [],
+            attributes: [],
+            children: [],
+          } as OoxmlNode,
+        ]
+      : []),
+    ...(piece.length > 0 ? [textNode(mint, piece)] : []),
+  ]);
+}
+
+/** Text pieces between symbol marks, each mark written back as its `w:sym`. */
+function textWithSymbols(
+  mint: () => string,
+  text: string,
+  symbols: readonly TocSymbol[] | undefined
+): OoxmlNode[] {
+  if (!symbols || !text.includes(TOC_SYMBOL_MARK)) return textWithNonBreakingHyphens(mint, text);
+  return text.split(TOC_SYMBOL_MARK).flatMap((piece, index) => {
+    const symbol = index > 0 ? symbols[index - 1] : undefined;
+    return [
+      ...(symbol ? [tocSymbolNode(mint, symbol)] : []),
+      ...(piece.length > 0 ? textWithNonBreakingHyphens(mint, piece) : []),
+    ];
+  });
+}
+
+function runWithText(mint: () => string, text: string, symbols?: readonly TocSymbol[]): OoxmlNode {
   return {
     id: mint(),
     kind: 'run',
@@ -79,7 +124,23 @@ function runWithText(mint: () => string, text: string): OoxmlNode {
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: [textNode(mint, text)],
+    children: text.split('\t').flatMap((piece, index) => [
+      ...(index > 0
+        ? [
+            {
+              id: mint(),
+              kind: 'tab',
+              namespaceUri: WML_NAMESPACE_URI,
+              localName: 'tab',
+              prefix: 'w',
+              namespaceBindings: [],
+              attributes: [],
+              children: [],
+            } as OoxmlNode,
+          ]
+        : []),
+      ...textWithSymbols(mint, piece, symbols),
+    ]),
   } as unknown as OoxmlNode;
 }
 
@@ -259,8 +320,8 @@ export function buildTocEntryParagraph(
   paragraphPropertiesTemplate?: OoxmlNode
 ): OoxmlNode {
   const styleId = `TOC${Math.min(entry.level + 1, 9)}`;
-  const runs: OoxmlNode[] = [runWithText(mint, entry.text)];
-  if (!instruction.omitPageNumbers) {
+  const runs: OoxmlNode[] = [runWithText(mint, entry.text, entry.symbols)];
+  if (!instruction.omitPageNumbers && entry.pageNumberText !== '') {
     runs.push(ptabRun(mint));
     runs.push(runWithText(mint, entry.pageNumberText));
   }
@@ -296,6 +357,16 @@ export function buildTocEntryParagraph(
   } as unknown as OoxmlNode;
 }
 
+/** Splice the field opening in after a paragraph's properties, where Word puts it. */
+function withOpeningRun(paragraph: OoxmlNode, opening: OoxmlNode): OoxmlNode {
+  const children = (paragraph as unknown as { children: readonly OoxmlNode[] }).children;
+  const at = children[0]?.kind === 'paragraphProperties' ? 1 : 0;
+  return {
+    ...paragraph,
+    children: [...children.slice(0, at), opening, ...children.slice(at)],
+  } as unknown as OoxmlNode;
+}
+
 /** Build an SDT-wrapped complex TOC field with an already planned cached result. */
 export function buildTocContentControl(
   mint: () => string,
@@ -303,13 +374,22 @@ export function buildTocContentControl(
   instruction: TocInstruction,
   alias: string
 ): OoxmlNode {
-  const begin = paragraphWithChildren(mint, [
-    runWithChildren(mint, [
-      fieldChar(mint, 'begin'),
-      instructionText(mint, instruction.raw),
-      fieldChar(mint, 'separate'),
-    ]),
+  // Word opens the field INSIDE the first entry's paragraph, not in one of its own: begin,
+  // the instruction and the separator are followed by that entry's hyperlink in the same
+  // `w:p`. A paragraph holding only the opening has an empty field result, and its mark
+  // still occupies a line, so emitting one put a blank row above every inserted TOC.
+  // An empty TOC has no entry to open inside and keeps the standalone paragraph.
+  const opening = runWithChildren(mint, [
+    fieldChar(mint, 'begin'),
+    instructionText(mint, instruction.raw),
+    fieldChar(mint, 'separate'),
   ]);
+  const entryParagraphs = entries.map((entry) => buildTocEntryParagraph(mint, entry, instruction));
+  const first = entryParagraphs[0];
+  const opened: readonly OoxmlNode[] =
+    first === undefined
+      ? [paragraphWithChildren(mint, [opening])]
+      : [withOpeningRun(first, opening), ...entryParagraphs.slice(1)];
   const end = paragraphWithChildren(mint, [runWithChildren(mint, [fieldChar(mint, 'end')])]);
   const properties: OoxmlNode = {
     id: mint(),
@@ -371,11 +451,7 @@ export function buildTocContentControl(
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: [
-      begin,
-      ...entries.map((entry) => buildTocEntryParagraph(mint, entry, instruction)),
-      end,
-    ],
+    children: [...opened, end],
   } as unknown as OoxmlNode;
   return {
     id: mint(),
@@ -484,11 +560,9 @@ export function planTocEntries(
   let bookmarkAlloc = 0;
   const nextTocId = nextTocBookmarkNumber(index, actorId);
 
-  for (const heading of outline) {
+  for (const heading of resolveTocSources(part, outline, instruction) ?? []) {
     if (entries.length >= TOC_MAX_ENTRIES) break;
     if (excludeParagraphIds.has(heading.blockId)) continue;
-    const oneBased = heading.level + 1;
-    if (oneBased < instruction.outlineStart || oneBased > instruction.outlineEnd) continue;
 
     let bookmarkName = nameByParagraph.get(heading.blockId);
     if (!bookmarkName && instruction.hyperlink) {
@@ -505,10 +579,12 @@ export function planTocEntries(
 
     entries.push({
       level: heading.level,
-      text: tocEntryText(heading.text),
+      text: heading.tcEntry ? heading.text.trim() : tocEntryText(heading.text),
       headingParagraphId: heading.blockId,
       bookmarkName,
-      pageNumberText: pageNumberByParagraphId.get(heading.blockId) ?? '1',
+      pageNumberText: heading.omitPageNumber
+        ? ''
+        : (pageNumberByParagraphId.get(heading.blockId) ?? '1'),
     });
   }
 

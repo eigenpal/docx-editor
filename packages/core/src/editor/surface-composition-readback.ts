@@ -179,6 +179,17 @@ function walkContainer(container: Element, walk: ReadbackWalk): void {
       // either — a resolved display mode lays merged paragraphs out on one line, so this is
       // an ordinary page, not a malformed one.
       if (element.dataset?.start !== undefined) continue;
+      // A picture's advance spacer stands for the picture's one model unit, so text the
+      // browser composed after it sits after the picture, not before it.
+      const picture = element.dataset?.drawingStart;
+      if (
+        element.dataset?.drawingParagraphId === walk.paragraphId &&
+        picture !== undefined &&
+        /^\d{1,9}$/.test(picture)
+      ) {
+        walk.end = Math.max(walk.end, Number(picture) + 1);
+        continue;
+      }
       if (element.matches?.(PAINTED_FURNITURE)) continue;
       // A line, a hyperlink anchor, a decoration wrapper: descend.
       walkContainer(element, walk);

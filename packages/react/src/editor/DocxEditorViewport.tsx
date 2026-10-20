@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // The scroll container around the painted pages.
 //
@@ -12,12 +13,14 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 import { useCallback, useContext } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor } from './context';
+import { ReviewRailContext, claimsReviewGutter, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { useReviewGutter } from './review-gutter';
+import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { InsideViewportContext } from './viewport-context';
+import { isElementNode } from '@docx-editor.dev/core/editor';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -38,6 +41,7 @@ export interface DocxEditorViewportProps {
  * @public
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
+  const { t } = useTranslation();
   const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
@@ -56,7 +60,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   const reviewGutter = useReviewGutter();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
-  const reserve = (rail?.mounted ?? 0) > 0;
+  const reserve = claimsReviewGutter(rail);
   // The navigation pane needs this element's width to decide whether it has to move the
   // page at all, and publishes the answer back as `--docx-nav-shift`. Both directions are
   // no-ops when no pane is mounted: the store stays at 0 and the custom property falls
@@ -77,7 +81,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const target = event.target;
-      if (target instanceof Element && target.closest('input, textarea, select, [role="dialog"]')) {
+      if (isElementNode(target) && target.closest('input, textarea, select, [role="dialog"]')) {
         return;
       }
       const next = zoomLevelForShortcut(event.key, editor.getZoom());
@@ -92,6 +96,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     <div
       ref={attach}
       data-testid="docx-editor-scroll"
+      tabIndex={0}
+      role="region"
+      aria-label={t('editor.documentViewport')}
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
       {...(fitting ? { 'data-zoom-fit': '' } : {})}
@@ -106,6 +113,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
             ? {
                 ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
                 ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
+                // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
+                // the fit subtracts this in both pane states, so the page keeps one size.
+                ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,
               }
             : {}),
         } as CSSProperties
@@ -115,7 +125,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           wrapper above us, or this element, which scoped itself just now. Say
           so, or parts inside repeat the class under `chrome={false}` and in the
           Root + Viewport composition path. */}
-      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
+      <ScopedByAncestorContext.Provider value={true}>
+        <InsideViewportContext.Provider value={true}>{children}</InsideViewportContext.Provider>
+      </ScopedByAncestorContext.Provider>
     </div>
   );
 }

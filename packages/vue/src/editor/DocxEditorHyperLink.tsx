@@ -9,6 +9,7 @@ import {
   type VNode,
   isVNode,
 } from 'vue';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
 import { useStableDocxId } from '../lib/stable-id';
@@ -17,6 +18,12 @@ import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { isFieldLink, useHyperlinkPopup } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
+
+// `asChild` merges a part's wiring onto your own element. The packaged
+// `docx-hyperlink-popup__*` class stays OFF that element, so your own styles apply as
+// written; `class-name` on the part still reaches it. The Root is the one exception: its
+// class carries the panel's position and stacking, not decoration, so an `asChild` panel
+// keeps being a positioned popup. The React twin states the same rule.
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: MouseEvent): void {
@@ -108,7 +115,12 @@ const HyperLinkUrl = defineComponent({
         ...(inert ? {} : { onClick: () => popup.openTarget(), type: 'button' as const }),
       };
       const content = slots.default?.() ?? text;
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => content }}
+          </Slot>
+        );
       if (inert) {
         return (
           <span {...shared}>
@@ -154,7 +166,12 @@ const HyperLinkCopy = defineComponent({
         onClick: () => void popup.copy(),
       };
       const content = props.icon ?? slots.default?.() ?? icon(COPY_ICON);
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => content }}
+          </Slot>
+        );
       return <button {...shared}>{content}</button>;
     };
   },
@@ -185,7 +202,12 @@ const HyperLinkEdit = defineComponent({
         onClick: () => popup.beginEdit(),
       };
       const content = props.icon ?? slots.default?.() ?? icon(EDIT_ICON);
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => content }}
+          </Slot>
+        );
       return <button {...shared}>{content}</button>;
     };
   },
@@ -216,7 +238,12 @@ const HyperLinkUnlink = defineComponent({
         onClick: () => popup.unlink(),
       };
       const content = props.icon ?? slots.default?.() ?? icon(UNLINK_ICON);
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => content }}
+          </Slot>
+        );
       return <button {...shared}>{content}</button>;
     };
   },
@@ -321,7 +348,12 @@ const HyperLinkApply = defineComponent({
         onMousedown: guardMousedown,
         onClick: () => popup.commitEdit(),
       };
-      if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => slots.default?.() }}
+          </Slot>
+        );
       return <button {...shared}>{slots.default?.() ?? label}</button>;
     };
   },
@@ -374,7 +406,12 @@ const HyperLinkCancel = defineComponent({
         onMousedown: guardMousedown,
         onClick: () => popup.close(),
       };
-      if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+      if (props.asChild)
+        return (
+          <Slot {...shared} class={props.className}>
+            {{ default: () => slots.default?.() }}
+          </Slot>
+        );
       return <button {...shared}>{slots.default?.() ?? label}</button>;
     };
   },
@@ -423,6 +460,7 @@ const HyperLinkPreset = defineComponent({
 const HyperLinkRoot = defineComponent({
   name: 'DocxEditorHyperLink',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     className: { type: String, default: undefined },
     asChild: { type: Boolean, default: undefined },
     hidden: { type: Boolean, default: undefined },
@@ -445,14 +483,15 @@ const HyperLinkRoot = defineComponent({
         };
         const onMouseDown = (event: MouseEvent): void => {
           const panel = panelRef.value;
-          if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+          if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
           popup.close();
         };
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('mousedown', onMouseDown, true);
+        const doc = hostDocumentOf(panelRef.value);
+        doc.addEventListener('keydown', onKeyDown);
+        doc.addEventListener('mousedown', onMouseDown, true);
         onCleanup(() => {
-          document.removeEventListener('keydown', onKeyDown);
-          document.removeEventListener('mousedown', onMouseDown, true);
+          doc.removeEventListener('keydown', onKeyDown);
+          doc.removeEventListener('mousedown', onMouseDown, true);
         });
       }
     );
@@ -494,7 +533,7 @@ const HyperLinkRoot = defineComponent({
       if (state.mode === 'closed') return null;
 
       const body = props.preset ? (
-        <HyperLinkPreset>{slots.default?.()}</HyperLinkPreset>
+        <HyperLinkPreset>{{ default: () => slots.default?.() }}</HyperLinkPreset>
       ) : (
         slots.default?.()
       );
@@ -510,7 +549,7 @@ const HyperLinkRoot = defineComponent({
         'aria-label': title,
       };
 
-      if (props.asChild) return <Slot {...shared}>{body}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => body }}</Slot>;
       return <div {...shared}>{body}</div>;
     };
   },

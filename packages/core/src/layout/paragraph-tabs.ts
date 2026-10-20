@@ -9,7 +9,7 @@
 // Hostile authored values are dropped or clamped; stop count is capped; nothing from the
 // file is used as a loop bound or allocation size.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 
 /** Soft ceiling matching Word's practical custom-tab UI limit. */
 export const MAX_TAB_STOPS = 64;
@@ -64,6 +64,13 @@ export interface TabStop {
   /** Position from the paragraph content origin, in points. */
   readonly positionPt: number;
   readonly alignment: TabAlignment;
+  /** Legacy `num` stop: positions a numbering suffix, not a tab in ordinary text. */
+  readonly numberingOnly?: true;
+  /**
+   * Supplied at a hanging paragraph's text indent, not authored. It positions ordinary text
+   * tabs only: the numbering suffix treats the indent by its own rule.
+   */
+  readonly implied?: true;
   /** Absent for `none` — the schema default and the overwhelming majority of stops. */
   readonly leader?: TabLeader;
 }
@@ -77,6 +84,11 @@ export interface ResolvedTabStops {
   readonly stops: readonly TabStop[];
   /** Default-tab interval in points (always positive and bounded). */
   readonly defaultIntervalPt: number;
+  /**
+   * `w:doNotUseIndentAsNumberingTabStop` (§17.15.3): a numbering suffix tab goes to the
+   * first authored stop past the marker, wherever it is, before it falls back to the indent.
+   */
+  readonly ignoreIndentAsNumberingTabStop?: true;
 }
 
 /** The frozen "no custom stops" value, so a paragraph without tabs mints no object. */
@@ -93,7 +105,7 @@ export const EMPTY_TAB_STOPS: ResolvedTabStops = Object.freeze({
  * discarded the stop ENTIRELY — a right-aligned TOC stop became a default-interval left tab
  * and every page number in the table of contents slid inboard. `w:pPr/w:ind` and `w:jc`
  * already read the Strict spellings (`paragraph-style.ts`, `paragraph-flow.ts`); this makes
- * tabs agree with them. `bar` and `num` are not stops and stay unhandled.
+ * tabs agree with them. `num` is a legacy numbering-only stop; `bar` remains unhandled.
  *
  * This lane is left-to-right, so `start` is `left` and `end` is `right`, exactly as
  * `paragraphAlignment` resolves `w:jc`.
@@ -112,6 +124,7 @@ const TAB_LEADERS = new Set<string>(['dot', 'hyphen', 'underscore', 'heavy', 'mi
 /** A resolved stop before ordering: position is the map key. */
 interface TabStopEntry {
   readonly alignment: TabAlignment;
+  readonly numberingOnly?: true;
   readonly leader?: TabLeader;
 }
 
@@ -131,10 +144,8 @@ function childNamed(parent: OoxmlElement, localName: string): OoxmlElement | und
 }
 
 function integerTwips(raw: string | undefined): number | null {
-  if (raw === undefined) return null;
-  // Up to 9 digits so oversized values reach the clamp; longer strings are garbage.
-  if (!/^-?\d{1,9}$/.test(raw)) return null;
-  return Number(raw);
+  // Up to 9 integer digits so oversized values reach the clamp; longer strings are garbage.
+  return readTwipsMeasure(raw);
 }
 
 function clampPositionTwips(twips: number): number | null {
@@ -147,7 +158,7 @@ function clampPositionTwips(twips: number): number | null {
  * Apply one `w:tabs` element onto a position→stop map.
  *
  * `clear` removes a stop at that position; recognised alignments upsert. Unknown `val` and
- * non-stop kinds (`bar`, `num`, …) are ignored. At most `MAX_TAB_STOPS` survive.
+ * non-stop kinds (`bar`, …) are ignored. At most `MAX_TAB_STOPS` survive.
  */
 function applyTabsElement(
   byTwips: Map<number, TabStopEntry>,
@@ -167,13 +178,14 @@ function applyTabsElement(
       byTwips.delete(twips);
       continue;
     }
-    const alignment = TAB_ALIGNMENTS.get(val);
+    const alignment = val === 'num' ? 'left' : TAB_ALIGNMENTS.get(val);
     if (alignment === undefined) continue;
     if (byTwips.size >= MAX_TAB_STOPS && !byTwips.has(twips)) continue;
     // An unrecognised leader is `none`, not a rejected stop: the geometry is still authored.
     const leader = attributeValue(child, 'leader');
     byTwips.set(twips, {
       alignment,
+      ...(val === 'num' ? { numberingOnly: true as const } : {}),
       ...(leader !== undefined && TAB_LEADERS.has(leader) ? { leader: leader as TabLeader } : {}),
     });
   }
@@ -187,16 +199,12 @@ function mapToResolved(
   const stops: TabStop[] = [];
   for (let index = 0; index < ordered.length && index < MAX_TAB_STOPS; index += 1) {
     const [twips, entry] = ordered[index]!;
-    stops.push({ positionPt: twips / 20, alignment: entry.alignment, ...normalizedLeader(entry) });
+    stops.push({ positionPt: twips / 20, ...entry });
   }
   return {
     stops: Object.freeze(stops),
     defaultIntervalPt,
   };
-}
-
-function normalizedLeader(entry: TabStopEntry): { leader?: TabLeader } {
-  return entry.leader ? { leader: entry.leader } : {};
 }
 
 /**
@@ -236,7 +244,7 @@ export function withDefaultTabInterval(
   if (defaultIntervalPt === undefined) return tabs;
   if (!Number.isFinite(defaultIntervalPt) || defaultIntervalPt <= 0) return tabs;
   if (defaultIntervalPt === tabs.defaultIntervalPt) return tabs;
-  return { stops: tabs.stops, defaultIntervalPt };
+  return { ...tabs, defaultIntervalPt };
 }
 
 /**
@@ -276,10 +284,13 @@ export interface TabDestination {
 export function nextTabDestination(
   tabs: ResolvedTabStops,
   currentX: number,
-  rightEdge: number
+  rightEdge: number,
+  forNumbering = false
 ): TabDestination {
   const edge = Math.max(currentX, rightEdge);
   for (const stop of tabs.stops) {
+    if (stop.numberingOnly && !forNumbering) continue;
+    if (stop.implied && forNumbering) continue;
     if (stop.positionPt > currentX) {
       return {
         positionPt: Math.min(stop.positionPt, edge),
@@ -340,8 +351,11 @@ export function tabStopsFingerprint(tabs: ResolvedTabStops): string {
   const stops = tabs.stops
     .map(
       (stop) =>
-        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.leader ? `/${stop.leader}` : ''}`
+        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.numberingOnly ? '#num' : ''}${stop.implied ? '#implied' : ''}${stop.leader ? `/${stop.leader}` : ''}`
     )
     .join(',');
-  return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)})`;
+  // The numbering rule moves a list's first line, so a break cached under the other rule
+  // must not be reused.
+  const rule = tabs.ignoreIndentAsNumberingTabStop ? '|numStop' : '';
+  return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)}${rule})`;
 }

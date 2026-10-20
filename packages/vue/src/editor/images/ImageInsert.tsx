@@ -1,5 +1,9 @@
 import { defineComponent, h, inject, provide, ref, type InjectionKey } from 'vue';
-import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import {
+  editorHostDocument,
+  executeImageCommand,
+  toolbarCommandState,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -9,6 +13,9 @@ import { normalizeImageBytes } from './normalizeImageFile';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { usePopupConfig } from '../popup-config-context';
+import { renderPopup } from '../popup-renderer';
+import { DocxEditorImageInsertErrorDialog } from './ImageInsertErrorDialog';
 
 const ACCEPT = 'image/png,image/jpeg,image/gif';
 
@@ -52,6 +59,14 @@ export const ImageInsertProvider = defineComponent({
     const { t } = useTranslation();
     const inputRef = ref<HTMLInputElement | null>(null);
     const busyRef = ref(false);
+    const popups = usePopupConfig();
+    // A refusal shows in an editor dialog. A browser alert would stop every script on the page.
+    const refusal = ref<string | null>(null);
+    const closeRefusal = () => {
+      refusal.value = null;
+    };
+    /** A picker made in a pop-out window's document, until it reports a choice or a cancel. */
+    let strayPicker: HTMLInputElement | null = null;
 
     const insertState = useEditorState(
       () => toolbarCommandState(editorRef.value, 'image.insert'),
@@ -63,7 +78,7 @@ export const ImageInsertProvider = defineComponent({
       if (!editor || busyRef.value) return;
       const normalized = normalizeImageBytes(bytes);
       if (!normalized.ok) {
-        window.alert(t(normalized.reasonKey as TranslationKey));
+        refusal.value = t(normalized.reasonKey as TranslationKey);
         return;
       }
       const command = {
@@ -73,16 +88,14 @@ export const ImageInsertProvider = defineComponent({
         widthPoints: normalized.widthPoints,
         heightPoints: normalized.heightPoints,
       };
-      const gate = editor.canExecuteImageCommand?.(command);
-      if (gate && !gate.ok) {
-        window.alert(gate.reason ?? t('imageInsert.errors.refused'));
-        return;
-      }
+      // `executeImageCommand` applies the same checks and reports a refusal to diagnostics.
       busyRef.value = true;
       try {
         const result = await executeImageCommand(editor, command);
         if (!result.ok) {
-          window.alert(result.reason ?? t('imageInsert.errors.refused'));
+          refusal.value =
+            localizeDisabledReason(readableReason(result.reason) ?? null, t) ??
+            t('imageInsert.errors.refused');
         } else {
           editor.focus();
         }
@@ -117,7 +130,33 @@ export const ImageInsertProvider = defineComponent({
 
     const openFilePicker = () => {
       if (!insertState.value.enabled) return;
-      inputRef.value?.click();
+      const input = inputRef.value;
+      const editor = editorRef.value;
+      const hostDocument = editor ? editorHostDocument(editor) : null;
+      if (!hostDocument || !input || input.ownerDocument === hostDocument) {
+        input?.click();
+        return;
+      }
+      // The editor is in another window (a pop-out): a file picker opens only from an input in
+      // the window the user clicked in, so this one is made there and removed once it answers.
+      strayPicker?.remove();
+      const picker = hostDocument.createElement('input');
+      picker.type = 'file';
+      picker.accept = ACCEPT;
+      picker.hidden = true;
+      picker.tabIndex = -1;
+      picker.setAttribute('aria-hidden', 'true');
+      const done = () => {
+        picker.remove();
+        if (strayPicker === picker) strayPicker = null;
+      };
+      picker.addEventListener('change', () => void insertFromFileList(picker.files).finally(done), {
+        once: true,
+      });
+      picker.addEventListener('cancel', done, { once: true });
+      hostDocument.body.append(picker);
+      strayPicker = picker;
+      picker.click();
     };
 
     const onInputChange = async (event: Event) => {
@@ -154,6 +193,14 @@ export const ImageInsertProvider = defineComponent({
         onMousedown: (event: MouseEvent) => event.stopPropagation(),
       }),
       ...flattenChildren(slots.default?.() ?? []),
+      refusal.value === null
+        ? null
+        : popups.value?.imageInsertError !== undefined
+          ? renderPopup(popups.value.imageInsertError, {
+              message: refusal.value,
+              onClose: closeRefusal,
+            })
+          : h(DocxEditorImageInsertErrorDialog, { message: refusal.value, onClose: closeRefusal }),
     ];
   },
 });
@@ -191,7 +238,7 @@ export const ImageInsertTrigger = defineComponent({
         onMousedown: guardToolbarMousedown,
         onClick: insert.openFilePicker,
       };
-      if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
       return <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>;
     };
   },
@@ -202,3 +249,8 @@ export const ImageInsertTrigger = defineComponent({
 export const ToolbarImageInsert = Object.assign(ImageInsertTrigger, {
   docxSlot: 'image.insert' as const,
 });
+
+/** A reason written for people, or undefined for a bare code such as `invalid-range`. */
+function readableReason(reason: string | undefined): string | undefined {
+  return reason && /\s/.test(reason) ? reason : undefined;
+}

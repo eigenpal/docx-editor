@@ -1,0 +1,203 @@
+// Focus in and out of the navigation pane, Escape, and the Ctrl/Cmd+F shortcut.
+//
+// Focus requests are plain variables answered after the next flush. The pane may be
+// controlled, so a request is made before the host has opened (or closed) the pane, and the
+// flush that follows is the host's answer: a request the pane now satisfies is honoured, and
+// one the host declined is dropped there, so it cannot fire on some unrelated later open.
+
+import { nextTick, onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import { useDocxEditor } from '../context';
+import { scopeDispose } from '../scope-dispose';
+import type { NavigationIntents } from './navigation-context';
+import { useNavigationViewportElement } from './navigation-layout';
+import {
+  focusPaneEntry,
+  coverPage,
+  isFindShortcut,
+  isGoToShortcut,
+  ownsShortcutTarget,
+  paneEntryTarget,
+  publishViewportSize,
+  returnFocus,
+} from './navigation-keys';
+import type { NavigationTab, UseNavigationPaneResult } from './useNavigationPane';
+
+/** @internal */
+export interface NavigationFocus {
+  readonly rootRef: ShallowRef<HTMLElement | null>;
+  readonly intents: NavigationIntents;
+  readonly onKeyDown: (event: KeyboardEvent) => void;
+}
+
+/** @internal */
+export function useNavigationFocus(
+  pane: UseNavigationPaneResult,
+  findShortcut: () => boolean = () => true,
+  goToShortcut: () => boolean = () => true
+): NavigationFocus {
+  const editor = useDocxEditor();
+  const viewport = useNavigationViewportElement();
+  const rootRef = shallowRef<HTMLElement | null>(null);
+  // Who opened the pane: an element to return focus to, or null for the disc.
+  let opener: HTMLElement | null = null;
+  let focusRequest = false;
+  let restoreRequest = false;
+  // A pick from an overlaying pane asked to close it; the document takes focus once it has.
+  let pickRequest = false;
+
+  const focusEntry = () => {
+    focusRequest = false;
+    const target = paneEntryTarget(rootRef.value, pane.tab.value);
+    if (target) focusPaneEntry(target);
+  };
+
+  const restoreFocus = () => {
+    restoreRequest = false;
+    const back = opener;
+    opener = null;
+    const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
+    const instance = editor.value;
+    returnFocus(back, disc, instance ? () => instance.focus() : null);
+  };
+
+  // The flush after a request is the host's answer (see the header).
+  const answerRequests = () => {
+    void nextTick(() => {
+      if (focusRequest) {
+        if (pane.open.value) focusEntry();
+        else focusRequest = false;
+      }
+      if (restoreRequest) {
+        if (!pane.open.value) restoreFocus();
+        else restoreRequest = false;
+      }
+      if (pickRequest) {
+        pickRequest = false;
+        // The close is answered: the page's `inert` went in the watch cleanup before this.
+        if (!pane.open.value) editor.value?.focus();
+      }
+    });
+  };
+
+  const close = () => {
+    focusRequest = false;
+    restoreRequest = true;
+    pane.setOpen(false);
+    answerRequests();
+  };
+
+  // Open the pane on `tab` and focus its entry. `from` gets focus back when it closes.
+  const openTab = (tab: NavigationTab, from: HTMLElement | null) => {
+    if (from && !rootRef.value?.contains(from)) opener = from;
+    restoreRequest = false;
+    // Already open on the tab: nothing re-renders, so focus the entry now.
+    if (pane.open.value && pane.tab.value === tab) {
+      focusEntry();
+      return;
+    }
+    focusRequest = true;
+    if (pane.tab.value !== tab) pane.setTab(tab);
+    if (!pane.open.value) pane.setOpen(true);
+    answerRequests();
+  };
+
+  const intents: NavigationIntents = {
+    openTab: (tab) => {
+      const active = rootRef.value?.ownerDocument.activeElement;
+      openTab(tab, isHTMLElementNode(active) ? active : null);
+    },
+    toggle: () => {
+      if (pane.open.value) {
+        close();
+        return;
+      }
+      opener = null;
+      restoreRequest = false;
+      focusRequest = true;
+      pane.setOpen(true);
+      answerRequests();
+    },
+    close,
+    picked: () => {
+      if (!pane.overlay.value) return;
+      // The chosen row turns inert once the pane closes; the document it pointed at takes
+      // focus then. A host that keeps the pane open keeps the page inert and focus here.
+      const active = rootRef.value?.ownerDocument.activeElement;
+      pickRequest = !!active && !!rootRef.value?.contains(active);
+      pane.setOpen(false);
+      answerRequests();
+    },
+  };
+
+  // Ctrl/Cmd+F and the Go To chord, on the document so they reach the toolbar and the pane as
+  // well as the pages. Bubble phase: the engine's keymap and the viewport's zoom capture see
+  // them first, and an event either of them claimed (default prevented) is left alone.
+  const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    const tab: NavigationTab | null =
+      findShortcut() && isFindShortcut(event)
+        ? 'find'
+        : goToShortcut() && isGoToShortcut(event)
+          ? 'goto'
+          : null;
+    if (!tab || !ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
+    // Go To goes through the editor as the shortcut does: a host's own Go To UI on top
+    // answers it, and one that turned its shortcut off leaves the chord to the browser.
+    const current = editor.value;
+    if (tab === 'goto' && current?.can({ type: 'openGoTo' }).ok) {
+      if (current.exec({ type: 'openGoTo', fromShortcut: true }).ok) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    const active = rootRef.value?.ownerDocument.activeElement;
+    openTab(tab, isHTMLElementNode(active) ? active : null);
+  };
+  let listening: Document | null = null;
+  onMounted(() => {
+    listening = rootRef.value?.ownerDocument ?? null;
+    listening?.addEventListener('keydown', onDocumentKeyDown);
+  });
+  onUnmounted(() => {
+    listening?.removeEventListener('keydown', onDocumentKeyDown);
+    listening = null;
+    // A host may answer a close by unmounting the pane in `onOpenChange(false)`; the
+    // unmount then answers the pending return of focus.
+    if (restoreRequest) restoreFocus();
+  });
+
+  // An overlaying pane hides the page, so the page leaves the tab order while it does.
+  scopeDispose(
+    watch(
+      [rootRef, viewport, () => pane.open.value && pane.overlay.value],
+      ([root, element, covering], _previous, onCleanup) => {
+        if (!covering || !root || !element) return;
+        // A press on the page it leaves visible closes the pane, as a press outside any popup
+        // does.
+        onCleanup(coverPage(root, element, () => intents.close()));
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+
+  // A pane inside the scroll container is sticky and sizes itself from these properties.
+  scopeDispose(
+    watch(
+      [rootRef, viewport],
+      ([root, element], _previous, onCleanup) => {
+        if (!root || !element || !element.contains(root)) return;
+        onCleanup(publishViewportSize(root, element));
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+    if (!pane.open.value) return;
+    event.preventDefault();
+    close();
+  };
+
+  return { rootRef, intents, onKeyDown };
+}

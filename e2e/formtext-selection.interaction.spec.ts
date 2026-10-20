@@ -23,15 +23,21 @@ async function waitForEditor(page: Page): Promise<void> {
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__DOCX_EDITOR_E2E__?.ready());
   await page.waitForSelector('.docx-page');
-  // Let the document fonts settle so the pointer geometry stays fixed during the gesture.
-  await page.waitForTimeout(250);
+  // Wait for actual font readiness rather than an OS-dependent delay.
+  await page.waitForFunction(() => window.__DOCX_EDITOR_E2E__?.fontMeasurer() === 'shaped');
 }
 
 async function placeStaleModelCaretAtParagraphEnd(page: Page): Promise<void> {
-  const paragraph = page.locator('.docx-paragraph-fragment').filter({ hasText: PARAGRAPH_TEXT });
-  const box = await paragraph.boundingBox();
-  if (!box) throw new Error('FORMTEXT regression paragraph is not painted');
-  await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  // This is setup, not the pointer gesture under test. Establish the stale caret
+  // explicitly so platform font metrics cannot place it short of the final glyph.
+  await page.evaluate((offset) => {
+    const editor = window.__DOCX_EDITOR_E2E__!.getEditor() as DocxEditorInstance;
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const position = { paragraphId, offset };
+    surface.setSelection({ anchor: position, head: position });
+    document.querySelector<HTMLElement>('.docx-pages')!.focus();
+  }, PARAGRAPH_TEXT.length);
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -105,7 +111,7 @@ test.beforeEach(async ({ page }) => {
   await placeStaleModelCaretAtParagraphEnd(page);
 });
 
-test('justified NBSP form fields keep pointer hit-testing aligned with painted text', async ({
+test('clicking a justified NBSP form field selects and deletes the whole result like Word', async ({
   page,
 }) => {
   const field = streetField(page);
@@ -114,18 +120,21 @@ test('justified NBSP form fields keep pointer hit-testing aligned with painted t
 
   const afterClick = await selectionSnapshot(page);
   expect(afterClick.nativeText).toBe('Street');
-  expect(afterClick.nativeOffset).toBe(4);
-  expect(afterClick.modelOffset).toBe(fieldStart + 4);
+  expect(afterClick.selectedText).toBe('Street');
+  expect(afterClick.modelOffset).toBe(fieldStart + 'Street'.length);
 
   await page.keyboard.press('Backspace');
 
-  await expect(fieldAtStart(page, fieldStart)).toHaveText('Stret');
+  await expect(streetField(page)).toHaveCount(0);
   await expect(
     page.locator('.docx-paragraph-fragment').filter({ hasText: 'Post/area code' })
-  ).toContainText('Stret, Post/area code');
+  ).toContainText('at , Post/area code');
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(fieldAtStart(page, fieldStart)).toHaveText('Street');
 });
 
-test('clicking inside a FORMTEXT result makes Backspace delete beside that caret', async ({
+test('a native caret inside a FORMTEXT result overrides the stale model for Backspace', async ({
   page,
 }) => {
   await delayNativeSelectionReport(page);
@@ -134,7 +143,10 @@ test('clicking inside a FORMTEXT result makes Backspace delete beside that caret
   const box = await field.boundingBox();
   if (!box) throw new Error('FORMTEXT result is not painted');
 
-  await page.mouse.click(box.x + box.width * 0.55, box.y + box.height / 2);
+  // Inspect the browser caret after pointerdown, before pointerup/click selects
+  // the whole field. Keep selectionchange delayed until the real Backspace key.
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height / 2);
+  await page.mouse.down();
   const before = await selectionSnapshot(page);
   expect(before.nativeText).toBe('Street');
   expect(before.nativeOffset).toBeGreaterThan(0);
@@ -144,6 +156,7 @@ test('clicking inside a FORMTEXT result makes Backspace delete beside that caret
 
   const expected = 'Street'.slice(0, before.nativeOffset - 1) + 'Street'.slice(before.nativeOffset);
   await page.keyboard.press('Backspace');
+  await page.mouse.up();
 
   await expect(fieldAtStart(page, fieldStart)).toHaveText(expected);
   await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(', Post/area code');
@@ -155,17 +168,24 @@ test('a native range inside a FORMTEXT result is preserved for Backspace', async
   const fieldStart = Number(await field.getAttribute('data-start'));
   const box = await field.boundingBox();
   if (!box) throw new Error('FORMTEXT result is not painted');
-
-  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height / 2);
+  // Pointerdown focuses the actual native editing host before the queued-range race.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, { steps: 5 });
-  await page.mouse.up();
+  // Deliberately make native selection newer than the model. Native dragging
+  // with the editor's pointer handler disabled differs across Chromium platforms;
+  // the Selection API establishes the exact race this Backspace test exercises.
+  await field.evaluate((element) => {
+    const text = element.firstChild;
+    if (!text || text.nodeType !== Node.TEXT_NODE) throw new Error('Street text node is missing');
+    document.getSelection()!.setBaseAndExtent(text, 1, text, 5);
+  });
 
   const before = await selectionSnapshot(page);
   expect(before.selectedText).toBe('tree');
   expect(before.modelOffset).toBe(PARAGRAPH_TEXT.length);
 
   await page.keyboard.press('Backspace');
+  await page.mouse.up();
 
   await expect(fieldAtStart(page, fieldStart)).toHaveText('St');
   await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(

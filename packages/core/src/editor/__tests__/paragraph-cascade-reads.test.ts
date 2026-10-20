@@ -118,6 +118,20 @@ describe('paragraph reads answer the cascade, not its floor', () => {
     expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
   });
 
+  test('a cascade that states no line spacing reads as the single spacing it lays out at', () => {
+    const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
+    expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1 });
+    expect(editor.snapshot().formatting?.disagrees.lineSpacing).toBe(false);
+  });
+
+  test('an exact line spacing reads in points', () => {
+    const editor = mount(
+      '<w:p><w:pPr><w:spacing w:line="250" w:lineRule="exact"/></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'exact', value: 12.5 });
+  });
+
   test('a style-supplied value reads through, and a press over it reads back', () => {
     const editor = mount(FANCY);
     expect(editor.snapshot().formatting?.alignment).toBe('center');
@@ -259,8 +273,8 @@ describe('a paragraph can switch its style page break off', () => {
 describe('auto paragraph spacing yields to an explicit write', () => {
   test('a space-before write moves the page even under an inherited flag', () => {
     const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
-    // The flag REPLACES the 5pt beside it, so the paragraph opens at Word's auto gap.
-    expect(paintedSpacing(editor)).toEqual({ before: 14, after: 14 });
+    // The flag REPLACES the 5pt beside it. Its space before drops at the top of the document.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
 
     expect(editor.exec({ type: 'setParagraphSpacing', beforePt: 36, afterPt: 36 }).ok).toBe(true);
     expect(paintedSpacing(editor)).toEqual({ before: 36, after: 36 });
@@ -280,11 +294,12 @@ describe('auto paragraph spacing yields to an explicit write', () => {
     const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
     editor.exec({ type: 'setParagraphSpacing', beforePt: 36 });
     editor.exec({ type: 'setParagraphSpacing', beforePt: null });
-    // Both gone, so the paragraph inherits the pair the document defaults state.
-    expect(paintedSpacing(editor).before).toBe(14);
+    // Both gone, so the paragraph inherits the pair the document defaults state. The
+    // inherited flag drops space before at the top of the document; without it, 5pt shows.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
   });
 
-  test('inside a list the flag is worth nothing, and the read says so', () => {
+  test('list boundary auto spacing does not change the authored spacing read', () => {
     const numbering =
       `<w:numbering xmlns:w="${W}">` +
       '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>' +
@@ -318,8 +333,8 @@ describe('auto paragraph spacing yields to an explicit write', () => {
       ),
     });
     const editor = createDocxEditor({ container, document: bytes });
-    // The flag is worth nothing inside a list, so the page draws the item flush.
-    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 0 });
+    // A list at section start has no leading auto margin, but keeps its trailing one.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
     // The read answers the MEASUREMENT the cascade states (100 twips), not that resolved
     // gap: resolving it needs list and cell membership, which this lane cannot see without
     // guessing. Documented on `spaceBeforePt`.

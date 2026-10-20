@@ -6,10 +6,9 @@
 // drift from the headless one: it is not that two implementations agree, it is that there is
 // one implementation.
 //
-// TEXT COMES FROM `paragraphTextOf`, the same offset authority the tree ops validate against,
-// so a length a consumer reads and an offset it then writes at are the same vocabulary. A
-// paragraph text derived any other way — a layout span, a painted node, a projection — reads a
-// field or a note differently and puts every subsequent offset one character out.
+// RAW OFFSETS COME FROM `paragraphTextOf`, the same authority tree ops validate against.
+// Display reads use a projection that can expand one field atom into its visible result.
+// Projected ranges map back to the raw vocabulary before any write reaches the store.
 //
 // A DOCUMENT IS SEVERAL STORIES, and each is read on its own. The body, a header or footer per
 // variant per section, and one story per footnote and endnote: they live in different parts, hold
@@ -22,6 +21,7 @@
 // would report a document shorter than the one on screen — then place an insertion in the wrong
 // paragraph, because the caller counted with a different list than the engine writes with.
 
+import { shapesInParagraphs, type AutomationShapesRead } from './shapes.ts';
 import {
   resolveHeaderFooterResolutionBySection,
   type HeaderFooterSectionResolution,
@@ -50,7 +50,13 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
-import { BODY_STORY, HEADER_FOOTER_VARIANTS, storyKey, type AutomationStoryId } from './stories.ts';
+import {
+  BODY_STORY,
+  HEADER_FOOTER_VARIANTS,
+  storyKey,
+  type AutomationShapeOwnerStory,
+  type AutomationStoryId,
+} from './stories.ts';
 import type { AutomationTextProjection } from './operations.ts';
 import { projectParagraphText, type ProjectedParagraphText } from './text-projection.ts';
 
@@ -61,6 +67,7 @@ export interface AutomationParagraphRead {
   readonly nodeId: string;
   /** `w14:paraId` as the document writes it, or null when the file declared none. */
   readonly paraId: string | null;
+  /** Display text for the default review view. Do not derive model offsets from its length. */
   readonly text: string;
 }
 
@@ -123,9 +130,11 @@ export interface AutomationStoryReads {
    * alternative is every such read walking the part again to find a node this file already holds.
    */
   node(paragraphId: string): OoxmlNode | null;
-  /** A paragraph's text in model-offset vocabulary, or null when it is not in the story. */
+  /** A paragraph's raw model text. Every automation offset uses this vocabulary. */
+  rawText(paragraphId: string): string | null;
+  /** A paragraph's projected text. Display views can differ from model offset length. */
   paragraphText(paragraphId: string, projection?: AutomationTextProjection): string | null;
-  /** A paragraph projection with mappings back to model offsets. */
+  /** Projected text with mappings back to raw model offsets. */
   projectedText(
     paragraphId: string,
     projection?: AutomationTextProjection
@@ -177,6 +186,11 @@ export interface AutomationPackageReads {
    * aliasing, so no note of that kind is addressable until the malformed document is repaired.
    */
   noteIds(noteKind: NoteKind): AutomationNoteIdsRead;
+  /**
+   * The shapes, floating and inline, in one story's paragraphs, by `wp:docPr/@id`, or an ambiguity that
+   * makes that story's shapes unaddressable.
+   */
+  shapes(story: AutomationStoryId): AutomationShapesRead;
   styles(): AutomationStyleIndex;
 }
 
@@ -186,10 +200,12 @@ const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   idOf: () => null,
   defaultId: null,
   present: false,
+  inheritsRtl: () => false,
 });
 const NO_BLOCKS: readonly AutomationBlockRead[] = Object.freeze([]);
 const NO_SECTIONS: readonly AutomationSectionRead[] = Object.freeze([]);
 const NO_FURNITURE: readonly AutomationFurnitureRead[] = Object.freeze([]);
+const NO_SHAPES: AutomationShapesRead = Object.freeze({ ok: true as const, shapes: [] });
 
 export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   package: null,
@@ -199,6 +215,7 @@ export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   sections: () => NO_SECTIONS,
   furniture: () => NO_FURNITURE,
   noteIds: (): AutomationNoteIdsRead => ({ ok: true, ids: NONE_NUMBERS }),
+  shapes: (): AutomationShapesRead => NO_SHAPES,
   styles: () => NO_STYLE_INDEX,
 });
 
@@ -281,15 +298,29 @@ function storyReadsOver(
     paragraph(paragraphId) {
       const node = byId.get(paragraphId);
       if (!node) return null;
-      return { nodeId: paragraphId, paraId: paraIdOf(node), text: rawTextOf(paragraphId) ?? '' };
+      return {
+        nodeId: paragraphId,
+        paraId: paraIdOf(node),
+        text: projectionOf(paragraphId)?.text ?? '',
+      };
     },
     node: (paragraphId) => byId.get(paragraphId) ?? null,
+    rawText: rawTextOf,
     paragraphText: (paragraphId, projection) => projectionOf(paragraphId, projection)?.text ?? null,
     projectedText: projectionOf,
     text: (projection) =>
       paragraphIds.map((id) => projectionOf(id, projection)?.text ?? '').join(PARAGRAPH_MARK),
     styles,
   };
+}
+
+/** A cell body shares its story's offsets while restricting reads and whole-body edits to the cell. */
+export function scopedStoryReads(
+  story: AutomationStoryReads,
+  root: OoxmlNode
+): AutomationStoryReads {
+  const scoped = storyReadsOver(story.story, story.part, story.scope, root, story.styles);
+  return { ...scoped, indexOf: (id) => (scoped.has(id) ? story.indexOf(id) : -1) };
 }
 
 /**
@@ -315,6 +346,23 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
 
   const cache = new Map<string, AutomationStoryReads | null>();
   const noteIdsCache = new Map<NoteKind, AutomationNoteIdsRead>();
+  const shapesCache = new Map<string, AutomationShapesRead>();
+
+  const shapesOf = (id: AutomationStoryId): AutomationShapesRead => {
+    const key = storyKey(id);
+    const cached = shapesCache.get(key);
+    if (cached) return cached;
+    const reads = story(id);
+    const paragraphs = reads
+      ? reads.paragraphIds.flatMap((paragraphId) => {
+          const node = reads.node(paragraphId);
+          return node ? [node] : [];
+        })
+      : [];
+    const listing = reads ? shapesInParagraphs(reads.part, paragraphs) : NO_SHAPES;
+    shapesCache.set(key, listing);
+    return listing;
+  };
 
   const noteIdsOf = (noteKind: NoteKind): AutomationNoteIdsRead => {
     const cached = noteIdsCache.get(noteKind);
@@ -406,6 +454,15 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
         stylesOf
       );
     }
+    if (story.kind === 'textbox') {
+      // A text box is reachable only while its owner names exactly one shape with this id.
+      const owner = documentStory(story.owner);
+      const listing = shapesOf(story.owner);
+      if (!owner || !listing.ok) return null;
+      const shape = listing.shapes.find((entry) => entry.id === story.shapeId);
+      if (!shape?.textboxRoot) return null;
+      return storyReadsOver(story, owner.part, owner.scope, shape.textboxRoot, stylesOf);
+    }
     const slot = slotOf(story);
     if (!slot) return null;
     // The part's ROOT is the story: `w:hdr` and `w:ftr` hold blocks directly.
@@ -418,6 +475,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     );
   };
 
+  const documentStory = (id: AutomationStoryId): AutomationStoryReads | null => story(id);
   const story = (id: AutomationStoryId): AutomationStoryReads | null => {
     const key = storyKey(id);
     if (cache.has(key)) return cache.get(key) ?? null;
@@ -434,14 +492,33 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
    * alone does not name the story a paragraph belongs to. Ordered cheapest-first, and the body is
    * both the common case and the only story most documents have.
    */
+  /** The text box of `owner` holding a paragraph, probed only when the owner has text boxes. */
+  const textboxStoryOf = (
+    owner: AutomationShapeOwnerStory,
+    paragraphId: string
+  ): AutomationStoryId | null => {
+    const listing = shapesOf(owner);
+    if (!listing.ok) return null;
+    for (const shape of listing.shapes) {
+      if (!shape.textboxRoot) continue;
+      const id: AutomationStoryId = { kind: 'textbox', owner, shapeId: shape.id };
+      if (story(id)?.has(paragraphId)) return id;
+    }
+    return null;
+  };
+
   const storyOf = (paragraphId: string): AutomationStoryId | null => {
     const body = story(BODY_STORY);
     if (body?.has(paragraphId)) return BODY_STORY;
+    // Every plain story is asked first: a text box probe lists its owner's shapes.
+    const owners: AutomationShapeOwnerStory[] = [{ kind: 'body' }];
     for (const [index] of resolution().entries()) {
       for (const kind of ['header', 'footer'] as const) {
         for (const variant of HEADER_FOOTER_VARIANTS) {
-          const id: AutomationStoryId = { kind, sectionIndex: index, variant };
-          if (story(id)?.has(paragraphId)) return id;
+          const id: AutomationShapeOwnerStory = { kind, sectionIndex: index, variant };
+          if (!story(id)) continue;
+          if (story(id)!.has(paragraphId)) return id;
+          owners.push(id);
         }
       }
     }
@@ -452,6 +529,10 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
         const id: AutomationStoryId = { kind: 'note', noteKind, noteId };
         if (story(id)?.has(paragraphId)) return id;
       }
+    }
+    for (const owner of owners) {
+      const inBox = textboxStoryOf(owner, paragraphId);
+      if (inBox) return inBox;
     }
     return null;
   };
@@ -479,6 +560,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
       return Object.freeze(found);
     },
     noteIds: noteIdsOf,
+    shapes: shapesOf,
     styles: stylesOf,
   };
 }

@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A large open showed a packaged spinner on the first page that hosts could not replace.",
+  "after": "The first page shows a real indicator element that hosts can fill through setOpeningIndicatorHost, loadingIndicator, or the indicator slot.",
+  "reason": "The indicator is local chrome outside the document. It adds no document operation, shared state, or collaboration format field, and each participant opens its own copy.",
+  "tests": [
+    "packages/core/src/editor/__tests__/opening-indicator.test.ts",
+    "packages/react/test/loading-part.test.tsx",
+    "packages/vue/test/loading-indicator.test.ts"
+  ],
+  "changeset": "custom-loading-indicator",
+  "migration": null
+}

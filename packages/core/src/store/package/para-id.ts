@@ -22,6 +22,8 @@ import { MC_NAMESPACE_URI, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-
 import { carryIndexToRebuiltRoot, parentNodeOf } from './ooxml-edit.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { validateOoxmlPart } from './ooxml-validate.ts';
+import { createSubtreeAggregateMemo, keepsSubtreeMemo } from './subtree-memo-policy.ts';
+import { createRecentRootCache } from '../store/recent-root-cache.ts';
 
 const PARA_ID_PATTERN = /^[0-9A-Fa-f]{8}$/;
 
@@ -78,7 +80,8 @@ export function mintParaId(seed: string, used: ReadonlySet<string>): string {
   }
 }
 
-const usedParaIdCache = new WeakMap<OoxmlElement, ReadonlySet<string>>();
+/** Bounded: the undo history keeps old roots, and each set holds every id of a part. */
+const usedParaIdCache = createRecentRootCache<ReadonlySet<string>>(3);
 
 /** One shared empty list for the (vast) majority of subtrees that carry no paraId. */
 const EMPTY_PARA_IDS: readonly string[] = Object.freeze([]);
@@ -90,10 +93,10 @@ const EMPTY_PARA_IDS: readonly string[] = Object.freeze([]);
  * root set after a split touches only the rebuilt spine and reuses every sibling block's
  * cached list. The full walk this composes replaced was O(document) per fresh root, which
  * every structural keystroke paid inside `applyOps` (a split mints its new id against this
- * set). Subtrees with no id share one frozen empty list, so the memo costs nothing where
- * there is nothing to remember.
+ * set). Subtrees with no id share one frozen empty list. Only nodes `keepsSubtreeMemo`
+ * admits get an entry: a node of leaves rebuilds its short list from those leaves.
  */
-const subtreeParaIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+const subtreeParaIdsCache = createSubtreeAggregateMemo<readonly string[]>();
 
 function subtreeParaIds(node: OoxmlNode): readonly string[] {
   if (node.kind === 'textValue') return EMPTY_PARA_IDS;
@@ -109,7 +112,9 @@ function subtreeParaIds(node: OoxmlNode): readonly string[] {
     for (const id of ids) found.push(id);
   }
   const result: readonly string[] = found ?? EMPTY_PARA_IDS;
-  subtreeParaIdsCache.set(node, result);
+  // A run answers from its few children again: an entry per run is most of the memo.
+  if (node.kind !== 'run' && keepsSubtreeMemo(node))
+    subtreeParaIdsCache.set(node, result, result.length);
   return result;
 }
 
@@ -187,6 +192,70 @@ export function mintedParagraphIdentityAttributes(
       value,
     } as const),
   ]);
+}
+
+/**
+ * Fresh `w14:paraId`/`w14:textId` on every cloned paragraph, deterministic per seat.
+ *
+ * `hostPrefix` is the w14 prefix in scope where the clones land, or null when the host part
+ * carries no paragraph identity. With a prefix, EVERY paragraph gets an identity, whether
+ * or not its source had one: the body's identity invariant (every paragraph addressable by
+ * `paraId`) is established at load, and content from outside the document must not punch
+ * holes in it. Projected HTML and hand-built fragments carry no ids at all, so minting only
+ * over an existing id left every pasted paragraph after the first unaddressable.
+ */
+export function withFreshParaIds(
+  node: OoxmlNode,
+  used: Set<string>,
+  seedBase: string,
+  counter: { value: number },
+  hostPrefix: string | null,
+  hostPrefixShadowed = false
+): OoxmlNode {
+  if (node.kind === 'textValue') return node;
+  const element: OoxmlElement = node;
+  // A fragment element can rebind the host's prefix to another namespace. Inside it the
+  // host prefix no longer names w14, so minting under it would write a foreign attribute.
+  const shadowed =
+    hostPrefixShadowed ||
+    (hostPrefix !== null &&
+      element.namespaceBindings.some(
+        (binding) => binding.prefix === hostPrefix && binding.namespaceUri !== W14_NAMESPACE_URI
+      ));
+  let attributes = element.attributes;
+  if (element.localName === 'p' && element.namespaceUri === WML_NAMESPACE_URI) {
+    const identity = element.attributes.find(
+      (attribute) =>
+        attribute.namespaceUri === W14_NAMESPACE_URI && attribute.localName === 'paraId'
+    );
+    // Re-mint whenever a `w14:paraId` is present, valid or not: a crafted fragment can
+    // carry a syntactically INVALID id shared across paragraphs, which would plant
+    // duplicate identities in the host. A fresh valid id replaces it either way.
+    const prefix =
+      hostPrefix !== null && !shadowed ? hostPrefix : identity ? (identity.prefix ?? 'w14') : null;
+    if (prefix !== null) {
+      const minted = mintParaId(`${seedBase}:${counter.value}`, used);
+      counter.value += 1;
+      used.add(minted);
+      const kept = element.attributes.filter(
+        (attribute) =>
+          !(
+            attribute.namespaceUri === W14_NAMESPACE_URI &&
+            (attribute.localName === 'paraId' || attribute.localName === 'textId')
+          )
+      );
+      attributes = [
+        ...kept,
+        ...mintedParagraphIdentityAttributes(prefix, minted),
+      ] as typeof element.attributes;
+    }
+  }
+  const children = element.children.map((child) =>
+    withFreshParaIds(child, used, seedBase, counter, hostPrefix, shadowed)
+  );
+  const childrenChanged = children.some((child, index) => child !== element.children[index]);
+  if (attributes === element.attributes && !childrenChanged) return node;
+  return { ...element, attributes, children } as OoxmlNode;
 }
 
 function isWmlParagraphElement(node: OoxmlNode): node is OoxmlElement {

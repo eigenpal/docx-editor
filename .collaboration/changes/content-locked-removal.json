@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Removing a whole contentLocked control by deleteBlock, a cross-paragraph range, a replacement, or a reject was refused, and joining a paragraph that held a locked control was refused.",
+  "after": "Those removals and joins commit. sdtLocked, sdtContentLocked, and enclosing content locks still refuse. A tracked deletion over a whole contentLocked inline control writes the w:sdt inside one w:del.",
+  "reason": "Only local lock validation changes. The committed edits use existing operations (deleteBlock, removeContentControl, deleteText, joinParagraphs, rejectRevision) that peers already apply. Shared nodes, operation shapes, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-control-lock.test.ts",
+    "packages/core/src/store/__tests__/content-control-inline-locks.test.ts",
+    "packages/core/src/editor/__tests__/locked-control-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-control-delete.test.ts",
+    "packages/core/src/store/__tests__/tracked-locked-control-deletion.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-locked-control-delete.test.ts"
+  ],
+  "changeset": "content-locked-removal",
+  "migration": null
+}

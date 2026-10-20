@@ -32,9 +32,7 @@ import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorS
 import { useReviewRailRegistry } from '../../../vue/src/editor/context.ts';
 import { useReviewOf, type ReviewItemView } from '../vue/useReview.ts';
 
-afterEach(() => {
-  document.body.innerHTML = '';
-});
+afterEach(() => document.body.replaceChildren());
 
 describe('DocxEditorReview (Vue)', () => {
   test('updates Vue cards after a full-data tracked-change predicate changes', async () => {
@@ -167,6 +165,7 @@ describe('DocxEditorReview (Vue)', () => {
           author: 'Demo Reviewer',
           color: '#b42318',
         }),
+        h(DocxEditorAuthorStyle, { author: 'Updated Reviewer', color: '#0b7285' }),
       ],
       SOURCE,
       () => [h(DocxEditorReview)],
@@ -183,6 +182,13 @@ describe('DocxEditorReview (Vue)', () => {
       const draft = mounted.container.querySelector('[data-testid="review-draft"]') as HTMLElement;
       expect(draft.dataset.reviewAuthor).toBe('Demo Reviewer');
       expect(draft.style.getPropertyValue('--doc-review-author-current')).toBe('#b42318');
+      mounted.editor().setAuthor('Updated Reviewer');
+      await flushMount();
+      const updatedDraft = mounted.container.querySelector(
+        '[data-testid="review-draft"]'
+      ) as HTMLElement;
+      expect(updatedDraft.dataset.reviewAuthor).toBe('Updated Reviewer');
+      expect(updatedDraft.style.getPropertyValue('--doc-review-author-current')).toBe('#0b7285');
     } finally {
       mounted.unmount();
     }
@@ -255,7 +261,7 @@ describe('DocxEditorReview (Vue)', () => {
       await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
       mounted.editor().surface!.focus();
       expect(mounted.editor().snapshot().selectionCollapsed).toBe(true);
-      expect(requestDraft()).toBe(true);
+      expect(requestDraft()).toBe(false); // the control refuses before any handler runs
       await flush();
       expect(mounted.container.querySelector('[data-testid="review-draft"]')).toBeNull();
     } finally {
@@ -426,9 +432,18 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-reply-input"]'
       ) as HTMLInputElement;
       expect(input).toBeTruthy();
+      const submit = mounted.container.querySelector(
+        '[data-testid="review-reply-submit"]'
+      ) as HTMLButtonElement;
+      expect(submit.disabled).toBe(true);
+      input.value = '   ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await flush();
+      expect(submit.disabled).toBe(true);
       input.value = 'Why this wording?';
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await flush();
+      expect(submit.disabled).toBe(false);
       (
         mounted.container.querySelector('[data-testid="review-reply-submit"]') as HTMLButtonElement
       ).click();
@@ -444,23 +459,48 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('a tracked change carries a delete control that discards the suggestion', async () => {
-    const mounted = mountReview(TRACKED);
-    try {
-      await flush();
-      expect(mounted.container.querySelectorAll('[data-testid="review-delete"]').length).toBe(1);
-      (
-        mounted.container.querySelector('[data-testid="review-delete"]') as HTMLButtonElement
-      ).click();
-      await waitFor(() => mounted.editor().getReviewItems().length === 0);
-      await waitFor(
-        () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 0
+  for (const explicitDelete of [false, true]) {
+    test(`a tracked change exposes Discard only when explicitly composed: ${explicitDelete}`, async () => {
+      const mounted = mountEditorTree(
+        () => [],
+        TRACKED,
+        () => [
+          h(DocxEditorReview, null, {
+            default: () =>
+              explicitDelete
+                ? [
+                    h(DocxEditorReview.List, null, {
+                      default: () =>
+                        h(DocxEditorReview.Card, null, {
+                          default: () => h(DocxEditorReview.Delete),
+                        }),
+                    }),
+                  ]
+                : [],
+          }),
+        ],
+        [reviewModule()]
       );
-      expect(mounted.editor().surface!.session.bodyText()).toBe('base ');
-    } finally {
-      mounted.unmount();
-    }
-  });
+      try {
+        await flush();
+        expect(mounted.container.querySelectorAll('[data-testid="review-delete"]').length).toBe(
+          explicitDelete ? 1 : 0
+        );
+        (
+          mounted.container.querySelector(
+            `[data-testid="${explicitDelete ? 'review-delete' : 'review-reject'}"]`
+          ) as HTMLButtonElement
+        ).click();
+        await waitFor(() => mounted.editor().getReviewItems().length === 0);
+        await waitFor(
+          () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 0
+        );
+        expect(mounted.editor().surface!.session.bodyText()).toBe('base ');
+      } finally {
+        mounted.unmount();
+      }
+    });
+  }
 
   test('stops observing a card slot when the card unmounts', async () => {
     const original = globalThis.ResizeObserver;
@@ -483,7 +523,7 @@ describe('DocxEditorReview (Vue)', () => {
       const slot = observed.find((node) => node.classList.contains('docx-review__slot'));
       expect(slot).toBeDefined();
       (
-        mounted.container.querySelector('[data-testid="review-delete"]') as HTMLButtonElement
+        mounted.container.querySelector('[data-testid="review-reject"]') as HTMLButtonElement
       ).click();
       await waitFor(() => mounted.editor().getReviewItems().length === 0);
       await waitFor(() => unobserved.includes(slot!));
@@ -535,8 +575,8 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('collapses resolved comments to a green-tick miniature until clicked', async () => {
-    const mounted = mountReview(COMMENTED_SOURCE);
+  test('collapses resolved comments to a check-badge miniature until clicked', async () => {
+    const mounted = mountReview(COMMENTED_SOURCE, {}, {}, { commentMarkers: 'initials' });
     try {
       await flush();
       await waitFor(
@@ -555,8 +595,8 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-card"]'
       ) as HTMLDetailsElement;
       expect(details.open).toBe(false);
-      expect(details.querySelector('.docx-review__resolved-comment')).not.toBeNull();
-      expect(details.querySelector('.docx-review__resolved-tick')).not.toBeNull();
+      // `commentMarkers: 'initials'` draws the miniature as the quiet check badge.
+      expect(details.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
 
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
         new MouseEvent('click', { bubbles: true })
@@ -579,7 +619,7 @@ describe('DocxEditorReview (Vue)', () => {
       expect(
         mounted.container
           .querySelector('[data-testid="review-marker"]')
-          ?.querySelector('.docx-review__resolved-icon')
+          ?.querySelector('[data-testid="review-badge"][data-resolved]')
       ).not.toBeNull();
       (mounted.container.querySelector('[data-testid="review-marker"]') as HTMLElement).click();
       await flush();
@@ -600,7 +640,7 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('default rail hides structural cards', async () => {
+  test('default rail shows structural cards', async () => {
     const structural = docx(
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
         '<w:tr><w:trPr><w:ins w:id="1" w:author="Ada"/></w:trPr>' +
@@ -610,7 +650,17 @@ describe('DocxEditorReview (Vue)', () => {
     try {
       await flush();
       const cards = [...mounted.container.querySelectorAll('[data-testid="review-card"]')];
-      expect(cards.every((card) => card.getAttribute('data-kind') !== 'structural')).toBe(true);
+      expect(cards.some((card) => card.getAttribute('data-kind') === 'structural')).toBe(true);
+      for (const action of ['accept', 'reject']) {
+        const card = mounted.container.querySelector('[data-kind="structural"]')!;
+        expect(card.textContent).toContain('Inserted table row');
+        (card.querySelector(`[data-testid="review-${action}"]`) as HTMLElement).click();
+        await flush();
+        expect(mounted.container.querySelector('[data-kind="structural"]')).toBeNull();
+        expect(mounted.editor().exec({ type: 'undo' }).ok).toBe(true);
+        await flush();
+        expect(mounted.container.querySelector('[data-kind="structural"]')).not.toBeNull();
+      }
     } finally {
       mounted.unmount();
     }
@@ -624,7 +674,7 @@ describe('DocxEditorReview (Vue)', () => {
         '<w:tr><w:trPr><w:ins w:id="1" w:author="Grace"/></w:trPr>' +
         '<w:tc><w:p><w:r><w:t>second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
     );
-    const mounted = mountReview(structural);
+    const mounted = mountReview(structural, { structural: false });
     try {
       await flush();
       await waitFor(
@@ -646,7 +696,71 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('default rail lists only non-format/non-structural cards', async () => {
+  test('Next and Previous Change open the balloon for a rail-hidden format revision', async () => {
+    const mounted = mountReview(FORMAT_AND_INSERT);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-rail"]') !== null);
+      expect(
+        mounted.container.querySelector('[data-testid="review-rail"]')?.getAttribute('data-count')
+      ).toBe('1');
+      // Formatting stays activatable for both balloons and fallback sidebar cards.
+      // Start from the text insertion so navigation is independent of the initial caret.
+      const insertion = mounted
+        .editor()
+        .getReviewItems()
+        .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
+      mounted.editor().setActiveReviewItem(insertion.key);
+      await flush();
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]') === null).toBe(true);
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      const balloon = mounted.container.querySelector(
+        '[data-testid="review-balloon-card"]'
+      ) as HTMLElement;
+      expect(balloon.dataset.kind).toBe('format');
+      expect(
+        mounted.container.querySelector(
+          '[data-testid="review-balloon"] [data-testid="review-accept"]'
+        )
+      ).not.toBeNull();
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-card"][data-active]') !== null
+      );
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+      expect(
+        (mounted.container.querySelector('[data-testid="review-card"]') as HTMLElement).dataset.kind
+      ).toBe('insert');
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      expect(
+        (mounted.container.querySelector('[data-testid="review-balloon-card"]') as HTMLElement)
+          .dataset.kind
+      ).toBe('format');
+
+      mounted.container.querySelector('[data-revision-kind="format"]')?.remove();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('default rail keeps formatting in the page balloon', async () => {
     const mounted = mountReview(FORMAT_AND_INSERT);
     try {
       await flush();
@@ -798,6 +912,7 @@ describe('useReviewOf (Vue)', () => {
     const editor = {
       getReviewRevision: () => revision,
       getEditingMode: () => 'editing',
+      getActivatedReviewItemKey: () => null,
       getReviewItems: () => {
         itemReads++;
         return [];
@@ -864,4 +979,21 @@ describe('review stable ids', () => {
     app.unmount();
     container.remove();
   });
+});
+
+test('Vue exposes table formatting without a painted balloon', async () => {
+  const bytes = docx(
+    '<w:tbl><w:tblPr><w:jc w:val="right"/><w:tblPrChange w:id="10" w:author="Ada"><w:tblPr><w:jc w:val="left"/></w:tblPr></w:tblPrChange></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+  );
+  const mounted = mountReview(bytes);
+  try {
+    await flush();
+    const card = mounted.container.querySelector('[data-kind="format"]');
+    expect(card?.textContent).toContain('Alignment: Right');
+    (card!.querySelector('[data-testid="review-reject"]') as HTMLElement).click();
+    await flush();
+    expect(mounted.container.querySelector('[data-testid="review-card"]')).toBeNull();
+  } finally {
+    mounted.unmount();
+  }
 });

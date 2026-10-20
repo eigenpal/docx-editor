@@ -335,8 +335,12 @@ describe('adoption rescues a concurrent peer, not the author', () => {
           });
         }
       );
-      expect(runText(left), "the tombstoning replica keeps the peer's child").toBe('Alpha!');
-      expect(runText(right), 'the adding replica keeps its own child').toBe('Alpha!');
+      // The peer's text keeps the run it was typed in when that run is replaced at once, as
+      // typing keeps the formatting around it; the text itself reaches both replicas.
+      const paragraphText = (replica: Replica): string =>
+        nodeText(collectKind(packageOf(replica), 'paragraph')[0]!);
+      expect(paragraphText(left), "the tombstoning replica keeps the peer's child").toBe('Alpha!');
+      expect(paragraphText(right), 'the adding replica keeps its own child').toBe('Alpha!');
       expect(packageFingerprint(packageOf(right))).toBe(packageFingerprint(packageOf(left)));
       expect(JSON.stringify(saveReopenDigest(packageOf(right)))).toBe(
         JSON.stringify(saveReopenDigest(packageOf(left)))

@@ -64,6 +64,11 @@
  *     `compat/manifest.json`'s `omissions`: this member is intentionally
  *     *not* selected for exact conformance against the reference, precisely
  *     because it is a deliberate simplification, not a faithful mirror.
+ *   - `ChangeTrackingVersion`: the same two-overload shape as `SelectionMode`,
+ *     for `Range#getReviewedText` and `Paragraph#getReviewedText`.
+ *   - `ClientResult`: the box a queued method such as `Range#getBookmarks`
+ *     returns, declared with its `value` only so the selected members that
+ *     return one can be compared against the reference.
  */
 export declare namespace DocxEditor {
   export type SelectionMode = 'Select' | 'Start' | 'End';
@@ -76,6 +81,13 @@ export declare namespace DocxEditor {
    * same-named type has to exist for the enum-typed overload to type-check at all.
    */
   export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
+
+  /**
+   * Which version of tracked text `getReviewedText` reads. A named type for the same reason
+   * `SelectionMode` is one: upstream offers the position as an enum overload and a
+   * string-literal overload.
+   */
+  export type ChangeTrackingVersion = 'Original' | 'Current';
 
   /** Base request-context handle; see the file header for why only `sync` is declared here. */
   export class ClientRequestContext {
@@ -95,16 +107,86 @@ export declare namespace DocxEditor {
     isNullObject: boolean;
   }
 
+  /** A value a queued method answers, readable after the next `sync()`. */
+  export class ClientResult<T> {
+    readonly value: T;
+  }
+
+  /** Document information categories. Only DocumentProperties removal is supported. @public */
+  export enum RemoveDocInfoType {
+    all = 'All',
+    atMentions = 'AtMentions',
+    commentReactions = 'CommentReactions',
+    comments = 'Comments',
+    contentType = 'ContentType',
+    documentIntelligence = 'DocumentIntelligence',
+    documentManagementPolicy = 'DocumentManagementPolicy',
+    documentProperties = 'DocumentProperties',
+    documentServerProperties = 'DocumentServerProperties',
+    documentTasks = 'DocumentTasks',
+    documentWorkspace = 'DocumentWorkspace',
+    emailHeader = 'EmailHeader',
+    inkAnnotations = 'InkAnnotations',
+    removePersonalInformation = 'RemovePersonalInformation',
+    revisions = 'Revisions',
+    routingSlip = 'RoutingSlip',
+    sendForReview = 'SendForReview',
+    taskpaneWebExtensions = 'TaskpaneWebExtensions',
+    template = 'Template',
+    versions = 'Versions',
+  }
+
   export class Document {
+    changeTrackingMode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+    readonly properties: DocumentProperties;
+    removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+    removeDocumentInformation(
+      removeDocInfoType:
+        | 'Comments'
+        | 'Revisions'
+        | 'Versions'
+        | 'RemovePersonalInformation'
+        | 'EmailHeader'
+        | 'RoutingSlip'
+        | 'SendForReview'
+        | 'DocumentProperties'
+        | 'Template'
+        | 'DocumentWorkspace'
+        | 'InkAnnotations'
+        | 'DocumentServerProperties'
+        | 'DocumentManagementPolicy'
+        | 'ContentType'
+        | 'TaskpaneWebExtensions'
+        | 'AtMentions'
+        | 'DocumentTasks'
+        | 'DocumentIntelligence'
+        | 'CommentReactions'
+        | 'All'
+    ): void;
     readonly body: Body;
     readonly comments: CommentCollection;
     readonly contentControls: ContentControlCollection;
     readonly paragraphs: ParagraphCollection;
     readonly revisions: RevisionCollection;
     readonly sections: SectionCollection;
+    deleteBookmark(name: string): void;
+    getBookmarkRange(name: string): Range;
+    getBookmarkRangeOrNullObject(name: string): Range;
+  }
+
+  export class DocumentProperties {
+    readonly lastAuthor: string;
+    author: string;
+    title: string;
+    subject: string;
+    keywords: string;
+    comments: string;
+    category: string;
   }
 
   export class Body {
+    readonly footnotes: NoteItemCollection;
+    readonly endnotes: NoteItemCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
     readonly lists: ListCollection;
@@ -124,14 +206,24 @@ export declare namespace DocxEditor {
   // document-wide counter for a range to report. Declaring the members and never implementing them
   // would make this file a roadmap rather than an inventory. The recorded reasons are the
   // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
-  export class Range {
+  export class Range extends ClientObject {
+    clear(): void;
+    delete(): void;
     readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
     hyperlink: string;
     readonly paragraphs: ParagraphCollection;
+    readonly revisions: RevisionCollection;
     style: string;
     readonly text: string;
+    expandTo(range: Range): Range;
+    getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
+    getRange(rangeLocation?: 'Whole' | 'Start' | 'End' | 'After' | 'Content'): Range;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
+    insertBookmark(name: string): void;
     insertComment(commentText: string): Comment;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(
@@ -159,8 +251,12 @@ export declare namespace DocxEditor {
     readonly text: string;
     clear(): void;
     delete(): void;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
+    search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
     split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection;
   }
 
@@ -233,12 +329,12 @@ export declare namespace DocxEditor {
   // bookmarks
   // ---------------------------------------------------------------------
 
-  // `start`, `end` and `delete` are deliberately ABSENT: the first two are the document-wide
-  // character offsets already de-selected on `Range`, and nothing in the engine removes a bookmark's
-  // marker pair. See `compat/manifest.json`.
+  // `start` and `end` are deliberately ABSENT: they are the document-wide character offsets
+  // already de-selected on `Range`. See `compat/manifest.json`.
   export class Bookmark {
     readonly name: string;
     readonly range: Range;
+    delete(): void;
     select(): void;
   }
 
@@ -282,9 +378,6 @@ export declare namespace DocxEditor {
     getNext(): NoteItem;
   }
 
-  // Upstream reaches this from `Body#footnotes`/`#endnotes`; here it hangs off the document, because
-  // a note is a part of the package that only the main story may reference. See
-  // `compat/manifest.json`.
   export class NoteItemCollection {
     readonly items: NoteItem[];
     getFirst(): NoteItem;

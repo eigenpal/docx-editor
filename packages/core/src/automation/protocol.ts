@@ -1,3 +1,5 @@
+import type { RevisionBatchResult } from '../store/store/revision-batch.ts';
+import type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 // The automation host protocol.
 //
 // One interface, two implementations: a headless host that owns a package it opened from
@@ -31,7 +33,13 @@ export type AutomationObjectKind =
   | 'revision'
   | 'bookmark'
   | 'list'
-  | 'contentControl';
+  | 'contentControl'
+  | 'table'
+  | 'tableRow'
+  | 'tableCell'
+  | 'field'
+  | 'inlinePicture'
+  | 'shape';
 
 declare const AUTOMATION_HANDLE_BRAND: unique symbol;
 
@@ -87,7 +95,11 @@ export interface AutomationCapabilities {
  * `stale-revision` must not retry an `invalid-handle`.
  */
 export type AutomationErrorCode =
-  /** `expectedRevision` did not match the host's current revision; nothing was applied. */
+  /**
+   * Nothing was applied because the request was built from an older read: `expectedRevision`
+   * did not match the host's current revision, or an endpoint's `readAt` names a position
+   * that moved since. Read again before retrying; resending the same endpoints fails again.
+   */
   | 'stale-revision'
   /** A handle this host never minted, or one naming a different kind of object. */
   | 'invalid-handle'
@@ -150,11 +162,11 @@ export interface AutomationError {
 /**
  * One end of a stretch of a story: a paragraph, and a UTF-16 offset in it.
  *
- * The only addressing vocabulary in this protocol. A stable paragraph handle plus a model
- * offset is what the tree ops take, what selection uses and what the layout reports — so a
- * position a consumer reads and a position it then writes at mean the same thing. Painted DOM
- * indices and document-wide character counters appear nowhere: the first is a picture, and the
- * second is a coordinate space no part of the engine maintains.
+ * The only addressing vocabulary in this protocol. A stable paragraph handle plus a raw model
+ * offset is what tree operations, selection, and layout use. Display text reads can expand field
+ * atoms and apply a review view. A client must not calculate offsets from display text. It can
+ * request the `model` projection when it needs text in this offset vocabulary. Painted DOM
+ * indices and document-wide character counters appear nowhere.
  */
 export interface AutomationEndpoint {
   /**
@@ -166,6 +178,13 @@ export interface AutomationEndpoint {
    */
   readonly paragraph: AutomationHandle;
   readonly offset: number;
+  /**
+   * The host revision this endpoint was read at. Hosts stamp every endpoint they answer with
+   * it; send it back unchanged. An endpoint whose paragraph text changed since then is refused
+   * with `stale-revision` instead of addressing whatever text now sits at its offset. Omit it
+   * for an endpoint built by hand, which the host then takes as current.
+   */
+  readonly readAt?: number;
 }
 
 /** A stretch of a story between two endpoints, in reading order. */
@@ -176,9 +195,38 @@ export interface AutomationSpan {
 
 /** What an operation answered with. */
 export type AutomationValue =
+  | { readonly kind: 'revisionBatch'; readonly result: RevisionBatchResult }
+  | { readonly kind: 'revisionAuthors'; readonly result: RevisionAuthorResult }
+  | { readonly kind: 'field'; readonly field: { readonly code: string } }
+  | {
+      readonly kind: 'table';
+      readonly table: {
+        readonly values: readonly (readonly string[])[];
+        readonly style: string;
+        readonly headerRowCount: number;
+        readonly rowCount: number;
+        readonly columnCount: number;
+      };
+    }
+  | {
+      readonly kind: 'tableCell';
+      readonly cell: {
+        readonly value: string;
+        readonly columnWidth: number;
+        readonly shadingColor: string;
+        readonly verticalAlignment: 'Top' | 'Center' | 'Bottom';
+      };
+    }
+  | {
+      readonly kind: 'inlinePicture';
+      readonly picture: import('./pictures.ts').AutomationInlinePictureRead;
+    }
+  | { readonly kind: 'shape'; readonly shape: import('./shapes.ts').AutomationShapeRead }
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }
+  /** Several strings, in document order: the names of the bookmarks a range holds. */
+  | { readonly kind: 'texts'; readonly texts: readonly string[] }
   | { readonly kind: 'span'; readonly span: AutomationSpan }
   | { readonly kind: 'spans'; readonly spans: readonly AutomationSpan[] }
   /**
@@ -298,6 +346,8 @@ export interface AutomationHost {
    * nothing is written at all.
    */
   execute(request: AutomationBatchRequest): AutomationBatchResponse;
+  /** Settle optional pagination resources before a field-update batch. Does not write content. */
+  prepare?(request: AutomationBatchRequest): Promise<void>;
   /** The current document as DOCX bytes, through the normalizing serializer. */
   save(): AutomationSaveResult;
   /** Change notification. Returns an unsubscribe that is safe to call more than once. */

@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Table and header layout can overlap pictures or add unwanted space.",
+  "after": "Table rows, captions, repeated headers, and empty header frames use corrected layout geometry.",
+  "reason": "Only derived layout changes; document operations and shared state retain their format.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-layout-clearance.test.ts"
+  ],
+  "changeset": "clear-table-header-flow",
+  "migration": null
+}

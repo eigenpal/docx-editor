@@ -13,7 +13,11 @@
 // from the DOM is which CHARACTERS were gestured over, never where they are.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import type {
+  SemanticSelection,
+  CaretGeometry,
+  CaretAtOptions,
+} from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   applySelectionToDom,
@@ -31,13 +35,12 @@ export interface SurfaceSelectionSyncDeps {
   /** Active story for IME commits and composition — body or open furniture. */
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   /**
-   * The document the surface was MOUNTED into, never the ambient global.
+   * The painted pages: the only subtree a selection endpoint may map through.
    *
-   * The selection is a property of one document, and a surface mounted into an iframe or a
-   * detached document would otherwise read and write the wrong one.
+   * Their `ownerDocument`, read per call, is the document whose selection this reads and
+   * writes, never the ambient global: the surface can be mounted in an iframe or a pop-out
+   * window, and can move between them while mounted.
    */
-  readonly document: Document;
-  /** The painted pages: the only subtree a selection endpoint may map through. */
   readonly pagesLayer: HTMLElement;
   /** The CURRENT model selection — read per call, never captured. */
   selection(): SemanticSelection;
@@ -100,6 +103,14 @@ export interface SurfaceSelectionSyncDeps {
    * whatever the DOM guessed, halfway through the drag.
    */
   isGesturing?(): boolean;
+  /**
+   * True while the reader's own selection is not taken up at all: viewing.
+   *
+   * The browser can still report one (a host stylesheet that re-enables `user-select`, a
+   * select-all from outside), and adopting it moved the model selection, so the toolbar
+   * reported the formatting of text nobody can edit.
+   */
+  selectionLocked?(): boolean;
   /**
    * What to write into the browser's own selection, when that is not the model selection.
    *
@@ -170,7 +181,8 @@ export interface SurfaceSelectionSync {
    * ordinary write refuses whenever the DOM selection lives outside these pages, which is
    * the normal state when the request came from the host's own chrome: the caret moved and
    * the model held a range that nothing on screen highlighted. Claiming writes the range
-   * anyway; it never moves FOCUS, so the host's own control keeps it.
+   * anyway; in Chromium this can also focus the contenteditable. Passive restoration
+   * must use an unclaimed write.
    */
   mirrorToDom(claim?: boolean): void;
   /**
@@ -207,10 +219,16 @@ export interface SurfaceSelectionSync {
    * scroll-follow need this page or they jump to the authored copy on page 0.
    */
   selectionPageIndex(): number | undefined;
+  selectionLineId(): string | undefined;
+  caretPreference(preferredPageIndex?: number): CaretAtOptions;
+  /** Keep pointer geometry local; model positions and collaboration selections stay unchanged. */
+  notePointerCaret(caret?: CaretGeometry): void;
 }
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
-  const { document, pagesLayer, session } = deps;
+  const { pagesLayer, session } = deps;
+  /** The selection's document is the pages' own, wherever they are now. */
+  const hostDocument = (): Document => pagesLayer.ownerDocument;
 
   let applyingSelection = false;
   let lastMirroredSelection: SemanticSelection | null = null;
@@ -222,6 +240,21 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * the first built one — usually page 0.
    */
   let lastSelectionPageIndex: number | undefined;
+  let pointerCaret: CaretGeometry | undefined;
+
+  /**
+   * The line the HEAD shows on, when a pointer gesture or a keyboard motion chose one for a
+   * position that also starts the next line. It belongs to the head, so an extending motion
+   * keeps it; only a collapsed selection paints it as the caret.
+   */
+  function selectionLineId(): string | undefined {
+    const { head } = deps.selection();
+    return pointerCaret &&
+      pointerCaret.position.paragraphId === head.paragraphId &&
+      pointerCaret.position.offset === head.offset
+      ? pointerCaret.lineId
+      : undefined;
+  }
 
   function rememberSelectionPage(domSelection: Selection | null): void {
     const page =
@@ -285,7 +318,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * mirror the selection into the DOM and report the new state anyway.
    */
   function adoptPendingDomSelection(): boolean {
-    const domSelection = document.getSelection();
+    if (deps.selectionLocked?.()) return false;
+    const domSelection = hostDocument().getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) return false;
     rememberSelectionPage(domSelection);
@@ -300,12 +334,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * True when focus or the selection is already inside these pages, and also when NOTHING
    * holds a selection — writing one then takes it from nobody. What this refuses is the case
    * that matters: a caret living in another element, which a repaint here would otherwise
-   * yank away with no focus change and no interaction.
+   * yank away without an interaction.
    */
   function ownsSelection(): boolean {
-    const active = document.activeElement;
+    const active = hostDocument().activeElement;
     if (active && pagesLayer.contains(active)) return true;
-    const domSelection = document.getSelection();
+    // Text inputs can own focus while the document Selection is empty or still
+    // points into our pages. Their native caret is not represented by that Selection.
+    if (active && active !== hostDocument().body && active !== hostDocument().documentElement)
+      return false;
+    const domSelection = hostDocument().getSelection();
     if (!domSelection || domSelection.rangeCount === 0) return true;
     const anchor = domSelection.anchorNode;
     if (!anchor) return true;
@@ -318,7 +356,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
-    const domSelection = document.getSelection();
+    if (deps.selectionLocked?.()) return;
+    const domSelection = hostDocument().getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) {
       // NOT MAPPING IS NOT NOTHING HAPPENING.
@@ -359,7 +398,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       pagesLayer,
       paragraphId,
       modelText,
-      document.getSelection()?.anchorNode ?? null
+      hostDocument().getSelection()?.anchorNode ?? null
     );
     if (painted === null) return;
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
@@ -457,13 +496,19 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // Reading it back is how a caret the DOM could not express became a caret at the
     // paragraph start.
     if (!lastMirroredSelection) return true;
-    const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+    const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
 
   /** Arm one adoption opportunity. Secondary buttons are not a caret gesture. */
   function noteUserSelectionGesture(event: Event): void {
-    if (event instanceof PointerEvent && event.button !== 0) return;
+    if (event.type.startsWith('pointer') && (event as PointerEvent).button !== 0) return;
+    // A drag or multi-click starting a native selection while locked. Refused here rather than
+    // with `user-select: none`, which would also hide the highlight of a selection the host sets.
+    if (event.type === 'selectstart' && deps.selectionLocked?.()) {
+      event.preventDefault();
+      return;
+    }
     userSelectionGesture = true;
   }
 
@@ -489,14 +534,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // This write is the new baseline. Matching DOM carets after it are echoes until the
     // user starts another selection gesture.
     userSelectionGesture = false;
-    const native = document.getSelection();
+    const native = hostDocument().getSelection();
     const preferredPageIndex = preferredSelectionPage(native);
-    const wrote = applySelectionToDom(
-      pagesLayer,
-      next,
-      native,
-      preferredPageIndex !== undefined ? { preferredPageIndex } : undefined
-    );
+    const preferredLineId = selectionLineId();
+    const wrote = applySelectionToDom(pagesLayer, next, native, {
+      ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+      ...(preferredLineId !== undefined ? { preferredLineId } : {}),
+    });
     if (wrote) rememberSelectionPage(native);
     // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
     // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
@@ -568,6 +612,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
     noteModelMoved() {
       modelMoved = true;
+      pointerCaret = undefined;
     },
 
     noteSelectionSettled() {
@@ -606,8 +651,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // already MATCHES the model does not spend the one-shot: it is this surface's own
       // mirror reporting back, and spending on it would leave a park that lands on a later
       // task unguarded.
-      if (browserSelectionFixup && domSelectionTouchesPages(pagesLayer, document.getSelection())) {
-        const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+      if (
+        browserSelectionFixup &&
+        domSelectionTouchesPages(pagesLayer, hostDocument().getSelection())
+      ) {
+        const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
         if (reported === null || !selectionsEqual(reported, deps.selection())) {
           browserSelectionFixup = false;
           if (!userSelectionGesture) {
@@ -696,6 +744,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     },
 
     selectionPageIndex: () => lastSelectionPageIndex,
+    selectionLineId,
+    caretPreference(preferredPageIndex = lastSelectionPageIndex) {
+      const preferredLineId = selectionLineId();
+      return {
+        ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+        ...(preferredLineId !== undefined ? { preferredLineId } : {}),
+      };
+    },
+    notePointerCaret(caret) {
+      pointerCaret = caret;
+      if (caret) lastSelectionPageIndex = caret.pageIndex;
+    },
     destroy() {
       pagesLayer.removeEventListener('pointerdown', noteUserSelectionGesture, true);
       pagesLayer.removeEventListener('selectstart', noteUserSelectionGesture, true);

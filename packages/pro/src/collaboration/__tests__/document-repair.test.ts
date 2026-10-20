@@ -8,9 +8,11 @@ import * as Y from 'yjs';
 import { collaborationDocx } from './support.ts';
 import {
   applyJournal,
+  childIdsOf,
   collectKind,
   concurrent,
   destroyReplica,
+  expectConverged,
   findText,
   joinReplica,
   loadPackage,
@@ -18,19 +20,36 @@ import {
   packageOf,
   parentOf,
   seedReplica,
+  shownParentOf,
   spliceTextJournal,
+  WML,
 } from './document-support.ts';
-import { isElementRecord } from '../document/index.ts';
 
 describe('deterministic materialization repair', () => {
   test('keeps the first preorder placement and reports duplicate-parent', async () => {
+    // Runs live in their paragraph's shared text, so two peers move one paragraph record into
+    // two different containers at once.
     const bytes = collaborationDocx();
     const left = await seedReplica(loadPackage(bytes));
+    const paragraphs = collectKind(packageOf(left), 'paragraph');
+    const moved = paragraphs[1]!;
+    const body = shownParentOf(left, moved.id, 'body');
+    const containers = [left.mint.take(), left.mint.take()];
+    left.doc.transact(() => {
+      containers.forEach((id, index) => {
+        left.registry.putElement({
+          logicalId: id,
+          kind: 'generic',
+          namespaceUri: WML,
+          localName: 'customXml',
+          attributes: [],
+          bindings: [],
+        });
+        left.registry.spliceChildren(body, index, 0, [id]);
+      });
+    });
     const right = joinReplica(left);
     try {
-      const run = collectKind(packageOf(left), 'run')[0]!;
-      const first = collectKind(packageOf(left), 'paragraph')[0]!;
-      const second = collectKind(packageOf(left), 'paragraph')[1]!;
       concurrent(
         left,
         right,
@@ -39,8 +58,8 @@ describe('deterministic materialization repair', () => {
             effects: [
               {
                 kind: 'moveNode',
-                logicalId: run.id,
-                destinationParentLogicalId: second.id,
+                logicalId: moved.id,
+                destinationParentLogicalId: containers[1]!,
                 destinationIndex: 0,
               },
             ],
@@ -50,14 +69,16 @@ describe('deterministic materialization repair', () => {
             effects: [
               {
                 kind: 'moveNode',
-                logicalId: run.id,
-                destinationParentLogicalId: first.id,
+                logicalId: moved.id,
+                destinationParentLogicalId: containers[0]!,
                 destinationIndex: 0,
               },
             ],
           })
       );
-      const matches = collectKind(packageOf(left), 'run').filter((node) => node.id === run.id);
+      const matches = collectKind(packageOf(left), 'paragraph').filter(
+        (node) => node.id === moved.id
+      );
       expect(matches).toHaveLength(1);
       expect(left.materializer.issues.some((issue) => issue.code === 'duplicate-parent')).toBe(
         true
@@ -65,18 +86,19 @@ describe('deterministic materialization repair', () => {
       expect(right.materializer.issues.some((issue) => issue.code === 'duplicate-parent')).toBe(
         true
       );
+      expectConverged(left, right);
     } finally {
       destroyReplica(left);
       destroyReplica(right);
     }
   });
 
-  test('tombstone delete reports orphan-with-content for concurrent descendant text', async () => {
+  test('deleting a paragraph wins over concurrent typing in it', async () => {
     const left = await seedReplica(loadPackage(collaborationDocx()));
     const right = joinReplica(left);
     try {
-      const paragraph = parentOf(
-        left.registry,
+      const paragraph = shownParentOf(
+        left,
         findText(packageOf(left), 'Bravo paragraph').id,
         'paragraph'
       );
@@ -84,15 +106,13 @@ describe('deterministic materialization repair', () => {
         left,
         right,
         () => {
-          const body = parentOf(left.registry, paragraph, 'body');
-          const bodyRecord = left.registry.record(body);
-          if (!bodyRecord || !isElementRecord(bodyRecord)) throw new Error('body');
+          const body = shownParentOf(left, paragraph, 'body');
           applyJournal(left, {
             effects: [
               {
                 kind: 'spliceChildren',
                 parentLogicalId: body,
-                start: bodyRecord.childIds.indexOf(paragraph),
+                start: childIdsOf(left, body).indexOf(paragraph),
                 deleteCount: 1,
                 childLogicalIds: [],
               },
@@ -106,10 +126,11 @@ describe('deterministic materialization repair', () => {
           )
       );
       expect(left.registry.isTombstoned(paragraph)).toBe(true);
-      expect(left.materializer.issues.some((issue) => issue.code === 'orphan-with-content')).toBe(
-        true
-      );
       expect(left.registry.hasNode(paragraph)).toBe(true);
+      expect(collectKind(packageOf(left), 'paragraph').some((node) => node.id === paragraph)).toBe(
+        false
+      );
+      expectConverged(left, right);
     } finally {
       destroyReplica(left);
       destroyReplica(right);

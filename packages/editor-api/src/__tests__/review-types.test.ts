@@ -37,3 +37,18 @@ test('both public entries require nullable review dates to be narrowed', () => {
   const revisionDate = revision.date;
   if (revisionDate) revisionDate.toISOString();
 });
+
+test('bulk results and readonly revision selections are available through both public entries', () => {
+  type Browser = import('../browser.ts').RevisionCollection;
+  type Server = import('../index.ts').RevisionCollection;
+  type Result = import('../index.ts').RevisionBatchResult;
+  expectTypeOf<Browser['resolve']>().toEqualTypeOf<Server['resolve']>();
+  expectTypeOf<ReturnType<Server['resolve']>>().toEqualTypeOf<
+    import('../index.ts').ClientResult<Result>
+  >();
+  expectTypeOf<Parameters<Server['resolve']>[1]>().toEqualTypeOf<
+    readonly ServerRevision[] | undefined
+  >();
+  expectTypeOf<Parameters<Server['acceptAll']>>().toEqualTypeOf<[]>();
+  expectTypeOf<ReturnType<Server['acceptAll']>>().toEqualTypeOf<void>();
+});

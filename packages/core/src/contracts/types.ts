@@ -1,3 +1,34 @@
+import type { HistoryGroupOutcome } from './editor-scope.ts';
+import type { RevisionAuthorResult, RevisionBatchResult } from './editor.ts';
+// Types this vocabulary's results hand out, re-exported from where they are declared so every
+// entry built on this module can name them. The contracts lane may import store, layout and
+// collaboration types (`mayImportTypes` in `core-lane-graph.ts`).
+export type { HistoryGroupOutcome, RevisionAuthorResult, RevisionBatchResult };
+export type * from './revision-markup.ts';
+export type * from './review-pane.ts';
+export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
+export type {
+  DocumentProtectionEdit,
+  DocumentProtectionState,
+} from '../store/package/document-protection.ts';
+export type {
+  ReviewPosition,
+  ReviewRange,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+} from '../store/store/review-items.ts';
+export type { RevisionAddress } from '../store/store/tree-op-revision-attribution.ts';
+export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+export type {
+  RevisionBatchEntry,
+  RevisionBatchSkipDetail,
+  RevisionBatchSkipReason,
+} from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorSkipReason,
+} from '../store/store/revision-author-change.ts';
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
  *
@@ -8,6 +39,8 @@
 /** Which paragraph-level reads the selection disagrees about. @public */
 export interface ParagraphDisagreements {
   readonly alignment: boolean;
+  /** The selection mixes left-to-right and right-to-left paragraphs. */
+  readonly direction: boolean;
   readonly spaceBeforePt: boolean;
   readonly spaceAfterPt: boolean;
   readonly lineSpacing: boolean;
@@ -40,6 +73,11 @@ export interface ParagraphFlags {
  */
 export interface ParagraphFormatCommand {
   alignment?: 'left' | 'center' | 'right' | 'justify';
+  /**
+   * Paragraph base direction (`w:bidi`), Word's Direction setting. `ltr` writes an explicit
+   * off value where a style would otherwise make the paragraph right-to-left.
+   */
+  direction?: 'ltr' | 'rtl';
   spaceBeforePt?: number | null;
   spaceAfterPt?: number | null;
   lineSpacing?: { rule: 'multiple' | 'exact' | 'atLeast'; value: number } | null;
@@ -131,8 +169,23 @@ export interface DocRange {
  * distinct ContentControl error classes that a boolean would flatten.
  */
 export type ExecResult =
-  | { ok: true; changed: boolean }
-  | { ok: false; code: ExecErrorCode; reason: string; target?: DocTarget };
+  | {
+      ok: true;
+      /** Whether the DOCUMENT changed; view-only calls (pane, activation, mode) always report `false`. */
+      changed: boolean;
+      revisions?: RevisionBatchResult;
+      /** Present on `setReviewChangesAuthor`: the changes it updated and the ones it skipped. */
+      revisionAuthors?: RevisionAuthorResult;
+      history?: HistoryGroupOutcome;
+    }
+  | {
+      ok: false;
+      code: ExecErrorCode;
+      reason: string;
+      target?: DocTarget;
+      revisions?: RevisionBatchResult;
+      revisionAuthors?: RevisionAuthorResult;
+    };
 
 /**
  * Why a write was refused, as a value to branch on.
@@ -247,15 +300,24 @@ export interface RunFormatting {
   // alignment or paragraph style of its own.
   readonly superscript?: boolean;
   readonly subscript?: boolean;
-  /** Paragraph alignment at the selection. `both` is OOXML's spelling of justify. */
+  /**
+   * Paragraph alignment at the selection, as a PHYSICAL edge. `both` is OOXML's spelling of
+   * justify. A right-to-left paragraph with no `w:jc` reads `right`.
+   */
   readonly alignment?: 'left' | 'center' | 'right' | 'both';
+  /**
+   * Paragraph base direction at the selection (`w:bidi` through the style cascade). Absent
+   * when the selection's paragraphs disagree; `disagrees.direction` then says so.
+   */
+  readonly direction?: 'ltr' | 'rtl';
   /** Paragraph style id (`w:pStyle`) at the selection. */
   readonly styleId?: string;
   /**
    * Line spacing at the selection, in the unit its rule implies — LINES for `multiple`,
    * points for `exact` and `atLeast`. The same vocabulary `setLineSpacing` takes, so a
-   * control can show what it reads and send back what it shows. Absent when the
-   * selection's paragraphs disagree or state no line spacing.
+   * control can show what it reads and send back what it shows. The effective value: a
+   * paragraph whose cascade states none reads as single spacing (`multiple`, 1). Absent
+   * when the selection's paragraphs disagree.
    */
   readonly lineSpacing?: {
     readonly rule: 'multiple' | 'exact' | 'atLeast';
@@ -324,9 +386,12 @@ export interface RunFormatting {
  * not know the cell.
  */
 export interface IndentFormatting {
-  /** Left indent, signed. Negative pulls text into the margin, as Word allows. */
+  /**
+   * Leading indent (`w:left`), signed: the left one, or the right one in a right-to-left
+   * paragraph. Negative pulls text into the margin, as Word allows.
+   */
   readonly left: number;
-  /** Right indent, signed. */
+  /** Trailing indent (`w:right`), signed: the right one, or the left one right to left. */
   readonly right: number;
   /** First-line offset from {@link left}, signed. Negative is a hanging indent. */
   readonly firstLine: number;
@@ -336,6 +401,11 @@ export interface IndentFormatting {
     readonly right: boolean;
     readonly firstLine: boolean;
   };
+  /**
+   * The first selected paragraph reads right to left, so `left` and the first line sit on
+   * the right margin. Absent for a left-to-right paragraph.
+   */
+  readonly rtl?: true;
 }
 
 /** A table: its rows, and the table style they resolve through. */
@@ -382,6 +452,7 @@ export type ContentControlType =
   | 'comboBox'
   | 'date'
   | 'picture'
+  | 'buildingBlockGallery'
   | 'repeatingSection';
 
 /**
@@ -390,8 +461,8 @@ export type ContentControlType =
  * A NARROWING of {@link ContentControlType}, not a separate vocabulary: a kind read off an
  * existing control can be handed straight back to `insertContentControl`. Three kinds are
  * absent because an insertion would have to invent what they carry — a checkbox needs its two
- * declared glyph states, a picture needs an image part, and a repeating section is a container
- * whose items have their own verbs. Reading still answers the wider type; a document may hold
+ * declared glyph states, a picture needs an image part, a building block gallery needs a
+ * glossary to list, and a repeating section is a container whose items have their own verbs. Reading still answers the wider type; a document may hold
  * kinds this cannot create.
  *
  * `dropDownList` is the same kind as `dropdown`, spelt as OOXML spells it. Both are accepted,
@@ -583,10 +654,74 @@ export interface Theme {
 /** Theme colour slots (`accent1`, `dk1`, `lt2`, …) to hex. */
 export type ThemeColorScheme = Readonly<Record<string, string>>;
 
-/** A watermark, which OOXML expresses as either text or an image — never both meaningfully. */
+/**
+ * A document watermark: text or a picture drawn behind the text of every page.
+ *
+ * Set `text` for a text watermark or `imageData` for a picture watermark, never both. Omitted
+ * options take the defaults in each field's description. The watermark goes into every header
+ * the document shows; a section with no header gets one.
+ *
+ * Text options apply only with `text`; `scale` and `washout` apply only with `imageData`.
+ * `setWatermark` refuses a mixed or out-of-range value with `invalidArgs` and a reason naming
+ * the field, and writes nothing.
+ *
+ * @example
+ * ```ts
+ * // A red, horizontal text watermark at 72pt.
+ * editor.exec({
+ *   type: 'setWatermark',
+ *   watermark: { text: 'CONFIDENTIAL', color: 'C00000', fontSizePt: 72, layout: 'horizontal' },
+ * });
+ * // A washed-out picture watermark at its natural size.
+ * editor.exec({ type: 'setWatermark', watermark: { imageData: pngBytes, scale: 1 } });
+ * ```
+ */
 export interface Watermark {
+  /** The text of a text watermark, up to 256 characters on one line. */
   readonly text?: string;
+  /** The PNG, JPEG, GIF, BMP or WebP bytes of a picture watermark. */
   readonly imageData?: Uint8Array;
+  /** Text: the font family. Defaults to `Calibri`. */
+  readonly fontFamily?: string;
+  /** Text: the size in points, from 1 to 1000. Omitted or null is Auto, which fills the page. */
+  readonly fontSizePt?: number | null;
+  /** Text: bold. Defaults to false. */
+  readonly bold?: boolean;
+  /** Text: italic. Defaults to false. */
+  readonly italic?: boolean;
+  /** Text: the colour as `RRGGBB`. Defaults to `C0C0C0` (silver). */
+  readonly color?: string;
+  /** Text: transparency from 0 (opaque) to 1. Defaults to 0.5. */
+  readonly transparency?: number;
+  /** Text: the orientation. Defaults to `diagonal`. */
+  readonly layout?: WatermarkLayout;
+  /** Picture: a factor of the picture's natural size. Omitted or null is Auto, which fits the page. */
+  readonly scale?: number | null;
+  /** Picture: lighten the picture so text over it stays readable. Defaults to true. */
+  readonly washout?: boolean;
+}
+
+/** How a text watermark crosses the page. */
+export type WatermarkLayout = 'diagonal' | 'horizontal';
+
+/**
+ * The watermark a document shows, as `Editor.getWatermark()` reads it.
+ *
+ * The text fields are present for a text watermark, `washout` for a picture watermark.
+ */
+export interface WatermarkState {
+  readonly kind: 'text' | 'image';
+  readonly text?: string;
+  readonly fontFamily?: string;
+  /** Null for Auto size. */
+  readonly fontSizePt?: number | null;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  /** `RRGGBB`. */
+  readonly color?: string;
+  readonly transparency?: number;
+  readonly layout?: WatermarkLayout;
+  readonly washout?: boolean;
 }
 
 /** A size in EMUs, the unit DrawingML stores extents in. 914400 EMU = 1 inch. */

@@ -24,6 +24,7 @@ import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
  * @public
  */
 export interface CollaborationModuleOptions extends ProLicenseOptions {
+  /** The session from a collaboration factory. The editor attaches its document port to it. */
   readonly session: EditorCollaborationSession;
 }
 

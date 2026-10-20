@@ -46,10 +46,15 @@ export interface PaginatedDocxEditorHandle {
   setParagraphProperty(
     localName: string,
     attributes?: Record<string, string | null>,
-    options?: { readonly mergeAttributes?: boolean }
+    options?: {
+      readonly mergeAttributes?: boolean;
+      readonly physicalAlignment?: boolean;
+      readonly paragraphDirection?: 'ltr' | 'rtl';
+    }
   ): void;
   formatting(): SurfaceFormatting | null;
   sectionProperties(): SectionProperties | null;
+  /** Save pending form input. Throws for invalid values or an active edit. */
   save(): Uint8Array | null;
 }
 
@@ -153,16 +158,15 @@ export const PaginatedDocxEditor = defineComponent({
       setParagraphProperty: (
         localName: string,
         attributes?: Record<string, string | null>,
-        options?: { readonly mergeAttributes?: boolean }
+        options?: {
+          readonly mergeAttributes?: boolean;
+          readonly physicalAlignment?: boolean;
+          readonly paragraphDirection?: 'ltr' | 'rtl';
+        }
       ) => surfaceRef.value?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.value?.formatting() ?? null,
       sectionProperties: () => surfaceRef.value?.sectionProperties() ?? null,
-      save: () => {
-        const surface = surfaceRef.value;
-        if (!surface) return null;
-        surface.flushPendingInput();
-        return surface.session.save();
-      },
+      save: () => surfaceRef.value?.save() ?? null,
     } satisfies PaginatedDocxEditorHandle);
 
     return (): VNode =>

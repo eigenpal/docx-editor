@@ -1,15 +1,15 @@
 // The stable-identity wrapper every font source needs before it can be a prop.
 //
-// `DocxEditor.Root` rebuilds its instance when `fonts` changes identity, which is right
-// for a value — new bytes are a new document setup — and a trap for a function:
-// `fonts={googleFonts()}` is a fresh resolver on every render, so the editor would be
-// destroyed and rebuilt on every render, forever. Awaiting a loader in the component has
+// `DocxEditor.Root` replaces its fonts when `fonts` changes identity, which is right for a
+// value — new bytes are a new font setup — and a trap for a function: `fonts={googleFonts()}`
+// is a fresh resolver on every render, so the editor would resolve and lay out its fonts
+// again on every render, forever. Awaiting a loader in the component has
 // the same shape of problem from the other end (`useState` + an effect, cancelled on
 // unmount, and nothing renders until it lands).
 //
 // `useFonts` gives back ONE resolver for the component's life, delegating to whatever was
 // passed most recently. Inline objects, inline `googleFonts()`, a promise, a bare
-// fragment: all fine, none of them remount anything.
+// fragment: all fine, none of them replaces the fonts again.
 
 import { useMemo, useRef } from 'react';
 import {
@@ -71,9 +71,8 @@ export type FontsInput =
  * Order origins cheapest-first.
  *
  * The returned resolver never changes identity, so the editor is never rebuilt on account
- * of this prop — which also means the arguments are re-read per LOAD rather than per
- * render. Changing them mid-document does not re-resolve fonts; load a document, or
- * remount, for new fonts to take effect.
+ * of this prop. Arguments are re-read when opening a document or requesting a new family.
+ * Changing them alone does not replace already loaded faces; reload the document for that.
  *
  * It is marked (`defineFontResolver`), so it can itself be an origin of another list or
  * `useDocxSource`'s `fonts` option without being mistaken for a zero-argument loader.

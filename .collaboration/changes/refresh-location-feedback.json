@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Refresh locations report status without anchor diagnostics.",
+  "after": "Refresh reports anchor diagnostics and processor summaries. The example handles successive results and review indicators.",
+  "reason": "Refresh still refuses collaborative sessions. These additions change local metadata and presentation without changing shared state.",
+  "tests": ["packages/core/src/editor/__tests__/document-refresh.test.ts"],
+  "changeset": null,
+  "migration": null
+}

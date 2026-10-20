@@ -67,6 +67,18 @@ export async function bookmarkNamesIn(searchText: string): Promise<string[]> {
   });
 }
 
+export async function goToBookmark(name: string): Promise<boolean> {
+  return DocxEditor.run(async (context) => {
+    const range = context.document.getBookmarkRangeOrNullObject(name);
+    await context.sync();
+
+    if (range.isNullObject) return false;
+    range.select();
+    await context.sync();
+    return true;
+  });
+}
+
 export async function widenTheFirstSectionsMargins(points: number): Promise<void> {
   await DocxEditor.run(async (context) => {
     const sections = context.document.sections;

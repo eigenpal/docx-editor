@@ -81,7 +81,7 @@ export interface ContentControlSummary {
 }
 
 // @public
-export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
 
 // @public
 export interface DocAnchor {
@@ -381,11 +381,16 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 // @public
 export type ExecResult = {
     changed: boolean;
+    history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
+    revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
+    revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
 
@@ -408,6 +413,16 @@ export interface HeaderFooterSet {
 }
 
 // @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
+}
+
+// @public
 export interface IndentFormatting {
     readonly firstLine: number;
     readonly left: number;
@@ -417,10 +432,30 @@ export interface IndentFormatting {
         readonly right: boolean;
     };
     readonly right: number;
+    readonly rtl?: true;
 }
 
 // @public
 export type InsertableContentControlType = Extract<ContentControlType, 'richText' | 'plainText' | 'dropdown' | 'comboBox' | 'date'> | 'dropDownList';
+
+// @public
+export interface NumberingRef {
+    readonly level: number;
+    // (undocumented)
+    readonly numId: string;
+}
+
+// @public
+export interface PageMargins {
+    // (undocumented)
+    readonly bottomTwips: number;
+    // (undocumented)
+    readonly leftTwips: number;
+    // (undocumented)
+    readonly rightTwips: number;
+    // (undocumented)
+    readonly topTwips: number;
+}
 
 // @public
 export interface Paragraph {
@@ -433,6 +468,21 @@ export interface Paragraph {
     readonly runs: readonly Run[];
     // (undocumented)
     readonly styleId?: string;
+}
+
+// @public
+export interface ParagraphDisagreements {
+    // (undocumented)
+    readonly alignment: boolean;
+    readonly direction: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly spaceAfterPt: boolean;
+    // (undocumented)
+    readonly spaceBeforePt: boolean;
+    // (undocumented)
+    readonly tabStops: boolean;
 }
 
 // @public
@@ -470,6 +520,69 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface ReviewPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ReviewRange {
+    // (undocumented)
+    readonly end: ReviewPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: ReviewPosition;
+}
+
+// @public
+export interface ReviewRevisionItem {
+    readonly address: RevisionAddress;
+    readonly addresses: readonly RevisionAddress[];
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'revision';
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+    readonly nesting: number;
+    readonly pairedWith?: string;
+    readonly ranges: readonly ReviewRange[];
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    readonly replacedText: string;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
+    readonly text: string;
+}
+
+// @public
+export type ReviewRevisionKind = 'insert' | 'delete'
+/**
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
+*/
+| 'replace' | 'moveFrom' | 'moveTo'
+/** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
+| 'format'
+/** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
+| 'paragraphMark'
+/** A row, cell, section or grid revision. Supported row revisions are resolvable. */
+| 'structural';
+
+// @public
 export interface Revision {
     // (undocumented)
     readonly author: string;
@@ -479,6 +592,70 @@ export interface Revision {
     // (undocumented)
     readonly type: RevisionType;
 }
+
+// @public
+export interface RevisionAddress {
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export interface RevisionAuthorEntry extends RevisionBatchEntry {
+    readonly previousAuthor: string;
+    readonly previousKey: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
+export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revision';
+
+// @public
+export interface RevisionBatchEntry {
+    // (undocumented)
+    readonly author: string;
+    readonly formattingKind?: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionItem['revisionKind'];
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+}
+
+// @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export type RevisionType = 'insert' | 'delete'
@@ -492,12 +669,22 @@ export type RevisionType = 'insert' | 'delete'
 | 'structural';
 
 // @public
+export interface Run {
+    // (undocumented)
+    readonly formatting?: RunFormatting;
+    readonly revisionId?: number;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
 export interface RunFormatting {
     readonly alignment?: 'left' | 'center' | 'right' | 'both';
     // (undocumented)
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly direction?: 'ltr' | 'rtl';
     readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
@@ -585,6 +772,20 @@ export interface Table {
 }
 
 // @public
+export interface TableCell {
+    readonly colSpan?: number;
+    // (undocumented)
+    readonly content: readonly Block[];
+    readonly rowSpan?: number;
+}
+
+// @public
+export interface TableRow {
+    // (undocumented)
+    readonly cells: readonly TableCell[];
+}
+
+// @public
 export interface Theme {
     // (undocumented)
     readonly colorScheme: ThemeColorScheme;
@@ -594,7 +795,5 @@ export interface Theme {
 
 // @public
 export type ThemeColorScheme = Readonly<Record<string, string>>;
-
-// (No @packageDocumentation comment for this package)
 
 ```

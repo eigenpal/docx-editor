@@ -4,7 +4,10 @@
 // note reference — including content nested under `w:hyperlink`. Appliers and validation
 // share this model so offsets agree across insert/delete/format/link.
 
+import { inlineCharacterTextOf } from '../package/hyphen-text.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import { isLegacyVmlAtom } from '../package/legacy-vml-projection.ts';
+import { isOmmlEquationAtom } from '../package/omml-display.ts';
 import {
   DEFAULT_SUPPORTED_MC_REQUIRES,
   emptyNamespaceScope,
@@ -12,33 +15,39 @@ import {
   namespaceScopeForNode,
   resolveRunLevelMcAtom,
 } from '../package/drawing-projection.ts';
+import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
 import {
   atomicFieldSpansOf,
+  parsedFieldSpansOf,
   isFieldChrome,
   isFldChar,
   isFldSimple,
   isInstrText,
+  type AtomicFieldSpan,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import {
-  MAX_CONTENT_CONTROL_NESTING,
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../package/ooxml-shared.ts';
+import {
   contentControlContentOf,
-  inlineContainerOf,
+  inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
+import {
+  besideRestrictedControl,
+  holdsContentControl,
+  restrictedControlsWithEdgeAt,
+} from './tree-op-restricted-edge.ts';
 
-/** Office Math Markup Language namespace (ECMA-376 Part 1, §22.1). */
-const OMML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
-
-/** A paragraph-level inline equation. Its internal OMML is one editable model atom. */
-function isMathEquation(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === OMML_NAMESPACE_URI &&
-    node.localName === 'oMath'
-  );
-}
+/**
+ * A paragraph-level equation: inline `m:oMath` or a display `m:oMathPara`. Its internal OMML
+ * is one editable model atom.
+ */
+const isMathEquation = isOmmlEquationAtom;
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
@@ -58,6 +67,11 @@ export interface Segment {
   readonly formatRunIds?: readonly string[];
 }
 
+/** Node id that locates a segment in paragraph ancestry: its run, or its runless atom. */
+export function segmentAncestryNodeId(segment: Segment): string {
+  return segment.runId || segment.node.id;
+}
+
 export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode {
   return node !== null && node.kind === 'paragraph';
 }
@@ -74,7 +88,7 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  *
  * Inline CONTENT CONTROLS are the same class of wrapper: their `w:sdtContent` runs join the
  * paragraph's offset stream with no break opportunity at the boundary. Nesting is bounded
- * (`MAX_CONTENT_CONTROL_NESTING`); beyond the bound the wrapper is opaque so recursion
+ * (`MAX_INLINE_CONTAINER_DEPTH`); beyond the bound the wrapper is opaque so recursion
  * cannot exhaust the stack.
  *
  * `runId` stays the id of the run the content actually lives in, at whatever depth: the
@@ -85,12 +99,23 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
   return walkParagraph(paragraph, null, null);
 }
 
+/** Build segments with field spans already computed by the caller. @internal */
+export function segmentsOfWithFieldSpans(
+  paragraph: OoxmlParagraphNode,
+  fieldSpans: readonly AtomicFieldSpan[]
+): Segment[] {
+  return walkParagraph(paragraph, null, null, fieldSpans);
+}
+
 export interface NoteSegmentProjection {
   readonly segments: readonly Segment[];
   readonly ancestorsByNodeId: ReadonlyMap<string, readonly OoxmlNode[]>;
 }
 
-const noteSegmentProjectionCache = new WeakMap<OoxmlParagraphNode, NoteSegmentProjection>();
+const noteSegmentProjectionCache = new FieldResultsModeMemo<
+  OoxmlParagraphNode,
+  NoteSegmentProjection
+>();
 
 /** Segment offsets plus note ancestry, derived by the same single paragraph walk. */
 export function noteSegmentsWithAncestorsOf(paragraph: OoxmlParagraphNode): NoteSegmentProjection {
@@ -148,7 +173,7 @@ export interface ParagraphOffsetIndex {
  * long document one keystroke re-walked every paragraph in the file several times over, and
  * the cost showed up as typing latency that grew with document length.
  */
-const offsetIndexCache = new WeakMap<OoxmlParagraphNode, ParagraphOffsetIndex>();
+const offsetIndexCache = new FieldResultsModeMemo<OoxmlParagraphNode, ParagraphOffsetIndex>();
 
 /**
  * THE paragraph offset authority: maps a paragraph's UTF-16 offsets to the nodes holding them.
@@ -162,6 +187,11 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   const index = buildParagraphOffsetIndex(paragraph);
   offsetIndexCache.set(paragraph, index);
   return index;
+}
+
+/** Addressable length of one node, read from the paragraph offset authority. */
+export function paragraphInlineLengthOf(paragraph: OoxmlParagraphNode, node: OoxmlNode): number {
+  return paragraphOffsetIndex(paragraph).lengthOf(node);
 }
 
 /** Build an offset index without populating the interactive paragraph memo. @internal */
@@ -189,7 +219,8 @@ function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffs
 function walkParagraph(
   paragraph: OoxmlParagraphNode,
   spans: Map<string, OffsetSpan> | null,
-  noteAncestors: Map<string, readonly OoxmlNode[]> | null
+  noteAncestors: Map<string, readonly OoxmlNode[]> | null,
+  suppliedFieldSpans?: readonly AtomicFieldSpan[]
 ): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
@@ -197,7 +228,7 @@ function walkParagraph(
   const record = (node: OoxmlNode, start: number): void => {
     if (spans !== null) spans.set(node.id, { start, end: offset });
   };
-  const atoms = atomicFieldSpansOf(paragraph);
+  const atoms = suppliedFieldSpans ?? atomicFieldSpansOf(paragraph);
   const noteAtoms = atomicNoteSpansOf(paragraph);
   const atomByBeginId = new Map(atoms.map((span) => [span.node.id, span]));
   const noteAtomById = new Map(noteAtoms.map((span) => [span.node.id, span]));
@@ -288,7 +319,7 @@ function walkParagraph(
       record(node, start);
       return;
     }
-    if (node.kind === 'drawing') {
+    if (node.kind === 'drawing' || isLegacyVmlAtom(node)) {
       emitAtom({ runId, node, removeNodeIds: [node.id] });
       record(node, start);
       return;
@@ -298,6 +329,13 @@ function walkParagraph(
       return;
     }
     if (node.kind === 'generic') {
+      // A non-breaking or optional hyphen is one character, like a tab.
+      if (inlineCharacterTextOf(node) !== null) {
+        segments.push({ runId, node, start: offset, end: offset + 1 });
+        offset += 1;
+        record(node, start);
+        return;
+      }
       if (isRunLevelMcAlternateContent(node)) {
         const mcAtom = resolveRunLevelMcAtom(node, scope, DEFAULT_SUPPORTED_MC_REQUIRES);
         emitAtom({ runId, node: mcAtom.segmentNode, removeNodeIds: mcAtom.removeNodeIds });
@@ -336,7 +374,19 @@ function walkParagraph(
     }
     if (isFldSimple(child)) {
       const atom = atomByBeginId.get(child.id);
-      if (atom) emitAtom(atom);
+      if (atom) {
+        emitAtom(atom);
+        // A simple field is one model atom, but its result runs remain public run addresses.
+        // Give every result run the atom span without changing the paragraph offset space.
+        if (spans !== null) {
+          for (const runId of atom.formatRunIds) spans.set(runId, { start, end: offset });
+        }
+      } else {
+        // An editable saved result: its runs are ordinary text inside the field element.
+        ancestorPath.push(child);
+        for (const inner of child.children) visitInline(inner, depth + 1);
+        ancestorPath.pop();
+      }
       record(child, start);
       return;
     }
@@ -352,7 +402,7 @@ function walkParagraph(
     // revision wrapper are both containers, and either can hold the other — a link inside a
     // tracked insertion is ordinary. Not descending is what made tracked text invisible to the
     // op offset space, so every op past it was refused as out of range.
-    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+    if (isInlineRunContainer(child)) {
       ancestorPath.push(child);
       for (const inner of child.children) visitInline(inner, depth + 1);
       ancestorPath.pop();
@@ -364,7 +414,7 @@ function walkParagraph(
       return;
     }
     // Inline content controls: descend into `w:sdtContent` with a nesting bound.
-    if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+    if (isContentControlNode(child)) {
       const content = contentControlContentOf(child);
       if (content) {
         const contentStart = offset;
@@ -385,8 +435,7 @@ function walkParagraph(
   return segments;
 }
 
-/** Matches the layout projection's nesting cap; see `segmentsOf`. */
-const MAX_INLINE_CONTAINER_DEPTH = 32;
+export { MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 
 /**
  * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
@@ -394,12 +443,12 @@ const MAX_INLINE_CONTAINER_DEPTH = 32;
  * Links, revision wrappers, and inline content controls are all run containers.
  */
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
-  if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
-  if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+  if (child.kind === 'run') return [child];
+  if (isInlineRunContainer(child)) {
     return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
   }
-  if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+  if (isContentControlNode(child)) {
     const content = contentControlContentOf(child);
     if (!content) return [];
     return content.children.flatMap((inner) => runsUnder(inner, depth + 1));
@@ -424,22 +473,146 @@ export type InsertionSite =
   | { readonly kind: 'atBoundary'; readonly segment: Segment }
   /** Past every segment in scope: the content is appended to this run. */
   | { readonly kind: 'appendToRun'; readonly run: OoxmlElement }
-  /** No run in scope holds the offset: a run is minted as this node's last child. */
-  | { readonly kind: 'newRun'; readonly holder: OoxmlElement };
+  /** Between run children, after zero-width field chrome. */
+  | { readonly kind: 'atRunIndex'; readonly run: OoxmlElement; readonly index: number }
+  /** No run in scope holds the offset: a run is minted in this node at `index`. */
+  | { readonly kind: 'newRun'; readonly holder: OoxmlElement; readonly index?: number };
 
 /**
  * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
  *
- * `owner` is the content control a caller NAMED as the destination. Narrowing to it is what
- * makes a control's trailing edge mean "the end of the field" rather than "the run after it";
- * without one the paragraph is the scope and only its direct runs can be appended to.
+ * `owner` is the content control a caller NAMED as the destination. Narrowing to it makes a
+ * control's trailing edge mean "the end of the field" rather than "the run after it". Without
+ * one, an outer run-wrapper edge receives a sibling run.
  */
 export function insertionSite(
   paragraph: OoxmlParagraphNode,
   offset: number,
-  owner: OoxmlNode | null
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
 ): InsertionSite {
-  const all = segmentsOf(paragraph);
+  const raw = rawInsertionSite(paragraph, offset, owner, bias);
+  if (owner !== null) return raw;
+  // Beside a control typing cannot enter, then out of a deletion around wherever that is.
+  const site = besideRestrictedControlAt(paragraph, offset, raw) ?? raw;
+  if (site.kind !== 'newRun' && site.kind !== 'atRunIndex') return site;
+  const target = site.kind === 'newRun' ? site.holder : site.run;
+  const ancestors = [target, ...inlineContainersOf(paragraph, target.id)];
+  if (
+    !ancestors.some((node) => node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom')
+  ) {
+    return site;
+  }
+  // A newly minted run must survive accepting the deletion. Escape the outermost
+  // revision, using the same destination for protection checks and application.
+  const revision = ancestors.filter((node) => isContentRevisionKind(node.kind)).at(-1)!;
+  const holder = directParentOf(paragraph, revision.id) ?? paragraph;
+  const index = holder.children.findIndex((child) => child.id === revision.id);
+  const span = paragraphOffsetIndex(paragraph).spanOf(revision);
+  return { kind: 'newRun', holder, index: index + (span && offset > span.start ? 1 : 0) };
+}
+
+/** The node a site writes into: the run it joins, or the node a run is minted in. */
+function siteLandingNodeId(site: InsertionSite): string {
+  if (site.kind === 'withinValue' || site.kind === 'atBoundary') {
+    return segmentAncestryNodeId(site.segment);
+  }
+  return site.kind === 'newRun' ? site.holder.id : site.run.id;
+}
+
+function besideRestrictedControlAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  site: InsertionSite
+): InsertionSite | null {
+  return besideRestrictedControl(
+    paragraph,
+    offset,
+    siteLandingNodeId(site),
+    paragraphOffsetIndex(paragraph)
+  );
+}
+
+/**
+ * Whether an unowned insertion at `offset` lands beside a control that typing cannot enter,
+ * at that control's edge, rather than in the run the default rule reads. Validation then
+ * checks the place the insert actually lands. That covers a control wrapped in a revision or
+ * a hyperlink too, where the default site already leaves the wrapper.
+ */
+export function insertsBesideRestrictedControl(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  bias: 'left' | 'right' = 'left'
+): boolean {
+  if (!holdsContentControl(paragraph)) return false;
+  const controls = restrictedControlsWithEdgeAt(paragraph, offset, paragraphOffsetIndex(paragraph));
+  if (controls.length === 0) return false;
+  const landingId = siteLandingNodeId(insertionSite(paragraph, offset, null, bias));
+  return controls.every((control) => !containsNode(control, landingId));
+}
+
+/**
+ * The closing marker at the trailing caret boundary of a field whose result is addressable (a
+ * legacy text form, or a saved result in the `editable` mode): text typed there lands after
+ * the field, not inside its result.
+ */
+export function textFormFieldEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  const offsets = paragraphOffsetIndex(paragraph);
+  for (const field of parsedFieldSpansOf(paragraph)) {
+    if (field.addressing === 'atomic') continue;
+    const endId = field.removeNodeIds.at(-1);
+    if (endId && offsets.spanOf(endId)?.end === offset) return endId;
+  }
+  return undefined;
+}
+
+const orphanFieldEnds = new FieldResultsModeMemo<OoxmlParagraphNode, ReadonlyMap<number, string>>();
+
+/** A trailing field marker must stay before content inserted at its zero-width boundary. */
+export function fieldInsertionEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  const form = textFormFieldEndAt(paragraph, offset);
+  if (form) return form;
+  return orphanFieldEndAt(paragraph, offset);
+}
+
+export function orphanFieldEndAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): string | undefined {
+  let ends = orphanFieldEnds.get(paragraph);
+  if (!ends) {
+    const found = new Map<number, string>();
+    const offsets = paragraphOffsetIndex(paragraph);
+    const closed = new Set(parsedFieldSpansOf(paragraph).flatMap((field) => field.removeNodeIds));
+    const walk = (node: OoxmlNode, depth: number): void => {
+      if (node.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+      if (isFldChar(node, 'end') && !closed.has(node.id)) {
+        const span = offsets.spanOf(node);
+        if (span && span.start === span.end) found.set(span.end, node.id);
+      }
+      for (const child of node.children) walk(child, nextInlineContainerDepth(node, depth));
+    };
+    walk(paragraph, 0);
+    ends = found;
+    orphanFieldEnds.set(paragraph, ends);
+  }
+  return ends.get(offset);
+}
+
+function rawInsertionSite(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
+): InsertionSite {
+  const offsets = paragraphOffsetIndex(paragraph);
+  const all = offsets.segments;
   const segments =
     owner === null ? all : all.filter((segment) => containsNode(owner, segment.node.id));
 
@@ -448,8 +621,126 @@ export function insertionSite(
     if (offset <= segment.start || offset >= segment.end) continue;
     return { kind: 'withinValue', segment };
   }
+  {
+    const endId = fieldInsertionEndAt(paragraph, offset);
+    const run = endId ? directParentOf(paragraph, endId) : null;
+    if (run?.kind === 'run' && (owner === null || containsNode(owner, run.id))) {
+      if (owner !== null || offsets.spanOf(run)?.end !== offset) {
+        return {
+          kind: 'atRunIndex',
+          run,
+          index: run.children.findIndex((node) => node.id === endId) + 1,
+        };
+      }
+      // Field chrome has no width. Do not append to the visible result before it.
+      // Escape wrappers that end here, and keep closing bookmarks before the new run.
+      const exited =
+        inlineContainersOf(paragraph, run.id)
+          .filter((node) => offsets.spanOf(node)?.end === offset)
+          .at(-1) ?? run;
+      const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+      let index = holder.children.findIndex((node) => node.id === exited.id) + 1;
+      while (holder.children[index]?.kind === 'bookmarkEnd') index += 1;
+      return { kind: 'newRun', holder, index };
+    }
+  }
   const boundary = segments.find((segment) => segment.start === offset);
+  if (owner === null && boundary) {
+    const boundaryIndex = all.findIndex((segment) => segment === boundary);
+    const preceding = boundaryIndex > 0 ? all[boundaryIndex - 1]! : null;
+    const containers = inlineContainersOf(paragraph, segmentAncestryNodeId(boundary));
+    // Default typing at a wrapper edge stays outside, but `bias: 'right'` explicitly asks to
+    // join the run that starts there. Resolve its innermost transparent container before the
+    // ordinary wrapper-edge escape, so the default rule cannot override the caller's request.
+    const biasedContainer =
+      bias === 'right'
+        ? containers.find(
+            (container) =>
+              isInlineRunContainer(container) && offsets.spanOf(container)?.start === offset
+          )
+        : null;
+    if (biasedContainer) {
+      const biasedBoundary = all.find(
+        (segment) =>
+          segment.start === offset && containsNode(biasedContainer, segmentAncestryNodeId(segment))
+      );
+      if (biasedBoundary) return { kind: 'atBoundary', segment: biasedBoundary };
+    }
+    let outermostWrapper = -1;
+    for (let index = 0; index < containers.length; index += 1) {
+      const container = containers[index]!;
+      if (!isInlineRunContainer(container) || offsets.spanOf(container)?.start !== offset) continue;
+      const followsContentInSameWrapper =
+        preceding !== null &&
+        preceding.end === offset &&
+        containsNode(container, segmentAncestryNodeId(preceding));
+      if (!followsContentInSameWrapper) outermostWrapper = index;
+    }
+    const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
+    if (entered) {
+      const holder = directParentOf(paragraph, entered.id) ?? paragraph;
+      const index = holder.children.findIndex((child) => child.id === entered.id);
+      return index < 0 ? { kind: 'newRun', holder } : { kind: 'newRun', holder, index };
+    }
+  }
+  if (owner === null && boundary && bias === 'left') {
+    const preceding = [...all].reverse().find((segment) => segment.end === offset);
+    if (preceding && preceding.removeNodeIds === undefined) {
+      const exited = inlineContainersOf(paragraph, segmentAncestryNodeId(preceding))
+        .filter(
+          (container) =>
+            container.kind === 'generic' &&
+            isInlineRunContainer(container) &&
+            offsets.spanOf(container)?.end === offset &&
+            !containsNode(container, segmentAncestryNodeId(boundary))
+        )
+        .at(-1);
+      if (exited) {
+        const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+        // Both runs must remain in the same enclosing owner. Leaving a hyperlink or
+        // control keeps that owner's established boundary behavior.
+        if (containsNode(holder, segmentAncestryNodeId(boundary))) {
+          const index = holder.children.findIndex((child) => child.id === exited.id);
+          return { kind: 'newRun', holder, index: index + 1 };
+        }
+      }
+    }
+  }
+  if (owner === null && boundary?.removeNodeIds) {
+    const holder = directParentOf(paragraph, boundary.node.id);
+    // Runless atoms are siblings of runs inside transparent wrappers too. Resolve
+    // the actual holder so the applier never mistakes the atom id for a run id.
+    if (holder && isInlineRunContainer(holder)) {
+      const index = holder.children.findIndex((child) => child.id === boundary.node.id);
+      if (index >= 0) return { kind: 'newRun', holder, index };
+    }
+  }
   if (boundary) return { kind: 'atBoundary', segment: boundary };
+
+  if (owner === null) {
+    const trailing = segments[segments.length - 1];
+    if (trailing?.end === offset) {
+      const containers = inlineContainersOf(paragraph, segmentAncestryNodeId(trailing));
+      let outermostWrapper = -1;
+      for (let index = 0; index < containers.length; index += 1) {
+        if (isInlineRunContainer(containers[index]!)) outermostWrapper = index;
+      }
+      const exited = outermostWrapper >= 0 ? containers[outermostWrapper] : (containers[0] ?? null);
+      if (exited) {
+        const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+        const index = holder.children.findIndex((child) => child.id === exited.id);
+        return {
+          kind: 'newRun',
+          holder,
+          ...(index < 0 ? {} : { index: index + 1 }),
+        };
+      }
+      const direct = paragraph.children.find(
+        (child) => child.id === segmentAncestryNodeId(trailing)
+      );
+      if (direct?.kind === 'run') return { kind: 'appendToRun', run: direct };
+    }
+  }
 
   const runs =
     owner === null
@@ -458,7 +749,29 @@ export function insertionSite(
           .flatMap((child) => runsUnder(child))
           .filter((run) => containsNode(owner, run.id));
   const last = runs[runs.length - 1];
-  if (last && last.kind !== 'textValue') return { kind: 'appendToRun', run: last };
+  if (last && last.kind !== 'textValue') {
+    // A named owner still LEAVES an inner wrapper at its trailing edge: typing after the last
+    // character of a hyperlink inside a control stays in the control and out of the link, the
+    // same escape the unowned path makes, bounded to wrappers the owner holds.
+    const exited =
+      owner === null || offsets.spanOf(last)?.end !== offset
+        ? null
+        : inlineContainersOf(paragraph, last.id)
+            .filter(
+              (container) =>
+                container.id !== owner.id &&
+                containsNode(owner, container.id) &&
+                container.kind !== 'contentControl' &&
+                container.kind !== 'contentControlContent' &&
+                isInlineRunContainer(container) &&
+                offsets.spanOf(container)?.end === offset
+            )
+            .at(-1);
+    if (!exited) return { kind: 'appendToRun', run: last };
+    const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+    const index = holder.children.findIndex((child) => child.id === exited.id);
+    return { kind: 'newRun', holder, ...(index < 0 ? {} : { index: index + 1 }) };
+  }
   // Nothing to join, so the run is minted — and WHICH NODE it is minted into is the whole of
   // which controls receive it. A named owner that HOLDS this paragraph gets the run in the
   // paragraph, which is inside every control between the owner and it; an inline owner gets it
@@ -468,6 +781,42 @@ export function insertionSite(
       ? paragraph
       : contentHolder(owner);
   return { kind: 'newRun', holder };
+}
+
+export interface InsertionDestination {
+  readonly site: InsertionSite;
+  readonly landingNodeId: string;
+  /** Every node from the paragraph through the landing node, including both endpoints. */
+  readonly path: ReadonlySet<string>;
+}
+
+/** Resolve one insertion site and its complete paragraph-local ancestor path. */
+export function insertionDestination(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
+): InsertionDestination {
+  const site = insertionSite(paragraph, offset, owner, bias);
+  const landingNodeId =
+    site.kind === 'withinValue' || site.kind === 'atBoundary'
+      ? segmentAncestryNodeId(site.segment)
+      : site.kind === 'appendToRun' || site.kind === 'atRunIndex'
+        ? site.run.id
+        : site.holder.id;
+  const path = new Set<string>();
+  const collect = (node: OoxmlNode): boolean => {
+    if (node.id === landingNodeId) {
+      path.add(node.id);
+      return true;
+    }
+    if (node.kind === 'textValue') return false;
+    const holds = node.children.some(collect);
+    if (holds) path.add(node.id);
+    return holds;
+  };
+  collect(paragraph);
+  return { site, landingNodeId, path };
 }
 
 /** Where a run goes inside a control: its content element, or the control itself. */
@@ -491,18 +840,42 @@ function contentHolder(control: OoxmlElement): OoxmlElement {
 export function insertionLandingNodeId(
   paragraph: OoxmlParagraphNode,
   offset: number,
-  owner: OoxmlNode | null
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
 ): string {
-  const site = insertionSite(paragraph, offset, owner);
-  if (site.kind === 'withinValue' || site.kind === 'atBoundary') return site.segment.runId;
-  if (site.kind === 'appendToRun') return site.run.id;
-  return site.holder.id;
+  return insertionDestination(paragraph, offset, owner, bias).landingNodeId;
+}
+
+export interface TrailingInsertionDestination {
+  readonly holderId: string;
+  readonly path: ReadonlySet<string>;
+}
+
+/** Holder and ancestor ids for the shared unowned trailing insertion site. */
+export function trailingInsertionDestination(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): TrailingInsertionDestination | null {
+  const destination = insertionDestination(paragraph, offset, null);
+  if (destination.site.kind !== 'newRun') return null;
+  return { holderId: destination.site.holder.id, path: destination.path };
 }
 
 function containsNode(node: OoxmlNode, id: string): boolean {
   if (node.id === id) return true;
   if (node.kind === 'textValue') return false;
   return node.children.some((child) => containsNode(child, id));
+}
+
+/** Direct element parent of one descendant within a paragraph. */
+function directParentOf(parent: OoxmlElement, id: string): OoxmlElement | null {
+  for (const child of parent.children) {
+    if (child.id === id) return parent;
+    if (child.kind === 'textValue') continue;
+    const found = directParentOf(child, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */
@@ -527,18 +900,20 @@ function idsUnder(node: OoxmlNode, out: Set<string>): void {
 function spanOfControl(
   paragraph: OoxmlParagraphNode,
   segments: readonly Segment[],
-  runId: string
+  segment: Segment
 ): InlineControlSpan | null {
-  const container = inlineContainerOf(paragraph, runId);
-  if (!container || container.kind !== 'contentControl') return null;
+  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
+    (ancestor) => ancestor.kind === 'contentControl'
+  );
+  if (!container) return null;
   const ids = new Set<string>();
   idsUnder(container, ids);
   let start = Number.MAX_SAFE_INTEGER;
   let end = -1;
-  for (const segment of segments) {
-    if (!ids.has(segment.runId)) continue;
-    if (segment.start < start) start = segment.start;
-    if (segment.end > end) end = segment.end;
+  for (const candidate of segments) {
+    if (!ids.has(segmentAncestryNodeId(candidate))) continue;
+    if (candidate.start < start) start = candidate.start;
+    if (candidate.end > end) end = candidate.end;
   }
   if (end < 0) return null;
   return { controlId: container.id, start, end };
@@ -558,7 +933,7 @@ export function inlineControlEndingAt(
   const segments = segmentsOf(paragraph);
   const before = [...segments].reverse().find((s) => s.end === offset && s.end > s.start);
   if (!before) return null;
-  const span = spanOfControl(paragraph, segments, before.runId);
+  const span = spanOfControl(paragraph, segments, before);
   return span && span.end === offset ? span : null;
 }
 
@@ -570,7 +945,7 @@ export function inlineControlStartingAt(
   const segments = segmentsOf(paragraph);
   const after = segments.find((s) => s.start === offset && s.end > s.start);
   if (!after) return null;
-  const span = spanOfControl(paragraph, segments, after.runId);
+  const span = spanOfControl(paragraph, segments, after);
   return span && span.start === offset ? span : null;
 }
 

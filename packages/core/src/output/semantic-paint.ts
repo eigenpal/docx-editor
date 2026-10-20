@@ -1,8 +1,36 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { paintUnsupportedContent } from './unsupported-elements.ts';
-// Paint semantic layout records to DOM (task 7.5).
-//
-// A NON-AUTHORITATIVE CONSUMER. It positions every element from the numbers layout already
+import {
+  reflowTableFragment,
+  rememberPaintedCell,
+  rememberPaintedTable,
+  previousTableElement,
+} from './semantic-paint-table-retention.ts';
+import type { TableRowFragmentRecord } from '../layout/semantic-records.ts';
+import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
+import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
+import { appendEmptyLineAnchor } from './semantic-paint-empty-line.ts';
+import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts';
+import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
+import { paintRunBorders } from './semantic-paint-run-borders.ts';
+import { isRunKerningEnabled } from '../layout/run-kerning.ts';
+import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
+import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
+
+import { paintedSpanText } from '../layout/optional-hyphen-break.ts';
+import { withoutTrailingZeroWidthSpaces } from '../layout/trailing-spaces.ts';
+import { paintManualLineBreak } from './semantic-paragraph-marks.ts';
+import {
+  DEFAULT_BREAK_MARK_STRINGS,
+  breakMarkStringsCacheToken,
+  breakMarksOfLayout,
+  paintParagraphEndFurniture,
+  type BreakMarkPaint,
+  type BreakMarkStrings,
+} from './semantic-break-marks.ts';
+// Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
 // no `getComputedStyle`, no canvas text metrics. If this file could measure, the DOM would
 // become a second source of geometry and the two would drift — which is exactly the
@@ -14,34 +42,30 @@ import { paintUnsupportedContent } from './unsupported-elements.ts';
 
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
-import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
-import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
+import {
+  baselineShiftPtOf,
+  glyphSizeFactorOf,
+  TAB_LEADER_GLYPH,
+} from '@docx-editor.dev/core/layout';
+import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
+import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
-  REVIEW_AUTHOR_SLOTS,
   reviewAuthorSlotColor,
   revisionStyleContextKey,
   revisionStyleContextOf,
-  revisionPresentationOf,
   type RevisionStyleContext,
   type RevisionStyles,
 } from './revision-presentation.ts';
-import {
-  formatRevisionOf,
-  markRevisionRemovesMark,
-  shownMarkRevision,
-  type RevisionAttribution,
-} from '@docx-editor.dev/core/layout';
+import { formatRevisionOf } from '@docx-editor.dev/core/layout';
+import { applyParagraphFormatAnchor } from './paragraph-format-anchor.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
-  ContentControlMappedType,
-  LayoutBox,
   LineRecord,
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
-  HeaderFooterStoryRecord,
   ResolvedRunStyle,
   SemanticLayout,
   SpanLinkRecord,
@@ -50,15 +74,18 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
+import { paintContentControlChrome } from './semantic-paint-content-controls.ts';
 import {
-  applyHeaderFooterPaintChrome,
-  headerFooterBandHeightPt,
-  headerFooterBandIsActive,
-} from './semantic-paint-hf-chrome.ts';
+  paintPageChangeBars,
+  reconcilePageChangeBars,
+  type ChangeBarsMode,
+} from './semantic-paint-change-bars.ts';
+import { applyHeaderFooterPaintChrome } from './semantic-paint-hf-chrome.ts';
+import { paintHeaderFooterLayer } from './semantic-paint-hf-layer.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
+import { pictureIsRtl } from '../layout/inline-picture-caret.ts';
 import { type AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
-import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
   collectUsedDrawingElementKeys,
   collectUsedDrawingResourceKeys,
@@ -76,7 +103,9 @@ import {
   notifyUnsupportedElementsPaint,
 } from './unsupported-elements.ts';
 import { mountEquationForSpan } from './semantic-paint-equation.ts';
+import { applyEquationRevision } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
+import { applyTextOutline } from './semantic-paint-text-outline.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -99,8 +128,17 @@ export interface PaintContext {
   readonly unsupportedOwnerPartName?: (nodeId: string) => string;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
+  readonly paragraphFormatRevision?: import('../layout/revision-projection.ts').RevisionAttribution;
+  /** Story's horizontal origin relative to its paper or containing textbox frame. */
+  readonly tabLeaderOriginXPt?: number;
   /** Generated paragraphs that paint as non-editable navigation surfaces. */
   readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Paint without selection and editing bindings (`data-paragraph-id`, `data-start`, the
+   * drawing position and node attributes): a story no caret, selection or drawing command may
+   * reach, such as the text of a group's text box member.
+   */
+  readonly unbound?: boolean;
   /**
    * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
    * serialised into the document.
@@ -142,6 +180,10 @@ export interface PaintContext {
    * arrow key, and deciding it in layout would do far worse.
    */
   readonly fieldShading?: FieldShadingMode;
+  /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
+  readonly showParagraphMarks?: boolean;
+  /** Labeled page, column and section break furniture, present only with paragraph marks. */
+  readonly breakMarks?: BreakMarkPaint;
   /**
    * Whether legacy form fields (`w:ffData`) are shaded — the document's `w:doNotShadeFormData`,
    * inverted at the read so this states what to DO rather than what to skip.
@@ -153,6 +195,11 @@ export interface PaintContext {
    * page shares one author→slot map.
    */
   readonly revisionStyles?: RevisionStyleContext;
+  /** Author palette for explicit cell colors, independent of text color mode. */
+  readonly revisionCellStyles?: RevisionStyleContext;
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
+  readonly revisionKindColors?: boolean;
+  readonly facingPages?: boolean;
 }
 
 /**
@@ -209,6 +256,10 @@ export interface PaintOptions {
   readonly defaultFontFamily?: string;
   /** See {@link PaintContext.fieldShading}. */
   readonly fieldShading?: FieldShadingMode;
+  /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
+  readonly showParagraphMarks?: boolean;
+  /** Localized labels for the break furniture paragraph marks show (defaults to English). */
+  readonly breakMarkStrings?: BreakMarkStrings;
   /** See {@link PaintContext.shadeFormFields}. */
   readonly shadeFormFields?: boolean;
   /**
@@ -217,6 +268,22 @@ export interface PaintOptions {
    * See {@link RevisionStyles}.
    */
   readonly revisionStyles?: RevisionStyles;
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
+  readonly revisionKindColors?: boolean;
+  readonly facingPages?: boolean;
+  /**
+   * Which change bars the margin draws: All Markup's neutral rule beside attributed lines
+   * (the default, whatever the layout's projection — a layout that carries attribution gets
+   * its bars), Simple Markup's red rule beside the change sites a resolved layout published,
+   * or none, which the review chrome names for its resolved views.
+   */
+  readonly changeBars?: ChangeBarsMode;
+  /**
+   * Whether a change bar takes the pointer as Word's does — a click swaps Simple and All
+   * Markup. Only a host that can act on the press should set it; the bars stay inert
+   * furniture otherwise.
+   */
+  readonly changeBarsToggle?: boolean;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -293,6 +360,8 @@ type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 type DrawingPaintHostContext = PaintContext & {
   readonly drawingStrings?: DrawingPaintStrings;
   readonly urlRegistry?: DrawingUrlRegistry | null;
+  readonly changeBars?: ChangeBarsMode;
+  readonly changeBarsToggle?: boolean;
   /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
   readonly paintInstance?: string;
 };
@@ -300,6 +369,8 @@ type DrawingPaintHostContext = PaintContext & {
 interface ResolvedPaintContext extends DrawingPaintHostContext {
   readonly drawingStrings: DrawingPaintStrings;
   readonly urlRegistry: DrawingUrlRegistry | null;
+  readonly changeBars: ChangeBarsMode;
+  readonly changeBarsToggle: boolean;
 }
 
 function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintContext {
@@ -307,12 +378,14 @@ function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintCont
     ...ctx,
     drawingStrings: ctx.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS,
     urlRegistry: ctx.urlRegistry ?? null,
+    changeBars: ctx.changeBars ?? 'none',
+    changeBarsToggle: ctx.changeBarsToggle ?? false,
   };
 }
 
 function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
   // Textbox stories are furniture wherever they paint: links inert, no editable bindings.
-  const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true };
+  const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true, tabLeaderOriginXPt: 0 };
   return Object.freeze({
     scale: ctx.scale,
     ...(ctx.unsupportedSource ? { unsupportedSource: ctx.unsupportedSource } : {}),
@@ -321,13 +394,17 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
     ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
     ...(ctx.revisionStyles ? { revisionStyles: ctx.revisionStyles } : {}),
+    ...(ctx.unbound ? { unbound: true } : {}),
     paintStoryFragment: (
       document: Document,
-      fragment: ParagraphFragmentRecord | TableFragmentRecord
-    ) =>
-      fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, storyCtx)
-        : paintFragment(document, fragment, storyCtx),
+      fragment: ParagraphFragmentRecord | TableFragmentRecord,
+      options?: { readonly readOnly?: boolean }
+    ) => {
+      const paintCtx = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      return fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, paintCtx)
+        : paintFragment(document, fragment, paintCtx);
+    },
   });
 }
 
@@ -377,9 +454,9 @@ function appendAnchoredDrawingsForRecords(
   },
   layer: 'behind' | 'inFront',
   // Inert drawings paint but never take a click. Header/footer bands pass `false` while
-  // the band is not being edited: their box overflows are VISIBLE (Word draws header ink
-  // into the margins and over the body), so a shape hanging past the band must not
-  // swallow clicks meant for the document text underneath (#856).
+  // the band is not being edited: their box overflows are VISIBLE (header ink reaches into
+  // the margins and under the body), so a shape hanging past the band must not swallow
+  // clicks meant for the document (#856).
   interactive = true,
   /** Marks a page-relative furniture layer so in-place chrome can retint hit-testing. */
   hfFrontKind?: 'header' | 'footer'
@@ -420,120 +497,14 @@ function appendAnchoredDrawingsForRecords(
   if (layerElement.childElementCount > 0) parent.append(layerElement);
 }
 
-function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
-  return drawing.horizontalFrame === 'page' || drawing.verticalFrame === 'page';
-}
-
-function hfAnchorOnPageSheet(
-  story: HeaderFooterStoryRecord,
-  drawing: AnchoredDrawingRecord,
-  pageBox: { readonly x: number; readonly y: number }
-): AnchoredDrawingRecord {
-  const pb = drawing.paintBounds;
-  // Layout resolves page-frame axes in page-CONTENT coordinates; the record's frame origin is
-  // the page edge in that space (−margin), so the sheet position needs the page box, not the
-  // story box — a footer story's own Y would double-count most of the page height. Axes on
-  // story-relative frames keep the story box base.
-  const absoluteOrigin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
-  const dx = absoluteOrigin.x - drawing.x;
-  const dy = absoluteOrigin.y - drawing.y;
-  const shift = (box: LayoutBox): LayoutBox =>
-    Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
-  return Object.freeze({
-    ...drawing,
-    x: drawing.x + dx,
-    y: drawing.y + dy,
-    paintBounds: shift(pb),
-    hitBounds: shift(drawing.hitBounds),
-    geometry: Object.freeze({
-      ...drawing.geometry,
-      contentBounds: shift(drawing.geometry.contentBounds),
-      paintBounds: shift(drawing.geometry.paintBounds),
-      ...(drawing.geometry.clipPolygon
-        ? {
-            clipPolygon: Object.freeze(
-              drawing.geometry.clipPolygon.map((point) =>
-                Object.freeze({ x: point.x + dx, y: point.y + dy })
-              )
-            ),
-          }
-        : {}),
-    }),
-  });
-}
-
-/**
- * Every header/footer BEHIND drawing, lifted onto the sheet and clipped to it.
- *
- * Both frames go through `hfAnchorOnPageSheet`: it resolves a page-frame axis against the
- * page box and a story-relative one against the story box, which is what makes one layer
- * able to carry both. Inert always — furniture behind the body must never take a click
- * meant for the text over it, and the band, not this layer, is what editing activates.
- */
-function appendHfBehindDrawingLayer(
-  document: Document,
-  pageElement: HTMLElement,
-  story: HeaderFooterStoryRecord,
-  drawings: readonly AnchoredDrawingRecord[],
-  ctx: ResolvedPaintContext,
-  pageOrigin: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  }
-): void {
-  const lifted = drawings.map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
-  // The wrapper spans the sheet exactly, so `overflow: hidden` on it is the paper edge:
-  // furniture ink can reach anywhere on this page and nowhere on the next.
-  const clip = document.createElement('div');
-  clip.className = 'docx-hf-behind-layer';
-  clip.dataset.docxHfBehind = story.kind;
-  clip.setAttribute('contenteditable', 'false');
-  clip.style.position = 'absolute';
-  clip.style.inset = '0';
-  clip.style.overflow = 'hidden';
-  clip.style.pointerEvents = 'none';
-  appendAnchoredDrawingsForRecords(document, clip, lifted, ctx, pageOrigin, 'behind', false);
-  if (clip.childElementCount > 0) pageElement.append(clip);
-}
-
-function appendHfPageRelativeDrawingLayer(
-  document: Document,
-  pageElement: HTMLElement,
-  story: HeaderFooterStoryRecord,
-  drawings: readonly AnchoredDrawingRecord[],
-  ctx: ResolvedPaintContext,
-  pageOrigin: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  },
-  layer: 'behind' | 'inFront',
-  interactive = false
-): void {
-  const pageRelative = drawings
-    .filter(isPageRelativeHfAnchor)
-    .map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
-  appendAnchoredDrawingsForRecords(
-    document,
-    pageElement,
-    pageRelative,
-    ctx,
-    pageOrigin,
-    layer,
-    interactive,
-    layer === 'inFront' ? story.kind : undefined
-  );
-}
-
 const HEX = /^[0-9A-Fa-f]{6}$/;
 // Unicode-aware: `\w` is ASCII-only, so every CJK family name — 游ゴシック, 맑은 고딕 — failed
 // validation and the run silently fell back to the inherited face, losing the typeface of an
-// entire document. Quote, backslash, semicolon, comma and control characters stay excluded,
-// which is what keeps the quoted CSS string unbreakable.
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+// entire document. Comma and semicolon are part of one family name: the sink always writes
+// the name as a double-quoted CSS string through the `fontFamily` style property, so neither
+// can split the family list or end the declaration. Quote, backslash and control characters
+// stay excluded, which is what keeps that quoted string unbreakable.
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** ST_Underline to the nearest CSS decoration style. */
 // MAPS, not object literals. These are indexed by a value that came out of a document, so
@@ -681,10 +652,11 @@ function applyTabAdvanceUnderline(
 function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: PaintContext): void {
   const css = element.style;
   const scale = ctx.scale;
-  // Super/subscript draw at three quarters — the same reduction the measurer applies, so
+  applyTextOutline(css, style, scale);
+  // Super/subscript draw at the shared reduced size — the same reduction the measurer applies, so
   // the painted glyphs match the advance layout reserved. Painting them full size while
   // measuring them small made every line containing one slightly too wide.
-  const sizeFactor = style.verticalAlign === 'baseline' ? 1 : 0.75;
+  const sizeFactor = glyphSizeFactorOf(style);
   css.fontSize = `${style.fontSizePt * sizeFactor * scale}px`;
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
@@ -707,9 +679,8 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     const alias = ctx.fontAlias?.(family);
     // The measurer's fallback stack trails the family so an unresolvable name falls
     // back to the SAME face measurement fell back to — not to the inherited font.
-    css.fontFamily = alias
-      ? `"${alias}", "${family}", ${DEFAULT_CANVAS_FONT_STACK}`
-      : `"${family}", ${DEFAULT_CANVAS_FONT_STACK}`;
+    const stack = fallbackStackForFamily(family);
+    css.fontFamily = alias ? `"${alias}", "${family}", ${stack}` : `"${family}", ${stack}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT_COLOR_HEX.get(style.highlight) : undefined;
@@ -723,6 +694,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     css.backgroundColor = `#${style.shading}`;
   }
   if (style.caps) css.textTransform = 'uppercase';
+  css.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
   if (style.smallCaps) css.fontVariant = 'small-caps';
   // Super/subscript shift with a RELATIVE offset, not `vertical-align`. Vertical alignment
   // grows the line box to contain the raised glyph, which pushes a line's selection band
@@ -834,6 +806,11 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
   // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
   // relaying out, and because the review surface and tests want to find fields regardless.
   element.dataset.fieldAtom = field.formField ? 'form' : 'field';
+  // An editable saved result spans several pieces; the caret shades all of them together.
+  if (field.resultStart !== undefined && field.resultEnd !== undefined) {
+    element.dataset.fieldResultStart = String(field.resultStart);
+    element.dataset.fieldResultEnd = String(field.resultEnd);
+  }
   const shaded = field.formField
     ? ctx.shadeFormFields !== false
     : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';
@@ -845,274 +822,6 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
     element.classList.add('docx-field-atom--shaded');
   }
 }
-
-function applyRevisionPresentation(
-  element: HTMLElement,
-  span: StyleSpanRecord,
-  ctx: PaintContext
-): void {
-  // A tracked FORMAT change alters no characters, so it has no strike or underline of its own
-  // to wear. It still has to be visible: the reader is looking at text whose appearance is
-  // itself a pending decision. A dashed rule and a tint say "this changed" without claiming
-  // the words were added or removed.
-  const format = formatRevisionOf(span.props);
-  const colors = ctx.revisionStyles;
-  const presentation = revisionPresentationOf(span.revisions, colors?.authorSlots, colors?.styles);
-  if (!presentation && !format) return;
-
-  if (presentation) {
-    const { attribution } = presentation;
-    element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
-    element.dataset.revisionKind = attribution.kind;
-    element.dataset.revisionId = attribution.id;
-    if (attribution.author !== '') element.dataset.reviewAuthor = attribution.author;
-    if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
-    // The author's ramp slot, as a CSS hook: `[data-review-author-slot='2']` restyles one
-    // reviewer's changes without the host knowing the name. Only under author colouring,
-    // because the slot map is in the paint-reuse key only then — emitted always, a new
-    // author appearing would have to repaint every page in every scheme.
-    const authorStyle = colors?.styles.get(attribution.author);
-    if (colors) {
-      element.dataset.reviewAuthorSlot = String(
-        (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
-      );
-      // Host classes for this author's changes, for whatever the typed fields do not
-      // cover. Pre-split when the context resolved, so paint adds tokens rather than
-      // running a regex for every painted span.
-      const tokens = colors.classTokens.get(attribution.author);
-      if (tokens) for (let i = 0; i < tokens.length; i += 1) element.classList.add(tokens[i]!);
-    }
-    // SELECTIVE, and only where the host actually asked for a COLOUR. A declaration that
-    // names only an avatar or a class says nothing about ink, so the ink stays on the kind
-    // colours: "give this reviewer a picture" must not silently recolour their text.
-    // An unstyled author takes whatever the scheme says for `others` — the ramp under
-    // by-author colouring, the kind colours otherwise, so "highlight one reviewer, keep the
-    // rest green/red" is expressible.
-    //
-    // Under author colouring the KIND still reads from the decoration — underline for an
-    // insertion, strike for a deletion — while the colour answers "whose", exactly Word's
-    // by-author view. The strike/underline rules above are untouched by the scheme.
-    const byAuthor =
-      colors !== undefined && (authorStyle?.color !== undefined || colors.others === 'author');
-    const color = byAuthor ? presentation.authorColor : presentation.color;
-    element.style.color = color;
-    // The TINT is what makes a change findable when scanning rather than reading. A decoration
-    // alone is a hairline: on a dense page of small type it disappears, and a reviewer skims
-    // straight past an edit.
-    //
-    // The WASH, not the full tint. This layer covers every tracked change in the document; the
-    // band layer covers only the open one and adds the full tint over this. Painting both at
-    // full strength gave pending and open changes the same weight — the pale/open distinction
-    // the band exists to draw never appeared, because this was already at the band's colour.
-    //
-    // The wash keeps the KIND pair under either scheme — unless the host's style for this
-    // author says otherwise. At its faint strength an author-mixed wash is
-    // indistinguishable anyway, and the kind pair keeps "added" and "removed" scannable
-    // while the ink answers "whose". It also needs no `color-mix()`, which a host-supplied
-    // literal colour would have forced on every painted run.
-    element.style.backgroundColor =
-      authorStyle?.background ??
-      (presentation.deleted
-        ? 'var(--doc-revision-deletion-wash)'
-        : 'var(--doc-revision-insertion-wash)');
-    if (presentation.line) {
-      element.style.textDecorationLine = presentation.line;
-      element.style.textDecorationStyle = presentation.decorationStyle;
-      element.style.textDecorationColor = color;
-    }
-    return;
-  }
-
-  // A tracked FORMAT change gets its provenance and NO inline decoration — its marking
-  // (a grey wash and a faint dotted rule) comes from the STYLESHEET's
-  // `.docx-revision-format`, not from style written here. The split is deliberate: an
-  // authored underline or strike is painted as inline style and so outranks the stylesheet,
-  // keeping the author's own decoration intact, and a host that finds even the quiet grey
-  // too loud at its documents' density (a real fixture carries 18,284 of these) can silence
-  // it with one CSS override instead of forking the painter.
-  element.classList.add('docx-revision', 'docx-revision-format');
-  element.dataset.revisionKind = 'format';
-  element.dataset.revisionId = format!.id;
-  if (format!.author !== '') element.dataset.reviewAuthor = format!.author;
-  if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
-  // A format revision has an AUTHOR like any other, so the per-author hooks belong here
-  // too — a host rule scoped to a reviewer's slot or class would otherwise skip what can be
-  // the largest population of tracked changes in a document. The ink stays the stylesheet's
-  // grey unless the host named a colour: a format change is not an addition or a removal,
-  // and painting it in the author's ink would claim it was.
-  if (colors) {
-    const formatStyle = colors.styles.get(format!.author);
-    element.dataset.reviewAuthorSlot = String(
-      (colors.authorSlots.get(format!.author) ?? 0) % REVIEW_AUTHOR_SLOTS
-    );
-    const tokens = colors.classTokens.get(format!.author);
-    if (tokens) for (let i = 0; i < tokens.length; i += 1) element.classList.add(tokens[i]!);
-    if (formatStyle?.color !== undefined) element.style.color = formatStyle.color;
-    // The wash too, as the span branch applies it. Declaring `background` for an author and
-    // seeing it on their insertions but not on their property changes is not a rule anyone
-    // could infer.
-    if (formatStyle?.background !== undefined) {
-      element.style.backgroundColor = formatStyle.background;
-    }
-  }
-}
-
-/**
- * The pilcrow beside a paragraph whose MARK was inserted or deleted.
- *
- * Word draws it because there is nothing else to draw: the change is to the paragraph break
- * itself, so no character carries it. A struck-through ¶ is how a reader sees that this
- * paragraph is being merged into the next one, and an underlined one that it was split here.
- *
- * Furniture: no model range, `aria-hidden`, not editable, so it can never be selected, copied
- * or counted as text.
- */
-function paintParagraphMark(
-  document: Document,
-  revisions: readonly RevisionAttribution[],
-  scale: number,
-  colors: RevisionStyleContext | undefined
-): HTMLElement {
-  // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
-  // beside it would read as a second paragraph break. A REMOVAL wins the face when a mark
-  // carries both — a break proposed and then unproposed ends up removed, and the same rule
-  // already decides the colour of a change bar over mixed lines. `moveFrom` counts as a
-  // removal, which is what keeps this glyph agreeing with the rule in the margin beside it.
-  // Both attributions are published on the element, so review chrome can offer both.
-  const shown = shownMarkRevision(revisions)!;
-  const glyph = document.createElement('span');
-  glyph.className = `docx-revision-pmark docx-revision-pmark-${shown.kind}`;
-  glyph.setAttribute('aria-hidden', 'true');
-  glyph.contentEditable = 'false';
-  glyph.dataset.revisionKind = shown.kind;
-  glyph.dataset.revisionId = shown.id;
-  if (shown.author !== '') glyph.dataset.reviewAuthor = shown.author;
-  // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
-  // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
-  // ids alone cannot say which decision each one is.
-  glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
-  glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
-  glyph.textContent = '\u00b6';
-  glyph.style.position = 'absolute';
-  glyph.style.pointerEvents = 'none';
-  glyph.style.marginLeft = `${2 * scale}px`;
-  const removes = markRevisionRemovesMark(shown);
-  // Under author colouring the glyph follows its author, like the spans beside it; the
-  // strike still says a removal is a removal.
-  const markStyle = colors?.styles.get(shown.author);
-  const markSlot = colors ? (colors.authorSlots.get(shown.author) ?? 0) % REVIEW_AUTHOR_SLOTS : 0;
-  if (colors) {
-    glyph.dataset.reviewAuthorSlot = String(markSlot);
-    const tokens = colors.classTokens.get(shown.author);
-    if (tokens) for (let i = 0; i < tokens.length; i += 1) glyph.classList.add(tokens[i]!);
-  }
-  // The same selective rule as the spans, read straight off the maps: building a whole
-  // presentation object for one field allocated per paragraph mark, and a heavily revised
-  // document has one per paragraph.
-  glyph.style.color =
-    markStyle?.color ??
-    (colors?.others === 'author'
-      ? reviewAuthorSlotColor(markSlot)
-      : removes
-        ? 'var(--doc-revision-deletion)'
-        : 'var(--doc-revision-insertion)');
-  if (removes) glyph.style.textDecorationLine = 'line-through';
-  return glyph;
-}
-
-/**
- * The margin rules beside the lines that carry tracked changes.
- *
- * CONTIGUOUS lines MERGE into one rule. Drawn per line, a five-line edit reads as five separate
- * marks with hairline gaps between them at every line boundary — the eye sees a dashed rule
- * where Word draws a solid one, and the gaps imply the change stops and restarts.
- *
- * Coloured by kind, so the margin says what happened as well as that something did. A run of
- * lines carrying both an insertion and a deletion takes the deletion colour: removed text is
- * the stronger claim, and it is the one a reviewer scanning the margin must not miss.
- *
- * Furniture throughout: one overlay, `aria-hidden`, `pointer-events: none`, no model range, and
- * positioned in the margin the fragment box already leaves, so it can never move a glyph.
- */
-function paintChangeBars(
-  document: Document,
-  fragment: ParagraphFragmentRecord,
-  scale: number
-): HTMLElement | null {
-  interface BarRun {
-    top: number;
-    bottom: number;
-    deleted: boolean;
-  }
-  const runs: BarRun[] = [];
-  // The mark belongs to the LAST line, and it is a revision like any other. Reading only the
-  // spans left a paragraph whose sole change was its own pilcrow — a split or a merge, the
-  // most ordinary tracked edit there is — with a coloured ¶ and no rule in the margin, so a
-  // reader scanning the margin never saw that the paragraph had been changed at all.
-  const markLine = fragment.lines[fragment.lines.length - 1];
-  for (const line of fragment.lines) {
-    const revisions = [
-      ...line.spans.flatMap((span) => span.revisions ?? []),
-      // Drawings too: a line whose ONLY change is an inserted or deleted picture carries no
-      // revision span — an inline atom is projected, not a span, and an anchored drawing
-      // paints from the page layer — and without these the margin said nothing had changed
-      // on it (#479).
-      ...(line.drawings ?? []).flatMap((drawing) => drawing.revisions ?? []),
-      ...(line.anchorRevisions ?? []),
-      ...(line === markLine ? (fragment.markRevisions ?? []) : []),
-    ];
-    if (revisions.length === 0) continue;
-    const deleted = revisions.some(
-      (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
-    );
-    const top = line.box.y - fragment.box.y;
-    const bottom = top + line.box.height;
-    const previous = runs[runs.length - 1];
-    // Touching or overlapping lines of the same claim are one rule.
-    if (previous && previous.deleted === deleted && top <= previous.bottom + 0.5) {
-      previous.bottom = Math.max(previous.bottom, bottom);
-      continue;
-    }
-    runs.push({ top, bottom, deleted });
-  }
-  if (runs.length === 0) return null;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'docx-change-bars';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.pointerEvents = 'none';
-  for (const run of runs) {
-    const bar = document.createElement('div');
-    bar.className = `docx-change-bar docx-change-bar-${run.deleted ? 'deletion' : 'insertion'}`;
-    bar.style.position = 'absolute';
-    bar.style.top = `${run.top * scale}px`;
-    bar.style.height = `${(run.bottom - run.top) * scale}px`;
-    // ANCHORED TO THE MARGIN, NOT TO THE PARAGRAPH. The bar is a child of the fragment, whose
-    // left edge is the paragraph's indented column — so an offset from the fragment put the
-    // rule at a different x for every indent level, and a nested list drew a staircase down
-    // the page. Subtracting the fragment's own x lands every bar on one vertical line, which
-    // is what makes a column of them readable as "these lines changed".
-    bar.style.left = `${(-fragment.box.x - CHANGE_BAR_OFFSET_PT) * scale}px`;
-    bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
-    bar.style.pointerEvents = 'none';
-    bar.style.backgroundColor = run.deleted
-      ? 'var(--doc-revision-deletion)'
-      : 'var(--doc-revision-insertion)';
-    overlay.append(bar);
-  }
-  return overlay;
-}
-
-/**
- * Distance from the text column to the change bar, and its thickness, in points.
- *
- * Close enough to read as belonging to the line, far enough not to collide with a hanging
- * indent or a list marker.
- */
-const CHANGE_BAR_OFFSET_PT = 7.5;
-const CHANGE_BAR_WIDTH_PT = 1.5;
 
 function paintSpan(
   document: Document,
@@ -1128,12 +837,16 @@ function paintSpan(
   if (span.unsupported)
     return paintUnsupportedContent(document, span.unsupported, span.box, ctx.scale);
   if (span.equation) {
-    element.dataset.paragraphId = span.range.paragraphId;
-    element.dataset.start = String(span.range.start);
-    element.dataset.end = String(span.range.end);
+    if (!ctx.unbound) {
+      element.dataset.paragraphId = span.range.paragraphId;
+      element.dataset.start = String(span.range.start);
+      element.dataset.end = String(span.range.end);
+    }
     applyRunFaceStyle(element, faceStyle, ctx);
-    mountEquationForSpan(document, element, span.equation, ctx);
-    applyRevisionPresentation(element, span, ctx);
+    mountEquationForSpan(document, element, span.equation, ctx, (run, style) =>
+      applyRunFaceStyle(run, style, ctx)
+    );
+    applyEquationRevision(document, element, span, ctx);
     return element;
   }
   element.className = 'layout-run layout-run-text';
@@ -1167,9 +880,11 @@ function paintSpan(
   // advance and its leader are still drawn, and the mapper resolves through the real text
   // either side. An ordinary `w:tab` keeps its address; it does occupy an offset.
   if (span.range.end > span.range.start) {
-    element.dataset.paragraphId = span.range.paragraphId;
-    element.dataset.start = String(span.range.start);
-    element.dataset.end = String(span.range.end);
+    if (!ctx.unbound) {
+      element.dataset.paragraphId = span.range.paragraphId;
+      element.dataset.start = String(span.range.start);
+      element.dataset.end = String(span.range.end);
+    }
   } else {
     element.setAttribute('aria-hidden', 'true');
     element.contentEditable = 'false';
@@ -1205,7 +920,9 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, textHost, span.text, span.style, ctx.scale);
+  mountRunText(document, textHost, paintedSpanText(span), span.style, ctx.scale);
+  paintLegacyCheckbox(element, span, ctx.scale);
+  paintLegacyDropdown(element, span);
   if (span.projected) {
     element.dataset.docxField = '';
     element.setAttribute('contenteditable', 'false');
@@ -1222,6 +939,11 @@ function paintSpan(
         element.dataset.docxNoteMarkBack = '';
         element.dataset.docxNoteScope = span.noteNav.scopeId;
       }
+    } else if (span.fieldAtom?.formControl) {
+      // A legacy form control takes the press itself: pointer events stay on so the surface
+      // can find it under the pointer, and the cursor says it is a control, not text.
+      element.style.userSelect = 'none';
+      element.style.cursor = 'pointer';
     } else {
       element.style.pointerEvents = 'none';
       element.style.userSelect = 'none';
@@ -1251,6 +973,8 @@ function paintHyperlinkAnchor(
 ): HTMLElement {
   const element = document.createElement('a');
   element.className = 'docx-hyperlink';
+  // Standalone painters and hosts with their own CSS still expose live link targets.
+  element.style.cursor = !ctx.inertLinks && link.href ? 'pointer' : 'default';
   // The link's identity, so a click can name the `w:hyperlink` it landed on without the
   // pointer path re-deriving it from geometry.
   element.dataset.docxLink = link.id;
@@ -1306,7 +1030,7 @@ function paintHyperlinkAnchor(
  * A line is ONE inline flow, not a row of absolutely positioned words.
  *
  * Layout decides what goes on the line, where the line sits, and where the page breaks —
- * the decisions that make output match Word. Placing glyphs WITHIN the line is left to the
+ * the decisions this engine owns. Placing glyphs WITHIN the line is left to the
  * browser, which is going to rasterise them its own way regardless.
  *
  * Positioning each word independently meant the browser drew the selection highlight once
@@ -1321,13 +1045,15 @@ function paintHyperlinkAnchor(
 function paintLine(
   document: Document,
   line: LineRecord,
-  ctx: DrawingPaintHostContext
+  ctx: DrawingPaintHostContext,
+  paragraphRtl = false,
+  emptyStyle = DEFAULT_RUN_STYLE
 ): HTMLElement {
   const scale = ctx.scale;
   const element = document.createElement('div');
   element.className = 'docx-line layout-line';
   element.dataset.lineId = line.id;
-  element.dataset.paragraphId = line.range.paragraphId;
+  if (!ctx.unbound) element.dataset.paragraphId = line.range.paragraphId;
   element.style.position = 'absolute';
   element.style.top = `${line.box.y * scale}px`;
   // Alignment is baked into the geometry, not re-derived here: `contentX` IS the line's left
@@ -1347,6 +1073,12 @@ function paintLine(
   // baseline`, so mixed-size and superscript/subscript (relative offset) still work.
   element.style.fontSize = '0';
   element.style.whiteSpace = 'pre';
+  // ONE UNBROKEN RULE ACROSS THE LINE. Every run is its own inline-block, so each run's
+  // trailing space ends a line box of its own, and the browser default skips decoration at
+  // line edges and around descenders. A document underline crosses both. Both properties
+  // inherit, so the line sets them once for every run and decoration layer inside it.
+  element.style.setProperty('text-decoration-skip-ink', 'none');
+  element.style.setProperty('text-decoration-skip-spaces', 'none');
   // A raised superscript or a tall glyph draws outside the line box rather than being
   // clipped at it; the box governs spacing and the selection band, not what is visible.
   element.style.overflow = 'visible';
@@ -1370,9 +1102,7 @@ function paintLine(
     Math.max(
       leading,
       ...line.spans.map((span) => span.box.height + leading),
-      // Empty lines still need a content band so the caret has a strut — the paragraph
-      // mark's own depth, which is the box less the spacing published below it, not the
-      // whole spaced box.
+      // Empty lines use the paragraph mark's depth, excluding trailing spacing.
       line.spans.length === 0 ? line.box.height - (line.trailingSpacing ?? 0) : 0
     ),
     line.box.height
@@ -1407,6 +1137,13 @@ function paintLine(
       rankOf(left.paragraphId) - rankOf(right.paragraphId) || left.start - right.start
   );
   let nextInlineDrawing = 0;
+  // Shaped spans are placed relative to where inline flow (spans and spacers) left them.
+  const bidi =
+    line.spans.some((span) => span.style.shaping !== undefined) ||
+    (line.drawings ?? []).some(pictureIsRtl);
+  let logicalAdvance = 0;
+  // How far the flow reaches; a picture's spacer reaches its far edge, past any jump before it.
+  let flowRight = line.contentX;
   const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (
       nextInlineDrawing < inlineDrawings.length &&
@@ -1415,10 +1152,18 @@ function paintLine(
           inlineDrawings[nextInlineDrawing]!.start < modelOffset))
     ) {
       const drawing = inlineDrawings[nextInlineDrawing]!;
-      const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      const advance = bidi
+        ? Math.max(0, drawing.advanceEnd - drawing.advanceStart)
+        : Math.max(0, drawing.advanceEnd - flowRight);
+      flowRight = Math.max(flowRight, drawing.advanceEnd);
       const spacer = document.createElement('span');
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
+      // The picture's model position: a lone picture paints no text to hold a caret after it.
+      if (!ctx.unbound) {
+        spacer.dataset.drawingParagraphId = drawing.paragraphId;
+        spacer.dataset.drawingStart = String(drawing.start);
+      }
       spacer.setAttribute('contenteditable', 'false');
       spacer.setAttribute('aria-hidden', 'true');
       spacer.style.display = 'inline-block';
@@ -1431,6 +1176,7 @@ function paintLine(
       spacer.style.pointerEvents = 'none';
       spacer.style.verticalAlign = 'baseline';
       element.append(spacer);
+      logicalAdvance += advance;
       nextInlineDrawing += 1;
       anchor = null;
       anchorLinkId = null;
@@ -1465,18 +1211,37 @@ function paintLine(
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
   for (const [spanIndex, span] of line.spans.entries()) {
+    const flushed = nextInlineDrawing;
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
-    appendWrapAdvance(span);
+    if (!bidi) appendWrapAdvance(span);
+    // Justify slack after a picture: its spacer ends at its far edge, and no span gap paints it.
+    const slackAfterPicture =
+      !bidi && nextInlineDrawing > flushed
+        ? span.box.x - flowRight - (span.wrapAdvanceBefore ?? 0)
+        : 0;
+    flowRight = Math.max(flowRight, span.box.x + span.box.width);
     const band = Math.min(span.box.height + leading, line.box.height);
-    const painted = paintSpan(document, span, ctx, band, leading);
-    if (pendingGap > 0 && !previousSpanAbsorbedGap) {
-      painted.style.marginLeft = `${pendingGap * scale}px`;
+    const painted = span.noteSeparator
+      ? paintNoteSeparatorSpan(document, span, line, scale)
+      : paintSpan(document, span, ctx, band, leading);
+    if (bidi) {
+      painted.style.position = 'relative';
+      painted.style.left = `${(span.box.x - line.contentX - logicalAdvance) * scale}px`;
+      // Paint hosts may reserve a pre-scaled width plus a compensating margin.
+      if (!painted.style.width) painted.style.width = `${span.box.width * scale}px`;
+      painted.style.direction = span.style.shaping?.direction ?? 'ltr';
+      painted.style.unicodeBidi = 'isolate';
+      if (span.style.shaping?.wordSpacingPt)
+        painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
+      logicalAdvance += span.box.width;
     }
+    const margin = pendingGap > 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
+    if (margin > 0.001) painted.style.marginLeft = `${margin * scale}px`;
     // A justify gap is drawn INSIDE the span before it wherever that span can stretch its
     // trailing space: the browser highlights a space's advance but never a margin, so a
     // margin gap broke the selection band into one block per word on justified lines.
     const next = line.spans[spanIndex + 1];
-    const gapAfter = interSpanGapBefore(line, spanIndex + 1, rankOf);
+    const gapAfter = bidi ? 0 : interSpanGapBefore(line, spanIndex + 1, rankOf);
     previousSpanAbsorbedGap = gapAfter > 0 && next !== undefined && absorbsFollowingGap(span, next);
     if (previousSpanAbsorbedGap) painted.style.wordSpacing = `${gapAfter * scale}px`;
     pendingGap = gapAfter;
@@ -1492,14 +1257,16 @@ function paintLine(
     // same model offset. Two adjacent fields share one content-keyed id when their targets
     // match, so keying on the id alone would merge two discrete links into one anchor a screen
     // reader announces once. Keying on the offset too keeps each field its own link unit while
-    // still letting one field's wrapped or space-split result stay a single anchor.
+    // still letting one field's wrapped or space-split result stay a single anchor. A result
+    // laid out as editable text spans several offsets, so its pieces share `resultStart`.
     if (span.fieldAtom) {
+      const fieldStart = fieldAnchorStart(span);
       const sameField =
-        anchor !== null && anchorLinkId === link.id && anchorFieldStart === span.range.start;
+        anchor !== null && anchorLinkId === link.id && anchorFieldStart === fieldStart;
       if (!sameField) {
         anchor = paintHyperlinkAnchor(document, link, ctx);
         anchorLinkId = link.id;
-        anchorFieldStart = span.range.start;
+        anchorFieldStart = fieldStart;
         element.append(anchor);
       }
       anchor!.append(painted);
@@ -1520,15 +1287,9 @@ function paintLine(
     lineSegments(line)[lineSegments(line).length - 1]?.paragraphId ?? line.range.paragraphId,
     Number.POSITIVE_INFINITY
   );
-  // A span-less line (empty paragraph) has no inline content, and a browser will not
-  // draw a caret at a position with no inline box to measure. The <br> is the anchor;
-  // sizing it to the line keeps the caret the paragraph's font height, not the div's
-  // default.
-  if (line.spans.length === 0) {
-    const anchor = document.createElement('br');
-    anchor.style.lineHeight = `${line.box.height * scale}px`;
-    element.append(anchor);
-  }
+  appendEmptyLineAnchor(element, line, scale, emptyStyle, (style) =>
+    applyRunFaceStyle(element, style, ctx)
+  );
 
   const lineOrigin = Object.freeze({
     x: line.contentX,
@@ -1536,6 +1297,9 @@ function paintLine(
     width: line.box.width,
     height: line.box.height,
   });
+  paintRunBorders(document, element, line, scale);
+  if (ctx.showParagraphMarks && line.manualBreakAfter)
+    paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1580,7 +1344,7 @@ function interSpanGapBefore(
   if (drawingOccupiesGap) return 0;
   const gap =
     current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-  return gap > 0.25 ? gap : 0;
+  return gap > 0.001 ? gap : 0;
 }
 
 /**
@@ -1597,7 +1361,7 @@ const WORD_SEPARATOR = /[\t\n\r \u00A0\u1361\u{10100}-\u{10102}\u{1039F}\u{1091F
  * itself, stretching its trailing space, instead of as a margin on the next span.
  *
  * The stretch must move ONLY the trailing space. Layout puts justify slack after expandable
- * U+0020s and word-breaks after every one of them, so an ordinary word-span qualifies —
+ * U+0020s (and any U+200B after) and word-breaks after each, so an ordinary span qualifies —
  * including a projected field result, whose box was reserved from the drawn text like any
  * other. A span carrying any OTHER word separator keeps the margin, whose only cost is a
  * seam in the native selection band. A span with a forced width (`w:w` horizontal scaling)
@@ -1610,11 +1374,12 @@ const WORD_SEPARATOR = /[\t\n\r \u00A0\u1361\u{10100}-\u{10102}\u{1039F}\u{1091F
  * slack (and this span's underline and shading) inside the float's exclusion zone.
  */
 function absorbsFollowingGap(span: StyleSpanRecord, next: StyleSpanRecord): boolean {
-  if (!span.text.endsWith(' ')) return false;
+  const text = withoutTrailingZeroWidthSpaces(span.text);
+  if (!text.endsWith(' ')) return false;
   if (span.style.horizontalScalePercent !== 100) return false;
   if (!sharesAnchor(span, next)) return false;
   if ((next.wrapAdvanceBefore ?? 0) > 0.001) return false;
-  return !WORD_SEPARATOR.test(span.text.slice(0, -1));
+  return !WORD_SEPARATOR.test(text.slice(0, -1));
 }
 
 /**
@@ -1626,7 +1391,12 @@ function sharesAnchor(a: StyleSpanRecord, b: StyleSpanRecord): boolean {
   if (!a.link && !b.link) return true;
   if (!a.link || !b.link || a.link.id !== b.link.id) return false;
   if (Boolean(a.fieldAtom) !== Boolean(b.fieldAtom)) return false;
-  return !a.fieldAtom || a.range.start === b.range.start;
+  return !a.fieldAtom || fieldAnchorStart(a) === fieldAnchorStart(b);
+}
+
+/** The model offset that identifies a field's link anchor: its result's start, or its unit. */
+function fieldAnchorStart(span: StyleSpanRecord): number {
+  return span.fieldAtom?.resultStart ?? span.range.start;
 }
 
 function paintFragment(
@@ -1637,13 +1407,14 @@ function paintFragment(
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-paragraph-fragment layout-paragraph';
-  element.dataset.paragraphId = fragment.paragraphId;
+  if (fragment.clipToBox) element.style.overflow = 'hidden';
+  if (!ctx.unbound) element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  if (!ctx.unbound) applyParagraphFormatAnchor(element, fragment);
   if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
     element.classList.add('docx-generated-region');
     element.dataset.docxReadOnly = '';
     element.setAttribute('contenteditable', 'false');
-    element.setAttribute('aria-readonly', 'true');
   }
   if (ctx.emptyTocPlaceholderIds?.has(fragment.paragraphId)) {
     element.classList.add('docx-toc-empty-placeholder');
@@ -1667,32 +1438,29 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
-  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, and it
-  // is the only signal that a change exists at all once the reader is in a resolved view.
-  const bars = paintChangeBars(document, fragment, scale);
-  if (bars) element.append(bars);
-  if (fragment.markRevisions && fragment.markRevisions.length > 0) {
-    const glyph = paintParagraphMark(document, fragment.markRevisions, scale, ctx.revisionStyles);
-    const last = fragment.lines[fragment.lines.length - 1];
-    if (last) {
-      // At the end of the last line's text, which is where the mark itself sits.
-      const end = last.spans[last.spans.length - 1];
-      glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
-      // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
-      // place the caret goes. Reading the line box drew a centred one against the margin.
-      glyph.style.left = `${((end ? end.box.x + end.box.width : last.contentX) - fragment.box.x) * scale}px`;
-      element.append(glyph);
-    }
-  }
+  const lineElements: HTMLElement[] = [];
   for (const line of fragment.lines) {
-    const painted = paintLine(document, line, ctx);
+    const painted = paintLine(
+      document,
+      line,
+      ctx.revisionMarkup && formatRevisionOf(fragment.props)
+        ? { ...ctx, paragraphFormatRevision: formatRevisionOf(fragment.props)! }
+        : ctx,
+      paragraphIsRtl(fragment.props),
+      fragment.emptyParagraphStyle
+    );
+    if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
+      applyParagraphFormatAnchor(painted, fragment, true);
+    }
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
     // content edge), so an absolute left here would count that origin twice.
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
     painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
     element.append(painted);
+    lineElements.push(painted);
   }
+  paintParagraphEndFurniture(document, fragment, lineElements, ctx, scale);
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them
   // there and never reflows the text for them — so a painter deriving an edge from the
   // fragment box would put the frame through the words.
@@ -1727,6 +1495,8 @@ function paintListMarker(
 ): HTMLElement {
   const marker = fragment.marker!;
   const scale = ctx.scale;
+  const picture = paintListMarkerPicture(document, fragment, asResolvedPaintContext(ctx));
+  if (picture) return picture;
   // The marker belongs to the paragraph's FIRST line, which is the line it is drawn beside.
   const leading = fragment.lines[0]?.leading ?? 0;
   const element = positioned(document, 'span', marker.box, scale);
@@ -1768,28 +1538,11 @@ function paintListMarker(
   glyph.style.paddingTop = `${leading * scale}px`;
   glyph.style.lineHeight = `${(glyphBand - leading) * scale}px`;
   applyRunFaceStyle(glyph, marker.style, ctx);
+  if (marker.pieces) glyph.dir = 'rtl'; // A right-to-left marker: `1.` shows as `.1`.
   mountRunText(document, glyph, marker.text, marker.style, scale);
   element.append(glyph);
   return element;
 }
-
-/**
- * ST_TabTlc (ECMA-376 §17.3.1.38) to the glyph Word repeats across the tab.
- *
- * A Map, not an object literal, for the same reason as the decoration tables: the key comes
- * out of a document and an object literal answers `constructor` with a function.
- * `heavy` has no separate character — Word draws a thicker rule, approximated by the
- * underscore in the run's own face at bold weight rather than by inventing a font.
- */
-
-/**
- * Ceiling on repeated leader glyphs for one tab.
- *
- * The repeat count is derived from a layout width and a resolved font size — both bounded —
- * but this is still a `.repeat()` bound, so it gets an explicit cap rather than trusting the
- * arithmetic upstream of it. `overflow: hidden` trims whatever the cap leaves over.
- */
-const MAX_TAB_LEADER_GLYPHS = 512;
 
 /**
  * Paint the leader of one tab across the advance layout already reserved for it.
@@ -1876,14 +1629,13 @@ function paintTabLeader(
     span.tabLeaderAdvancePt && span.tabLeaderAdvancePt > 0
       ? span.tabLeaderAdvancePt
       : Math.max(0.5, span.style.fontSizePt * 0.2);
-  // Two glyphs of margin over the measured fit: the browser resolves its own face and its
-  // advance may run a shade narrower than the measurer's, which would stop the leader short
-  // of the stop. The layer clips, so the spare glyphs cost nothing.
-  const count = Math.min(
-    MAX_TAB_LEADER_GLYPHS,
-    Math.max(1, Math.floor(span.box.width / advancePt) + 2)
+  const pattern = tabLeaderPattern(
+    (ctx.tabLeaderOriginXPt ?? 0) + span.box.x,
+    span.box.width,
+    advancePt
   );
-  glyphs.textContent = glyph.repeat(count); // SAFE: textContent, never innerHTML
+  glyphs.style.marginLeft = `${pattern.offsetPt * scale}px`;
+  glyphs.textContent = glyph.repeat(pattern.count); // SAFE: textContent, never innerHTML
   // No tracking on top of the glyph's own advance — the leader is plain repeated
   // punctuation, and inherited letter-spacing would re-space it.
   glyphs.style.letterSpacing = '0';
@@ -1963,118 +1715,11 @@ function paintParagraphBorder(
   return rule;
 }
 
-/** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
-function isCompoundParagraphBorder(val: string): boolean {
-  return (
-    val === 'double' ||
-    val === 'triple' ||
-    val === 'doubleWave' ||
-    val.startsWith('thinThick') ||
-    val.startsWith('thickThin')
-  );
-}
-
-/**
- * Map authored `ST_Border` onto the painted rule.
- *
- * CSS gives `double` / `dashed` / `dotted` / `groove` / `ridge` / `inset` / `outset` almost
- * for free. Decorative art borders (apples, bats, …) stay solid — a deliberate approximation.
- */
-function applyParagraphBorderStyle(
-  rule: HTMLElement,
-  val: string,
-  color: string,
-  vertical: boolean,
-  thicknessPx: number,
-  scale: number
-): void {
-  switch (val) {
-    case 'dashed':
-    case 'dashSmallGap':
-    case 'dotDash':
-    case 'dotDotDash':
-    case 'dashDotStroked': {
-      const period = Math.max(4, 4 * scale);
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      return;
-    }
-    case 'dotted': {
-      const period = Math.max(3, 3 * scale);
-      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
-      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      return;
-    }
-    case 'double':
-    case 'doubleWave':
-    case 'triple':
-    case 'thinThickSmallGap':
-    case 'thickThinSmallGap':
-    case 'thinThickThinSmallGap':
-    case 'thinThickMediumGap':
-    case 'thickThinMediumGap':
-    case 'thinThickThinMediumGap':
-    case 'thinThickLargeGap':
-    case 'thickThinLargeGap':
-    case 'thinThickThinLargeGap': {
-      // Two hairlines inside the published box — layout owns the band (incl. thin-double floor).
-      // Triple and thinThick* compound vals approximate as double; decorative art stays solid.
-      const line = Math.max(1, thicknessPx / 3);
-      rule.style.backgroundColor = 'transparent';
-      if (vertical) {
-        rule.style.borderLeft = `${line}px solid #${color}`;
-        rule.style.borderRight = `${line}px solid #${color}`;
-      } else {
-        rule.style.borderTop = `${line}px solid #${color}`;
-        rule.style.borderBottom = `${line}px solid #${color}`;
-      }
-      rule.style.boxSizing = 'border-box';
-      return;
-    }
-    case 'threeDEmboss':
-    case 'ridge': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px ridge #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'threeDEngrave':
-    case 'groove': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px groove #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'inset': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px inset #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'outset': {
-      rule.style.backgroundColor = 'transparent';
-      const side = vertical ? 'borderLeft' : 'borderTop';
-      rule.style[side] = `${Math.max(1, thicknessPx)}px outset #${color}`;
-      if (vertical) rule.style.width = '0px';
-      else rule.style.height = '0px';
-      return;
-    }
-    case 'single':
-    case 'thick':
-    case 'wave':
-    default:
-      // Solid fill already set. Art borders and unrecognised vals stay solid.
-      return;
-  }
-}
-
+import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
+import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
+import { markTrackedRow } from './table-row-revision-paint.ts';
+import { sameDataWithin } from './semantic-paint-record-equality.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
 function paintTableCell(
@@ -2104,16 +1749,30 @@ function paintTableCell(
     cellElement.dataset.vMergeContinue = 'true';
     cellElement.style.border = 'none';
     cellElement.style.backgroundColor = 'transparent';
+    rememberPaintedCell(cellElement, cell, cellElement, undefined, []);
     return cellElement;
   }
 
   cellElement.style.border = 'none';
-  applyCellBorders(document, cellElement, cell.borders, scale);
+  const strokes = applyCellBorders(document, cellElement, cell.borders, scale);
 
   if (cell.shading && HEX.test(cell.shading)) {
     cellElement.style.backgroundColor = `#${cell.shading}`;
   }
+  if (cell.revisionShading && ctx.revisionMarkup) {
+    const color = ctx.revisionMarkup.cells[cell.revisionShading];
+    cellElement.dataset.revisionCell = cell.revisionShading;
+    if (color !== 'none') {
+      const author = cell.revisionShadingAuthor ?? '';
+      cellElement.style.backgroundColor =
+        color === 'byAuthor'
+          ? (ctx.revisionStyles?.styles.get(author)?.color ??
+            reviewAuthorSlotColor(ctx.revisionCellStyles?.authorSlots.get(author) ?? 0))
+          : `var(--doc-revision-color-${color})`;
+    }
+  }
   const contentElement = tableCellContentHost(document, cell, scale, cellElement);
+  const blocks: HTMLElement[] = [];
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
@@ -2122,7 +1781,9 @@ function paintTableCell(
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
     contentElement.append(painted);
+    blocks.push(painted);
   }
+  rememberPaintedCell(cellElement, cell, contentElement, strokes, blocks);
   return cellElement;
 }
 
@@ -2132,43 +1793,62 @@ function paintTableCell(
  * which is what gives cell text the same `data-paragraph-id`/`data-start` attributes as
  * body text, so selection and the caret work inside cells with no extra wiring.
  */
-function paintTableFragment(
+function paintTableRow(
   document: Document,
+  row: TableRowFragmentRecord,
   fragment: TableFragmentRecord,
   ctx: DrawingPaintHostContext
 ): HTMLElement {
+  const scale = ctx.scale;
+  const rowElement = positioned(document, 'div', row.box, scale);
+  rowElement.className = 'docx-table-row';
+  markTrackedRow(rowElement, row, !!ctx.revisionMarkup);
+  rowElement.dataset.rowId = row.id;
+  if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
+  rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
+  rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
+  rowElement.style.overflow = 'visible';
+  for (const cell of row.cells) {
+    rowElement.append(paintTableCell(document, cell, row.box, ctx));
+  }
+  return rowElement;
+}
+
+function paintTableFragment(
+  document: Document,
+  fragment: TableFragmentRecord,
+  ctx: DrawingPaintHostContext,
+  previous?: HTMLElement
+): HTMLElement {
+  // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
+  const retained =
+    previous &&
+    reflowTableFragment(previous, fragment, {
+      scale: ctx.scale,
+      showParagraphMarks: ctx.showParagraphMarks === true,
+      row: (row) => paintTableRow(document, row, fragment, ctx),
+      cell: (cell, rowBox) => paintTableCell(document, cell, rowBox, ctx),
+      block: (block, prior) =>
+        block.kind === 'table'
+          ? paintTableFragment(document, block, ctx, prior)
+          : paintFragment(document, block, ctx),
+      // Reuse refuses lines with drawings, the only lines whose gaps depend on reading rank.
+      gapOf: (line, index) => interSpanGapBefore(line, index, () => 0),
+    });
+  if (retained) return retained;
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-table-fragment layout-table';
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
+  const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
-    const rowElement = positioned(document, 'div', row.box, scale);
-    rowElement.className = 'docx-table-row';
-    if (row.revisionKind) {
-      rowElement.classList.add(
-        'docx-table-row--revision',
-        row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
-      );
-      // The same attribution datasets revision SPANS carry, so chrome that maps a hovered
-      // element to its review decision treats a tracked row like any other tracked change.
-      // Dataset assignment escapes; the values are attacker-controlled and never markup.
-      rowElement.dataset.revisionKind = row.revisionKind;
-      if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
-      if (row.revisionAuthor !== undefined) rowElement.dataset.reviewAuthor = row.revisionAuthor;
-      if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
-    }
-    rowElement.dataset.rowId = row.id;
-    if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
-    rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
-    rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
-    rowElement.style.overflow = 'visible';
-    for (const cell of row.cells) {
-      rowElement.append(paintTableCell(document, cell, row.box, ctx));
-    }
-    element.append(rowElement);
+    const painted = paintTableRow(document, row, fragment, ctx);
+    rows.set(row, painted);
+    element.append(painted);
   }
+  rememberPaintedTable(element, fragment, rows);
   return element;
 }
 
@@ -2188,17 +1868,17 @@ function paintPage(
   // Every drawing painted below carries this page's instance key, so a repaint of the
   // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
   // ever stealing a repeated header image from a sibling page.
-  const options = { ...baseOptions, paintInstance: `p${page.index}` };
+  const options = {
+    ...baseOptions,
+    paintInstance: `p${page.index}`,
+    tabLeaderOriginXPt: page.contentBox.x - page.box.x,
+  };
   const element = positioned(document, 'div', page.box, options.scale);
   // The FRAME is never lightness-inverted — flipping it would flip the paper itself. The
   // sheet keeps the canvas colour its token names and only `.docx-page-content` below is
   // inverted, so the theme and print rules name that class instead.
   element.className = 'docx-page';
-  // The measurer's own fallback stack, so an unstyled run — or one whose declared family
-  // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to
-  // inherit, the page picked up the host UI font, and every measured overlay (caret,
-  // selection, revision bands, strikes) drifted along the line against the painted glyphs.
-  element.style.fontFamily = DEFAULT_CANVAS_FONT_STACK;
+  isolatePageFromHost(element);
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {
     // The painted page is a PICTURE of the document; the editable projection is what
@@ -2212,12 +1892,6 @@ function paintPage(
   element.dataset.materialized = String(materialize);
   if (!materialize) return element;
 
-  const pageOrigin = Object.freeze({
-    x: page.box.x,
-    y: page.box.y,
-    width: page.box.width,
-    height: page.box.height,
-  });
   // Body anchored records are per-page CONTENT-relative (a page-frame drawing at offset 0
   // publishes paintBounds x/y = -margin). The layer lives on the page element, so the
   // origin is the negated content inset — never page.box, which is absolute and would
@@ -2228,24 +1902,44 @@ function paintPage(
     width: page.box.width,
     height: page.box.height,
   });
+  // PAINT ORDER IS THE SHEET'S CHILD ORDER, bottom to top: a `back` page border, the header
+  // and footer layer, the body's behind-text drawings, the body, the body's in-front
+  // drawings, and a `front` page border. Header and footer content is one layer under the
+  // main document: a header drawing set in front of text covers the header text only, never
+  // a body line or a body drawing, and `behindDoc` orders it within that layer alone.
+  const borderLayer = page.pageBorders
+    ? paintPageBorderFrame(document, page.pageBorders, options.scale)
+    : null;
+  if (borderLayer && page.pageBorders) borderLayer.dataset.docxZOrder = page.pageBorders.zOrder;
+  if (borderLayer && page.pageBorders?.zOrder === 'back') element.append(borderLayer);
+  // One furniture context per tab-leader origin: a story's fragments all share one.
+  const furnitureCtxs = new Map<number, ResolvedPaintContext>();
+  const hfHints = paintHeaderFooterLayer(document, element, page, {
+    chrome: options,
+    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
+    paintFragment: (fragment, tabLeaderOriginXPt) => {
+      let furnitureCtx = furnitureCtxs.get(tabLeaderOriginXPt);
+      if (!furnitureCtx) {
+        furnitureCtx = { ...options, inertLinks: true, tabLeaderOriginXPt };
+        furnitureCtxs.set(tabLeaderOriginXPt, furnitureCtx);
+      }
+      return fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, furnitureCtx)
+        : paintFragment(document, fragment, furnitureCtx);
+    },
+    appendDrawings: (parent, drawings, origin, layer, interactive, hfFrontKind) =>
+      appendAnchoredDrawingsForRecords(
+        document,
+        parent,
+        drawings,
+        options,
+        origin,
+        layer,
+        interactive,
+        hfFrontKind
+      ),
+  });
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
-
-  // FURNITURE INK THAT GOES BEHIND THE TEXT IS PAINTED BEFORE THE TEXT.
-  //
-  // `behindDoc` means behind the DOCUMENT, and a letterhead or watermark anchored in a
-  // header routinely reaches down over the body. Painted from inside the band — which the
-  // page appends after its content box — it covered the first body lines instead, the one
-  // thing `behindDoc` exists to prevent. Every header/footer behind-drawing is lifted onto
-  // the sheet here, ahead of the content, exactly as the body's own behind layer is.
-  for (const story of [page.header, page.footer]) {
-    if (!story?.anchoredDrawings?.length) continue;
-    appendHfBehindDrawingLayer(document, element, story, story.anchoredDrawings, options, {
-      x: page.box.x,
-      y: page.box.y,
-      width: page.box.width,
-      height: page.box.height,
-    });
-  }
 
   const content = document.createElement('div');
   content.className = 'docx-page-content';
@@ -2284,8 +1978,9 @@ function paintPage(
     painted.blocks = blocks;
   }
   element.append(content);
-
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
+  // A `front` page border is over every drawing on the sheet, in-front ones included.
+  if (borderLayer && page.pageBorders?.zOrder === 'front') element.append(borderLayer);
 
   // Footnotes / endnotes — editable stories inside the sheet (not [data-docx-hf] furniture).
   paintPageNoteAreas(document, element, page, options, paintFragment, paintTableFragment);
@@ -2296,9 +1991,9 @@ function paintPage(
   // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
   // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
   // click can create the story. Geometry mirrors the pointer's activation band: the full
-  // margin strip at content width. Never printed (CSS hides it), never editable.
+  // margin strip at content width. Never printed or editable; absent on blank parity sheets.
   for (const kind of ['header', 'footer'] as const) {
-    if (page[kind]) continue;
+    if (page[kind] || page.parityBlank) continue;
     const band = document.createElement('div');
     band.className = 'docx-hf docx-hf--placeholder';
     band.dataset.docxHf = kind;
@@ -2326,114 +2021,25 @@ function paintPage(
     element.append(band);
   }
 
-  for (const story of [page.header, page.footer]) {
-    if (!story) continue;
-    const anchored = story.anchoredDrawings ?? [];
-    // Ahead of the layers below, which BOTH need it: furniture ink is inert while the band
-    // is not being edited, wherever on the sheet it was lifted to.
-    const active = headerFooterBandIsActive(story, page.index, options);
-    // The BEHIND half was already painted, on the sheet and ahead of the body content —
-    // see `appendHfBehindDrawingLayer`. Only the in-front ink belongs to the band.
-    const container = document.createElement('div');
-    container.className = 'docx-hf';
-    container.dataset.docxHf = story.kind;
-    if (story.rId) container.dataset.docxRId = story.rId;
-    if (active) {
-      container.dataset.docxHfActive = '';
-      container.setAttribute('contenteditable', 'true');
-    } else {
-      container.setAttribute('contenteditable', 'false');
-    }
-    container.style.position = 'absolute';
-    container.style.left = `${(story.box.x - page.box.x) * options.scale}px`;
-    container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
-    container.style.width = `${story.box.width * options.scale}px`;
-    // A footer whose only direct content is the empty paragraph hosting a floating shape
-    // flows to a hairline, which makes the ACTIVE edit band invisible. Editing extends the
-    // band down to the sheet edge — origin unchanged, so fragment and caret geometry stay
-    // put, and normal-mode sizing keeps the flow-height rule (#856) intact.
-    const bandHeight = headerFooterBandHeightPt(story, page, active);
-    container.style.height = `${bandHeight * options.scale}px`;
-    // VISIBLE, exactly because the box is sized by flow height alone (#856). Word paints
-    // header ink wherever it lands — a negative indent hangs into the left margin, an
-    // anchored shape offset past the content width sits in the right margin and reaches
-    // below the header text. Clipping to the band silently deleted both. The band's
-    // GEOMETRY still stops at flow height, so hit-testing and the body's effective top
-    // margin are untouched; overflowing drawings stay inert below via `interactive`.
-    container.style.overflow = 'visible';
-    // BUT NEVER PAST THE PAPER. Word clips ink at the sheet edge, and the band's own
-    // records are story-relative: a footer shape anchored far above its paragraph, or a
-    // header one reaching far below, resolves to a paint box that runs off the sheet and
-    // would paint across the inter-page gutter onto the neighbouring page. The clip is the
-    // SHEET expressed in the band's own coordinates, so ink still escapes the band (the
-    // whole point) and still stops at the paper.
-    const sheetLeft = (page.box.x - story.box.x) * options.scale;
-    const sheetTop = (page.box.y - story.box.y) * options.scale;
-    const sheetRight = sheetLeft + page.box.width * options.scale;
-    const sheetBottom = sheetTop + page.box.height * options.scale;
-    container.style.clipPath =
-      `polygon(${sheetLeft}px ${sheetTop}px, ${sheetRight}px ${sheetTop}px, ` +
-      `${sheetRight}px ${sheetBottom}px, ${sheetLeft}px ${sheetBottom}px)`;
-    const storyOrigin = Object.freeze({
-      x: 0,
-      y: 0,
-      width: story.box.width,
-      height: story.box.height,
-    });
-    const storyRelative = anchored.filter((drawing) => !isPageRelativeHfAnchor(drawing));
-    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
-    const furnitureCtx: ResolvedPaintContext = {
-      ...options,
-      inertLinks: true,
-    };
-    for (const fragment of story.fragments) {
-      container.append(
-        fragment.kind === 'table'
-          ? paintTableFragment(document, fragment, furnitureCtx)
-          : paintFragment(document, fragment, furnitureCtx)
-      );
-    }
-    appendAnchoredDrawingsForRecords(
-      document,
-      container,
-      storyRelative,
-      asResolvedPaintContext(options),
-      storyOrigin,
-      'inFront',
-      active
-    );
-    element.append(container);
-    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
-    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
-    // A SIBLING, not a child: the `+` selector needs the pill right after the band, and
-    // keeping it out of the band keeps band content from sitting under the pill.
-    // Adjacency is load-bearing — keep this append right here.
-    const hint = document.createElement('div');
-    hint.className = 'docx-hf-edit-hint';
-    hint.dataset.docxHfHint = story.kind;
-    hint.setAttribute('contenteditable', 'false');
-    hint.style.position = 'absolute';
-    hint.style.left = container.style.left;
-    hint.style.width = container.style.width;
-    hint.style.top =
-      story.kind === 'header'
-        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
-        : `${(story.box.y - page.box.y) * options.scale}px`;
-    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
-    element.append(hint);
-    appendHfPageRelativeDrawingLayer(
-      document,
-      element,
-      story,
-      anchored,
-      options,
-      pageOrigin,
-      'inFront',
-      active
-    );
-  }
+  // Edit pills over the body text: the bands they invite into paint under the body.
+  for (const hint of hfHints) element.append(hint);
 
   paintContentControlChrome(document, element, page, options);
+  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, in
+  // one column per sheet. Painted from the whole page — body, notes, header, footer and
+  // text boxes — so a change that crosses a paragraph or a cell boundary is one unbroken
+  // rule. LAST on the sheet, which is also where block adoption puts a rebuilt one.
+  const changeBars = paintPageChangeBars(
+    document,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle,
+    options.revisionMarkup,
+    options.facingPages,
+    options.revisionStyles
+  );
+  if (changeBars) element.append(changeBars);
   return element;
 }
 
@@ -2441,203 +2047,6 @@ function paintPage(
 const PLACEHOLDER_BAND_PT = 30;
 /** Where the band starts from the sheet edge — `w:pgMar` header/footer default (720 twips). */
 const PLACEHOLDER_DISTANCE_PT = 36;
-
-/** Widget kinds the painted surface can activate without adapter chrome. */
-/**
- * Height of the control label tab, in SCREEN pixels: `.docx-content-control-label` is 14px of
- * line-height plus 1px of padding each side, and its font does not scale with the zoom.
- *
- * The two have to agree. A mismatch shows up as a gap or an overlap where the tab meets the box
- * it labels, and only at a zoom nobody tested at.
- */
-const CONTROL_LABEL_HEIGHT = 16;
-
-const WIDGET_TYPES = new Set<ContentControlMappedType>([
-  'dropdown',
-  'comboBox',
-  'date',
-  'checkbox',
-]);
-
-/**
- * Paint on-demand content-control boundary furniture onto a page sheet.
- *
- * Absolute-positioned over the sheet (page coordinates), never inside flowing content —
- * so toggling chrome cannot reflow. `data-docx-marker` excludes the nodes from native
- * selection mapping; `contenteditable=false` keeps them furniture.
- */
-function paintContentControlChrome(
-  document: Document,
-  pageElement: HTMLElement,
-  page: PageRecord,
-  options: {
-    readonly scale: number;
-    readonly contentControlChrome?: PaintOptions['contentControlChrome'];
-  }
-): void {
-  const chrome = options.contentControlChrome;
-  const suppressed = chrome?.suppressedIds;
-  const pageControls = (page.contentControls ?? []).filter(
-    (control) => suppressed?.has(control.id) !== true
-  );
-  const controls = [
-    ...pageControls,
-    ...(chrome?.additionalBoundaries ?? []).filter(
-      (candidate) =>
-        suppressed?.has(candidate.id) !== true &&
-        !pageControls.some((control) => control.id === candidate.id)
-    ),
-  ];
-  if (controls.length === 0) return;
-  const showAll = chrome?.showAll === true;
-  const activeIds = chrome?.activeIds;
-  const hoverIds = chrome?.hoverIds;
-  const tocControlIds = chrome?.tocControlIds;
-  for (const control of controls) {
-    const isToc = tocControlIds?.has(control.id) === true;
-    const active = !isToc && activeIds?.has(control.id) === true;
-    const hovered = hoverIds?.has(control.id) === true;
-    pageElement.append(
-      paintContentControlBoundary(
-        document,
-        page,
-        control,
-        options.scale,
-        active,
-        hovered,
-        showAll || active || (isToc && hovered),
-        chrome?.checkedIds?.has(control.id),
-        isToc,
-        chrome?.readOnly === true
-      )
-    );
-  }
-}
-
-function paintContentControlBoundary(
-  document: Document,
-  page: PageRecord,
-  control: ContentControlBoundaryRecord,
-  scale: number,
-  active: boolean,
-  hovered: boolean,
-  boundaryVisible: boolean,
-  checked: boolean | undefined,
-  isToc: boolean,
-  readOnly: boolean
-): HTMLElement {
-  const layer = document.createElement('div');
-  layer.className = 'docx-content-control-chrome';
-  layer.dataset.docxContentControl = control.id;
-  layer.dataset.docxMarker = '';
-  layer.dataset.controlType = control.controlType;
-  layer.dataset.lock = control.effectiveLock;
-  if (control.bound) layer.dataset.bound = '';
-  if (control.placeholder) layer.dataset.placeholder = '';
-  if (isToc) layer.dataset.docxToc = '';
-  // Lets the stylesheet drop the "fill me in" hover invite without a second source of truth
-  // for what read-only means.
-  if (readOnly) layer.dataset.readOnly = '';
-  if (active) layer.dataset.active = '';
-  if (hovered) layer.dataset.hover = '';
-  if (boundaryVisible) layer.dataset.boundaryVisible = '';
-  layer.setAttribute('contenteditable', 'false');
-  layer.setAttribute('role', 'group');
-  // Alias and tag are document-authored control metadata.
-  if (control.alias) layer.dataset.alias = control.alias;
-  if (control.tag) layer.dataset.tag = control.tag;
-  if (control.alias) layer.setAttribute('aria-label', control.alias);
-  layer.style.position = 'absolute';
-  layer.style.inset = '0';
-  layer.style.pointerEvents = 'none';
-  layer.style.zIndex = '2';
-
-  // Boundary fragments use the same page-CONTENT coordinate space as paragraph/table
-  // fragments. This chrome layer is parented to the SHEET so it does not affect editable
-  // content or DOM-selection child indices, therefore translate through the content-box
-  // origin before painting. Omitting this offset puts every control in the page's top-left
-  // margin (and is especially obvious for controls inside table cells).
-  const contentLeft = page.contentBox.x - page.box.x;
-  const contentTop = page.contentBox.y - page.box.y;
-  for (const fragment of control.fragments) {
-    if (fragment.pageIndex !== page.index) continue;
-    const box = document.createElement('div');
-    box.className = 'docx-content-control-boundary';
-    box.dataset.docxMarker = '';
-    box.setAttribute('contenteditable', 'false');
-    box.setAttribute('aria-hidden', 'true');
-    box.style.position = 'absolute';
-    box.style.left = `${(contentLeft + fragment.box.x) * scale}px`;
-    box.style.top = `${(contentTop + fragment.box.y) * scale}px`;
-    box.style.width = `${Math.max(fragment.box.width, 1) * scale}px`;
-    box.style.height = `${Math.max(fragment.box.height, 1) * scale}px`;
-    box.style.pointerEvents = 'none';
-    layer.append(box);
-  }
-
-  const first = control.fragments.find((fragment) => fragment.pageIndex === page.index);
-  if (first && control.alias) {
-    const label = document.createElement('div');
-    label.className = 'docx-content-control-label';
-    label.dataset.docxMarker = '';
-    label.setAttribute('contenteditable', 'false');
-    label.setAttribute('aria-hidden', 'true');
-    label.textContent = control.alias;
-    label.style.position = 'absolute';
-    label.style.left = `${(contentLeft + first.box.x) * scale}px`;
-    // The box position scales; the OFFSET does not, and that is deliberate. The label is
-    // chrome, not content: its font is a fixed 10px/14px, so the tab is `CONTROL_LABEL_HEIGHT`
-    // screen pixels tall at every zoom. Subtracting a scaled height would open a gap between
-    // the tab and the box it labels, widening as the reader zooms in.
-    label.style.top = `${Math.max(0, (contentTop + first.box.y) * scale - CONTROL_LABEL_HEIGHT)}px`;
-    label.style.pointerEvents = 'none';
-    layer.append(label);
-  }
-  if (first && WIDGET_TYPES.has(control.controlType)) {
-    const widget = document.createElement('button');
-    widget.type = 'button';
-    widget.className = 'docx-content-control-widget';
-    widget.dataset.docxMarker = '';
-    widget.dataset.docxCcWidget = control.controlType;
-    widget.dataset.docxCcId = control.id;
-    widget.setAttribute('contenteditable', 'false');
-    widget.setAttribute('tabindex', '-1');
-    // Role / name / value come from data + state; adapters localize labels.
-    if (control.controlType === 'checkbox') widget.setAttribute('role', 'checkbox');
-    else if (control.controlType === 'dropdown' || control.controlType === 'comboBox') {
-      widget.setAttribute('role', 'listbox');
-    } else if (control.controlType === 'date') {
-      widget.setAttribute('role', 'button');
-    }
-    if (control.alias) widget.dataset.name = control.alias;
-    if (control.alias) widget.setAttribute('aria-label', control.alias);
-    if (control.controlType === 'checkbox') {
-      widget.setAttribute('data-checked', checked ? 'true' : 'false');
-      widget.setAttribute('aria-checked', checked ? 'true' : 'false');
-    }
-    const contentLocked =
-      control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked';
-    // Mode first: a document nobody may write has no writable control in it, whatever the
-    // control's own lock says.
-    if (readOnly || contentLocked || control.bound) {
-      widget.disabled = true;
-      widget.dataset.disabledReason = readOnly ? 'readOnly' : control.bound ? 'bound' : 'locked';
-      widget.setAttribute('aria-disabled', 'true');
-    }
-    widget.style.position = 'absolute';
-    widget.style.left = `${(contentLeft + first.box.x + first.box.width) * scale - 18}px`;
-    widget.style.top = `${(contentTop + first.box.y) * scale}px`;
-    widget.style.width = '16px';
-    widget.style.height = '16px';
-    widget.style.pointerEvents = 'auto';
-    widget.style.padding = '0';
-    widget.style.margin = '0';
-    widget.style.cursor = widget.disabled ? 'not-allowed' : 'pointer';
-    layer.append(widget);
-  }
-
-  return layer;
-}
 
 /**
  * One painted page, retained so an unchanged page never has to be rebuilt.
@@ -2729,7 +2138,9 @@ function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
   if (previous === next) return false;
   const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
   for (const key of keys) {
-    if (key === 'fragments') continue;
+    // Paint never reads the page-field source: the header, footer and body field records that
+    // show a page number carry its effect, and they are compared like everything else.
+    if (key === 'fragments' || key === 'pageFieldSource') continue;
     const a = (previous as unknown as Record<string, unknown>)[key];
     const b = (next as unknown as Record<string, unknown>)[key];
     if (a === b) continue;
@@ -2745,12 +2156,18 @@ function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
     ) {
       continue;
     }
+    // A record layout rebuilt with the same data paints the same: a footer re-projected for an
+    // unchanged page number, after a table edit replaced the page. Bounded, so a large or
+    // changed story refuses and repaints.
+    if (sameDataWithin(a, b, PAGE_RECORD_COMPARE_BUDGET)) continue;
     return false;
   }
   return true;
 }
 
 const COLUMN_SEPARATOR_CLASS = 'docx-column-separator';
+/** Objects one page-field comparison may visit before adoption gives up on it. */
+const PAGE_RECORD_COMPARE_BUDGET = 20_000;
 
 /**
  * Repaint one page's changed blocks IN PLACE, keeping the sheet and every block that did
@@ -2776,14 +2193,24 @@ function adoptPageBlocks(
   const content = retained.content;
   const previousBlocks = retained.blocks;
   if (!content || !previousBlocks || content.parentElement !== retained.element) return null;
-  const blockOptions = { ...options, paintInstance: `p${page.index}` };
+  const blockOptions = {
+    ...options,
+    paintInstance: `p${page.index}`,
+    tabLeaderOriginXPt: page.contentBox.x - page.box.x,
+  };
   const blocks = new Map<BlockFragmentRecord, HTMLElement>();
   const elements: HTMLElement[] = [];
   for (const fragment of page.fragments) {
     const element =
       previousBlocks.get(fragment) ??
+      equalBlockElement(previousBlocks, fragment, elements) ??
       (fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, blockOptions)
+        ? paintTableFragment(
+            document,
+            fragment,
+            blockOptions,
+            previousTableElement(previousBlocks, fragment)
+          )
         : paintFragment(document, fragment, blockOptions));
     blocks.set(fragment, element);
     elements.push(element);
@@ -2812,6 +2239,19 @@ function adoptPageBlocks(
     }
     content.insertBefore(element, cursor);
   }
+  // The margin rules are a page-level overlay over the adopted blocks, so they are the one
+  // piece of the sheet a block change can move; left alone when it did not.
+  reconcilePageChangeBars(
+    document,
+    retained.element,
+    page,
+    options.scale,
+    options.changeBars,
+    options.changeBarsToggle,
+    options.revisionMarkup,
+    options.facingPages,
+    options.revisionStyles
+  );
   return { record: page, materialized: true, element: retained.element, content, blocks };
 }
 
@@ -2862,6 +2302,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   authorSlots?: ReadonlyMap<string, number>
 ): void {
   captureUnsupportedElementFocus(container);
+  container.classList.toggle('docx-show-paragraph-marks', options.showParagraphMarks ?? false);
   const chrome = options.contentControlChrome;
   // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
   // entering a TOC rebuild every page, which detached the node the gesture started on.
@@ -2869,6 +2310,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}:${chrome.readOnly === true ? 'ro' : ''}`
     : '';
   const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  const breakStrings = options.breakMarkStrings ?? DEFAULT_BREAK_MARK_STRINGS;
   const urlRegistry =
     options.imageUrlPort !== undefined
       ? drawingUrlRegistryFor(container, options.imageUrlPort)
@@ -2893,7 +2335,15 @@ export function paintSemanticLayoutWithAuthorSlots(
   const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
   // Once per paint, from the WHOLE layout, so every page shares one author→slot map and an
   // incremental repaint cannot disagree with a full one.
-  const revisionStyles = revisionStyleContextOf(options.revisionStyles, layout, authorSlots);
+  const revisionStyles = revisionStyleContextOf(
+    options.revisionStyles ?? (options.revisionMarkup ? 'author' : undefined),
+    layout,
+    authorSlots
+  );
+  const revisionCellStyles =
+    options.revisionMarkup && Object.values(options.revisionMarkup.cells).includes('byAuthor')
+      ? (revisionStyles ?? revisionStyleContextOf('author', layout, authorSlots))
+      : null;
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
@@ -2910,8 +2360,16 @@ export function paintSemanticLayoutWithAuthorSlots(
       : {}),
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+    showParagraphMarks: options.showParagraphMarks ?? false,
+    ...(options.showParagraphMarks ? { breakMarks: breakMarksOfLayout(layout, breakStrings) } : {}),
+    changeBars: options.changeBars ?? 'all-markup',
+    changeBarsToggle: options.changeBarsToggle ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(revisionStyles ? { revisionStyles } : {}),
+    ...(revisionCellStyles ? { revisionCellStyles } : {}),
+    ...(options.revisionMarkup ? { revisionMarkup: options.revisionMarkup } : {}),
+    facingPages: options.facingPages,
+    revisionKindColors: options.revisionStyles === 'kind',
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
@@ -2943,7 +2401,10 @@ export function paintSemanticLayoutWithAuthorSlots(
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
-    `rev:${revisionStyleContextKey(revisionStyles)}`;
+    `markup:${JSON.stringify(options.revisionMarkup)}|facing:${options.facingPages}|rev:${revisionStyleContextKey(revisionStyles)}|cells:${revisionStyleContextKey(revisionCellStyles)}|marks:${options.showParagraphMarks ?? false}|` +
+    // A reused page keeps its painted labels, so the labels and the section kinds key reuse.
+    `${resolved.breakMarks ? `breaks:${breakMarkStringsCacheToken(breakStrings)}:${resolved.breakMarks.token}|` : ''}` +
+    `bars:${resolved.changeBars}:${resolved.changeBarsToggle}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;
   const reusable = parametersUnchanged
@@ -2991,9 +2452,14 @@ export function paintSemanticLayoutWithAuthorSlots(
   container.dataset.revision = String(layout.revision);
 
   if (urlRegistry) {
+    // Keep decoded images and URLs only for painted pages, including selection pins.
+    const paintedLayout = {
+      ...layout,
+      pages: pages.filter((entry) => entry.materialized).map((entry) => entry.record),
+    };
     urlRegistry.reconcile(
-      collectUsedDrawingResourceKeys(layout),
-      collectUsedDrawingElementKeys(layout)
+      collectUsedDrawingResourceKeys(paintedLayout),
+      collectUsedDrawingElementKeys(paintedLayout)
     );
   }
 
@@ -3020,3 +2486,5 @@ export function paintSemanticLayoutWithAuthorSlots(
   applyHeaderFooterPaintChrome(pages, resolved);
   notifyUnsupportedElementsPaint(container);
 }
+import { tabLeaderPattern } from '../layout/tab-leader-pattern.ts';
+import { equalBlockElement } from './semantic-paint-block-reuse.ts';

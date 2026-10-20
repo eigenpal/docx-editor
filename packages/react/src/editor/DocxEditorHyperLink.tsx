@@ -10,7 +10,12 @@ import type { ReactNode } from 'react';
 //
 //   1. `className` / `data-*`      restyle the default parts with CSS
 //   2. `icon`                      swap one part's glyph
-//   3. `asChild`                   merge a part's wiring onto your own element
+//   3. `asChild`                   merge a part's wiring onto your own element. The packaged
+//                                  `docx-hyperlink-popup__*` class stays OFF that element, so
+//                                  your own styles apply as written; `className` on the part
+//                                  still reaches it. The Root is the one exception: its class
+//                                  carries the panel's position and stacking, not decoration,
+//                                  so an `asChild` panel keeps being a positioned popup.
 //   4. in-place part override      a `<HyperLink.Copy>` child replaces that slot;
 //                                  `hidden` removes it; `preset={false}` drops the defaults
 //   5. `useHyperlinkPopup()`       the raw hook, for a UI with nothing in common with this
@@ -40,6 +45,7 @@ import {
   type UseHyperlinkPopupResult,
 } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -117,16 +123,17 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
     };
     const onMouseDown = (event: MouseEvent): void => {
       const panel = panelRef.current;
-      if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+      if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
       close();
     };
     // Capture phase for the mousedown: the surface prevents default on its own pointerdown,
     // and a bubbling listener would never see a click that lands on the pages.
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(panelRef.current);
+    doc.addEventListener('keydown', onKeyDown);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [state.mode, close]);
 
@@ -319,7 +326,12 @@ function HyperLinkUrl({ className, asChild, hidden, children }: HyperLinkPartPro
     // An inert link is not a button: there is nothing behind it to press.
     ...(inert ? {} : { onClick: () => openTarget(), type: 'button' as const }),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   if (inert) {
     return (
       <span {...shared}>
@@ -359,7 +371,12 @@ function HyperLinkCopy({
     onMouseDown: guardMousedown,
     onClick: () => void copy(),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   return <button {...shared}>{glyph ?? children ?? icon(COPY_ICON)}</button>;
 }
 HyperLinkCopy.docxHyperLinkPart = 'Copy' as const;
@@ -385,7 +402,12 @@ function HyperLinkEdit({
     onMouseDown: guardMousedown,
     onClick: () => beginEdit(),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   return <button {...shared}>{glyph ?? children ?? icon(EDIT_ICON)}</button>;
 }
 HyperLinkEdit.docxHyperLinkPart = 'Edit' as const;
@@ -411,7 +433,12 @@ function HyperLinkUnlink({
     onMouseDown: guardMousedown,
     onClick: () => unlink(),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   return <button {...shared}>{glyph ?? children ?? icon(UNLINK_ICON)}</button>;
 }
 HyperLinkUnlink.docxHyperLinkPart = 'Unlink' as const;
@@ -500,7 +527,12 @@ function HyperLinkApply({ className, asChild, hidden, children }: HyperLinkPartP
     onMouseDown: guardMousedown,
     onClick: () => commitEdit(),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   return <button {...shared}>{children ?? label}</button>;
 }
 
@@ -541,7 +573,12 @@ function HyperLinkCancel({ className, asChild, hidden, children }: HyperLinkPart
     onMouseDown: guardMousedown,
     onClick: () => close(),
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild)
+    return (
+      <Slot {...shared} className={className}>
+        {children}
+      </Slot>
+    );
   return <button {...shared}>{children ?? label}</button>;
 }
 HyperLinkCancel.docxHyperLinkPart = 'Cancel' as const;

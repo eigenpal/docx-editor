@@ -3,6 +3,7 @@
 // pagination policy (when to split at all) stays in note-pagination.ts.
 
 import { fragmentFlowBottom, shiftFragments } from './note-fragment-geometry.ts';
+import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { MAX_NOTE_FRAGMENTS, type NoteStoryLayout } from './note-layout.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -12,10 +13,20 @@ type NoteSplitFallbackReason = 'note-line-exceeds-page';
 /**
  * Split one paragraph fragment at a line boundary so the head fits under `availableBottom`
  * (story-relative). Empty head means no line fits — caller must defer the fragment.
+ *
+ * `w:widowControl` (§17.3.1.44) governs a note paragraph exactly as it governs a body one:
+ * never one line alone on either side of the break. A three-line endnote with room for two
+ * therefore moves whole, which is what the reference does — `demo.docx` page 8 kept two of
+ * its lines and stranded the third, and the reference opens the area on page 9 instead.
+ *
+ * `canRetreat` is the fail-open switch. Retreating is only safe when the next page offers
+ * more room than this one; when the note already has the full column, a paragraph that
+ * cannot satisfy the rule there could never satisfy it anywhere, so the near miss prints.
  */
 function splitParagraphFragmentByBottom(
   fragment: ParagraphFragmentRecord,
-  availableBottom: number
+  availableBottom: number,
+  canRetreat: boolean
 ): {
   readonly head: ParagraphFragmentRecord | null;
   readonly tail: ParagraphFragmentRecord | null;
@@ -31,8 +42,10 @@ function splitParagraphFragmentByBottom(
     const line = fragment.lines[cut]!;
     if (line.box.y + line.box.height > availableBottom + 0.001) break;
   }
-  if (cut === 0) return { head: null, tail: fragment };
   if (cut >= fragment.lines.length) return { head: fragment, tail: null };
+  if (canRetreat)
+    cut = adjustedBreakIndex(cut, 0, fragment.lines.length, paragraphKeeps(fragment.props), false);
+  if (cut === 0) return { head: null, tail: fragment };
 
   const headLines = fragment.lines.slice(0, cut);
   const tailLines = fragment.lines.slice(cut);
@@ -158,7 +171,11 @@ export function splitNoteFragments(
     }
 
     if (fragment.kind === 'paragraph') {
-      const split = splitParagraphFragmentByBottom(fragment, availableHeight);
+      const split = splitParagraphFragmentByBottom(
+        fragment,
+        availableHeight,
+        (options?.fullContentHeight ?? availableHeight) > availableHeight + 0.001
+      );
       if (split.head) {
         head.push(split.head);
         headHeight = split.head.box.y + split.head.box.height;

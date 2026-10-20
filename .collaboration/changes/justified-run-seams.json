@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting run boundaries could move a compressible word to the next line.",
+  "after": "Justified layout measures complete ordinary words across formatting runs and retains compressed spacing.",
+  "reason": "Only derived layout geometry changes. Document XML, model offsets, operations, snapshots, and collaboration messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/justified-run-seams.test.ts"
+  ],
+  "changeset": "justified-run-seams",
+  "migration": null
+}

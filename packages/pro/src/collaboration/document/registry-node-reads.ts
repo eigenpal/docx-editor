@@ -14,14 +14,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import * as Y from 'yjs';
-import type { LogicalId } from './identity.ts';
+import { itemIdOf } from './yjs-items.ts';
+import { asLogicalId, yjsItemKey, type LogicalId } from './identity.ts';
+import { rejectDangerousKey } from './limits.ts';
 import {
-  NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
+  namespaceUriOf,
+  type ElementRecord,
+  type PackageSchema,
+  type EncodedAttribute,
+  type EncodedBinding,
   childArrayOf,
   isNodeMap,
   isTextNodeMap,
-  unpackNodeShell,
+  readNodeShell,
 } from './schema.ts';
 
 /** What a bound check reads. Mutable, because the journal projection replays onto it. */
@@ -49,8 +55,7 @@ export function nodeKindOf(nodes: Y.Map<Y.Map<unknown>>, logicalId: string): str
   const rec = nodes.get(logicalId);
   if (!isNodeMap(rec)) return null;
   if (isTextNodeMap(rec)) return 'textValue';
-  const shell = rec.get(NODE_SHELL_FIELD);
-  return unpackNodeShell(typeof shell === 'string' ? shell : '').kind;
+  return readNodeShell(rec).kind;
 }
 
 /** True when two child listings hold the same ids in the same order. */
@@ -60,4 +65,59 @@ export function sameChildOrder(left: readonly LogicalId[], right: readonly Logic
     if (left[index] !== right[index]) return false;
   }
   return true;
+}
+
+/** A complete element view; mutable property maps remain indexed by the registry. */
+export function elementRecordOf(
+  logicalId: LogicalId,
+  rec: Y.Map<unknown>,
+  schema: PackageSchema,
+  attributes: readonly EncodedAttribute[],
+  bindings: readonly EncodedBinding[]
+): ElementRecord {
+  const shell = readNodeShell(rec);
+  return {
+    logicalId,
+    kind: shell.kind,
+    namespaceUri: namespaceUriOf(schema.namespaces, shell.namespaceId),
+    localName: shell.localName,
+    prefix: shell.prefix.length > 0 ? shell.prefix : undefined,
+    attributes,
+    bindings,
+    // Malformed peer records degrade to an empty listing, rather than throwing (#567).
+    childIds: childArrayOf(rec)?.toArray() ?? [],
+  };
+}
+
+/** The Yjs item key of a shared type, or null before it is integrated. */
+export function itemKeyOf(type: Y.Map<unknown>): string | null {
+  const id = itemIdOf(type);
+  return id && yjsItemKey(id.client, id.clock);
+}
+
+export function readString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+export function asTrackedType(type: unknown): Y.AbstractType<unknown> {
+  return type as Y.AbstractType<unknown>;
+}
+
+/** The logical ID a key or path entry of the shared nodes map names. */
+export function keyId(key: string | number): LogicalId {
+  return asLogicalId(String(key));
+}
+
+/** Whether a key of the shared nodes map is a safe logical ID. */
+export function isLogicalIdKey(key: string): key is LogicalId {
+  return !rejectDangerousKey(key);
+}
+
+/** Throws when a record replicates a parent field: parents are derived, never shared. */
+export function assertNoParentFieldsIn(nodes: Y.Map<Y.Map<unknown>>): void {
+  nodes.forEach((value) => {
+    if (isNodeMap(value) && (value.has('parent') || value.has('parentId'))) {
+      throw new Error('registry record must not replicate a parent field');
+    }
+  });
 }

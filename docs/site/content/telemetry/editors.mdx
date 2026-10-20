@@ -1,0 +1,119 @@
+---
+title: 'Set up an editor'
+description: 'Create the telemetry client, register its module in React or Vue, choose what to record, and read diagnostics in the console while you develop.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Create one telemetry client, register its module in the editor, and choose what it records. To install the package, see [Telemetry](/docs/2.x/telemetry). For data collection details, see [Privacy](/docs/2.x/telemetry/privacy).
+
+## Register the module
+
+Create the telemetry client once, outside your components, and register its module. Registration lets the module receive diagnostics from the first document the editor opens.
+
+```tsx
+// telemetry.ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { sentryExporter } from '@docx-editor.dev/telemetry/sentry';
+import * as Sentry from '@sentry/react';
+
+export const telemetry = createTelemetry({
+  exporters: [sentryExporter(Sentry)],
+  include: { documentOpen: true, trackedChanges: true, editing: true },
+  consent: () => consentManager.analytics === true, // your consent manager
+  resource: { 'service.name': 'contracts-app' },
+});
+```
+
+```tsx
+// Editor.tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { telemetry } from './telemetry';
+
+const MODULES = [reviewModule(), telemetry.module];
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return <DocxEditor document={bytes} modules={MODULES} />;
+}
+```
+
+In Vue, register the same module:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { telemetry } from './telemetry';
+
+defineProps<{ bytes: Uint8Array }>();
+const MODULES = [reviewModule(), telemetry.module];
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :modules="MODULES" />
+</template>
+```
+
+## Control consent
+
+When `consent` returns `false`, the editor drops new events without buffering them. Your OpenTelemetry SDK can still export metrics it recorded earlier. Apply the same consent choice to your Sentry and OpenTelemetry SDKs through their own settings. If you omit `consent`, the client sends events.
+
+The client checks consent when it records an event. With `performance` enabled, it also checks each timed key press, layout, and paint. Keep the function fast: read a value that your consent manager stores in memory. The function never runs during server rendering, so you can create the client there.
+
+The check applies to every exporter, including the console exporter. To allow all exporters in local builds, use `consent: () => import.meta.env.DEV || consentManager.analytics === true`.
+
+## Choose what to record
+
+Register `telemetry.module` or call `telemetry.record(event)` yourself. Using both records each event twice.
+
+Use `include` to choose telemetry areas. If you omit it, all areas are enabled. If you set it, list every area you want to enable, including areas that use default options.
+
+| Area | Records |
+| --- | --- |
+| `documentOpen` | Successful opens, with size and page buckets and open duration. Refused opens, with the reason. |
+| `documentSave` | Each `save()` call: saved, with a size bucket and duration, or failed, with the reason. |
+| `sessions` | When each editor starts and ends, active editing time, and edits by origin. See [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions). |
+| `editing` | Edits and commands that were refused while changes were not tracked. |
+| `trackedChanges` | Refused tracked edits and tracking errors, such as a missing author or document protection. Tracked changes skipped during accept, reject, or reassign requests. |
+| `fonts` | Fonts that failed to load and were substituted. |
+| `history` | Undo steps that did not group as the gesture intended. |
+| `customNodes` | Custom node payloads that could not be read. |
+| `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
+| `performance` | Time from a key press or click to the next frame, plus engine layout and paint times. See [Measure performance](/docs/2.x/telemetry/performance). |
+
+Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included. For `performance` and `sessions`, the rate selects editors, so each sampled editor sends all of its summaries.
+
+The areas whose failures can become Sentry issues are `documentOpen`, `documentSave`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](/docs/2.x/telemetry/sentry).
+
+By default, document-open events include size and page buckets. Set `documentShape: 'detailed'` to include part, paragraph, review item, and embedded font buckets. Combined counts reveal more about a document, so enable this option only when you need it.
+
+The client sends identical refusals once within each 10-second window. When the window closes, it sends a summary with `repeated` set to the number of extra events. Use `repeated` to count extra events; do not treat the summary as a new failure.
+
+The client sends only the latest participant count and each repeated collaboration status once per window. To change the window, set `dedupeWindowMs`.
+
+## See why an edit failed during development
+
+Add `consoleExporter()` to print each event with its hint and documentation link:
+
+```ts
+import { createTelemetry, consoleExporter } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({ exporters: [consoleExporter()] });
+```
+
+If an agent deletes a picture through the editing API while changes are tracked, the console prints the following output:
+
+```text
+[docx-editor] edit refused: edit.tracked-operation-unsupported (automation, tracked)
+  This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed.
+  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
+```
+
+## Next steps
+
+- To send events to a backend, see [Send to Sentry](/docs/2.x/telemetry/sentry), [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry), [Send to a log service](/docs/2.x/telemetry/log-services), or [Send to your own code](/docs/2.x/telemetry/callbacks).
+- To add your own room or user identifiers, see [Identify rooms and users](/docs/2.x/telemetry/identifiers).
+- To measure how fast editing feels, see [Measure performance](/docs/2.x/telemetry/performance).
+- To count sessions, active time, edits, and saves, see [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions).

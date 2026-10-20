@@ -1,0 +1,68 @@
+{
+  "config": "denseTable",
+  "seed": 18,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "join",
+      "from": 1
+    },
+    {
+      "kind": "toggle",
+      "replica": 3
+    },
+    {
+      "kind": "toggle",
+      "replica": 3
+    },
+    {
+      "kind": "toggle",
+      "replica": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 3
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 47,
+          "text": "l"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "undo",
+      "replica": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertHardBreak",
+          "offset": 46
+        },
+        "paragraphs": [1]
+      }
+    }
+  ]
+}

@@ -39,6 +39,9 @@ const PARAGRAPH_FIELDS = {
   // `id` is `${paragraphId}#f${fragmentIndex}`, so both are already in it.
   paragraphId: 'covered',
   fragmentIndex: 'covered',
+  clipToBox: 'hashed',
+  outOfFlow: 'hashed',
+  positionedFrame: 'hashed',
   range: 'hashed',
   // A paragraph-property change that layout does not read moves no geometry. Without this
   // the freshly built fragment converged against the old one and was discarded, leaving a
@@ -62,12 +65,16 @@ const PARAGRAPH_FIELDS = {
   // The revisions on the paragraph MARK. Accepting or rejecting a tracked pilcrow rewrites
   // `w:pPr/w:rPr/w:ins|w:del` and moves no geometry at all, so nothing else here moves with
   // them: paint kept drawing the attribution of a decision the document no longer records.
+  paragraphEnd: 'hashed',
+  emptyParagraphStyle: 'hashed',
+  paragraphMarkSizePt: 'hashed',
   markRevisions: 'hashed',
   // Derived from `markRevisions` at publish time by one shared function, so it cannot move
   // without the list moving first.
   markRevision: 'covered',
   // Its own field, not covered by the list: a mark can carry a format change and no decision.
   markFormatRevision: 'hashed',
+  markChangeSites: 'hashed',
   marker: 'hashed',
   // The resolved stops move where text lands on the line, so a fragment whose stops changed
   // is not the fragment it was even when every line box happens to match.
@@ -97,6 +104,7 @@ const PARAGRAPH_FIELDS = {
  */
 const TABLE_FIELDS = {
   kind: 'covered',
+  floatingWrap: 'hashed',
   id: 'hashed',
   tableId: 'hashed',
   fragmentIndex: 'hashed',
@@ -148,8 +156,49 @@ export function sameFragments(
   for (let index = 0; index < left.length; index += 1) {
     const a = left[index]!;
     const b = right[index]!;
-    if (a === b) continue;
+    if (a === b || sameHashedFields(a, b)) continue;
     if (fragmentSignature(a) !== fragmentSignature(b)) return false;
+  }
+  return true;
+}
+
+/**
+ * True only when both records would serialize to the same signature, decided without
+ * serializing: the same hashed fields, each holding the same keys in the same order and the
+ * same primitive values. Shared sub-records (styles, spans a paragraph cache handed out again)
+ * answer by identity at once. False means "not proved" and the signatures decide, so this can
+ * never call two different records equal. Rebuilding the JSON of every line and span of a
+ * freshly placed fragment was most of the cost of a convergence test on a long document.
+ */
+function sameHashedFields(a: BlockFragmentRecord, b: BlockFragmentRecord): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'table') {
+    if (isOutOfFlowTableFragment(a) !== isOutOfFlowTableFragment(b)) return false;
+    return TABLE_KEYS.every((key) => sameJson(a[key], (b as TableFragmentRecord)[key]));
+  }
+  return PARAGRAPH_KEYS.every((key) => sameJson(a[key], (b as ParagraphFragmentRecord)[key]));
+}
+
+/** `JSON.stringify(a) === JSON.stringify(b)` for plain data, proved without building either. */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index += 1) {
+      if (!sameJson(a[index], b[index])) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(b) || Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  const otherKeys = Object.keys(right);
+  if (keys.length !== otherKeys.length) return false;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key !== otherKeys[index] || !sameJson(left[key], right[key])) return false;
   }
   return true;
 }

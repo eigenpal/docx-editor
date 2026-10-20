@@ -1,3 +1,11 @@
+import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
+import { restoreHistoryPackage } from './history-package-index.ts';
+import { reportHistoryGroup, type HistoryGroup } from './history-group.ts';
+import { withFieldResultsMode } from '../package/field-result-mode.ts';
+import type { TransactOptions, TreeDocumentStoreOptions } from './tree-store-options.ts';
+export type { TransactOptions, TreeDocumentStoreOptions } from './tree-store-options.ts';
+import { textFormFieldForEdit } from './text-form-fields.ts';
+import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
 //
 // One transaction = one atomic publication = one history entry. `apply` stages ops against
@@ -11,20 +19,54 @@
 // transaction is one entry, a composition is one entry however many transactions it
 // contains, and a projection-origin commit is none.
 //
-// Entries are snapshots, which is affordable because the tree is persistent and
-// structurally shared: an entry retains the previous part by reference rather than cloning
-// it, so undo is a pointer swap and history costs nothing per entry.
+// Entries retain package snapshots and share unchanged tree nodes. History restores the
+// package reference and transfers its node index instead of rebuilding complete lookup maps.
 
 import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
+import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
+import { isCommentPackageEdit } from './comment-package-edit.ts';
+import { isPackageEditRefusal } from './package-edit-refusal.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
-import { formsProtectionRefusal } from './tree-op-content-controls.ts';
+import {
+  formsProtectionRefusal,
+  enforcesFormsProtection,
+  sectionProtectsForms,
+} from './tree-op-content-controls.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from './tree-op-tracked-properties.ts';
-import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
+import type { ContentLockPolicy, TransactionRevisionIds } from '../package/ooxml-edit.ts';
+
+/**
+ * The ops whose tracked appliers write a revision wrapper. They get the transaction's
+ * bookkeeping — the shared counter, and the record of what it has written, which is what
+ * tells a replacement's insertion from a keystroke after Backspace.
+ */
+const TRACKED_WRAPPER_OPS: ReadonlySet<string> = new Set([
+  'insertText',
+  'insertTab',
+  'insertHardBreak',
+  'insertPageBreak',
+  'insertPageField',
+  'insertDrawing',
+  'deleteText',
+  'setParagraphMarkRevision', // Mints from the same counter, so it does not reset it.
+]);
+
+/**
+ * Of those, the ones whose content comes from the CALLER and can carry revision ids in with
+ * it: an anchored text box holds `w:txbxContent` paragraphs that may already be revised. They
+ * still get the record — they write a wrapper, and the next op has to know it — but the
+ * counter is dropped around them, so nothing after them draws from a walk taken before the
+ * content arrived.
+ */
+const IMPORTS_REVISION_IDS: ReadonlySet<string> = new Set(['insertDrawing']);
+import { applyTreeOp } from './tree-ops.ts';
+import { contentLockPolicyOf } from './content-lock-policy.ts';
+import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
 /** A selection captured with a transaction, so undo restores where the caret was. */
@@ -118,42 +160,16 @@ export interface TransactionContext {
    * The edit is a pure function of the working package, so a rejected transaction discards it
    * with everything else. Returning the SAME package is a no-op, not a failure — a primitive
    * that finds nothing to do says so that way.
+   *
+   * Engine package edits refuse by throwing the internal `PackageEditRefusal`
+   * (`package-edit-refusal.ts`): the transaction is refused with its reason, `package-changed`
+   * by default, and nothing is applied. Any other throw escapes `transact` as a crash.
    */
   applyPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): boolean;
   /** The selection to restore when this entry is undone. */
   selectionBefore(selection: SelectionMark | null): void;
   /** The selection to restore when this entry is redone. */
   selectionAfter(selection: SelectionMark | null): void;
-}
-
-/** How one transaction behaves: its story scope, its attribution, and its selection marks. */
-export interface TransactOptions {
-  readonly origin?: string;
-  /** Stable actor attribution for collaboration and audit correlation. */
-  readonly actorId?: string;
-  /** Stable constituent identity for collaboration duplicate correlation. */
-  readonly operationId?: string;
-  /**
-   * Whether this transaction enters the legacy snapshot undo stack.
-   *
-   * Collaboration commits set this to false because their actor-local undo authority is the
-   * CRDT undo manager. Omitted preserves the ordinary non-collaborative history behavior.
-   */
-  readonly recordsHistory?: boolean;
-  /**
-   * A COMMAND is one user intent that may need several ops (a toolbar click applying a
-   * property across a multi-run selection). It is still exactly one history entry, which is
-   * the same rule a plain transaction follows — the option exists to say so explicitly at
-   * the call site rather than leaving it implied.
-   */
-  readonly scope?: 'transaction' | 'command';
-  /**
-   * Floor on the published impact. Header/footer story edits use `global` so every page
-   * sharing the part invalidates rather than keeping stale furniture.
-   */
-  readonly minimumImpact?: ImpactClass;
-  /** Story identity stamped onto the published ModelChange (package-aware targeting). */
-  readonly story?: TreeStoryRef;
 }
 
 interface HistoryEntry {
@@ -169,6 +185,12 @@ interface HistoryEntry {
   readonly revision: number;
   readonly selectionBefore: SelectionMark | null;
   readonly selectionAfter: SelectionMark | null;
+  /**
+   * The gesture this entry is still collecting, while it is the newest entry and nothing
+   * has closed it. Only ever set on the top of the undo stack: {@link closeHistoryGroup}
+   * strips it, and undo and redo never copy it onto the entries they push.
+   */
+  readonly group?: HistoryGroup;
 }
 
 const IMPACT_RANK: Record<ImpactClass, number> = {
@@ -177,22 +199,6 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
   'flow-structural': 2,
   global: 3,
 };
-
-/** How a store is constructed: its limits, its history depth, and its identity source. */
-export interface TreeDocumentStoreOptions {
-  /** Bound on retained history entries. Oldest entries drop first. */
-  readonly historyLimit?: number;
-  /**
-   * The document's `settings.xml`, for a store built from a PART rather than a package.
-   *
-   * Forms protection lives one part up from the op, and a store built from a part gets a
-   * synthetic one-part package that cannot see it — so `w:documentProtection w:edit="forms"`
-   * was enforced in the body and nowhere else, and a header, a footer or a note accepted every
-   * write a protected document is supposed to refuse. Read through a getter, not captured: a
-   * document can gain or lose protection while its stories stay open.
-   */
-  readonly settingsPart?: () => OoxmlPart | null | undefined;
-}
 
 /** A package holding exactly one part, for callers that never open a real one. */
 function singlePartPackage(part: OoxmlPart): OoxmlPackage {
@@ -246,10 +252,13 @@ export class TreeDocumentStore {
   private commitCounter = 0;
   private readonly undoStack: HistoryEntry[] = [];
   private readonly redoStack: HistoryEntry[] = [];
+  private pushCount = 0;
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
   /** See {@link TreeDocumentStoreOptions.settingsPart}. */
   private readonly settingsPartOverride: (() => OoxmlPart | null | undefined) | undefined;
+  /** See {@link TreeDocumentStoreOptions.contentLockPolicy}. */
+  private readonly contentLockPolicy: ContentLockPolicy | undefined;
   /** Package-aware story tag applied to publishes (including undo/redo). */
   private storyRef: TreeStoryRef | null = null;
 
@@ -285,6 +294,7 @@ export class TreeDocumentStore {
     this.storyPartName = storyPartName ?? (isPart ? source.name : source.mainDocumentPart);
     this.historyLimit = options.historyLimit ?? 200;
     this.settingsPartOverride = options.settingsPart;
+    this.contentLockPolicy = contentLockPolicyOf(options.contentLockPolicy);
   }
 
   /**
@@ -318,6 +328,14 @@ export class TreeDocumentStore {
   /** Retained entries — the unit `undo()` reverses, so tests can assert grouping. */
   get historyDepth(): number {
     return this.undoStack.length;
+  }
+  /**
+   * How many entries this store has ever pushed. Monotonic, unlike `historyDepth`, which
+   * stands still at the history limit because the oldest entry is shifted out.
+   * @internal
+   */
+  get historyPushCount(): number {
+    return this.pushCount;
   }
   get compositionActive(): boolean {
     return this.composition !== null;
@@ -409,7 +427,9 @@ export class TreeDocumentStore {
     build: (ctx: TransactionContext) => void,
     options: TransactOptions = {}
   ): TransactResult {
-    return runWithTransactionActor(options.actorId, () => this.commitTransaction(build, options));
+    return runWithTransactionActor(options.actorId, () =>
+      withFieldResultsMode(options.fieldResults, () => this.commitTransaction(build, options))
+    );
   }
 
   private commitTransaction(
@@ -417,6 +437,19 @@ export class TreeDocumentStore {
     options: TransactOptions
   ): TransactResult {
     const origin = options.origin ?? ORIGIN_IDS.mutationHuman;
+    // A PROJECTION-origin commit reconciles the view with state the store already holds.
+    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
+    // it must not become an undo step (task 5.6).
+    const recordsHistory =
+      options.recordsHistory ??
+      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
+    // An intent naming another gesture (or none) closes the open one HERE, whether it goes
+    // on to land, to change nothing or to be refused: the same input class, one rule. A
+    // frame of the same gesture leaves it open for the extension below.
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (recordsHistory && !this.composition && top?.group !== options.historyGroup) {
+      this.closeHistoryGroup();
+    }
     const before = this.current;
     const beforeRevision = this.rev;
 
@@ -458,8 +491,46 @@ export class TreeDocumentStore {
      * including `applyPackage`. Those ops MINT ids and never import one, so an id taken before
      * the first of them is still free when the last lands. A paste carries its own revision
      * ids, so an id that survived one would be an address the document had just started using.
+     * The id itself comes from the per-part minter below, which every tracked lane shares.
      */
     const revisionIdOfGroup = new Map<string, { id: string | null }>();
+    /**
+     * ONE `nextRevisionId` walk per part per transaction, shared by every tracked lane. The
+     * property groups above and the text ops below draw from the same counter, so an id a
+     * `w:rPrChange` took is never handed to the `w:ins` written next — two counters, each
+     * walking the part for itself, did exactly that once one of them cached its walk. What it
+     * hands out is remembered, which is the other half of `TransactionRevisionIds`.
+     */
+    const revisionIdsOfPart = new Map<
+      string,
+      { mint: (() => string) | null; readonly written: Set<string> }
+    >();
+    /**
+     * The bookkeeping for one part, bound to the part AS IT STANDS FOR THIS OP.
+     *
+     * The counter is memoized in the map, the closure over it is not: an applier is handed a
+     * new part after every op, and a walk that captured the first one it ever saw re-walked
+     * that stale snapshot whenever the counter was dropped — handing back an id the same
+     * transaction had already used, which is the very collision this is here to prevent.
+     */
+    const revisionIdsFor = (part: OoxmlPart): TransactionRevisionIds => {
+      let held = revisionIdsOfPart.get(part.name);
+      if (!held) {
+        held = { mint: null, written: new Set<string>() };
+        revisionIdsOfPart.set(part.name, held);
+      }
+      const state = held;
+      return {
+        // The walk itself is LAZY: an untracked transaction never pays for one.
+        mint: (): string => (state.mint ??= nextRevisionId(part))(),
+        wrote: (key: string): void => void state.written.add(key),
+        wroteUnder: (key: string): boolean => state.written.has(key),
+      };
+    };
+    /** Drop the counters; the next mint walks the part it is given. The record stays. */
+    const resetRevisionCounters = (): void => {
+      for (const held of revisionIdsOfPart.values()) held.mint = null;
+    };
     const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
       const wrapper = PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op);
       if (wrapper === undefined) {
@@ -473,14 +544,31 @@ export class TreeDocumentStore {
         revisionIdOfGroup.set(key, group);
       }
       // Taken LAZILY on the first record actually written, so an untracked format — the
-      // common case — never pays the walk at all. AGAINST THIS OP'S OWN PART, not the one
-      // that happened to open the group: an op that records nothing (a run inside this
-      // author's own `w:ins`) opens it against a part that does not yet hold the other
-      // wrapper's id, and minting from that snapshot later handed both wrappers one address.
+      // common case — never pays the walk at all.
       const held = group;
-      return (): string => (held.id ??= nextRevisionId(part)());
+      return (): string => (held.id ??= revisionIdsFor(part).mint());
     };
 
+    /**
+     * The tracked TEXT ops' bookkeeping. The COUNTER is dropped, like the property group, the
+     * moment anything else runs (`applyPackage` included): a paste re-mints the ids it carries
+     * against the part as it stands, and a walk taken before it would hand out an id the paste
+     * just used. What this transaction WROTE survives all of it — a record of the past cannot
+     * go stale, and the replacement rule reads it after ops that mint nothing.
+     */
+    const trackedRevisionIdsFor = (
+      op: TreeDocOp,
+      part: OoxmlPart
+    ): TransactionRevisionIds | null => {
+      const writes = TRACKED_WRAPPER_OPS.has(op.op);
+      // A property op keeps the counter: its group takes one id and imports none.
+      if (!writes && PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op) !== undefined) return null;
+      if (!writes || IMPORTS_REVISION_IDS.has(op.op)) resetRevisionCounters();
+      return writes ? revisionIdsFor(part) : null;
+    };
+
+    const retainFormControl = createFormsTextReplacementContext();
+    let fillingField: { partName: string; paragraphId: string; fieldNodeId: string } | null = null;
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
       if (failure) return false;
       const target = working.parts.get(partName);
@@ -488,14 +576,22 @@ export class TreeDocumentStore {
         failure = { reason: 'unknown-part', detail: partName };
         return false;
       }
+      op = retainFormControl(target, this.settingsPartOverride?.() ?? settingsPartOf(working), op);
       // Forms protection lives in `settings.xml`, one part up from the op, so it is resolved
       // HERE rather than in the per-part applier: a part alone cannot see whether the document
       // it belongs to is protected.
-      const protection = formsProtectionRefusal(
-        target,
-        this.settingsPartOverride?.() ?? settingsPartOf(working),
-        op
-      );
+      const protection =
+        documentProtectionRefusal(this.settingsPartOverride?.() ?? settingsPartOf(working), op) ??
+        formsProtectionRefusal(
+          target,
+          this.settingsPartOverride?.() ?? settingsPartOf(working),
+          op,
+          fillingField?.partName === partName &&
+            'paragraphId' in op &&
+            fillingField.paragraphId === op.paragraphId
+            ? fillingField.fieldNodeId
+            : undefined
+        );
       if (protection) {
         failure = { reason: protection };
         return false;
@@ -505,14 +601,42 @@ export class TreeDocumentStore {
       // commit can observe the intermediate parts. Op-level input validation still runs
       // inside `applyTreeOp` before any tree work.
       const revisionIds = sharedRevisionIds(op, target);
-      const result = applyTreeOp(target, op, {
+      const trackedRevisionIds = trackedRevisionIdsFor(op, target);
+      const settings = this.settingsPartOverride?.() ?? settingsPartOf(working);
+      const formField =
+        enforcesFormsProtection(settings) &&
+        'paragraphId' in op &&
+        sectionProtectsForms(target, op.paragraphId)
+          ? textFormFieldForEdit(
+              target,
+              op,
+              fillingField?.partName === partName && fillingField.paragraphId === op.paragraphId
+                ? fillingField.fieldNodeId
+                : undefined
+            )
+          : null;
+      fillingField =
+        formField && 'paragraphId' in op
+          ? { partName, paragraphId: op.paragraphId, fieldNodeId: formField.fieldNodeId }
+          : null;
+      const editOptions = {
         deferValidation: true,
+        ...(this.contentLockPolicy ? { contentLockPolicy: this.contentLockPolicy } : {}),
         ...(revisionIds ? { revisionIds } : {}),
-      });
+        ...(trackedRevisionIds ? { trackedRevisionIds } : {}),
+      };
+      const result = formField
+        ? applyProtectedTextFormEdit(target, op, formField, editOptions)
+        : applyTreeOp(target, op, editOptions);
       if (!result.ok) {
         failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
         return false;
       }
+      // AFTER an importing op, not only before it: the op writes a wrapper of its own, so it
+      // re-establishes the counter while it runs — against the part as it stood before its
+      // own content arrived. Left standing, the next op would mint from a walk that never saw
+      // the ids that came in with it.
+      if (IMPORTS_REVISION_IDS.has(op.op)) resetRevisionCounters();
       working = withPart(working, result.part);
       const identityNoOp =
         result.part === target &&
@@ -545,11 +669,36 @@ export class TreeDocumentStore {
       applyTo: (partName, op) => applyToPart(partName, op),
       applyPackage: (edit) => {
         if (failure) return false;
+        // The package channel imports and rewrites whole parts, so it needs the document-wide
+        // refusal as much as the per-op one does: comment deletion and thread resolution reach
+        // the story's own `w:commentRangeStart` through here, and nothing else would stop them
+        // in a document protected read-only.
+        // `documentProtectionRefusal`, NOT the lifecycle one: forms protection is not
+        // document-scoped here. A story transaction carries a package edit whenever it
+        // touches resources, and the collaboration and automation lanes append one
+        // unconditionally — judging those document-scoped refused every collaborative and
+        // scripted fill of the very fields forms protection exists to permit.
+        const settings = this.settingsPartOverride?.() ?? settingsPartOf(working);
+        const packageProtection = isCommentPackageEdit(edit)
+          ? lifecycleProtectionRefusal(settings, { op: 'comment' })
+          : documentProtectionRefusal(settings);
+        if (packageProtection) {
+          failure = { reason: packageProtection };
+          return false;
+        }
         // The SECOND write channel, and it imports whole parts — a pasted fragment carries
         // its own revision ids. The shared id is taken from the part it first saw, so it goes
         // here for the same reason a non-property op drops it.
         revisionIdOfGroup.clear();
-        const next = edit(working);
+        resetRevisionCounters();
+        let next: OoxmlPackage;
+        try {
+          next = edit(working);
+        } catch (error) {
+          if (!isPackageEditRefusal(error)) throw error;
+          failure = { reason: error.reason, detail: error.message };
+          return false;
+        }
         if (next === working) return true;
         for (const [name, part] of next.parts) {
           if (working.parts.get(name) !== part) touched.add(name);
@@ -625,29 +774,36 @@ export class TreeDocumentStore {
       };
     }
 
-    // A PROJECTION-origin commit reconciles the view with state the store already holds.
-    // It publishes a revision so consumers can re-derive, but it is not a user intent, so
-    // it must not become an undo step (task 5.6).
-    const recordsHistory =
-      options.recordsHistory ??
-      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
-
     if (recordsHistory) {
       if (this.composition) {
         // Inside a composition every transaction folds into the entry opened at
         // compositionstart — however many transactions the IME emits (task 5.5).
+        reportHistoryGroup(options.historyGroup, 'split', 'composition');
         this.composition.committed = true;
         this.composition = {
           ...this.composition,
           entry: { ...this.composition.entry, selectionAfter },
         };
       } else {
-        this.pushUndo({
-          pkg: before,
-          revision: beforeRevision,
-          selectionBefore,
-          selectionAfter,
-        });
+        const group = options.historyGroup;
+        const top = this.undoStack[this.undoStack.length - 1];
+        if (group !== undefined && top !== undefined && top.group === group) {
+          // Same gesture, still open: the entry keeps its `pkg` and `selectionBefore` — the
+          // state before the FIRST frame — and takes this frame's selection as its end.
+          this.undoStack[this.undoStack.length - 1] = {
+            ...top,
+            selectionAfter: selectionAfter ?? top.selectionAfter,
+          };
+        } else {
+          this.pushUndo({
+            pkg: before,
+            revision: beforeRevision,
+            selectionBefore,
+            selectionAfter,
+            group,
+          });
+        }
+        reportHistoryGroup(group, top?.group === group ? 'extended' : 'started');
         this.redoStack.length = 0;
       }
     }
@@ -715,9 +871,24 @@ export class TreeDocumentStore {
     this.composition = null;
   }
 
+  /**
+   * Close the open history group, if any: the next transaction records its own entry.
+   * The store does this itself for another token, none, undo and redo; the package
+   * coordinator does it for history moving ABOVE the store (a package unit, another
+   * story's pointer), which the store cannot see.
+   */
+  closeHistoryGroup(): void {
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top === undefined || top.group === undefined) return;
+    this.undoStack[this.undoStack.length - 1] = { ...top, group: undefined };
+  }
+
   undo(): TreeModelChange | null {
     const entry = this.undoStack.pop();
     if (!entry) return null;
+    // Undo is a boundary: the entry now on top must not collect a gesture that resumes
+    // after it, and the one pushed to redo carries no group either.
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.redoStack.push({
       pkg: this.current,
@@ -725,7 +896,7 @@ export class TreeDocumentStore {
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.pkg;
+    this.current = restoreHistoryPackage(this.current, entry.pkg);
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationUndo, beforeRevision, null, this.storyRef ?? undefined);
   }
@@ -733,6 +904,7 @@ export class TreeDocumentStore {
   redo(): TreeModelChange | null {
     const entry = this.redoStack.pop();
     if (!entry) return null;
+    this.closeHistoryGroup();
     const beforeRevision = this.rev;
     this.undoStack.push({
       pkg: this.current,
@@ -740,7 +912,7 @@ export class TreeDocumentStore {
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.pkg;
+    this.current = restoreHistoryPackage(this.current, entry.pkg);
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationRedo, beforeRevision, null, this.storyRef ?? undefined);
   }
@@ -755,7 +927,20 @@ export class TreeDocumentStore {
     return this.redoStack[this.redoStack.length - 1]?.selectionAfter ?? null;
   }
 
+  /**
+   * Remove the newest undo entry and answer its selections, for the package coordinator
+   * when a package history group absorbs the story pointer that entry belonged to.
+   * @internal
+   */
+  discardNewestUndoEntry(): Pick<HistoryEntry, 'selectionBefore' | 'selectionAfter'> | null {
+    const entry = this.undoStack.pop();
+    return entry
+      ? { selectionBefore: entry.selectionBefore, selectionAfter: entry.selectionAfter }
+      : null;
+  }
+
   private pushUndo(entry: HistoryEntry): void {
+    this.pushCount += 1;
     this.undoStack.push(entry);
     if (this.undoStack.length > this.historyLimit) this.undoStack.shift();
   }
@@ -801,7 +986,11 @@ export class TreeDocumentStore {
       ...(effects?.caret ? { caret: effects.caret } : {}),
       ...(story ? { story } : {}),
     };
-    for (const listener of this.subscribers) listener(change);
+    // Subscribers are outside the store call: they read in the default mode, never in the
+    // transaction's editable field-result mode.
+    withFieldResultsMode('atomic', () => {
+      for (const listener of this.subscribers) listener(change);
+    });
     return change;
   }
 }

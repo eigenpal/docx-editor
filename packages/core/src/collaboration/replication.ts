@@ -57,8 +57,22 @@ export type CollaborationApplyResult =
  */
 export interface CollaborationDocumentPort {
   readonly documentId: string;
+  /**
+   * True for the port of an editor that people edit through, which shows undo state to
+   * them. False or absent for a headless or server replica. Optional.
+   *
+   * While a port with `true` is attached, a full-document session refuses
+   * `beginUndoGroup()` with `editor-attached`, and attaching it closes an open undo group, so
+   * the undo state a person sees stays true.
+   */
+  readonly interactive?: boolean;
   paragraphs(): readonly CollaborationParagraph[];
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
+  /**
+   * The model text of the paragraph with this node id in any story, or null when the editor
+   * shows none. A lookup by node id, whatever the paragraph's `w14:paraId`. Optional.
+   */
+  paragraphTextOf?(nodeId: string): string | null;
   /**
    * Resolve a stable `w14:paraId` in any story this replica holds.
    *
@@ -90,6 +104,11 @@ export interface CollaborationDocumentPort {
    *
    * Disabled observation allocates no journal. This is the collaboration write seam;
    * adapters never write a CRDT through this port.
+   * Preserve the journal object's identity and deliver it synchronously to local capture.
+   * `historyGroupOfJournal` reads local identity metadata, outside replicated state.
+   * Cloning, spreading, serialization or postMessage loses that metadata. Custom worker
+   * ports must map local gesture identities explicitly; a serialized journal alone cannot
+   * preserve gesture grouping or synchronous `ExecResult.history` reporting.
    */
   observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
   /** True when a committed journal has not yet been frozen or delivered to observers. */
@@ -110,6 +129,9 @@ export {
   createCollaborationDocumentPort,
   type CreateCollaborationDocumentPortOptions,
 } from './document-port.ts';
+export { historyGroupOfJournal } from './primitive-journal.ts';
+export { mapOffsetAcrossText } from './offset-mapping.ts';
+export type { HistoryGroup } from '../store/store/history-group.ts';
 export type {
   CanonicalAttributeName,
   CanonicalBinaryDescriptor,
@@ -120,3 +142,7 @@ export type {
   CanonicalRelationshipRecord,
   CanonicalTextNodeDescriptor,
 } from './primitive-journal.ts';
+
+export { reportHistoryGroup } from '../store/store/history-group.ts';
+
+export { registerUndoHistoryPosition } from '../store/store/undo-history-position.ts';

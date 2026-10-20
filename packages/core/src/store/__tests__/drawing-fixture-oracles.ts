@@ -40,17 +40,48 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'list-pagination-break.docx': {
-    // One MC-wrapped header textbox ("Textbox 1") surfaced when textbox stories became
-    // renderable payloads; it was invisible before the textbox-story-layout change.
-    drawingCount: 1,
-    pageCount: 81,
-    readyCount: 0,
+    // Word-authored VML uses repeated inert styles and page wrap anchors.
+    // The paint harness injects ready resources; the package tests refuse external fetches.
+    drawingCount: 28,
+    // Fixed-measurer baseline: all 717 authored w:cr breaks remain line breaks.
+    // Empty section marks reuse the preceding page break, which removes 17 empty sheets.
+    // Their editable fragments remain on the preceding sheet; text and drawings stay intact.
+    pageCount: 66,
+    readyCount: 27,
     placeholderCount: 0,
+    assertLayout: (layout) => {
+      // Each retained sheet holds text, a table, or a drawing.
+      for (const page of layout.pages) {
+        const holdsContent =
+          (page.anchoredDrawings?.length ?? 0) > 0 ||
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind !== 'paragraph' ||
+              fragment.lines.some(
+                (line) =>
+                  (line.drawings?.length ?? 0) > 0 ||
+                  line.spans.some((span) => /[^\s\u200b]/.test(span.text))
+              )
+          );
+        expect(holdsContent).toBe(true);
+      }
+      // Seventeen marks join their break sheet; two collapse before continuous sections.
+      const outOfFlow = layout.pages.flatMap((page) =>
+        page.fragments.filter((fragment) => fragment.kind === 'paragraph' && fragment.outOfFlow)
+      );
+      expect(outOfFlow).toHaveLength(19);
+    },
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(1);
-      expect(projections[0]!.ownerPartName).toBe('/word/header3.xml');
-      expect(projections[0]!.textboxStory).not.toBeNull();
-      expect(projections[0]!.picture).toBeNull();
+      const photos = projections.filter((projection) => projection.picture);
+      expect(photos).toHaveLength(27);
+      for (const photo of photos) {
+        expect(photo.legacyGraphic).toBeUndefined();
+        expect(photo.position?.horizontal.relativeFrom).toBe('page');
+        expect(photo.position?.vertical.relativeFrom).toBe('page');
+        expect(photo.anchor?.behindDocument).toBe(true);
+      }
+      const textbox = projections.find((projection) => projection.textboxStory);
+      expect(textbox?.ownerPartName).toBe('/word/header3.xml');
     },
   },
   'float-wrap-comprehensive-test.docx': {
@@ -130,15 +161,21 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
   'issue-705-anchored-header-letterhead.docx': {
     // Seven MC-wrapped letterhead textboxes (one body, six header) surfaced when textbox
     // stories became renderable payloads; all were invisible before textbox-story-layout.
-    drawingCount: 7,
+    // The header also has a standalone horizontal line with `cy="0"`, which projects as a
+    // vector shape since zero-height lines draw (#972).
+    drawingCount: 8,
     pageCount: 1,
     readyCount: 0,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(7);
-      expect(projections.every((p) => p.textboxStory !== null)).toBe(true);
-      expect(projections.every((p) => p.picture === null && p.vectorShape === null)).toBe(true);
-      expect(projections.filter((p) => p.ownerPartName === '/word/document.xml')).toHaveLength(1);
+      expect(projections).toHaveLength(8);
+      const textboxes = projections.filter((p) => p.textboxStory !== null);
+      expect(textboxes).toHaveLength(7);
+      expect(textboxes.every((p) => p.picture === null && p.vectorShape === null)).toBe(true);
+      expect(textboxes.filter((p) => p.ownerPartName === '/word/document.xml')).toHaveLength(1);
+      const line = projections.find((p) => p.vectorShape !== null);
+      expect(line?.vectorShape?.extentEmu).toEqual({ cx: 107_950, cy: 0 });
+      expect(line?.vectorShape?.strokeHex).toBe('00445E');
     },
   },
   'wrap-none-positioned-image-demo.docx': {
@@ -161,8 +198,9 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
     assertResourceKinds: (kinds) => {
       expect(kinds.filter((kind) => kind === 'external')).toHaveLength(2);
-      expect(kinds).toContain('unrenderable');
-      expect(kinds).toContain('ready');
+      // `spoof.jpg` has PNG bytes, so its raster signature selects the decoder.
+      expect(kinds.filter((kind) => kind === 'ready')).toHaveLength(2);
+      expect(kinds).not.toContain('unrenderable');
     },
   },
   'images-wrap-sides.docx': {
@@ -286,12 +324,16 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'images-compatibility-malformed.docx': {
-    drawingCount: 1,
+    drawingCount: 2,
     pageCount: 1,
-    readyCount: 1,
+    readyCount: 2,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(1);
+      // One selected DrawingML branch plus the independent native VML photo.
+      // The malformed anchor and unselected fallback still add nothing.
+      expect(projections).toHaveLength(2);
+      expect(projections.filter((projection) => projection.legacyGraphic)).toHaveLength(0);
+      expect(projections.filter((projection) => projection.picture)).toHaveLength(2);
     },
   },
   'images-drawingml-watermark.docx': {
@@ -309,7 +351,7 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     // textboxes (PAGE / NUMPAGES with stale cached results). Per-page field projection is
     // asserted in layout/__tests__/textbox-story-layout.test.ts; this oracle pins the
     // package-wide projection census and body-only paint.
-    drawingCount: 14,
+    drawingCount: 15,
     pageCount: 62,
     readyCount: 2,
     placeholderCount: 0,
@@ -322,7 +364,17 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
         '/word/footer4.xml',
       ]);
       expect(projections.filter((p) => p.picture !== null)).toHaveLength(2);
-      expect(projections.filter((p) => p.vectorShape !== null)).toHaveLength(9);
+      expect(projections.filter((p) => p.vectorShape !== null)).toHaveLength(10);
+      // The authored Group 7 consists of three open two-point rules, now supported.
+      const rules = projections.find(
+        (p) => p.drawingNodeId === '/word/document.xml#0.0.33.1.1.0.0'
+      )!.vectorShape!;
+      expect(rules.components.map((component) => component.subpathsClosed)).toEqual([
+        [false],
+        [false],
+        [false],
+      ]);
+      expect(rules.subpathsEmu.map((points) => points.length)).toEqual([2, 2, 2]);
     },
   },
 };

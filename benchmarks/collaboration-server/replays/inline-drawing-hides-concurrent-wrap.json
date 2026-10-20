@@ -1,0 +1,74 @@
+{
+  "config": "everything",
+  "seed": 20,
+  "replicas": 4,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "setDrawingWrap",
+          "drawingNodeId": "",
+          "wrap": "tight"
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 2
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 3,
+      "from": -1
+    },
+    {
+      "kind": "join",
+      "from": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "setDrawingWrap",
+          "drawingNodeId": "",
+          "wrap": "inline"
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 2
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 4,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "setDrawingWrap",
+          "drawingNodeId": "",
+          "wrap": "tight"
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 2
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+// The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
+/** @jsxImportSource vue */
 
 import {
   computed,
@@ -17,7 +19,13 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { Slot } from '@docx-editor.dev/vue';
+import {
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+  hostWindowOf,
+} from '@docx-editor.dev/core/editor';
+import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   MARKER_STEP,
@@ -28,21 +36,48 @@ import {
   isThreadedReply,
   markPart,
 } from './review-shared.ts';
-import { ReviewItemScope, ReviewReplyScope, useRail, useReviewLabel } from './review-context.ts';
+import {
+  ReviewItemScope,
+  ReviewReplyScope,
+  useRail,
+  useReviewLabel,
+  type ReviewLabelParams,
+} from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import {
   ReviewAccept,
   ReviewAuthor,
   ReviewAvatar,
+  ReviewBalloonReply,
   ReviewCard,
   ReviewEmpty,
   ReviewReject,
+  ReviewRefusal,
+  ReviewReplies,
   ReviewSummary,
   ReviewTime,
 } from './review-card-parts.tsx';
-import { ADD_COMMENT_ICON, icon, markerIconPath, resolvedCommentIcon } from './review-icons.tsx';
-import { revisionLabelKey } from './review-labels.ts';
+import {
+  ADD_COMMENT_ICON,
+  icon,
+  markerIconPath,
+  resolvedCommentIcon,
+  reviewBadge,
+} from './review-icons.tsx';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
+import { revisionItemLabel, revisionLabelKey } from './review-labels.ts';
 import { authorAccent, authorCardStyle, authorSlot } from './review-author-styles.ts';
+import {
+  activeItemNeedsBalloon,
+  anchorFromRevisionElement,
+  balloonBox,
+  remeasureBalloonAnchor,
+  markOpenBalloonSites,
+  balloonServesRevisionKind,
+  findPaintedRevisionElement,
+  matchBalloonReviewItem,
+  type BalloonAnchor,
+} from './review-balloon-anchor.ts';
 
 /** @public */
 export const ReviewList = markPart(
@@ -164,7 +199,8 @@ export const ReviewMarkers = markPart(
 
       return () => {
         if (props.hidden) return null;
-        const { review, authorSlots, authorInfo, setExpandedResolvedKey } = rail.value;
+        const { review, authorSlots, authorInfo, setExpandedResolvedKey, commentMarkers } =
+          rail.value;
         const { roots, stackedTops } = stacked.value;
         return (
           <div class={`docx-review__markers${props.className ? ` ${props.className}` : ''}`}>
@@ -174,6 +210,9 @@ export const ReviewMarkers = markPart(
               if (props.window && (top < props.window.top || top > props.window.bottom)) {
                 return null;
               }
+              const custom = typeof props.icon === 'function' ? props.icon(entry) : props.icon;
+              const badge =
+                custom == null && commentMarkers === 'initials' && entry.kind === 'comment';
               return (
                 <button
                   key={entry.key}
@@ -181,6 +220,7 @@ export const ReviewMarkers = markPart(
                   class="docx-review__marker"
                   data-testid="review-marker"
                   data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
+                  {...(badge ? { 'data-marker': 'initials' } : {})}
                   {...(entry.author
                     ? {
                         'data-review-author': entry.author,
@@ -203,7 +243,7 @@ export const ReviewMarkers = markPart(
                       : {}),
                   }}
                   title={entry.author ? `${entry.author}: ${entry.text}` : entry.text}
-                  aria-label={`${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`}
+                  aria-label={markerLabel(entry, t)}
                   onMousedown={guardMousedown}
                   onClick={() => {
                     if (entry.kind === 'comment' && entry.resolved) {
@@ -213,10 +253,14 @@ export const ReviewMarkers = markPart(
                     review.setActive(entry.key);
                   }}
                 >
-                  {(typeof props.icon === 'function' ? props.icon(entry) : props.icon) ??
-                    (entry.kind === 'comment' && entry.resolved
-                      ? resolvedCommentIcon()
-                      : icon(markerIconPath(entry)))}
+                  {custom ??
+                    (entry.kind !== 'comment'
+                      ? icon(markerIconPath(entry))
+                      : badge
+                        ? reviewBadge(entry.initials, entry.replyIds.length, entry.resolved)
+                        : entry.resolved
+                          ? resolvedCommentIcon()
+                          : icon(markerIconPath(entry)))}
                 </button>
               );
             })}
@@ -227,6 +271,21 @@ export const ReviewMarkers = markPart(
   }),
   'Markers'
 );
+
+/** A marker's accessible name: what opening it shows, whose it is, and its thread state. */
+function markerLabel(
+  entry: ReviewItemView,
+  t: (key: TranslationKey, params?: ReviewLabelParams) => string
+): string {
+  const parts = [
+    `${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`,
+  ];
+  if (entry.kind === 'comment' && entry.resolved) parts.push(t('review.resolved'));
+  if (entry.kind === 'comment' && entry.replyIds.length > 0) {
+    parts.push(t('review.replyCount', { count: entry.replyIds.length }));
+  }
+  return parts.join('. ');
+}
 
 /** @public */
 export const ReviewAddComment = markPart(
@@ -263,21 +322,6 @@ export const ReviewAddComment = markPart(
   'AddComment'
 );
 
-interface BalloonAnchor {
-  readonly revisionId: string;
-  readonly author: string;
-  readonly date?: string;
-  readonly kind?: string;
-  readonly structuralSite: boolean;
-  readonly paragraphId?: string;
-  readonly start?: number;
-  readonly end?: number;
-  readonly left: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly above: boolean;
-}
-
 const BalloonTime = defineComponent({
   name: 'BalloonTime',
   props: { raw: { type: String, required: true } },
@@ -294,7 +338,60 @@ const BalloonTime = defineComponent({
   },
 });
 
-/** @public */
+type BalloonEntry = Extract<ReviewItemView, { readonly kind: 'revision' }>;
+
+/**
+ * What a change balloon says the change did: the verb, then the words themselves — added
+ * words as added, removed words struck, and a replacement as both in one line. Kinds with
+ * no words of their own keep the card's summary. The words render as text, never markup.
+ */
+const BalloonChangeSummary = defineComponent({
+  name: 'BalloonChangeSummary',
+  props: { entry: { type: Object as PropType<BalloonEntry>, required: true } },
+  setup(props) {
+    const t = useReviewLabel();
+    return () => {
+      const entry = props.entry;
+      const kind = entry.revisionKind;
+      const shared = {
+        class: 'docx-review__summary',
+        'data-testid': 'review-summary',
+        'data-review-selectable': '',
+      };
+      if (kind === 'replace') {
+        return h('div', shared, [
+          h('span', { class: 'docx-review__label', 'data-kind': 'replace' }, t('review.replaced')),
+          ' ',
+          h('del', { class: 'docx-review__removed' }, entry.replacedText ?? ''),
+          ' ',
+          h('ins', { class: 'docx-review__added' }, entry.text),
+        ]);
+      }
+      const added = kind === 'insert' || kind === 'moveTo';
+      if (!added && kind !== 'delete' && kind !== 'moveFrom') return h(ReviewSummary);
+      return h('div', shared, [
+        h(
+          'span',
+          { class: 'docx-review__label', 'data-kind': kind },
+          revisionItemLabel(entry.item, t)
+        ),
+        ' ',
+        h(
+          added ? 'ins' : 'del',
+          { class: `docx-review__${added ? 'added' : 'removed'}` },
+          entry.text
+        ),
+      ]);
+    };
+  },
+});
+
+/**
+ * `DocxEditorReview.Balloon`: the balloon that opens a review item at its text. Takes
+ * {@link ReviewBalloonProps}.
+ *
+ * @public
+ */
 export const ReviewBalloon = markPart(
   defineComponent({
     name: 'ReviewBalloon',
@@ -303,7 +400,26 @@ export const ReviewBalloon = markPart(
       const instance = getCurrentInstance();
       const rail = useRail();
       const t = useReviewLabel();
+      const editorRef = useDocxEditor();
       const anchor = ref<BalloonAnchor | null>(null);
+      const navigationAnchorKey = ref<string | null>(null);
+      const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
+      watch(displayMode, () => {
+        navigationAnchorKey.value = null;
+        anchor.value = null;
+      });
+      // Counts `reviewItemReveal` events. Next/Previous Change and `setActive` fire one on every
+      // landing, the active item included, so a balloon the reader closed opens again even
+      // though the active key did not move. A caret move fires none.
+      const revealCount = ref(0);
+      // A change balloon that Next/Previous Change (or an announced `setActive`) opens takes
+      // the focus, so a keyboard reader reaches Accept and Reject with Tab; Escape gives it back.
+      let focusPending = false;
+      const dialogEl = ref<HTMLElement | null>(null);
+      useEditorEvent('reviewItemReveal', () => {
+        focusPending = rail.value.revisionsIn === 'balloons';
+        revealCount.value += 1;
+      });
       const openRef = ref(false);
       const hadEntry = ref(false);
 
@@ -311,157 +427,300 @@ export const ReviewBalloon = markPart(
         openRef.value = next !== null;
       });
 
+      const close = (): void => {
+        navigationAnchorKey.value = null;
+        anchor.value = null;
+        instance?.proxy?.$forceUpdate();
+      };
+
       let balloonCleanup: (() => void) | undefined;
       onMounted(() => {
-        const host = getCurrentInstance()?.proxy?.$el;
+        const host = getCurrentInstance()?.proxy?.$el ?? instance?.proxy?.$el;
         const railEl = host?.closest('.docx-review') as HTMLElement | null;
         const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
           railEl?.offsetParent) as HTMLElement | null;
         if (!host || !railEl || !scroller) return;
 
-        const openAt = (element: HTMLElement, structuralSite: boolean): void => {
-          const railRect = railEl.getBoundingClientRect();
-          const rect = element.getBoundingClientRect();
-          const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
-          const start = Number(element.dataset.start);
-          const end = Number(element.dataset.end);
-          anchor.value = {
-            revisionId: element.dataset.revisionId!,
-            author: element.dataset.reviewAuthor ?? '',
-            ...(element.dataset.revisionDate !== undefined
-              ? { date: element.dataset.revisionDate }
-              : {}),
-            ...(element.dataset.revisionKind !== undefined
-              ? { kind: element.dataset.revisionKind }
-              : {}),
-            structuralSite,
-            ...(element.dataset.paragraphId !== undefined
-              ? { paragraphId: element.dataset.paragraphId }
-              : {}),
-            ...(Number.isFinite(start) ? { start } : {}),
-            ...(Number.isFinite(end) ? { end } : {}),
-            left: rect.left - railRect.left,
-            top: rect.top - railRect.top,
-            bottom: rect.bottom - railRect.top,
-            above: rect.bottom + 220 > viewportBottom,
-          };
-          instance?.proxy?.$forceUpdate();
-        };
-
         const onDown = (event: Event): void => {
           const target = event.target;
-          if (!(target instanceof Element)) return;
+          if (!isElementNode(target)) return;
           if (host.contains(target)) return;
+          // A press keeps the focus where the reader put it.
+          focusPending = false;
           const element = target.closest('[data-revision-id]');
-          if (element instanceof HTMLElement && scroller.contains(element)) {
+          if (isHTMLElementNode(element) && scroller.contains(element)) {
             const structuralSite = element.classList.contains('docx-table-row--revision');
-            if (element.dataset.revisionKind === 'format' || structuralSite) {
-              openAt(element, structuralSite);
+            if (
+              element.dataset.revisionKind === 'format' ||
+              structuralSite ||
+              rail.value.revisionsIn === 'balloons'
+            ) {
+              navigationAnchorKey.value = null;
+              anchor.value = anchorFromRevisionElement(element, railEl, structuralSite);
+              instance?.proxy?.$forceUpdate();
               return;
             }
           }
-          if (openRef.value) {
-            anchor.value = null;
-            instance?.proxy?.$forceUpdate();
-          }
+          if (openRef.value) close();
+        };
+        // Typing never happens under a change balloon. The reply line's own input is exempt.
+        const onInput = (event: Event): void => {
+          if (rail.value.revisionsIn !== 'balloons' || !openRef.value) return;
+          if (isDomNode(event.target) && host.contains(event.target)) return;
+          close();
+        };
+        // Bubble phase, and only when no other control already handled the key.
+        // Only a key from this editor counts: the page, a dialog, or another editor keeps its
+        // own Escape. A key that ends an IME composition is the input method's.
+        const onKey = (event: KeyboardEvent): void => {
+          if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+          if (rail.value.revisionsIn !== 'balloons' || !openRef.value) return;
+          if (!isDomNode(event.target) || !scroller.contains(event.target)) return;
+          // Focus inside the balloon would land on `<body>` once it unmounts.
+          const hadFocus = host.contains(host.ownerDocument.activeElement);
+          close();
+          if (hadFocus) editorRef.value?.focus();
         };
 
         scroller.addEventListener('pointerdown', onDown, true);
         scroller.addEventListener('mousedown', onDown, true);
+        scroller.addEventListener('beforeinput', onInput, true);
+        host.ownerDocument.addEventListener('keydown', onKey);
         balloonCleanup = () => {
           scroller.removeEventListener('pointerdown', onDown, true);
           scroller.removeEventListener('mousedown', onDown, true);
+          scroller.removeEventListener('beforeinput', onInput, true);
+          host.ownerDocument.removeEventListener('keydown', onKey);
         };
       });
       onUnmounted(() => balloonCleanup?.());
 
-      const served = computed(() => {
+      const served = computed((): BalloonEntry | null => {
         const current = anchor.value;
-        if (!current) return null;
-        const { allItems } = rail.value;
-        let byAuthor: ReviewItemView | null = null;
-        let byAuthorAmbiguous = false;
-        let byId: ReviewItemView | null = null;
-        let byIdAmbiguous = false;
-        let byRange: ReviewItemView | null = null;
-        let byRangeAmbiguous = false;
-        for (const candidate of allItems) {
-          if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
-          for (const address of candidate.item.addresses) {
-            if (address.id !== current.revisionId) continue;
-            if (address.author === current.author) {
-              if (address.date === current.date) return candidate;
-              if (byAuthor === null) byAuthor = candidate;
-              else if (byAuthor !== candidate) byAuthorAmbiguous = true;
-            }
-            if (byId === null) byId = candidate;
-            else if (byId !== candidate) byIdAmbiguous = true;
-          }
-          if (
-            current.paragraphId !== undefined &&
-            current.start !== undefined &&
-            current.end !== undefined &&
-            (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
-          ) {
-            for (const range of candidate.item.ranges) {
-              if (
-                range.start.paragraphId === current.paragraphId &&
-                range.start.offset < current.end &&
-                range.end.offset > current.start
-              ) {
-                if (byRange === null) byRange = candidate;
-                else if (byRange !== candidate) byRangeAmbiguous = true;
-                break;
-              }
-            }
-          }
-        }
-        if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
-        if (byId !== null && !byIdAmbiguous) return byId;
-        if (byRange !== null && !byRangeAmbiguous) return byRange;
-        return null;
+        const candidate = current ? matchBalloonReviewItem(current, rail.value.allItems) : null;
+        return candidate &&
+          balloonServesRevisionKind(candidate.revisionKind, rail.value.revisionsIn)
+          ? candidate
+          : null;
       });
 
-      const entry = computed(() => {
-        const candidate = served.value;
-        if (
-          candidate &&
-          (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
-        ) {
-          return candidate;
-        }
-        return null;
-      });
+      const navigationActive = computed(
+        () => rail.value.allItems.find((entry) => entry.isActive) ?? null
+      );
+      const navigationActiveKey = computed(() => navigationActive.value?.key ?? null);
+      const navigationNeedsBalloon = computed(
+        () =>
+          navigationActive.value !== null &&
+          activeItemNeedsBalloon(
+            navigationActive.value,
+            rail.value.review.items,
+            rail.value.review.paneOpen,
+            rail.value.revisionsIn,
+            // Opened on purpose (Next/Previous Change, `setActive`), not by a caret landing.
+            rail.value.review.activatedKey !== null
+          )
+      );
+      watch(
+        [navigationActiveKey, navigationNeedsBalloon, () => rail.value.revisionsIn, revealCount],
+        ([activeKey, needsBalloon, revisionsIn], _previous, onCleanup) => {
+          const active = navigationActive.value;
+          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const railEl = host?.closest('.docx-review') as HTMLElement | null;
+          const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
+            railEl?.offsetParent) as HTMLElement | null;
+          if (!activeKey || !active) {
+            if (navigationAnchorKey.value === null) return;
+            close();
+            return;
+          }
+          if (!needsBalloon) {
+            // The caret following a click into the change the balloon already shows keeps it.
+            if (revisionsIn === 'balloons' && served.value?.key === active.key) return;
+            close();
+            return;
+          }
+          if (!railEl || !scroller) return;
+          // A reveal of the decision already open keeps its balloon rather than redrawing it.
+          if (openRef.value && navigationAnchorKey.value === active.key) return;
+          navigationAnchorKey.value = active.key;
+          anchor.value = null;
+          let cancelled = false;
+          const win = hostWindowOf(scroller);
+          const frame = win.requestAnimationFrame(() => {
+            if (cancelled) return;
+            const element = findPaintedRevisionElement(scroller, active);
+            if (!element) {
+              anchor.value = null;
+              instance?.proxy?.$forceUpdate();
+              return;
+            }
+            anchor.value = anchorFromRevisionElement(
+              element,
+              railEl,
+              element.classList.contains('docx-table-row--revision')
+            );
+            instance?.proxy?.$forceUpdate();
+          });
+          onCleanup(() => {
+            cancelled = true;
+            win.cancelAnimationFrame(frame);
+          });
+        },
+        { flush: 'post' }
+      );
 
-      watch(entry, (next) => {
+      // The balloon stands on painted geometry: measure it again after a repaint, a zoom
+      // change, or a resize of the scroll container, or it drifts away from its text.
+      const zoom = useEditorState((snapshot) => snapshot.zoom);
+      const layoutTick = ref(0);
+      useEditorEvent('change', () => {
+        layoutTick.value += 1;
+      });
+      watch(
+        [() => anchor.value !== null, zoom, layoutTick],
+        ([open], _previous, onCleanup) => {
+          if (!open) return;
+          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const railEl = host?.closest('.docx-review') as HTMLElement | null;
+          const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
+            railEl?.offsetParent) as HTMLElement | null;
+          if (!railEl || !scroller) return;
+          const remeasure = (): void => {
+            const current = anchor.value;
+            if (!current) return;
+            const next = remeasureBalloonAnchor(current, scroller, railEl, served.value);
+            if (next === current) return;
+            anchor.value = next;
+            instance?.proxy?.$forceUpdate();
+          };
+          // The scroller's own window: a pop-out window measures and animates there.
+          const win = hostWindowOf(scroller);
+          let frame = win.requestAnimationFrame(remeasure);
+          const observer =
+            typeof win.ResizeObserver === 'undefined'
+              ? null
+              : new win.ResizeObserver(() => {
+                  win.cancelAnimationFrame(frame);
+                  frame = win.requestAnimationFrame(remeasure);
+                });
+          observer?.observe(scroller);
+          onCleanup(() => {
+            win.cancelAnimationFrame(frame);
+            observer?.disconnect();
+          });
+        },
+        { flush: 'post' }
+      );
+
+      // The sites of the open change carry a mark the stylesheet tints, again after each
+      // repaint.
+      watch(
+        [
+          () => anchor.value?.revisionId,
+          () => anchor.value?.author,
+          () => anchor.value?.date,
+          () => anchor.value?.formattingKind,
+          layoutTick,
+        ],
+        (_next, _previous, onCleanup) => {
+          const current = anchor.value;
+          if (!current) return;
+          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const railEl = host?.closest('.docx-review') as HTMLElement | null;
+          const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
+            railEl?.offsetParent) as HTMLElement | null;
+          if (scroller) onCleanup(markOpenBalloonSites(scroller, current));
+        },
+        { flush: 'post' }
+      );
+
+      watch(
+        [
+          () =>
+            anchor.value !== null && rail.value.revisionsIn === 'balloons'
+              ? served.value?.key
+              : undefined,
+          revealCount,
+        ],
+        ([key]) => {
+          if (key === undefined || !focusPending) return;
+          focusPending = false;
+          dialogEl.value?.focus({ preventScroll: true });
+        },
+        { flush: 'post' }
+      );
+
+      // Resolving the decision removes it from the queue; the balloon it was resolved from
+      // must not linger over the text the accept just changed. A reply the reader is typing
+      // is the exception: the balloon stays on the resolved change and keeps the text, and
+      // the reply line says why it cannot be posted.
+      let lastServed: BalloonEntry | null = null;
+      let replyDraft = false;
+      const onReplyDraft = (hasText: boolean): void => {
+        replyDraft = hasText;
+      };
+      const orphan = ref<BalloonEntry | null>(null);
+      watch(served, (next) => {
         if (next) {
           hadEntry.value = true;
+          lastServed = next;
+          orphan.value = null;
           return;
         }
         if (hadEntry.value) {
           hadEntry.value = false;
+          if (replyDraft && lastServed && rail.value.revisionsIn === 'balloons') {
+            orphan.value = lastServed;
+            return;
+          }
           anchor.value = null;
         }
+      });
+      watch(anchor, (next) => {
+        if (next === null) orphan.value = null;
       });
 
       return () => {
         if (props.hidden) return null;
-        const { review, authorSlots, authorInfo } = rail.value;
+        const { review, authorSlots, authorInfo, revisionsIn } = rail.value;
         const current = anchor.value;
         const fallbackKind =
           current?.kind === 'format' ? ('format' as const) : ('structural' as const);
-        const matched = entry.value;
+        const matched = served.value ?? orphan.value;
+        const orphaned = served.value === null && orphan.value !== null;
+        // An unmatched TEXT change has nothing honest to show: its label would claim a structure.
+        const unmatchedContent =
+          current !== null && !matched && current.kind !== 'format' && !current.structuralSite;
+        const changeBalloon = revisionsIn === 'balloons' && matched !== null;
+        const box = current ? balloonBox(current, changeBalloon ? 300 : 280) : null;
 
+        const shown = !(
+          current === null ||
+          displayMode.value !== 'all-markup' ||
+          unmatchedContent ||
+          (matched && review.items.some((item) => item.id === matched.id) && review.paneOpen)
+        );
+        // Read out what opened, also when focus stays in the page (a click on the change).
+        const announcement =
+          shown && changeBalloon && !orphaned && matched && matched.item.kind === 'revision'
+            ? t('review.changeAnnouncement', {
+                change: revisionItemLabel(matched.item, t),
+                author: matched.author || t('comments.unknown'),
+                text: matched.text,
+              })
+            : '';
         const balloonBody =
-          current === null
+          !shown || current === null
             ? null
             : h(
                 'div',
                 {
                   class: 'docx-review__balloon',
                   'data-testid': 'review-balloon',
+                  ...(changeBalloon ? { 'data-variant': 'change' } : {}),
                   style: {
-                    left: `${current.left}px`,
+                    left: `${box!.left}px`,
+                    width: `${box!.width}px`,
                     top: `${current.above ? current.top - 6 : current.bottom + 6}px`,
                     transform: current.above ? 'translateY(-100%)' : undefined,
                   },
@@ -484,12 +743,24 @@ export const ReviewBalloon = markPart(
                                 ),
                               }
                             : {}),
+                          ...(changeBalloon
+                            ? {
+                                ref: dialogEl,
+                                role: 'dialog',
+                                tabindex: -1,
+                                'aria-label': t('review.trackedChange'),
+                              }
+                            : {}),
                           style: authorCardStyle(
                             matched.author,
                             authorInfo.get(matched.author),
                             authorSlots.get(matched.author) ?? 0
                           ),
-                          onClick: () => review.setActive(matched.key),
+                          // A change balloon is already open on its change; activating it again
+                          // would move the caret out from under the reply line being typed into.
+                          ...(changeBalloon || orphaned
+                            ? {}
+                            : { onClick: () => review.setActive(matched.key) }),
                         },
                         [
                           h('div', { class: 'docx-review__head' }, [
@@ -498,14 +769,28 @@ export const ReviewBalloon = markPart(
                               h(ReviewAuthor),
                               h(ReviewTime),
                             ]),
-                            matched.kind === 'revision' && !matched.readOnly
+                            matched.kind === 'revision' && !matched.readOnly && !orphaned
                               ? h('div', { class: 'docx-review__actions' }, [
                                   h(ReviewAccept),
                                   h(ReviewReject),
                                 ])
                               : null,
                           ]),
-                          h(ReviewSummary),
+                          changeBalloon
+                            ? h(BalloonChangeSummary, { entry: matched })
+                            : h(ReviewSummary),
+                          h(ReviewRefusal),
+                          ...(changeBalloon
+                            ? [
+                                h(ReviewReplies),
+                                h(ReviewBalloonReply, {
+                                  key: matched.key,
+                                  entry: matched,
+                                  orphaned,
+                                  onDraft: onReplyDraft,
+                                }),
+                              ]
+                            : []),
                         ]
                       )
                     )
@@ -562,7 +847,18 @@ export const ReviewBalloon = markPart(
           {
             class: `docx-review__balloon-root${props.className ? ` ${props.className}` : ''}`,
           },
-          balloonBody === null ? undefined : [balloonBody]
+          [
+            h(
+              'span',
+              {
+                class: 'docx-editor-sr-only',
+                'aria-live': 'polite',
+                'data-testid': 'review-balloon-live',
+              },
+              announcement
+            ),
+            ...(balloonBody === null ? [] : [balloonBody]),
+          ]
         );
       };
     },

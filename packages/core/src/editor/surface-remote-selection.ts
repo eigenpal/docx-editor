@@ -4,6 +4,7 @@
 // layout to cover every line between them, including a range that crosses a page or a cell.
 // A `kind: 'cells'` payload reconstructs the table rectangle those endpoints name.
 
+import { textboxPresenceLayout } from './textbox-presence-layout.ts';
 import type { TextMeasurer } from '../layout/semantic-records.ts';
 import {
   caretAt,
@@ -28,6 +29,7 @@ import type {
   CollaborationSelectionKind,
 } from '../collaboration/index.ts';
 import type { CollaborationParagraph } from '../collaboration/replication.ts';
+import { isHTMLElementNode } from './host-realm.ts';
 
 /** Map a surface selection to the stable paragraph ids awareness publishes. */
 export function localCollaborationSelection(
@@ -208,6 +210,7 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
+  layout = textboxPresenceLayout(layout);
   const { scale, pageOffsetX, pages, colorForAuthor, declaredColorFor } = options;
   const labelHost = options.labelHost ?? null;
   const colors = resolvedSelectionColors(selections, colorForAuthor, declaredColorFor);
@@ -304,7 +307,7 @@ export function paintRemoteSelections(
   paintSelectionOverlay(layer, layout, rects, { scale, pageOffsetX });
   [...layer.children].forEach((element, index) => {
     const color = safeParticipantColor(rectColors[index]);
-    if (!color || !(element instanceof HTMLElement)) return;
+    if (!color || !isHTMLElementNode(element)) return;
     element.style.setProperty('--doc-remote-color', color);
   });
   const document = layer.ownerDocument;

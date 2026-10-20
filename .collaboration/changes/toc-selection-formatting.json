@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting a selection that included a generated table of contents refused the whole change.",
+  "after": "Formatting skips the operations that reach a generated table of contents and applies the rest. A selection inside the table still refuses.",
+  "reason": "The written operations are ordinary run and paragraph property operations, a subset of those the same command wrote before. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/toc-selection-formatting.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc-selection-formatting.test.ts"
+  ],
+  "changeset": "toc-selection-formatting",
+  "migration": null
+}

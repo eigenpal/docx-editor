@@ -11,12 +11,16 @@ import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/co
 import { paintSemanticLayout, type PaintOptions } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 
 function load(body: string) {
-  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
-    name: '/word/document.xml',
-    contentType: 'app/xml',
-  });
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${body}</w:body></w:document>`,
+    {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    }
+  );
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
@@ -82,15 +86,58 @@ describe('content-control boundary paint seam', () => {
     expect(label?.style.top).toBe(
       `${Math.max(0, (page.contentBox.y - page.box.y + fragment.box.y) * scale - 16)}px`
     );
+    // The value widget sits OUTSIDE the control past its right edge, scaled like the page, and
+    // centred on the control's line, so it never covers the last characters of the value.
     const widget = container.querySelector<HTMLElement>('.docx-content-control-widget');
+    const size = 16 * scale;
     expect(widget?.style.left).toBe(
-      `${(page.contentBox.x - page.box.x + fragment.box.x + fragment.box.width) * scale - 18}px`
+      `${(page.contentBox.x - page.box.x + fragment.box.x + fragment.box.width + 2) * scale}px`
     );
     expect(widget?.style.top).toBe(
-      `${(page.contentBox.y - page.box.y + fragment.box.y) * scale}px`
+      `${
+        (page.contentBox.y - page.box.y + fragment.box.y) * scale +
+        Math.max(0, (fragment.box.height * scale - size) / 2)
+      }px`
     );
-    expect(widget?.style.width).toBe('16px');
-    expect(widget?.style.height).toBe('16px');
+    expect(widget?.style.width).toBe(`${size}px`);
+    expect(widget?.style.height).toBe(`${size}px`);
+    expect(widget?.style.fontSize).toBe(`${size}px`);
+  });
+
+  test('a checkbox widget covers its glyph box and scales with the font', () => {
+    const layout = layoutSemanticDocument(
+      load(
+        `<w:sdt><w:sdtPr><w14:checkbox><w14:checked w14:val="1"/></w14:checkbox></w:sdtPr>` +
+          `<w:sdtContent><w:p><w:r><w:t>☒</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+      ),
+      1,
+      { measurer: createFixedMeasurer(6, 14) }
+    );
+    const page = layout.pages[0]!;
+    const fragment = page.contentControls![0]!.fragments[0]!;
+    const container = document.createElement('div');
+    const scale = 2;
+    paintSemanticLayout(container, layout, {
+      scale,
+      contentControlChrome: { showAll: true, checkedIds: new Set([page.contentControls![0]!.id]) },
+    });
+    const widget = container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]');
+    expect(widget).not.toBeNull();
+    // Glyph-sized and centred on the line: the fragment is the LINE box, so a tall line must
+    // not inflate the widget over the text beside the glyph.
+    const size = Math.min(fragment.box.height, 16) * scale;
+    const center =
+      (page.contentBox.x - page.box.x + fragment.box.x + fragment.box.width / 2) * scale;
+    // Compared as numbers: CSS serializes to six decimals.
+    expect(Number.parseFloat(widget!.style.left)).toBeCloseTo(center - size / 2, 4);
+    expect(Number.parseFloat(widget!.style.top)).toBeCloseTo(
+      (page.contentBox.y - page.box.y + fragment.box.y) * scale +
+        Math.max(0, (fragment.box.height * scale - size) / 2),
+      4
+    );
+    expect(Number.parseFloat(widget!.style.width)).toBeCloseTo(size, 4);
+    expect(Number.parseFloat(widget!.style.height)).toBeCloseTo(size, 4);
+    expect(widget!.getAttribute('aria-checked')).toBe('true');
   });
 
   test('show-all keeps aliases inactive until a control is active', () => {

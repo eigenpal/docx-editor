@@ -85,7 +85,7 @@ describe('a property is only readable once a sync has filled it', () => {
       ]);
       expect(notes.map((note) => note.text)).toEqual([
         '',
-        'first\t<unsafe>\nline\rsecond',
+        'first\t<unsafe>\vline\rsecond',
         'end note',
       ]);
     });
@@ -155,9 +155,11 @@ describe('the shapes load accepts', () => {
   test('omitted and empty expand preserve ordinary load behavior', async () => {
     expect(resolveLoadOption({ select: 'text' }, 'document.body')).toEqual({
       select: ['text'],
+      itemSelect: [],
     });
     expect(resolveLoadOption({ select: 'text', expand: [] }, 'document.body')).toEqual({
       select: ['text'],
+      itemSelect: [],
     });
 
     const runtime = createRuntime({ host: openHost(), save: true });

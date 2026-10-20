@@ -24,6 +24,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // fixed sentence, and `target` — the consumer-facing path of the object or property involved,
 // which is the only identifier they wrote themselves.
 
+import type { DiagnosticCode } from '@docx-editor.dev/core/automation';
+import { explainDiagnostic } from '@docx-editor.dev/core/automation';
+
 /** What went wrong, as a value a consumer may branch on. */
 export type DocxEditorErrorCode =
   /** A property was read before a `load(...)` for it completed in a `sync()`. */
@@ -31,18 +34,22 @@ export type DocxEditorErrorCode =
   /** A `ClientResult` value was read before the sync that fills it. */
   | 'ValueNotLoaded'
   /**
-   * The object cannot be addressed, in either of the two ways that happens.
+   * The object cannot be addressed, in one of three ways.
    *
    * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
    * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
-   * is terminal. One code because from a consumer's side both are "this object cannot be used
-   * here"; the message says which one, because the fix for one is not the fix for the other.
+   * is terminal. GONE: the document no longer holds the object, because an edit removed or merged
+   * it; `debugInfo.innerError.code` is then `edit.stale-target` and the message says so. One
+   * code because from a consumer's side all three are "this object cannot be used here"; the
+   * message says which one, because the fix for one is not the fix for the others.
    */
   | 'InvalidObjectPath'
   /** The object still belongs to a run that has not finished, so it cannot be handed over. */
   | 'ObjectInUse'
   /** An argument or load option this API does not accept. */
   | 'InvalidArgument'
+  /** Opening the document exceeded a bounded reader resource limit. */
+  | 'ResourceLimitExceeded'
   /** The collection has no such item — `getFirst()` on an empty one. */
   | 'ItemNotFound'
   /** The host cannot do this at all — a capability it reports false. */
@@ -67,10 +74,21 @@ export type DocxEditorErrorCode =
   | 'InvalidRequestContext'
   /** The runtime was disposed. Every later operation fails this way. */
   | 'RuntimeDisposed'
-  /** The document moved under a context that had already read from it; nothing was applied. */
+  /**
+   * The request was built from an older read, so nothing was applied: another writer moved the
+   * document, or a range's text moved since the range was read, including by this context's own
+   * earlier sync. Read again before retrying.
+   */
   | 'StaleDocument'
   /** The host is live but holds no document right now — an editor between mounts. */
   | 'DocumentUnavailable'
+  /**
+   * A preview is open over the editor, so it refuses this write or a second preview. Commit or
+   * discard the open preview first. Browser runtime only.
+   */
+  | 'PreviewActive'
+  /** The preview has ended — committed, discarded, or replaced by a remount — so it cannot commit. */
+  | 'PreviewEnded'
   /** The document refused the change, or answered something this runtime cannot use. */
   | 'GeneralException';
 
@@ -86,25 +104,46 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the property has not been loaded. Call load(...) and await context.sync() before reading it.',
   ValueNotLoaded: 'the result has not been filled in yet. Await context.sync() before reading it.',
   InvalidObjectPath:
-    'the object cannot be addressed. An object an item accessor answered is usable after the ' +
-    'next await context.sync(); an object whose run has ended is released for good, unless ' +
-    'context.trackedObjects.add(...) kept it.',
+    'the object cannot be addressed. Await context.sync() after creating an object with an edit. ' +
+    'Keep proxies within their run, or use context.trackedObjects.add(...) before the run ends.',
   ObjectInUse:
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
+  ResourceLimitExceeded: 'the document exceeds a supported resource limit.',
   ItemNotFound: 'the collection has no such item.',
-  NotSupported: 'this document host does not support that operation.',
+  NotSupported:
+    'the operation or argument is outside this document or host’s supported capabilities.',
   NotImplemented: 'this version does not implement that yet.',
   ConflictingChanges:
-    'two changes in this batch affect the same paragraph. Split them across two ' +
+    'these operations cannot share one atomic batch. Split them across separate ' +
     'context.sync() calls.',
   InvalidRequestContext: 'the request context has finished. Start another run to continue.',
   RuntimeDisposed: 'the runtime has been disposed.',
-  StaleDocument: 'the document changed after this context read it, so nothing was applied.',
+  StaleDocument:
+    'the document or a range changed after this context read it, so nothing was applied. ' +
+    'The change can come from another writer or from an earlier sync of this context.',
   DocumentUnavailable: 'the document is not available right now.',
+  PreviewActive:
+    'a preview is open over the document. Commit or discard it before writing or opening another.',
+  PreviewEnded: 'the preview has ended. Start another preview to show other wording.',
   GeneralException: 'the document could not complete the request.',
 });
+
+/**
+ * The message for `InvalidObjectPath` when the host reports that the object is gone. Fixed, like
+ * every other message, so it names no document content.
+ */
+const REMOVED_OBJECT_MESSAGE =
+  'the object no longer exists in the document. An edit removed or merged it. Read the ' +
+  'document again to get a fresh object.';
+
+/** The fixed message for an error, from its code and the diagnostic the engine gave. */
+function messageOf(code: DocxEditorErrorCode, diagnostic: DiagnosticCode | undefined): string {
+  return code === 'InvalidObjectPath' && diagnostic === 'edit.stale-target'
+    ? REMOVED_OBJECT_MESSAGE
+    : MESSAGES[code];
+}
 
 /**
  * The fields a {@link DocxEditorError} is constructed from.
@@ -114,6 +153,17 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
 export interface DocxEditorErrorInit {
   /** Which refusal this is. The stable thing to branch on. */
   readonly code: DocxEditorErrorCode;
+  /** The resource limit exceeded while opening a document. */
+  readonly limit?:
+    | 'zip.maxEntries'
+    | 'zip.maxTotalBytes'
+    | 'zip.maxRatio'
+    | 'xml.maxBytes'
+    | 'xml.maxElements'
+    | 'xml.maxDepth'
+    | 'maxXmlParts'
+    | 'maxRelationships';
+
   /**
    * The consumer-facing path of the object or property involved — `document.body.text`, not a
    * handle. Omitted when there is nothing to name.
@@ -123,6 +173,42 @@ export interface DocxEditorErrorInit {
   readonly expectedRevision?: number;
   /** The revision the document was actually at, for `StaleDocument`. */
   readonly actualRevision?: number;
+  /**
+   * The engine's public diagnostic code for this refusal, when it has one. It becomes
+   * `debugInfo.innerError`.
+   */
+  readonly diagnostic?: DiagnosticCode;
+}
+
+/**
+ * Why the engine refused, as a public diagnostic code with its fixed hint.
+ *
+ * @public
+ */
+export interface DocxEditorInnerError {
+  /** A stable public diagnostic code, such as `edit.tracked-drawing-delete-unsupported`. */
+  readonly code: DiagnosticCode;
+  /** The fixed hint for the code: the cause, then the action. Never document content. */
+  readonly message: string;
+}
+
+/**
+ * Debug details in the shape of Office.js `OfficeExtension.DebugInfo`.
+ *
+ * @public
+ */
+export interface DocxEditorDebugInfo {
+  /** The same code as {@link DocxEditorError.code}. */
+  readonly code: DocxEditorErrorCode;
+  /** The same message as the error's own. */
+  readonly message: string;
+  /** The consumer-facing path of the object or property involved, when there is one. */
+  readonly errorLocation?: string;
+  /**
+   * Why the engine refused, when it knows a specific reason. Handle the outer `code`; read
+   * `innerError.message` to tell a person or a model what to change.
+   */
+  readonly innerError?: DocxEditorInnerError;
 }
 
 /**
@@ -143,8 +229,8 @@ export interface DocxEditorErrorInit {
  * try {
  *   await context.sync();
  * } catch (error) {
- *   if (error instanceof DocxEditorError && error.code === 'StaleDocument') {
- *     // Re-read and retry: someone else changed the document first.
+ *   if (isDocxEditorError(error) && error.code === 'StaleDocument') {
+ *     // Re-read, re-anchor, and reconsider: someone else changed the document first.
  *   }
  * }
  * ```
@@ -154,18 +240,58 @@ export interface DocxEditorErrorInit {
 export class DocxEditorError extends Error {
   /** Which refusal this is. Stable across versions; the thing to branch on. */
   readonly code: DocxEditorErrorCode;
+  /** For `ResourceLimitExceeded`: the resource limit that prevented opening. */
+  readonly limit?: DocxEditorErrorInit['limit'];
   /** Consumer-facing path of the object or property involved, when there is one to name. */
   readonly target?: string;
-  /** For `StaleDocument`: the revision the context had read at. */
+  /**
+   * For `StaleDocument`: the revision the context had last read at, when the refused batch
+   * wrote. Absent for a batch that only read, on every host.
+   *
+   * When it equals {@link DocxEditorError.actualRevision}, the document is where this context
+   * last saw it, and a range it holds is out of date: an edit after the range was read (often
+   * this context's own earlier sync) moved its text. Search for the text again. When the two
+   * differ, another writer changed the document after this context's last read. Read again
+   * before you decide.
+   */
   readonly expectedRevision?: number;
   /** For `StaleDocument`: the revision the document was actually at. */
   readonly actualRevision?: number;
+  /**
+   * Debug details, as Office.js `OfficeExtension.Error.debugInfo` has them. `innerError` names
+   * the engine's reason with a stable diagnostic code and a fixed hint, when there is one.
+   *
+   * @example
+   * ```ts
+   * catch (error) {
+   *   if (isDocxEditorError(error) && error.debugInfo.innerError) {
+   *     console.warn(error.debugInfo.innerError.code, error.debugInfo.innerError.message);
+   *   }
+   * }
+   * ```
+   */
+  readonly debugInfo: DocxEditorDebugInfo;
 
   constructor(init: DocxEditorErrorInit) {
-    const message = init.target ? `${MESSAGES[init.code]} (${init.target})` : MESSAGES[init.code];
+    const base = messageOf(init.code, init.diagnostic);
+    const message = init.target ? `${base} (${init.target})` : base;
     super(message);
     this.name = 'DocxEditorError';
     this.code = init.code;
+    this.debugInfo = Object.freeze({
+      code: init.code,
+      message,
+      ...(init.target === undefined ? {} : { errorLocation: init.target }),
+      ...(init.diagnostic === undefined
+        ? {}
+        : {
+            innerError: Object.freeze({
+              code: init.diagnostic,
+              message: explainDiagnostic(init.diagnostic).hint,
+            }),
+          }),
+    });
+    if (init.limit !== undefined) this.limit = init.limit;
     if (init.target !== undefined) this.target = init.target;
     if (init.expectedRevision !== undefined) this.expectedRevision = init.expectedRevision;
     if (init.actualRevision !== undefined) this.actualRevision = init.actualRevision;
@@ -190,8 +316,8 @@ export function isDocxEditorError(value: unknown): value is DocxEditorError {
 }
 
 /** The message this runtime uses for a code, for tests that assert nothing else is thrown. */
-export function messageFor(code: DocxEditorErrorCode): string {
-  return MESSAGES[code];
+export function messageFor(code: DocxEditorErrorCode, diagnostic?: DiagnosticCode): string {
+  return messageOf(code, diagnostic);
 }
 
 export function fail(init: DocxEditorErrorInit): never {

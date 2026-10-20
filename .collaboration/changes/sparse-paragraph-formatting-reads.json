@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A paragraph formatting read indexed every paragraph on every page before the paragraph it asked for.",
+  "after": "A formatting read indexes only the paragraph it asks for, with the same answers, until a layout has answered many paragraphs.",
+  "reason": "The change is a local read of the published layout. Document operations, shared state and the collaboration format remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/surface-formatting-sparse.test.ts",
+    "packages/core/src/editor/__tests__/surface-formatting-index.test.ts"
+  ],
+  "changeset": "share-ooxml-read-metadata",
+  "migration": null
+}

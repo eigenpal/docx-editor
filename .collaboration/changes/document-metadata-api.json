@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Document metadata has no public editing API.",
+  "after": "Metadata edits synchronize through existing package operations. Concurrent initial core-part creation refuses.",
+  "reason": "Existing canonical package operations carry property changes. No wire fields or operation kinds change.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-properties-api.test.ts"],
+  "changeset": "document-core-properties",
+  "migration": null
+}

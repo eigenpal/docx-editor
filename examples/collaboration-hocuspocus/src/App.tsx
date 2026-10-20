@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { reviewModule } from '@docx-editor.dev/pro';
+import { consoleExporter, createTelemetry } from '@docx-editor.dev/telemetry';
 import {
   DocxEditorCollaboration,
   DocxEditorCollaborationRoot,
@@ -30,7 +31,6 @@ import type {
   UseCollaborationStatusReturn,
 } from '@docx-editor.dev/pro/react';
 import { useHocuspocusCollaboration } from '@docx-editor.dev/pro/react/hocuspocus';
-import type { CollaborationFailure } from '@docx-editor.dev/core/collaboration';
 import {
   createCollaborationRoomId,
   validateRoomId,
@@ -38,13 +38,24 @@ import {
 import { CollaboratorCaret, PersonAvatar } from './CollaboratorCaret';
 import { useColorMode, type ColorMode } from './useColorMode';
 import { actorIdFor, PEOPLE, type Person } from './people';
+import { encodeDemoToken } from '../shared/admission';
+import { failureMessage } from '../shared/failure-message';
+import { exampleText as t } from '../../shared/example-text';
+import { roomAddress } from './room-address';
+import { roomToken } from './room-token';
+
+/**
+ * Anonymous diagnostics. In development, the console prints each one with its hint, such as why
+ * an edit was refused. In production, pass the exporters for your own tools instead.
+ */
+const telemetry = createTelemetry({ exporters: import.meta.env.DEV ? [consoleExporter()] : [] });
 
 /**
  * Comments and tracked changes. Read once, when the instance is built, so it must not be
  * rebuilt per render. The hook appends `collaborationModule` to it when a room is ready; a
  * host module that carried a collaboration contribution would be a configuration error.
  */
-const MODULES = [reviewModule()];
+const MODULES = [reviewModule(), telemetry.module];
 
 /** Where `server/server.ts` listens. */
 const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';
@@ -54,8 +65,13 @@ const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';
  * `onAuthenticate`. A real app sends a signed token for the signed-in user; pass a callback
  * instead of a string and the provider re-evaluates it on every reconnect, which is how an
  * expiring token renews.
+ *
+ * The tab that starts a room asks the server to create it. An invite link only joins: the
+ * server refuses a room it does not know.
  */
-const TOKEN = import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token';
+const SECRET = import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token';
+const CREATE_TOKEN = encodeDemoToken(SECRET, { createRoom: true });
+const JOIN_TOKEN = encodeDemoToken(SECRET);
 
 /**
  * Give up on the first sync after eight seconds rather than the default thirty.
@@ -102,6 +118,8 @@ interface Joined {
   readonly roomId: string;
   /** Unique per attachment, so two tabs of one person are two carets. */
   readonly actorId: string;
+  /** This tab started the room, so the server may create it. */
+  readonly creating: boolean;
 }
 
 /**
@@ -265,6 +283,10 @@ function RoomBar({
   // Either way the failure has to land where the user can act on it, not in the console.
   const [copyFailed, setCopyFailed] = useState(false);
   const state = transportState(status);
+  const recovery =
+    status.diverged && status.reason
+      ? failureMessage(status.reason, { serverUrl: SERVER_URL, serverCommand: SERVER_COMMAND })
+      : null;
 
   useEffect(() => {
     if (!copied) return undefined;
@@ -284,106 +306,94 @@ function RoomBar({
   }, [roomId]);
 
   return (
-    <header
-      className="collab-bar"
-      style={{ '--collab-you': person.color } as CSSProperties}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <span className={`collab-state ${state.tone}`} role="status">
-        <span className="collab-state__glyph" aria-hidden="true">
-          {state.glyph}
-        </span>
-        {state.label}
-      </span>
-
-      {session ? (
-        <button
-          type="button"
-          className={`collab-room${copied ? ' is-copied' : ''}`}
-          onClick={copyInvite}
-          title={copyFailed ? inviteUrl(roomId) : 'Copy the invite link'}
-        >
-          <span className="collab-room__label">Room</span>
-          <span className="collab-room__id">{shortRoomId(roomId)}</span>
-          <span aria-hidden="true">
-            {copied ? '✓ copied' : copyFailed ? '— copy it from the address bar' : '⧉'}
+    <>
+      <header
+        className="collab-bar"
+        style={{ '--collab-you': person.color } as CSSProperties}
+        onMouseDown={(event) => event.preventDefault()}
+      >
+        <span className={`collab-state ${state.tone}`} role="status" title={recovery?.body}>
+          <span className="collab-state__glyph" aria-hidden="true">
+            {state.glyph}
           </span>
-        </button>
-      ) : (
-        <span className="collab-bar__note">This browser only. Nothing leaves it.</span>
-      )}
+          {state.label}
+        </span>
 
-      <span className="collab-bar__spacer" />
+        {session ? (
+          <button
+            type="button"
+            className={`collab-room${copied ? ' is-copied' : ''}`}
+            onClick={copyInvite}
+            title={copyFailed ? inviteUrl(roomId) : 'Copy the invite link'}
+          >
+            <span className="collab-room__label">Room</span>
+            <span className="collab-room__id">{shortRoomId(roomId)}</span>
+            <span aria-hidden="true">
+              {copied ? '✓ copied' : copyFailed ? '— copy it from the address bar' : '⧉'}
+            </span>
+          </button>
+        ) : (
+          <span className="collab-bar__note">This browser only. Nothing leaves it.</span>
+        )}
 
-      {session ? (
-        <span className="collab-here">
-          {/*
+        <span className="collab-bar__spacer" />
+
+        {session ? (
+          <span className="collab-here">
+            {/*
             The packaged avatar stack. It needs no render prop to show the photos: the declared
             `avatarUrl` reaches it the same way it reaches a comment card. The override here is
             only for the overlap this bar wants, and `announced` keeps the name the packaged
             disc carries — this is chrome, not furniture, so unlike a caret label it IS
             announced.
           */}
-          <DocxEditorCollaboration.Avatars max={5}>
-            {({ participant, color, avatarUrl }) => (
-              <span className="collab-bar__person" title={participant.name}>
-                <PersonAvatar
-                  avatarUrl={avatarUrl}
-                  name={participant.name}
-                  color={color}
-                  announced
-                />
-              </span>
-            )}
-          </DocxEditorCollaboration.Avatars>
-          <span className="collab-count">
-            {participants.length < 2 ? 'only you — share the room' : `${participants.length} here`}
+            <DocxEditorCollaboration.Avatars max={5}>
+              {({ participant, color, avatarUrl }) => (
+                <span className="collab-bar__person" title={participant.name}>
+                  <PersonAvatar
+                    avatarUrl={avatarUrl}
+                    name={participant.name}
+                    color={color}
+                    announced
+                  />
+                </span>
+              )}
+            </DocxEditorCollaboration.Avatars>
+            <span className="collab-count">
+              {participants.length < 2
+                ? 'only you — share the room'
+                : `${participants.length} here`}
+            </span>
           </span>
-        </span>
-      ) : null}
+        ) : null}
 
-      <ThemeSwitch mode={theme.mode} toggle={theme.toggle} />
+        <ThemeSwitch mode={theme.mode} toggle={theme.toggle} />
 
-      {session ? (
-        <button
-          type="button"
-          className="collab-button"
-          onClick={() => {
-            void editor?.save().then((bytes) => onLeave(new Uint8Array(bytes)));
-          }}
-        >
-          Leave room
-        </button>
+        {session ? (
+          <button
+            type="button"
+            className="collab-button"
+            onClick={() => {
+              void editor?.save().then((bytes) => onLeave(new Uint8Array(bytes)));
+            }}
+          >
+            Leave room
+          </button>
+        ) : null}
+      </header>
+      {recovery ? (
+        <aside className="collab-recovery" role="alert">
+          <strong>{recovery.title}</strong>
+          <p>{recovery.body}</p>
+          {recovery.documentation ? (
+            <a href={recovery.documentation.url} target="_blank" rel="noopener noreferrer">
+              {recovery.documentation.label}
+            </a>
+          ) : null}
+        </aside>
       ) : null}
-    </header>
+    </>
   );
-}
-
-/** A failure code turned into something a person can act on. */
-function failureMessage(failure: CollaborationFailure): {
-  readonly title: string;
-  readonly body: string;
-  readonly command?: string;
-} {
-  if (failure.code === 'initialization-timeout') {
-    return {
-      title: 'No answer from the room server.',
-      body: `Nothing is listening on ${SERVER_URL}. Start it in a second terminal, then reload this page.`,
-      command: SERVER_COMMAND,
-    };
-  }
-  if (failure.code === 'initialization-aborted') {
-    return {
-      title: 'The room server refused the connection.',
-      body:
-        failure.detail ??
-        'It rejected the token this demo sends. Check COLLAB_TOKEN on the server against VITE_COLLAB_TOKEN here.',
-    };
-  }
-  return {
-    title: 'Could not join the room.',
-    body: failure.detail ?? `The room reported ${failure.code}. Reload to try again.`,
-  };
 }
 
 export function App() {
@@ -395,44 +405,68 @@ export function App() {
   // reconnecting to the room it was just asked to leave.
   const [left, setLeft] = useState(false);
 
-  // Fetch the document and Word's substitute faces in one call. The hook holds `document`
-  // back until fonts settle, because layout measures with them.
+  // A tab opened from an invite link joins a room that exists, so it needs no document of its
+  // own: the room is the document. Read once; the address bar changes only on join.
+  const [invited] = useState(() => roomFromUrl() !== null);
+
+  // Fetch the document and the substitute faces in one call. The hook holds `document` back
+  // until fonts settle, because layout measures with them. An invited tab loads fonts only.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts() });
+  } = useDocxSource(invited ? null : DOCUMENT_URL, { fonts: packagedFonts() });
+
+  // One token callback per joined room. A starting tab asks to create the room only until
+  // its first sync; every reconnect after it only joins (`room-token.ts`).
+  const tokens = useMemo(
+    () =>
+      roomToken({ create: CREATE_TOKEN, join: JOIN_TOKEN, creating: joined?.creating ?? false }),
+    [joined]
+  );
 
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.
   const room = useMemo(() => {
-    if (!joined || !bytes || left) return null;
+    if (!joined || left) return null;
+    if (joined.creating && !bytes) return null;
     return {
       url: SERVER_URL,
       roomId: joined.roomId,
-      token: TOKEN,
+      token: tokens.token,
       syncedTimeoutMs: SYNC_TIMEOUT_MS,
       identity: {
         actorId: joined.actorId,
         name: joined.person.name,
         color: joined.person.color,
       },
-      // The first tab seeds the room from these bytes; every later tab ignores them and
-      // takes the document the server already holds.
-      bootstrap: { kind: 'create-or-join', document: bytes } as const,
+      // `server/server.ts` seeds every new room itself, so every tab joins the document the
+      // server holds and uploads nothing. The starting tab's bytes seed the room only on a
+      // server that leaves new rooms empty; an invited tab only joins.
+      bootstrap:
+        joined.creating && bytes
+          ? ({ kind: 'create-or-join', document: bytes } as const)
+          : ({ kind: 'join' } as const),
     };
-  }, [bytes, joined, left]);
+  }, [bytes, joined, left, tokens]);
 
   const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
 
   const join = useCallback((person: Person) => {
-    const roomId = roomFromUrl() ?? createCollaborationRoomId();
-    const url = new URL(location.href);
-    url.search = '';
-    url.searchParams.set('room', roomId);
-    history.replaceState(null, '', url);
-    setJoined({ person, roomId, actorId: actorIdFor(person) });
+    const invited = roomFromUrl();
+    const roomId = invited ?? createCollaborationRoomId();
+    setJoined({ person, roomId, actorId: actorIdFor(person), creating: invited === null });
   }, []);
+
+  // Name the room in the address bar. A starting tab waits for its first successful connect:
+  // until then a reload starts a new room instead of asking for one the server never made.
+  const connected = collaboration.document !== null;
+  useEffect(() => {
+    if (!joined) return;
+    if (connected) tokens.markJoined();
+    const next = roomAddress({ href: location.href, ...joined, connected });
+    if (next) history.replaceState(null, '', next);
+  }, [joined, connected, tokens]);
 
   const leave = useCallback(
     (nextDocument: Uint8Array) => {
@@ -453,16 +487,29 @@ export function App() {
     );
   }
 
-  if (!joined) return <SignIn ready={bytes !== undefined} onJoin={join} />;
+  if (!joined) return <SignIn ready={invited || bytes !== undefined} onJoin={join} />;
 
   if (collaboration.error) {
-    const message = failureMessage(collaboration.error);
+    const message = failureMessage(collaboration.error, {
+      serverUrl: SERVER_URL,
+      serverCommand: SERVER_COMMAND,
+    });
     return (
       <div className="collab-message" role="alert">
         <div className="collab-message__inner">
           <h2>{message.title}</h2>
           <p>{message.body}</p>
+          {message.documentation ? (
+            <a href={message.documentation.url} target="_blank" rel="noopener noreferrer">
+              {message.documentation.label}
+            </a>
+          ) : null}
           {message.command ? <code>{message.command}</code> : null}
+          {message.retry && room ? (
+            <button type="button" onClick={() => void collaboration.connect(room)}>
+              {t('collaborationDemo.serverRecovery.retry')}
+            </button>
+          ) : null}
         </div>
       </div>
     );

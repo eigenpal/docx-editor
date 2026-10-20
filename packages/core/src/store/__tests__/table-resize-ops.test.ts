@@ -326,7 +326,7 @@ describe('setTableColumnWidths', () => {
     ['gridSpan', '<w:gridSpan w:val="2"/>'],
     ['hMerge', '<w:hMerge w:val="restart"/>'],
     ['vMerge', '<w:vMerge w:val="restart"/>'],
-  ] as const)('refuses merged tables (%s)', (_label, mergeMarkup) => {
+  ] as const)('answers merged tables by their grid (%s)', (_label, mergeMarkup) => {
     const part = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr>${mergeMarkup}</w:tcPr><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>`
@@ -342,7 +342,51 @@ describe('setTableColumnWidths', () => {
         leftWidthTwips: 3000,
         rightWidthTwips: 3000,
       })
-    ).toBe('table-has-merge');
+    ).toBe(
+      _label === 'gridSpan' ? 'tree-invariant' : _label === 'hMerge' ? 'table-has-merge' : null
+    );
+  });
+
+  test('resizes a grid beneath a spanning header and preserves its merged width', () => {
+    const part = load(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:p/></w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p/></w:tc></w:tr>' +
+        '<w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+    );
+    const table = firstTable(part);
+    const columns = gridColIds(part, table.id);
+    const cells = collectByKind(part.root, 'tableCell');
+    const resize = applyTreeOp(part, {
+      op: 'setTableColumnWidths',
+      tableId: table.id,
+      leftGridColumnId: columns[0]!,
+      rightGridColumnId: columns[1]!,
+      leftWidthTwips: 2400,
+      rightWidthTwips: 1600,
+    });
+    expect(resize.ok).toBe(true);
+    if (!resize.ok) return;
+    expect(cellTcWidth(resize.part, cells[0]!.id)).toBe('2400');
+    expect(cellTcWidth(resize.part, cells[1]!.id)).toBe('3600');
+    expect(cellTcWidth(resize.part, cells[3]!.id)).toBe('1600');
+    const edge = applyTreeOp(resize.part, {
+      op: 'setTableRightEdgeWidth',
+      tableId: table.id,
+      gridColumnId: columns[2]!,
+      columnWidthTwips: 2500,
+      tableWidthTwips: 6500,
+    });
+    expect(edge.ok).toBe(true);
+    if (!edge.ok) return;
+    expect(cellTcWidth(edge.part, cells[1]!.id)).toBe('4100');
+    expect(cellTcWidth(edge.part, cells[4]!.id)).toBe('2500');
+    const reopened = readOoxmlPart(serializeOoxmlPart(edge.part), {
+      name: part.name,
+      contentType: part.contentType,
+    });
+    expect(reopened.ok).toBe(true);
+    if (reopened.ok)
+      expect(canonicalOoxmlFingerprint(reopened.part)).toBe(canonicalOoxmlFingerprint(edge.part));
   });
 
   test('refuses missing grid and irregular alignment', () => {

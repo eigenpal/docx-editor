@@ -44,10 +44,7 @@ test.beforeEach(async ({ page }) => {
 async function scrollToParagraph(page: Page, needle: string): Promise<Locator> {
   const scroller = page.locator(SCROLLER).first();
   for (let i = 0; i < 60; i++) {
-    const fragment = page
-      .locator('.docx-paragraph-fragment')
-      .filter({ hasText: needle })
-      .first();
+    const fragment = page.locator('.docx-paragraph-fragment').filter({ hasText: needle }).first();
     if ((await fragment.count()) > 0) {
       await fragment.scrollIntoViewIfNeeded();
       // `scrollIntoViewIfNeeded` is a PROGRAMMATIC scroll, and a programmatic scroll can
@@ -118,7 +115,10 @@ function headingInViewport(page: Page, needle: string) {
 }
 
 const scrollTop = (page: Page) =>
-  page.locator(SCROLLER).first().evaluate((el) => el.scrollTop);
+  page
+    .locator(SCROLLER)
+    .first()
+    .evaluate((el) => el.scrollTop);
 
 test.describe('section 9 rendering', () => {
   test('external hyperlink text is painted, styled, and carries the sanitized href', async ({
@@ -131,9 +131,9 @@ test.describe('section 9 rendering', () => {
 
     const example = p91.locator('a.docx-hyperlink[href="https://example.com"]');
     await expect(example).toHaveText('Example.com');
-    await expect(
-      p91.locator('a.docx-hyperlink[href="https://www.anthropic.com"]')
-    ).toHaveText('Anthropic’s website');
+    await expect(p91.locator('a.docx-hyperlink[href="https://www.anthropic.com"]')).toHaveText(
+      'Anthropic’s website'
+    );
 
     // The Hyperlink character style resolves through the cascade: colored + underlined.
     //
@@ -152,9 +152,7 @@ test.describe('section 9 rendering', () => {
     expect(style.colors.some((color) => color !== 'rgb(0, 0, 0)')).toBe(true);
   });
 
-  test('internal cross-references paint as anchors targeting their bookmarks', async ({
-    page,
-  }) => {
+  test('internal cross-references paint as anchors targeting their bookmarks', async ({ page }) => {
     const p92 = await scrollToParagraph(page, 'Jump to:');
 
     expect((await p92.textContent())?.trim()).toBe(
@@ -206,7 +204,10 @@ test.describe('external link activation', () => {
 
     await clickLink(page, link);
     await expect(page.locator(POPUP)).toBeVisible();
-    await page.locator(PAINTED_PAGE).first().click({ position: { x: 30, y: 30 } });
+    await page
+      .locator(PAINTED_PAGE)
+      .first()
+      .click({ position: { x: 30, y: 30 } });
     await expect(page.locator(POPUP)).not.toBeVisible();
   });
 });
@@ -225,9 +226,7 @@ test.describe('in-document navigation', () => {
     await expect(page.locator(POPUP)).toHaveCount(0);
   });
 
-  test('internal link jumps forward across pages to a not-yet-painted target', async ({
-    page,
-  }) => {
+  test('internal link jumps forward across pages to a not-yet-painted target', async ({ page }) => {
     // Section 12 lies several virtualized pages past section 9, so the jump must
     // work even when the target paragraph has no DOM yet.
     const p92 = await scrollToParagraph(page, 'Jump to:');
@@ -247,5 +246,35 @@ test.describe('in-document navigation', () => {
 
     await headingInViewport(page, '6. Nested Tables');
     await expect(page.locator(POPUP)).toHaveCount(0);
+  });
+});
+
+// Viewing refuses caret placement and selection, but links are reading, not editing.
+test.describe('viewing mode', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.getByTestId('editing-mode-trigger').first().click();
+    await page.getByTestId('editing-mode-viewing').first().click();
+    await expect(page.locator('.docx-paginated-surface')).toHaveClass(
+      /docx-paginated-surface--viewing/
+    );
+  });
+
+  test('an external link still opens the popover', async ({ page }) => {
+    const p91 = await scrollToParagraph(page, 'Visit ');
+    await clickLink(page, p91.locator('a.docx-hyperlink[href="https://example.com"]'));
+
+    const popup = page.locator(POPUP);
+    await expect(popup).toBeVisible();
+    await expect(popup).toContainText('https://example.com');
+  });
+
+  test('an internal link still jumps to its bookmark', async ({ page }) => {
+    const p92 = await scrollToParagraph(page, 'Jump to:');
+    const before = await scrollTop(page);
+
+    await clickLink(page, p92.locator('a.docx-hyperlink[href="#section12"]'));
+
+    await headingInViewport(page, '12. Form Elements & Checkboxes');
+    expect(await scrollTop(page)).toBeGreaterThan(before);
   });
 });

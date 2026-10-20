@@ -44,7 +44,7 @@ function threeParagraphs(): Uint8Array {
 function applyLifecycle(peer: Peer, op: TreeDocOp): void {
   const refusal = peer.room.session.gateOperations([op], { kind: 'body' });
   if (refusal) throw new Error(`gate refused: ${refusal}`);
-  const result = peer.store.applyLifecycleOp(op);
+  const result = peer.store.applyLifecycleOp(op, { actorId: peer.room.session.identity.actorId });
   if (!result.ok) throw new Error(result.detail ?? result.reason);
   peer.port.flushPendingJournals();
 }
@@ -152,7 +152,39 @@ describe('concurrent first-create of a notes part', () => {
     });
   }
 
-  test('an uncontested first note is byte-identical to the one a solo author gets', async () => {
+  for (const testCase of CASES) {
+    test(`a ${testCase.label.slice(0, -1)} stays when the peer who made the part at once undoes theirs`, async () => {
+      // Both create the part; the directory keeps one entry for its name. The peer whose entry
+      // won undoes its note, which deletes that entry, and the name had no entry left: the
+      // other note's relationship pointed at nothing and every replica stopped applying.
+      const { alice, bob, pause, resume } = await harness.pair(threeParagraphs());
+      pause();
+      applyLifecycle(alice, {
+        op: 'insertNote',
+        noteKind: testCase.noteKind,
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        offset: 5,
+      });
+      applyLifecycle(bob, {
+        op: 'insertNote',
+        noteKind: testCase.noteKind,
+        paragraphId: harness.paragraphIdAt(bob, 2),
+        offset: 5,
+      });
+      expect(bob.room.session.undo()).toBe(true);
+      resume();
+      alice.port.flushPendingJournals();
+      bob.port.flushPendingJournals();
+      for (const peer of [alice, bob] as const) {
+        expect(peer.room.session.status()).toBe('ready');
+        expect(authoredIds(peer, testCase)).toHaveLength(1);
+        expect(referenceCount(peer.store.currentPackage(), testCase.referenceName)).toBe(1);
+      }
+      harness.expectConverged(alice, bob);
+    });
+  }
+
+  test('an uncontested first note keeps the order the notes part has', async () => {
     // The repair reorders members when it adopts. It must not reorder anything otherwise, or
     // every document that merely HAS a notes part starts drifting from what Word wrote.
     const { alice, bob } = await harness.pair(threeParagraphs());
@@ -163,7 +195,12 @@ describe('concurrent first-create of a notes part', () => {
       offset: 5,
     });
     bob.port.flushPendingJournals();
-    expect(noteIdOrder(bob.store.currentPackage(), FOOTNOTES_PART, 'footnote')).toEqual([-1, 0, 1]);
+    // The reserved separators first, then the note. Its id is striped by its author, as
+    // every id a collaborating editor mints is.
+    const order = noteIdOrder(bob.store.currentPackage(), FOOTNOTES_PART, 'footnote');
+    expect(order.slice(0, 2)).toEqual([-1, 0]);
+    expect(order).toHaveLength(3);
+    expect(order[2]).toBeGreaterThan(0);
     harness.expectConverged(alice, bob);
   });
 });

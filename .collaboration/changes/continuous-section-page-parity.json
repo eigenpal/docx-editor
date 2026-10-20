@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Shared continuous restarts and explicit restarted section breaks could add or remove the wrong blank page.",
+  "after": "Layout keeps sheet progression separate from displayed numbering and uses physical parity for explicit restarted breaks.",
+  "reason": "Only derived layout changes. Shared document operations and stored section properties retain their existing formats.",
+  "tests": [
+    "packages/core/src/layout/__tests__/page-parity-sheets.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-layout-clearance.test.ts"
+  ],
+  "changeset": "continuous-section-page-parity",
+  "migration": null
+}

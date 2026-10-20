@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Copying a selection that held a computed field wrote only the first character of the field result to the plain-text clipboard.",
+  "after": "The plain-text clipboard and selectedText() read each computed field as its full painted result.",
+  "reason": "Copy reads the local layout only. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/clipboard-field-results.test.ts"],
+  "changeset": "copy-field-results",
+  "migration": null
+}

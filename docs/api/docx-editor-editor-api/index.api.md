@@ -4,29 +4,63 @@
 
 ```ts
 
-import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
 import { AutomationHandle } from '@docx-editor.dev/core/automation';
-import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
-import { AutomationSpan } from '@docx-editor.dev/core/automation';
+import { AutomationPaginationOptions } from '@docx-editor.dev/core/automation';
+import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
+import { DiagnosticCode } from '@docx-editor.dev/core/automation';
+import { DiagnosticErrorName } from '@docx-editor.dev/core/automation';
+import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { DocumentPartKind } from '@docx-editor.dev/core/automation';
+import { EditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { HistoryGroup } from '@docx-editor.dev/core/automation';
+import { HistoryGroupOutcome } from '@docx-editor.dev/core/automation';
+import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
+import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
+import { RevisionAuthorSkipReason } from '@docx-editor.dev/core/automation';
+import { RevisionBatchEntry } from '@docx-editor.dev/core/automation';
+import { RevisionBatchResult } from '@docx-editor.dev/core/automation';
+import { RevisionBatchSkipReason } from '@docx-editor.dev/core/automation';
 
 // @public
-export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
+export enum Alignment {
+    // (undocumented)
+    centered = "Centered",
+    // (undocumented)
+    justified = "Justified",
+    // (undocumented)
+    left = "Left",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    right = "Right",
+    // (undocumented)
+    unknown = "Unknown"
+}
+
+// @public
+export type BesideLocation = Extract<RangeInsertTextLocation, 'Before' | 'After'>;
 
 // @public
 class Body_2 extends ModelObject {
     get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
+    get endnotes(): NoteItemCollection;
+    get fields(): FieldCollection;
     get font(): Font;
+    get footnotes(): NoteItemCollection;
     getComments(): CommentCollection;
+    getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
-    insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    get inlinePictures(): InlinePictureCollection;
+    insertParagraph(paragraphText: string, insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End'): Paragraph;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get lists(): ListCollection;
     // @internal
     static main(context: RequestContext, label: string): Body_2;
@@ -39,22 +73,25 @@ class Body_2 extends ModelObject {
     static promisedStory(context: RequestContext, label: string): Body_2;
     get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
+    get shapes(): ShapeCollection;
     get style(): string;
     set style(value: string);
+    get tables(): TableCollection;
     get text(): string;
 }
 export { Body_2 as Body }
 
 // @public
-export type BodyInsertParagraphLocation = Extract<InsertLocation, 'Start' | 'End'>;
+export type BodyInsertParagraphLocation = Extract<RangeInsertTextLocation, 'Start' | 'End'>;
 
 // @public
-export type BodyInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type BodyInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 // @public
 export class Bookmark extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Bookmark;
+    delete(): void;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -81,6 +118,42 @@ export class BookmarkCollection extends HandleCollection<Bookmark> {
 }
 
 // @public
+export enum BreakType {
+    // (undocumented)
+    line = "Line",
+    // (undocumented)
+    next = "Next",
+    // (undocumented)
+    page = "Page",
+    // (undocumented)
+    sectionContinuous = "SectionContinuous",
+    // (undocumented)
+    sectionEven = "SectionEven",
+    // (undocumented)
+    sectionNext = "SectionNext",
+    // (undocumented)
+    sectionOdd = "SectionOdd"
+}
+
+// @public
+export enum ChangeTrackingMode {
+    // (undocumented)
+    off = "Off",
+    // (undocumented)
+    trackAll = "TrackAll",
+    // (undocumented)
+    trackMineOnly = "TrackMineOnly"
+}
+
+// @public
+export enum ChangeTrackingVersion {
+    // (undocumented)
+    current = "Current",
+    // (undocumented)
+    original = "Original"
+}
+
+// @public
 export abstract class ClientObject implements RuntimeManagedObject {
     // @internal
     [REBIND](context: RequestContext): void;
@@ -101,10 +174,13 @@ export abstract class ClientObject implements RuntimeManagedObject {
     load(option?: LoadOption): this;
     // @internal
     protected loadedProperty<T>(name: string): T;
+    // @internal
+    protected get loadsItemPaths(): boolean;
     protected abstract onLoad(request: ResolvedLoadOptions): void;
     // @internal
     protected get path(): ObjectPath;
     protected requireAddressable(): void;
+    protected requireUsablePath(): void;
     // @internal
     protected setLoadedProperty(name: string, value: unknown): void;
 }
@@ -173,6 +249,11 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
 }
 
 // @public
+export interface CommitPreviewOptions {
+    readonly rebase?: boolean;
+}
+
+// @public
 export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): ContentControl;
@@ -188,7 +269,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     hydrateNull(): void;
     get id(): string;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get isBound(): boolean;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
@@ -230,6 +311,46 @@ export type ContentControlLockState = 'unlocked' | 'sdtLocked' | 'contentLocked'
 export type ContentControlSubtype = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';
 
 // @public
+export enum ContentControlType {
+    // (undocumented)
+    buildingBlockGallery = "BuildingBlockGallery",
+    // (undocumented)
+    checkBox = "CheckBox",
+    // (undocumented)
+    comboBox = "ComboBox",
+    // (undocumented)
+    datePicker = "DatePicker",
+    // (undocumented)
+    dropDownList = "DropDownList",
+    // (undocumented)
+    group = "Group",
+    // (undocumented)
+    picture = "Picture",
+    // (undocumented)
+    plainText = "PlainText",
+    // (undocumented)
+    plainTextInline = "PlainTextInline",
+    // (undocumented)
+    plainTextParagraph = "PlainTextParagraph",
+    // (undocumented)
+    repeatingSection = "RepeatingSection",
+    // (undocumented)
+    richText = "RichText",
+    // (undocumented)
+    richTextInline = "RichTextInline",
+    // (undocumented)
+    richTextParagraphs = "RichTextParagraphs",
+    // (undocumented)
+    richTextTable = "RichTextTable",
+    // (undocumented)
+    richTextTableCell = "RichTextTableCell",
+    // (undocumented)
+    richTextTableRow = "RichTextTableRow",
+    // (undocumented)
+    unknown = "Unknown"
+}
+
+// @public
 export type ContentControlValue = {
     readonly kind: 'text';
     readonly text: string;
@@ -254,21 +375,31 @@ export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
     readonly modules?: readonly EditorModule[];
+    readonly pagination?: ServerPaginationOptions;
     readonly revisionTextView?: RevisionTextView;
 }
 
 // @public
 class Document_2 extends ModelObject {
     get body(): Body_2;
+    get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly';
+    set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly');
     get comments(): CommentCollection;
     get contentControls(): ContentControlCollection;
+    deleteBookmark(name: string): void;
     get endnotes(): NoteItemCollection;
     get footnotes(): NoteItemCollection;
+    getBookmarkRange(name: string): Range_2;
+    getBookmarkRangeOrNullObject(name: string): Range_2;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static open(context: RequestContext): Document_2;
     get paragraphs(): ParagraphCollection;
+    get properties(): DocumentProperties;
+    removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+    // (undocumented)
+    removeDocumentInformation(removeDocInfoType: 'Comments' | 'Revisions' | 'Versions' | 'RemovePersonalInformation' | 'EmailHeader' | 'RoutingSlip' | 'SendForReview' | 'DocumentProperties' | 'Template' | 'DocumentWorkspace' | 'InkAnnotations' | 'DocumentServerProperties' | 'DocumentManagementPolicy' | 'ContentType' | 'TaskpaneWebExtensions' | 'AtMentions' | 'DocumentTasks' | 'DocumentIntelligence' | 'CommentReactions' | 'All'): void;
     get revisions(): RevisionCollection;
     get sections(): SectionCollection;
 }
@@ -279,6 +410,7 @@ export interface DocumentCapabilities {
     readonly document: boolean;
     readonly events: boolean;
     readonly layout: boolean;
+    readonly preview: boolean;
     readonly save: boolean;
     readonly scrolling: boolean;
     readonly selection: boolean;
@@ -290,6 +422,40 @@ export interface DocumentLimits {
     readonly maxXmlParts?: number;
     readonly xml?: DocumentXmlLimits;
     readonly zip?: DocumentZipLimits;
+}
+
+// @public
+export interface DocumentPreview<T = void> {
+    commit(options?: CommitPreviewOptions): Promise<void>;
+    discard(): void;
+    onStatusChanged(listener: (status: DocumentPreviewStatus) => void): () => void;
+    readonly result: T;
+    reveal(): boolean;
+    readonly status: DocumentPreviewStatus;
+}
+
+// @public
+export type DocumentPreviewStatus = 'active' | 'stale' | 'ended';
+
+// @public
+export class DocumentProperties extends ModelObject {
+    get author(): string;
+    set author(value: string);
+    get category(): string;
+    set category(value: string);
+    get comments(): string;
+    set comments(value: string);
+    get keywords(): string;
+    set keywords(value: string);
+    get lastAuthor(): string;
+    // @internal (undocumented)
+    static of(context: RequestContext, owner: ObjectPath): DocumentProperties;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    get subject(): string;
+    set subject(value: string);
+    get title(): string;
+    set title(value: string);
 }
 
 // @public
@@ -309,11 +475,21 @@ export interface DocumentZipLimits {
 export const DocxEditor: DocxEditorNamespace;
 
 // @public
+export interface DocxEditorDebugInfo {
+    readonly code: DocxEditorErrorCode;
+    readonly errorLocation?: string;
+    readonly innerError?: DocxEditorInnerError;
+    readonly message: string;
+}
+
+// @public
 export class DocxEditorError extends Error {
     constructor(init: DocxEditorErrorInit);
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
+    readonly debugInfo: DocxEditorDebugInfo;
     readonly expectedRevision?: number;
+    readonly limit?: DocxEditorErrorInit['limit'];
     readonly target?: string;
 }
 
@@ -324,18 +500,22 @@ export type DocxEditorErrorCode =
 /** A `ClientResult` value was read before the sync that fills it. */
 | 'ValueNotLoaded'
 /**
-* The object cannot be addressed, in either of the two ways that happens.
+* The object cannot be addressed, in one of three ways.
 *
 * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
 * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
-* is terminal. One code because from a consumer's side both are "this object cannot be used
-* here"; the message says which one, because the fix for one is not the fix for the other.
+* is terminal. GONE: the document no longer holds the object, because an edit removed or merged
+* it; `debugInfo.innerError.code` is then `edit.stale-target` and the message says so. One
+* code because from a consumer's side all three are "this object cannot be used here"; the
+* message says which one, because the fix for one is not the fix for the others.
 */
 | 'InvalidObjectPath'
 /** The object still belongs to a run that has not finished, so it cannot be handed over. */
 | 'ObjectInUse'
 /** An argument or load option this API does not accept. */
 | 'InvalidArgument'
+/** Opening the document exceeded a bounded reader resource limit. */
+| 'ResourceLimitExceeded'
 /** The collection has no such item — `getFirst()` on an empty one. */
 | 'ItemNotFound'
 /** The host cannot do this at all — a capability it reports false. */
@@ -360,10 +540,21 @@ export type DocxEditorErrorCode =
 | 'InvalidRequestContext'
 /** The runtime was disposed. Every later operation fails this way. */
 | 'RuntimeDisposed'
-/** The document moved under a context that had already read from it; nothing was applied. */
+/**
+* The request was built from an older read, so nothing was applied: another writer moved the
+* document, or a range's text moved since the range was read, including by this context's own
+* earlier sync. Read again before retrying.
+*/
 | 'StaleDocument'
 /** The host is live but holds no document right now — an editor between mounts. */
 | 'DocumentUnavailable'
+/**
+* A preview is open over the editor, so it refuses this write or a second preview. Commit or
+* discard the open preview first. Browser runtime only.
+*/
+| 'PreviewActive'
+/** The preview has ended — committed, discarded, or replaced by a remount — so it cannot commit. */
+| 'PreviewEnded'
 /** The document refused the change, or answered something this runtime cannot use. */
 | 'GeneralException';
 
@@ -371,8 +562,16 @@ export type DocxEditorErrorCode =
 export interface DocxEditorErrorInit {
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
+    readonly diagnostic?: DiagnosticCode;
     readonly expectedRevision?: number;
+    readonly limit?: 'zip.maxEntries' | 'zip.maxTotalBytes' | 'zip.maxRatio' | 'xml.maxBytes' | 'xml.maxElements' | 'xml.maxDepth' | 'maxXmlParts' | 'maxRelationships';
     readonly target?: string;
+}
+
+// @public
+export interface DocxEditorInnerError {
+    readonly code: DiagnosticCode;
+    readonly message: string;
 }
 
 // @public
@@ -385,8 +584,10 @@ export interface DocxEditorNamespace {
 export interface DocxEditorRuntime {
     readonly capabilities: DocumentCapabilities;
     dispose(): void;
+    preview<T = void>(callback: PreviewCallback<T>): Promise<DocumentPreview<T>>;
     run<T>(callback: RunCallback<T>): Promise<T>;
     run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
+    run<T>(options: RunOptions, callback: RunCallback<T>): Promise<T>;
 }
 
 // @public
@@ -400,7 +601,238 @@ export interface EditorModule {
     readonly collaboration?: CollaborationModuleContribution;
     // (undocumented)
     readonly id: string;
+    readonly onDiagnostic?: (event: RuntimeDiagnostic) => void;
 }
+
+// @public
+export class Field extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Field;
+    // (undocumented)
+    get code(): string;
+    set code(value: string);
+    delete(): void;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): Field;
+    updateResult(): void;
+}
+
+// @public
+export class FieldCollection extends ItemCollection<Field> {
+    // (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    // (undocumented)
+    getFirst(): Field;
+    // (undocumented)
+    getFirstOrNullObject(): Field;
+    // (undocumented)
+    getLast(): Field;
+    // (undocumented)
+    getLastOrNullObject(): Field;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Field;
+    // (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): FieldCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): Field & PromisedItem;
+    // (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum FieldType {
+    // (undocumented)
+    addin = "Addin",
+    // (undocumented)
+    addressBlock = "AddressBlock",
+    // (undocumented)
+    advance = "Advance",
+    // (undocumented)
+    ask = "Ask",
+    // (undocumented)
+    author = "Author",
+    // (undocumented)
+    autoText = "AutoText",
+    // (undocumented)
+    autoTextList = "AutoTextList",
+    // (undocumented)
+    barCode = "BarCode",
+    // (undocumented)
+    bibliography = "Bibliography",
+    // (undocumented)
+    bidiOutline = "BidiOutline",
+    // (undocumented)
+    citation = "Citation",
+    // (undocumented)
+    comments = "Comments",
+    // (undocumented)
+    compare = "Compare",
+    // (undocumented)
+    createDate = "CreateDate",
+    // (undocumented)
+    data = "Data",
+    // (undocumented)
+    database = "Database",
+    // (undocumented)
+    date = "Date",
+    // (undocumented)
+    displayBarcode = "DisplayBarcode",
+    // (undocumented)
+    docProperty = "DocProperty",
+    // (undocumented)
+    docVariable = "DocVariable",
+    // (undocumented)
+    editTime = "EditTime",
+    // (undocumented)
+    embedded = "Embedded",
+    // (undocumented)
+    empty = "Empty",
+    // (undocumented)
+    eq = "EQ",
+    // (undocumented)
+    expression = "Expression",
+    // (undocumented)
+    fileName = "FileName",
+    // (undocumented)
+    fileSize = "FileSize",
+    // (undocumented)
+    fillIn = "FillIn",
+    // (undocumented)
+    formCheckbox = "FormCheckbox",
+    // (undocumented)
+    formDropdown = "FormDropdown",
+    // (undocumented)
+    formText = "FormText",
+    // (undocumented)
+    gotoButton = "GotoButton",
+    // (undocumented)
+    greetingLine = "GreetingLine",
+    // (undocumented)
+    hyperlink = "Hyperlink",
+    // (undocumented)
+    if = "If",
+    // (undocumented)
+    import = "Import",
+    // (undocumented)
+    include = "Include",
+    // (undocumented)
+    includePicture = "IncludePicture",
+    // (undocumented)
+    includeText = "IncludeText",
+    // (undocumented)
+    index = "Index",
+    // (undocumented)
+    info = "Info",
+    // (undocumented)
+    keywords = "Keywords",
+    // (undocumented)
+    lastSavedBy = "LastSavedBy",
+    // (undocumented)
+    link = "Link",
+    // (undocumented)
+    listNum = "ListNum",
+    // (undocumented)
+    macroButton = "MacroButton",
+    // (undocumented)
+    mergeBarcode = "MergeBarcode",
+    // (undocumented)
+    mergeField = "MergeField",
+    // (undocumented)
+    mergeRec = "MergeRec",
+    // (undocumented)
+    mergeSeq = "MergeSeq",
+    // (undocumented)
+    next = "Next",
+    // (undocumented)
+    nextIf = "NextIf",
+    // (undocumented)
+    noteRef = "NoteRef",
+    // (undocumented)
+    numChars = "NumChars",
+    // (undocumented)
+    numPages = "NumPages",
+    // (undocumented)
+    numWords = "NumWords",
+    // (undocumented)
+    ocx = "OCX",
+    // (undocumented)
+    others = "Others",
+    // (undocumented)
+    page = "Page",
+    // (undocumented)
+    pageRef = "PageRef",
+    // (undocumented)
+    print = "Print",
+    // (undocumented)
+    printDate = "PrintDate",
+    // (undocumented)
+    private = "Private",
+    // (undocumented)
+    quote = "Quote",
+    // (undocumented)
+    rd = "RD",
+    // (undocumented)
+    ref = "Ref",
+    // (undocumented)
+    revNum = "RevNum",
+    // (undocumented)
+    saveDate = "SaveDate",
+    // (undocumented)
+    section = "Section",
+    // (undocumented)
+    sectionPages = "SectionPages",
+    // (undocumented)
+    seq = "Seq",
+    // (undocumented)
+    set = "Set",
+    // (undocumented)
+    shape = "Shape",
+    // (undocumented)
+    skipIf = "SkipIf",
+    // (undocumented)
+    styleRef = "StyleRef",
+    // (undocumented)
+    subject = "Subject",
+    // (undocumented)
+    subscriber = "Subscriber",
+    // (undocumented)
+    symbol = "Symbol",
+    // (undocumented)
+    ta = "TA",
+    // (undocumented)
+    tc = "TC",
+    // (undocumented)
+    template = "Template",
+    // (undocumented)
+    time = "Time",
+    // (undocumented)
+    title = "Title",
+    // (undocumented)
+    toa = "TOA",
+    // (undocumented)
+    toc = "TOC",
+    // (undocumented)
+    undefined = "Undefined",
+    // (undocumented)
+    userAddress = "UserAddress",
+    // (undocumented)
+    userInitials = "UserInitials",
+    // (undocumented)
+    userName = "UserName",
+    // (undocumented)
+    xe = "XE"
+}
+
+// @public
+export type FieldTypeLiteral = `${FieldType}`;
 
 // @public
 export class Font extends ModelObject {
@@ -408,6 +840,8 @@ export class Font extends ModelObject {
     set bold(value: boolean);
     get color(): string | null;
     set color(value: string);
+    get highlightColor(): string | null;
+    set highlightColor(value: string);
     get italic(): boolean | null;
     set italic(value: boolean);
     get name(): string | null;
@@ -417,13 +851,99 @@ export class Font extends ModelObject {
     protected onLoad(request: ResolvedLoadOptions): void;
     get size(): number | null;
     set size(value: number);
+    // (undocumented)
+    get strikeThrough(): boolean | null;
+    set strikeThrough(value: boolean);
+    // (undocumented)
+    get subscript(): boolean | null;
+    set subscript(value: boolean);
+    // (undocumented)
+    get superscript(): boolean | null;
+    set superscript(value: boolean);
+    get underline(): string | null;
+    set underline(value: UnderlineType | 'Mixed' | 'None' | 'Hidden' | 'DotLine' | 'Single' | 'Word' | 'Double' | 'Thick' | 'Dotted' | 'DottedHeavy' | 'DashLine' | 'DashLineHeavy' | 'DashLineLong' | 'DashLineLongHeavy' | 'DotDashLine' | 'DotDashLineHeavy' | 'TwoDotDashLine' | 'TwoDotDashLineHeavy' | 'Wave' | 'WaveHeavy' | 'WaveDouble');
 }
+
+// @public
+export function getReviewItemRange(context: RequestContext, key: string): Range_2;
+
+// @public
+export function getReviewItemRangeOrNullObject(context: RequestContext, key: string): Range_2;
+
+// @public
+export function getReviewItemRevisions(context: RequestContext, key: string): RevisionCollection;
 
 // @public
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
+export { HistoryGroup }
+
+export { HistoryGroupOutcome }
+
 // @public
-export type InsertLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+export class InlinePicture extends ModelObject implements PromisedItem {
+    // (undocumented)
+    get altTextDescription(): string;
+    set altTextDescription(value: string);
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): InlinePicture;
+    delete(): void;
+    // (undocumented)
+    get height(): number;
+    set height(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    get lockAspectRatio(): boolean;
+    set lockAspectRatio(value: boolean);
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): InlinePicture;
+    // (undocumented)
+    get width(): number;
+    set width(value: number);
+}
+
+// @public
+export class InlinePictureCollection extends ItemCollection<InlinePicture> {
+    // (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    // (undocumented)
+    getFirst(): InlinePicture;
+    // (undocumented)
+    getFirstOrNullObject(): InlinePicture;
+    // (undocumented)
+    getLast(): InlinePicture;
+    // (undocumented)
+    getLastOrNullObject(): InlinePicture;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): InlinePicture;
+    // (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): InlinePictureCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): InlinePicture & PromisedItem;
+    // (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum InsertLocation {
+    // (undocumented)
+    after = "After",
+    // (undocumented)
+    before = "Before",
+    // (undocumented)
+    end = "End",
+    // (undocumented)
+    replace = "Replace",
+    // (undocumented)
+    start = "Start"
+}
 
 // @public
 export function isDocxEditorError(value: unknown): value is DocxEditorError;
@@ -444,6 +964,32 @@ export class List extends ModelObject implements PromisedItem {
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): List;
+    setLevelBullet(level: number, listBullet: ListBullet, charCode?: number, fontName?: string): void;
+    // (undocumented)
+    setLevelBullet(level: number, listBullet: 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark', charCode?: number, fontName?: string): void;
+    setLevelIndents(level: number, textIndent: number, bulletNumberPictureIndent: number): void;
+    setLevelNumbering(level: number, listNumbering: ListNumbering, formatString?: (string | number)[]): void;
+    // (undocumented)
+    setLevelNumbering(level: number, listNumbering: 'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter', formatString?: (string | number)[]): void;
+    setLevelStartingNumber(level: number, startingNumber: number): void;
+}
+
+// @public
+export enum ListBullet {
+    // (undocumented)
+    arrow = "Arrow",
+    // (undocumented)
+    checkmark = "Checkmark",
+    // (undocumented)
+    custom = "Custom",
+    // (undocumented)
+    diamonds = "Diamonds",
+    // (undocumented)
+    hollow = "Hollow",
+    // (undocumented)
+    solid = "Solid",
+    // (undocumented)
+    square = "Square"
 }
 
 // @public
@@ -468,6 +1014,22 @@ export class ListItem extends ModelObject {
     static of(context: RequestContext, label: string, owner: ObjectPath): ListItem;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
+}
+
+// @public
+export enum ListNumbering {
+    // (undocumented)
+    arabic = "Arabic",
+    // (undocumented)
+    lowerLetter = "LowerLetter",
+    // (undocumented)
+    lowerRoman = "LowerRoman",
+    // (undocumented)
+    none = "None",
+    // (undocumented)
+    upperLetter = "UpperLetter",
+    // (undocumented)
+    upperRoman = "UpperRoman"
 }
 
 // @public
@@ -517,7 +1079,12 @@ export class NoteItemCollection extends HandleCollection<NoteItem> {
 export type NoteItemType = 'Footnote' | 'Endnote';
 
 // @public
-export type PageOrientation = 'Portrait' | 'Landscape';
+export enum PageOrientation {
+    // (undocumented)
+    landscape = "Landscape",
+    // (undocumented)
+    portrait = "Portrait"
+}
 
 // @public
 export class PageSetup extends ModelObject {
@@ -529,8 +1096,8 @@ export class PageSetup extends ModelObject {
     static of(context: RequestContext, label: string, owner: ObjectPath): PageSetup;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
-    get orientation(): PageOrientation;
-    set orientation(value: PageOrientation);
+    get orientation(): PageOrientation | 'Portrait' | 'Landscape';
+    set orientation(value: PageOrientation | 'Portrait' | 'Landscape');
     get pageHeight(): number;
     set pageHeight(value: number);
     get pageWidth(): number;
@@ -547,17 +1114,24 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set alignment(value: ParagraphAlignment);
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph;
+    attachToList(listId: number, level: number): List;
     clear(): void;
+    get contentControls(): ContentControlCollection;
     delete(): void;
+    detachFromList(): void;
     get firstLineIndent(): number;
     set firstLineIndent(value: number);
     get font(): Font;
+    getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
     hydrateNull(): void;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    insertText(text: string, insertLocation: InsertLocation.replace | InsertLocation.start | InsertLocation.end | 'Replace' | 'Start' | 'End'): Range_2;
     get leftIndent(): number;
     set leftIndent(value: number);
     get lineSpacing(): number;
@@ -568,13 +1142,18 @@ export class Paragraph extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Paragraph;
+    get readingOrder(): ParagraphReadingOrder;
+    set readingOrder(value: ParagraphReadingOrder);
     get rightIndent(): number;
     set rightIndent(value: number);
+    search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
+    get shapes(): ShapeCollection;
     get spaceAfter(): number;
     set spaceAfter(value: number);
     get spaceBefore(): number;
     set spaceBefore(value: number);
     split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection;
+    startNewList(): List;
     get style(): string;
     set style(value: string);
     get text(): string;
@@ -582,7 +1161,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
 }
 
 // @public
-export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+export type ParagraphAlignment = Alignment | 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 // @public
 export class ParagraphCollection extends ItemCollection<Paragraph> {
@@ -607,32 +1186,58 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 }
 
 // @public
-export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
+export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
+
+// @public
+export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
+
+// @public
+export type PreviewCallback<T = void> = (context: RequestContext) => Promise<T>;
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Range_2;
     get bookmarks(): BookmarkCollection;
+    clear(): void;
+    get contentControls(): ContentControlCollection;
+    delete(): void;
+    expandTo(range: Range_2): Range_2;
+    get fields(): FieldCollection;
     get font(): Font;
+    getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
+    getRange(rangeLocation?: RangeLocation.whole | RangeLocation.start | RangeLocation.end | RangeLocation.after | RangeLocation.content | 'Whole' | 'Start' | 'End' | 'After' | 'Content'): Range_2;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
     hydrateNull(): void;
     get hyperlink(): string;
     set hyperlink(value: string);
+    get inlinePictures(): InlinePictureCollection;
+    insertBookmark(name: string): void;
+    insertBreak(breakType: BreakType | 'Page' | 'SectionNext' | 'Next' | 'Line' | 'SectionContinuous' | 'SectionEven' | 'SectionOdd', insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): void;
     insertComment(commentText: string): Comment_2;
-    insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
-    insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
+    insertContentControl(contentControlType?: ContentControlType.richText | ContentControlType.plainText | ContentControlType.buildingBlockGallery | ContentControlType.checkBox | ContentControlType.comboBox | ContentControlType.datePicker | ContentControlType.dropDownList | ContentControlType.group | ContentControlType.picture | ContentControlType.repeatingSection | 'RichText' | 'PlainText' | 'BuildingBlockGallery' | 'CheckBox' | 'ComboBox' | 'DatePicker' | 'DropDownList' | 'Group' | 'Picture' | 'RepeatingSection'): ContentControl;
+    insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldType, text?: string, removeFormatting?: boolean): Field;
+    insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldTypeLiteral, text?: string, removeFormatting?: boolean): Field;
+    insertInlinePictureFromBase64(base64EncodedImage: string, insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'): InlinePicture;
+    insertParagraph(paragraphText: string, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): Paragraph;
+    insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', values?: string[][]): Table;
+    insertText(text: string, insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Range_2;
+    get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     select(selectionMode_?: SelectionMode_2): void;
     get style(): string;
     set style(value: string);
+    get tables(): TableCollection;
     get text(): string;
 }
 export { Range_2 as Range }
@@ -659,7 +1264,67 @@ export class RangeCollection extends ItemCollection<Range_2> {
 }
 
 // @public
-export type RangeInsertTextLocation = InsertLocation;
+export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+
+// @public
+export enum RangeLocation {
+    // (undocumented)
+    after = "After",
+    // (undocumented)
+    before = "Before",
+    // (undocumented)
+    content = "Content",
+    // (undocumented)
+    end = "End",
+    // (undocumented)
+    start = "Start",
+    // (undocumented)
+    whole = "Whole"
+}
+
+// @public
+export enum RemoveDocInfoType {
+    // (undocumented)
+    all = "All",
+    // (undocumented)
+    atMentions = "AtMentions",
+    // (undocumented)
+    commentReactions = "CommentReactions",
+    // (undocumented)
+    comments = "Comments",
+    // (undocumented)
+    contentType = "ContentType",
+    // (undocumented)
+    documentIntelligence = "DocumentIntelligence",
+    // (undocumented)
+    documentManagementPolicy = "DocumentManagementPolicy",
+    // (undocumented)
+    documentProperties = "DocumentProperties",
+    // (undocumented)
+    documentServerProperties = "DocumentServerProperties",
+    // (undocumented)
+    documentTasks = "DocumentTasks",
+    // (undocumented)
+    documentWorkspace = "DocumentWorkspace",
+    // (undocumented)
+    emailHeader = "EmailHeader",
+    // (undocumented)
+    inkAnnotations = "InkAnnotations",
+    // (undocumented)
+    removePersonalInformation = "RemovePersonalInformation",
+    // (undocumented)
+    revisions = "Revisions",
+    // (undocumented)
+    routingSlip = "RoutingSlip",
+    // (undocumented)
+    sendForReview = "SendForReview",
+    // (undocumented)
+    taskpaneWebExtensions = "TaskpaneWebExtensions",
+    // (undocumented)
+    template = "Template",
+    // (undocumented)
+    versions = "Versions"
+}
 
 // @public
 export class RequestContext {
@@ -683,6 +1348,8 @@ export class Revision extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
+    // @internal
+    static batchHandle(revision: Revision, context: RequestContext, target?: string): AutomationHandle;
     get date(): Date | null;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
@@ -697,9 +1364,34 @@ export class Revision extends ModelObject implements PromisedItem {
     get type(): RevisionType;
 }
 
+export { RevisionAuthorEntry }
+
+// @public
+export interface RevisionAuthorOptions {
+    readonly date?: Date;
+}
+
+export { RevisionAuthorResult }
+
+// @public
+export interface RevisionAuthorSelection {
+    // (undocumented)
+    readonly authors: readonly string[];
+}
+
+export { RevisionAuthorSkipReason }
+
+export { RevisionBatchEntry }
+
+export { RevisionBatchResult }
+
+export { RevisionBatchSkipReason }
+
 // @public
 export class RevisionCollection extends HandleCollection<Revision> {
     acceptAll(): void;
+    // @internal
+    static inSpan(context: RequestContext, label: string, owner: ObjectPath, span: () => AutomationSpanRef): RevisionCollection;
     // @internal
     protected itemAt(label: string, address: ObjectAddress): Revision;
     // @internal
@@ -707,8 +1399,12 @@ export class RevisionCollection extends HandleCollection<Revision> {
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): RevisionCollection;
     // @internal
+    static ofReviewKey(context: RequestContext, label: string, owner: ObjectPath, key: string): RevisionCollection;
+    // @internal
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
+    resolve(action: 'accept' | 'reject', revisions?: readonly Revision[]): ClientResult<RevisionBatchResult>;
+    setAuthor(author: string, selection?: readonly Revision[] | RevisionAuthorSelection, options?: RevisionAuthorOptions): ClientResult<RevisionAuthorResult>;
 }
 
 // @public
@@ -719,6 +1415,40 @@ export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'Paragrap
 
 // @public
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
+
+// @public
+export interface RunOptions {
+    readonly historyGroup?: HistoryGroup;
+    readonly previousObjects?: ClientObject | readonly ClientObject[];
+}
+
+// @public
+export type RuntimeDiagnostic = {
+    readonly editorSessionId: string;
+    readonly schemaVersion: number;
+    readonly time: number;
+} & ({
+    readonly durationMs: number;
+    readonly kind: 'document.open';
+    readonly outcome: 'opened';
+    readonly sizeBucket: ByteSizeBucket;
+} | {
+    readonly cause?: string;
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly errorName?: DiagnosticErrorName;
+    readonly kind: 'document.open';
+    readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
+    readonly sizeBucket?: ByteSizeBucket;
+} | {
+    readonly cause?: string;
+    readonly code: EditDiagnosticCode;
+    readonly errorName?: DiagnosticErrorName;
+    readonly kind: 'edit.rejected';
+    readonly origin: 'automation';
+    readonly stage?: 'automation';
+    readonly tracked: boolean;
+});
 
 // @public
 export interface SearchOptions {
@@ -766,11 +1496,238 @@ type SelectionMode_2 = 'Select' | 'Start' | 'End';
 export { SelectionMode_2 as SelectionMode }
 
 // @public
+export interface ServerPaginationOptions extends AutomationPaginationOptions {
+}
+
+// @public
+export class Shape extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Shape;
+    get body(): Body_2;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    get id(): number;
+    get name(): string;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): Shape;
+    get type(): ShapeType;
+}
+
+// @public
+export class ShapeCollection extends ItemCollection<Shape> {
+    // @internal (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    getByTypes(types: ShapeType[]): ShapeCollection;
+    getFirst(): Shape;
+    getFirstOrNullObject(): Shape;
+    // @internal (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Shape;
+    // @internal (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner, types?: readonly ShapeType[]): ShapeCollection;
+    // @internal (undocumented)
+    protected promised(label: string, nullable: boolean): Shape & PromisedItem;
+    // @internal (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum ShapeType {
+    // (undocumented)
+    canvas = "Canvas",
+    // (undocumented)
+    geometricShape = "GeometricShape",
+    // (undocumented)
+    group = "Group",
+    // (undocumented)
+    picture = "Picture",
+    // (undocumented)
+    textBox = "TextBox",
+    // (undocumented)
+    unsupported = "Unsupported"
+}
+
+// @public
+export class Table extends ModelObject implements PromisedItem {
+    addColumns(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', columnCount: number, values?: string[][]): void;
+    addRows(insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End', rowCount: number, values?: string[][]): TableRowCollection;
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Table;
+    get columnCount(): number;
+    delete(): void;
+    deleteColumns(columnIndex: number, columnCount?: number): void;
+    deleteRows(rowIndex: number, rowCount?: number): void;
+    getCell(rowIndex: number, cellIndex: number): TableCell;
+    get headerRowCount(): number;
+    set headerRowCount(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    mergeCells(topRow: number, firstCell: number, bottomRow: number, lastCell: number): TableCell;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): Table;
+    get rowCount(): number;
+    get rows(): TableRowCollection;
+    get style(): string;
+    set style(value: string);
+    get values(): string[][];
+    set values(value: string[][]);
+}
+
+// @public
+export class TableCell extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): TableCell;
+    get body(): Body_2;
+    get columnWidth(): number;
+    set columnWidth(value: number);
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): TableCell;
+    get shadingColor(): string;
+    set shadingColor(value: string);
+    split(rowCount: number, columnCount: number): void;
+    get value(): string;
+    set value(value: string);
+    get verticalAlignment(): VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed';
+    set verticalAlignment(value: VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed');
+}
+
+// @public
+export class TableCellCollection extends HandleCollection<TableCell> {
+    getFirst(): TableCell;
+    getFirstOrNullObject(): TableCell;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): TableCell;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCellCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): TableCell & PromisedItem;
+}
+
+// @public
+export class TableCollection extends HandleCollection<Table> {
+    getFirst(): Table;
+    getFirstOrNullObject(): Table;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Table;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableCollection;
+    // @internal (undocumented)
+    static over(context: RequestContext, label: string, owner: ObjectPath, scope: () => AutomationSpanRef): TableCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): Table & PromisedItem;
+}
+
+// @public
+export class TableRow extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): TableRow;
+    get cells(): TableCellCollection;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    insertRows(insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', rowCount: number, values?: string[][]): TableRowCollection;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable?: boolean): TableRow;
+}
+
+// @public
+export class TableRowCollection extends HandleCollection<TableRow> {
+    getFirst(): TableRow;
+    getFirstOrNullObject(): TableRow;
+    // (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): TableRow;
+    // (undocumented)
+    protected listing(): AutomationOperation | null;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, listing: () => AutomationOperation | null): TableRowCollection;
+    // (undocumented)
+    protected promised(label: string, nullable: boolean): TableRow & PromisedItem;
+}
+
+// @public
 export class TrackedObjects {
     // @internal
     constructor(internals: ContextInternals, owns: (object: ClientObject) => boolean);
     add(object: ClientObject | readonly ClientObject[]): void;
     remove(object: ClientObject | readonly ClientObject[]): void;
+}
+
+// @public
+export enum UnderlineType {
+    // (undocumented)
+    dashLine = "DashLine",
+    // (undocumented)
+    dashLineHeavy = "DashLineHeavy",
+    // (undocumented)
+    dashLineLong = "DashLineLong",
+    // (undocumented)
+    dashLineLongHeavy = "DashLineLongHeavy",
+    // (undocumented)
+    dotDashLine = "DotDashLine",
+    // (undocumented)
+    dotDashLineHeavy = "DotDashLineHeavy",
+    // (undocumented)
+    dotLine = "DotLine",
+    // (undocumented)
+    dotted = "Dotted",
+    // (undocumented)
+    dottedHeavy = "DottedHeavy",
+    // (undocumented)
+    double = "Double",
+    // (undocumented)
+    hidden = "Hidden",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    none = "None",
+    // (undocumented)
+    single = "Single",
+    // (undocumented)
+    thick = "Thick",
+    // (undocumented)
+    twoDotDashLine = "TwoDotDashLine",
+    // (undocumented)
+    twoDotDashLineHeavy = "TwoDotDashLineHeavy",
+    // (undocumented)
+    wave = "Wave",
+    // (undocumented)
+    waveDouble = "WaveDouble",
+    // (undocumented)
+    waveHeavy = "WaveHeavy",
+    // (undocumented)
+    word = "Word"
+}
+
+// @public
+export enum VerticalAlignment {
+    // (undocumented)
+    bottom = "Bottom",
+    // (undocumented)
+    center = "Center",
+    // (undocumented)
+    mixed = "Mixed",
+    // (undocumented)
+    top = "Top"
 }
 
 ```

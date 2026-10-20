@@ -2,7 +2,7 @@
 //
 // Composes the already-hardened package primitives — `readZip` (entry/size/ratio limits and
 // OPC name normalization), `normalizePartName` / `resolveInternalTarget` /
-// `validateExternalTarget`, `buildContentTypeIndex`, and `buildRelationshipSet` — into ONE
+// `validateExternalTarget`, `buildTolerantContentTypeIndex`, and `buildRelationshipSet` — into ONE
 // loader that produces `OoxmlPart` trees. It replaces nothing yet: `parseDocx` still builds
 // the `PackageModel`, and this is the path that becomes authoritative as sections 5 and 6
 // move the store and binding onto the tree (task 6.7 then deletes the byte-range model).
@@ -15,11 +15,14 @@
 //   - XML parsing inherits `readXml`'s DTD/entity refusal and byte/element caps;
 //   - the number of parts converted into trees is capped, so a package cannot force
 //     unbounded tree construction.
+// One deliberate tolerance: a content-type record with malformed MIME syntax is ignored
+// (treated as absent) unless it decides the type of a part the document needs.
 
+import { textboxFallbackExportPackageSteps } from './textbox-fallback-export.ts';
+import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
   readZip,
-  writeZip,
-  strToU8,
+  writeZipSteps,
   strFromU8,
   type ZipLimits,
   type ZipRejection,
@@ -39,24 +42,43 @@ import {
   type RelationshipRecord,
 } from './relationships.ts';
 import {
-  buildContentTypeIndex,
+  buildTolerantContentTypeIndex,
+  governedByIgnoredRecord,
+  isConventionalMime,
   resolveContentType,
   type ContentTypeIndex,
   type DefaultRecord,
+  type IgnoredContentTypes,
   type OverrideRecord,
 } from './content-types.ts';
-import {
-  readOoxmlPart,
-  serializeOoxmlPart,
-  type OoxmlPart,
-  type OoxmlReadRejection,
-} from './ooxml-tree.ts';
+import type { OoxmlPart, OoxmlReadRejection } from './ooxml-tree.ts';
+import { serializeOoxmlPartSteps } from './ooxml-serialize-steps.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
+import { commentExportPackage } from './comment-export-cleanup.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const OFFICE_DOCUMENT_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+const OFFICE_RELATIONSHIPS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+/**
+ * Relationships whose targets are binary payloads the engine keeps as bytes and identifies
+ * by their signature, never by their declared type. Every OTHER internal target of the
+ * package root or the main document is required: a dropped content-type record that decides
+ * its type refuses the package, because the part would otherwise load as unknown bytes and
+ * the document would open without it.
+ */
+const PAYLOAD_RELATIONSHIP_TYPES: ReadonlySet<string> = new Set([
+  `${OFFICE_RELATIONSHIPS}/image`,
+  `${OFFICE_RELATIONSHIPS}/oleObject`,
+  `${OFFICE_RELATIONSHIPS}/package`,
+  `${OFFICE_RELATIONSHIPS}/audio`,
+  `${OFFICE_RELATIONSHIPS}/video`,
+  'http://schemas.microsoft.com/office/2007/relationships/media',
+  'http://schemas.microsoft.com/office/2007/relationships/hdphoto',
+  'http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail',
+]);
 
 /** MIME types read into canonical trees. Anything else stays bytes (media, fonts, ...). */
 const XML_CONTENT_TYPE_RE = /(?:\/xml|\+xml)$/i;
@@ -181,7 +203,12 @@ export type OoxmlPackageRejection =
 /** A loaded package, or a typed refusal. Never throws. */
 export type OoxmlPackageResult =
   | { readonly ok: true; readonly package: OoxmlPackage }
-  | { readonly ok: false; readonly reason: OoxmlPackageRejection; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly reason: OoxmlPackageRejection;
+      readonly detail?: string;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
+    };
 
 function isElement(node: XmlNode): node is Extract<XmlNode, { type: 'element' }> {
   return node.type === 'element';
@@ -302,27 +329,56 @@ function relsOwner(relsPartName: string): string | null {
   return `${dir}/${base}`;
 }
 
-function readContentTypes(xml: string, limits?: XmlLimits): ContentTypeIndex | null {
-  const parsed = readXml(xml, limits);
-  if (!parsed.ok) return null;
+function readContentTypes(
+  nodes: readonly XmlNode[]
+): { readonly index: ContentTypeIndex; readonly ignored: IgnoredContentTypes } | null {
   const defaults: DefaultRecord[] = [];
   const overrides: OverrideRecord[] = [];
   let order = 0;
   const emptyScope = new Map<string, string>();
-  for (const element of collectContentTypeElements(parsed.nodes, 'Default', emptyScope)) {
+  for (const element of collectContentTypeElements(nodes, 'Default', emptyScope)) {
     const extension = unqualifiedXmlAttribute(element, 'Extension');
     const contentType = unqualifiedXmlAttribute(element, 'ContentType');
     if (extension === undefined || contentType === undefined) continue;
     defaults.push({ extension, contentType, order: order++ });
   }
-  for (const element of collectContentTypeElements(parsed.nodes, 'Override', emptyScope)) {
+  for (const element of collectContentTypeElements(nodes, 'Override', emptyScope)) {
     const partName = unqualifiedXmlAttribute(element, 'PartName');
     const contentType = unqualifiedXmlAttribute(element, 'ContentType');
     if (partName === undefined || contentType === undefined) continue;
     overrides.push({ partName, contentType, order: order++ });
   }
-  const index = buildContentTypeIndex({ defaults, overrides });
-  return index.ok ? index.index : null;
+  const built = buildTolerantContentTypeIndex({ defaults, overrides });
+  return built.ok ? { index: built.index, ignored: built.ignored } : null;
+}
+
+/**
+ * The first required part whose content type a dropped (invalid-MIME) record decides, or
+ * `null`. Required: the main document part, every relationships part, and every part the
+ * package root or the main document relates to, except binary payloads.
+ */
+function requiredPartWithIgnoredType(
+  mainDocumentPart: string,
+  ownedRelationships: readonly RelationshipRecord[],
+  partNames: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+  index: ContentTypeIndex,
+  ignored: IgnoredContentTypes
+): string | null {
+  if (ignored.overrideKeys.size === 0 && ignored.extensions.size === 0) return null;
+  if (governedByIgnoredRecord(index, ignored, mainDocumentPart)) return mainDocumentPart;
+  for (const partName of partNames.keys()) {
+    if (relsOwner(partName) !== null && governedByIgnoredRecord(index, ignored, partName)) {
+      return partName;
+    }
+  }
+  for (const record of ownedRelationships) {
+    if (PAYLOAD_RELATIONSHIP_TYPES.has(record.type)) continue;
+    const resolved = resolveRelationship(record);
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
+    const target = resolved.target.partName;
+    if (partNames.has(target) && governedByIgnoredRecord(index, ignored, target)) return target;
+  }
+  return null;
 }
 
 /** Resolve a part's declared content type: Override wins, then the extension Default. */
@@ -331,21 +387,6 @@ function contentTypeFor(partName: string, index: ContentTypeIndex): string {
   return resolved.ok ? resolved.contentType : '';
 }
 
-/**
- * Load an OPC package into canonical typed/generic OOXML trees.
- *
- * Fails closed on every limit, malformed name, unresolvable internal target, duplicate
- * relationship id, and XML rejection. An external relationship never causes a failure and
- * never causes a fetch: it is recorded with its sink-safety verdict for a later, explicitly
- * user-gated lane.
- */
-/**
- * Load DOCX bytes into canonical trees, bounded at every step.
- *
- * THE trust boundary for a document. Composes the hardened primitives — zip limits and OPC name
- * normalization, content-type indexing, relationship validation, entity-free XML — into one
- * loader, and returns a typed rejection rather than throwing from inside a decoder.
- */
 /**
  * Times {@link readOoxmlPackage} has run in this process.
  *
@@ -359,20 +400,72 @@ export function ooxmlPackageReadCount(): number {
   return packageReadCount;
 }
 
+/**
+ * Load DOCX bytes into canonical typed/generic OOXML trees, bounded at every step.
+ *
+ * THE trust boundary for a document. Composes the hardened primitives — zip limits and OPC name
+ * normalization, content-type indexing, relationship validation, entity-free XML — into one
+ * loader, and returns a typed rejection rather than throwing from inside a decoder.
+ *
+ * Fails closed on every limit, malformed name, unresolvable internal target, duplicate
+ * relationship id, and XML rejection. An external relationship never causes a failure and
+ * never causes a fetch: it is recorded with its sink-safety verdict for a later, explicitly
+ * user-gated lane. A content-type record with an invalid MIME type is treated as absent,
+ * unless it decides the type of the main document part, a relationships part, or a
+ * non-payload part that the package root or the main document relates to.
+ */
 export function readOoxmlPackage(
   bytes: Uint8Array,
   limits: OoxmlPackageLimits = {}
 ): OoxmlPackageResult {
+  const steps = readOoxmlPackageSteps(bytes, limits);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * {@link readOoxmlPackage}, yielding between units of work: after the unzip, and inside a
+ * long XML part (see `ooxml-part-steps.ts`). A caller that stops between yields gives the page
+ * a turn while a large document reads; the answer is the same either way.
+ *
+ * @internal
+ */
+export function* readOoxmlPackageSteps(
+  bytes: Uint8Array,
+  limits: OoxmlPackageLimits = {}
+): Generator<void, OoxmlPackageResult> {
   packageReadCount += 1;
   const zip = readZip(bytes, limits.zip ?? DEFAULT_ZIP_LIMITS);
-  if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
+  yield;
+  if (!zip.ok)
+    return {
+      ok: false,
+      reason: zip.reason,
+      detail: zip.detail,
+      ...(zip.limit === undefined ? {} : { limit: zip.limit }),
+    };
 
   const contentTypeBytes = zip.entries.get(CONTENT_TYPES_PART);
   if (!contentTypeBytes) return { ok: false, reason: 'no-content-types' };
   const decodedContentTypes = decodeXmlBytes(contentTypeBytes, limits.xml);
   if (!decodedContentTypes.ok) return { ok: false, reason: decodedContentTypes.reason };
-  const contentTypes = readContentTypes(decodedContentTypes.xml, limits.xml);
-  if (!contentTypes) return { ok: false, reason: 'bad-content-types' };
+  const parsedContentTypes = readXml(decodedContentTypes.xml, limits.xml);
+  if (!parsedContentTypes.ok) {
+    // Preserve the existing malformed-content-types refusal, but retain resource failures.
+    const reason = parsedContentTypes.reason;
+    return {
+      ok: false,
+      reason:
+        reason === 'too-large' || reason === 'too-many-elements' || reason === 'too-deep'
+          ? reason
+          : 'bad-content-types',
+    };
+  }
+  const contentTypeRead = readContentTypes(parsedContentTypes.nodes);
+  if (!contentTypeRead) return { ok: false, reason: 'bad-content-types' };
+  const contentTypes = contentTypeRead.index;
 
   const maxRelationships = limits.maxRelationships ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxRelationships;
   const records: RelationshipRecord[] = [];
@@ -455,6 +548,16 @@ export function readOoxmlPackage(
   if (!zip.entries.has(mainDocumentPart)) {
     return { ok: false, reason: 'no-main-document', detail: mainDocumentPart };
   }
+  const misdeclared = requiredPartWithIgnoredType(
+    mainDocumentPart,
+    rootRels.concat(set.byOwner.get(mainDocumentPart) ?? []),
+    zip.entries,
+    contentTypes,
+    contentTypeRead.ignored
+  );
+  if (misdeclared !== null) {
+    return { ok: false, reason: 'bad-content-types', detail: misdeclared };
+  }
 
   const maxXmlParts = limits.maxXmlParts ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxXmlParts;
   const parts = new Map<string, OoxmlPart>();
@@ -464,6 +567,8 @@ export function readOoxmlPackage(
     // Media SVG stays raw bytes — tree parsing would break D9 byte identity for parts.
     if (contentType.toLowerCase() === 'image/svg+xml') continue;
     if (!XML_CONTENT_TYPE_RE.test(contentType)) continue;
+    // An extension-style type (`image/.svg+xml`) names no XML vocabulary: its part stays bytes.
+    if (!isConventionalMime(contentType)) continue;
     if (parts.size >= maxXmlParts) return { ok: false, reason: 'too-many-xml-parts' };
     // Re-normalize even though `readZip` already did: this is the name that becomes a node
     // identity prefix, and it must not be reachable through a second, unchecked route.
@@ -477,7 +582,11 @@ export function readOoxmlPackage(
     }
     const decoded = decodeXmlBytes(data, limits.xml);
     if (!decoded.ok) return { ok: false, reason: decoded.reason, detail: partName };
-    const read = readOoxmlPart(decoded.xml, { name: normalized.partName, contentType }, limits.xml);
+    const read = yield* readOoxmlPartSteps(
+      decoded.xml,
+      { name: normalized.partName, contentType },
+      limits.xml
+    );
     if (!read.ok) return { ok: false, reason: read.reason, detail: partName };
     parts.set(normalized.partName, read.part);
   }
@@ -512,11 +621,33 @@ export function readOoxmlPackage(
  * save cannot be smuggled into the archive.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
-  const entries = new Map<string, Uint8Array>(pkg.partBytes);
-  for (const [name, part] of pkg.parts) {
-    entries.set(name, strToU8(serializeOoxmlPart(part)));
+  const steps = writeOoxmlPackageSteps(pkg);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
   }
-  return writeZip(entries);
+}
+
+/**
+ * {@link writeOoxmlPackage}, yielding between units of work: between paragraphs of a long
+ * part and between slices of a long ZIP entry. A caller that stops between yields keeps the
+ * page responsive while a large document saves; the bytes are the same either way.
+ *
+ * The package is immutable, so the result describes `pkg` even when the caller's document
+ * moves on between steps. Paragraphs serialized by an earlier save are reused, so a save
+ * after a small edit does real work only for what the edit changed.
+ *
+ * @internal
+ */
+export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint8Array> {
+  const exported = yield* textboxFallbackExportPackageSteps(commentExportPackage(pkg));
+  yield;
+  const entries = new Map<string, Uint8Array>(exported.partBytes);
+  for (const [name, part] of exported.parts) {
+    entries.set(name, yield* serializeOoxmlPartSteps(part));
+    yield;
+  }
+  return yield* writeZipSteps(entries);
 }
 
 /** Replace one part's tree, returning a new package. Pure, like the tree edits themselves. */

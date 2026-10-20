@@ -50,6 +50,9 @@ export type {
   ChromeMenuItemEntry,
   ChromeMenuSeparatorEntry,
   ChromeMenuSubmenuEntry,
+  ContentLockPolicy,
+  FieldResultsMode,
+  FontShapingOptions,
   FontLoadFailureReason,
   FontResolutionRequest,
   FontMeasurementState,
@@ -57,6 +60,11 @@ export type {
   FontUrlSource,
   HyperlinkActivation,
   HyperlinkChromeHandlers,
+  BookmarkMarkInfo,
+  BookmarkMarkOptions,
+  CommentDraftChromeHandlers,
+  GoToChromeHandlers,
+  LockedControlNavigation,
   SurfaceHyperlink,
 } from './editor/index.ts';
 
@@ -70,10 +78,14 @@ export type {
 // contract's transitive closure in one line and it cannot drift again.
 export type * from './contracts/editor.ts';
 
-// ─── Fonts: the reason pagination matches Word ───────────────────────────────
+// ─── Fonts: what line and page breaks are measured against ───────────────────
 export {
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   loadFonts,
+  customFonts,
+  type CustomFontsOptions,
+  type CustomFontsResolver,
   createFontSource,
   FONT_RESOLVER_BRAND,
   FONT_RESOLVER_MARK_KEY,
@@ -93,6 +105,12 @@ export {
   type FontLoadFailure,
 } from './editor/index.ts';
 export type { FontConfiguration, FontSource, FontFaceRequest } from './contracts/editor.ts';
+// The shape `snapshot().documentProtection` carries. Declared in the store lane, named here
+// so a consumer of this package can type the field without reaching into a subpath.
+export type {
+  DocumentProtectionEdit,
+  DocumentProtectionState,
+} from './store/package/document-protection.ts';
 
 // ─── Chrome registry: what a toolbar is built from ───────────────────────────
 export {
@@ -106,6 +124,35 @@ export {
   type ChromeSlotId,
   type ToolbarCommandState,
 } from './editor/index.ts';
+// Types the editor's public signatures hand out. The editor entry exports them too; listing
+// them here lets a consumer of this entry name what `createDocxEditor` and its methods return.
+export type {
+  AttachOptions,
+  BookmarkChromeHandlers,
+  ChromeExportView,
+  CollaborationModuleContribution,
+  ContentControlWidgetChromeHandlers,
+  ContentControlWidgetSession,
+  EquationActivation,
+  EquationChromeHandlers,
+  SurfaceEquation,
+  ImageDecodePort,
+  ImageResourceLimits,
+  InvalidTextFormFieldChromeHandlers,
+  InvalidTextFormFieldSession,
+  PopupChromeRegistrationOptions,
+  ReviewAuthorInfo,
+  ReviewPaneOptions,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionMarkupChromeHandlers,
+  RevisionMarkupOptions,
+  RevisionStyles,
+  TableChromeSlotId,
+  ToolbarValueMap,
+  ToolbarValueSlot,
+} from './editor/index.ts';
+export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from './contracts/modules.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {
@@ -115,6 +162,13 @@ export type {
   ReviewModuleContribution,
   RevisionDisplayMode,
 } from './contracts/modules.ts';
+
+// ─── Anonymous diagnostics: stable codes, fixed hints, no document content ───
+export { DIAGNOSTIC_SCHEMA_VERSION } from './contracts/diagnostics.ts';
+export { diagnosticCodes, explainDiagnostic } from './automation/diagnostic-hints.ts';
+export { diagnosticCauses } from './automation/diagnostic-context.ts';
+export { diagnosticCommands } from './editor/diagnostic-commands.ts';
+export { diagnosticCodeOfRefusal } from './editor/diagnostic-codes.ts';
 
 // ─── The document model and the edit/query vocabulary ────────────────────────
 export type * from './contracts/types';
@@ -128,3 +182,22 @@ export type {
   DocQueryResults,
   ParagraphSummary,
 } from './contracts/document.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './editor/bind-history-group.ts';
+
+export { runChromeExport, ChromeExportError } from './editor/chrome-export.ts';
+export type {
+  ChromeExportFormat,
+  ChromeExportHandlers,
+  ChromeExportResult,
+} from './editor/chrome-export.ts';
+export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './editor/chrome-print.ts';
+export type {
+  ChromePrintErrorCode,
+  ChromePrintJob,
+  ChromePrintOptions,
+} from './editor/chrome-print.ts';

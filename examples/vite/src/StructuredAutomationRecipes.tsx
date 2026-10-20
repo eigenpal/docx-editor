@@ -1,5 +1,6 @@
+import { exampleText as t } from '../../shared/example-text';
 import { useState } from 'react';
-import { useDocxEditor, useTranslation } from '@docx-editor.dev/react';
+import { useDocxEditor } from '@docx-editor.dev/react';
 import {
   DocxEditor as AutomationDocxEditor,
   isDocxEditorError,
@@ -41,7 +42,6 @@ function textSample(value: string): string {
  * collection is useful output rather than an exception hidden behind demo-specific fallbacks.
  */
 export function StructuredAutomationRecipes() {
-  const { t } = useTranslation();
   const editor = useDocxEditor();
   const [open, setOpen] = useState(false);
   const [reading, setReading] = useState<RecipeReading>(IDLE_READING);

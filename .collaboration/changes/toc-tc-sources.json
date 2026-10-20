@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Refreshing a TC-based table of contents deletes cached entries not present in the document outline.",
+  "after": "Refresh builds entries from TC sources and refuses source combinations it cannot faithfully regenerate.",
+  "reason": "Generated TOC rows use existing OOXML paragraphs, tabs, text, and bookmarks. The operation commits existing canonical primitives; the shared format, repair rules, and readers do not change.",
+  "tests": [
+    "packages/core/src/editor/__tests__/toc-tc-refresh.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-toc.test.ts"
+  ],
+  "changeset": "toc-tc-sources",
+  "migration": null
+}

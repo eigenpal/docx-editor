@@ -4,11 +4,8 @@
  * `DocxEditor`. See `insert-text.ts` for why the trailing `context.sync()`
  * call is included.
  *
- * The sample highlights its matches. `Font#highlightColor` is a recorded
- * omission — the property this engine authors carries a fixed set of colour
- * NAMES where upstream's type is `#RRGGBB`, so it is de-selected rather than
- * declared and half-answered — and the sample's remaining formatting is
- * selected, so it is bold and coloured text here instead.
+ * This fixture keeps its original bold and color operations. The public runtime also
+ * supports exact Word-palette highlighting; see Font runtime notes in manifest.json.
  */
 import { DocxEditor } from '../../docxeditor/declarations';
 
@@ -41,6 +38,19 @@ export async function replaceFirstMatch(searchText: string, replacement: string)
     await context.sync();
     const first = results.getFirst();
     first.insertText(replacement, 'Replace');
+    await context.sync();
+  });
+}
+
+export async function highlightMatchesInFirstParagraph(searchText: string): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    const paragraph = context.document.body.paragraphs.getFirst();
+    const searchResults = paragraph.search(searchText);
+    await context.sync();
+
+    for (const range of searchResults.items) {
+      range.font.bold = true;
+    }
     await context.sync();
   });
 }

@@ -198,7 +198,7 @@ export function createUnsupportedContentProjector(resolve: UnsupportedContentRes
   return {
     part: projectPart,
     view(view) {
-      return {
+      const overrides: Partial<HeadlessDocumentView> = {
         part: () => projectPart(view.part()),
         currentPackage: () => {
           const source = view.currentPackage();
@@ -245,6 +245,15 @@ export function createUnsupportedContentProjector(resolve: UnsupportedContentRes
             }
           : {}),
       };
+      // Forward new view capabilities without losing their original receiver.
+      return new Proxy(overrides as HeadlessDocumentView, {
+        get(_target, key) {
+          if (Object.prototype.hasOwnProperty.call(overrides, key))
+            return Reflect.get(overrides, key);
+          const value = Reflect.get(view, key, view);
+          return typeof value === 'function' ? value.bind(view) : value;
+        },
+      });
     },
   };
 }

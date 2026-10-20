@@ -15,14 +15,14 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 
 ## Mount the editor
 
-Two files, mirroring [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite).
+Add these two files. The mount ID must match your `index.html`; the standard Vite React template uses `root`.
 
 ```tsx
 // src/main.tsx
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 
-const container = document.getElementById('app');
+const container = document.getElementById('root');
 if (container) {
   createRoot(container).render(<App />);
 }

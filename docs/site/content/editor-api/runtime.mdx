@@ -1,0 +1,252 @@
+---
+title: 'Runtime and setup'
+description: 'Create server, browser, and collaborative runtimes; configure limits, save files, and release resources.'
+category: 'Editing API'
+order: 51
+---
+
+Create one runtime for each document host. Obtain document objects inside `runtime.run()`. The package requires the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
+
+## Install and choose an entry
+
+Install the API and its engine peer dependency:
+
+```bash
+npm install @docx-editor.dev/editor-api @docx-editor.dev/core
+```
+
+Your application must resolve one engine copy across the API and editor adapters. Server use requires Node.js `^20.16.0 || >=22.3.0`.
+
+| Entry | Factories | Result |
+| --- | --- | --- |
+| `@docx-editor.dev/editor-api` | `DocxEditor.createServer`, `DocxEditor.createCollaborative` | `Promise<DocxEditorServerRuntime>` |
+| `@docx-editor.dev/editor-api/browser` | The server factories and `DocxEditor.createBrowser` | Browser creation returns `DocxEditorRuntime` synchronously |
+
+Both entries export the document model and shared support types. `CreateBrowserOptions` belongs to the browser entry. `DocxEditorNamespace` describes each entry's factory object. These host factories are DocxEditor extensions, outside the Office.js document model.
+
+## Open, edit, and save bytes
+
+This example replaces a unique template token and saves a separate file:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+
+const runtime = await DocxEditor.createServer(await readFile('input.docx'), {
+  author: 'Document agent',
+});
+try {
+  await runtime.run(async (context) => {
+    const matches = context.document.body.search('{{customer}}', {
+      matchCase: true,
+    });
+    matches.load('items');
+    await context.sync();
+    if (matches.items.length !== 1) throw new Error('Expected one customer');
+    matches.items[0]!.insertText('Ada', 'Replace');
+    await context.sync();
+  });
+  await writeFile('output.docx', await runtime.save());
+} finally {
+  runtime.dispose();
+}
+```
+
+`createServer(bytes, options?)` finishes parsing before its promise resolves. It does not retain the input byte array. `save()` returns a fresh, caller-owned `Uint8Array` each time. Mutating or transferring that array does not change the runtime. A detached runtime does not update an open editor automatically. Your application must explicitly load the saved bytes into that editor.
+
+`dispose()` is safe to call more than once. Later calls to `run()` or `save()` fail with `RuntimeDisposed`. Disposal also invalidates tracked objects.
+
+## Drive an open browser editor
+
+Pass an attached `DocxEditorInstance` from the core, React, or Vue editor integration:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+
+const runtime = DocxEditor.createBrowser(editor, {
+  author: 'Document reviewer',
+});
+try {
+  await runtime.run(async (context) => {
+    const first = context.document.paragraphs.getFirstOrNullObject();
+    first.load('text');
+    await context.sync();
+    if (!first.isNullObject) first.font.bold = true;
+    await context.sync();
+  });
+} finally {
+  runtime.dispose();
+}
+```
+
+Browser edits use the editor's transaction and Undo history. The browser runtime has no `save()` method. Save through the owning editor. Runtime disposal releases its adapter; it does not destroy the editor.
+
+### Join an editor history group
+
+By default, each `context.sync()` that writes is its own undo step. To make a run part of a larger undo step, pass an open handle from `editor.beginHistoryGroup()` as the first argument:
+
+```ts
+// `keys` are the other party's change keys from `editor.getReviewItems()`.
+// `runtime` is `DocxEditor.createBrowser(editor, { author: 'Reviewer' })`.
+const decision = editor.beginHistoryGroup();
+try {
+  const resolved = editor.exec(
+    { type: 'resolveAllReviewChanges', action: 'reject', keys },
+    { historyGroup: decision }
+  );
+  if (!resolved.ok) throw new Error(resolved.reason);
+  await runtime.run({ historyGroup: decision }, async (context) => {
+    const ranges = context.document.body.search('30 days');
+    ranges.load('items');
+    await context.sync();
+    const target = ranges.items[0];
+    if (!target) throw new Error('The document has no "30 days" text.');
+    const replaced = target.insertText('45 days', 'Replace');
+    await context.sync();
+    replaced.insertComment('Counter-proposal: 45 days.');
+    await context.sync();
+  });
+} finally {
+  decision.end();
+}
+```
+
+One undo reverts the rejection, the replacement, and the comment together. One redo reapplies them. The run has no `ExecResult`. The whole run counts as one write of the group: when the callback finishes, `decision.lastOutcome` is `started`, `extended`, or `split`. If any sync in the run split the group, the outcome is `split` and the editor emits one `historyDiagnostic` event. `RunOptions` also accepts `previousObjects`, which adopts tracked objects like the object argument of `run(object, callback)`.
+
+`run` options are DocxEditor infrastructure. The Office.js `run` function has no options and no undo grouping. The following rules apply:
+
+- Only the browser runtime supports `historyGroup`. Server and collaborative runtimes reject the run with `NotSupported` before the callback starts. To make one operation of a collaborative server runtime one undo step, use the collaboration session's undo group. For more information, see [Undo an agent operation](/docs/2.x/pro/collaboration#undo-an-agent-operation).
+- A closed handle, or a handle from another editor, rejects the run with `InvalidArgument` and `target: 'historyGroup'`. The callback does not run.
+- A handle that closes during the run rejects the next `context.sync()` with the same error. That sync writes nothing.
+- A run without the option never joins a group, even while one is open.
+
+For the boundary rules that close a group, such as undo and ungrouped writes, see [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
+### Preview other wording before you write it
+
+A review UI often needs to show a proposed change in the page before the user applies or cancels it. To show it, call `runtime.preview(callback)`. The callback gets an ordinary request context. Its reads and writes address a private copy of the document, and the page shows that copy over the live pages when the callback finishes:
+
+```ts
+// `runtime` is `DocxEditor.createBrowser(editor, { author: 'Reviewer' })`.
+const preview = await runtime.preview(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const range = context.document.body.search('thirty (30) days of receipt').getFirst();
+  range.insertText('forty-five (45) days of receipt', 'Replace');
+  await context.sync();
+});
+preview.reveal(); // Scroll to the first changed paragraph.
+
+// Later, when the user decides:
+if (accepted) await preview.commit();
+else preview.discard();
+```
+
+The live document, its undo history, and collaboration peers see nothing until `commit()`. `commit()` writes the preview as one undo step and ends it. `discard()` ends it without writing. The page then shows the live document again, with its selection, scroll position, and focus as they were.
+
+Build the preview from data you already have. The editor stays editable while the callback runs, so the callback must not wait for a model or a server. Ask the model first, then preview its answer:
+
+```ts
+// Do the slow work before the preview, not inside it.
+const proposal = await model.propose(clauseText);
+const preview = await runtime.preview(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const range = context.document.body.search(proposal.find).getFirst();
+  range.insertText(proposal.replace, 'Replace');
+  await context.sync();
+});
+```
+
+A preview follows these rules:
+
+- **One preview at a time.** A second `preview()` on the same editor, from any runtime, rejects with `PreviewActive`.
+- **The editor refuses document writes while a preview shows.** `editor.exec()` edits, typing, undo, and redo are refused, and `snapshot().editable` is `false`. A write from any runtime's `run()` rejects with `PreviewActive`. Zoom, paragraph marks, the review pane toggle, and selection keep working.
+- **Reads.** Reads from `run()` see the live document. Reads inside the preview callback see the preview. Like `run()`, the callback can return plain data, which `preview.result` holds.
+- **The review rail stays on the live document.** Review cards stay anchored to the live text, which is what a commit changes. Text highlights from `editor.setHighlights()` are hidden while the preview shows and come back when it ends.
+- **Suggesting mode.** If the editor is in suggesting mode, a write the callback makes with tracking off becomes a suggestion attributed to the editor's author. The preview and the commit write the same suggestion, as `run()` does.
+- **Status.** `preview.status` is `active`, `stale`, or `ended`. It becomes `stale` when the live document moves after the preview began, for example when a collaboration peer edits it. It becomes `ended` after `commit()` or `discard()`, when the runtime is disposed, or when the editor loads another document, detaches, or moves to another element. Subscribe with `preview.onStatusChanged(listener)`.
+- **Commit never re-runs the callback.** It replays the batches the callback sent, in order, inside one editor history group. Every read in the replay must answer what it answered in the preview, so a replay never edits text the preview did not see.
+- **Tracking mode.** A tracking mode the callback sets stays set on the runtime after `commit()`, as it does after `run()`. `discard()` discards it with the preview.
+
+If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. Ranges follow the text they name, so an edit elsewhere, even earlier in the same paragraph, rebases. The rebase refuses with `StaleDocument`, and writes nothing, if a replayed read answers differently, or if a write would overwrite text that changed: a search finds a different number of matches, text the preview read now reads otherwise, or the range, paragraph, or span a write replaces or formats holds other text. `debugInfo.innerError.code` is then `edit.preview-diverged`:
+
+```ts
+try {
+  await preview.commit();
+} catch (error) {
+  if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+  if (preview.status !== 'stale') throw error;
+  // Someone edited the document. Apply the preview to the current text,
+  // unless the edit touched the previewed clause.
+  await preview.commit({ rebase: true });
+}
+```
+
+Commit validates every recorded batch against a fresh private copy before it writes to the live document. A divergent read preserves document content, undo history, redo history, and shared state. A replay refusal ends the preview, including `StaleDocument` from a rebase. Read the document again before you create another preview. A commit after the preview ended rejects with `PreviewEnded`.
+
+Editor event listeners and preview status listeners run after replay and its history group finish. They observe the completed edit, so listener edits cannot interrupt a partially committed preview. A listener exception does not change the commit result.
+
+If an unexpected live replay failure occurs, commit uses undo to reverse earlier writes. If undo also fails, the error is `GeneralException` with target `preview.rollback`. Inspect the document before retrying.
+
+`preview()` rejects, and shows nothing, in these cases. `debugInfo.innerError.code` names the reason:
+
+| Case | Error | `innerError.code` |
+| --- | --- | --- |
+| Server or collaborative runtime | `NotSupported`, target `preview` | None |
+| Editor open for viewing | `NotSupported`, target `preview` | `edit.read-only` |
+| External refresh in progress | `NotSupported`, target `preview` | `edit.refresh-in-progress` |
+| Input method composition in progress | `NotSupported`, target `preview` | `edit.preview-composing` |
+| Another preview is open on the editor | `PreviewActive` | `edit.preview-active` |
+| No document is mounted | `DocumentUnavailable` | None |
+| A write the preview cannot show | `NotSupported` from `context.sync()` | `edit.preview-unsupported` |
+| A write the live editor refuses: a protected range, a generated table of contents, a collaboration session that is not ready, or a comment outside the body | The same error `run()` gives, from `context.sync()` | The live reason, such as `edit.protected-content` or `edit.unsupported-story` |
+| The callback throws | The same error | Unchanged |
+
+A preview shows text edits, paragraph inserts, splits, and deletions, font, paragraph, and style formatting, comments, line breaks, and tracked-change proposals and decisions, including `Range.revisions` and the review item functions such as `getReviewItemRevisions()` and `getReviewItemRange()`. A rebase refuses a decision by review item key when another writer edited inside that item. Text edits work in headers, footers, and notes too; `reveal()` finds only body paragraphs.
+
+A preview refuses table, picture, shape, field, list, hyperlink, content control, and bookmark writes. It also refuses page setup, page and section breaks, and selection changes. Creating or deleting headers, footers, and notes also fails. The preview also applies the live editor's write restrictions. These include protected ranges, generated tables of contents, and comments outside the body. Use `runtime.capabilities.preview` to check whether a runtime offers previews.
+
+A preview paints with a second, view-only copy of the editor's pages. The first screen shows at once, and the rest lays out in short tasks, as the editor opens a long document. While the preview shows, it uses about as much memory as the open document, and it releases that memory when it ends.
+
+`preview()` is DocxEditor infrastructure. Office.js has no preview, and the edits inside the callback stay ordinary Office.js calls.
+
+## Configure a host
+
+| Option | Hosts | Meaning |
+| --- | --- | --- |
+| `author` | All | Author name for comment creation, replies, and tracked text edits |
+| `revisionTextView` | All | `allMarkup` by default; `original` hides pending insertions and retains pending deletions in text reads and search |
+| `limits` | Server and collaborative | Bounded ZIP, XML, part, and relationship parsing |
+| `pagination` | Server and collaborative | Explicit measured pagination for page-field result updates |
+| `modules` | Server and collaborative | `EditorModule[]` contributions for the DOM-free host |
+
+`CreateCollaborativeOptions` uses `CreateServerOptions`. `ServerPaginationOptions` accepts a required `measurer` and optional `producer`. See [Fields and pagination](/docs/2.x/editor-api/fields) for font resources and cleanup. `EditorModule` exposes `id` and optional `collaboration`; it does not install browser UI.
+
+`createCollaborative(bytes, collaboration, options?)` uses an existing `EditorCollaborationSession`. The collaboration transport and session belong to your application. See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) for a complete shared review workflow. Do not treat detached server edits as collaborative writes.
+
+## Inspect capabilities and dynamic permissions
+
+Read `runtime.capabilities` or `context.capabilities` without calling `load()`. The `DocumentCapabilities` object remains frozen for the runtime's lifetime.
+
+| Capability | Server | Browser |
+| --- | --- | --- |
+| `document` | Yes | Requires a document when the host reports capabilities |
+| `save` | Yes | No |
+| `events` | Yes | Yes |
+| `selection`, `scrolling`, `layout` | No | Yes |
+| `preview` | No | Yes |
+
+Explicit server pagination does not give a server a browser selection or layout surface. The `events` flag does not provide a public event subscription API on the runtime. Capabilities do not guarantee write permission. Browser review writes also require the Pro review module and an editable document. Handle errors from the call or `sync()`.
+
+## Bound input parsing
+
+`DocumentLimits` has optional `zip`, `xml`, `maxXmlParts`, and `maxRelationships` fields. `DocumentZipLimits` requires `maxEntries` and `maxTotalBytes`; `maxRatio` is optional. `DocumentXmlLimits` requires `maxBytes`; `maxElements` is optional. Counts and byte budgets must be finite nonnegative integers. Compression ratios can be fractional.
+
+`maxRatio` compares the total uncompressed size of all entries with the size of the archive. It applies only after the total exceeds 8 MiB. The ratio never refuses a smaller archive. A larger archive is refused when it expands by more than `maxRatio`. The default ratio is 200.
+
+The default XML element budget is 10,000,000 per part. The engine limits each XML part to 50,000,000 elements, 64 MiB, and 256 nested levels. These limits do not guarantee sufficient host memory. Malformed input or invalid limits produce `InvalidArgument`. An exceeded budget produces `ResourceLimitExceeded` with a `limit` field. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for recovery.
+
+## Next steps
+
+- [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors)
+- [Comments](/docs/2.x/editor-api/comments) and [Tracked changes](/docs/2.x/editor-api/revisions)
+- [API member directory](/docs/2.x/editor-api/reference)

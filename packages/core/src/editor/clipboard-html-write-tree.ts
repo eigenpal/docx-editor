@@ -8,6 +8,7 @@ import {
   type OoxmlNode,
 } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { readTwipsMeasure } from '../store/units.ts';
 
 export function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -68,6 +69,11 @@ export function parseIntValue(raw: string | undefined): number | null {
   if (raw === undefined || !/^-?\d+$/.test(raw)) return null;
   const parsed = Number(raw);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+/** A twips attribute as whole twips: decimals truncate, as the layout reads them. */
+export function parseTwipsValue(raw: string | undefined): number | null {
+  return readTwipsMeasure(raw);
 }
 
 export function escapeHtml(value: string): string {

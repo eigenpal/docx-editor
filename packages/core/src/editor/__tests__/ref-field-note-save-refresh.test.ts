@@ -120,8 +120,9 @@ function editTarget(editor: DocxEditorInstance): void {
     {
       op: 'insertText',
       paragraphId: firstParagraphId(editor),
-      offset: 'Closing Date'.length,
-      text: 's',
+      // At the bookmark's start, so the typed text joins the bookmark.
+      offset: 0,
+      text: 'The ',
     },
   ]);
   expect(result.committed).toBe(true);
@@ -145,7 +146,7 @@ describe('save() refreshes stale REF results inside note parts', () => {
     // The result run keeps its own properties and carries the live value.
     expect(xml).toContain(
       '<w:fldChar w:fldCharType="separate"/></w:r>' +
-        '<w:r><w:rPr><w:i/></w:rPr><w:t>Closing Dates</w:t></w:r>'
+        '<w:r><w:rPr><w:i/></w:rPr><w:t>The Closing Date</w:t></w:r>'
     );
     expect(xml).not.toContain('<w:t>Closing Date</w:t>');
     editor.destroy();
@@ -157,7 +158,7 @@ describe('save() refreshes stale REF results inside note parts', () => {
     const xml = await savedPartXml(editor, 'word/endnotes.xml');
     expect(xml).toContain(' REF term \\h ');
     expect(xml).toContain(
-      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Closing Dates</w:t></w:r>'
+      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>The Closing Date</w:t></w:r>'
     );
     editor.destroy();
   });
@@ -176,7 +177,7 @@ describe('save() refreshes stale REF results inside note parts', () => {
     const revisionAfterEdit = editor.getDocumentHandle().revision;
     const xml = await savedPartXml(editor, 'word/footnotes.xml');
     expect(xml).toContain('<w:t>Outdated</w:t>');
-    expect(xml).not.toContain('Closing Dates');
+    expect(xml).not.toContain('The Closing Date');
     // No refresh transaction ran: nothing else in this document is refreshable.
     expect(editor.getDocumentHandle().revision).toBe(revisionAfterEdit);
     editor.destroy();
@@ -227,7 +228,7 @@ describe('save() refreshes stale REF results inside note parts', () => {
     const xml = await savedPartXml(editor, 'word/footnotes.xml');
     expect(xml).toContain('<w:ins');
     expect(xml).toContain('<w:t>Closing Date</w:t>');
-    expect(xml).not.toContain('Closing Dates');
+    expect(xml).not.toContain('The Closing Date');
     expect(editor.getDocumentHandle().revision).toBe(revisionAfterEdit);
     editor.destroy();
   });
@@ -241,8 +242,8 @@ describe('save() refreshes stale REF results inside note parts', () => {
     );
     editTarget(editor);
     const firstSave = new Uint8Array(await editor.save());
-    expect(strFromU8(unzipSync(firstSave)['word/footnotes.xml']!)).toContain('Closing Dates');
-    expect(strFromU8(unzipSync(firstSave)['word/endnotes.xml']!)).toContain('Closing Dates');
+    expect(strFromU8(unzipSync(firstSave)['word/footnotes.xml']!)).toContain('The Closing Date');
+    expect(strFromU8(unzipSync(firstSave)['word/endnotes.xml']!)).toContain('The Closing Date');
     editor.destroy();
 
     const reopened = mount(firstSave);
@@ -277,10 +278,10 @@ describe('save() refreshes stale REF results inside note parts', () => {
     editTarget(editor);
     const xml = await savedPartXml(editor, 'word/document.xml');
     // The plain field refreshed; the locked one saved exactly as loaded.
-    expect(xml).toContain('<w:t>Closing Dates</w:t>');
+    expect(xml).toContain('<w:t>The Closing Date</w:t>');
     const lockedRegion = xml.slice(xml.indexOf('<w:sdt>'), xml.indexOf('</w:sdt>'));
     expect(lockedRegion).toContain('<w:t>Closing Date</w:t>');
-    expect(lockedRegion).not.toContain('Closing Dates');
+    expect(lockedRegion).not.toContain('The Closing Date');
     editor.destroy();
   });
 
@@ -295,8 +296,8 @@ describe('save() refreshes stale REF results inside note parts', () => {
     const beforeSave = new Uint8Array(session.save());
     const saved = new Uint8Array(await editor.save());
     // Both parts refreshed in the save...
-    expect(strFromU8(unzipSync(saved)['word/document.xml']!)).toContain('Closing Dates</w:t>');
-    expect(strFromU8(unzipSync(saved)['word/footnotes.xml']!)).toContain('Closing Dates');
+    expect(strFromU8(unzipSync(saved)['word/document.xml']!)).toContain('The Closing Date</w:t>');
+    expect(strFromU8(unzipSync(saved)['word/footnotes.xml']!)).toContain('The Closing Date');
     // ...as ONE undo unit: a single undo restores the exact pre-save document. (`undo()`
     // returns the restored SELECTION, which a field rewrite legitimately lacks — the byte
     // comparison below is the oracle, `canUndo` only proves an entry existed.)

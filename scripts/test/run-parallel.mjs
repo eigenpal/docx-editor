@@ -11,7 +11,8 @@
 // a surface left mounted in `document.body` by one file can no longer be found by the next one's
 // `document.querySelector`. Shorter AND stricter.
 //
-//   node scripts/test/run-parallel.mjs [--jobs N] [-- <args passed to every `bun test`>]
+//   node scripts/test/run-parallel.mjs [--jobs N] [--shard INDEX/TOTAL] [--fail-fast]
+//     [-- <args passed to every `bun test`>]
 //
 // Slowest-first, from a duration cache written on every run, so the long poles start immediately
 // instead of landing last and leaving the pool half-idle.
@@ -27,6 +28,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { selectShard } from './shard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // `scripts/` as well as `packages/`: the checks that guard the published manifests and the
@@ -36,11 +38,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // `docs/` and `examples/` for the same reason, learned the hard way: the typed feature matrix
 // has a test beside it, and it never ran here, so a plain type error in that file survived
 // review. A test the suite does not walk is worth nothing.
+//
+// `benchmarks/` holds the collaboration scenario checks. Its long load run is named
+// `*.bench.ts`, so it stays out of the suite and runs only when asked for.
 const SEARCH_ROOTS = [
   join(ROOT, 'packages'),
   join(ROOT, 'scripts'),
   join(ROOT, 'docs'),
   join(ROOT, 'examples'),
+  join(ROOT, 'benchmarks'),
 ];
 const CACHE_FILE = join(ROOT, 'node_modules', '.cache', 'docx-editor', 'test-durations.json');
 
@@ -139,10 +145,6 @@ function registerRun() {
         // A stale entry is cleaned up by the next run's liveness check.
       }
     });
-    // Signal death skips 'exit' handlers; route the common Ctrl+C through process.exit so the
-    // registry entry is removed instead of haunting every later run's split.
-    process.on('SIGINT', () => process.exit(130));
-    process.on('SIGTERM', () => process.exit(143));
   } catch {
     // No registry means no sharing, which only costs politeness between runs.
   }
@@ -222,11 +224,30 @@ function writeDurations(durations) {
   }
 }
 
+/**
+ * A file that must run on Node rather than Bun, by name.
+ *
+ * Almost everything here is a Bun test. A few are integration tests for Node servers and
+ * Node workers — `node:worker_threads` fed a `data:` URL, for one — which hang or refuse
+ * under Bun, and whose failure would say nothing about the code under test. The suffix
+ * makes the runtime a property of the file instead of a list somewhere else.
+ */
+const NODE_TEST_FILE = /\.node\.test\.(mjs|cjs|js)$/;
+
 /** Bun's tallies: ` 71 pass`, ` 1 skip`, ` 0 fail`, ` 3 todo`. */
 function tally(output) {
   const counts = { pass: 0, fail: 0, skip: 0, todo: 0 };
   for (const [, count, kind] of output.matchAll(/^\s*(\d+) (pass|fail|skip|todo)\s*$/gm)) {
     counts[kind] += Number(count);
+  }
+  // `node --test` reports `# pass 2` / `ℹ pass 2` instead. Only consulted when Bun's own
+  // shape found nothing, so a Bun run never double-counts.
+  if (counts.pass + counts.fail + counts.skip + counts.todo === 0) {
+    for (const [, kind, count] of output.matchAll(
+      /^[#\u2139]\s+(pass|fail|skipped|todo)\s+(\d+)\s*$/gm
+    )) {
+      counts[kind === 'skipped' ? 'skip' : kind] += Number(count);
+    }
   }
   return counts;
 }
@@ -241,13 +262,21 @@ const NO_MATCHES = /matched 0 tests|had no matches/;
 function parseArguments(argv) {
   const passthrough = [];
   let jobs = 0;
+  let shard = '1/1';
+  let failFast = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--') {
       passthrough.push(...argv.slice(index + 1));
       break;
     }
-    if (argument === '--jobs' || argument === '-j') {
+    if (argument === '--shard') {
+      shard = argv[++index] ?? '';
+    } else if (argument.startsWith('--shard=')) {
+      shard = argument.slice('--shard='.length);
+    } else if (argument === '--fail-fast') {
+      failFast = true;
+    } else if (argument === '--jobs' || argument === '-j') {
       jobs = Number(argv[index + 1]);
       index += 1;
     } else if (argument.startsWith('--jobs=')) {
@@ -256,7 +285,7 @@ function parseArguments(argv) {
       passthrough.push(argument);
     }
   }
-  return { jobs, passthrough };
+  return { jobs, passthrough, shard, failFast };
 }
 
 /** The child's current resident set in bytes, or 0 when it cannot be read. */
@@ -266,22 +295,51 @@ function sampleRss(pid, onSample) {
   });
 }
 
-function runFile(file, passthrough, onRss) {
+const children = new Set();
+
+// Each POSIX worker owns a process group, including compilers/servers spawned by
+// its tests. Killing only Bun leaves those descendants running after fail-fast.
+function stopWorker(child) {
+  if (!child.pid) return;
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(-child.pid, 'SIGKILL');
+    }
+  } catch {
+    // The group may already have exited by the time cancellation reaches it.
+  }
+}
+
+// Covers fail-fast, external cancellation, and unexpected runner errors. This
+// must also run for SIGINT/SIGTERM, even if registering the run failed.
+process.on('exit', () => {
+  for (const child of children) stopWorker(child);
+});
+process.on('SIGINT', () => process.exit(130));
+process.on('SIGTERM', () => process.exit(143));
+
+function runFile(file, passthrough, failFast, onRss) {
   return new Promise((settle) => {
     const started = Date.now();
     let peak = 0;
     // `./` matters: a bare relative path is a FILTER that bun matches against the files its
     // own scan finds, and that scan does not reach everything this one does. With the
     // prefix it is a path, and the file runs whether or not bun would have discovered it.
-    const args = ['test', `./${file}`];
-    if (!passthrough.some((argument) => argument.startsWith('--timeout'))) {
+    const node = NODE_TEST_FILE.test(file);
+    const args = node ? ['--test', `./${file}`] : ['test', `./${file}`];
+    if (!node && !passthrough.some((argument) => argument.startsWith('--timeout'))) {
       args.push('--timeout', String(DEFAULT_TIMEOUT_MS));
     }
-    const child = spawn('bun', [...args, ...passthrough], {
+    // Bun's flags are not Node's, so a passthrough like `-t` is not forwarded to a Node file.
+    const child = spawn(node ? 'node' : 'bun', [...args, ...(node ? [] : passthrough)], {
       cwd: ROOT,
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: process.stdout.isTTY ? '1' : '0' },
     });
+    children.add(child);
     const sampler = setInterval(() => {
       sampleRss(child.pid, (rss) => {
         peak = Math.max(peak, rss);
@@ -292,10 +350,17 @@ function runFile(file, passthrough, onRss) {
     child.stdout.on('data', (chunk) => (output += chunk));
     child.stderr.on('data', (chunk) => (output += chunk));
     child.on('error', (error) => {
+      children.delete(child);
       clearInterval(sampler);
-      settle({ file, output: `failed to spawn bun: ${error.message}`, code: 1, ms: 0, peak: 0 });
+      settle({ file, output: `failed to spawn ${node ? 'node' : 'bun'}: ${error.message}`, code: 1, ms: 0, peak: 0 });
+    });
+    child.on('exit', (code) => {
+      // Descendants can inherit the worker's output pipes. Stop them on failure
+      // before waiting for 'close', or they can delay the first failure forever.
+      if (failFast && code !== 0) stopWorker(child);
     });
     child.on('close', (code) => {
+      children.delete(child);
       clearInterval(sampler);
       const ms = Date.now() - started;
       // A file that finished before the sampler ever fired cannot have grown large; record the
@@ -307,10 +372,14 @@ function runFile(file, passthrough, onRss) {
 }
 
 async function main() {
-  const { jobs, passthrough } = parseArguments(process.argv.slice(2));
-  const queue = SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot));
+  const { jobs, passthrough, shard, failFast } = parseArguments(process.argv.slice(2));
+  if (failFast) passthrough.push('--bail=1');
+  const queue = selectShard(
+    SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot)),
+    shard
+  );
   if (queue.length === 0) {
-    console.error('no test files found under packages/, scripts/, docs/ or examples/');
+    console.error(`no test files found for shard ${shard}`);
     process.exit(1);
   }
   const total = queue.length;
@@ -348,7 +417,7 @@ async function main() {
   const startWidth = currentWidth();
   const startRuns = currentRuns();
   console.log(
-    `Running ${total} test files across ${startWidth} workers` +
+    `Running ${total} test files (shard ${shard}) across ${startWidth} workers` +
       ` (${(currentAllowance() / GiB).toFixed(0)} GiB allowance` +
       (startRuns > 1
         ? `, shared with ${startRuns - 1} concurrent run${startRuns > 2 ? 's' : ''})`
@@ -435,7 +504,7 @@ async function main() {
         continue;
       }
       const { file, entry } = picked;
-      const result = await runFile(file, passthrough, (rss) => (entry.rss = rss));
+      const result = await runFile(file, passthrough, failFast, (rss) => (entry.rss = rss));
       inFlight.delete(file);
       done += 1;
 
@@ -454,6 +523,13 @@ async function main() {
       } else if (result.code !== 0 || counts.fail > 0) {
         failures.push(result);
         process.stdout.write(`FAIL ${file} (${(result.ms / 1000).toFixed(1)}s)\n`);
+        if (failFast) {
+          // Print the first failure before exiting so the matrix can cancel its
+          // siblings immediately. Kill active Bun children; dispatch no more files.
+          // Synchronous output survives process.exit even when CI captures a pipe.
+          writeFileSync(2, `${result.output.trimEnd()}\n`);
+          process.exit(1);
+        }
       } else if (process.stdout.isTTY) {
         // One redrawn line, padded to a fixed width so a shorter path cannot leave the tail of a
         // longer one behind it. Non-TTY output (CI) stays quiet apart from failures.

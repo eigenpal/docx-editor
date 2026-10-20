@@ -1,3 +1,5 @@
+import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
 // The formatting lane: toggling a run property, setting one outright, and setting a
@@ -21,9 +23,9 @@ import {
   isRunPropertyActive,
   mergedProperties,
   paragraphMarkOps,
+  paragraphPropertiesOf,
   paragraphsInRange,
   pendingPropertyState,
-  runPropertyEdits,
   withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
@@ -34,12 +36,22 @@ import type {
   TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
-import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceFormatDeps {
+  runFormatRefusal?(): string | null;
   readonly session: TreeDocxSessionView;
+  /**
+   * Applies formatting ops outside every generated table of contents: ops that reach one are
+   * dropped, and the rest apply even though the selection covers the table. When every op
+   * reaches one, the write keeps the read-only refusal.
+   */
+  applyOutsideToc?(
+    ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
+    apply: (ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0]) => TreeApplyResult
+  ): TreeApplyResult;
   /** Active story for mutations — body or `{ kind: 'headerFooter', rId }`. */
   storyScope(): StoryScope;
   layout(): SemanticLayout;
@@ -62,7 +74,7 @@ export interface SurfaceFormatDeps {
     run: () => TreeApplyResult | boolean,
     nextSelection?: () => SemanticSelection | null,
     options?: { readonly keepCellSelection?: boolean }
-  ): void;
+  ): string | null;
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   textOf(paragraphId: string): string;
@@ -106,6 +118,13 @@ type FormatMethods = Pick<
 >;
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
+  const { runPropertyEdits, mergedParagraphMarkProperties } = createContextualRunFormatting(
+    () => deps.session.stylesRoot(),
+    () => deps.session.settingsRoot(),
+    () => deps.displayMode(),
+    () => deps.authorFilter()
+  );
+
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
   const displayMode = (): FormattingDisplayMode => deps.displayMode();
   const authorFilter = (): FormattingRevisionAuthorFilter | undefined => deps.authorFilter();
@@ -114,7 +133,17 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
     after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
-  ) => session.applyTreeOps(ops, before, after, deps.storyScope());
+  ) => {
+    const apply = (kept: typeof ops) =>
+      session.applyTreeOps(kept, before, after, deps.storyScope());
+    return deps.applyOutsideToc ? deps.applyOutsideToc(ops, apply) : apply(ops);
+  };
+  /** The refusal of any run format here, reported, or null when formatting may go ahead. */
+  const refuseRunFormat = (): string | null => {
+    const reason = deps.runFormatRefusal?.();
+    if (!reason) return null;
+    return deps.commit(() => ({ committed: false, rejected: true, opCount: 0, reason })) ?? reason;
+  };
   const currentLayout = {
     get value(): SemanticLayout {
       return deps.layout();
@@ -147,7 +176,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     from: SemanticPosition,
     to: SemanticPosition,
     incoming: SurfaceProperty
-  ): void => {
+  ): string | null => {
     const part = storyPart();
     if (from.paragraphId === to.paragraphId) {
       const edits = runPropertyEdits(
@@ -160,9 +189,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         authorFilter()
       );
       // No run in range means nothing was formatted, so the mark must not move either.
-      if (edits.length === 0) return;
+      if (edits.length === 0) return null;
       const markProperties = mergedParagraphMarkProperties(part, from.paragraphId, incoming);
-      commit(() =>
+      return commit(() =>
         applyOps(
           [
             ...edits.map((edit) => ({
@@ -180,14 +209,13 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           selectionMark()
         )
       );
-      return;
     }
     const order = deps.paragraphOrder();
     const firstIndex = order.indexOf(from.paragraphId);
     const lastIndex = order.indexOf(to.paragraphId);
     // An endpoint the published order does not know is a layout that has not caught up;
     // writing a partial range would be worse than writing none.
-    if (firstIndex === -1 || lastIndex === -1) return;
+    if (firstIndex === -1 || lastIndex === -1) return null;
     const ops: TreeDocOp[] = [];
     for (let index = firstIndex; index <= lastIndex; index += 1) {
       const paragraphId = order[index]!;
@@ -237,8 +265,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         });
       }
     }
-    if (ops.length === 0) return;
-    commit(() => applyOps(ops, selectionMark()));
+    if (ops.length === 0) return null;
+    return commit(() => applyOps(ops, selectionMark()));
   };
 
   /**
@@ -252,7 +280,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const writeRunPropertyOverCells = (
     cells: readonly string[],
     incoming: SurfaceProperty
-  ): boolean => {
+  ): string | null => {
     const part = storyPart();
     const ops: TreeDocOp[] = [];
     for (const paragraphId of paragraphsInCells(currentLayout.value, cells)) {
@@ -287,12 +315,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         });
       }
     }
-    if (ops.length === 0) return false;
+    if (ops.length === 0) return null;
     // Word leaves the cells selected after formatting them, so the rectangle survives.
-    commit(() => applyOps(ops, selectionMark()), undefined, {
+    return commit(() => applyOps(ops, selectionMark()), undefined, {
       keepCellSelection: true,
     });
-    return true;
   };
 
   /**
@@ -342,11 +369,23 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     const ops = order
       .slice(firstIndex, lastIndex + 1)
       .filter((paragraphId) => deps.paragraphMarkVisible(paragraphId))
-      .map((paragraphId) => {
+      .flatMap((paragraphId) => {
         // Folded in order over the paragraph's OWN properties, so a batch that names the
         // same element twice ends with the last word and every entry sees the ones before it.
-        let properties = directParagraphProperties(part, paragraphId);
-        for (const entry of entries) {
+        const original = directParagraphProperties(part, paragraphId);
+        let properties = original;
+        const cascaded = paragraphPropertiesOf(currentLayout.value, paragraphId);
+        // A paragraph every entry leaves as it is gets no op, so a direction press over
+        // text already in that direction is not an undo step.
+        let wrote = false;
+        for (const rawEntry of entries) {
+          const entry = directionalParagraphEntry(rawEntry, cascaded, properties, original);
+          if (!entry) continue;
+          wrote = true;
+          if (entry.remove) {
+            properties = properties.filter((property) => property.localName !== entry.localName);
+            continue;
+          }
           // `mergeAttributes` is for the properties that carry SEVERAL independent settings
           // in one element. `w:spacing` holds the line rule, the space before and the space
           // after; replacing it wholesale meant picking a line spacing deleted the
@@ -368,7 +407,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
             ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
           });
         }
-        return { op: 'setParagraphProperties' as const, paragraphId, properties };
+        return wrote ? [{ op: 'setParagraphProperties' as const, paragraphId, properties }] : [];
       });
     if (ops.length === 0) return;
     // Word leaves the cells selected after a paragraph command, exactly as it does after
@@ -380,20 +419,19 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
   return {
     setRunProperty(localName, attributes) {
+      const refused = refuseRunFormat();
+      if (refused) return refused;
       const incoming = { localName, ...(attributes ? { attributes } : {}) };
       const cells = deps.selectedCells?.();
-      if (cells && cells.length > 0) {
-        writeRunPropertyOverCells(cells, incoming);
-        return;
-      }
+      if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
       const { from, to } = orderedRange();
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
         // with nothing selected is how Word starts typing in that font.
         armPending(incoming);
-        return;
+        return null;
       }
-      writeRunProperty(from, to, incoming);
+      return writeRunProperty(from, to, incoming);
     },
 
     setParagraphProperty(localName, attributes, options) {
@@ -423,12 +461,17 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           },
           deps.selectedCells?.(),
           deps.defaultParagraphStyleId?.() ?? null,
-          deps.paragraphOrder()
+          selectionNow.value.anchor.paragraphId === selectionNow.value.head.paragraphId
+            ? [selectionNow.value.head.paragraphId]
+            : deps.paragraphOrder(),
+          deps.defaultFontFamily?.() ?? null
         ),
         deps.pendingFormats()
       ),
 
     toggleRunProperty(localName, attributes) {
+      const refused = refuseRunFormat();
+      if (refused) return refused;
       const cells = deps.selectedCells?.();
       // The VALUE this press means, for a property whose on-state is one member of an
       // enumeration rather than a boolean: `w:vertAlign` carries superscript AND subscript,
@@ -454,10 +497,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const incoming = active
         ? { localName, attributes: { val: OFF_VALUES[localName] ?? '0' } }
         : { localName, ...(attributes ? { attributes } : {}) };
-      if (cells && cells.length > 0) {
-        writeRunPropertyOverCells(cells, incoming);
-        return;
-      }
+      if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
       const { from, to } = orderedRange();
       if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
@@ -482,12 +522,13 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         } else {
           armPending(incoming);
         }
-        return;
+        return null;
       }
-      writeRunProperty(from, to, incoming);
+      return writeRunProperty(from, to, incoming);
     },
 
     clearFormatting() {
+      if (refuseRunFormat()) return;
       // Word's eraser, and Word's split: character formatting is a RANGE, paragraph
       // formatting is not. The selected text loses its direct `w:rPr`; every paragraph the
       // selection touches loses its direct `w:pPr` — which includes `w:pStyle`, so the
@@ -573,11 +614,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         ) {
           ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
         }
-        if (
-          deps.paragraphMarkVisible(paragraphId) &&
-          directParagraphProperties(part, paragraphId).length > 0
-        ) {
-          ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
+        // Direction is not formatting to erase: the paragraph keeps its `w:bidi`, the way
+        // it kept it before the property was nameable, so Arabic stays right-to-left.
+        const direct = directParagraphProperties(part, paragraphId);
+        const kept = direct.filter((property) => property.localName === 'bidi');
+        if (deps.paragraphMarkVisible(paragraphId) && direct.length > kept.length) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties: kept });
         }
       }
       if (ops.length === 0) return;

@@ -1,5 +1,6 @@
 // Normalize comments and tracked changes onto the exact layout/package revision being published.
 
+import { withHyphenGlyphs } from '../store/package/hyphen-text.ts';
 import {
   commentBodyText,
   commentInitials,
@@ -15,17 +16,29 @@ import {
   type ReviewRange,
 } from '@docx-editor.dev/core/store';
 import { createExportReviewDerivationScope } from '../store/store/review-export-derivation.ts';
-import { isPotentialRevisionElement } from '../store/store/tree-op-revisions.ts';
+import {
+  inertPropertyChangeInputsOf,
+  withoutInertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
+import {
+  collectRevisionSites,
+  isPotentialRevisionElement,
+} from '../store/store/tree-op-revisions.ts';
+import { stylesAndNumberingKey, unlistedSitesOf } from '../store/store/review-unlisted-sites.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import type { UnlistedRevisionSites } from '../layout/revision-hidden-sites.ts';
 import {
   forEachSemanticDrawing,
   forEachSemanticStory,
   forEachStoryParagraphFragment,
-  type SemanticArtifactStoryKind,
-  type SemanticLayout,
-  type SemanticReviewArtifactOccurrence,
-  type SemanticReviewArtifactRecord,
   type SemanticStoryVisit,
-} from '../layout/index.ts';
+} from '../layout/semantic-record-queries.ts';
+import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type {
+  SemanticArtifactStoryKind,
+  SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactRecord,
+} from '../layout/review-artifact-records.ts';
 
 interface ParagraphOccurrence {
   readonly pageIndex: number;
@@ -224,7 +237,8 @@ function paragraphOccurrences(
   // traversal covers body, furniture, notes, separators, tables, and nested textboxes uniformly.
   forEachSemanticDrawing(layout, (visit) => {
     const partName = visit.drawing.ownerPartName;
-    if (!boundsByPart.has(partName)) return;
+    // A hidden record (an MC wrap footprint) reserves space but shows no atom.
+    if (visit.drawing.accessibility.hidden || !boundsByPart.has(partName)) return;
     addInterval(
       partName,
       visit.root,
@@ -426,6 +440,7 @@ function occurrencesOf(
             source: {
               partName: range.partName,
               start: { paragraphId, offset: slice.start },
+              // Same paragraph as start: engine occurrences never span paragraphs.
               end: { paragraphId, offset: slice.end },
             },
           });
@@ -516,11 +531,13 @@ function artifactOf(
       kind: 'tracked-change',
       id: mappedId(ids.revision, 'change', item.id),
       change: item.revisionKind,
+      ...(item.structuralChanges ? { structuralChanges: item.structuralChanges } : {}),
       ...(item.markDirection ? { markDirection: item.markDirection } : {}),
       author: item.author,
       ...(item.date !== undefined ? { date: item.date } : {}),
-      text: item.text,
-      replacedText: item.replacedText,
+      // One for one, so the text still lines up with its occurrence spans.
+      text: withHyphenGlyphs(item.text),
+      replacedText: withHyphenGlyphs(item.replacedText),
       nesting: item.nesting,
       ...(item.replacedRangeCount !== undefined
         ? { replacedRangeCount: item.replacedRangeCount }
@@ -560,24 +577,70 @@ function artifactOf(
   };
 }
 
-/** Project every core review item without exposing OOXML nodes or mutation addresses. @internal */
-export function projectReviewArtifacts(
-  layout: SemanticLayout,
-  pkg: OoxmlPackage
-): readonly SemanticReviewArtifactRecord[] {
+interface ExportReviewQueue {
+  readonly parts: readonly OoxmlPart[];
+  readonly derivation: ReturnType<typeof createExportReviewDerivationScope>;
+  /** The listed items: property changes that leave the formatting unchanged are left out. */
+  readonly items: readonly ReviewItem[];
+  /** The records of the items left out and their paragraphs, which paint leaves unmarked. */
+  readonly unlistedSites: UnlistedRevisionSites;
+}
+
+/** One transient review derivation of `pkg`, or null when it holds no review markup. */
+function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
   const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return [];
+  if (!main) return null;
   const furnitureParts = storyParts(pkg, main);
   const parts = [main, ...furnitureParts];
   const commentsPart = pkg.parts.get(commentPartNameOf(pkg, main.name));
-  if (!hasReviewMarkup(parts, commentsPart)) return [];
+  if (!hasReviewMarkup(parts, commentsPart)) return null;
   const derivation = createExportReviewDerivationScope();
-  const items = derivation.collectReviewItems({
+  const all = derivation.collectReviewItems({
     storyPart: main,
     furnitureParts,
     commentsPart,
     commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, main.name)),
   });
+  const items = withoutInertPropertyChanges(all, inertPropertyChangeInputsOf(pkg));
+  const listed = new Set(items.map((item) => item.id));
+  const unlisted = unlistedSitesOf(all.filter((item) => !listed.has(item.id)));
+  const unlistedSites = {
+    sites: new Set(unlisted.sites),
+    paragraphs: unlisted.paragraphs,
+    key: stylesAndNumberingKey(stylesPartOf(pkg)?.root ?? null, numberingRootOf(pkg)),
+  };
+  return { parts, derivation, items, unlistedSites };
+}
+
+/** Only the site ids are kept per package, so no derivation outlives the call that needed it. */
+const unlistedSitesByPackage = new WeakMap<OoxmlPackage, UnlistedRevisionSites>();
+const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Map(), key: '' };
+
+/** The revision sites an export of `pkg` leaves unmarked, because they have no review item. */
+export function unlistedReviewSites(pkg: OoxmlPackage): UnlistedRevisionSites {
+  let sites = unlistedSitesByPackage.get(pkg);
+  if (!sites) {
+    // Only property changes are ever unlisted, so a package without one needs no derivation.
+    const main = pkg.parts.get(pkg.mainDocumentPart);
+    const holdsPropertyChanges =
+      main !== undefined &&
+      [main, ...storyParts(pkg, main)].some((part) =>
+        collectRevisionSites(part).some((site) => site.propertyChange)
+      );
+    sites = (holdsPropertyChanges && exportReviewQueue(pkg)?.unlistedSites) || NO_SITES;
+    unlistedSitesByPackage.set(pkg, sites);
+  }
+  return sites;
+}
+
+/** Project every core review item without exposing OOXML nodes or mutation addresses. @internal */
+export function projectReviewArtifacts(
+  layout: SemanticLayout,
+  pkg: OoxmlPackage
+): readonly SemanticReviewArtifactRecord[] {
+  const queue = exportReviewQueue(pkg);
+  if (!queue) return [];
+  const { parts, derivation, items } = queue;
   // The overwhelmingly common export has no review artifacts. Do not build a paragraph/page
   // occurrence index over a large settled layout unless there is something to place.
   if (items.length === 0) return [];

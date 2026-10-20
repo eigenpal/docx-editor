@@ -13,6 +13,7 @@ import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { flattenContentControls } from '../package/content-control-nodes.ts';
 import { namedChild, paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
+import { planVerticalMergeHeadRepairs } from './tree-op-table-vmerge-removal.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
 /** The block kinds a removal may name — exactly the ones the canonical tree types. */
@@ -144,6 +145,10 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
     // A `w:tbl` with no `w:tr` has no content and no geometry. Removing the last row means
     // removing the table, which is a different op the caller has to ask for.
     return 'block-required';
+  }
+  if (block.kind === 'tableRow') {
+    const repairs = planVerticalMergeHeadRepairs(part, blockId);
+    if (!repairs.ok) return repairs.reason;
   }
 
   // A table nested in a cell is the cell's content; taking it out must still leave the

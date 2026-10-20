@@ -1,3 +1,4 @@
+import { fontUnitsConverter, exactFontUnitsConverter } from './harfbuzz-font-units.ts';
 import {
   assertValidatedResolvedFont,
   boundedStructuralFontValidator,
@@ -10,9 +11,8 @@ import {
   createShapedRun,
   createShapingEnvironment,
   fixedPoint,
-  shapingEnvironmentFingerprint,
-  type FixedPoint,
-  type FixedPointRoundingMode,
+  MAX_SHAPING_CONTEXT,
+  markFacePreservingShaper,
   type GlyphOutline,
   type ShapeInput,
   type ShapedCluster,
@@ -21,12 +21,15 @@ import {
   type TextShaper,
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
+import { ShapeCacheKeys } from './shape-cache-key.ts';
 import {
   harfBuzzUnsupportedRuntimeDiagnostic,
   harfBuzzVersionMismatchDiagnostic,
   harfBuzzWasmUnavailableDiagnostic,
   isUnsupportedNodeRuntime,
 } from './harfbuzz-wasm-binary.ts';
+
+export { roundFontUnitToFixedPoint } from './harfbuzz-font-units.ts';
 
 type HarfBuzzModule = typeof import('harfbuzzjs');
 type HarfBuzzBlob = InstanceType<HarfBuzzModule['Blob']>;
@@ -43,7 +46,7 @@ type HarfBuzzFont = InstanceType<HarfBuzzModule['Font']>;
  */
 export const HARFBUZZ_SHAPING_LIBRARY: VersionedShapingLibrary = Object.freeze({
   name: 'HarfBuzz',
-  version: '14.3.0',
+  version: '14.4.0',
 });
 
 let harfBuzzModule: HarfBuzzModule | null = null;
@@ -179,6 +182,8 @@ export interface HarfBuzzTextShaperOptions {
   readonly maxCodepoints?: number;
   readonly maxGlyphs?: number;
   readonly maxCachedFaces?: number;
+  /** Aggregate retained native font bytes; oversized faces are shaped without retention. */
+  readonly maxCachedFontBytes?: number;
   readonly maxCachedShapes?: number;
   readonly maxOutlineBytes?: number;
   readonly maxCachedOutlineBytes?: number;
@@ -314,95 +319,31 @@ const assertPositiveLimit = (value: number, name: string, hardMaximum: number): 
   return value;
 };
 
-const roundRational = (
-  numerator: bigint,
-  denominator: bigint,
-  mode: FixedPointRoundingMode
-): number => {
-  const negative = numerator < 0n;
-  const absolute = negative ? -numerator : numerator;
-  let quotient = absolute / denominator;
-  const remainder = absolute % denominator;
-  if (mode !== 'towardZero') {
-    const doubled = remainder * 2n;
-    if (
-      doubled > denominator ||
-      (doubled === denominator &&
-        (mode === 'halfAwayFromZero' || (mode === 'halfToEven' && quotient % 2n !== 0n)))
-    ) {
-      quotient += 1n;
-    }
-  }
-  const signed = negative ? -quotient : quotient;
-  const result = Number(signed);
-  if (!Number.isSafeInteger(result)) {
-    throw new RangeError('Shaped fixed-point value exceeds the safe integer range');
-  }
-  return result;
-};
-
-/** Convert signed font units by an exact rational multiplier using the declared tie rule. */
-export const roundFontUnitToFixedPoint = (
-  fontUnits: number,
-  denominator: number,
-  numerator: number,
-  mode: FixedPointRoundingMode
-): FixedPoint => {
-  if (!Number.isSafeInteger(fontUnits)) throw new RangeError('font units must be a safe integer');
-  if (!Number.isSafeInteger(denominator) || denominator <= 0) {
-    throw new RangeError('fixed-point denominator must be a positive safe integer');
-  }
-  if (!Number.isSafeInteger(numerator) || numerator < 0) {
-    throw new RangeError('fixed-point numerator must be a non-negative safe integer');
-  }
-  return fixedPoint(
-    roundRational(BigInt(fontUnits) * BigInt(numerator), BigInt(denominator), mode)
-  );
-};
-
-const fontUnitsConverter = (
-  unitsPerEm: number,
-  fontSizeHalfPoints: number,
-  fixedPointScale: number,
-  mode: FixedPointRoundingMode
-): ((value: number) => FixedPoint) => {
-  if (!Number.isSafeInteger(fontSizeHalfPoints) || fontSizeHalfPoints <= 0) {
-    throw new RangeError('font size must be a positive integer number of half points');
-  }
-  if (fontSizeHalfPoints > Math.floor(Number.MAX_SAFE_INTEGER / fixedPointScale)) {
-    throw new RangeError('font size and fixed-point scale product exceeds the safe integer range');
-  }
-  const numerator = fontSizeHalfPoints * fixedPointScale;
-  const denominator = unitsPerEm * 2;
-  return (value) => roundFontUnitToFixedPoint(value, denominator, numerator, mode);
-};
-
 const clustersFromGlyphs = (
   text: string,
-  glyphs: readonly ShapedGlyph[]
+  glyphs: readonly ShapedGlyph[],
+  direction: 'ltr' | 'rtl'
 ): readonly ShapedCluster[] => {
   if (glyphs.length === 0) return [];
-  const logicalStarts = [...new Set(glyphs.map((glyph) => glyph.cluster))].sort(
-    (left, right) => left - right
-  );
-  const logicalEnd = new Map<number, number>();
-  for (let index = 0; index < logicalStarts.length; index += 1) {
-    logicalEnd.set(logicalStarts[index]!, logicalStarts[index + 1] ?? text.length);
-  }
-
+  // MONOTONE_CHARACTERS keeps equal clusters together and orders their starts by direction.
+  // Adjacent groups therefore give logical ends without a set, sort, or per-cluster slice.
   const clusters: ShapedCluster[] = [];
   let glyphStart = 0;
   while (glyphStart < glyphs.length) {
     const textStart = glyphs[glyphStart]!.cluster;
     let glyphEnd = glyphStart + 1;
-    while (glyphEnd < glyphs.length && glyphs[glyphEnd]!.cluster === textStart) glyphEnd += 1;
-    const advance = glyphs
-      .slice(glyphStart, glyphEnd)
-      .reduce((sum, glyph) => sum + glyph.advanceX, 0);
+    let advance = glyphs[glyphStart]!.advanceX as number;
+    while (glyphEnd < glyphs.length && glyphs[glyphEnd]!.cluster === textStart) {
+      advance += glyphs[glyphEnd]!.advanceX;
+      glyphEnd += 1;
+    }
     const safeAdvance = fixedPoint(advance);
     clusters.push({
       textStart,
-      textEnd: logicalEnd.get(textStart)!,
+      textEnd:
+        direction === 'rtl'
+          ? (glyphs[glyphStart - 1]?.cluster ?? text.length)
+          : (glyphs[glyphEnd]?.cluster ?? text.length),
       glyphStart,
       glyphEnd,
       advance: safeAdvance,
@@ -420,6 +361,7 @@ interface ActiveHarfBuzzFont {
   readonly face: HarfBuzzFace;
   readonly font: HarfBuzzFont;
   readonly unitsPerEm: number;
+  readonly byteLength: number;
 }
 
 const OBJECT_OVERHEAD_BYTES = 64;
@@ -428,7 +370,8 @@ const NUMBER_STORAGE_BYTES = 8;
 const ARRAY_OVERHEAD_BYTES = 32;
 const MAP_ENTRY_OVERHEAD_BYTES = OBJECT_OVERHEAD_BYTES + 2 * REFERENCE_BYTES;
 const CACHED_OUTLINE_WRAPPER_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
-const CACHED_SHAPE_WRAPPER_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
+const CACHED_SHAPE_WRAPPER_BYTES =
+  OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + 2 * NUMBER_STORAGE_BYTES;
 const OUTLINE_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + REFERENCE_BYTES + NUMBER_STORAGE_BYTES;
 const SHAPED_RUN_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + 8 * REFERENCE_BYTES;
 const GLYPH_OBJECT_BYTES = OBJECT_OVERHEAD_BYTES + 8 * NUMBER_STORAGE_BYTES + REFERENCE_BYTES;
@@ -470,6 +413,9 @@ const shapedRunStorageBytes = (run: ShapedRun): number => {
     run.clusters.reduce((sum, cluster) => sum + arrayStorageBytes(cluster.caretEdges.length), 0) +
     arrayStorageBytes(run.fontSpans.length) +
     run.fontSpans.length * FONT_SPAN_OBJECT_BYTES +
+    (run.exactAdvancesX === undefined
+      ? 0
+      : ARRAY_OVERHEAD_BYTES + run.exactAdvancesX.length * NUMBER_STORAGE_BYTES) +
     METRICS_OBJECT_BYTES +
     [...uniqueOutlines].reduce((sum, outline) => sum + outlineStorageBytes(outline.path), 0)
   );
@@ -484,11 +430,15 @@ const shapeCacheEntryStorageBytes = (key: string, retainedRunBytes: number): num
 interface CachedOutline {
   readonly outline: GlyphOutline;
   readonly bytes: number;
+  readonly identity: string;
+  readonly glyphId: number;
 }
 
 interface CachedShape {
   readonly run: ShapedRun;
   readonly bytes: number;
+  /** The recency stamp when the entry last went to the young end of the map. */
+  stamp: number;
 }
 
 class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
@@ -498,6 +448,8 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   readonly #maxCodepoints: number;
   readonly #maxGlyphs: number;
   readonly #maxCachedFaces: number;
+  readonly #maxCachedFontBytes: number;
+  #fontBytes = 0;
   readonly #maxCachedShapes: number;
   readonly #maxOutlineBytes: number;
   readonly #maxCachedOutlineBytes: number;
@@ -506,13 +458,24 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   readonly #onFaceCacheEvent: ((event: HarfBuzzFaceCacheEvent) => void) | undefined;
   readonly #instrumentation: HarfBuzzTextShaperInstrumentation | undefined;
   readonly #faces = new Map<string, ActiveHarfBuzzFont>();
-  readonly #outlines = new Map<string, CachedOutline>();
+  readonly #outlines = new Map<string, Map<number, CachedOutline>>();
+  readonly #outlineLru = new Map<CachedOutline, undefined>();
   readonly #shapeResults = new Map<string, CachedShape>();
+  readonly #keys = new ShapeCacheKeys(() => {
+    this.#shapeResults.clear();
+    this.#shapeBytes = 0;
+    this.#instrumentation?.onShapeCacheEvent?.(
+      Object.freeze({ kind: 'cleared', retainedBytes: 0 })
+    );
+  });
   #outlineBytes = 0;
   #shapeBytes = 0;
+  #shapeStamp = 0;
   #buffer: HarfBuzzBuffer | undefined;
 
   constructor(harfBuzz: HarfBuzzModule, options: HarfBuzzTextShaperOptions) {
+    // It refuses a fallback order, so every run it shapes is in the environment's face.
+    markFacePreservingShaper(this);
     this.#harfBuzz = harfBuzz;
     this.#maxFontBytes = assertPositiveLimit(
       options.maxFontBytes ?? DEFAULT_MAX_FONT_BYTES,
@@ -533,6 +496,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       options.maxGlyphs ?? DEFAULT_MAX_GLYPHS,
       'maximum shaped glyphs',
       HARD_MAX_GLYPHS
+    );
+    this.#maxCachedFontBytes = assertPositiveLimit(
+      options.maxCachedFontBytes ?? 64 * 1024 * 1024,
+      'maximum cached font bytes',
+      64 * 1024 * 1024
     );
     this.#maxCachedFaces = assertPositiveLimit(
       options.maxCachedFaces ?? DEFAULT_MAX_CACHED_FACES,
@@ -571,8 +539,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
 
   dispose(): void {
     this.#faces.clear();
+    this.#fontBytes = 0;
     this.#outlines.clear();
+    this.#outlineLru.clear();
     this.#shapeResults.clear();
+    this.#keys.clear();
     this.#outlineBytes = 0;
     this.#shapeBytes = 0;
     this.#instrumentation?.onOutlineCacheEvent?.(
@@ -617,29 +588,39 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     font.setScale(face.upem, face.upem);
-    if (this.#faces.size >= this.#maxCachedFaces) {
-      const oldest = this.#faces.keys().next().value;
-      if (oldest !== undefined) {
+    const active = {
+      identity: fontResource.identity,
+      blob,
+      face,
+      font,
+      unitsPerEm: face.upem,
+      byteLength: bytes.byteLength,
+    };
+    if (bytes.byteLength <= this.#maxCachedFontBytes) {
+      while (
+        this.#faces.size >= this.#maxCachedFaces ||
+        this.#fontBytes + bytes.byteLength > this.#maxCachedFontBytes
+      ) {
+        const oldest = this.#faces.keys().next().value;
+        if (oldest === undefined) break;
+        this.#fontBytes -= this.#faces.get(oldest)!.byteLength;
         this.#faces.delete(oldest);
         this.#onFaceCacheEvent?.(Object.freeze({ kind: 'evicted', identity: oldest }));
       }
+      this.#faces.set(fontResource.identity, active);
+      this.#fontBytes += bytes.byteLength;
     }
-    const active = { identity: fontResource.identity, blob, face, font, unitsPerEm: face.upem };
-    this.#faces.set(fontResource.identity, active);
     this.#onFaceCacheEvent?.(Object.freeze({ kind: 'created', identity: fontResource.identity }));
     return active;
   }
 
-  #outline(
-    active: ActiveHarfBuzzFont,
-    glyphId: number,
-    variationFingerprint: string
-  ): GlyphOutline {
-    const key = JSON.stringify([active.identity, active.unitsPerEm, variationFingerprint, glyphId]);
-    const cached = this.#outlines.get(key);
+  #outline(active: ActiveHarfBuzzFont, glyphId: number): GlyphOutline {
+    // Variation axes are refused before shaping. The admitted face identity and glyph id
+    // therefore identify an outline without serializing the font identity for each lookup.
+    const cached = this.#outlines.get(active.identity)?.get(glyphId);
     if (cached) {
-      this.#outlines.delete(key);
-      this.#outlines.set(key, cached);
+      this.#outlineLru.delete(cached);
+      this.#outlineLru.set(cached, undefined);
       this.#instrumentation?.onOutlineCacheEvent?.(
         Object.freeze({ kind: 'hit', retainedBytes: this.#outlineBytes })
       );
@@ -656,7 +637,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     const outline = Object.freeze({ path, unitsPerEm: active.unitsPerEm });
-    const bytes = outlineCacheEntryStorageBytes(key, path);
+    // Charge the face key and both indexes to each entry, including singleton face maps.
+    const bytes =
+      outlineCacheEntryStorageBytes(active.identity, path) +
+      3 * MAP_ENTRY_OVERHEAD_BYTES +
+      2 * NUMBER_STORAGE_BYTES;
     if (bytes > this.#maxCachedOutlineBytes) {
       this.#instrumentation?.onOutlineCacheEvent?.(
         Object.freeze({ kind: 'skipped', retainedBytes: this.#outlineBytes })
@@ -664,16 +649,22 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       return outline;
     }
     while (this.#outlineBytes + bytes > this.#maxCachedOutlineBytes) {
-      const oldest = this.#outlines.keys().next().value;
-      if (oldest === undefined) break;
-      const evicted = this.#outlines.get(oldest)!;
-      this.#outlines.delete(oldest);
+      const evicted = this.#outlineLru.keys().next().value;
+      if (evicted === undefined) break;
+      this.#outlineLru.delete(evicted);
+      const byGlyph = this.#outlines.get(evicted.identity)!;
+      byGlyph.delete(evicted.glyphId);
+      if (byGlyph.size === 0) this.#outlines.delete(evicted.identity);
       this.#outlineBytes -= evicted.bytes;
       this.#instrumentation?.onOutlineCacheEvent?.(
         Object.freeze({ kind: 'evicted', retainedBytes: this.#outlineBytes })
       );
     }
-    this.#outlines.set(key, { outline, bytes });
+    let byGlyph = this.#outlines.get(active.identity);
+    if (!byGlyph) this.#outlines.set(active.identity, (byGlyph = new Map()));
+    const entry = { outline, bytes, identity: active.identity, glyphId };
+    byGlyph.set(glyphId, entry);
+    this.#outlineLru.set(entry, undefined);
     this.#outlineBytes += bytes;
     this.#instrumentation?.onOutlineCacheEvent?.(
       Object.freeze({ kind: 'created', retainedBytes: this.#outlineBytes })
@@ -720,16 +711,16 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       });
     }
     const environment = createShapingEnvironment(input.environment);
-    const cacheKey = JSON.stringify([
-      input.text,
-      input.fontSizeHalfPoints,
-      input.bidiLevel,
-      shapingEnvironmentFingerprint(environment),
-    ]);
+    const cacheKey = this.#keys.keyOf(input, environment);
     const cached = this.#shapeResults.get(cacheKey);
     if (cached) {
-      this.#shapeResults.delete(cacheKey);
-      this.#shapeResults.set(cacheKey, cached);
+      // Approximate recency: an entry in the younger half stays put, so a hot run survives in
+      // at worst a half-size true LRU. A delete and re-insert on every hit was a hot spot.
+      if (this.#shapeStamp - cached.stamp >= Math.max(1, this.#shapeResults.size >> 1)) {
+        this.#shapeResults.delete(cacheKey);
+        this.#shapeResults.set(cacheKey, cached);
+        cached.stamp = ++this.#shapeStamp;
+      }
       this.#instrumentation?.onShapeCacheEvent?.(
         Object.freeze({ kind: 'hit', retainedBytes: this.#shapeBytes })
       );
@@ -762,19 +753,32 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
     }
     const bytes = trustedFontBytes(environment.font);
     const tags = trustedFontTableTags(environment.font);
-    if ([...COLOR_TABLES].some((tag) => tags.has(tag))) {
+    // A color face shapes like any other when it also carries outlines: the export writer
+    // paints its COLR layers itself, and a browser draws them from the same face. A face
+    // whose color glyphs are bitmaps or SVG alone, with no outline table, has no ink this
+    // engine can measure or embed, and stays refused.
+    if ([...COLOR_TABLES].some((tag) => tags.has(tag)) && !tags.has('glyf') && !tags.has('CFF ')) {
       throw new HarfBuzzShapingError('unsupportedColorFont');
     }
 
     const text = input.text;
     this.#assertTextBudget(text);
+    const before = input.context?.before ?? '';
+    const after = input.context?.after ?? '';
+    const limit = MAX_SHAPING_CONTEXT;
+    const actual = Math.max(String(before).length, String(after).length);
+    if (typeof before !== 'string' || typeof after !== 'string' || actual > limit)
+      throw new HarfBuzzShapingError('textOverLimit', { limit, actual });
 
     try {
       const active = this.#loadFont(environment.font, bytes);
       const { face, font } = active;
       const buffer = this.#buffer;
       buffer.reset();
-      buffer.addText(text);
+      // Context is read for contextual forms and never shaped. HarfBuzz reports clusters as
+      // offsets into the whole string, so they shift back by the leading context below.
+      if (before || after) buffer.addText(before + text + after, before.length, text.length);
+      else buffer.addText(text);
       buffer.setDirection(
         environment.direction === 'rtl'
           ? this.#harfBuzz.Direction.RTL
@@ -788,13 +792,17 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       );
       this.#instrumentation?.onShapeCall?.();
       this.#harfBuzz.shape(font, buffer, features);
-      const shaped = buffer.getGlyphInfosAndPositions();
-      if (shaped.length > this.#maxGlyphs) {
+      const glyphCount = buffer.getLength();
+      if (glyphCount > this.#maxGlyphs) {
         throw new HarfBuzzShapingError('glyphOverLimit', {
           limit: this.#maxGlyphs,
-          actual: shaped.length,
+          actual: glyphCount,
         });
       }
+      // The combined getter defines internal metadata properties on every glyph.
+      // Layout only needs glyph identities and positions, available without those properties.
+      const shaped = buffer.getGlyphInfos();
+      const positions = buffer.getGlyphPositions();
 
       const convert = fontUnitsConverter(
         face.upem,
@@ -802,30 +810,33 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
         environment.fixedPointScale,
         environment.roundingMode
       );
+      const exactAdvance = exactFontUnitsConverter(
+        face.upem,
+        input.fontSizeHalfPoints,
+        environment.fixedPointScale
+      );
+      const exactAdvancesX: number[] = [];
       let originX = fixedPoint(0);
       let originY = fixedPoint(0);
       const runOutlines = new Map<number, GlyphOutline>();
-      const variationFingerprint = JSON.stringify(
-        Object.entries(environment.variationAxes).sort(([left], [right]) =>
-          left.localeCompare(right)
-        )
-      );
-      const glyphs: ShapedGlyph[] = shaped.map((glyph) => {
-        const advanceX = convert(glyph.xAdvance ?? 0);
-        const advanceY = convert(glyph.yAdvance ?? 0);
+      const glyphs: ShapedGlyph[] = shaped.map((glyph, index) => {
+        const position = positions[index];
+        exactAdvancesX.push(exactAdvance(position?.xAdvance ?? 0));
+        const advanceX = convert(position?.xAdvance ?? 0);
+        const advanceY = convert(position?.yAdvance ?? 0);
         const positioned = {
           id: glyph.codepoint,
-          cluster: glyph.cluster,
+          cluster: glyph.cluster - before.length,
           originX,
           originY,
           advanceX,
           advanceY,
-          offsetX: convert(glyph.xOffset ?? 0),
-          offsetY: convert(glyph.yOffset ?? 0),
+          offsetX: convert(position?.xOffset ?? 0),
+          offsetY: convert(position?.yOffset ?? 0),
           outline:
             runOutlines.get(glyph.codepoint) ??
             (() => {
-              const outline = this.#outline(active, glyph.codepoint, variationFingerprint);
+              const outline = this.#outline(active, glyph.codepoint);
               runOutlines.set(glyph.codepoint, outline);
               return outline;
             })(),
@@ -841,7 +852,8 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           direction: environment.direction,
           bidiLevel: input.bidiLevel,
           glyphs,
-          clusters: clustersFromGlyphs(text, glyphs),
+          exactAdvancesX,
+          clusters: clustersFromGlyphs(text, glyphs, environment.direction),
           fontSpans:
             glyphs.length === 0
               ? []
@@ -888,7 +900,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
           Object.freeze({ kind: 'evicted', retainedBytes: this.#shapeBytes })
         );
       }
-      this.#shapeResults.set(cacheKey, { run: result, bytes: cachedBytes });
+      this.#shapeResults.set(cacheKey, {
+        run: result,
+        bytes: cachedBytes,
+        stamp: ++this.#shapeStamp,
+      });
       this.#shapeBytes += cachedBytes;
       this.#instrumentation?.onShapeCacheEvent?.(
         Object.freeze({ kind: 'stored', retainedBytes: this.#shapeBytes })

@@ -1,3 +1,4 @@
+import { commentPackageContext } from './comment-package-edit.ts';
 // Comment write through the package coordinator, so collaboration can journal it.
 //
 // `addComment` commits on the story store. The coordinator then grafts the new parts onto
@@ -23,6 +24,9 @@ import {
   type SetCommentResolvedResult,
 } from './comment-writes.ts';
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
+import { lifecycleProtectionRefusal } from './forms-protection.ts';
+import type { HistoryGroup } from './history-group.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -35,7 +39,8 @@ const BODY: StoryScope = { kind: 'body' };
 export function addPackageComment(
   packageStore: TreePackageStore,
   request: AddCommentRequest,
-  scope: StoryScope = BODY
+  scope: StoryScope = BODY,
+  historyGroup?: HistoryGroup
 ): AddCommentResult {
   const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
   const store = resolved?.ok ? resolved.store : packageStore.bodyStore();
@@ -49,11 +54,12 @@ export function addPackageComment(
       if (!result.ok) return result;
       store.restoreHistoryStacks(checkpoint);
       packageStore.replacePackageShell(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return result;
     },
-    (result) => packageTransactionPublished(result)
+    (result) => packageTransactionPublished(result),
+    historyGroup
   );
 }
 
@@ -66,10 +72,19 @@ export function addPackageComment(
 export function setPackageCommentResolved(
   packageStore: TreePackageStore,
   commentId: string,
-  resolved: boolean
+  resolved: boolean,
+  historyGroup?: HistoryGroup
 ): SetCommentResolvedResult {
   const store = packageStore.bodyStore();
   const beforePackage = packageStore.currentPackage();
+  // A package-ONLY write: no story op accompanies it, so the per-op gate never sees it and
+  // the package channel cannot refuse forms protection without also refusing a legitimate
+  // field fill. Asked here instead, or a form sent out for filling came back with every
+  // comment thread resolved by a reader who could not type a character.
+  const locked = lifecycleProtectionRefusal(settingsPartOf(beforePackage), {
+    op: 'setCommentResolved',
+  });
+  if (locked) return { ok: false, reason: locked };
   const checkpoint = store.checkpoint();
   store.graftPackage(() => packageStore.currentPackage());
   return runObservedStoreTransaction(
@@ -80,11 +95,12 @@ export function setPackageCommentResolved(
       if (!result.changed) return result;
       store.restoreHistoryStacks(checkpoint);
       packageStore.replacePackageShell(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return result;
     },
-    (result) => result.ok && result.changed
+    (result) => result.ok && result.changed,
+    historyGroup
   );
 }
 
@@ -105,9 +121,18 @@ export function deletePackageComments(
   packageStore: TreePackageStore,
   comments: readonly PackageCommentDelete[],
   scope: StoryScope = BODY,
-  noteId?: number
+  noteId?: number,
+  historyGroup?: HistoryGroup
 ): boolean {
   if (comments.length === 0) return false;
+  // Package-only, like the resolve above: asked here because no story op carries it.
+  if (
+    lifecycleProtectionRefusal(settingsPartOf(packageStore.currentPackage()), {
+      op: 'deleteComments',
+    })
+  ) {
+    return false;
+  }
   const storyPart =
     scope.kind === 'body' ? packageStore.bodyStore().part : packageStore.partFor(scope);
   if (!storyPart) return false;
@@ -124,7 +149,8 @@ export function deletePackageComments(
     () => {
       let refused = false;
       let removed = false;
-      const result = store.transact((ctx) => {
+      const result = store.transact((transaction) => {
+        const ctx = commentPackageContext(transaction);
         ctx.applyPackage((current) => {
           let next = current;
           for (const comment of comments) {
@@ -145,10 +171,11 @@ export function deletePackageComments(
       if (refused || !result.ok || !removed) return false;
       store.restoreHistoryStacks(checkpoint);
       packageStore.installPackageSnapshot(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return true;
     },
-    (ok) => ok
+    (ok) => ok,
+    historyGroup
   );
 }

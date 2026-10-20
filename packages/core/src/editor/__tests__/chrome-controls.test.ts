@@ -49,6 +49,7 @@ const EXPECTED_GROUPS = [
   'text',
   'script',
   'alignment',
+  'direction',
   'list',
   'format',
   'review',
@@ -81,6 +82,8 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'alignment.center',
   'alignment.right',
   'alignment.justify',
+  'direction.ltr',
+  'direction.rtl',
   'list.bullet',
   'list.numbered',
   'list.outdent',
@@ -88,7 +91,20 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'list.lineSpacing',
   'format.painter',
   'format.clear',
+  'review.revisionMarkup',
+  'review.simpleMarkup',
+  'review.allMarkup',
+  'review.noMarkup',
+  'review.original',
+  'review.previousChange',
+  'review.nextChange',
+  'review.acceptAllChanges',
+  'review.rejectAllChanges',
+  'review.paragraphMarks',
+  'review.bookmarks',
+  'review.protectDocument',
   'review.comments',
+  'review.addComment',
   'review.authors',
   'review.editingMode',
   'contentControl.showAll',
@@ -105,10 +121,16 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
+  'table.mergeCells',
+  'table.splitCell',
   'paragraph.dialog',
   'file.open',
   'file.save',
+  'file.exportMarkdown',
+  'file.exportPdf',
+  'file.print',
   'file.pageSetup',
+  'insert.textBox',
   'insert.footnote',
   'insert.endnote',
   'insert.pageNumber',
@@ -119,6 +141,9 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'insert.sectionBreakNextPage',
   'insert.sectionBreakContinuous',
   'insert.toc',
+  'insert.bookmark',
+  'insert.goToBookmark',
+  'insert.watermark',
 ];
 
 const allSlots = (): ChromeSlotId[] =>
@@ -302,10 +327,10 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(57);
+    expect(chromeControlCount()).toBe(81);
   });
 
-  test('the table group is contextual and carries border/fill chrome slots', () => {
+  test('the table group is contextual and carries border, fill, merge, and split slots', () => {
     const table = CHROME_GROUPS.find((g) => g.id === 'table');
     expect(table?.contextual).toBe(true);
     const slots = table!.controls.map((c) => chromeSlotId(table!, c));
@@ -316,10 +341,15 @@ describe('legacy chrome descriptor', () => {
       'table.borderStyle',
       'table.borderWidth',
       'table.cellFill',
+      'table.mergeCells',
+      'table.splitCell',
     ]);
-    for (const slot of slots.slice(1)) {
+    for (const slot of slots.slice(1, 6)) {
       expect(commandForSlot(slot as ChromeSlotId)).toBeNull();
     }
+    expect(commandForSlot('table.mergeCells')).toEqual({ type: 'mergeCells' });
+    // Split takes its counts from a dialog, so only a probe stands behind it.
+    expect(commandForSlot('table.splitCell')).toBeNull();
   });
 
   test('the image group carries insert, properties, wrap, and altText in order', () => {
@@ -371,6 +401,8 @@ describe('legacy chrome descriptor', () => {
       group.controls.map((control) => chromeSlotId(group, control))
     );
     expect(defaults).not.toContain('review.authors');
+    expect(defaults).not.toContain('review.paragraphMarks');
+    expect(chromeMenuSlots()).toContain('review.paragraphMarks');
     expect(allSlots()).toContain('review.authors');
   });
 
@@ -405,11 +437,13 @@ describe('legacy chrome descriptor', () => {
     for (const menu of CHROME_MENUS) walk(menu.entries);
   });
 
-  test('the File menu offers open, save and page setup — and no print', () => {
+  test('the File menu offers open, save, print and page setup', () => {
     const file = CHROME_MENUS.find((m) => m.id === 'file');
     expect(file).toBeDefined();
     const rows = file!.entries.flatMap((e) => (e.kind === 'item' ? [e.slot] : []));
-    expect(rows).toEqual(['file.open', 'file.save', 'file.pageSetup']);
+    expect(rows).toEqual(['file.open', 'file.save', 'file.print', 'file.pageSetup']);
+    const print = file!.entries.find((e) => e.kind === 'item' && e.slot === 'file.print');
+    expect(print).toMatchObject({ shortcutKey: 'toolbar.printShortcut' });
   });
 
   test('the Insert menu reaches all three break kinds the engine wires', () => {
@@ -447,5 +481,16 @@ describe('legacy chrome descriptor', () => {
       type: 'setPageSetup',
       orientation: 'portrait',
     });
+  });
+
+  test('the watermark row is probe-driven and sits in the Insert menu', () => {
+    expect(commandForSlot('insert.watermark')).toBeNull();
+    expect(chromeProbeForSlot('insert.watermark')).toEqual({
+      type: 'setWatermark',
+      watermark: { text: 'DRAFT' },
+    });
+    const insert = CHROME_MENUS.find((m) => m.id === 'insert');
+    const rows = insert!.entries.flatMap((e) => (e.kind === 'item' ? [e.slot] : []));
+    expect(rows).toContain('insert.watermark');
   });
 });

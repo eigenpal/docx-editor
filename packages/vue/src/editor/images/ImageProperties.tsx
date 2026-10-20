@@ -1,3 +1,5 @@
+import { renderPopup } from '../popup-renderer';
+import { usePopupConfig } from '../popup-config';
 import { computed, defineComponent, nextTick, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
@@ -11,6 +13,8 @@ import {
   IMAGE_WRAP_TARGETS,
   positionInputFromPropertiesCommand,
   validateDrawingPositionInput,
+  isHTMLElementNode,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -27,7 +31,21 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
     root.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+  ).filter(
+    (element) => element.offsetParent !== null || element === hostDocumentOf(root).activeElement
+  );
+}
+
+/**
+ * A host may render this public dialog from its own chrome, outside the editor. The
+ * packaged rules are anchored to `.docx-editor`, so the overlay carries that class
+ * itself when nothing above it does, the way `NativeDialog` does for native dialogs.
+ *
+ * This runs as an element ref, not a watcher: the panel mounts only once its draft
+ * exists, which is a later tick than the one that sets `open`. The React twin matches.
+ */
+function scopeOverlay(node: unknown): void {
+  if (isHTMLElementNode(node) && !node.closest('.docx-editor')) node.classList.add('docx-editor');
 }
 
 function guardDialogMousedown(event: MouseEvent): void {
@@ -283,7 +301,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
         let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
         onCleanup(() => {
           disposed = true;
-          if (onKeyDown) document.removeEventListener('keydown', onKeyDown);
+          if (onKeyDown) hostDocumentOf(dialog).removeEventListener('keydown', onKeyDown);
         });
         await nextTick();
         if (disposed || !props.open || dialogRef.value !== dialog) return;
@@ -304,7 +322,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
           if (event.key !== 'Tab') return;
           const items = dialogFocusables(dialog);
           if (items.length === 0) return;
-          const active = document.activeElement;
+          const active = hostDocumentOf(dialog).activeElement;
           const currentIndex = items.findIndex((element) => element === active);
           if (currentIndex === -1) return;
           event.preventDefault();
@@ -313,7 +331,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
             : (currentIndex + 1) % items.length;
           items[nextIndex]?.focus();
         };
-        document.addEventListener('keydown', onKeyDown);
+        hostDocumentOf(dialog).addEventListener('keydown', onKeyDown);
       },
       { flush: 'post' }
     );
@@ -514,6 +532,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
       const positionLocked = target?.kind === 'anchored' && target.canMove === false;
       return (
         <div
+          ref={scopeOverlay}
           class={`docx-dialog-overlay${props.className ? ` ${props.className}` : ''}`}
           onClick={dismiss}
           onMousedown={(event) => {
@@ -525,6 +544,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
+            data-docx-modal=""
             aria-labelledby={titleId}
             class="docx-dialog docx-image-properties-dialog"
             onClick={(event) => event.stopPropagation()}
@@ -865,10 +885,17 @@ export const ImagePropertiesTrigger = defineComponent({
     asChild: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
+    const popups = usePopupConfig();
     const editorRef = useDocxEditor();
     const { t } = useTranslation();
     const image = useEditorState(selectImage);
     const open = ref(false);
+    watch(
+      () => popups.value?.imageProperties,
+      (renderer) => {
+        if (renderer === false) open.value = false;
+      }
+    );
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const probe = { type: 'setImageProperties' as const, description: 'probe' };
 
@@ -889,24 +916,34 @@ export const ImagePropertiesTrigger = defineComponent({
         title: disabledReason ?? t('formattingBar.imagePropertiesShortcut'),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
-          open.value = true;
+          if (popups.value?.imageProperties !== false) open.value = true;
         },
       };
 
       return (
         <>
           {props.asChild ? (
-            <Slot {...shared}>{slots.default?.()}</Slot>
+            <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
             <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
           )}
-          <DocxEditorImagePropertiesDialog
-            open={open.value}
-            onClose={() => {
-              open.value = false;
-            }}
-            triggerRef={refAsRefObject(triggerRef)}
-          />
+          {popups.value?.imageProperties === false ? null : popups.value?.imageProperties ? (
+            renderPopup(popups.value.imageProperties, {
+              open: open.value,
+              onClose: () => {
+                open.value = false;
+              },
+              triggerRef: refAsRefObject(triggerRef),
+            })
+          ) : (
+            <DocxEditorImagePropertiesDialog
+              open={open.value}
+              onClose={() => {
+                open.value = false;
+              }}
+              triggerRef={refAsRefObject(triggerRef)}
+            />
+          )}
         </>
       );
     };

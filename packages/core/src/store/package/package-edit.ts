@@ -36,6 +36,7 @@ import {
   relationshipIdFromNumber,
   relationshipNumberOf,
   resolveAllocationActor,
+  stripedDecimalIdSequence,
 } from './actor-scoped-ids.ts';
 import {
   isCanonicalPrimitiveCaptureActive,
@@ -358,7 +359,7 @@ export function withContentTypeOverride(
  * Declare content types for MANY parts in one content-types tree edit — the batched twin
  * of {@link withContentTypeOverride}. A per-part call re-parses and re-serializes the whole
  * `[Content_Types].xml` each time, which is quadratic when a paste installs thousands of
- * media parts; this parses and serializes once.
+ * media parts; this indexes, edits, and serializes the children once.
  */
 export function withContentTypeOverrides(
   pkg: OoxmlPackage,
@@ -373,25 +374,80 @@ export function withContentTypeOverrides(
   });
   if (!parsed.ok) return pkg;
 
-  let part = parsed.part;
+  const part = parsed.part;
+  const root = part.root;
+  if (root.kind !== 'generic') return pkg;
+  const requests: Array<readonly [string, string, string]> = [];
+  const wanted = new Set<string>();
+  for (const [partName, contentType] of entries) {
+    const canonical = writablePartName(partName);
+    if (canonical === null) continue;
+    const key = partNameKey(canonical);
+    requests.push([canonical, key, contentType]);
+    wanted.add(key);
+  }
+  if (requests.length === 0) return pkg;
+
+  // Keep the first matching node in place. Remove only requested duplicates.
+  const children: OoxmlNode[] = [];
+  const positions = new Map<string, number>();
+  const duplicates = new Set<string>();
+  for (const child of root.children) {
+    const name = readUnqualifiedGenericAttribute(child, 'PartName');
+    const key = name === undefined ? undefined : partNameKey(name);
+    if (
+      name !== undefined &&
+      key !== undefined &&
+      wanted.has(key) &&
+      isContentTypeOverrideNode(child, name)
+    ) {
+      if (positions.has(key)) {
+        duplicates.add(key);
+        continue;
+      }
+      positions.set(key, children.length);
+    }
+    children.push(child);
+  }
+
   const overrides = new Map(pkg.contentTypes.overrides);
   const capture = isCanonicalPrimitiveCaptureActive();
   const recorded: Array<readonly [string, string]> = [];
   let changed = false;
-  for (const [partName, contentType] of entries) {
-    const canonical = writablePartName(partName);
-    if (canonical === null) continue;
-    const upserted = upsertContentTypeOverrideChildren(part, canonical, contentType);
-    if (!upserted.changed) continue;
-    part = upserted.part;
-    overrides.set(partNameKey(canonical), contentType);
+  for (const [canonical, key, contentType] of requests) {
+    const position = positions.get(key);
+    if (position === undefined) {
+      positions.set(key, children.length);
+      children.push(
+        element(mintedId(part, `override-${canonical}`), CONTENT_TYPES_NAMESPACE, 'Override', {
+          PartName: canonical,
+          ContentType: contentType,
+        })
+      );
+    } else {
+      const child = children[position] as OoxmlGenericElementNode;
+      const removedDuplicates = duplicates.delete(key);
+      if (readUnqualifiedGenericAttribute(child, 'ContentType') === contentType) {
+        if (!removedDuplicates) continue;
+      } else {
+        children[position] = withGenericAttributeValue(child, 'ContentType', contentType);
+      }
+    }
+    overrides.set(key, contentType);
     changed = true;
     if (capture) recorded.push([canonical, contentType]);
   }
   if (!changed) return pkg;
 
+  const replaced = runWithoutJournalCapture(() =>
+    replaceChildren(part, root.id, children, { deferValidation: true })
+  );
+  if (!replaced.ok) return pkg;
   const partBytes = new Map(pkg.partBytes);
-  partBytes.set(contentTypesEntry.storageKey, new TextEncoder().encode(serializeOoxmlPart(part)));
+  partBytes.set(
+    contentTypesEntry.storageKey,
+    new TextEncoder().encode(serializeOoxmlPart(replaced.part))
+  );
   const next = Object.freeze({
     ...pkg,
     partBytes,
@@ -425,12 +481,29 @@ export function withRelationships(
     const match = /^rId(\d+)$/.exec(id);
     if (match) next = Math.max(next, Number(match[1]) + 1);
   }
+  // With a collaborator bound, ids come from that actor's stripe, so two people adding
+  // relationships to one part from one snapshot do not mint the same `rId`.
+  const actor = resolveAllocationActor();
+  const striped =
+    actor === undefined
+      ? null
+      : stripedDecimalIdSequence(
+          new Set(
+            [...used].flatMap((id) => {
+              const value = relationshipNumberOf(id);
+              return value === null ? [] : [String(value)];
+            })
+          ),
+          actor,
+          MAX_RELATIONSHIP_NUMBER
+        );
   const existing = relationshipsOf(pkg, ownerPart);
   const ids: string[] = [];
   const records: OoxmlNode[] = [];
   const added: RelationshipRecord[] = [];
   requests.forEach(([type, rawTarget], index) => {
-    let id = `rId${next++}`;
+    const stripedNumber = striped?.() ?? null;
+    let id = stripedNumber !== null ? `rId${stripedNumber}` : `rId${next++}`;
     while (used.has(id)) id = `rId${next++}`;
     used.add(id);
     ids.push(id);
@@ -592,8 +665,13 @@ function withoutContentTypeOverride(pkg: OoxmlPackage, partName: string): OoxmlP
   });
   if (!parsed.ok) return pkg;
   const children = parsed.part.root.children.filter((child) => {
-    if (child.kind === 'textValue' || child.localName !== 'Override') return true;
-    const named = child.attributes.find((a) => a.localName === 'PartName');
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== CONTENT_TYPES_NAMESPACE ||
+      child.localName !== 'Override'
+    )
+      return true;
+    const named = child.attributes.find((a) => a.namespaceUri === '' && a.localName === 'PartName');
     return named === undefined || partNameKey(named.value) !== overrideKey;
   });
   if (children.length === parsed.part.root.children.length) return pkg;

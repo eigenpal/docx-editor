@@ -10,7 +10,7 @@
 // The real chain: `docx-editor.ts` passes `configuredDefaultFontFamily(fontConfiguration())`,
 // and `fontConfiguration()` answers `resolvedFontConfiguration` for a function-form
 // `fonts` — which is `undefined` until the resolver returns. `font-catalog.ts` answers
-// `WORD_DEFAULT_FONT.family` for `undefined`, so the request always carries 'Calibri'.
+// `DEFAULT_FONT.family` for `undefined`, so the request always carries 'Calibri'.
 //
 // UNCONDITIONALLY, for this form. `defaultFont` lives on the font configuration the
 // resolver has not produced yet, and `createDocxEditor` has no `defaultFont` option, so no
@@ -147,7 +147,7 @@ describe('the request the engine sends', () => {
 
       expect(seen).toHaveLength(1);
       expect(seen[0]!.families).toEqual(['Montserrat']);
-      // NOT the document's family. `WORD_DEFAULT_FONT.family`, because a function-form
+      // NOT the document's family. `DEFAULT_FONT.family`, because a function-form
       // configuration has resolved nothing yet when this call is made. A test that writes
       // its own `defaultFamily` here can assert anything it likes.
       expect(seen[0]!.defaultFamily).toBe('Calibri');

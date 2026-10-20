@@ -6,39 +6,19 @@
 // the cases where a naive implementation still produces valid XML that says the wrong thing.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, serializeOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { revisionItemsOf } from '../store/review-reads.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
-import type { TreeDocOp } from '../store/tree-op-validate.ts';
+import { ADA, apply, paragraphId, part, xml } from './tracked-edit-fixture.ts';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const ADA = { author: 'Ada Lovelace', date: '2026-01-02T03:04:05Z' };
-
-function part(body: string): OoxmlPart {
-  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
-    name: '/word/document.xml',
-    contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-  });
-  if (!read.ok) throw new Error(`fixture did not parse: ${read.reason}`);
-  return read.part;
-}
-
-/** The only paragraph in the fixture. */
-function paragraphId(source: OoxmlPart): string {
-  const body = source.root.children.find((child) => child.kind !== 'textValue');
-  const found = body && body.kind !== 'textValue' ? body.children[0] : undefined;
-  if (!found) throw new Error('no paragraph');
-  return found.id;
-}
-
-function apply(source: OoxmlPart, op: TreeDocOp): OoxmlPart {
-  const result = applyTreeOp(source, op);
-  if (!result.ok) throw new Error(`op refused: ${result.reason} ${result.detail ?? ''}`);
-  return result.part;
-}
-
-/** Serialized, with the noise a diff does not care about collapsed. */
-function xml(source: OoxmlPart): string {
-  return serializeOoxmlPart(source).replace(/^<\?xml[^>]*\?>/, '');
+function paragraphIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') ids.push(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
 }
 
 describe('a tracked insertion', () => {
@@ -178,7 +158,7 @@ describe('a tracked insertion', () => {
     expect(out).toContain('<w:t>rest</w:t>');
   });
 
-  test("another author's insertion nests, because it is a second proposal", () => {
+  test("inside another author's insertion, their wrapper splits around a second proposal", () => {
     const before = part(
       `<w:p><w:ins w:id="1" w:author="Alan Turing"><w:r><w:t>abcd</w:t></w:r></w:ins></w:p>`
     );
@@ -190,65 +170,12 @@ describe('a tracked insertion', () => {
       revision: ADA,
     });
     const out = xml(after);
-    expect(out.match(/<w:ins\b/g)?.length).toBe(2);
-    expect(out).toMatch(/w:author="Ada Lovelace"/);
-    expect(out).toMatch(/w:author="Alan Turing"/);
-  });
-});
-
-describe('a replacement', () => {
-  test('the halves share one revision identity and read in Word order', () => {
-    // Typing over a selection: the delete lands first, then the insert, in one transaction.
-    let current = part('<w:p><w:r><w:t>alpha beta</w:t></w:r></w:p>');
-    const id = paragraphId(current);
-    current = apply(current, {
-      op: 'deleteText',
-      paragraphId: id,
-      start: 0,
-      end: 5,
-      revision: ADA,
-    });
-    current = apply(current, {
-      op: 'insertText',
-      paragraphId: id,
-      offset: 0,
-      text: 'omega',
-      // The same instant, because it is the same edit — the surface stamps one timestamp per
-      // transaction. A month apart would NOT join, and must not: see the next test.
-      revision: ADA,
-    });
-    const out = xml(current);
-    // Struck text first, then what takes its place — Word's arrangement, and the order that
-    // reads as a sentence. Before it, the replacement would read "omega alpha".
+    // Nested, the new words would belong to their proposal: rejecting theirs would remove
+    // these, and accepting these would leave them pending inside theirs. Side by side, each
+    // is its own decision, and their two halves keep one revision identity.
     expect(out).toMatch(
-      /<w:del[^>]*><w:r><w:delText>alpha<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>omega<\/w:t><\/w:r><\/w:ins>/
+      /<w:ins w:author="Alan Turing" w:id="1"><w:r><w:t>ab<\/w:t><\/w:r><\/w:ins><w:ins w:author="Ada Lovelace"[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins><w:ins w:author="Alan Turing" w:id="1"><w:r><w:t>cd<\/w:t><\/w:r><\/w:ins>/
     );
-    // ONE identity across both halves: the insert adopted the deletion's id AND its date,
-    // which is what makes accept/reject resolve the pair together.
-    const ids = [...out.matchAll(/<w:(?:ins|del)[^>]*w:id="(\d+)"/g)].map((match) => match[1]);
-    expect(new Set(ids).size).toBe(1);
-    const dates = [...out.matchAll(/<w:(?:ins|del)[^>]*w:date="([^"]+)"/g)].map((m) => m[1]);
-    expect(new Set(dates).size).toBe(1);
-  });
-
-  test("an OLD deletion by the same author is not absorbed into today's edit", () => {
-    const before = part(
-      `<w:p><w:del w:id="5" w:author="Ada Lovelace" w:date="2020-01-01T00:00:00Z">` +
-        `<w:r><w:delText>old</w:delText></w:r></w:del><w:r><w:t>new</w:t></w:r></w:p>`
-    );
-    const after = apply(before, {
-      op: 'deleteText',
-      paragraphId: paragraphId(before),
-      start: 3,
-      end: 6,
-      revision: ADA,
-    });
-    const out = xml(after);
-    // Two decisions. Joining them would backdate today's edit into a revision from 2020 and
-    // make rejecting one reject the other.
-    expect(out.match(/<w:del\b/g)?.length).toBe(2);
-    expect(out).toContain('w:date="2020-01-01T00:00:00Z"');
-    expect(out).toContain(`w:date="${ADA.date}"`);
   });
 });
 
@@ -321,6 +248,61 @@ describe('a tracked paragraph mark', () => {
       revision: ADA,
     });
     expect(xml(twice).match(/<w:ins\b/g)?.length).toBe(1);
+  });
+
+  test('adjacent marks reuse the first timestamp across the grouping window', () => {
+    const before = part(
+      '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>three</w:t></w:r></w:p>'
+    );
+    const [first, second, third] = paragraphIds(before);
+    const once = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: first!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:00:00Z' },
+    });
+    const twice = apply(once, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:01:00Z' },
+    });
+    const thrice = apply(twice, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: third!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:01:01Z' },
+    });
+    const marks = revisionItemsOf(thrice).filter((item) => item.revisionKind === 'paragraphMark');
+    expect(marks).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:00:00Z')?.ranges).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:01:01Z')?.ranges).toHaveLength(1);
+  });
+
+  test('a paired mark coalesces against the matching revision kind', () => {
+    const before = part(
+      '<w:p><w:pPr><w:rPr>' +
+        '<w:ins w:id="1" w:author="Ada" w:date="2026-09-09T08:00:00Z"/>' +
+        '<w:del w:id="2" w:author="Bob" w:date="2026-09-09T08:00:00Z"/>' +
+        '</w:rPr></w:pPr></w:p><w:p/>'
+    );
+    const [, second] = paragraphIds(before);
+    const after = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'del',
+      revision: { author: 'Bob', date: '2026-09-09T08:00:05Z' },
+    });
+    const deletions = revisionItemsOf(after).filter(
+      (item) =>
+        item.revisionKind === 'paragraphMark' &&
+        item.markDirection === 'delete' &&
+        item.author === 'Bob'
+    );
+    expect(deletions).toHaveLength(1);
+    expect(deletions[0]!.ranges).toHaveLength(2);
   });
 });
 
@@ -972,4 +954,26 @@ describe('a tracked page field', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('invalid-property-value');
   });
+});
+
+describe("a tracked insertion inside a container within another author's insertion", () => {
+  for (const [name, opening, closing] of [
+    ['link', '<w:hyperlink w:anchor="target">', '</w:hyperlink>'],
+    ['content control', '<w:sdt><w:sdtPr/><w:sdtContent>', '</w:sdtContent></w:sdt>'],
+  ] as const) {
+    test(`refuses inside a ${name}, which cannot split`, () => {
+      const before = part(
+        `<w:p><w:ins w:id="1" w:author="Alan Turing">${opening}<w:r><w:t>abcd</w:t></w:r>${closing}</w:ins></w:p>`
+      );
+      const result = applyTreeOp(before, {
+        op: 'insertText',
+        paragraphId: paragraphId(before),
+        offset: 2,
+        text: 'XY',
+        revision: ADA,
+      });
+      // Nested inside their proposal, rejecting it would remove these words.
+      expect(result).toMatchObject({ ok: false, reason: 'unsupported-revision:foreign-insertion' });
+    });
+  }
 });

@@ -29,7 +29,18 @@ export function tryCreateBrowserImageDecodePort(ownerDocument: Document): ImageD
   return Object.freeze({
     async decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits) {
       const blob = new Blob([new Uint8Array(bytes)], { type: mime });
-      const bitmap = await view.createImageBitmap!(blob);
+      // `validateJpegHeader` reports the extent AFTER EXIF orientation; the bitmap must be
+      // oriented the same way or the two disagree on portrait photos. An engine whose
+      // `ImageOrientation` enum predates `from-image` rejects the dictionary with a
+      // TypeError; retry without it to preserve the existing decode path. The resource
+      // layer still rejects a bitmap whose dimensions disagree with the oriented header.
+      let bitmap: ImageBitmap;
+      try {
+        bitmap = await view.createImageBitmap!(blob, { imageOrientation: 'from-image' });
+      } catch (error) {
+        if ((error as { name?: unknown } | null)?.name !== 'TypeError') throw error;
+        bitmap = await view.createImageBitmap!(blob);
+      }
       try {
         const pixelWidth = bitmap.width;
         const pixelHeight = bitmap.height;

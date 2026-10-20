@@ -16,15 +16,69 @@ import {
   defineFontResolver,
   isFontResolver,
 } from '../font-resolver.ts';
-import type { FontOrigin } from '../font-resolver.ts';
+import type { FontOrigin, FontOriginCompositionRequest } from '../font-resolver.ts';
 import type { FontConfigurationFragment, FontResolutionRequest } from '../font-composition.ts';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { prepareLayoutFontConfiguration } from '../../layout/layout-shaping.ts';
+import { HARD_MAX_FONT_SOURCES } from '../../layout/font-resource.ts';
 
 const REQUEST: FontResolutionRequest = {
   families: ['Calibri', 'Montserrat'],
   defaultFamily: 'Calibri',
 };
+
+test('partial font failures are bounded snapshots and do not discard usable sources', async () => {
+  const cause = new Error('Missing bold face');
+  const failures = Array.from({ length: HARD_MAX_FONT_SOURCES + 2 }, () => cause);
+  const reports: unknown[] = [];
+  const fragment = { sources: [source('Calibri', 'available')], failures };
+  const merged = await composeFontOrigins([fragment], REQUEST, {
+    onOriginFailure: ({ cause }) => {
+      reports.push(cause);
+      failures.length = 0;
+    },
+  });
+  expect(merged?.sources?.map(({ id }) => id)).toEqual(['available']);
+  expect(reports).toHaveLength(2); // One unique cause plus the truncation diagnostic.
+  expect(reports[0]).toBe(cause);
+  expect(merged?.failures).toHaveLength(HARD_MAX_FONT_SOURCES + 1);
+});
+
+test('a reported font failure has its stack formatted before anyone keeps it', async () => {
+  // An unread stack keeps every frame's closure alive, and those reach the document. A
+  // report that outlives the export, such as a PDF result's font resolution, kept it all.
+  const cause = new Error('Missing bold face');
+  const stack = cause.stack;
+  let reads = 0;
+  Object.defineProperty(cause, 'stack', {
+    get: () => {
+      reads += 1;
+      return stack;
+    },
+  });
+  let readsAtReport = -1;
+  await composeFontOrigins([{ sources: [], failures: [cause] }], REQUEST, {
+    onOriginFailure: () => {
+      readsAtReport = reads;
+    },
+  });
+  expect(readsAtReport).toBeGreaterThan(0);
+});
+
+test('concurrent font compositions keep partial failure reports independent', async () => {
+  const first = new Error('First export'),
+    second = new Error('Second export');
+  const results = await Promise.all(
+    [first, second].map(async (cause) => {
+      const reports: unknown[] = [];
+      await composeFontOrigins([Promise.resolve({ sources: [], failures: [cause] })], REQUEST, {
+        onOriginFailure: ({ cause }) => reports.push(cause),
+      });
+      return reports;
+    })
+  );
+  expect(results).toEqual([[first], [second]]);
+});
 
 function source(family: string, id: string): FontSource {
   return {
@@ -194,6 +248,7 @@ describe('composeFontOrigins', () => {
     // Everything else about the request is untouched.
     expect(seen[0]!.families).toBe(REQUEST.families);
     expect(seen[0]!.defaultFamily).toBe(REQUEST.defaultFamily);
+    expect((seen[0] as FontOriginCompositionRequest).committedSourceBytes).toBe(1);
   });
 
   test('reports FACES, not families: two faces of one family are two entries', async () => {
@@ -307,6 +362,32 @@ describe('composeFontOrigins', () => {
     await composeFontOrigins([empty, record], REQUEST);
 
     expect(seen[0]!.resolvedFaces).toBeUndefined();
+    expect((seen[0] as FontOriginCompositionRequest).committedSourceBytes).toBeUndefined();
+  });
+
+  test('tells later origins the bytes earlier origins already committed', async () => {
+    const seen: FontOriginCompositionRequest[] = [];
+    const first = defineFontResolver(async () => ({
+      sources: [
+        { ...source('Calibri', 'first-a'), bytes: new Uint8Array([1, 2, 3]) },
+        { ...source('Arial', 'first-b'), bytes: new Uint8Array([4, 5]) },
+      ],
+    }));
+    const second = defineFontResolver(async (request: FontOriginCompositionRequest) => {
+      seen.push(request);
+      return { sources: [source('Georgia', 'second')] };
+    });
+    const third = defineFontResolver(async (request: FontOriginCompositionRequest) => {
+      seen.push(request);
+      return undefined;
+    });
+
+    await composeFontOrigins([first, second, third], REQUEST);
+
+    expect(seen[0]!.committedSourceBytes).toBe(5);
+    expect(faceNames(seen[0])).toEqual(['Arial/400/normal', 'Calibri/400/normal']);
+    expect(seen[1]!.committedSourceBytes).toBe(6);
+    expect(seen[1]!.families).toBe(REQUEST.families);
   });
 
   test('an aborting origin never starts a later fallback', async () => {

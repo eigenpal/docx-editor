@@ -212,3 +212,136 @@ describe('a raw command target', () => {
     expect(editor.surface!.session.revision()).toBe(revisionBefore);
   });
 });
+
+// A live control rerenders on every snapshot. That must not mint a new group per frame.
+import { useEditorValueCommand } from '../src/editor/useEditorValueCommand.ts';
+import { useHistoryGroup } from '../src/editor/useHistoryGroup.ts';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+
+test('range binding survives React updates, groups two gestures, and cleans up', async () => {
+  const results: ExecResult[] = [];
+  let currentOptions: ReturnType<typeof useHistoryGroup>['options'] | undefined;
+  function RangeProbe() {
+    const size = useEditorValueCommand('font.size');
+    const gesture = useHistoryGroup({ kind: 'range' });
+    currentOptions = gesture.options;
+    return (
+      <input
+        data-testid="live-size"
+        ref={gesture.ref}
+        type="range"
+        min="16"
+        max="100"
+        disabled={!size.isEnabled}
+        value={size.value ?? 22}
+        onInput={(event) =>
+          results.push(size.execute(Number(event.currentTarget.value), gesture.options()))
+        }
+      />
+    );
+  }
+  const { view, editor } = mount(<RangeProbe />);
+  await selectAll(editor());
+  const input = view.getByTestId('live-size') as HTMLInputElement;
+  for (const values of [
+    [24, 28, 32],
+    [40, 44],
+  ]) {
+    await act(async () => {
+      input.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0 })
+      );
+    });
+    for (const value of values) {
+      await act(async () => {
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+  expect(results.map((r) => (r.ok ? r.history?.kind : r.reason))).toEqual([
+    'started',
+    'extended',
+    'extended',
+    'started',
+    'extended',
+  ]);
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(input.value).toBe('32');
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(editor().snapshot().canUndo).toBe(false);
+  const handle = currentOptions!().historyGroup!;
+  view.unmount();
+  expect(handle.state).toBe('closed');
+  expect(() => currentOptions!()).toThrow('not mounted');
+});
+
+test('React color onChange retains frames through the native final change', async () => {
+  const results: ExecResult[] = [];
+  function ColorProbe() {
+    const color = useEditorValueCommand('text.color');
+    const gesture = useHistoryGroup({ kind: 'native-color' });
+    return (
+      <input
+        data-testid="live-color"
+        ref={gesture.ref}
+        type="color"
+        value={`#${color.value ?? '000000'}`}
+        disabled={!color.isEnabled}
+        onChange={(event) =>
+          results.push(color.execute(event.currentTarget.value.slice(1), gesture.options()))
+        }
+      />
+    );
+  }
+  const { view, editor } = mount(<ColorProbe />);
+  await selectAll(editor());
+  const input = view.getByTestId('live-color') as HTMLInputElement;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  for (const [index, values] of [
+    ['#00ff00', '#007700', '#0070c0'],
+    ['#ff00ff', '#c00000'],
+  ].entries()) {
+    await act(async () => {
+      input.dispatchEvent(
+        index === 0
+          ? new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0 })
+          : new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })
+      );
+    });
+    for (const [frame, value] of values.entries()) {
+      await act(async () => {
+        setValue.call(input, value);
+        input.dispatchEvent(
+          new Event(frame === values.length - 1 ? 'change' : 'input', { bubbles: true })
+        );
+      });
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  expect(results.map((result) => (result.ok ? result.history?.kind : result.reason))).toEqual([
+    'started',
+    'extended',
+    'extended',
+    'started',
+    'extended',
+  ]);
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(input.value.toLowerCase()).toBe('#0070c0');
+  await act(async () => {
+    editor().exec({ type: 'undo' });
+  });
+  expect(editor().snapshot().canUndo).toBe(false);
+});

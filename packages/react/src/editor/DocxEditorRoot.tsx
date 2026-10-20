@@ -3,6 +3,21 @@ import {
   createUnsupportedElementRegistry,
   type UnsupportedElementRegistry,
 } from './unsupported-element-registry';
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+  FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  LockedControlNavigation,
+} from '@docx-editor.dev/core/editor';
+import { FormControlTranslateProvider } from './form-control-translate';
+import { DialogProvider } from './dialog-host';
+import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
+import { warnFieldResultsChanged } from './field-results-warning';
+import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
@@ -31,6 +46,8 @@ import {
   createDocxEditor,
   defaultTableLabel,
   resolveZoomMode,
+  resolveRevisionMarkup,
+  runToolbarCommand,
   sameZoomMode,
 } from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -57,14 +74,16 @@ import {
 } from './revision-style-registry';
 
 /**
- * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
- * `locale`, and the initial `mode`/`zoom`) are sampled when the instance is created;
- * only `document` and `fonts` identity remount it. Later `mode` and `zoom` changes flow through
- * `Editor.setZoom` so edits, the caret, and the undo history survive.
+ * Props for `DocxEditor.Root`. `document` and `imageDecodePort` identity changes remount the
+ * editor. Changing `fontShaping.maxFontBytes` also remounts. Later `fonts`, `author`, `locale`,
+ * `mode`, `translate`, `zoom`, and `zoomMode` changes use instance setters, so edits, selection
+ * and undo history survive them. `modules` is sampled at mount only.
  *
  * @public
  */
 export interface DocxEditorRootProps {
+  /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
+  popups?: DocxEditorPopups;
   /** A document to load: DOCX bytes, `'blank'` for an empty one, or an existing handle.
    * Identity change remounts; `'blank'` is a constant, so holding it across renders does
    * not. Omitting this mounts NO document, which is not the same as an empty one. */
@@ -74,23 +93,30 @@ export interface DocxEditorRootProps {
    * uses a fixed-width estimate; fonts embedded in the document are wired automatically
    * either way. Pass `await loadDefaultFonts()` from `@docx-editor.dev/fonts` for
    * Word's default faces — a bare fragment is accepted — or compose several origins
-   * with `composeFontConfiguration`. Sampled at mount; identity change remounts;
-   * failures degrade to the fixed measurer and report through `onFontError`.
+   * with `composeFontConfiguration`. An identity change replaces the fonts in place
+   * (`setFonts`), keeping the document, selection and undo history; keep the reference stable
+   * across renders. Failures degrade to the fixed measurer and report through `onFontError`.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling; a changed maxFontBytes value remounts. */
+  fontShaping?: FontShapingOptions;
+  /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
+  /**
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * For UI translations, wrap Root and its chrome in LocaleProvider with an i18n catalog.
+   */
   locale?: string;
-  /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */
+  /** Live drawing and form-control labels; defaults to the active catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
-   * custom nodes, collaboration). Sampled at mount only, like `mode`: module registration is
-   * construction-time in the engine.
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes,
+   * collaboration). Sampled at mount only because registration is construction-time.
    */
   modules?: readonly EditorModule[];
   /**
-   * The mode the editor opens in, matching the toolbar's three-state pill. Sampled at
-   * mount only.
+   * The host mode, matching the toolbar's three-state pill. Changes apply without a remount.
    *
    * `'edit'` opens in editing even when the document's `w:trackRevisions` asks for
    * tracked changes; `'suggesting'` opens in suggesting (needs a review module and an
@@ -112,6 +138,38 @@ export interface DocxEditorRootProps {
    * navigation pane shrinks the document by what it took. Pass `{ type: 'fixed' }` to opt out.
    */
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
+
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). A large
    *  document mounts behind one painted frame; `onReady` fires AFTER that mount lands,
@@ -150,6 +208,7 @@ export interface DocxEditorRootListeners {
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 /** @public Vue-only setup result; exported for cross-adapter API parity. */
@@ -174,6 +233,7 @@ function useProvidedDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorR
     onReady: _onReady,
     onChange: _onChange,
     onFontError: _onFontError,
+    onRevisionMarkupChange: _onRevisionMarkupChange,
     ...rootProps
   } = options;
   const rootListeners = useMemo<DocxEditorRootListeners>(
@@ -184,6 +244,7 @@ function useProvidedDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorR
       },
       onChange: (change) => latest.current.onChange?.(change),
       onFontError: (error) => latest.current.onFontError?.(error),
+      onRevisionMarkupChange: (settings) => latest.current.onRevisionMarkupChange?.(settings),
     }),
     []
   );
@@ -208,6 +269,11 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const {
     document: doc,
     fonts,
+    fontShaping,
+    author,
+    locale,
+    translate,
+    mode,
     zoom,
     zoomMode,
     tableInteractionLabel,
@@ -220,12 +286,25 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       catalogT(key as TranslationKey, params),
     [catalogT]
   );
+  const defaultTranslateRef = useRef(defaultTranslate);
+  defaultTranslateRef.current = defaultTranslate;
 
   // Latest props, read inside effects without retriggering them.
+  const applyingMarkup = useRef(false);
+  const [markupRevision, setMarkupRevision] = useState(0);
   const propsRef = useRef(props);
   propsRef.current = props;
+  const fontShapingMaxFontBytes = fontShaping?.maxFontBytes;
 
   const [editor, setEditor] = useState<DocxEditorInstance | null>(null);
+  /** The `fieldResults` the current instance was created with. */
+  const createdFieldResults = useRef(props.fieldResults);
+  /** The `contentLockPolicy` the current instance was created with. */
+  const createdContentLockPolicy = useRef(props.contentLockPolicy);
+  /** The `lockedControlNavigation` the current instance was created with. */
+  const createdLockedControlNavigation = useRef(props.lockedControlNavigation);
+  /** The `fonts` the current instance holds: created with, or last handed to `setFonts`. */
+  const createdFonts = useRef(props.fonts);
 
   // The channel `<DocxEditor.ColorByChangeType>` / `<DocxEditor.AuthorStyle>` declare through.
   // A store: declarations register from anywhere in the subtree, and identity must hold
@@ -242,22 +321,33 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   unsupportedRegistryRef.current ??= createUnsupportedElementRegistry();
   const unsupportedRegistry = unsupportedRegistryRef.current;
 
-  // One instance per document/fonts identity, and per effect run: `destroy()` is
+  // One instance per document identity, and per effect run: `destroy()` is
   // terminal, so a StrictMode re-run must build anew rather than resurrect.
   useEffect(() => {
     const p = propsRef.current;
-    const translate = p.translate ?? defaultTranslate;
+    const translate = p.translate ?? defaultTranslateRef.current;
     // Declarations mounted in this same commit registered BEFORE this effect (child
     // effects run bottom-up), so they reach the engine as construction config and the
     // FIRST paint is already styled — no kind-coloured frame.
     const declaredStyles = revisionStyleRegistry.current();
+    createdFieldResults.current = p.fieldResults;
+    createdContentLockPolicy.current = p.contentLockPolicy;
+    createdLockedControlNavigation.current = p.lockedControlNavigation;
     const instance = createDocxEditor({
       unsupportedElementRules: unsupportedRegistry.current(),
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
+      ...(p.fontShaping ? { fontShaping: p.fontShaping } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate,
+      ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
+      ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
+      ...(p.lockedControlNavigation !== undefined
+        ? { lockedControlNavigation: p.lockedControlNavigation }
+        : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
@@ -267,15 +357,31 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
     });
+    createdFonts.current = p.fonts;
+    const offMarkup = instance.on('revisionMarkupChange', (settings) => {
+      if (applyingMarkup.current) return;
+      propsRef.current.onRevisionMarkupChange?.(settings);
+      setMarkupRevision((value) => value + 1);
+    });
     const offChange = instance.on('change', (change) => propsRef.current.onChange?.(change));
     setEditor(instance);
     return () => {
+      offMarkup();
       offChange();
       instance.destroy();
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry, unsupportedRegistry]);
+  }, [doc, fontShapingMaxFontBytes, imageDecodePort, revisionStyleRegistry, unsupportedRegistry]);
+
+  // A new `fonts` value replaces the instance's fonts in place. The instance a remount just
+  // created already has them, so only a change after creation reaches `setFonts`.
+  useEffect(() => {
+    if (!editor || createdFonts.current === fonts) return;
+    createdFonts.current = fonts;
+    // Rejects only after destroy; font failures report through `onFontError`.
+    editor.setFonts(fonts).catch(() => {});
+  }, [editor, fonts]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -343,6 +449,70 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     }
   }, [editor, zoom, zoomMode]);
 
+  useEffect(() => {
+    if (!editor || props.revisionMarkup === undefined) return;
+    const settings = resolveRevisionMarkup(props.revisionMarkup);
+    if (JSON.stringify(settings) === JSON.stringify(editor.snapshot().revisionMarkup)) return;
+    applyingMarkup.current = true;
+    try {
+      editor.setRevisionMarkup(settings);
+    } finally {
+      applyingMarkup.current = false;
+    }
+  }, [editor, props.revisionMarkup, markupRevision]);
+
+  // Author is runtime state. Prop changes preserve the editor instance and existing revisions.
+  useEffect(() => {
+    if (!editor) return;
+    editor.setAuthor(author);
+  }, [editor, author]);
+
+  const appliedMode = useRef<{
+    editor: DocxEditorInstance | null;
+    value: 'edit' | 'view' | 'suggesting' | undefined;
+  }>({ editor: null, value: undefined });
+  useEffect(() => {
+    if (!editor) return;
+    if (appliedMode.current.editor !== editor) {
+      appliedMode.current = { editor, value: mode };
+      return;
+    }
+    if (appliedMode.current.value === mode) return;
+    appliedMode.current.value = mode;
+    editor.setMode(mode);
+  }, [editor, mode]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setTranslate(translate ?? defaultTranslate);
+  }, [editor, translate, defaultTranslate]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setLocale(locale);
+  }, [editor, locale]);
+
+  // Read once at creation; a later change is ignored and reported in development.
+  useEffect(() => {
+    if (editor) warnFieldResultsChanged(createdFieldResults.current, props.fieldResults);
+  }, [editor, props.fieldResults]);
+
+  // Compared by value, so an inline policy object re-created on each render does not warn.
+  useEffect(() => {
+    if (editor)
+      warnContentLockPolicyChanged(createdContentLockPolicy.current, props.contentLockPolicy);
+  }, [editor, props.contentLockPolicy]);
+
+  // Read once at creation, like `fieldResults`.
+  useEffect(() => {
+    if (editor) {
+      warnLockedControlNavigationChanged(
+        createdLockedControlNavigation.current,
+        props.lockedControlNavigation
+      );
+    }
+  }, [editor, props.lockedControlNavigation]);
+
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {
     if (!editor) return;
@@ -352,7 +522,20 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // A rail registers itself here so the viewport only reserves a gutter when one is
   // actually composed in. See `ReviewRailContext`.
   const [rails, setRails] = useState(0);
+  const [gutters, setGutters] = useState(0);
   const commentDraftHandlers = useRef<Array<() => void>>([]);
+  const [commentDraftCount, setCommentDraftCount] = useState(0);
+  const servesCommentDrafts = commentDraftCount > 0;
+  const railEditor = useRef(editor);
+  railEditor.current = editor;
+  // The engine decides whether Add comment is enabled, so the handlers registered here reach
+  // it as one registration, while any exists. The latest handler receives each request.
+  useEffect(() => {
+    if (!editor || !servesCommentDrafts) return undefined;
+    return editor.setCommentDraftChrome({
+      onRequest: () => commentDraftHandlers.current.at(-1)?.(),
+    });
+  }, [editor, servesCommentDrafts]);
   const railRegistry = useMemo<ReviewRailRegistry>(
     () => ({
       mounted: rails,
@@ -360,21 +543,27 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
         setRails((count) => count + 1);
         return () => setRails((count) => Math.max(0, count - 1));
       },
+      gutters,
+      reserveGutter: () => {
+        setGutters((count) => count + 1);
+        return () => setGutters((count) => Math.max(0, count - 1));
+      },
       registerCommentDraft: (handler) => {
         commentDraftHandlers.current.push(handler);
+        setCommentDraftCount((count) => count + 1);
         return () => {
           const index = commentDraftHandlers.current.indexOf(handler);
-          if (index !== -1) commentDraftHandlers.current.splice(index, 1);
+          if (index === -1) return;
+          commentDraftHandlers.current.splice(index, 1);
+          setCommentDraftCount((count) => Math.max(0, count - 1));
         };
       },
       requestCommentDraft: () => {
-        const handler = commentDraftHandlers.current.at(-1);
-        if (!handler) return false;
-        handler();
-        return true;
+        const current = railEditor.current;
+        return current !== null && runToolbarCommand(current, 'review.addComment').ok;
       },
     }),
-    [rails]
+    [rails, gutters]
   );
 
   // The channel between an open navigation pane and the chrome it displaces. A store
@@ -396,22 +585,29 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   return (
     <UnsupportedElementRegistryContext.Provider value={unsupportedRegistry}>
-      <ReviewRailContext.Provider value={railRegistry}>
-        <DocxEditorContext.Provider value={editor}>
-          <NavigationLayoutContext.Provider value={navigationLayout}>
-            <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
-              {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+      <FormControlTranslateProvider value={translate ?? defaultTranslate}>
+        <ReviewRailContext.Provider value={railRegistry}>
+          <DocxEditorContext.Provider value={editor}>
+            <NavigationLayoutContext.Provider value={navigationLayout}>
+              <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
+                {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
                 popover panel — which are siblings, not ancestor and descendant — see the same
                 open/closed state and only one of them registers with the engine's gestures. */}
-              <HyperlinkPopupProvider>
-                <ContentControlProvider>
-                  <ImageInsertProvider>{children}</ImageInsertProvider>
-                </ContentControlProvider>
-              </HyperlinkPopupProvider>
-            </RevisionStyleRegistryContext.Provider>
-          </NavigationLayoutContext.Provider>
-        </DocxEditorContext.Provider>
-      </ReviewRailContext.Provider>
+                <HyperlinkPopupProvider>
+                  <ContentControlProvider>
+                    {/* Outside the picture insert, which shows its refusal through the registry. */}
+                    <PopupConfigProvider value={props.popups}>
+                      <ImageInsertProvider>
+                        <DialogProvider popups={props.popups}>{children}</DialogProvider>
+                      </ImageInsertProvider>
+                    </PopupConfigProvider>
+                  </ContentControlProvider>
+                </HyperlinkPopupProvider>
+              </RevisionStyleRegistryContext.Provider>
+            </NavigationLayoutContext.Provider>
+          </DocxEditorContext.Provider>
+        </ReviewRailContext.Provider>
+      </FormControlTranslateProvider>
     </UnsupportedElementRegistryContext.Provider>
   );
 }

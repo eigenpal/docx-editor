@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Document automation cannot set or read a paragraph's direction.",
+  "after": "Paragraph.readingOrder writes and reads w:bidi through the existing paragraph property operation.",
+  "reason": "The write reuses setParagraphProperties with an accepted property, so shared nodes, operations, journals, and serialization are unchanged. Concurrent paragraph property writes on the same paragraph keep the existing limit tracked in #579.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-paragraph-direction-automation.test.ts",
+    "packages/editor-api/src/model/__tests__/model-reading-order.test.ts"
+  ],
+  "changeset": "paragraph-reading-order",
+  "migration": null
+}

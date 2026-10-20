@@ -17,8 +17,13 @@ const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relatio
 const RIGHT_MARGIN_PT = 468;
 const INDENT_STEP_PT = TOC_LEVEL_INDENT_TWIPS / 20;
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 const STYLES =
   `<w:styles xmlns:w="${W}">` +
+  FORMAT_DOC_DEFAULTS +
   '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/></w:style>' +

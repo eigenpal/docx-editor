@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Revision markup uses fixed decorations and document formatting tracking settings.",
+  "after": "Each viewer can customize markup and skip new formatting revision records without changing text tracking.",
+  "reason": "Preferences remain local. Formatting edits use existing untracked operations. Text edits use existing tracked operations. No collaboration schema or protocol changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-revision-markup.test.ts"
+  ],
+  "changeset": "revision-markup-preferences",
+  "migration": null
+}

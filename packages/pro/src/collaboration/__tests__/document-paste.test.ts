@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // comments.xml did not travel.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import {
   ooxmlTreesEqual,
   relationshipsOf,
@@ -93,7 +93,7 @@ function formattedFragment(): Uint8Array {
   });
 }
 
-function imageFragment(): Uint8Array {
+function imageFragment(declaredType = 'image/png'): Uint8Array {
   const picture =
     `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC}">` +
     `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/>` +
@@ -106,7 +106,7 @@ function imageFragment(): Uint8Array {
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
-        '<Default Extension="png" ContentType="image/png"/>' +
+        `<Default Extension="png" ContentType="${declaredType}"/>` +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '</Types>'
     ),
@@ -292,30 +292,33 @@ describe('clipboard paste replicates the story and package resources', () => {
     harness.expectConverged(alice, bob);
   });
 
-  test('an inline image brings media bytes, the relationship, and the drawing', async () => {
-    const { alice, bob } = await harness.pair(hostDoc());
-    const journals = pasteOn(alice, imageFragment());
-    const source = harness.packageOf(alice);
-    const peer = harness.packageOf(bob);
+  test.each(['image/png', 'image/.png'])(
+    'an inline image declared %s brings media bytes, the relationship, and the drawing',
+    async (declaredType) => {
+      const { alice, bob } = await harness.pair(hostDoc());
+      const journals = pasteOn(alice, imageFragment(declaredType));
+      const source = harness.packageOf(alice);
+      const peer = harness.packageOf(bob);
 
-    expect(allText(source)).toContain('Pic');
-    expect(allText(peer)).toContain('Pic');
-    expect(mediaPng(source)).toBeDefined();
-    expect(mediaPng(peer)).toBeDefined();
-    expect([...mediaPng(peer)!]).toEqual([...PNG_1X1]);
-    expect(hasRelType(source, IMG)).toBe(true);
-    expect(hasRelType(peer, IMG)).toBe(true);
-    expect(
-      journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putBinary'))
-    ).toBe(true);
-    expect(
-      journals.some((journal) =>
-        journal.effects.some((effect) => effect.kind === 'putRelationship')
-      )
-    ).toBe(true);
-    expectPackagesEqual(source, peer);
-    harness.expectConverged(alice, bob);
-  });
+      expect(allText(source)).toContain('Pic');
+      expect(allText(peer)).toContain('Pic');
+      expect(mediaPng(source)).toBeDefined();
+      expect(mediaPng(peer)).toBeDefined();
+      expect([...mediaPng(peer)!]).toEqual([...PNG_1X1]);
+      expect(hasRelType(source, IMG)).toBe(true);
+      expect(hasRelType(peer, IMG)).toBe(true);
+      expect(
+        journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putBinary'))
+      ).toBe(true);
+      expect(
+        journals.some((journal) =>
+          journal.effects.some((effect) => effect.kind === 'putRelationship')
+        )
+      ).toBe(true);
+      expectPackagesEqual(source, peer);
+      harness.expectConverged(alice, bob);
+    }
+  );
 
   test('a paragraph style not in the target arrives as styles.xml plus the relationship', async () => {
     const { alice, bob } = await harness.pair(hostDoc());
@@ -355,6 +358,42 @@ describe('clipboard paste replicates the story and package resources', () => {
     expect(
       journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putXmlPart'))
     ).toBe(true);
+    expectPackagesEqual(source, peer);
+    harness.expectConverged(alice, bob);
+  });
+
+  test('application defaults materialized from omitted source defaults replicate', async () => {
+    // The fragment's styles part has no docDefaults, so it painted 12pt with 8pt after. The
+    // host authors 10pt with no spacing, so the paste stamps both onto the pasted content.
+    const host = unzipSync(hostDoc());
+    host['[Content_Types].xml'] = strToU8(
+      strFromU8(host['[Content_Types].xml']!).replace(
+        '</Types>',
+        `<Override PartName="/word/styles.xml" ContentType="${STYLES_CT}"/></Types>`
+      )
+    );
+    host['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdS" Type="${STYLES}" Target="styles.xml"/></Relationships>`
+    );
+    host['word/styles.xml'] = strToU8(
+      `<w:styles xmlns:w="${W}"><w:docDefaults>` +
+        '<w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault/>' +
+        '</w:docDefaults></w:styles>'
+    );
+    const { alice, bob } = await harness.pair(zipSync(host));
+    pasteOn(alice, styleFragment());
+    const source = harness.packageOf(alice);
+    const peer = harness.packageOf(bob);
+    const sizes = (pkg: OoxmlPackage): string[] => {
+      const found: string[] = [];
+      walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node) => {
+        if (node.kind === 'textValue' || node.localName !== 'sz') return;
+        found.push(node.attributes.find((attribute) => attribute.localName === 'val')!.value);
+      });
+      return found;
+    };
+    expect(sizes(source)).toContain('24');
+    expect(sizes(peer)).toEqual(sizes(source));
     expectPackagesEqual(source, peer);
     harness.expectConverged(alice, bob);
   });

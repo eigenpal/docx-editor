@@ -112,8 +112,8 @@ describe('inline drawing geometry tracks alignment shifts', () => {
     const layout = layoutOf(
       documentXml(
         '<w:tbl><w:tblGrid><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/></w:tblGrid>' +
-          '<w:tr><w:tc><w:p><w:r><w:t>left</w:t></w:r></w:p></w:tc>' +
-          `<w:tc><w:p>${inlinePictureRun()}</w:p></w:tc></w:tr></w:tbl>`
+          '<w:tr><w:tc><w:tcPr><w:tcW w:w="2340" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>left</w:t></w:r></w:p></w:tc>' +
+          `<w:tc><w:tcPr><w:tcW w:w="2340" w:type="dxa"/></w:tcPr><w:p>${inlinePictureRun()}</w:p></w:tc></w:tr></w:tbl>`
       )
     );
     const drawing = firstDrawing(layout);

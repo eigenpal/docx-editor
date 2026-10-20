@@ -13,7 +13,7 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { readCollaborationDocument } from '../document-read.ts';
-import { CollaborationSchemaError } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
 import { collaborationDocx } from './support.ts';
 
 const SCHEMA_MAP_KEYS = [

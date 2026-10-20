@@ -1,6 +1,8 @@
 import { computed, shallowRef, toValue, watch, type ComputedRef } from 'vue';
 import {
   editorCommandKey,
+  commandExecOptions,
+  type EditorCommandExecute,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
@@ -14,7 +16,7 @@ import { useEditorState } from './useEditorState';
 
 /** @public */
 export interface EditorCommandState {
-  readonly execute: () => boolean;
+  readonly execute: EditorCommandExecute;
   readonly isActive: ComputedRef<boolean>;
   readonly isEnabled: ComputedRef<boolean>;
   readonly disabledReason: ComputedRef<string | null>;
@@ -100,11 +102,13 @@ export function useEditorCommand(
 
   void key.value;
 
-  const execute = (): boolean => {
+  const execute = (input?: unknown): boolean => {
+    const options = commandExecOptions(input);
     const current = latest.value;
-    if (isSlot(current)) return runToolbarCommand(editorRef.value, current).ok;
+    if (isSlot(current))
+      return runToolbarCommand(editorRef.value, current, undefined, options ?? {}).ok;
     if (!editorRef.value) return false;
-    return editorRef.value!.exec(current).ok;
+    return editorRef.value!.exec(current, options).ok;
   };
 
   return {

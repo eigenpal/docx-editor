@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import {
   addPackageComment,
   commentsExtendedPartNameOf,
@@ -40,6 +40,7 @@ import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from '../document-session.ts';
+import { readCollaborationDocument } from '../document-read.ts';
 import { findText, nodeText, packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'comment-replication-room';
@@ -357,6 +358,34 @@ describe('adding a comment replicates the comments part, not only the story mark
     expectConverged(alice, bob);
   });
 
+  test('deleting a comment the other peer created with its own part removes it from shared state', async () => {
+    // Both peers create the first comment, so both mint the comments part. One part root wins;
+    // the other's comment shows by adoption under it. Deleting that comment must tombstone it,
+    // or the adoption shows it again on every replica and in a fresh read of shared state.
+    for (const deleter of ['alice', 'bob'] as const) {
+      const { alice, bob } = await pair(EMPTY);
+      const wire = wires.get(bob);
+      if (!wire) throw new Error('peer has no relay');
+      wire.pause();
+      const aliceId = addCommentOn(alice, 0, 'from alice', 'Alice');
+      const bobId = addCommentOn(bob, 1, 'from bob', 'Bob');
+      wire.resume();
+      alice.port.flushPendingJournals();
+      bob.port.flushPendingJournals();
+      const [actor, target] = deleter === 'alice' ? [alice, bobId] : [bob, aliceId];
+      expect(deletePackageComments(actor.store, [{ commentId: target }])).toBe(true);
+      actor.port.flushPendingJournals();
+      for (const peer of [alice, bob]) {
+        expect(commentTextOf(packageOf(peer), target)).toBe(null);
+        expect(markerIds(packageOf(peer), 'commentReference')).not.toContain(target);
+      }
+      const cold = readOoxmlPackage(readCollaborationDocument(actor.ydoc));
+      if (!cold.ok) throw new Error(cold.reason);
+      expect(commentTextOf(cold.package, target)).toBe(null);
+      expectConverged(alice, bob);
+    }
+  });
+
   test('concurrent adds onto an existing comments.xml both survive with distinct ids', async () => {
     const { alice, bob } = await pair(WITH_COMMENTS);
     const wire = wires.get(bob);
@@ -545,4 +574,38 @@ describe('deleting a comment replicates the stripped markers and the comments pa
     expect(findText(packageOf(bob), 'Alpha').value).toBe('Alpha');
     expectConverged(alice, bob);
   });
+});
+
+test('comments-only protection permits journaled comment work and preserves protected text', async () => {
+  const files = unzipSync(EMPTY);
+  files['word/settings.xml'] = strToU8(
+    `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="comments" w:enforcement="1"/></w:settings>`
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'
+    )
+  );
+  files['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>`
+  );
+  const { alice, bob } = await pair(zipSync(files));
+  const id = addCommentOn(alice, 0, 'Protected review', 'Alice');
+  replyOn(bob, id, 0, 'Reply');
+  expectConverged(alice, bob);
+  expect(setPackageCommentResolved(alice.store, id, true).ok).toBe(true);
+  alice.port.flushPendingJournals();
+  expectExtendedOnPeer(bob, true);
+  expectConverged(alice, bob);
+  expect(deletePackageComments(bob.store, [{ commentId: id }])).toBe(true);
+  bob.port.flushPendingJournals();
+  expectConverged(alice, bob);
+  expect(markerIds(packageOf(alice), 'commentRangeStart')).toHaveLength(0);
+  expect(findText(packageOf(alice), 'Alpha').value).toBe('Alpha');
+  expect(
+    alice.store.bodyStore().transact((ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: paragraphIdAt(alice, 0), offset: 0, text: 'X' });
+    })
+  ).toMatchObject({ ok: false, reason: 'locked' });
 });

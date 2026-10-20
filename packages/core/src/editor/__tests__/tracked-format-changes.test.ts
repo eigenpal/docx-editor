@@ -16,7 +16,10 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { revisionItemsOf } from '../../store/store/review-reads.ts';
+import { planRevisionBatch } from '../../store/store/revision-batch.ts';
+import { serializeOoxmlPart } from '../../store/index.ts';
 import { docx } from './paginated-surface-fixtures.ts';
+import { resolveRevisionMarkup } from '../../contracts/revision-markup.ts';
 
 const AUTHOR = 'Bea';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -539,9 +542,9 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
-  test('Accept All survives a record with no author on the wrapper', () => {
+  test('bulk planning preserves and reports a record with no author on the wrapper', () => {
     // `CT_TrackChange` requires `@w:author` and other generators omit it anyway, so an
-    // unaddressed record is an ordinary file — and the record's contents are still a copy.
+    // unaddressed record must remain visible; its historical children are not live decisions.
     const authorless =
       '<w:p><w:pPr><w:rPr><w:b/>' +
       '<w:rPrChange w:id="7" w:date="2026-01-02T00:00:00Z"><w:rPr>' +
@@ -552,11 +555,19 @@ describe('tracked format changes in suggesting mode', () => {
       textRun('added') +
       '</w:ins></w:p>';
     withSuggesting(authorless, (surface) => {
-      const result = surface.applyAutomationOps(() => [{ op: 'acceptAllRevisions' as const }]);
+      const before = serializeOoxmlPart(surface.session.part());
+      const atomic = surface.applyAutomationOps(() => [{ op: 'acceptAllRevisions' as const }]);
+      expect(atomic.rejected).toBe(true);
+      expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+      const plan = planRevisionBatch(surface.session.part(), 'accept');
+      expect(plan.result.resolved).toHaveLength(1);
+      expect(plan.result.skipped).toMatchObject([{ reason: 'unsupported-revision' }]);
+      const result = surface.applyAutomationOps(() => [...plan.ops]);
       expect(result.rejected).toBe(false);
-      // Ann's content insertion is resolved; the copy inside the record is untouched, because
-      // it is the container as it WAS and not a decision anyone can answer.
-      expect(revisionItemsOf(surface.session.part())).toEqual([]);
+      expect(revisionItemsOf(surface.session.part())).toMatchObject([
+        { revisionKind: 'format', readOnly: true },
+      ]);
+      // The historical insertion is not surfaced as another pending change.
       expect(
         findAll(surface.session.part().root, 'rPrChange').flatMap((w) => findAll(w, 'ins'))
       ).toHaveLength(1);
@@ -677,6 +688,27 @@ describe('tracked format changes in suggesting mode', () => {
       opened.surface.destroy();
       container.remove();
     }
+  });
+
+  test('viewer formatting preferences change tracking without changing text tracking', () => {
+    withSuggesting(`<w:p>${textRun('hello')}</w:p>`, (surface) => {
+      surface.setRevisionMarkup(resolveRevisionMarkup({ trackFormatting: false }));
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      surface.setParagraphProperty('jc', { val: 'center' });
+      expect(surface.formatting().bold).toBe(true);
+      expect(rPrChanges(surface)).toHaveLength(0);
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(0);
+      select(surface, 5, 5);
+      surface.type('!');
+      expect(findAll(surface.session.part().root, 'ins')).toHaveLength(1);
+      surface.setRevisionMarkup(resolveRevisionMarkup({ trackFormatting: true }));
+      select(surface, 0, 5);
+      surface.toggleRunProperty('i');
+      expect(rPrChanges(surface)).toHaveLength(1);
+      surface.setParagraphProperty('jc', { val: 'right' });
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(1);
+    });
   });
 
   test('editing mode writes the properties with no record at all', () => {

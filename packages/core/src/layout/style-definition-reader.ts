@@ -1,6 +1,7 @@
 // Bounded styles.xml definition parsing, kept separate from cascade resolution.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import { styleOutlineLevel } from '../store/package/style-outline.ts';
 import { propertiesOf } from './paragraph-flow.ts';
@@ -11,6 +12,7 @@ const MAX_CONDITIONAL_TABLE_FORMATS = 32;
 
 export interface StyleDefinition {
   readonly styleId: string;
+  readonly name?: string;
   readonly type: string;
   readonly basedOn: string | null;
   /** `w:next` — the authoring style for a following paragraph. */
@@ -21,6 +23,7 @@ export interface StyleDefinition {
   readonly paragraphPropertiesNode: OoxmlElement | undefined;
   readonly tablePropertiesNode: OoxmlElement | undefined;
   readonly tableRowPropertiesNode: OoxmlElement | undefined;
+  readonly tableCellPropertiesNode?: OoxmlElement;
   readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
 }
 
@@ -107,6 +110,8 @@ export function readStyleDefinition(
   const styleId = attributeValue(node, 'styleId');
   if (!isValidStyleId(styleId)) return null;
   const type = attributeValue(node, 'type') ?? '';
+  const nameNode = childNamed(node, 'name');
+  const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
   const basedOnNode = childNamed(node, 'basedOn');
   const basedOnRaw = basedOnNode ? attributeValue(basedOnNode, 'val') : undefined;
   const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
@@ -128,6 +133,7 @@ export function readStyleDefinition(
   }
   return {
     styleId,
+    name: name && name.length <= 128 ? name : undefined,
     type,
     basedOn,
     next,
@@ -138,6 +144,7 @@ export function readStyleDefinition(
     paragraphPropertiesNode,
     tablePropertiesNode: childNamed(node, 'tblPr'),
     tableRowPropertiesNode: childNamed(node, 'trPr'),
+    tableCellPropertiesNode: childNamed(node, 'tcPr'),
     conditionalTableFormats,
   };
 }

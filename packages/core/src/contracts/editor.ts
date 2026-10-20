@@ -1,22 +1,99 @@
+import type { ResolvedRevisionMarkup } from './revision-markup.ts';
+import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
  *
  * Commands go through `can` before `exec`; queries answer against the live, laid-out document.
- * Type-only where it can be, so an adapter can name the whole surface without importing the
- * engine.
- *
- * CONTRACT ONLY — declarations, not an implementation.
+ * Type-only declarations let adapters name the surface without importing the engine.
  *
  * @packageDocumentation
  * @public
  */
 
+import type { ZoomMode } from './editor-zoom.ts';
+export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
+import type { TextMatch } from './editor-text-match.ts';
+export type { TextMatch } from './editor-text-match.ts';
+import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
+export type {
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './editor-fonts.ts';
+import type { EditorEvents } from './editor-events.ts';
+import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
+export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  EditorAnchorNavigation,
+  ScrollPlacement,
+  ScrollToAnchorOptions,
+} from './editor-anchor.ts';
+import type { EditorHighlights } from './editor-highlights.ts';
+export type {
+  EditorHighlights,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
+} from './editor-highlights.ts';
+import type { EditorReviewHits } from './editor-review-hits.ts';
+import type { ReviewItemQuery } from './editor-review-query.ts';
+export type { ReviewItemQuery } from './editor-review-query.ts';
+export type { DocumentOpenFailure, DocumentOpenFailureReason } from './editor-open-failure.ts';
+import type { DocumentOpenFailure } from './editor-open-failure.ts';
+import type { ReviewActivationOptions } from './review-activation.ts';
+export type { ReviewActivationOptions } from './review-activation.ts';
+import type { ReviewItemPlacement } from './editor-review-placement.ts';
+export type {
+  ReviewCommentPlacement,
+  ReviewCustomPlacement,
+  ReviewItemPlacement,
+  ReviewItemPlacementBase,
+  ReviewRevisionPlacement,
+} from './editor-review-placement.ts';
+export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
+export type {
+  DocumentChange,
+  EditorEvents,
+  EditorHostChange,
+  EditorHostDocument,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
+} from './editor-events.ts';
+import type {
+  DocumentEditingMode,
+  ResolveReviewChangesOptions,
+  SetReviewChangesAuthorOptions,
+} from './editor-review.ts';
+import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
+export type * from './editor-review.ts';
+export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
+export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
+import type {
+  EditorExecOptions,
+  EditorScope,
+  HistoryGroup,
+  HistoryGroupOptions,
+  ViewScope,
+} from './editor-scope.ts';
+export type {
+  EditorExecOptions,
+  EditorScope,
+  HistoryGroup,
+  HistoryGroupOptions,
+  HistoryDiagnostic,
+  HistoryGroupOutcome,
+  ViewScope,
+} from './editor-scope.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the store lane, which they are not allowed to import.
 import type {
-  ReviewCommentItem,
-  ReviewCustomItem,
   ReviewItem,
   ReviewRevisionItem,
   ReviewRevisionKind,
@@ -41,6 +118,7 @@ import type {
   ExecResult,
   Unsubscribe,
   Watermark,
+  WatermarkState,
 } from './types';
 import type {
   EditorHeaderFooterCommands,
@@ -53,14 +131,18 @@ import type {
   FormatPainterSurfaceState,
 } from './editor-format-painter.ts';
 import type { ImageWrapTarget } from '../store/package/drawing-projection.ts';
+import type { DocumentProtectionState } from '../store/package/document-protection.ts';
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
+import type { BookmarkSummary, EditorBookmarkCommands } from './editor-bookmarks.ts';
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
 export type * from './editor-format-painter.ts';
+export type * from './editor-bookmarks.ts';
 export type * from './editor-image-state.ts';
+export type * from './diagnostics.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this
@@ -134,75 +216,6 @@ export interface DocumentHandle {
  */
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
-/** A concrete font face requested by authored document content. */
-export interface FontFaceRequest {
-  readonly family: string;
-  readonly weight: number;
-  readonly style: 'normal' | 'italic';
-}
-
-/** Immutable, byte-backed font face supplied to layout and browser paint. */
-export interface FontSource {
-  readonly request: FontFaceRequest;
-  readonly id: string;
-  readonly bytes: Uint8Array;
-  readonly hash: string;
-  readonly faceIndex: number;
-  readonly availability?: 'available' | 'forbidden';
-}
-
-/** An explicit authored-font substitution. No implicit platform fallback is performed. */
-export interface FontSourceSubstitution {
-  readonly from: FontFaceRequest;
-  readonly to: FontFaceRequest;
-  /** Word line-box metrics for the requested face, expressed as em ratios. */
-  readonly lineMetrics?: {
-    readonly heightEm: number;
-    readonly baselineEm: number;
-  };
-}
-
-/**
- * Public font source configuration sampled when an adapter mounts. It must be immutable for that
- * editor lifetime; remount the adapter to replace bytes or substitutions atomically.
- */
-export interface FontConfiguration {
-  readonly epoch: number;
-  readonly maxFontBytes: number;
-  readonly sources: readonly FontSource[];
-  readonly substitutions?: readonly FontSourceSubstitution[];
-  readonly defaultFont: {
-    readonly family: string;
-    readonly sizeHalfPoints: number;
-  };
-  readonly language?: string;
-}
-
-/**
- * Why a font was not admitted.
- *
- * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
- * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
- * it claimed and the load should not be retried. `wasmUnavailable` alone is a HOST fault — the
- * shaper's WASM never loaded, `diagnostic` carries the remedy — surface it as a setup error.
- */
-export type EditorFontErrorCode =
-  | 'initializationFailed'
-  | 'wasmUnavailable'
-  | 'missing'
-  | 'forbidden'
-  | 'overLimit'
-  | 'malformed'
-  | 'hashMismatch'
-  | 'metadataMismatch'
-  | 'fontFaceLoadFailed'
-  | 'unsupportedFaceIndex'
-  | 'missingFont'
-  | 'hashInvalid'
-  | 'fontMismatch'
-  | 'unsupportedFace'
-  | 'loadFailed';
-
 /** Typed adapter error reported both through `onFontError` and accessible alert UI. */
 export class EditorFontError extends Error {
   readonly name: string = 'EditorFontError';
@@ -225,82 +238,6 @@ export class EditorFontError extends Error {
     this.diagnostic = details.diagnostic;
   }
 }
-
-/**
- * The payload of the `change` event / `onChange`. It carries revision + identity
- * deltas, NOT serialized bytes: serializing a whole DOCX on every keystroke would
- * be prohibitive for large documents. Call `save()` to get bytes on demand.
- */
-export interface DocumentChange {
-  /** Package revision after this change — `getDocumentHandle()`'s number, monotonic. */
-  readonly revision: number;
-  /** Block ids created/deleted/edited by this change, when the engine reports them. */
-  readonly created?: readonly string[];
-  readonly deleted?: readonly string[];
-  readonly dirty?: readonly string[];
-}
-
-/**
- * The editor is N+1 editing views: one body plus one per header/footer
- * relationship, plus footnotes, text boxes, and other addressable regions.
- * Commands must say which one they target, or they silently hit the wrong
- * surface when a header is focused.
- *
- * Intentionally open-ended: this set is expected to grow (notes, frames, and
- * whatever regions later prove addressable), so treat it as non-exhaustive
- * rather than a closed enum.
- */
-export type EditorScope =
-  | { kind: 'body' }
-  | { kind: 'headerFooter'; rId: string }
-  /**
-   * A footnote/endnote region.
-   *
-   * `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-   * (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-   * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
-   */
-  | { kind: 'note'; id: string }
-  /** A text box or floating frame with its own content, addressed by id. */
-  | { kind: 'frame'; id: string }
-  /** Read-only aggregate across every view. Valid for queries, not for writes. */
-  | { kind: 'all' };
-
-/** A concrete editing view — every scope except the read-only `all` aggregate. */
-export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
-
-/**
- * What a fit mode fits the page to.
- *
- * One member today. It is a union rather than a boolean because Word's other two — the whole
- * sheet including its height, and the text column inside the margins — are the same
- * computation with a different numerator, and a later change adds one without breaking the
- * shape a host already stores.
- */
-export type ZoomFitTarget = 'pageWidth';
-
-/**
- * Where the display scale comes from.
- *
- * `fixed` is a number the engine holds until someone changes it. `fit` is a number the engine
- * recomputes whenever the room beside the page changes — a resized window, an opened comments
- * rail, a docked navigation pane — bounded by `minZoom`/`maxZoom`.
- *
- * The bounds are what make one mode serve both cases. The default, `'auto'`, is this fit
- * bounded at both ends: it leaves a page that fits at 100%, shrinks one that does not, and
- * stops at 50% — past which it would be trading a scrollbar nobody minds for a page nobody
- * can read.
- */
-export type ZoomMode =
-  | { readonly type: 'fixed' }
-  | {
-      readonly type: 'fit';
-      readonly fit: ZoomFitTarget;
-      /** Never shrink past this. Defaults to the contract floor, 0.1. */
-      readonly minZoom?: number;
-      /** Never grow past this. `1` is the "shrink only" rule. Defaults to the ceiling, 5. */
-      readonly maxZoom?: number;
-    };
 
 /**
  * A selection endpoint, in either vocabulary the engine resolves.
@@ -351,7 +288,7 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -361,15 +298,23 @@ export interface Editor {
    * `save`, `exec` and `selectMatch` complete a scheduled open before they run.
    */
   load(document: DocumentSource): void;
-  /** Serialize the current canonical document to DOCX bytes — on demand, never per keystroke. */
+  /**
+   * Serialize the current document, finalizing pending text form values first.
+   * Invalid input rejects with `EditorError.code === 'invalidArgs'` and remains editable.
+   * Validation does not open a dialog. Other write refusals also reject the save.
+   *
+   * The bytes describe the document as it was when you called `save()`. The file is written
+   * in short tasks, so input stays responsive while a long document saves, and edits made
+   * meanwhile belong to the next save. Paragraphs and table rows unchanged since an earlier
+   * save are not written again, so autosave after a small edit stays cheap.
+   */
   save(): Promise<ArrayBuffer>;
-  /** An opaque handle to the current document (identity + revision). Replaces the former
-   *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */
   getDocumentHandle(): DocumentHandle;
-
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  /** Create an explicit gesture handle; creates no undo entry. */
+  beginHistoryGroup(): HistoryGroup;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
-  can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+  can(command: EditorCommand, options?: EditorExecOptions): CanResult;
   /**
    * Dry run for byte commands that require {@link Editor.executeImageCommand}.
    * Generic {@link Editor.can} on `insertImage` / `replaceImage` refuses with an async-path
@@ -435,10 +380,10 @@ export interface Editor {
   getDocumentFonts(): readonly string[];
 
   /**
-   * Every font family the editor can offer: the configured catalog (the default face,
+   * Selectable standard and provider-supported families plus the configured catalog (the default face,
    * the Word-name families the substitution map stands in for, and host-registered
    * source families) merged with {@link getDocumentFonts}. Never empty — a brand-new
-   * document offers the configured catalog rather than a dead picker.
+   * document offers the same standard choices. This does not report installed or loaded fonts.
    */
   getAvailableFonts(): readonly string[];
 
@@ -476,11 +421,29 @@ export interface Editor {
     readonly underline?: boolean;
   } | null;
 
-  /** Find matches for a query, for the find/replace dialog. The BODY story only. */
+  /**
+   * Find across body, headers, footers, footnotes, endnotes, and selectable text boxes.
+   *
+   * The search narrows to the body and its selectable text boxes when other stories cannot open.
+   * This includes viewing mode and surfaces without header, footer, or note entry methods.
+   * Text boxes in footnotes and endnotes remain excluded until their drawings are selectable.
+   *
+   * Pass a match to `exec({ type: 'replaceMatch', match, text })` to replace it, which records a
+   * tracked replacement in suggesting mode, or to {@link selectMatch} and then
+   * {@link addComment} to comment on it. For headless or server use, see `body.search` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
+   */
   findMatches(
     query: string,
     options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
   ): readonly TextMatch[];
+  /** Find many terms in one pass, such as a glossary: one result list per term, in order. */
+  findMatches(
+    queries: readonly string[],
+    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+  ): readonly (readonly TextMatch[])[];
 
   /**
    * Move the selection to a found match — what a find dialog's next/previous do.
@@ -517,8 +480,11 @@ export interface Editor {
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
-  /** The document watermark, for the watermark dialog. */
-  getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+  /**
+   * The watermark the document shows, read from the first section's headers; null when it
+   * shows none. For a picture watermark's bytes, use `query({ type: 'watermark' })`.
+   */
+  getWatermark(): WatermarkState | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
   getHeaderFooterState(): HeaderFooterState | null;
@@ -626,8 +592,32 @@ export interface Editor {
    * Anchored to the RETAINED range when there is one, so a compose box that took focus does
    * not lose the words it is about — that is what retention exists for. Refused on a
    * collapsed caret: a comment with no range has nothing to point at, and Word writes none.
+   *
+   * A refused write names its cause, as every review write does: `code: 'locked'` with
+   * `'the document is open for viewing'` in viewing or under read-only protection, and
+   * `code: 'unsupported'` with the external refresh sentence or a collaboration reason token
+   * such as `'collaboration-session-not-ready'` (wait for the session, then retry). Branch on
+   * `diagnosticCodeOfRefusal(result.reason, result.code)`, not on the text.
+   *
+   * Pass `options.historyGroup` to make the comment part of a larger undo step, such as a
+   * review decision that also resolves changes. See {@link HistoryGroupOptions}.
+   *
+   * @example
+   * ```ts
+   * editor.addComment('Counter-proposal: 45 days.', { historyGroup: decision });
+   * editor.addComment('Approved.', 'Legal team', { historyGroup: decision });
+   * ```
+   *
+   * To comment on found text, select it first with {@link findMatches} and
+   * {@link selectMatch}. In a React or Vue host with the review module, `useReview().comment`
+   * calls this. For headless or server use, see `Range.insertComment` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
    */
-  addComment(text: string, author?: string): ExecResult;
+  addComment(text: string, options?: HistoryGroupOptions): ExecResult;
+  /** {@link addComment} with an author for this call, overriding the configured author. */
+  addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Where a comment on the current selection would sit, in the same space as
@@ -643,11 +633,45 @@ export interface Editor {
    *
    * REPORTS, like {@link acceptReviewItem} and for the same reason. Activation is refused for
    * an item with no resolvable range, for a kind the host's rail excluded (see
-   * {@link setReviewActivationExclusions}), and when the story it lives in will not open —
-   * and a host walking a queue with next/previous controls has no other way to learn that a
-   * step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
+   * {@link setReviewActivationExclusions}), for a custom node without `reviewCard`, and when
+   * the story it lives in will not open — and a host walking a queue with next/previous
+   * controls has no other way to learn that a step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
+   *
+   * With `options.announce: true`, a call that lands fires `reviewItemReveal` with
+   * `source: 'host'`, also when the item was already active, so the packaged review UI opens
+   * the item's balloon or card. By default it fires nothing. A `null` key fires nothing.
+   *
+   * Pass `{ reveal: false }` to open the item without scrolling, for a host whose own list
+   * drives the scroll. `useReview().setActive` calls this.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
+
+  /**
+   * The key of the ACTIVATED review item: the one {@link setActiveReviewItem}, Next Change, or
+   * Previous Change made active, while the caret stays in it.
+   *
+   * Two ideas of "active" exist. The caret-active item is the one the caret is in, however it
+   * got there: `isActive` on the placements {@link getReviewItems} returns, and `activeKey` in
+   * `useReview()`. The activated item is narrower: only an explicit activation sets it, so a
+   * caret that merely lands in a change leaves this `null`. Open a balloon or card for the
+   * activated item, and highlight the caret-active one.
+   *
+   * Pass the query you read items with, so the key matches theirs. By default a paired
+   * replacement reports the pair's key; with `pairReplacements: false`, the key of the half
+   * the caret is in. The value changes with the selection, so read it again on
+   * `selectionChange`.
+   *
+   * @example
+   * ```ts
+   * editor.on('selectionChange', () => {
+   *   const activated = editor.getActivatedReviewItemKey();
+   *   if (activated !== null) showMyCard(activated);
+   * });
+   * ```
+   */
+  getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
 
   /**
    * Revision kinds the caret must never activate, or null for none.
@@ -655,8 +679,13 @@ export interface Editor {
    * A host rail that hides some kinds (structural and format cards, typically) tells the
    * engine here, so a click on tracked text cannot activate a card the rail does not
    * render — the band would light and nothing on screen would answer it.
+   * `formattingKinds` limits a format exclusion to those OOXML property-change names,
+   * allowing other formatting decisions to retain sidebar activation.
    */
-  setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+  setReviewActivationExclusions(
+    kinds: readonly ReviewRevisionKind[] | null,
+    options?: { readonly formattingKinds?: readonly string[] }
+  ): void;
 
   /**
    * Accept or reject the revision behind a card.
@@ -667,18 +696,27 @@ export interface Editor {
    *
    * Refused for a card whose kind the engine cannot resolve structurally, which is why
    * `readOnly` is on the item — a surface should not offer the button in the first place.
+   * Other refusals name their cause, as {@link addComment} describes.
+   *
+   * Neither call scrolls. In a React or Vue host with the review module, `useReview().accept`
+   * and `useReview().reject` call these. For headless or server use, see `Revision.accept()`
+   * and `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
-  acceptReviewItem(key: string): ExecResult;
-  rejectReviewItem(key: string): ExecResult;
+  acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
+  /** The rejecting half of {@link acceptReviewItem}, with the same rules and options. */
+  rejectReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Resolve or reopen the comment thread behind a review card.
    *
    * The thread state is written through the same package transaction as every other comment
    * mutation, so `commentsExtended.xml`, Undo and save/reopen cannot disagree. Repeating the
-   * state already on the item succeeds without adding an undo entry.
+   * state already on the item succeeds without adding an undo entry. A refusal names its cause,
+   * as {@link addComment} describes.
    */
-  setCommentResolved(key: string, resolved: boolean): ExecResult;
+  setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Discard the item behind a card: the destructive half of the review verbs.
@@ -693,9 +731,10 @@ export interface Editor {
    * a surface can put one "remove this" affordance on every card instead of branching.
    *
    * Refused on a custom node's card, which is informational, and on a revision kind the engine
-   * cannot resolve — the same rule {@link rejectReviewItem} follows.
+   * cannot resolve — the same rule {@link rejectReviewItem} follows. Other refusals name their
+   * cause, as {@link addComment} describes, and leave the open card and its draft open.
    */
-  deleteReviewItem(key: string): ExecResult;
+  deleteReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Reply to a review item.
@@ -707,8 +746,19 @@ export interface Editor {
    * The author is AMBIENT — `DocxEditorConfig.author`, the way the rest of the authored commands
    * source it — and the argument overrides it for one call. `CT_Comment` makes `@w:author`
    * required, so a reply with neither is refused rather than written as an empty attribute.
+   * Other refusals name their cause, as {@link addComment} describes.
+   *
+   * In a React or Vue host with the review module, `useReview().reply` calls this. For
+   * headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
-  replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+  replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+  /** {@link replyToReviewItem} with an author for this call, overriding the configured author. */
+  replyToReviewItem(
+    key: string,
+    text: string,
+    author?: string,
+    options?: HistoryGroupOptions
+  ): ExecResult;
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 
@@ -735,10 +785,17 @@ export interface Editor {
    */
   /**
    * Scroll a page or a block into view. Returns false when the target does not exist or
-   * the host has no scroll container — a caller can tell "not found" from "scrolled".
+   * the host has no scroll container. During a large open, a target not laid out yet answers
+   * true and scrolls once it is; input cancels that, and a page past the end never scrolls.
    */
   scrollToPage(pageNumber: number): boolean;
-  scrollToBlock(blockId: string): boolean;
+  /**
+   * `options` takes the {@link ScrollToAnchorOptions} fields. `block` defaults to `'start'`
+   * here (`scrollToAnchor` defaults to `'centerIfNeeded'`), `behavior` to `'instant'`, and
+   * `offsetPx` to 24. An invalid option also returns false, and nothing scrolls.
+   */
+  scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
+  // scrollToAnchor, highlightAnchor, and clearAnchorHighlight: see EditorAnchorNavigation.
 
   getZoom(): number;
   /**
@@ -842,161 +899,13 @@ export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 /** How revisions excluded by a tracked-changes predicate project into the view. */
 export type TrackedChangeFilterMode = 'accept' | 'reject';
 
-/**
- * Narrows what `getReviewItems` returns.
- *
- * Both fields exist to keep the review rail cheap: filtering revision kinds is how a host hides
- * structural cards it has no UI for, and `placement: false` skips the layout pass entirely when
- * only metadata is wanted.
- */
-export interface ReviewItemQuery {
-  readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
-  /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
-  readonly placement?: boolean;
-}
-
-/**
- * What every review card carries, whatever kind of decision it represents.
- *
- * Presentation-ready by design: author, initials, date and text are derived by the ENGINE,
- * because deriving them means walking runs and reading `w15:commentsEx`. An adapter doing that
- * walk would put document derivation in the host and would have to be written once per
- * framework.
- */
-export interface ReviewItemPlacementBase {
-  /** Stable and unique per DECISION — a revision with three ranges is one entry. */
-  readonly key: string;
-  /** The engine's own id for the comment, the revision, or the custom node. */
-  readonly id: string;
-  readonly author: string;
-  /** Initials for an avatar: `@w:initials` when the file carries one, else from the name. */
-  readonly initials: string;
-  /** `@w:date`, absent when the file omits it — Word does when date stamping is off. */
-  readonly date?: string;
-  /**
-   * The comment's body, the words the revision covers, or the custom card's detail.
-   *
-   * PLAIN TEXT, and it must be rendered as text: a `.docx` is a zip of XML an attacker
-   * controls end to end, so this string is untrusted and never markup.
-   */
-  readonly text: string;
-  /**
-   * Replies to this item, in document order.
-   *
-   * Comments AND revisions carry them: OOXML gives `w:ins` and `w:del` no body, so replying
-   * to a tracked change writes a comment over the change's own range, and the reply belongs
-   * inside the card for the change rather than beside it.
-   */
-  readonly replyIds: readonly string[];
-  /**
-   * True when the engine cannot resolve this kind structurally, so accept and reject must
-   * not be offered. A card offering a button the engine will refuse is worse than one that
-   * explains why it cannot.
-   */
-  readonly readOnly: boolean;
-  /**
-   * Whether {@link Editor.setActiveReviewItem} would take this key.
-   *
-   * False for an item with no resolvable range, and for a revision kind the host's rail
-   * excluded through {@link Editor.setReviewActivationExclusions} — the queue still LISTS
-   * those, because `getReviewItems` answers "what does this document hold" rather than "what
-   * may be clicked", and a host filtering the two apart needs to be told which is which. A
-   * card drawn for an item that cannot be activated is a card that does nothing when clicked.
-   */
-  readonly activatable: boolean;
-  /** Document-space Y of the anchor, or null when the item has no resolvable range. */
-  readonly anchorY: number | null;
-  readonly pageIndex: number | null;
-  readonly isActive: boolean;
-}
-
-/**
- * How activating a review item places it in the viewport.
- *
- * @public
- */
-export interface ReviewActivationOptions {
-  /**
-   * Where the item lands, or `false` to open it without scrolling at all.
-   *
-   * Default `'centerIfNeeded'`: silent while the item is already on screen, centred when it
-   * has to travel. `'nearest'` scrolls the minimum instead, which parks the item flush
-   * against the edge it came in from; `'start'` puts it near the top, the way a jump to a
-   * heading reads. `false` is for a host whose own list already drives the scroll and does
-   * not want the engine competing with it.
-   *
-   * It governs the reveal of the ITEM. An item in a header, a footer or a note also opens
-   * that story, and opening one always brings its band into view — a story the reader cannot
-   * see is one they cannot read the change in, which is the whole point of activating it.
-   */
-  readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
-}
-
-/** A comment thread's card. @public */
-export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'comment';
-  /** Whether `w15:commentsEx` marks the thread done. */
-  readonly resolved: boolean;
-  /** The comment this replies to, absent at the top of a thread. */
-  readonly parentId?: string;
-  /**
-   * The REVISION this comment answers, absent unless it does.
-   *
-   * A surface listing top-level cards must skip these as well as the ones with a
-   * {@link parentId}: the card is rendered inside the change it answers, and a rail that
-   * only checked `parentId` drew the reply twice.
-   */
-  readonly parentRevisionId?: string;
-  readonly item: ReviewCommentItem;
-}
-
-/** A tracked change's card. @public */
-export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'revision';
-  /** Which decision this is. */
-  readonly revisionKind: ReviewRevisionKind;
-  /**
-   * The words a REPLACEMENT removes, when {@link revisionKind} is `'replace'`.
-   *
-   * Paired with {@link ReviewItemPlacementBase.text}, which holds the words it puts in
-   * their place, so a card can say `Replaced "x" with "y"` — one decision, the way Word
-   * presents it.
-   */
-  readonly replacedText?: string;
-  readonly item: ReviewRevisionItem;
-}
-
-/** A custom node's card (`defineCustomNode` with a `reviewCard` hook). @public */
-export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'custom';
-  readonly item: ReviewCustomItem;
-}
-
-/**
- * A DISCRIMINATED union on {@link ReviewItemPlacementBase.kind}: narrowing the kind
- * narrows `item` and the kind-specific fields with it, so a consumer never writes the
- * `placement.kind === 'custom' && placement.item.kind === 'custom'` double check.
- */
-export type ReviewItemPlacement =
-  | ReviewCommentPlacement
-  | ReviewRevisionPlacement
-  | ReviewCustomPlacement;
-
-/**
- * How a keystroke reaches the document.
- *
- * `'suggesting'` changes what an edit MEANS rather than whether it is allowed: typing writes
- * `w:ins` and deleting writes `w:del` over the words it would have removed, so every change
- * arrives as a proposal somebody else accepts or rejects.
- */
-export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
-
 import type {
   TableBorderEdgeTarget,
   TableBorderSpec,
   TableCellVerticalAlignment,
   TableColumnDividerResizeTarget,
   TableColumnOccurrenceTarget,
+  TableContext,
   TableRightEdgeResizeTarget,
   TableRowOccurrenceTarget,
 } from './table-targets.ts';
@@ -1015,6 +924,7 @@ export type {
   TableCellVerticalAlignment,
   TableColumnDividerResizeTarget,
   TableColumnOccurrenceTarget,
+  TableContext,
   TableRightEdgeResizeTarget,
   TableRowOccurrenceTarget,
 } from './table-targets.ts';
@@ -1031,7 +941,8 @@ export interface EditorCommands
     EditorCommandShape<DocEdits>,
     EditorHeaderFooterCommands,
     EditorNoteCommands,
-    EditorFormatPainterCommands {
+    EditorFormatPainterCommands,
+    EditorBookmarkCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**
@@ -1042,6 +953,30 @@ export interface EditorCommands
    * adapters and any host chrome read one answer.
    */
   toggleReviewPane: Record<never, never>;
+  /** Open the local review settings dialog supplied by the review module. */
+  openRevisionMarkupDialog: Record<never, never>;
+  /** Word's Show/Hide paragraph marks; presentation only. */
+  toggleParagraphMarks: Record<never, never>;
+  /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
+  toggleDocumentProtection: Record<never, never>;
+  /**
+   * Navigate tracked changes, including hidden formatting balloons, and wrap at the end.
+   *
+   * A replacement is one stop in every review layout. A replacement is a deletion and the
+   * touching insertion from the same author that took its place. Navigation lands on the
+   * deletion, highlights both halves, and `reviewItemReveal` carries the pair's `pairKey`.
+   *
+   * Navigation steps through the changes {@link Editor.getReviewItems} returns, so a
+   * reviewer or `setTrackedChangesFilter` filter applies. When a filter hides one half of a
+   * replacement, the other half is a stop of its own.
+   */
+  navigateReviewChange: { direction: 'next' | 'previous' };
+  /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
+  resolveAllReviewChanges: ResolveReviewChangesOptions;
+  /** Attribute eligible changes to another author, keeping them pending, in one undo step. */
+  setReviewChangesAuthor: SetReviewChangesAuthorOptions;
+  /** Change the review projection without accepting or rejecting document revisions. */
+  setReviewDisplayMode: { mode: ReviewDisplayMode };
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
@@ -1063,7 +998,22 @@ export interface EditorCommands
    * character style leaves that style's face on it.
    */
   clearFormatting: Record<never, never>;
+  /**
+   * Physical alignment on every paragraph the selection touches. A right-to-left paragraph
+   * reaches its right margin with `w:jc="left"`, so the written value follows each
+   * paragraph's direction.
+   */
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
+  /**
+   * Word's Left-to-Right and Right-to-Left Text Direction: the base direction (`w:bidi`) of
+   * every paragraph the selection touches, table cells included. `rtl` writes `w:bidi`.
+   * `ltr` removes a direct `w:bidi`, and writes `w:bidi w:val="0"` only where a style would
+   * otherwise make the paragraph right-to-left. Run text, run direction (`w:rtl`)
+   * and `w:jc` are untouched: alignment and indents are leading and trailing sides, so a
+   * start-aligned paragraph moves to the other margin with its direction.
+   * A paragraph already in the requested direction is left as it is.
+   */
+  setParagraphDirection: { direction: 'ltr' | 'rtl' };
   /**
    * Word's Line Spacing, on every paragraph the selection touches.
    *
@@ -1193,11 +1143,21 @@ export interface EditorCommands
   removeTabMark: { positionTwips: number };
 
   /**
-   * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
-   * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
-   * from it in the caller is where an off-by-one would come from. An empty `text`
-   * deletes the match, which is what a find/replace dialog means by replacing with
-   * nothing.
+   * Replace one found match with `text`, addressed by the {@link TextMatch} `findMatches`
+   * returns. An empty `text` deletes it. The selection and scroll position stay put. In
+   * suggesting mode it is a tracked replacement under the editor's author, refused where
+   * `proposeReplacement` would be. The match must be in the open story, not a text box.
+   *
+   * For headless or server use, see `range.insertText(text, 'Replace')` with
+   * `document.changeTrackingMode` set to `'TrackMineOnly'` in `@docx-editor.dev/editor-api`.
+   *
+   * @example
+   * ```ts
+   * const [match] = editor.findMatches('30 days', { matchCase: true });
+   * if (match) editor.exec({ type: 'replaceMatch', match, text: '45 days' });
+   * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceMatch: { match: TextMatch; text: string };
 
@@ -1289,6 +1249,9 @@ export interface EditorCommands
    * `snapshot().image` or `getSelectedImage()`; use `setImageProperties` to enlarge past
    * the fit afterwards.
    */
+  /** Insert a rectangular body textbox and enter its text. */
+  insertTextBox: Record<never, never>;
+
   insertImage: {
     data: Uint8Array;
     mime: SupportedImageMime;
@@ -1314,9 +1277,16 @@ export interface EditorCommands
     expectedPackageRevision?: number;
   };
 
+  /**
+   * Replace the document watermark in every header the document shows; null removes it. One
+   * undo step. Refuses with `invalidArgs` for an invalid option and `locked` in a protected
+   * document; a refusal writes nothing. See {@link Watermark} for the options and defaults.
+   */
   setWatermark: { watermark: Watermark | null };
   /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
   insertToc: Record<never, never>;
+  /** Open options for the selected or context-clicked legacy text form. */
+  editTextFormField: Record<never, never>;
   refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
 
   undo: Record<never, never>;
@@ -1415,6 +1385,8 @@ export interface EditorQueries extends DocQueries {
   contentControlAt: { filter?: ContentControlFilter };
   isInsideToc: { pos: number };
   trackedChanges: Record<never, never>;
+  /** Every bookmark in the document, hidden ones included, in document order. */
+  bookmarks: Record<never, never>;
 }
 
 /**
@@ -1438,58 +1410,7 @@ export interface EditorQueryResults extends DocQueryResults {
   contentControlAt: ContentControlSummary | null;
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
-}
-
-/**
- * Where the caret sits inside a table: the table's shape, and the cell holding it.
- *
- * Null from the `tableContext` query when the selection is not in a table at all, which is how
- * table-only chrome decides whether to render.
- */
-export interface TableContext {
-  readonly rows: number;
-  readonly columns: number;
-  /** Zero-based, within the table. */
-  readonly rowIndex: number;
-  /** Zero-based, within the row. */
-  readonly columnIndex: number;
-}
-
-/**
- * One occurrence of a search query in the document.
- *
- * Carries TWO addresses on purpose. `blockId` + `start` is the engine's own: stable
- * across edits and independent of ordering. `paragraphIndex` + `runIndex` + `runOffset`
- * is the positional one a find/replace UI needs to show and navigate results, and it is
- * derived from the same walk rather than left to the caller to reconstruct — a caller
- * guessing at run boundaries would send the selection to the wrong place.
- *
- * A match can span runs when formatting changes mid-word; the run address is where it
- * STARTS.
- */
-export interface TextMatch {
-  readonly blockId: string;
-  /** Character offset within the paragraph's concatenated run text. */
-  readonly start: number;
-  readonly length: number;
-  /** Ordinal among PARAGRAPHS in the body, skipping tables and other non-paragraph blocks. */
-  readonly paragraphIndex: number;
-  /** Index of the run the match starts in, and the offset within that run. */
-  readonly runIndex: number;
-  readonly runOffset: number;
-  /** The matched text as it appears in the document. */
-  readonly text: string;
-  /**
-   * Paragraph text immediately before and after the match, bounded at the derivation
-   * boundary. A results list shows the match in its sentence — "…as described in this
-   * **Exhi**bit A" — and nothing else in the contract can reach paragraph text, so a
-   * caller would otherwise have to re-read the document to render one row.
-   *
-   * Optional and additive: an implementation that has not derived them omits them, and a
-   * consumer treats absent as empty.
-   */
-  readonly contextBefore?: string;
-  readonly contextAfter?: string;
+  bookmarks: readonly BookmarkSummary[];
 }
 
 /**
@@ -1542,16 +1463,23 @@ export interface EditorSnapshot {
    *  point on — it never depends on one existing. */
   readonly isLoading: boolean;
   /**
-   * Whether a supplied document is still on its way to painted pages. Opening a large
-   * document mounts behind one painted frame so a loading screen can show instead of a
-   * frozen page; this is true for exactly that window, and across it the previous
-   * document (if any) stays on screen. Show a loading overlay while it holds — but gate
-   * only chrome on it, never the mount point, which must stay mounted for the open to
-   * complete ({@link EditorSnapshot.isLoading} is the gate-safe flag). Optional and
+   * Whether a supplied document is still on its way to painted pages. A large document
+   * mounts behind one painted frame so a loading screen can show instead of a frozen page,
+   * with the previous document (if any) still on screen. Show an overlay while it holds,
+   * but gate only chrome on it, never the mount point, which must stay mounted for the open
+   * to complete ({@link EditorSnapshot.isLoading} is the gate-safe flag). It turns false
+   * when the first pages paint; they take input while the rest lay out. Optional and
    * additive: absent means the implementation has not derived it, read as `false`.
    */
   readonly isOpening?: boolean;
   readonly parseError: string | null;
+  /**
+   * Why the last supplied document did not open, or `null` while it opens or after it opened.
+   * Unlike {@link EditorSnapshot.parseError}, it holds a stable code and never quotes the
+   * file, so a host can show it to a person. `DocxEditor.OpenFailure` renders it. Optional
+   * and additive: absent means the implementation has not derived it, read as `null`.
+   */
+  readonly openFailure?: DocumentOpenFailure | null;
   /** Whether the loaded document is being edited: a patchable document opened in edit mode. A
    *  read-only document (tables/SDTs/unpreservable) or `mode: 'view'` reports false. */
   readonly editable: boolean;
@@ -1614,6 +1542,23 @@ export interface EditorSnapshot {
    */
   readonly reviewPaneOpen?: boolean;
   /**
+   * The review pane settings in force: every field of `ReviewPaneOptions`, such as when the
+   * pane opens by itself and what it does when its card column does not fit. Change them with
+   * `setReviewPaneOptions`. Never saved. Always
+   * set: an editor without a review module reports `DEFAULT_REVIEW_PANE`.
+   */
+  readonly reviewPane: ResolvedReviewPane;
+  /** Whether Show/Hide paragraph marks is enabled. */
+  readonly showParagraphMarks?: boolean;
+  /** Whether bracket marks are shown at bookmarks. */
+  readonly showBookmarks?: boolean;
+  /** The document's `w:documentProtection`, as the file states it; null with no document. */
+  readonly documentProtection?: DocumentProtectionState | null;
+  /** The displayed revision projection. The document and its revision history stay unchanged. */
+  readonly reviewDisplayMode?: ReviewDisplayMode;
+  /** Resolved local viewer preferences. Never saved into the document. */
+  readonly revisionMarkup: ResolvedRevisionMarkup;
+  /**
    * Whether the document carries review content — tracked changes or comment
    * anchors — independent of any registered review module.
    *
@@ -1652,15 +1597,15 @@ export interface EditorSnapshot {
    */
   readonly lastRejection?: string | null;
   /**
-   * Document font families that are NOT AVAILABLE: declared by the document, but with no
-   * byte source admitted for them, no configured redirect to an admitted face, nothing
-   * embedded in the file, and nothing the platform could resolve. Chrome shows a
-   * compatibility notice from this the way Word does.
+   * Document font families that are NOT AVAILABLE: declared by the document, but with no byte
+   * source admitted, no redirect to an admitted face, nothing embedded, and nothing the platform
+   * could resolve. Chrome shows a compatibility notice from this the way Word does.
    *
-   * A family the app deliberately answers with a metric-compatible stand-in — Word's
-   * Times New Roman with Liberation Serif, say — is AVAILABLE and stays out of the list.
-   * The glyph outlines differ; the advance widths do not, so wrap and pagination land
-   * where Word puts them and there is nothing for a fidelity notice to report.
+   * A family the app answers with a metric-compatible stand-in — Word's Times New Roman
+   * with Liberation Serif — is AVAILABLE and stays out: the outlines differ, the advance
+   * widths do not, so wrap and pagination land where Word puts them. The face a `w:sym`
+   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out too, because it
+   * paints one code point rather than text, and has no metric twin an app could supply.
    *
    * Optional and additive like `canUndo`: absent means the implementation has not derived
    * it; empty means every family resolved (or no document is loaded).
@@ -1678,23 +1623,10 @@ export interface EditorSnapshot {
  * An error the engine raised, carrying a machine-readable `code` alongside the message.
  *
  * `code` is optional because an `Error` from deeper down (a parser, a codec) is surfaced as-is
- * rather than wrapped in a fabricated code.
+ * rather than wrapped in a fabricated code. The editor's own codes: `invalidTarget` (`attach`
+ * cannot mount there), `unsupported` (a source it refuses to open), and `hostCallback` (a host
+ * callback such as a bookmark mark's `decorate` threw; the editor kept its default behavior).
  */
 export interface EditorError extends Error {
   readonly code?: string;
-}
-
-/**
- * What `editor.on(...)` can be subscribed to, and what each handler receives.
- *
- * These are PUSH notifications and are not interchangeable with reading `snapshot()`: a snapshot
- * read cannot observe an event that was never emitted, which is why adapter behaviour is asserted
- * against these rather than against the snapshot.
- */
-export interface EditorEvents {
-  /** A document mutation committed, with the ids it touched. */
-  change: (change: DocumentChange) => void;
-  /** The selection or its derived formatting moved. */
-  selectionChange: (snapshot: EditorSnapshot) => void;
-  error: (error: EditorError) => void;
 }

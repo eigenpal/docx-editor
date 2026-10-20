@@ -1,3 +1,4 @@
+import { parseCharacterStyleField, type CharacterStyleField } from './field-character-style.ts';
 // FORMCHECKBOX / FORMDROPDOWN legacy form fields (§17.16.5.22, §17.16.5.16).
 //
 // Their state lives in `w:ffData` under the begin `w:fldChar`, read once at the trust boundary
@@ -16,6 +17,7 @@
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
+import type { FieldAtomMarker } from './field-pieces.ts';
 import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts';
 import { parseDocPropertyInstruction, type DocPropertyField } from './field-doc-property.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
@@ -23,6 +25,7 @@ import { allowlistedPageField } from './field-instruction.ts';
 import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
 import { parseAutonumInstruction, type AutonumFieldSpec } from './field-autonum.ts';
 import { parseRefInstruction, type RefFieldSpec } from './field-ref.ts';
+import { parseRefLinkInstruction } from './field-ref-link.ts';
 import { refSpecModifiersOf } from './field-ref-parse.ts';
 import { parseSymbolInstruction, type SymbolFieldSpec } from './field-symbol.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -53,6 +56,7 @@ export function parseFormFieldInstruction(raw: string): FormFieldKind | null {
  * the walk's vocabulary.
  */
 export interface CapturedInstructionSpecs {
+  characterStyleSpec?: CharacterStyleField | null;
   symbolSpec: SymbolFieldSpec | null;
   linkSpec: HyperlinkFieldSpec | null;
   formSpec: FormFieldKind | null;
@@ -68,6 +72,7 @@ export interface CapturedInstructionSpecs {
  * mutually exclusive, so the first recognizer that hits wins and the rest stay null.
  */
 export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: string): void {
+  pending.characterStyleSpec = parseCharacterStyleField(raw);
   pending.symbolSpec = parseSymbolInstruction(raw);
   if (pending.symbolSpec) return;
   pending.linkSpec = parseHyperlinkInstruction(raw);
@@ -78,6 +83,7 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   if (pending.buttonSpec) return;
   pending.docPropertySpec = parseDocPropertyInstruction(raw);
   if (pending.docPropertySpec) return;
+  pending.linkSpec = parseRefLinkInstruction(raw);
   pending.refSpec = parseRefInstruction(raw);
   if (pending.refSpec) return;
   pending.autonumSpec = parseAutonumInstruction(raw);
@@ -160,6 +166,29 @@ export function simpleFieldInstructionMaySynthesizeGlyph(
   );
 }
 
+/**
+ * Interactive legacy field state and its macro-free accessible name. Paint uses the marker
+ * for checkbox hit targets and native dropdowns without parsing displayed values.
+ */
+export function formControlMarkerOf(pending: {
+  readonly formSpec: FormFieldKind | null;
+  readonly formData: LegacyFormFieldData | null;
+  readonly formAccessibleName?: string;
+}): FieldAtomMarker['formControl'] | undefined {
+  if (pending.formSpec === 'dropdown' && pending.formData?.kind === 'dropdown') {
+    return {
+      ...pending.formData,
+      ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
+    };
+  }
+  if (pending.formSpec !== 'checkbox' || pending.formData?.kind !== 'checkbox') return undefined;
+  return {
+    kind: 'checkbox',
+    checked: pending.formData.checked,
+    ...(pending.formAccessibleName ? { accessibleName: pending.formAccessibleName } : {}),
+  };
+}
+
 /** The synthesized form-field result: text plus the props/style the piece should carry. */
 export interface FormFieldGlyph {
   readonly text: string;
@@ -207,8 +236,10 @@ export function formFieldResult(
     // suppresses synthesis too — the file said this result is not shown.
     if (pending.cachedText.length > 0 || pending.sawResultContent) return null;
     if (pending.formData?.kind !== 'dropdown') return null;
-    const text = pending.formData.entries[pending.formData.selectedIndex] ?? '';
-    if (text.length === 0) return null;
+    const entry = pending.formData.entries[pending.formData.selectedIndex];
+    if (entry === undefined) return null;
+    // An empty declared choice still needs a hit target so the picker can be reopened.
+    const text = entry || '\u00a0';
     return { text, props: pending.props, style: pending.style };
   }
   return null;

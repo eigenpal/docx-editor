@@ -1,9 +1,10 @@
-import type { ButtonHTMLAttributes, MouseEvent } from 'react';
+import type { ButtonHTMLAttributes, MouseEvent, Ref } from 'react';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 
 export interface DemoHeaderButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly variant?: 'primary' | 'secondary';
   readonly keepEditorCaret?: boolean;
+  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /** One visual and focus contract for every action in the demo header. */

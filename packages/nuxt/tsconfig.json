@@ -6,6 +6,7 @@
     "jsxImportSource": "vue",
     "moduleResolution": "bundler",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
@@ -15,7 +16,6 @@
     "esModuleInterop": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     "paths": {
       "@docx-editor.dev/vue": ["../vue/src/index.ts"],
       // Every published subpath, mapped to source. The export map points at dist, so a subpath

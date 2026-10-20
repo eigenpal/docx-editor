@@ -1,11 +1,17 @@
+import { withNumberingParagraphProperties } from './numbering-paragraph-properties.ts';
 // Bounded projection of `/word/numbering.xml` for semantic list layout.
 //
 // Projection only — never mutation or serialization authority. Hostile values are dropped
 // or clamped; missing definitions resolve to "no list" rather than guessing.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import { readTwipsMeasure, WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
+import {
+  readNumberingPictureBullets,
+  type NumberingPictureBullet,
+} from './numbering-picture-bullet.ts';
 
 /** Soft ceiling on abstractNum / num entries read from one part. */
 export const MAX_NUMBERING_DEFINITIONS = 512;
@@ -40,6 +46,16 @@ export type ListMarkerAlign = 'left' | 'center' | 'right';
  * must not overwrite an inherited `hanging` with a synthesized zero.
  */
 export interface NumberingLevelIndent {
+  /**
+   * The sides as the level spells them, in points. `left` and `start` both name the leading
+   * indent, and `right` and `end` the trailing one; `left`/`right` below hold those two.
+   */
+  readonly authored?: {
+    readonly left?: number;
+    readonly right?: number;
+    readonly start?: number;
+    readonly end?: number;
+  };
   readonly left: number;
   readonly right: number;
   readonly hanging: number;
@@ -47,9 +63,9 @@ export interface NumberingLevelIndent {
   /**
    * Which of these the LEVEL actually authored.
    *
-   * A level's `w:pPr/w:ind` sits between the paragraph style and direct formatting, so the
-   * merge has to tell "the level says left = 0" from "the level says nothing about left and
-   * the style's value stands". Absent (the default) reads as "says nothing", which is what a
+   * A level's `w:pPr/w:ind` sits between the formatting it outranks and the formatting that
+   * outranks it (`mergeListIndent`), so the merge has to tell "the level says left = 0" from
+   * "the level says nothing about left and the style's value stands". Absent (the default) reads as "says nothing", which is what a
    * hand-built level in a test means.
    */
   readonly stated?: {
@@ -79,6 +95,11 @@ export interface NumberingLevel {
    * decimal, whatever number format those levels declare for themselves.
    */
   readonly isLgl: boolean;
+  /**
+   * `w:lvlPicBulletId` (§17.9.12): this level's marker is the `w:numPicBullet` of that id,
+   * drawn INSTEAD of `w:lvlText`. Absent on every ordinary level.
+   */
+  readonly picBulletId?: string;
   /** Level `w:rPr` as flat properties (for marker face / vanish). */
   readonly runProperties: readonly OoxmlProperty[];
   /** True when level run props request vanish — marker must not paint. */
@@ -139,6 +160,13 @@ export interface NumDefinition {
 export interface NumberingIndex {
   readonly abstractNums: ReadonlyMap<string, AbstractNumDefinition>;
   readonly nums: ReadonlyMap<string, NumDefinition>;
+  /**
+   * `w:numPicBullet` declarations keyed by `w:numPicBulletId` (§17.9.20).
+   *
+   * Optional so a hand-built index stays valid; absent reads as "this part declares none",
+   * which is what a level's `w:lvlPicBulletId` then falls back from.
+   */
+  readonly pictureBullets?: ReadonlyMap<string, NumberingPictureBullet>;
 }
 
 function isWml(node: OoxmlNode, localName: string): node is OoxmlElement {
@@ -169,6 +197,12 @@ function integerAttr(raw: string | undefined, allowNegative = false): number | n
   return Number(raw);
 }
 
+/** An unsigned twips attribute: a negative value is not a measurement. */
+function unsignedTwips(raw: string | undefined): number | null {
+  const value = readTwipsMeasure(raw);
+  return value !== null && value >= 0 ? value : null;
+}
+
 function clampNonNegativePt(twips: number): number {
   const pt = twips / 20;
   if (!Number.isFinite(pt) || pt <= 0) return 0;
@@ -196,16 +230,22 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   if (!pPr) return empty;
   const ind = child(pPr, 'ind');
   if (!ind) return empty;
-  const leftTwips = integerAttr(attr(ind, 'left') ?? attr(ind, 'start'), true);
-  const rightTwips = integerAttr(attr(ind, 'right') ?? attr(ind, 'end'), true);
+  const authored: { left?: number; right?: number; start?: number; end?: number } = {};
+  for (const side of ['left', 'right', 'start', 'end'] as const) {
+    const value = readTwipsMeasure(attr(ind, side));
+    if (value !== null) authored[side] = clampSignedPt(value);
+  }
+  const leftTwips = readTwipsMeasure(attr(ind, 'left') ?? attr(ind, 'start'));
+  const rightTwips = readTwipsMeasure(attr(ind, 'right') ?? attr(ind, 'end'));
   // `w:hanging` is unsigned in the schema, and a negative one is meaningless: the hanging
   // slot cannot be to the RIGHT of the text it hangs from.
-  const hangingTwips = integerAttr(attr(ind, 'hanging'));
+  const hangingTwips = unsignedTwips(attr(ind, 'hanging'));
   // `w:firstLine` is declared unsigned, but Word's model keeps ONE signed first-line indent
   // where negative means hanging — which is why the two attributes are mutually exclusive.
   // A negative one is therefore read as authored rather than flattened to zero.
-  const firstLineTwips = integerAttr(attr(ind, 'firstLine'), true);
+  const firstLineTwips = readTwipsMeasure(attr(ind, 'firstLine'));
   return {
+    ...(authored.start !== undefined || authored.end !== undefined ? { authored } : {}),
     left: leftTwips === null ? 0 : clampSignedPt(leftTwips),
     right: rightTwips === null ? 0 : clampSignedPt(rightTwips),
     hanging: hangingTwips === null ? 0 : clampNonNegativePt(hangingTwips),
@@ -287,23 +327,34 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
     if (parsed !== null && parsed >= 0 && parsed <= 9) lvlRestart = parsed;
   }
 
+  const picBulletNode = child(lvl, 'lvlPicBulletId');
+  const picBulletRaw = picBulletNode ? attr(picBulletNode, 'val') : undefined;
+  const picBulletId =
+    picBulletRaw !== undefined && picBulletRaw.length > 0 && picBulletRaw.length <= 64
+      ? picBulletRaw
+      : undefined;
+
   const pPr = child(lvl, 'pPr');
   const rPr = child(lvl, 'rPr');
   const runProperties = rPr ? propertiesOfRunContainer(rPr) : [];
 
-  return {
-    ilvl: ilvlRaw,
-    start: startVal,
-    numFmt: numFmtVal.length > 64 ? 'decimal' : numFmtVal,
-    lvlText: lvlText.length > 64 ? lvlText.slice(0, 64) : lvlText,
-    lvlJc,
-    suff,
-    indent: parseIndent(pPr),
-    ...(lvlRestart !== undefined ? { lvlRestart } : {}),
-    isLgl: onOffChild(lvl, 'isLgl'),
-    runProperties,
-    vanish: toggleOn(runProperties, 'vanish'),
-  };
+  return withNumberingParagraphProperties(
+    {
+      ilvl: ilvlRaw,
+      start: startVal,
+      numFmt: numFmtVal.length > 64 ? 'decimal' : numFmtVal,
+      lvlText: lvlText.length > 64 ? lvlText.slice(0, 64) : lvlText,
+      lvlJc,
+      suff,
+      indent: parseIndent(pPr),
+      ...(lvlRestart !== undefined ? { lvlRestart } : {}),
+      ...(picBulletId !== undefined ? { picBulletId } : {}),
+      isLgl: onOffChild(lvl, 'isLgl'),
+      runProperties,
+      vanish: toggleOn(runProperties, 'vanish'),
+    },
+    pPr
+  );
 }
 
 function parseAbstractNum(node: OoxmlElement): AbstractNumDefinition | null {
@@ -407,7 +458,8 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
     }
   }
 
-  return { abstractNums, nums };
+  const pictureBullets = readNumberingPictureBullets(root);
+  return pictureBullets.size > 0 ? { abstractNums, nums, pictureBullets } : { abstractNums, nums };
 }
 
 /**
@@ -470,7 +522,10 @@ export function resolveNumberingStyleLinks(
     abstractNums.set(id, { ...definition, levels: target.levels });
     changed = true;
   }
-  return changed ? { abstractNums, nums: index.nums } : index;
+  if (!changed) return index;
+  return index.pictureBullets
+    ? { abstractNums, nums: index.nums, pictureBullets: index.pictureBullets }
+    : { abstractNums, nums: index.nums };
 }
 
 /** Resolve the effective level for a `numId` + `ilvl`, applying overrides. */

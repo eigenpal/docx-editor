@@ -1,11 +1,12 @@
 import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
-import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
+import { tableChromeIconPaths, hostWindowOf, type HostWindow } from '@docx-editor.dev/core/editor';
+import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import { MenuRow, menuRowSlot } from '../menu/parts';
+import { useDialogHost } from '../dialog-host';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
 import {
@@ -62,7 +63,7 @@ function defineCommandRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };
@@ -115,6 +116,7 @@ export const ContextMenuPaste = defineComponent({
   },
   setup(props) {
     const editorRef = useDocxEditor();
+    const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
     const cmd = useEditorCommand({ type: 'paste', text: ' ' });
@@ -131,9 +133,14 @@ export const ContextMenuPaste = defineComponent({
             ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
             : {})}
           onSelect={() => {
+            // Close first: the read can wait on a browser permission prompt, and a menu
+            // left open over it looks stuck. The read still starts inside this click.
+            close(true);
             void (async () => {
               try {
-                const { text, html } = await readClipboardPayload();
+                const { text, html } = await readClipboardPayload(
+                  hostWindowOf(contentElement.value)
+                );
                 if (text || html) {
                   editorRef.value?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
                 }
@@ -141,14 +148,12 @@ export const ContextMenuPaste = defineComponent({
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
                 );
-              } finally {
-                close(true);
               }
             })();
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label(props.labelKey ?? 'contextMenu.paste')}
+          {{ default: () => label(props.labelKey ?? 'contextMenu.paste') }}
         </MenuRow>
       );
     };
@@ -162,9 +167,13 @@ ContextMenuPaste.docxRow = 'edit.paste' as const;
  * Some engines strip attributes from async-read HTML — the engine's paste router degrades
  * to the surviving flavours, so the read never has to guess what made it through.
  */
-async function readClipboardPayload(): Promise<{ text: string; html: string | null }> {
-  const clipboard = navigator.clipboard;
-  if (typeof clipboard.read === 'function' && typeof ClipboardItem !== 'undefined') {
+async function readClipboardPayload(
+  win: HostWindow
+): Promise<{ text: string; html: string | null }> {
+  // The editor's own window: a pop-out window has focus there, and the opener's clipboard
+  // refuses a read from a window that does not.
+  const clipboard = win.navigator.clipboard;
+  if (typeof clipboard.read === 'function' && typeof win.ClipboardItem !== 'undefined') {
     try {
       const items = await clipboard.read();
       let text = '';
@@ -202,6 +211,7 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
   },
   setup(props) {
     const editorRef = useDocxEditor();
+    const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
     const cmd = useEditorCommand({ type: 'pasteWithoutFormatting', text: ' ' });
@@ -218,22 +228,25 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
             ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
             : {})}
           onSelect={() => {
+            // Close first: the read can wait on a browser permission prompt, and a menu
+            // left open over it looks stuck. The read still starts inside this click.
+            close(true);
             void (async () => {
               try {
-                const text = await navigator.clipboard.readText();
+                const text = await hostWindowOf(
+                  contentElement.value
+                ).navigator.clipboard.readText();
                 if (text) editorRef.value?.exec({ type: 'pasteWithoutFormatting', text });
               } catch (error) {
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
                 );
-              } finally {
-                close(true);
               }
             })();
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label(props.labelKey ?? 'contextMenu.pasteWithoutFormatting')}
+          {{ default: () => label(props.labelKey ?? 'contextMenu.pasteWithoutFormatting') }}
         </MenuRow>
       );
     };
@@ -324,7 +337,7 @@ function defineTableCommandRow(
               if (cmd.execute()) close(true);
             }}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };
@@ -359,6 +372,54 @@ export const ContextMenuInsertColumnRight = defineTableCommandRow(
   'table.insertColumnRight',
   { type: 'insertColumn', where: 'right' },
   { labelKey: 'table.insertColumnRight', paths: tableChromeIconPaths('view_column') }
+);
+
+/** Merge the selected cells into one cell. @public */
+export const ContextMenuMergeCells = defineTableCommandRow(
+  'table.mergeCells',
+  { type: 'mergeCells' },
+  { labelKey: 'table.mergeCells', paths: tableChromeIconPaths('call_merge') }
+);
+
+/** Open the Split cells dialog for the cell at the selection. @public */
+export const ContextMenuSplitCell = Object.assign(
+  defineComponent({
+    name: 'ContextMenuTable_table_splitCell',
+    props: {
+      icon: { type: null as unknown as PropType<VNode>, default: undefined },
+      labelKey: { type: String, default: undefined },
+      className: { type: String, default: undefined },
+      hidden: { type: Boolean, default: undefined },
+    },
+    setup(props) {
+      const { close } = useContextMenuContext();
+      const label = useMenuLabel();
+      const tableVisible = useTableContextMenuVisible();
+      const dialogs = useDialogHost();
+      // The slot's probe answers whether the cell splits; the dialog picks the counts.
+      const cmd = useEditorCommand('table.splitCell');
+      return () => {
+        if (props.hidden || !tableVisible.value || !dialogs) return null;
+        return (
+          <MenuRow
+            {...menuRowSlot('table.splitCell')}
+            icon={props.icon ?? chromeIcon(tableChromeIconPaths('call_split')) ?? undefined}
+            disabled={!cmd.isEnabled.value}
+            {...(cmd.disabledReason.value ? { title: cmd.disabledReason.value } : {})}
+            {...(props.className ? { class: props.className } : {})}
+            onSelect={() => {
+              // Focus goes back to the document first, so closing the dialog returns it there.
+              close(true);
+              dialogs.open('splitCell');
+            }}
+          >
+            {{ default: () => label(props.labelKey ?? 'table.splitCell') }}
+          </MenuRow>
+        );
+      };
+    },
+  }),
+  { docxRow: 'table.splitCell' }
 );
 
 /** @public */
@@ -500,7 +561,7 @@ function defineTocCommandRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };

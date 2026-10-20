@@ -23,26 +23,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //   `select`), which can be compared whole.
 //
 // WHY RETURN TYPES ARE NOT COMPARED WHOLE. A declared `Body#insertText` answers the declared
-// `Range`, which also has `contentControls`. This package's `Range` does not, so the shipped type is
-// NARROWER than the declared one and asserting the whole return type would either fail or have to be
-// faked. What is asserted instead is that the method exists, takes exactly the declared arguments,
+// `Range`, a class with private members of its own, so the shipped type and the declared one are
+// not interchangeable and asserting the whole return type would either fail or have to be faked. What is asserted instead is that the method exists, takes exactly the declared arguments,
 // and answers this package's own object of the right sort — and the list below says, by name, what is
 // still owed.
 //
-// WHAT IS NOT IMPLEMENTED YET, and therefore not asserted. One group, and a SCHEDULED one: content
-// controls, which the plan completes as its own step. Nothing else on the declared surface is
-// unimplemented, because everything that was not implemented has been de-selected from
-// `compat/manifest.json` — with a reason each — and removed from the declarations, so the authored
-// file is an inventory rather than a roadmap. `Range#start`/`end` were the first members treated that
-// way (document-wide character offsets are a second addressing scheme for positions this lane already
-// addresses by paragraph identity and UTF-16 offset); `Bookmark#start`/`end`/`delete`,
-// `ListItem#listString`/`siblingIndex`, `ParagraphFormat`, and a comment's assignable body and its
-// author's email address followed, each for its own recorded reason.
-//
-//   Document       — `contentControls`
-//   Body           — `contentControls`
-//   Range          — `contentControls`
-//   Paragraph      — `contentControls`
+// WHAT IS NOT IMPLEMENTED: nothing on the declared surface. Everything that was not implemented
+// has been de-selected from `compat/manifest.json` — with a reason each — and removed from the
+// declarations, so the authored file is an inventory rather than a roadmap. `Range#start`/`end`
+// were the first members treated that way (document-wide character offsets are a second
+// addressing scheme for positions this lane already addresses by paragraph identity and UTF-16
+// offset); `Bookmark#start`/`end`, `ListItem#listString`/`siblingIndex`, `ParagraphFormat`, and a
+// comment's assignable body and its author's email address followed, each for its own recorded
+// reason. Content controls are reachable from `Document`, `Body`, `Range` and `Paragraph`, and
+// asserted below.
 //
 // A NULL THE UPSTREAM DECLARATION CANNOT SAY. Font reads include `null` in this package's public
 // surface because mixed or inherited formatting returns it at runtime; its setters remain the
@@ -58,6 +52,7 @@ import type { DocxEditor as Declared } from '../../../compat/docxeditor/declarat
 import type { Body } from '../../model/body.ts';
 import type { Bookmark, BookmarkCollection } from '../../model/bookmarks.ts';
 import type { ParagraphCollection, RangeCollection } from '../../model/collections.ts';
+import type { ContentControlCollection } from '../../model/content-controls.ts';
 import type { Document } from '../../model/document.ts';
 import type { Font } from '../../model/font.ts';
 import type { List, ListCollection, ListItem } from '../../model/lists.ts';
@@ -153,6 +148,20 @@ const bodyAnswersItsOwnObjects: Satisfies<
 > = true;
 const bodyHasParagraphs: Satisfies<Body['paragraphs'], ParagraphCollection> = true;
 const bodyHasBookmarks: Satisfies<Body['bookmarks'], BookmarkCollection> = true;
+const everyStoryObjectHasContentControls: Satisfies<
+  [
+    Document['contentControls'],
+    Body['contentControls'],
+    Range['contentControls'],
+    Paragraph['contentControls'],
+  ],
+  [
+    ContentControlCollection,
+    ContentControlCollection,
+    ContentControlCollection,
+    ContentControlCollection,
+  ]
+> = true;
 
 // ---------------------------------------------------------------------------
 // Ranges and paragraphs
@@ -173,6 +182,26 @@ const rangeInsertsAParagraph: TakesTheSameArguments<
 > = true;
 const rangeSearches: TakesTheSameArguments<Range['search'], Declared.Range['search']> = true;
 const rangeHasParagraphs: Satisfies<Range['paragraphs'], ParagraphCollection> = true;
+const rangeSplitsIntoWords: TakesTheSameArguments<
+  Range['getTextRanges'],
+  Declared.Range['getTextRanges']
+> = true;
+const rangeAnswersAnEndpoint: TakesTheSameArguments<Range['getRange'], Declared.Range['getRange']> =
+  true;
+const rangeReadsReviewedText: TakesTheSameArguments<
+  Range['getReviewedText'],
+  Declared.Range['getReviewedText']
+> = true;
+// `expandTo` takes a range of this package; the declared one names the declared `Range`.
+const rangeExpandsToARange: Satisfies<Parameters<Range['expandTo']>, [Range]> = true;
+const rangeAnswersItsOwnRanges: Satisfies<
+  [
+    ReturnType<Range['getTextRanges']>,
+    ReturnType<Range['getRange']>,
+    ReturnType<Range['expandTo']>,
+  ],
+  [RangeCollection, Range, Range]
+> = true;
 
 const paragraphTextIsAString: Satisfies<
   Pick<Paragraph, 'text'>,
@@ -192,6 +221,14 @@ const paragraphInsertsAParagraph: TakesTheSameArguments<
 > = true;
 const paragraphSplits: TakesTheSameArguments<Paragraph['split'], Declared.Paragraph['split']> =
   true;
+const paragraphSplitsIntoWords: TakesTheSameArguments<
+  Paragraph['getTextRanges'],
+  Declared.Paragraph['getTextRanges']
+> = true;
+const paragraphReadsReviewedText: TakesTheSameArguments<
+  Paragraph['getReviewedText'],
+  Declared.Paragraph['getReviewedText']
+> = true;
 const paragraphAnswersItsOwnObjects: Satisfies<
   [
     ReturnType<Paragraph['insertText']>,
@@ -364,10 +401,8 @@ const noteItemsAreNotes: Satisfies<
   [NoteItemCollection['items'], ReturnType<NoteItemCollection['getFirst']>],
   [readonly NoteItem[], NoteItem]
 > = true;
-// Upstream hangs these off a story; here they are the document's, because only the main story may
-// reference a note (a recorded omission). The collection they answer is the measured one.
 const notesAreReachable: Satisfies<
-  [Document['footnotes'], Document['endnotes']],
+  [Body['footnotes'], Body['endnotes']],
   [NoteItemCollection, NoteItemCollection]
 > = true;
 
@@ -451,11 +486,19 @@ void bodySearches;
 void bodyAnswersItsOwnObjects;
 void bodyHasParagraphs;
 void bodyHasBookmarks;
+void everyStoryObjectHasContentControls;
 void rangeTextIsAString;
 void rangeSelects;
 void rangeInsertsText;
 void rangeInsertsAParagraph;
 void rangeSearches;
+void rangeSplitsIntoWords;
+void rangeAnswersAnEndpoint;
+void rangeReadsReviewedText;
+void rangeExpandsToARange;
+void rangeAnswersItsOwnRanges;
+void paragraphSplitsIntoWords;
+void paragraphReadsReviewedText;
 void rangeHasParagraphs;
 void paragraphTextIsAString;
 void paragraphClearsAndDeletes;
@@ -513,3 +556,14 @@ void revisionItemsAreRevisions;
 void revisionsAreReachable;
 void noteItemsAreNotes;
 void notesAreReachable;
+
+const documentTracksChanges: Satisfies<
+  Pick<Document, 'changeTrackingMode'>,
+  Pick<Declared.Document, 'changeTrackingMode'>
+> = true;
+const rangeDeletesAndClears: Satisfies<
+  Pick<Range, 'delete' | 'clear'>,
+  Pick<Declared.Range, 'delete' | 'clear'>
+> = true;
+void documentTracksChanges;
+void rangeDeletesAndClears;

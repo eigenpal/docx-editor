@@ -25,6 +25,7 @@ import {
   collectKind,
 } from './document-support.ts';
 import { PackageMaterializer, assertIndependentIdentity } from '../document/index.ts';
+import { idOf } from '../document/identity.ts';
 
 function manyParagraphs(count: number): Uint8Array {
   const paragraphs = Array.from(
@@ -65,7 +66,7 @@ describe('full-document registry round trip', () => {
       expect(saveReopenDigest(materialized)).toEqual(packageDigest(original));
       replica.registry.assertNoParentFields();
       const paragraph = collectKind(materialized, 'paragraph')[0]!;
-      const meta = replica.registry.identityMeta(paragraph.id);
+      const meta = replica.registry.identityMeta(idOf(paragraph));
       expect(meta).not.toBeNull();
       assertIndependentIdentity(meta!);
     } finally {

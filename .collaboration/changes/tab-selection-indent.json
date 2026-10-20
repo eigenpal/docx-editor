@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Tab over any selection outside a list replaced the selection with a tab character, which deleted the selected text.",
+  "after": "Tab and Shift+Tab over a selection of two or more paragraphs, or over a selection from a paragraph start, write w:ind with the existing setParagraphProperties operation and keep the text. A caret, or a selection in one paragraph that starts inside the text, keeps the earlier behavior.",
+  "reason": "The change uses only the existing paragraph property operation that Increase Indent already sends. It adds no shared state, operations, snapshot fields, or protocol messages. A concurrent deletion of the indented paragraph can diverge, as it does for Increase Indent; issue #1176 tracks that existing defect.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-tab-selection-indent.test.ts",
+    "packages/core/src/editor/__tests__/tab-selection-indent.test.ts"
+  ],
+  "changeset": "tab-selection-indent",
+  "migration": null
+}

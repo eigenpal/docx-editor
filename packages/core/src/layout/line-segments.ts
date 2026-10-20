@@ -9,6 +9,8 @@ import { paragraphFragmentsOf } from './semantic-records.ts';
 import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type {
   LineRecord,
+  ListMarkerRecord,
+  PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
   StyleSpanRecord,
@@ -54,7 +56,7 @@ const lineSegmentsCache = new WeakMap<LineRecord, readonly LineSegment[]>();
 export function lineSegments(line: LineRecord): readonly LineSegment[] {
   const cached = lineSegmentsCache.get(line);
   if (cached) return cached;
-  // Opaque block paragraphs reserve geometry but have no editable model position.
+  // Opaque blocks have geometry without editable model positions.
   if (
     line.spans.length > 0 &&
     line.spans.every(
@@ -64,19 +66,48 @@ export function lineSegments(line: LineRecord): readonly LineSegment[] {
     )
   )
     return [];
-  const whole: LineSegment = {
+  const mixed =
+    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
+    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
+  const segments = mixed ? splitLineByParagraph(line) : [wholeLineSegment(line)];
+  lineSegmentsCache.set(line, segments);
+  return segments;
+}
+
+/**
+ * A line that belongs to one paragraph, as one segment covering what the line draws.
+ *
+ * A field cut across lines publishes its whole range on every fragment, while the line range
+ * starts where the previous line ended. Starting at the earliest drawn span lets selection
+ * reach every fragment and caret ownership see it (`laterSegmentHolds`).
+ */
+function wholeLineSegment(line: LineRecord): LineSegment {
+  let start = line.range.start;
+  for (const span of line.spans) if (span.range.start < start) start = span.range.start;
+  return {
     paragraphId: line.range.paragraphId,
-    start: line.range.start,
+    start,
     end: line.range.end,
     spans: line.spans,
     drawings: line.drawings ?? [],
   };
-  const mixed =
-    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
-    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
-  const segments = mixed ? splitLineByParagraph(line) : [whole];
-  lineSegmentsCache.set(line, segments);
-  return segments;
+}
+
+/** Source member order is independent of the physical order used by hit testing. */
+export function logicalLineSegments(line: LineRecord): readonly LineSegment[] {
+  const segments = lineSegments(line);
+  if (segments.length < 2 || !line.spans.some((span) => span.style.shaping)) return segments;
+  const remaining = new Map(segments.map((segment) => [segment.paragraphId, segment]));
+  const result: LineSegment[] = [];
+  // Bidi layout retains span arrays in canonical order. Atom-only lines use the old path.
+  for (const span of line.spans) {
+    const segment = remaining.get(span.range.paragraphId);
+    if (segment) {
+      result.push(segment);
+      remaining.delete(segment.paragraphId);
+    }
+  }
+  return [...result, ...remaining.values()];
 }
 
 function splitLineByParagraph(line: LineRecord): readonly LineSegment[] {
@@ -141,12 +172,20 @@ export function segmentOverlap(
   layout: SemanticLayout,
   segment: LineSegment,
   from: SemanticPosition,
-  to: SemanticPosition
+  to: SemanticPosition,
+  index: ReadonlyMap<string, number> = documentOrderIndex(layout)
 ): { start: number; end: number } | null {
-  const index = documentOrderIndex(layout);
-  const lineParagraph = index.get(segment.paragraphId) ?? -1;
-  const fromParagraph = index.get(from.paragraphId) ?? -1;
-  const toParagraph = index.get(to.paragraphId) ?? -1;
+  if (from.paragraphId === to.paragraphId) {
+    if (segment.paragraphId !== from.paragraphId) return null;
+    const start = Math.max(segment.start, from.offset),
+      end = Math.min(segment.end, to.offset);
+    return end > start ? { start, end } : null;
+  }
+  const lineParagraph = index.get(segment.paragraphId);
+  const fromParagraph = index.get(from.paragraphId);
+  const toParagraph = index.get(to.paragraphId);
+  if (lineParagraph === undefined || fromParagraph === undefined || toParagraph === undefined)
+    return null;
   if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
 
   const start =
@@ -166,20 +205,71 @@ export function mergedPredecessorsOf(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly string[] {
+  const position = mergedPositions(layout).get(paragraphId);
+  return position ? position.members.slice(0, position.at).reverse() : [];
+}
+
+/** Where a member first sits after another member of its fragment: members and its index. */
+interface MergedPosition {
+  readonly members: readonly string[];
+  readonly at: number;
+}
+
+const EMPTY_MERGED_POSITIONS: ReadonlyMap<string, MergedPosition> = new Map();
+const mergedPositionsByPage = new WeakMap<PageRecord, ReadonlyMap<string, MergedPosition>>();
+const mergedPositionsByLayout = new WeakMap<SemanticLayout, ReadonlyMap<string, MergedPosition>>();
+
+/**
+ * The FIRST fragment, in page and fragment order, that holds each paragraph after position 0.
+ *
+ * One walk per page record, reused by every layout that keeps the page, and one merge per
+ * layout. A position stores the shared member list and an index, not a copied prefix, so a
+ * merged run of n paragraphs costs O(n) here however many of its members are asked about.
+ */
+function mergedPositions(layout: SemanticLayout): ReadonlyMap<string, MergedPosition> {
+  const cached = mergedPositionsByLayout.get(layout);
+  if (cached) return cached;
+  let merged: Map<string, MergedPosition> | undefined;
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      const at = fragmentParagraphs(fragment).indexOf(paragraphId);
-      if (at > 0) return fragmentParagraphs(fragment).slice(0, at).reverse();
+    for (const [paragraphId, position] of mergedPositionsOnPage(page)) {
+      merged ??= new Map();
+      if (!merged.has(paragraphId)) merged.set(paragraphId, position);
     }
   }
-  return [];
+  const result = merged ?? EMPTY_MERGED_POSITIONS;
+  mergedPositionsByLayout.set(layout, result);
+  return result;
+}
+
+function mergedPositionsOnPage(page: PageRecord): ReadonlyMap<string, MergedPosition> {
+  const cached = mergedPositionsByPage.get(page);
+  if (cached) return cached;
+  let found: Map<string, MergedPosition> | undefined;
+  for (const fragment of paragraphFragmentsOf(page)) {
+    const members = fragmentParagraphs(fragment);
+    if (members.length < 2) continue;
+    // `indexOf` semantics: a member listed twice answers from its first position only, and a
+    // member first listed at position 0 is not after anyone in this fragment.
+    const seen = new Set<string>();
+    for (let at = 0; at < members.length; at += 1) {
+      const paragraphId = members[at]!;
+      if (seen.has(paragraphId)) continue;
+      seen.add(paragraphId);
+      if (at === 0) continue;
+      found ??= new Map();
+      if (!found.has(paragraphId)) found.set(paragraphId, { members, at });
+    }
+  }
+  const result = found ?? EMPTY_MERGED_POSITIONS;
+  mergedPositionsByPage.set(page, result);
+  return result;
 }
 
 /** Cached per fragment: the answer is a walk of every line, and most callers ask repeatedly. */
 const fragmentParagraphsCache = new WeakMap<ParagraphFragmentRecord, readonly string[]>();
 
 /**
- * Every paragraph a fragment DRAWS, in visual order.
+ * Every paragraph a fragment DRAWS, in canonical member order.
  *
  * `[fragment.paragraphId]` for an ordinary one, which is what it has always been. A resolved
  * display mode publishes a merged run as one fragment under the SURVIVOR's identity, so the
@@ -190,11 +280,25 @@ const fragmentParagraphsCache = new WeakMap<ParagraphFragmentRecord, readonly st
 export function fragmentParagraphs(fragment: ParagraphFragmentRecord): readonly string[] {
   const cached = fragmentParagraphsCache.get(fragment);
   if (cached) return cached;
+  // Ordinary paragraphs need membership only, not allocated segment geometry.
+  if (
+    (fragment.lines ?? []).every(
+      (line) =>
+        line.range.paragraphId === fragment.paragraphId &&
+        line.spans.every((span) => span.range.paragraphId === fragment.paragraphId) &&
+        (line.drawings ?? []).every((drawing) => drawing.paragraphId === fragment.paragraphId)
+    )
+  ) {
+    const members = [fragment.paragraphId];
+    fragmentParagraphsCache.set(fragment, members);
+    return members;
+  }
+
   // From the LINES, so the order is the order the reader meets them, and the fragment's own
   // name last if no line named it — an empty paragraph has no span to speak for it.
   const held: string[] = [];
   for (const line of fragment.lines ?? []) {
-    for (const segment of lineSegments(line)) {
+    for (const segment of logicalLineSegments(line)) {
       if (!held.includes(segment.paragraphId)) held.push(segment.paragraphId);
     }
   }
@@ -266,4 +370,40 @@ export function fragmentHolding(
     }
   }
   return null;
+}
+
+/**
+ * The list marker a paragraph publishes, or null.
+ *
+ * It is on the fragment {@link fragmentHolding} finds, except when page breaks open the
+ * paragraph: layout then publishes it with the first line after them, on a later fragment.
+ */
+export function markerHolding(
+  layout: SemanticLayout,
+  paragraphId: string
+): ListMarkerRecord | null {
+  const first = fragmentHolding(layout, paragraphId);
+  if (!first || first.marker) return first?.marker ?? null;
+  const opensWithBreak = first.lines.every((line) =>
+    line.spans.every((span) => !/[^\f]/.test(span.text))
+  );
+  if (!opensWithBreak || first.paragraphId !== paragraphId) return null;
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOnPage(page)) {
+      if (fragment.paragraphId === paragraphId && fragment.marker) return fragment.marker;
+    }
+  }
+  return null;
+}
+
+/** View one merged member in its own offset space for logical line-end rules. */
+export function lineForSegment(line: LineRecord, segment: LineSegment | undefined): LineRecord {
+  return segment
+    ? {
+        ...line,
+        range: { paragraphId: segment.paragraphId, start: segment.start, end: segment.end },
+        spans: segment.spans,
+        drawings: segment.drawings,
+      }
+    : line;
 }

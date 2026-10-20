@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Projected ASCII-decimal field and note marks could disrupt right-to-left word order.",
+  "after": "Projected field and note marks with only ASCII decimal digits retain surrounding right-to-left word order when their model range is one character.",
+  "reason": "Only local bidirectional layout changes. Canonical nodes, operation formats, and one-character model ranges stay unchanged. The repair does not extend other projected field results.",
+  "tests": [
+    "packages/core/src/layout/__tests__/rtl-field-note-atoms.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-rtl-decimal-atoms.test.ts"
+  ],
+  "changeset": "rtl-ascii-decimal-atoms",
+  "migration": null
+}

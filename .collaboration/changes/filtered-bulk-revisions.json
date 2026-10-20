@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Bulk review resolves hidden revisions and refuses the entire operation when one revision is unsupported.",
+  "after": "Selected revisions resolve in one canonical transaction while excluded and unsupported groups remain pending.",
+  "reason": "Selected sets use existing revision operations and the existing canonical primitive journal. The stored document and replication formats are unchanged; released peers can replay the resulting edits.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-batch.test.ts",
+    "packages/core/src/editor/__tests__/review-menu-commands.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revisions.test.ts"
+  ],
+  "changeset": "filtered-bulk-revisions",
+  "migration": null
+}

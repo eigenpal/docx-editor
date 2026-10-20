@@ -1,14 +1,13 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { readTwipsMeasure } from '../store/units.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
+import { tableSide } from './clipboard-table-direction.ts';
 import { wmlChild } from './clipboard-html-write-tree.ts';
 
-function intAttribute(element: OoxmlElement | null, name: string): number | null {
+function twipsAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
-  const raw = attributeValueOf(element, name, WML_NAMESPACE_URI);
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return null;
-  const value = Number.parseInt(raw, 10);
-  return Number.isSafeInteger(value) ? value : null;
+  return readTwipsMeasure(attributeValueOf(element, name, WML_NAMESPACE_URI));
 }
 
 function colorAttribute(element: OoxmlElement | null, name: string): string | null {
@@ -163,7 +162,9 @@ export function wordTableCellCss(
   rowSpan: number,
   firstGridColumn: boolean,
   lastGridColumn: boolean,
-  conditionalFill: string | null
+  conditionalFill: string | null,
+  rtl = false,
+  tableMargins: readonly OoxmlElement[] = []
 ): string {
   const rules: string[] = [];
   const tcBorders = wmlChild(tcPr, 'tcBorders');
@@ -176,12 +177,16 @@ export function wordTableCellCss(
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     // An explicit cell `nil`/`none` SUPPRESSES the edge; only an absent cell border
     // falls back to the table grid.
-    const cellEdge = wmlChild(tcBorders, edge);
+    const relative = edge === 'left' ? 'start' : edge === 'right' ? 'end' : edge;
+    const cellEdge = wmlChild(tcBorders, edge) ?? wmlChild(tcBorders, relative);
+    const tableEdge = tableEdges[edge];
+    const tableRelative =
+      tableEdge === 'left' ? 'start' : tableEdge === 'right' ? 'end' : tableEdge;
     const border =
       cellEdge !== null
         ? wordBorderCss(cellEdge)
-        : wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
-    if (border) rules.push(`border-${edge}:${border}`);
+        : wordBorderCss(wmlChild(tblBorders, tableEdge) ?? wmlChild(tblBorders, tableRelative));
+    if (border) rules.push(`border-${tableSide(edge, rtl)}:${border}`);
   }
   const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill') ?? conditionalFill;
   if (fill) rules.push(`background-color:${fill}`);
@@ -191,18 +196,25 @@ export function wordTableCellCss(
   if (vAlign === 'center') rules.push('vertical-align:middle');
   else if (vAlign === 'bottom' || vAlign === 'top') rules.push(`vertical-align:${vAlign}`);
   const tcW = wmlChild(tcPr, 'tcW');
-  const width = intAttribute(tcW, 'w');
+  const width = twipsAttribute(tcW, 'w');
   const widthType = tcW === null ? undefined : attributeValueOf(tcW, 'type', WML_NAMESPACE_URI);
   if (width !== null && width > 0 && (widthType === undefined || widthType === 'dxa')) {
     rules.push(`width:${pointsFromTwips(width)}`);
   }
   const margins = wmlChild(tcPr, 'tcMar');
   for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
-    const margin = wmlChild(margins, edge);
-    const value = intAttribute(margin, 'w');
+    const relative = edge === 'left' ? 'start' : edge === 'right' ? 'end' : edge;
+    const margin =
+      wmlChild(margins, edge) ??
+      wmlChild(margins, relative) ??
+      tableMargins
+        .map((container) => wmlChild(container, edge) ?? wmlChild(container, relative))
+        .find((value) => value !== null) ??
+      null;
+    const value = twipsAttribute(margin, 'w');
     const type = margin === null ? undefined : attributeValueOf(margin, 'type', WML_NAMESPACE_URI);
-    if (value !== null && value >= 0 && type === 'dxa') {
-      rules.push(`padding-${edge}:${pointsFromTwips(value)}`);
+    if (value !== null && value >= 0 && (type === undefined || type === 'dxa')) {
+      rules.push(`padding-${tableSide(edge, rtl)}:${pointsFromTwips(value)}`);
     }
   }
   return rules.join(';');

@@ -130,9 +130,10 @@ describe('comprehensive fixture table fidelity', () => {
     const afterLine = afterNested.lines[afterNested.lines.length - 1]!;
     const hostPadTop = host.blocks[0]!.box.y - host.box.y;
     const hostPadBottom = host.box.y + host.box.height - (afterLine.box.y + afterLine.box.height);
-    // Outer tcMar top=bottom=80 twips (+ hairline border) — must stay symmetric and small.
-    expect(hostPadTop).toBeCloseTo(4.125, 2);
-    expect(hostPadBottom).toBeCloseTo(4.125, 2);
+    // The band above is charged here in full, and the outer bottom reserves its full
+    // hairline stroke: both pads are the 4pt `w:tcMar` plus one whole 0.1pt rule.
+    expect(hostPadTop).toBeCloseTo(4.1, 2);
+    expect(hostPadBottom).toBeCloseTo(4.1, 2);
     // Top pad must not regress when bottom shrinks.
     expect(hostPadTop).toBeGreaterThan(3.5);
 
@@ -143,9 +144,11 @@ describe('comprehensive fixture table fidelity', () => {
     expect(nested.rows[0]!.box.height).toBeLessThan(18);
     const inner = nested.rows[0]!.cells[0]!;
     const innerPara = inner.blocks[0]!;
-    expect(innerPara.box.y - inner.box.y).toBeCloseTo(2.125, 2);
+    // The first nested row clears its full outer top rule, and its bottom is the interior
+    // band, which the row below it now carries.
+    expect(innerPara.box.y - inner.box.y).toBeCloseTo(2.1, 2);
     expect(inner.box.y + inner.box.height - (innerPara.box.y + innerPara.box.height)).toBeCloseTo(
-      2.125,
+      2,
       2
     );
 

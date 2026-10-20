@@ -64,6 +64,36 @@ describe('an overlay rectangle carries its review author', () => {
     expect(rect.style.getPropertyValue('--doc-review-author-current')).toBe('');
   });
 
+  test('a declared active background paints inline and clears the kind rule', () => {
+    // The open revision's band. Inline, so it outranks the kind tokens — and the rule
+    // with it, so `transparent` clears the whole band rather than leaving a floating
+    // underline.
+    const layer = paint([
+      {
+        ...RECT,
+        className: 'docx-revision-band docx-revision-band--insert docx-revision-band--active',
+        reviewAuthor: { author: 'Ada Lovelace', slot: 0, color: '#c0392b' },
+        activeBackground: 'rgba(1, 2, 3, 0.25)',
+      },
+    ]);
+    const band = layer.firstElementChild as HTMLElement;
+    expect(band.style.backgroundColor).toBe('rgba(1, 2, 3, 0.25)');
+    expect(band.style.boxShadow).toBe('none');
+  });
+
+  test('a band without a declared background leaves the stylesheet in charge', () => {
+    const layer = paint([
+      {
+        ...RECT,
+        className: 'docx-revision-band docx-revision-band--insert docx-revision-band--active',
+        reviewAuthor: { author: 'Ada Lovelace', slot: 0, color: '#c0392b' },
+      },
+    ]);
+    const band = layer.firstElementChild as HTMLElement;
+    expect(band.style.backgroundColor).toBe('');
+    expect(band.style.boxShadow).toBe('');
+  });
+
   test('an author name from the file is set as a value, never as markup', () => {
     // `w:author` is attacker-controlled. The name goes through `dataset`, so a name shaped
     // like a tag is a string, not an element.
@@ -74,5 +104,23 @@ describe('an overlay rectangle carries its review author', () => {
     const rect = layer.firstElementChild as HTMLElement;
     expect(rect.dataset.reviewAuthor).toBe(hostile);
     expect(rect.querySelector('img')).toBeNull();
+  });
+});
+
+describe('a repaint keeps unchanged rectangles', () => {
+  test('an identical band keeps its element; a changed one is rebuilt', () => {
+    const layer = document.createElement('div');
+    const band = { ...RECT, className: 'docx-comment-band' };
+    const moved = { ...RECT, y: 20, className: 'docx-comment-band' };
+    paintSelectionOverlay(layer, LAYOUT, [band, moved], { scale: 1 });
+    const [first, second] = [...layer.children];
+    paintSelectionOverlay(layer, LAYOUT, [band, { ...moved, y: 30 }], { scale: 1 });
+    expect(layer.children[0]).toBe(first!);
+    expect(layer.children[1]).not.toBe(second!);
+    expect((layer.children[1] as HTMLElement).style.top).toBe('102px');
+    const active = { ...band, className: 'docx-comment-band docx-comment-band--active' };
+    paintSelectionOverlay(layer, LAYOUT, [active], { scale: 1 });
+    expect(layer.children).toHaveLength(1);
+    expect(layer.children[0]).not.toBe(first!);
   });
 });

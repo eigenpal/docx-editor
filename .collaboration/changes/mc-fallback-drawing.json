@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A run-level mc:AlternateContent whose chosen branch could not paint showed nothing, and an inline one kept the chosen branch's extent as empty space.",
+  "after": "When the mc:Fallback holds VML that paints, the wrapper shows that VML at its own geometry. Without such a fallback the earlier result stays.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. The mc:AlternateContent wrapper stays one paragraph offset, so paragraph offsets do not change.",
+  "tests": ["packages/core/src/store/__tests__/mc-fallback-projection.test.ts"],
+  "changeset": "header-drawing-fidelity",
+  "migration": null
+}

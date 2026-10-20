@@ -1,3 +1,4 @@
+import { registerGroupThemeEffects } from './drawing-group-theme-effects.ts';
 import { resolveRelationship } from './relationships.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import {
@@ -265,6 +266,23 @@ export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShap
       return null;
     },
     cacheToken: `${rootIdentity(theme)}|${rootIdentity(settings)}`,
+  });
+  registerGroupThemeEffects(result.resolveStyleMatrixReference, (index) => {
+    if (
+      !formatScheme ||
+      !Number.isSafeInteger(index) ||
+      index < 1 ||
+      index > MAX_STYLE_MATRIX_ENTRIES
+    )
+      return null;
+    const list = directGeneric(formatScheme, DRAWINGML_MAIN_NAMESPACE_URI, 'effectStyleLst');
+    if (!list) return null;
+    let at = 0;
+    for (const child of list.children) {
+      if (!genericElement(child)) continue;
+      if (++at === index) return child;
+    }
+    return null;
   });
   PACKAGE_THEME_CACHE.set(pkg, result);
   return result;

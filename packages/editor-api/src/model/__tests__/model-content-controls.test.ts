@@ -369,7 +369,8 @@ describe('a control is written through the document’s own write path', () => {
     });
     const xml = await mainXmlOf(runtime);
     expect(xml).toContain('w14:val="1"');
-    expect(xml).toContain('\u2612');
+    expect(xml).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
+    expect(xml).not.toContain('<w:t>☒</w:t>');
   });
 
   test('writing into a control showing its prompt replaces the whole prompt', async () => {

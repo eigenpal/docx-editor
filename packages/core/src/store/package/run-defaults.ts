@@ -14,6 +14,7 @@
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { themeFontFamilyOf, type DocumentThemeFonts } from './theme-font-scheme.ts';
+import { fontFamilyName } from './font-family-name.ts';
 
 /** What a run inherits at one point of the chain — null means "nothing authored". */
 export interface StyleRunDefaults {
@@ -75,13 +76,15 @@ export function familyFromRFonts(
   // The shared token table (`theme-font-scheme.ts`) resolves the East Asian tokens too:
   // `w:asciiTheme="minorEastAsia"` is Word's "use East Asian fonts on Latin text", and
   // this reader must answer the same face the layout lane paints.
-  const themed =
+  // Each theme attribute overrides only its own slot, so an explicit `w:ascii` outranks a
+  // `w:hAnsiTheme` beside it.
+  const direct =
     themeFontFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
-  if (themed !== null) return themed;
-  const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
+    attributeValue(rFonts, 'ascii') ??
+    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts) ??
+    attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
-  return FONT_NAME.test(direct) ? direct : null;
+  return fontFamilyName(direct);
 }
 
 /** The independently resolved East Asian family named by an `w:rFonts` element. */
@@ -93,7 +96,22 @@ export function eastAsiaFamilyFromRFonts(
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'eastAsia');
   if (direct === undefined) return null;
-  return FONT_NAME.test(direct) ? direct : null;
+  return fontFamilyName(direct);
+}
+
+/**
+ * The independently resolved `w:hAnsi` family named by an `w:rFonts` element: the face
+ * layout uses for non-ASCII Latin, Greek and Cyrillic text when it differs from `w:ascii`.
+ */
+export function hAnsiFamilyFromRFonts(
+  rFonts: OoxmlElement,
+  themeFonts: DocumentThemeFonts
+): string | null {
+  const themed = themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
+  if (themed !== null) return themed;
+  const direct = attributeValue(rFonts, 'hAnsi');
+  if (direct === undefined) return null;
+  return fontFamilyName(direct);
 }
 
 /** A validated literal family name from another Word font-bearing attribute such as `w:sym`. */
@@ -101,25 +119,53 @@ export function validFontFamily(raw: string | undefined): string | null {
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
 }
 
+/**
+ * The family a symbol-bearing attribute (`w:sym/@w:font`, a SYMBOL field's `\f`) names, for
+ * anyone that has to ASK a font resolver for the face.
+ *
+ * The same bound as {@link validFontFamily}, deliberately, including for Word's
+ * vertical-writing prefix (`@MS Gothic`). Layout will apply that name to the run, but the
+ * measurer and the paint sink both re-validate against this shape and fall back when it
+ * fails — so bytes supplied under the stripped family would never reach the glyph, and
+ * asking for them would spend a slot of a capped request on nothing.
+ */
+export function symbolFontFamily(raw: string | undefined): string | null {
+  return validFontFamily(raw);
+}
+
+interface RunDefaultsEntry extends StyleRunDefaults {
+  readonly hasLatinFontReference: boolean;
+}
+
+function hasLatinReference(rFonts: OoxmlElement | undefined): boolean {
+  return (
+    rFonts !== undefined &&
+    ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+      Boolean(attributeValue(rFonts, name))
+    )
+  );
+}
+
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
 function rPrDefaults(
   rPr: OoxmlElement | undefined,
   themeFonts: DocumentThemeFonts
-): StyleRunDefaults {
-  if (!rPr) return { fontFamily: null, fontSizeHalfPoints: null };
+): RunDefaultsEntry {
+  if (!rPr) return { fontFamily: null, fontSizeHalfPoints: null, hasLatinFontReference: false };
   const rFonts = childElement(rPr, 'rFonts');
   const sz = childElement(rPr, 'sz');
   const rawSize = sz ? attributeValue(sz, 'val') : undefined;
   const size = rawSize !== undefined && /^\d{1,4}$/.test(rawSize) ? Number(rawSize) : null;
   return {
     fontFamily: rFonts ? familyFromRFonts(rFonts, themeFonts) : null,
+    hasLatinFontReference: hasLatinReference(rFonts),
     fontSizeHalfPoints: size !== null && size >= SZ_MIN && size <= SZ_MAX ? size : null,
   };
 }
 
 interface StyleEntry {
   readonly basedOn: string | null;
-  readonly own: StyleRunDefaults;
+  readonly own: RunDefaultsEntry;
 }
 
 /**
@@ -135,7 +181,11 @@ export function createRunDefaultsResolver(
   themeFonts: DocumentThemeFonts
 ): (styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults {
   const styles = new Map<string, StyleEntry>();
-  let docDefaults: StyleRunDefaults = { fontFamily: null, fontSizeHalfPoints: null };
+  let docDefaults: RunDefaultsEntry = {
+    fontFamily: null,
+    fontSizeHalfPoints: null,
+    hasLatinFontReference: false,
+  };
 
   if (stylesRoot) {
     const defaults = childElement(stylesRoot, 'docDefaults');
@@ -154,13 +204,14 @@ export function createRunDefaultsResolver(
     }
   }
 
-  const memo = new Map<string, StyleRunDefaults>();
-  const chainOf = (styleId: string | null): StyleRunDefaults => {
+  const memo = new Map<string, RunDefaultsEntry>();
+  const chainOf = (styleId: string | null): RunDefaultsEntry => {
     const key = styleId ?? '';
     const cached = memo.get(key);
     if (cached) return cached;
     let fontFamily: string | null = null;
     let fontSizeHalfPoints: number | null = null;
+    let hasLatinFontReference = docDefaults.hasLatinFontReference;
     const seen = new Set<string>();
     let at = styleId;
     for (let depth = 0; at !== null && depth < CHAIN_CAP && !seen.has(at); depth += 1) {
@@ -168,10 +219,12 @@ export function createRunDefaultsResolver(
       const entry = styles.get(at);
       if (!entry) break;
       fontFamily ??= entry.own.fontFamily;
+      hasLatinFontReference ||= entry.own.hasLatinFontReference;
       fontSizeHalfPoints ??= entry.own.fontSizeHalfPoints;
       at = entry.basedOn;
     }
-    const resolved: StyleRunDefaults = {
+    const resolved: RunDefaultsEntry = {
+      hasLatinFontReference,
       fontFamily: fontFamily ?? docDefaults.fontFamily,
       fontSizeHalfPoints: fontSizeHalfPoints ?? docDefaults.fontSizeHalfPoints,
     };
@@ -186,8 +239,19 @@ export function createRunDefaultsResolver(
     const rFonts = runProperties?.find((property) => property.localName === 'rFonts');
     const runTheme = rFonts
       ? (themeFontFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
-        themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
+        (rFonts.attributes?.ascii === undefined
+          ? themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts)
+          : null))
       : null;
-    return runTheme === null ? chain : { ...chain, fontFamily: runTheme };
+    const hasRunReference = ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
+      Boolean(rFonts?.attributes?.[name])
+    );
+    return {
+      fontFamily:
+        runTheme ??
+        chain.fontFamily ??
+        (!chain.hasLatinFontReference && !hasRunReference ? themeFonts.minor : null),
+      fontSizeHalfPoints: chain.fontSizeHalfPoints,
+    };
   };
 }

@@ -25,7 +25,6 @@
     "isolatedModules": true,
     "declaration": true,
     "types": [],
-    "baseUrl": ".",
     "paths": {
       // Every published subpath, mapped to source. The export map points at dist, so a subpath
       // missing here resolves to built .d.ts while its siblings resolve to src, and the same
@@ -41,6 +40,7 @@
       "@docx-editor.dev/core/contracts/plugin": ["../../../core/src/contracts/plugin.ts"],
       "@docx-editor.dev/core/contracts/types": ["../../../core/src/contracts/types-barrel.ts"],
       "@docx-editor.dev/core/layout": ["../../../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/export": ["../../../core/src/export/index.ts"],
       "@docx-editor.dev/core/output": ["../../../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../../../core/src/store/index.ts"],
       "@docx-editor.dev/core/collaboration": ["../../../core/src/collaboration/index.ts"],

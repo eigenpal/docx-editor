@@ -10,25 +10,17 @@ import type { ReviewItemView } from './useReview.ts';
 
 export const selectDocumentAbsent = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.parseError !== null || snapshot.pageSetup == null;
+/** The `opening` review pane setting. */
+export const selectPaneOpening = (snapshot: EditorSnapshot) => snapshot.reviewPane.opening;
+/** The `revisionsIn` review pane setting. */
+export const selectRevisionsIn = (snapshot: EditorSnapshot) => snapshot.reviewPane.revisionsIn;
+/** The `commentMarkers` review pane setting. */
+export const selectCommentMarkers = (snapshot: EditorSnapshot) =>
+  snapshot.reviewPane.commentMarkers;
 export const selectDocumentReadOnly = (snapshot: EditorSnapshot) =>
   snapshot.editingMode === 'viewing';
 
-export interface RailMetrics {
-  readonly scale: number;
-  readonly top: number;
-  readonly left: number | null;
-  readonly compactCardLeft: number | null;
-}
-
-export const INITIAL_METRICS: RailMetrics = {
-  scale: 96 / 72,
-  top: 0,
-  left: null,
-  compactCardLeft: null,
-};
-export const RAIL_GUTTER = 16;
-export const COMPACT_CARD_WIDTH = 300;
-export const COMPACT_CARD_INSET = 12;
+export { COMPACT_CARD_WIDTH } from '../review/rail-metrics.ts';
 export const COMPOSE_KEY = '\u0000compose';
 export const RAIL_OVERSCAN = 600;
 export const AUTHOR_SLOTS = 8;
@@ -39,6 +31,12 @@ export const MARKER_STEP = 30;
 
 export const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({
   placement: false,
+  pairReplacements: false,
+}) satisfies ReviewItemQuery;
+/** The balloon's queue under `revisionsIn: 'balloons'`: a typed-over range is one decision. */
+export const PAIRED_REVIEW_QUERY = Object.freeze({
+  placement: false,
+  pairReplacements: true,
 }) satisfies ReviewItemQuery;
 
 export function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {

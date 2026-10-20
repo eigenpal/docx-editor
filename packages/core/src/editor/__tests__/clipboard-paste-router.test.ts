@@ -111,3 +111,26 @@ describe('paste routing', () => {
     expect(plain).toEqual([]);
   });
 });
+
+test('unsupported fragment content refuses paste without HTML or text fallback', () => {
+  let calls = 0;
+  const lane = routePaste(
+    {
+      richLaneOpen: true,
+      pasteFragment: () => {
+        calls++;
+        return 'unsupported-content';
+      },
+      insertPlainText: () => {
+        throw new Error('must not degrade');
+      },
+    },
+    {
+      html: wrapInteropHtml('<p>fallback</p>', { bytes: FRAGMENT_BYTES, lastMarkCovered: true }),
+      text: 'fallback',
+      forcePlain: false,
+    }
+  );
+  expect(lane).toBe('unsupported-content');
+  expect(calls).toBe(1);
+});

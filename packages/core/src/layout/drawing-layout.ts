@@ -1,31 +1,31 @@
-// Inline drawing measurement and placement (typed-drawings-and-images task 6).
-//
-// DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
-// dimensions never resize layout. Paint and hit testing consume the published records only.
+import { inlinePictureExtent } from './inline-picture-extent.ts';
+import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
+// Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
 
-import type {
-  DrawingAccessibility,
-  DrawingHorizontalReferenceFrame,
-  DrawingProjection,
-  DrawingTransform,
-  DrawingVerticalReferenceFrame,
-  ImageWrapTarget,
-  SourceCrop,
-  VectorShapeProjection,
-} from '../store/package/drawing-projection.ts';
+import { layoutTextArt, rotatedBounds, type DrawingTextArtRecord } from './drawing-text-art.ts';
+import { clipBoxToRegion } from './drawing-clip-box.ts';
+export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
+
+import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
+import { anchorLaidOutInCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import {
   drawingAccessibility,
-  isRunLevelMcAlternateContent,
+  type DrawingAccessibility,
+  type DrawingHorizontalReferenceFrame,
+  type DrawingProjection,
+  type DrawingTransform,
+  type DrawingVerticalReferenceFrame,
+  type ImageWrapTarget,
+  type SourceCrop,
+  type VectorShapeProjection,
 } from '../store/package/drawing-projection.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { pageClipRegion } from './drawing-page-clip.ts';
+export { pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  NO_REVISIONS,
-  isRevisionWrapper,
   projectedRevisions,
-  revisionAttributionOf,
-  withRevision,
   type RevisionAttribution,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
@@ -38,6 +38,14 @@ import {
   type DrawingGeometry,
 } from './drawing-geometry.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import { textboxPlacementProjection } from './textbox-placement.ts';
+import { withGroupTextboxStories } from './group-textbox-layout.ts';
+import {
+  anchoredDrawingAtomsInParagraph,
+  drawingModelOffsetsInParagraph,
+} from './drawing-atom-walk.ts';
+
+export { anchoredDrawingAtomsInParagraph, drawingModelOffsetsInParagraph };
 
 export type { DrawingGeometry } from './drawing-geometry.ts';
 
@@ -63,15 +71,12 @@ const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom
 
 function drawingPaintFields(projection: DrawingProjection): {
   readonly hyperlinkHref: string | null;
-  readonly effects: Readonly<{
-    readonly grayscale: boolean;
-    readonly brightness: number;
-    readonly contrast: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
   readonly vectorShape: VectorShapeProjection | null;
+  readonly groupPicture?: DrawingGroupPictureRecord;
 } {
   const picture = projection.picture;
   let placeholderGraphicKind: string | null = null;
@@ -87,10 +92,18 @@ function drawingPaintFields(projection: DrawingProjection): {
   return Object.freeze({
     hyperlinkHref: projection.hyperlinkHref,
     effects: projection.effects,
-    crop: picture?.crop ?? EMPTY_CROP,
+    crop: picture?.crop ?? projection.groupPicture?.crop ?? EMPTY_CROP,
     transform: picture?.transform ?? EMPTY_TRANSFORM,
-    placeholderGraphicKind: picture ? null : placeholderGraphicKind,
+    placeholderGraphicKind:
+      picture || projection.legacyGraphic || projection.textArt ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
+    ...(projection.groupPicture
+      ? {
+          groupPicture: Object.freeze({
+            alternateContent: projection.groupPicture.alternateContent,
+          }),
+        }
+      : {}),
   });
 }
 
@@ -127,16 +140,20 @@ export interface InlineDrawingMeasure {
 }
 
 export function measureInlineDrawing(projection: DrawingProjection): InlineDrawingMeasure {
-  const distL = emuToPoints(projection.inlineDistancesEmu.left);
-  const distR = emuToPoints(projection.inlineDistancesEmu.right);
-  const distT = emuToPoints(projection.inlineDistancesEmu.top);
-  const distB = emuToPoints(projection.inlineDistancesEmu.bottom);
+  // ECMA-376 Part 1 §20.4.2.8: inline dist* attributes are retained for a
+  // possible conversion to floating, but do not affect inline placement.
+  // Effect extents still contribute to inline geometry.
+  const distL = 0;
+  const distR = 0;
+  const distT = 0;
+  const distB = 0;
   const effectL = emuToPoints(projection.effectExtentEmu.left);
   const effectR = emuToPoints(projection.effectExtentEmu.right);
   const effectT = emuToPoints(projection.effectExtentEmu.top);
   const effectB = emuToPoints(projection.effectExtentEmu.bottom);
-  const width = emuToPoints(projection.extentEmu.cx);
-  const height = emuToPoints(projection.extentEmu.cy);
+  const extent = inlinePictureExtent(projection);
+  const width = emuToPoints(extent.cx),
+    height = emuToPoints(extent.cy);
   return Object.freeze({
     distL,
     distR,
@@ -204,6 +221,9 @@ function shiftGeometry(geometry: DrawingGeometry, dx: number, dy: number): Drawi
     paintBounds: shiftBox(geometry.paintBounds),
     hitBounds: shiftBox(geometry.hitBounds),
     transformedCorners: Object.freeze(geometry.transformedCorners.map(shiftPoint)),
+    ...(geometry.imageTransformCorners
+      ? { imageTransformCorners: Object.freeze(geometry.imageTransformCorners.map(shiftPoint)) }
+      : {}),
     clipPolygon: geometry.clipPolygon ? Object.freeze(geometry.clipPolygon.map(shiftPoint)) : null,
   });
 }
@@ -262,34 +282,14 @@ export function repositionInlineDrawingsForBaseline(
 }
 
 /** Clip `box` to a horizontal content band; preserves authored size, zeroes clipped axes. */
-export function clipBoxHorizontally(
-  box: LayoutBox,
-  contentLeft: number,
-  contentRight: number
-): LayoutBox {
-  const left = Math.max(box.x, contentLeft);
-  const right = Math.min(box.x + box.width, contentRight);
-  if (right <= left) {
-    return Object.freeze({ x: left, y: box.y, width: 0, height: box.height });
-  }
-  return Object.freeze({
-    x: left,
-    y: box.y,
-    width: right - left,
-    height: box.height,
-  });
-}
-
-/** Clip `box` to a rectangular region on both axes. */
-export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
-  const x = Math.max(box.x, region.x);
-  const y = Math.max(box.y, region.y);
-  const right = Math.min(box.x + box.width, region.x + region.width);
-  const bottom = Math.min(box.y + box.height, region.y + region.height);
-  if (right <= x || bottom <= y) {
-    return Object.freeze({ x, y, width: 0, height: 0 });
-  }
-  return Object.freeze({ x, y, width: right - x, height: bottom - y });
+/** How a drawing record holds the picture member of a shape group. */
+export interface DrawingGroupPictureRecord {
+  /**
+   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. An output
+   * that cannot draw the picture leaves such a group out, as it leaves out other MC content
+   * it cannot draw. A group without it shows the output's unsupported-drawing result.
+   */
+  readonly alternateContent: boolean;
 }
 
 export interface InlineDrawingRecord {
@@ -319,11 +319,7 @@ export interface InlineDrawingRecord {
   readonly accessibility: DrawingAccessibility;
   /** Sanitized external hyperlink projection; inert until an explicit gesture activates it. */
   readonly hyperlinkHref: string | null;
-  readonly effects: Readonly<{
-    readonly grayscale: boolean;
-    readonly brightness: number;
-    readonly contrast: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   /** Fixed non-picture graphic kind for refusal labels (`chart`, `group`, …); null for pictures. */
@@ -331,11 +327,35 @@ export interface InlineDrawingRecord {
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;
   /**
+   * Present when the image is the picture member of a drawing group. The image then fills
+   * the bounds of `geometry.imageTransformCorners`, not `geometry.contentBounds`, and paints
+   * below `vectorShape`, which holds the group's other members. `placeholderGraphicKind`
+   * stays non-null, as for a vector shape, so image commands do not treat the group as a
+   * picture. The group paints whole or not at all: when the picture cannot paint, an output
+   * shows no part of the group.
+   */
+  readonly groupPicture?: DrawingGroupPictureRecord;
+  /**
    * The revision wrappers enclosing the owning run, outermost first — the same stack spans
    * carry, so paint and review chrome give a tracked picture the same cues as tracked text.
    * Absent when the drawing is untracked.
    */
   readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The picture's resolved Unicode bidi level in a right-to-left or mixed-direction paragraph.
+   * An odd level reads right to left: its logical start is its right edge. Absent when the
+   * paragraph needed no bidi resolution.
+   */
+  readonly bidiLevel?: number;
+  /**
+   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
+   * extent instead of a placeholder. Absent when the drawing carries no story or the host
+   * did not thread story layout (the record then degrades to the placeholder path). An
+   * inline text box carries one too: its story sits inside the extent the line reserves.
+   */
+  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
+  /** Read-only stories of a group's text box members, each placed in its member box. */
+  readonly groupTextboxStories?: readonly import('./group-textbox-layout.ts').GroupTextboxStoryRecord[];
 }
 
 export type LineLayoutAtom =
@@ -404,6 +424,18 @@ export interface InlineDrawingLayoutContext {
     drawing: import('../store/package/ooxml-tree.ts').OoxmlDrawingNode
   ) => DrawingProjection | null;
   readonly resourceOf: (projection: DrawingProjection) => ImageResourceState;
+  /**
+   * Resolve a numbering picture bullet's image by relationship id.
+   *
+   * The owner is the NUMBERING part, not this context's story part: `w:numPicBullet` lives in
+   * `numbering.xml` and its `r:id` names a relationship of that part. The resolver answers the
+   * owner it used so a sink can key the resource without assuming the part name. Absent on a
+   * context whose host resolves no image resources, which degrades a picture bullet to its
+   * level's `w:lvlText`.
+   */
+  readonly pictureBulletResource?: (
+    relationshipId: string
+  ) => { readonly ownerPartName: string; readonly resource: ImageResourceState } | null;
 }
 
 export function clipInlineDrawingRecordVertically(
@@ -496,6 +528,8 @@ export interface DrawingAnchorFrameContext {
   readonly contentInsetBottom: number;
   readonly contentWidth: number;
   readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
+  /** Sheet top in header story coordinates. Body stories use their content inset. */
+  readonly topMarginFrameOrigin?: number;
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
   /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
@@ -505,6 +539,8 @@ export interface DrawingAnchorFrameContext {
   readonly anchorCharacterX: number;
   readonly columnBox: LayoutBox;
   readonly cellBox: LayoutBox | null;
+  /** Cell text column, excluding padding; the physical cell still owns clipping. */
+  readonly cellContentBox?: LayoutBox;
   readonly layoutInCell: boolean;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
@@ -540,18 +576,19 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly verticalFrameOrigin: number;
   readonly behindDocument: boolean;
   readonly allowOverlap: boolean;
+  /**
+   * Whether the object is laid out in the box it flows in. For an anchor in a table cell this
+   * is the layout's reading: `true` from compatibility mode 15, which ignores
+   * `layoutInCell="0"`. Everywhere else it is the authored `wp:anchor/@layoutInCell`.
+   */
   readonly layoutInCell: boolean;
   readonly relativeHeight: number;
   readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
   readonly layoutFallback?: AnchoredDrawingLayoutFallback;
   /** Canonical document traversal index within the owner story part. */
   readonly sourceOrder?: number;
-  /**
-   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
-   * extent instead of a placeholder. Absent when the drawing carries no story or the host
-   * did not thread story layout (the record then degrades to the placeholder path).
-   */
-  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
+  /** Floating VML text art fitted to the box; paint draws it instead of a resource. */
+  readonly textArt?: DrawingTextArtRecord;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -579,8 +616,15 @@ function horizontalEdges(
     if (!cellBox) return null;
     const { x, width } = cellBox;
     switch (frame) {
+      case 'column': {
+        const column = ctx.cellContentBox ?? cellBox;
+        return {
+          left: column.x,
+          right: column.x + column.width,
+          center: column.x + column.width / 2,
+        };
+      }
       case 'page':
-      case 'column':
       case 'margin':
       case 'leftMargin':
         return { left: x, right: x + width, center: x + width / 2 };
@@ -697,7 +741,7 @@ function verticalEdges(
   const contentBottom = ctx.contentHeight;
   const marginTop = ctx.verticalMarginFrame?.top ?? contentTop;
   const marginBottom = marginTop + (ctx.verticalMarginFrame?.height ?? ctx.contentHeight);
-
+  const topMarginTop = ctx.topMarginFrameOrigin ?? pageTop;
   switch (frame) {
     case 'page':
       return { top: pageTop, bottom: pageBottomSheet, center: (pageTop + pageBottomSheet) / 2 };
@@ -716,7 +760,7 @@ function verticalEdges(
         center: ctx.anchorLineBox.y + ctx.anchorLineBox.height / 2,
       };
     case 'topMargin':
-      return { top: pageTop, bottom: pageTop, center: pageTop };
+      return { top: topMarginTop, bottom: topMarginTop, center: topMarginTop };
     case 'bottomMargin':
       return { top: pageBottomInner, bottom: pageBottomInner, center: pageBottomInner };
     case 'insideMargin':
@@ -827,29 +871,6 @@ function positionFromVertical(
     if (resolved !== null) return resolved + offset;
   }
   return edges.top + offset;
-}
-
-/**
- * Full page clip including margin bands — page-relative anchors may paint into margins.
- *
- * Width MUST be {@link DrawingAnchorFrameContext.pageWidth}, not `contentWidth`: in a
- * multi-column section `contentWidth` is the active column, and page-relative drawings that
- * sit outside that column must still paint. Height stays the physical content band plus
- * margin bands (furniture-shrunk `contentHeight` must not clip page-relative paint).
- */
-export function pageClipRegion(
-  frameBase: Pick<
-    DrawingAnchorFrameContext,
-    'pageWidth' | 'marginLeft' | 'contentInsetTop' | 'contentInsetBottom' | 'contentBandHeight'
-  >
-): LayoutBox {
-  const bandHeight = frameBase.contentBandHeight;
-  return Object.freeze({
-    x: -frameBase.marginLeft,
-    y: -frameBase.contentInsetTop,
-    width: frameBase.pageWidth,
-    height: bandHeight + frameBase.contentInsetTop + frameBase.contentInsetBottom,
-  });
 }
 
 /** Resolve anchored x/y in page-content coordinates. */
@@ -981,14 +1002,19 @@ export function buildAnchoredDrawingRecord(options: {
   readonly anchorParagraphId: string;
   readonly start: number;
   readonly resolved: ResolvedAnchoredPosition;
+  readonly layoutInCell: boolean;
   readonly clipRegion?: LayoutBox;
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly revisions?: readonly RevisionAttribution[];
+  readonly measurer?: import('./semantic-records.ts').TextMeasurer;
 }): AnchoredDrawingRecord {
   const projection = options.input.projection;
   const anchorMeta = projection.anchor;
   const measure = measureInlineDrawing(projection);
+  const textArt = projection.textArt
+    ? layoutTextArt(projection.textArt, measure.width, measure.height, options.measurer)
+    : null;
   const geometry = drawingGeometryFromProjection({
     projection,
     anchorX: options.resolved.x,
@@ -996,9 +1022,11 @@ export function buildAnchoredDrawingRecord(options: {
     extentWidth: measure.width,
     extentHeight: measure.height,
   });
-  const paintBounds = options.clipRegion
-    ? clipBoxToRegion(geometry.paintBounds, options.clipRegion)
+  // Turned text reaches past its box; the painted area holds the whole turn.
+  const turned = textArt
+    ? rotatedBounds(geometry.paintBounds, textArt.rotationDegrees)
     : geometry.paintBounds;
+  const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
   const hitBounds =
     paintBounds.width > 0 && paintBounds.height > 0
       ? paintBounds
@@ -1020,7 +1048,7 @@ export function buildAnchoredDrawingRecord(options: {
     verticalFrameOrigin: options.resolved.verticalFrameOrigin,
     behindDocument: anchorMeta?.behindDocument ?? false,
     allowOverlap: anchorMeta?.allowOverlap ?? true,
-    layoutInCell: anchorMeta?.layoutInCell ?? true,
+    layoutInCell: options.layoutInCell,
     relativeHeight: anchorMeta?.relativeHeight ?? 0,
     wrap: projection.wrap === 'inline' ? 'inFront' : projection.wrap,
     ...(options.sourceOrder !== undefined ? { sourceOrder: options.sourceOrder } : {}),
@@ -1033,80 +1061,8 @@ export function buildAnchoredDrawingRecord(options: {
     resource: options.input.resource,
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
+    ...(textArt ? { textArt } : {}),
   });
-}
-
-/** Run-level drawing / MC atoms carrying anchored projections in one paragraph. */
-export function anchoredDrawingAtomsInParagraph(
-  paragraph: OoxmlNode,
-  context: InlineDrawingLayoutContext
-): readonly {
-  readonly atomId: string;
-  readonly projection: DrawingProjection;
-  /** Enclosing revision wrappers, outermost first — the stack spans carry (see #479). */
-  readonly revisions: readonly RevisionAttribution[];
-}[] {
-  if (paragraph.kind !== 'paragraph') return [];
-  const atoms: {
-    atomId: string;
-    projection: DrawingProjection;
-    revisions: readonly RevisionAttribution[];
-  }[] = [];
-  const visit = (node: OoxmlNode, revisions: readonly RevisionAttribution[]): void => {
-    if (node.kind === 'drawing') {
-      const projection =
-        context.projectionForAtom?.(node.id) ??
-        context.project(node as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode);
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
-    }
-    if (isRunLevelMcAlternateContent(node)) {
-      const projection = context.projectionForAtom?.(node.id) ?? null;
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
-    }
-    if ('children' in node) {
-      const attribution = isRevisionWrapper(node) ? revisionAttributionOf(node) : null;
-      const enclosing = attribution ? withRevision(revisions, attribution) : revisions;
-      for (const child of node.children) visit(child, enclosing);
-    }
-  };
-  for (const child of paragraph.children) visit(child, NO_REVISIONS);
-  return Object.freeze(atoms);
-}
-
-export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMap<string, number> {
-  const offsets = new Map<string, number>();
-  if (paragraph.kind !== 'paragraph') return offsets;
-  let offset = 0;
-  const visitRunContent = (node: OoxmlNode): void => {
-    if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
-      offsets.set(node.id, offset);
-      offset += 1;
-      return;
-    }
-    if (node.kind === 'textValue') {
-      offset += node.value.length;
-      return;
-    }
-    if ('children' in node) {
-      for (const child of node.children) visitRunContent(child);
-    }
-  };
-  // Descends hyperlinks and revision wrappers in either order: a `w:ins` wraps runs and
-  // hyperlinks the model still counts, so skipping it left every drawing after (or inside)
-  // the wrapper at a stale offset and an anchored drawing in a tracked insertion invisible.
-  const visitInlineChild = (child: OoxmlNode): void => {
-    if (child.kind === 'run') {
-      for (const grand of child.children) visitRunContent(grand);
-      return;
-    }
-    if (child.kind === 'hyperlink' || isRevisionWrapper(child)) {
-      for (const grand of child.children) visitInlineChild(grand);
-    }
-  };
-  for (const child of paragraph.children) visitInlineChild(child);
-  return offsets;
 }
 
 export function anchorCharacterXOnLine(
@@ -1219,46 +1175,61 @@ export function shiftAnchoredDrawingRecords(
   }
 }
 
-export function publishAnchoredDrawingsForParagraph(options: {
-  readonly paragraph: OoxmlNode;
-  readonly paragraphId: string;
-  readonly paragraphBox: LayoutBox;
-  readonly fragmentRange?: { readonly start: number; readonly end: number };
-  readonly lines: readonly {
-    readonly range: { readonly start: number; readonly end: number };
-    readonly box: LayoutBox;
-    readonly spans: readonly {
+/**
+ * A cell box always travels with the scope that reads its anchors' `layoutInCell`, so a
+ * publisher cannot pass one without the other and silently read the flag as authored.
+ */
+type PublishCellScope =
+  | { readonly cellBox: null; readonly cellAnchorScope: null }
+  | { readonly cellBox: LayoutBox; readonly cellAnchorScope: CellAnchorScope };
+
+export function publishAnchoredDrawingsForParagraph(
+  options: {
+    readonly paragraph: OoxmlNode;
+    readonly paragraphId: string;
+    readonly paragraphBox: LayoutBox;
+    readonly fragmentRange?: { readonly start: number; readonly end: number };
+    readonly lines: readonly {
       readonly range: { readonly start: number; readonly end: number };
       readonly box: LayoutBox;
-      readonly text?: string;
-      readonly style?: import('./run-style.ts').ResolvedRunStyle;
+      readonly spans: readonly {
+        readonly range: { readonly start: number; readonly end: number };
+        readonly box: LayoutBox;
+        readonly text?: string;
+        readonly style?: import('./run-style.ts').ResolvedRunStyle;
+      }[];
     }[];
-  }[];
-  readonly drawingLayout: InlineDrawingLayoutContext;
-  readonly frameBase: Omit<
-    DrawingAnchorFrameContext,
-    'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
-  >;
-  readonly columnBox: LayoutBox;
-  readonly cellBox: LayoutBox | null;
-  readonly pageClip: LayoutBox;
-  readonly measurer?: import('./semantic-records.ts').TextMeasurer;
-  readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
-  /**
-   * Which revisions are resolved before publishing. A deleted anchor survives `all-markup`
-   * (marked, like deleted text) and disappears from the proposed result; an inserted one
-   * disappears from the original. Defaults to `all-markup`, which shows everything.
-   */
-  readonly displayMode?: RevisionDisplayMode;
-  readonly revisionAuthorFilter?: RevisionAuthorFilter;
-  /**
-   * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
-   * context). Absent hosts degrade textbox drawings to the placeholder path.
-   */
-  readonly layoutTextboxStory?: (
-    projection: DrawingProjection
-  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
-}): readonly AnchoredDrawingRecord[] {
+    readonly drawingLayout: InlineDrawingLayoutContext;
+    readonly frameBase: Omit<
+      DrawingAnchorFrameContext,
+      | 'paragraphBox'
+      | 'anchorLineBox'
+      | 'anchorCharacterX'
+      | 'columnBox'
+      | 'cellBox'
+      | 'layoutInCell'
+    >;
+    readonly columnBox: LayoutBox;
+    readonly cellContentBox?: LayoutBox;
+    readonly pageClip: LayoutBox;
+    readonly measurer?: import('./semantic-records.ts').TextMeasurer;
+    readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
+    /**
+     * Which revisions are resolved before publishing. A deleted anchor survives `all-markup`
+     * (marked, like deleted text) and disappears from the proposed result; an inserted one
+     * disappears from the original. Defaults to `all-markup`, which shows everything.
+     */
+    readonly displayMode?: RevisionDisplayMode;
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    /**
+     * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
+     * context). Absent hosts degrade textbox drawings to the placeholder path.
+     */
+    readonly layoutTextboxStory?: (
+      projection: DrawingProjection
+    ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
+  } & PublishCellScope
+): readonly AnchoredDrawingRecord[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return [];
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
@@ -1266,7 +1237,11 @@ export function publishAnchoredDrawingsForParagraph(options: {
   const records: AnchoredDrawingRecord[] = [];
   for (const atom of atoms) {
     const projection = atom.projection;
-    if (projection.hidden) continue;
+    if (
+      projection.hidden ||
+      revisionMarkupHidesDrawing(atom.revisions, displayMode, options.revisionAuthorFilter)
+    )
+      continue;
     const revisions = projectedRevisions(atom.revisions, displayMode, options.revisionAuthorFilter);
     if (revisions === null) continue;
     const start = offsets.get(atom.atomId);
@@ -1281,7 +1256,11 @@ export function publishAnchoredDrawingsForParagraph(options: {
       (line) => start >= line.range.start && start < line.range.end
     );
     if (!anchorLine) continue;
-    const layoutInCell = projection.anchor?.layoutInCell ?? true;
+    // Outside any cell box the authored flag is only recorded; nothing reads it.
+    const layoutInCell =
+      options.cellBox === null
+        ? (projection.anchor?.layoutInCell ?? true)
+        : anchorLaidOutInCell(projection, options.cellAnchorScope);
     const horizontalFrame = projection.position?.horizontal.relativeFrom;
     const characterFrameOffset =
       horizontalFrame === 'character' ? anchorCharacterFrameOffset(anchorLine, start) : start;
@@ -1292,10 +1271,19 @@ export function publishAnchoredDrawingsForParagraph(options: {
       anchorCharacterX: anchorCharacterXOnLine(anchorLine, characterFrameOffset, options.measurer),
       columnBox: options.columnBox,
       cellBox: options.cellBox,
+      cellContentBox: options.cellContentBox,
       layoutInCell,
     });
-    const resolved = resolveAnchoredDrawingPosition(projection, frameContext);
+    // An unwrapped text box sizes its own width, so its story lays out before placement.
+    const textboxStory =
+      projection.textboxStory && options.layoutTextboxStory
+        ? options.layoutTextboxStory(projection)
+        : undefined;
+    const placed = textboxPlacementProjection(projection, textboxStory);
+    const resolved = resolveAnchoredDrawingPosition(placed, frameContext);
     const clipToCell =
+      projection.wrap !== 'inFront' &&
+      projection.wrap !== 'behind' &&
       layoutInCell &&
       options.cellBox !== null &&
       Number.isFinite(options.cellBox.height) &&
@@ -1311,22 +1299,22 @@ export function publishAnchoredDrawingsForParagraph(options: {
       input: Object.freeze({
         drawingNodeId: atom.atomId,
         ownerPartName: options.drawingLayout.ownerPartName,
-        projection,
+        projection: placed,
         resource: options.drawingLayout.resourceOf(projection),
       }),
       anchorParagraphId: options.paragraphId,
       start: characterFrameOffset,
       resolved,
+      layoutInCell,
       clipRegion,
       revisions,
+      measurer: options.measurer,
       ...(options.sourceOrderOf
         ? { sourceOrder: options.sourceOrderOf(projection.drawingNodeId) }
         : {}),
-      ...(projection.textboxStory && options.layoutTextboxStory
-        ? { textboxStory: options.layoutTextboxStory(projection) }
-        : {}),
+      ...(textboxStory !== undefined ? { textboxStory } : {}),
     });
-    records.push(record);
+    records.push(withGroupTextboxStories(record, projection, options.layoutTextboxStory));
   }
   return Object.freeze(records);
 }
@@ -1343,7 +1331,15 @@ export function buildInlineDrawingRecord(options: {
   readonly contentTop?: number;
   readonly contentBottom?: number;
   readonly revisions?: readonly RevisionAttribution[];
+  readonly bidiLevel?: number;
+  /** Lays out a text-box story; called only for a drawing that carries one. */
+  readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
 }): InlineDrawingRecord {
+  // A hidden box paints nothing, so its story is never laid out or reported.
+  const textboxStory =
+    options.input.projection.textboxStory && !drawingAccessibility(options.input.projection).hidden
+      ? options.layoutTextboxStory?.(options.input.projection)
+      : undefined;
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
   const geometry = drawingGeometryFromProjection({
@@ -1372,7 +1368,7 @@ export function buildInlineDrawingRecord(options: {
     paintBounds.width > 0 && paintBounds.height > 0
       ? paintBounds
       : Object.freeze({ ...paintBounds });
-  return Object.freeze({
+  const record: InlineDrawingRecord = Object.freeze({
     kind: 'inlineDrawing',
     drawingNodeId: options.input.drawingNodeId,
     paragraphId: options.paragraphId,
@@ -1396,5 +1392,8 @@ export function buildInlineDrawingRecord(options: {
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
+    ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
+    ...(textboxStory ? { textboxStory } : {}),
   });
+  return withGroupTextboxStories(record, options.input.projection, options.layoutTextboxStory);
 }

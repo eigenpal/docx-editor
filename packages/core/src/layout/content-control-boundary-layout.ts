@@ -6,8 +6,18 @@
 // geometry memoizes per page object — a typing pass that reuses 675 of 677 pages walks the
 // spans of the two pages it rebuilt, not the whole document.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
-import { storyRootsOf } from '../store/package/story-blocks.ts';
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { paragraphContentBounds } from './paragraph-content-bounds.ts';
+import { linesOfUnneededTable } from './table-fragment-facts.ts';
+import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
   contentControlContentChildren,
@@ -34,26 +44,14 @@ import {
   type SemanticLayout,
 } from './semantic-records.ts';
 
-import { contentControlContextToken } from './content-control-context-token.ts';
+import {
+  contentControlContextToken,
+  contentControlSubtreeToken,
+} from './content-control-context-token.ts';
+
+import { modelRangeOf, sameModelRange } from './content-control-model-range.ts';
 
 export { contentControlContextToken };
-
-/** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
-function addressableInlineLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
-  if (node.kind === 'generic') return 0;
-  if (isContentControl(node)) {
-    let total = 0;
-    for (const inner of contentControlContentChildren(node))
-      total += addressableInlineLength(inner);
-    return total;
-  }
-  let total = 0;
-  for (const child of node.children) total += addressableInlineLength(child);
-  return total;
-}
 
 export interface CollectedControl {
   readonly control: OoxmlElement;
@@ -74,7 +72,8 @@ export interface CollectedControlIndex {
   readonly neededToken: string;
 }
 
-const collectedControlIndexes = new WeakMap<OoxmlPart, CollectedControlIndex>();
+/** Control ranges are model offsets: each field-result mode keeps its own entries. */
+const collectedControlIndexes = new FieldResultsModeMemo<OoxmlPart, CollectedControlIndex>();
 
 /** Same references, same order — the identity comparison every retained memo here uses. */
 export function sameRefs<T>(left: readonly T[], right: readonly T[]): boolean {
@@ -98,7 +97,7 @@ export function sameRefs<T>(left: readonly T[], right: readonly T[]): boolean {
  * anchor idiom). An edit to the first block itself only misses once, never mixes — the
  * lists are still compared reference-for-reference.
  */
-const collectedIndexByAnchor = new WeakMap<
+const collectedIndexByAnchor = new FieldResultsModeMemo<
   OoxmlNode,
   {
     readonly lists: readonly (readonly CollectedControl[])[];
@@ -152,46 +151,46 @@ const EMPTY_CONTROLS: readonly CollectedControl[] = Object.freeze([]);
 function collectControlLists(part: OoxmlPart): readonly (readonly CollectedControl[])[] {
   const out: CollectedControl[] = [];
 
-  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[]): void => {
+  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[], containerDepth = 0): void => {
     for (const child of nodes) {
       if (child.kind === 'paragraph' || child.kind === 'table') {
         into.push(child.id);
         continue;
       }
-      if (isContentControl(child)) {
-        collectBlocks(contentControlContentChildren(child), into);
+      const nested = blockStoryContainerChildren(child);
+      if (nested !== null && containerDepth < MAX_SDT_NESTING) {
+        collectBlocks(nested, into, containerDepth + 1);
         continue;
       }
       if (child.kind === 'tableRow' || child.kind === 'tableCell') {
-        collectBlocks(child.children, into);
+        collectBlocks(child.children, into, containerDepth);
       }
     }
   };
 
   const walkInline = (
     nodes: readonly OoxmlNode[],
-    paragraphId: string,
-    offset: number,
+    paragraph: OoxmlParagraphNode,
     depth: number,
+    containerDepth: number,
     lockStack: readonly ContentControlLock[]
-  ): number => {
-    let cursor = offset;
+  ): void => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     for (const child of nodes) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (isContentControl(child)) {
-        if (depth >= MAX_SDT_NESTING) {
-          cursor += addressableInlineLength(child);
-          continue;
-        }
+        // Resolve spans only for actual controls. Ordinary paragraphs must not retain
+        // a complete offset index merely because the document's controls are queried.
+        const range = paragraphOffsetIndex(paragraph).spanOf(child);
+        if (!range) continue;
         const properties = contentControlPropertiesOf(child);
         const lock = parseContentControlLock(propertyVal(properties, 'lock'));
         const nextStack = [...lockStack, lock];
-        const start = cursor;
-        const end = walkInline(
+        walkInline(
           contentControlContentChildren(child),
-          paragraphId,
-          cursor,
+          paragraph,
           depth + 1,
+          containerDepth + 1,
           nextStack
         );
         out.push({
@@ -199,57 +198,61 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
           nestingDepth: depth,
           lockStack: nextStack,
           level: 'inline',
-          paragraphId,
-          range: { start, end },
+          paragraphId: paragraph.id,
+          range,
           blockIds: [],
         });
-        cursor = end;
         continue;
       }
-      if (child.kind === 'hyperlink') {
-        cursor = walkInline(child.children, paragraphId, cursor, depth, lockStack);
-        continue;
+      if (isInlineRunContainer(child)) {
+        walkInline(child.children, paragraph, depth, containerDepth + 1, lockStack);
       }
-      cursor += addressableInlineLength(child);
     }
-    return cursor;
   };
 
   const walkBlocks = (
     nodes: readonly OoxmlNode[],
     depth: number,
-    lockStack: readonly ContentControlLock[]
+    lockStack: readonly ContentControlLock[],
+    containerDepth = 0
   ): void => {
     for (const child of nodes) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'paragraph') {
-        walkInline(child.children, child.id, 0, depth, lockStack);
+        walkInline(child.children, child, depth, 0, lockStack);
         continue;
       }
       if (child.kind === 'table') {
+        if (contentControlSubtreeToken(child, depth) === '') continue;
         for (const row of child.children) {
           if (row.kind !== 'tableRow') continue;
-          walkBlocks([row], depth, lockStack);
+          walkBlocks([row], depth, lockStack, containerDepth);
         }
         continue;
       }
       if (child.kind === 'tableRow') {
         for (const cell of child.children) {
-          if (cell.kind === 'tableCell') walkBlocks(cell.children, depth, lockStack);
-          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack);
+          if (cell.kind === 'tableCell')
+            walkBlocks(cell.children, depth, lockStack, containerDepth);
+          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack, containerDepth);
         }
         continue;
       }
-      if (!isContentControl(child)) continue;
+      if (!isContentControl(child)) {
+        const nested = blockStoryContainerChildren(child);
+        if (nested !== null && containerDepth < MAX_SDT_NESTING)
+          walkBlocks(nested, depth, lockStack, containerDepth + 1);
+        continue;
+      }
       if (depth >= MAX_SDT_NESTING) continue;
       const properties = contentControlPropertiesOf(child);
       const lock = parseContentControlLock(propertyVal(properties, 'lock'));
       const nextStack = [...lockStack, lock];
       const level = controlLevelOf(child);
-      const content = contentControlContentChildren(child);
+      const content = blockStoryContainerChildren(child) ?? [];
       if (level === 'inline') {
         // Inline at body level is malformed; still walk content for nested discovery.
-        walkBlocks(content, depth + 1, nextStack);
+        walkBlocks(content, depth + 1, nextStack, containerDepth + 1);
         continue;
       }
       const blockIds: string[] = [];
@@ -261,7 +264,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         level,
         blockIds,
       });
-      walkBlocks(content, depth + 1, nextStack);
+      walkBlocks(content, depth + 1, nextStack, containerDepth + 1);
     }
   };
 
@@ -294,7 +297,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
   return lists;
 }
 
-const topLevelBlockControls = new WeakMap<OoxmlNode, readonly CollectedControl[]>();
+const topLevelBlockControls = new FieldResultsModeMemo<OoxmlNode, readonly CollectedControl[]>();
 
 interface PlacedBlockBox {
   readonly pageIndex: number;
@@ -415,7 +418,11 @@ function pageContribution(
     if (fragment.kind === 'paragraph') {
       if (index.neededBlockIds.has(fragment.paragraphId)) {
         work && (work.geometryEntries += 1);
-        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: shift(fragment.box) });
+        blocks.push({
+          pageIndex,
+          blockId: fragment.paragraphId,
+          box: shift(paragraphContentBounds(fragment)),
+        });
       }
       const needSpans = index.neededParagraphIds.has(fragment.paragraphId);
       for (const line of fragment.lines) {
@@ -436,9 +443,10 @@ function pageContribution(
           0,
           line.box.height - line.leading - (line.trailingSpacing ?? 0)
         );
+        const lineSpans: PlacedSpanBox[] = [];
         for (const span of line.spans) {
           work && (work.geometryEntries += 1);
-          spans.push({
+          lineSpans.push({
             pageIndex,
             paragraphId: span.range.paragraphId,
             start: span.range.start,
@@ -452,12 +460,35 @@ function pageContribution(
             },
           });
         }
+        // An inline drawing occupies one model unit and no span, and it can be a control's
+        // whole content (a picture control). Its painted bounds stand in for the span it does
+        // not have, merged in offset order so the paragraph's run stays ascending.
+        for (const drawing of line.drawings ?? []) {
+          work && (work.geometryEntries += 1);
+          lineSpans.push({
+            pageIndex,
+            paragraphId: drawing.paragraphId,
+            start: drawing.start,
+            end: drawing.start + 1,
+            line: lineKey,
+            box: shift(drawing.paintBounds),
+          });
+        }
+        if (line.drawings?.length) lineSpans.sort((a, b) => a.start - b.start || a.end - b.end);
+        for (const entry of lineSpans) spans.push(entry);
       }
       return;
     }
     if (index.neededBlockIds.has(fragment.tableId)) {
       work && (work.geometryEntries += 1);
       blocks.push({ pageIndex, blockId: fragment.tableId, box: shift(fragment.box) });
+    }
+    // Nothing inside is needed: count its lines as the walk below would, one clamp per line.
+    const lines = linesOfUnneededTable(fragment, index.neededBlockIds, index.neededParagraphIds);
+    if (lines !== null) {
+      const cap = page.index * PAGE_LINE_ORDINAL_SPAN + PAGE_LINE_ORDINAL_SPAN - 1;
+      lineOrdinal = Math.min(lineOrdinal + lines, cap);
+      return;
     }
     for (const row of fragment.rows) {
       if (row.isHeaderRepeat) continue;
@@ -599,6 +630,14 @@ function fragmentsForInlineControl(
       if (range.start > span.end) continue;
       if (seenPages.has(span.pageIndex)) continue;
       seenPages.add(span.pageIndex);
+      // A zero-width projected span AT the insertion point is the control's own glyph (a
+      // `w:sym` checkbox state owns no model text but paints a box): its painted box is the
+      // control's geometry, so the widget can hug the glyph instead of a hairline beside it.
+      if (span.start === span.end && span.start === range.start && span.box.width > 0) {
+        carets.push({ pageIndex: span.pageIndex, box: span.box });
+        if (!repeated) break;
+        continue;
+      }
       const x =
         span.start === span.end
           ? span.box.x
@@ -704,6 +743,7 @@ function sameBoundaryRecord(
     left.bound === right.bound &&
     left.nestingDepth === right.nestingDepth &&
     left.level === right.level &&
+    sameModelRange(left.range, right.range) &&
     sameGeometryFragments(left.fragments, right.fragments)
   );
 }
@@ -838,6 +878,8 @@ export function attachContentControlBoundaries(
     const cached = wrappedPages.get(page);
     if (cached && sameBoundaryList(cached.controls, pageControls)) return cached.wrapped;
     const wrapped = { ...page, contentControls: pageControls };
+    const geometry = pageGeometryContributions.get(page);
+    if (geometry) pageGeometryContributions.set(wrapped, geometry);
     wrappedPages.set(page, { controls: pageControls, wrapped });
     return wrapped;
   });
@@ -951,5 +993,6 @@ function recordWithoutGeometry(collected: CollectedControl): ContentControlBound
     nestingDepth: collected.nestingDepth,
     level: collected.level,
     fragments: [],
+    ...modelRangeOf(collected),
   };
 }

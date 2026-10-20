@@ -30,7 +30,7 @@ import {
   useEditorState,
 } from '@docx-editor.dev/react';
 import { DocxEditorCollaboration, DocxEditorCollaborationRoot } from '../react/index.ts';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import { collaborationModule } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

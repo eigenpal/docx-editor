@@ -3,8 +3,8 @@
  *
  * Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are proprietary
  * and cannot ship in an open package. What CAN ship are the faces built to MATCH THEIR METRICS:
- * identical advance widths, so wrap and pagination land where Word puts them even though the
- * glyph outlines differ slightly.
+ * matching advance widths for the glyphs they cover, though outlines differ slightly.
+ * Scripts outside that coverage still need a suitable native or app-supplied font.
  *
  * Nothing loads until an app calls in. Importing this module fetches no bytes, and the editor
  * engine never calls it on its own.
@@ -31,8 +31,8 @@
 //
 // Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are
 // proprietary and cannot ship in an open package. What CAN ship are the faces built to
-// MATCH THEIR METRICS — identical advance widths, so wrap and pagination land where Word
-// puts them even though the glyph outlines differ slightly:
+// MATCH THEIR METRICS for the glyphs they cover. Scripts outside that coverage still
+// need a suitable native or app-supplied font:
 //
 //   Calibri         → Carlito            (SIL OFL)
 //   Cambria         → Caladea            (SIL OFL)
@@ -62,10 +62,14 @@
 // type dependency on the engine and the engine has none on it.
 
 import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
-import type { WordDefaultFamily } from './family-plans.ts';
+import type { DefaultFontFamily } from './family-plans.ts';
+import { packagedAssetRootOverride, resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 
-export type { WordDefaultFamily } from './family-plans.ts';
+export type { DefaultFontFamily } from './family-plans.ts';
+
+/** @deprecated Use {@link DefaultFontFamily}. */
+export type WordDefaultFamily = DefaultFontFamily;
 
 /** A concrete font face request, structurally identical to the editor contract's. */
 export interface DefaultFontFaceRequest {
@@ -121,17 +125,17 @@ export interface DefaultFontsFragment {
 }
 
 /**
- * Options shared by {@link loadDefaultFonts}, {@link installDefaultFontFaces} and
- * {@link defaultFonts}. Both fields are optional, so `{}` loads
- * {@link WORD_DOCUMENT_DEFAULT_FAMILIES} over the global `fetch`.
+ * Options shared by {@link loadDefaultFonts} and {@link defaultFonts}.
+ * All fields are optional, so `{}` loads
+ * {@link DEFAULT_FONT_FAMILIES} over the global `fetch`.
  */
 export interface LoadDefaultFontsOptions {
   /**
    * Narrow or widen the families to load. The default is
-   * {@link WORD_DOCUMENT_DEFAULT_FAMILIES}; pass {@link ALL_WORD_DEFAULT_FAMILIES} to
+   * {@link DEFAULT_FONT_FAMILIES}; pass {@link ALL_DEFAULT_FONT_FAMILIES} to
    * add the families this package substitutes for that Word does not apply by default.
    */
-  readonly families?: readonly WordDefaultFamily[];
+  readonly families?: readonly DefaultFontFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
   /**
@@ -143,8 +147,43 @@ export interface LoadDefaultFontsOptions {
 
 const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry]));
 
-/** Bundler-visible asset URL for one packaged face. */
-const assetUrl = (file: string): URL => FONT_ASSET_URLS[file];
+/**
+ * Bundler-visible asset location for one packaged face.
+ *
+ * The return type is `URL | string` because bundlers disagree, and the disagreement is
+ * not observable from this file. Node, Bun, and Vite leave the `new URL(literal,
+ * import.meta.url)` expression as a real `URL`. webpack and Turbopack replace the whole
+ * expression with a bare path STRING for the asset they emitted, such as
+ * `/_next/static/media/Caladea-Bold.d6e01b80.ttf`. Anything that needs a `URL` here has
+ * to cope with both; see {@link FONT_ASSET_ROOT}.
+ */
+const relocatedAssetRoot = packagedAssetRootOverride();
+const assetUrl = (file: string): URL | string =>
+  relocatedAssetRoot === undefined ? FONT_ASSET_URLS[file]! : new URL(file, relocatedAssetRoot);
+
+/**
+ * Directory URL of the packaged font files this package serves.
+ *
+ * Headless exporters pass this to Core `createPackagedFileFetch` as `trustedRoot`.
+ * The value comes from the same packaged face URLs the loaders fetch, so the trusted
+ * directory matches Node, Bun, pnpm, Yarn PnP, and nested installs.
+ *
+ * In a browser bundle this resolves to an HTTP URL rather than a `file:` one. That is
+ * why every consumer gates on `FONT_ASSET_ROOT.protocol === 'file:'`: HTTP fetches do
+ * not use a trusted directory, and confining them to one would be meaningless.
+ *
+ * Deriving this MUST NOT throw. It runs at module scope, so a throw here is
+ * uncatchable and takes down the whole bundle that imported this package rather than
+ * degrading font loading.
+ *
+ * In Node, the `DOCX_EDITOR_FONT_ASSET_ROOT` environment variable relocates this
+ * directory. Single-file bundles set it to a copy of the package's `assets/` directory
+ * that ships beside the executable, and every packaged face is then read from there.
+ *
+ * @public
+ */
+export const FONT_ASSET_ROOT: URL =
+  relocatedAssetRoot ?? resolvePackagedAssetRoot(assetUrl(FONT_ASSET_MANIFEST[0]!.file));
 
 /**
  * The families Word applies to a document by DEFAULT, and what
@@ -154,7 +193,7 @@ const assetUrl = (file: string): URL => FONT_ASSET_URLS[file];
  * This is the load-every-document set, so it stays as small as correctness allows: a
  * family here costs four faces on every load, whether or not the file names it.
  */
-export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.freeze([
+export const DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[] = Object.freeze([
   'Calibri',
   'Cambria',
   'Times New Roman',
@@ -168,7 +207,7 @@ export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Obje
  * explicitly to load them all:
  *
  * ```ts
- * const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
+ * const fonts = await defaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES });
  * ```
  *
  * {@link packagedFonts} covers the extra families on demand instead, so a document that
@@ -176,24 +215,23 @@ export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Obje
  * with no network involved. `googleFonts()` covers them too, for an app already opted into
  * the catalog.
  */
-export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.freeze([
-  ...WORD_DOCUMENT_DEFAULT_FAMILIES,
+export const ALL_DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[] = Object.freeze([
+  ...DEFAULT_FONT_FAMILIES,
   'Century Gothic',
 ]);
 
-/**
- * Source id for a packaged file. Built here and parsed by {@link installDefaultFontFaces}
- * to find bytes it would otherwise refetch, so the two must not drift; keeping both sides
- * in one place is what stops them.
- */
-const SOURCE_ID_PREFIX = 'default-fonts:';
-const sourceIdForFile = (file: string): string => `${SOURCE_ID_PREFIX}${file}`;
-const fileFromSourceId = (id: string): string | undefined =>
-  id.startsWith(SOURCE_ID_PREFIX) ? id.slice(SOURCE_ID_PREFIX.length) : undefined;
+/** @deprecated Use {@link DEFAULT_FONT_FAMILIES}. */
+export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly DefaultFontFamily[] = DEFAULT_FONT_FAMILIES;
+
+/** @deprecated Use {@link ALL_DEFAULT_FONT_FAMILIES}. */
+export const ALL_WORD_DEFAULT_FAMILIES: readonly DefaultFontFamily[] = ALL_DEFAULT_FONT_FAMILIES;
+
+/** Stable source id for a packaged file. */
+const sourceIdForFile = (file: string): string => `default-fonts:${file}`;
 
 /**
  * Load the packaged substitute faces for the given Word families
- * ({@link WORD_DOCUMENT_DEFAULT_FAMILIES} by default) and return a configuration
+ * ({@link DEFAULT_FONT_FAMILIES} by default) and return a configuration
  * fragment: byte-backed sources for the SUBSTITUTE families plus the Word-name →
  * substitute substitution map, so a document naming "Calibri" resolves without the host
  * mapping anything.
@@ -206,7 +244,7 @@ const fileFromSourceId = (id: string): string | undefined =>
 export async function loadDefaultFonts(
   options: LoadDefaultFontsOptions = {}
 ): Promise<DefaultFontsFragment> {
-  const families = options.families ?? WORD_DOCUMENT_DEFAULT_FAMILIES;
+  const families = options.families ?? DEFAULT_FONT_FAMILIES;
   const fetcher = options.fetcher ?? fetch;
 
   const sources: DefaultFontSource[] = [];
@@ -282,112 +320,27 @@ export async function loadDefaultFonts(
 }
 
 /**
- * Registration starts already made per FontFaceSet, so overlapping calls (React
- * StrictMode's double effect is the concrete trigger) neither double-register nor
- * double-fetch: the synchronous `[...fontSet]` check cannot see a face whose async
- * `load()` has not resolved yet.
- */
-const startedInstalls = new WeakMap<FontFaceSet, Set<string>>();
-
-/**
- * OPTIONAL paint-side fidelity: register the packaged substitutes with the browser's
- * `FontFace` API under the WORD family names, so painted glyphs use the same metrics
- * layout measured with instead of whatever the platform substitutes for "Calibri".
- * Presentation-only, app-triggered, idempotent per document (overlapping calls
- * included); returns the number of faces registered. No-op outside a DOM environment.
+ * Compatibility stub for the removed page-wide font installer.
  *
- * NOT a substitute for {@link loadDefaultFonts}. This affects painting only — calling it
- * alone leaves the engine measuring on the fixed fallback, which looks right and
- * paginates wrong. Pair it with `loadDefaultFonts()` fed to the editor's `fonts` prop.
- *
- * The return value counts faces THIS call registered, so `0` covers "no DOM
- * environment", "already registered", and "every face failed" alike; treat it as a
- * diagnostic hint rather than a success signal.
+ * @deprecated Does nothing and resolves to `0`. It does not fetch or register fonts.
+ * Remove this call. Supply {@link defaultFonts} or {@link packagedFonts} through the
+ * editor's `fonts` option for private font registration.
  */
 export async function installDefaultFontFaces(
-  options: LoadDefaultFontsOptions & {
+  _options: LoadDefaultFontsOptions & {
     readonly document?: Document;
-    /**
-     * Sources {@link loadDefaultFonts} already produced. A face found here registers from
-     * those bytes; anything missing still registers by URL, so a standalone call with no
-     * loader behind it behaves exactly as before.
-     */
     readonly loaded?: readonly DefaultFontSource[];
   } = {}
 ): Promise<number> {
-  const doc = options.document ?? (typeof document !== 'undefined' ? document : undefined);
-  const fontSet = (doc as { fonts?: FontFaceSet } | undefined)?.fonts;
-  if (!doc || !fontSet || typeof FontFace === 'undefined') return 0;
-  const preloaded = new Map<string, Uint8Array>();
-  for (const source of options.loaded ?? []) {
-    const file = fileFromSourceId(source.id);
-    if (file !== undefined) preloaded.set(file, source.bytes);
-  }
-  let started = startedInstalls.get(fontSet);
-  if (!started) {
-    started = new Set();
-    startedInstalls.set(fontSet, started);
-  }
-  const families = options.families ?? WORD_DOCUMENT_DEFAULT_FAMILIES;
-  let installed = 0;
-  const jobs: Promise<void>[] = [];
-  for (const family of families) {
-    const plan = FAMILY_PLANS.get(family);
-    if (!plan) continue;
-    for (const face of FACES) {
-      const file = planFaceFile(plan, face.suffix);
-      if (!manifestByFile.has(file)) continue;
-      const faceKey = `${family}#${face.weight}#${face.style}`;
-      if (started.has(faceKey)) continue;
-      const already = [...fontSet].some(
-        (existing) =>
-          existing.family === family &&
-          existing.weight === String(face.weight) &&
-          existing.style === face.style
-      );
-      if (already) continue;
-      started.add(faceKey);
-      jobs.push(
-        (async () => {
-          try {
-            const bytes = preloaded.get(file);
-            // A copy. These exact buffers also go to the engine as `FontSource.bytes` and
-            // get shaped there, so handing the original to the browser's font machinery
-            // would share one ArrayBuffer between the two. Unlike the engine's own
-            // registration, this is not guarding a windowed view — `bytes` is always a
-            // fresh full-length array — it is keeping the two consumers unaliased.
-            //
-            // No bytes means the face failed to load, and the URL form still registers it.
-            // That request is the one `fetcher` cannot intercept.
-            const source: string | ArrayBuffer = bytes
-              ? (bytes.slice().buffer as ArrayBuffer)
-              : `url(${assetUrl(file).href})`;
-            const fontFace = new FontFace(family, source, {
-              weight: String(face.weight),
-              style: face.style,
-            });
-            await fontFace.load();
-            fontSet.add(fontFace);
-            installed += 1;
-          } catch {
-            // Paint fidelity is best-effort; measurement does not depend on it.
-          }
-        })()
-      );
-    }
-  }
-  await Promise.all(jobs);
-  return installed;
+  return 0;
 }
 
 /**
- * The whole default-font boot, in one call: load the bytes, register the paint-side faces,
- * and hand back the fragment for the editor's `fonts` prop.
+ * Load the default-font bytes and report failures for the editor's `fonts` prop.
  *
- * The two halves have to happen together and almost nobody wants them apart —
- * {@link loadDefaultFonts} alone measures correctly and paints with whatever the platform
- * substitutes; {@link installDefaultFontFaces} alone paints correctly and paginates wrong.
- * Every host was writing the same six lines to pair them, so this is that pairing.
+ * The editor registers these bytes under private aliases for measurement and paint.
+ * This loader leaves public CSS family names unchanged, so native fonts remain available
+ * when a packaged substitute lacks a script.
  *
  * Non-cancellation face failures are WARNED, not thrown: one unavailable face degrades that
  * family to fixed-width measurement rather than refusing the document. Pass `onFailure` to route
@@ -405,11 +358,8 @@ export async function defaultFonts(
     if (onFailure) onFailure(failure);
     else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
   }
-  // Not awaited: painting can start on the platform's substitute and swap when the real
-  // face arrives, and blocking the document on it would delay first paint for nothing.
-  // The fragment goes with it, so registration reuses these bytes rather than asking the
-  // browser to fetch each face a second time.
-  void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
+  // Core owns private face registration. A public Arial→Liberation Sans registration
+  // hides native Arial's Arabic glyphs, which Liberation Sans does not contain.
   return fragment;
 }
 
@@ -499,10 +449,10 @@ const faceKey = (family: string, weight: number, style: string): string =>
 export interface PackagedFontsOptions {
   /**
    * Narrow what may ever be loaded. Omitted, any of the six substituted families a
-   * document names is fair game — {@link ALL_WORD_DEFAULT_FAMILIES}, not the smaller set
+   * document names is fair game — {@link ALL_DEFAULT_FONT_FAMILIES}, not the smaller set
    * the eager loader defaults to. Set it to run against a shorter list.
    */
-  readonly allow?: readonly WordDefaultFamily[];
+  readonly allow?: readonly DefaultFontFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
   /**
@@ -511,14 +461,10 @@ export interface PackagedFontsOptions {
    */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * Set `false` to skip the paint-side `FontFace` registration
-   * {@link installDefaultFontFaces} performs. Measurement is unaffected; painted glyphs
-   * fall back to whatever the platform substitutes for the Word family name.
+   * Legacy registration option, retained for source compatibility.
    *
-   * Registration reuses the bytes the resolver already loaded, so a face that loaded costs
-   * no second request and {@link PackagedFontsOptions.fetcher} sees every byte read for it.
-   * A face that FAILED to load has no bytes to reuse and still registers by URL, which
-   * `fetcher` cannot intercept. The registration is idempotent per document.
+   * @deprecated Ignored. Font registration is always private to the editor.
+   * Remove this option; `true` no longer enables page-wide registration.
    */
   readonly install?: boolean;
 }
@@ -535,23 +481,25 @@ export type PackagedFontsResolver = ((
 
 /** What one {@link packagedFonts} resolver call produced. */
 export interface PackagedFontsFragment extends DefaultFontsFragment {
-  /** The Word families this call actually loaded, in {@link ALL_WORD_DEFAULT_FAMILIES} order. */
-  readonly families: readonly WordDefaultFamily[];
+  /** Families this provider can serve, including faces not loaded by this request. */
+  readonly supportedFamilies?: readonly DefaultFontFamily[];
+  /** The Word families this call actually loaded, in {@link ALL_DEFAULT_FONT_FAMILIES} order. */
+  readonly families: readonly DefaultFontFamily[];
 }
 
 /**
  * Case-folded Word family name -> the canonical spelling, built once.
  *
- * ALL six, deliberately, not the five in {@link WORD_DOCUMENT_DEFAULT_FAMILIES}. Those two
+ * ALL six, deliberately, not the five in {@link DEFAULT_FONT_FAMILIES}. Those two
  * lists exist because the eager loader pays for a family on EVERY load, so the set it
  * defaults to stays as small as correctness allows. This resolver has the opposite cost
  * shape: a family it can serve costs nothing until a document names it. Century Gothic is
  * the family that distinction was drawn for, and serving it here is the same on-demand
- * bargain {@link ALL_WORD_DEFAULT_FAMILIES} points at — from bundled bytes, with no third
+ * bargain {@link ALL_DEFAULT_FONT_FAMILIES} points at — from bundled bytes, with no third
  * party involved.
  */
-const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map(
-  ALL_WORD_DEFAULT_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
+const wordFamiliesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map(
+  ALL_DEFAULT_FONT_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
 );
 
 /**
@@ -568,7 +516,7 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  * ```
  *
  * Prefer this to {@link defaultFonts} unless you need the eager guarantee. `defaultFonts()`
- * loads all 20 faces of {@link WORD_DOCUMENT_DEFAULT_FAMILIES} — 7.4 MB — whichever
+ * loads all 20 faces of {@link DEFAULT_FONT_FAMILIES} — 7.4 MB — whichever
  * document opens, because it is called before there is a document to ask. This is called
  * AFTER the parse, so a file using only Times New Roman costs Liberation Serif plus the
  * four Carlito faces instead.
@@ -586,13 +534,17 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  * this package.
  *
  * The families are file-derived, so they are matched case-insensitively against the closed
- * {@link ALL_WORD_DEFAULT_FAMILIES} list and never used to build a path. A name outside it
+ * {@link ALL_DEFAULT_FONT_FAMILIES} list and never used to build a path. A name outside it
  * resolves to nothing here; pair with `googleFonts()` to cover more.
  */
 export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFontsResolver {
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
+
+  const supportedFamilies = Object.freeze(
+    ALL_DEFAULT_FONT_FAMILIES.filter((family) => !allowed || allowed.has(family.toLowerCase()))
+  );
 
   async function resolvePackagedFonts(request: FontOriginRequest): Promise<PackagedFontsFragment> {
     // Faces an earlier origin in the composition can already PAINT. Loading them again
@@ -603,7 +555,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // ALL FOUR faces, or none. This loads a family at a time, so skipping one whose
     // regular is covered but whose bold is not would leave the bold with neither bytes nor
     // a substitution — which is exactly what the family-grained version of this check did.
-    const fullyCovered = (family: WordDefaultFamily): boolean => {
+    const fullyCovered = (family: DefaultFontFamily): boolean => {
       const substitute = FAMILY_PLANS.get(family)!.substitute;
       return FACES.every(
         // Under the Word name the document wrote, or under the face this would load: an
@@ -616,18 +568,38 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would load nothing for a file that is entirely
     // default-styled.
-    const wanted = new Set<WordDefaultFamily>();
+    const wanted = new Set<DefaultFontFamily>();
+    const seen = new Set<DefaultFontFamily>();
+    // Substitutions for families an earlier origin covers under the SUBSTITUTE's own name.
+    // The bytes are there, but nothing maps the Word name to them: a caller who registers
+    // Carlito by name has not said it stands in for Calibri, and without this record the
+    // Word name resolves to nothing at all. No bytes load for these.
+    const aliasOnly: DefaultFontSubstitution[] = [];
     for (const declared of [request.defaultFamily, ...request.families]) {
       const family = wordFamiliesByFoldedName.get(declared.toLowerCase());
-      if (!family) continue;
+      if (!family || seen.has(family)) continue;
+      seen.add(family);
       if (allowed && !allowed.has(family.toLowerCase())) continue;
-      if (fullyCovered(family)) continue;
+      if (fullyCovered(family)) {
+        const plan = FAMILY_PLANS.get(family)!;
+        for (const face of FACES) {
+          if (already.has(faceKey(family, face.weight, face.style))) continue;
+          const lineMetrics = planLineBox(plan, face.weight);
+          aliasOnly.push({
+            from: { family, weight: face.weight, style: face.style },
+            to: { family: plan.substitute, weight: face.weight, style: face.style },
+            ...(lineMetrics ? { lineMetrics } : {}),
+          });
+        }
+        continue;
+      }
       wanted.add(family);
     }
     // Stable order regardless of how the document happened to declare them, so the same
     // file composes to the same configuration on every load.
-    const families = ALL_WORD_DEFAULT_FAMILIES.filter((family) => wanted.has(family));
-    if (families.length === 0) return { sources: [], substitutions: [], failures: [], families };
+    const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => wanted.has(family));
+    if (families.length === 0)
+      return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };
 
     const loadOptions = {
       families,
@@ -639,12 +611,13 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       if (options.onFailure) options.onFailure(failure);
       else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
     }
-    // Not awaited, exactly as in `defaultFonts`: painting can start on the platform's
-    // substitute and swap when the real face arrives.
-    if (options.install !== false) {
-      void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
-    }
-    return { ...fragment, families };
+    // Core registers private aliases, preserving native glyph fallback and host-page fonts.
+    return {
+      ...fragment,
+      substitutions: [...aliasOnly, ...fragment.substitutions],
+      families,
+      supportedFamilies,
+    };
   }
 
   return markResolver(resolvePackagedFonts);

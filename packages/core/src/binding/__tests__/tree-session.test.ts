@@ -1,10 +1,12 @@
+import { createSessionPackageWriter } from '../session-package-writer.ts';
+import { canonicalSerializeNodeVisits } from '../../store/package/ooxml-serialize.ts';
 // Tree-backed session (cutover step 2b).
 //
 // The headline assertion is the one the legacy path fails: a document containing clipart is
 // EDITABLE, and editing it neither loses the drawing nor freezes paragraph structure.
 
 import { describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8 } from 'fflate';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 import { treeSchema } from '../tree-schema.ts';
 
@@ -378,4 +380,66 @@ describe('a comment write does not publish over package-level writes', () => {
         .externalTargets.some((entry) => entry.id === relationshipId && entry.ownerPart === owner)
     ).toBe(true);
   });
+});
+
+describe('repeated session saves', () => {
+  test('unchanged saves skip serialization and return independently owned bytes', () => {
+    const session = open(docx('<w:p><w:r><w:t>original</w:t></w:r></w:p>'));
+    const first = session.save();
+    const visits = canonicalSerializeNodeVisits();
+    const second = session.save();
+    expect(canonicalSerializeNodeVisits()).toBe(visits);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    first.fill(0);
+    second.fill(1);
+    expect(open(session.save()).bodyText()).toBe('original');
+  });
+
+  test('edits, undo and redo save the current package rather than a stale body', () => {
+    const session = open(docx('<w:p><w:r><w:t>original</w:t></w:r></w:p>'));
+    session.save();
+    expect(retype(session, 0, 'edited').committed).toBe(true);
+    expect(open(session.save()).bodyText()).toBe('edited');
+    session.undo();
+    expect(open(session.save()).bodyText()).toBe('original');
+    session.redo();
+    expect(open(session.save()).bodyText()).toBe('edited');
+  });
+});
+
+describe('session save cache boundaries', () => {
+  test('a package shell change invalidates output even with identical XML parts', () => {
+    const pkg = open(docx('<w:p><w:r><w:t>text</w:t></w:r></w:p>')).currentPackage();
+    const write = createSessionPackageWriter();
+    const original = write(pkg);
+    const partBytes = new Map(pkg.partBytes);
+    partBytes.set('/custom.bin', new Uint8Array([7, 8, 9]));
+    const changed = Object.freeze({ ...pkg, partBytes });
+    expect(unzipSync(write(changed))['custom.bin']).toEqual(new Uint8Array([7, 8, 9]));
+    const visits = canonicalSerializeNodeVisits();
+    expect(write(pkg)).toEqual(original);
+    // Only the most recent snapshot is cached, even if history retains the old one.
+    expect(canonicalSerializeNodeVisits()).toBeGreaterThan(visits);
+  });
+
+  test('large compressed outputs are not retained', () => {
+    const pkg = open(docx('<w:p><w:r><w:t>text</w:t></w:r></w:p>')).currentPackage();
+    const payload = new Uint8Array(8 * 1024 * 1024 + 1024);
+    let state = 0x12345678;
+    for (let index = 0; index < payload.length; index += 1) {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      payload[index] = state & 255;
+    }
+    const partBytes = new Map(pkg.partBytes);
+    partBytes.set('/custom.bin', payload);
+    const large = Object.freeze({ ...pkg, partBytes });
+    const write = createSessionPackageWriter();
+    expect(write(large).byteLength).toBeGreaterThan(8 * 1024 * 1024);
+    const visits = canonicalSerializeNodeVisits();
+    write(large);
+    expect(canonicalSerializeNodeVisits()).toBeGreaterThan(visits);
+  }, 30_000);
 });

@@ -1,0 +1,551 @@
+---
+title: 'Tracked changes'
+description: 'Create tracked text edits, inspect revisions by story, accept or reject changes, change their author, and handle unsupported review markup.'
+category: 'Editing API'
+order: 63
+---
+
+Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them. To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter. To attribute pending changes to another author, use `RevisionCollection.setAuthor()` or the `setReviewChangesAuthor` editor command.
+
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+
+## Create a tracked replacement
+
+Configure a nonempty `author` when creating the runtime. For browser tracked writes, install the Pro review module on an editable editor. Then enable `TrackMineOnly` and use an ordinary range edit:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one deadline');
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+});
+```
+
+Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range.delete()` or `range.clear()` for deletion suggestions. Inserted ranges require sync before dependent use. Mode assignments and edits commit together; a failed batch preserves the previous mode and document.
+
+| `ChangeTrackingMode` value | Runtime behavior |
+| --- | --- |
+| `Off` | Initial mode; ordinary permanent edits |
+| `TrackMineOnly` | Text and property tracking for this runtime with an explicit author; browser writes require the Pro review module |
+| `TrackAll` | Fails with `NotSupported` |
+
+The runtime's tracking setting does not change the browser editor UI mode. Read `document.changeTrackingMode` only after loading it. The mode persists across runs on that runtime. It does not change peers' tracking settings or save a document-wide tracking policy. Set `Off` explicitly only when your application intends permanent edits.
+
+## Preview a counter-proposal
+
+In the browser runtime, you can show a tracked replacement in the page before the user accepts it. Build it inside `runtime.preview()` instead of `runtime.run()`. The live document and collaboration peers see nothing until you call `commit()`:
+
+```ts
+const preview = await runtime.preview(async (context) => {
+  const matches = context.document.body.search('thirty (30) days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one deadline');
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  matches.items[0]!.insertText('forty-five (45) days', 'Replace');
+  await context.sync();
+});
+
+// The page shows the counter-proposal as a tracked change.
+preview.reveal();
+applyButton.onclick = async () => {
+  try {
+    await preview.commit({ rebase: true });
+  } catch (error) {
+    if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+    // Someone changed the clause. Read it again and preview again.
+  }
+};
+cancelButton.onclick = () => preview.discard();
+```
+
+`commit()` writes the tracked replacement as one undo step. It also keeps the tracking mode that the callback set on this runtime, as `run()` does. If a collaboration peer edits the document while the preview is open, `preview.status` becomes `stale`. With `rebase: true`, the commit applies the preview to the current document, even after an edit earlier in the same paragraph. It refuses with `StaleDocument` if replayed reads differ or the text it replaces changed. A replay refusal ends the preview.
+
+The live editor can also refuse the commit, for example if permissions change. In suggesting mode, the preview and the commit write the same suggestions. For the full rules, see [Preview other wording before you write it](/docs/2.x/editor-api/runtime#preview-other-wording-before-you-write-it).
+
+## Supported tracked edits
+
+`TrackMineOnly` supports these edits:
+
+| Edit | Supported behavior |
+| --- | --- |
+| Range text | Insert, replace, or delete text; deletions can span adjacent sibling paragraphs, and replacements across paragraphs work outside collaboration |
+| Paragraph deletion | `Paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
+| Font and paragraph formatting | Record property revisions, including paragraph styles |
+| Paragraph insertion | Track text and paragraph marks; reject removes both |
+| Lists | Track creation, membership, and level changes; configure newly proposed definitions |
+| Tables | Track complete insertion, cell values, row additions, and partial row deletions |
+| Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
+
+Tracked ranges refuse table and wrapper boundaries. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
+
+Tracked edits can go inside or beside another author's pending text insertion or deletion. If you delete or replace text that another author inserted, your deletion is recorded inside their insertion. New text lands after any deleted text. If new text lands inside their insertion, it splits their insertion into two halves that keep its revision identity. `revisions.items` and the review pane then list two revisions for their insertion, one on each side of your text. To accept or reject all of it, decide both revisions, or pass both to `RevisionCollection.resolve()` in one call. The returned range names the new text where it lands.
+
+Each author's change stays a separate decision. Accepting their insertion leaves your deletion pending, rejecting their insertion keeps your new text as your own pending insertion, and rejecting your changes restores their insertion.
+
+These edits work the same way in a collaboration session, from the editing API and from the page in suggesting mode. If another participant accepts or rejects the other author's change at the same time, the decision applies to all of that change and to nothing else. Your edits stay your own pending changes. Text that a participant types into text that you strike at the same time can join your deletion.
+
+These tracked edits fail with `NotImplemented`, and `debugInfo.innerError.code` names the rule:
+
+| Edit | `innerError.code` |
+| --- | --- |
+| A deletion or replacement that covers only deleted text and no paragraph mark | `edit.tracked-deleted-text-only` |
+| An edit that touches another author's paragraph mark, formatting, move, or structural change | `edit.tracked-foreign-revision-unsupported` |
+| New text inside a link or content control that sits within another author's insertion | `edit.tracked-foreign-revision-unsupported` |
+| An edit that covers or borders your own pending change, such as replacing a range that a tracked write returned | `edit.tracked-own-pending-change` |
+
+Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text also refuses. Structural and move revisions also block continuation.
+
+A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. See [Tables and cells](/docs/2.x/editor-api/tables#row-suggestions) for row deletion limits.
+
+Accept keeps a proposed content control. Reject restores the original formatted text. The author can set the pending control's `tag` and `title`. Empty ranges, existing review markup, and other control structure changes refuse.
+
+Established list definitions, pictures, page setup, and unsupported structural edits refuse. Comments and supported revision decisions remain available.
+
+Never turn tracking off automatically to make an unsupported operation succeed. Report the limit or ask your application to choose a separately authorized permanent edit. For a multi-stage review, each successful sync becomes a separately committed suggestion. A later refusal does not roll back earlier suggestions.
+
+## Propose removing paragraphs
+
+To propose removing whole paragraphs, enable `TrackMineOnly` and call `Paragraph.delete()`. You can delete several paragraphs in one sync:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items');
+  await context.sync();
+  for (const paragraph of paragraphs.items) paragraph.load('text');
+  await context.sync();
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  for (const paragraph of paragraphs.items) {
+    if (paragraph.text.startsWith('Draft note:')) paragraph.delete();
+  }
+  await context.sync();
+});
+```
+
+The text and paragraph marks stay in the document as proposed deletions. **Accept** removes them. **Reject** restores them. An insertion at the next paragraph's start remains a separate decision.
+
+A `range.delete()` across paragraphs also tracks each covered paragraph mark. Bookmark, comment, and permission markers do not split the decision. Accept moves markers between joined paragraphs to the join point. Reject keeps their original positions.
+
+A refusal cancels every write in the sync. For example, including the story's last paragraph prevents every deletion in that batch. Select only supported targets before retrying.
+
+Delete adjacent paragraphs in one sync. A later deletion beside your own pending deletion refuses because both would form one decision.
+
+Reject restores the original paragraph properties. After reopening a saved document, or rejecting from another collaboration participant, empty `w:pPr` or `w:rPr` elements can remain. These elements do not change formatting.
+
+These tracked deletions refuse and change nothing:
+
+| Paragraph | Error code |
+| --- | --- |
+| The last paragraph of a story, table cell, or content control | `NotSupported` |
+| A paragraph directly before a table or a block content control | `NotSupported` |
+| A paragraph whose mark ends a section | `NotSupported` |
+| A paragraph that contains an inline content control | `NotSupported` |
+| A paragraph that contains a complex field start or end whose matching boundary is in another paragraph | `NotSupported` |
+| A paragraph that nests inline content more than 64 levels deep | `NotSupported` |
+| A paragraph with your own pending change | `NotImplemented` |
+| A paragraph with another author's pending paragraph mark, formatting, move, or structural change | `NotImplemented` |
+| A paragraph whose next paragraph starts with a pending change, including your own | `NotImplemented` |
+| A paragraph whose previous paragraph mark you already proposed deleting, including a deletion or replacement at its start | `NotImplemented` |
+
+A `range.delete()` that covers any of these paragraph marks refuses with the same codes.
+
+A paragraph inside a multi-paragraph field can be deleted if it contains no field boundaries and meets the other requirements. Accept removes that paragraph from the saved field result. Reject restores it.
+
+In collaboration, text typed into the proposed deletion joins that deletion. Reject restores the text. Accept removes it with the paragraph, including untracked text from another participant. Text typed outside the proposed deletion remains ordinary text.
+
+## Choose the revision text view
+
+The runtime option `revisionTextView` affects ordinary text loads and search. `allMarkup` is the default. `original` retains pending deletions and hides pending insertions. This is a DocxEditor host option, not a Word document-model property. It does not accept or reject revisions.
+
+To read one paragraph or range in a single review version, call `getReviewedText('Current')` or `getReviewedText('Original')`. `Current` reads the text as if every pending change were accepted, and `Original` as if every change were rejected. The default is `Current`. For an example, see [Rewrite a paragraph and read the result](/docs/2.x/editor-api/text-and-ranges#rewrite-a-paragraph-and-read-the-result).
+
+Use plain text and explicit revision information when preparing a model prompt. Do not pass live proxies into a model or job queue. See [Runtime and setup](/docs/2.x/editor-api/runtime).
+
+## Inspect revisions by story
+
+`Document.revisions` addresses the main story. `Body.revisions` addresses that body's story, including a header, footer, or note. It never merges all stories into one collection.
+
+Load collection membership, then load `author`, `date`, and `type`:
+
+```ts
+const pending = await runtime.run(async (context) => {
+  const revisions = context.document.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) {
+    revision.load(['author', 'date', 'type']);
+  }
+  await context.sync();
+  return revisions.items.map((revision) => ({
+    author: revision.author,
+    date: revision.date?.toISOString() ?? null,
+    type: revision.type,
+  }));
+});
+```
+
+`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `setAuthor()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
+
+`items` omits a formatting change that leaves the resolved formatting unchanged after styles and list levels apply, as the editor's review list does. `acceptAll()` and `rejectAll()` on the story's collection still remove it, and a story-wide `setAuthor()` leaves its author unchanged.
+
+## Inspect revisions in a range
+
+`Range.revisions` returns the tracked changes that a range overlaps, in document order. The range's own story scopes the collection. A range in a header lists only that header's changes. Each member represents a revision that the story's collection also lists.
+
+These rules decide membership:
+
+- A change that the range covers only in part is listed whole.
+- A collapsed range lists the changes it touches.
+- A paragraph mark change is listed only when the range continues into the next paragraph. A range that ends at the end of a paragraph, such as `getRange('Content')` or a search result, leaves the mark change out. To decide a mark change, use the story's `body.revisions`.
+- A replacement stored as a deletion and an insertion lists two members.
+- A change nested inside another change, or a change by another author beside it, is listed when the range overlaps it.
+- Membership uses document positions, so `revisionTextView` changes the range text but not the members.
+
+For example, accept every change that a search result overlaps:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 30 days');
+  matches.load('items');
+  await context.sync();
+
+  for (const match of matches.items) match.revisions.acceptAll();
+  await context.sync();
+});
+```
+
+On a range collection, `acceptAll()` and `rejectAll()` resolve every change the range overlaps, in one transaction:
+
+- A change that the range covers in part resolves whole, including its characters outside the range.
+- Structural changes and unchanged-formatting records that `items` omits, such as a complete tracked row, resolve too.
+- If the range overlaps only part of a group of nested changes, only the overlapped changes resolve, and the others stay pending.
+- If one of the changes is read-only or can't resolve, the sync fails with `NotImplemented` and nothing changes.
+- If two decisions in one sync reach the same change, the later one skips it. Contrary decisions on one change fail with `ConflictingChanges`.
+- A change inside text that a decision in the same sync removes, such as a rejected insertion or an accepted deletion, goes with that text, so any decision on it in that sync is skipped. This also applies to `accept()` and `reject()` on single revisions.
+
+`resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection; call them on the story's collection instead.
+
+## Resolve a batch of changes
+
+Use `RevisionCollection.resolve(action, revisions?)` to accept or reject supported changes in one story. Pass `'accept'` to keep the changes or `'reject'` to undo them. Unsupported changes remain pending.
+
+API batches don't inherit editor filters. Pass revision objects from the same request context and story to select changes. For example, accept Ada's changes:
+
+```ts
+await runtime.run(async (context) => {
+  const revisions = context.document.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) {
+    revision.load('author');
+  }
+  await context.sync();
+
+  const selected = revisions.items.filter((revision) => revision.author === 'Ada');
+  const result = revisions.resolve('accept', selected);
+  await context.sync();
+
+  const { resolved, skipped, remaining } = result.value;
+  console.log({ resolved: resolved.length, skipped, remaining });
+});
+```
+
+Read `result.value` after `context.sync()`. Changes commit in one transaction and one undo step. Browser writes require the Pro review module and an editable document.
+
+To process the whole story, omit the selection. This includes complete tracked rows and reports unsupported changes omitted from `items`:
+
+```ts
+await runtime.run(async (context) => {
+  const result = context.document.revisions.resolve('reject');
+  await context.sync();
+  for (const skipped of result.value.skipped) {
+    console.log(skipped.revision?.author, skipped.reason);
+  }
+});
+```
+
+Keep `resolve()` as the only write in its sync batch; reads can share the batch. Use a separate sync for each story. Protection, content control locks, and collaboration permissions still apply. If the transaction fails, no changes commit and the result remains unloaded.
+
+### Interpret the result
+
+| Field | Meaning |
+| --- | --- |
+| `resolved` | Resolved decisions, with their key, author, part name, and revision kind. |
+| `skipped` | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
+| `remaining` | Number of pending decisions in the story, including excluded and unsupported changes. |
+
+A decision can contain several XML markers, such as split deletion fragments. A replacement keeps its deletion and addition decisions separate. A successful batch can leave changes pending:
+
+| Skip reason | Next step |
+| --- | --- |
+| `unsupported-revision` | Resolve the unsupported structure in Word. Independent supported changes can still resolve. |
+| `incomplete-group` | Review and select all related decisions together. |
+| `retained-structure` | A row remains to preserve nested table content. Other selected text changes may have applied; inspect the remaining decision. |
+| `unknown-revision` | Reload the collection; the target no longer exists. |
+
+Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. A single `Revision.accept()` or `Revision.reject()` call on a text insertion or deletion nested in another pending text change resolves that change alone, also when several authors' changes share one insertion. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection. A `retained-structure` result is different: supported text changes in the selected row can resolve while its structural marker stays pending to preserve the nested table.
+
+Pass an empty array to select nothing. Duplicate objects resolve once; stale objects produce `unknown-revision`. Objects from another context or story fail validation.
+
+Use revision objects instead of raw OOXML `w:id` values, which Word can reuse. Treat result keys as opaque identifiers for the open document. Reload revisions after saving and reopening a file.
+
+## Resolve changes shown in the editor
+
+The editor's bulk controls honor author visibility and the tracked-changes filter, including offscreen changes in supported stories. Mounted cards and activation exclusions don't affect the selection. Supported changes resolve in one undo step; unsupported changes remain pending.
+
+For example, accept changes shown by an author filter:
+
+```ts
+editor.setTrackedChangesFilter((revision) => revision.author === 'Ada');
+const result = editor.exec({
+  type: 'resolveAllReviewChanges',
+  action: 'accept',
+});
+if (result.ok) {
+  console.log(result.revisions);
+}
+```
+
+To select an explicit batch, pass `keys` from `editor.getReviewItems()`. Keys override the active filter:
+
+```ts
+const keys = editor
+  .getReviewItems({ placement: false })
+  .filter((item) => item.kind === 'revision' && item.author === 'Ada')
+  .map((item) => item.key);
+
+const result = editor.exec({
+  type: 'resolveAllReviewChanges',
+  action: 'reject',
+  keys,
+});
+```
+
+To include all authors across supported stories, pass `scope: 'document'`. To require every selected change to resolve, pass `unsupported: 'fail'`. The defaults are `scope: 'visible'` and `unsupported: 'skip'`.
+
+The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
+
+## Work with review items
+
+A review panel lists cards from `useReview().items` or `editor.getReviewItems()`. Each card has a `key`. Pass the key to these DocxEditor functions to act on the same item through the object model:
+
+- `getReviewItemRevisions(context, key)` returns the change that a revision card shows, or the deletion and insertion of a paired replacement card.
+- `getReviewItemRange(context, key)` returns the range that a revision or comment card covers.
+
+For example, accept the change that a review card shows. In this sample, `item` comes from `useReview().items`:
+
+```tsx
+import {
+  getReviewItemRevisions,
+  type DocxEditorRuntime,
+} from '@docx-editor.dev/editor-api/browser';
+
+function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key: string } }) {
+  const { runtime, item } = props;
+  const accept = () =>
+    runtime.run(async (context) => {
+      getReviewItemRevisions(context, item.key).acceptAll();
+      await context.sync();
+    });
+  return <button onClick={accept}>Accept</button>;
+}
+```
+
+Use `getReviewItemRevisions` to decide a card. Its collection refuses `resolve()` and `setAuthor()` with `NotSupported`. Use the story's `body.revisions` for those operations. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
+
+A key names an item in the current document. After someone accepts or rejects that change, the key names nothing:
+
+- `getReviewItemRevisions` loads an empty collection, and `acceptAll()` or `rejectAll()` on it fails with `InvalidObjectPath`.
+- `getReviewItemRange` fails the sync with `ItemNotFound`. It also fails for a comment with no anchor in the document.
+- `getReviewItemRangeOrNullObject` returns a range whose `isNullObject` is `true`.
+
+For example, read the words that a card covers, and skip a card that another reviewer already resolved:
+
+```ts
+import { getReviewItemRangeOrNullObject } from '@docx-editor.dev/editor-api/browser';
+
+const key = item.key;
+await runtime.run(async (context) => {
+  const range = getReviewItemRangeOrNullObject(context, key);
+  range.load('text');
+  await context.sync();
+
+  if (range.isNullObject) return;
+  console.log(range.text);
+});
+```
+
+A comment key works with `getReviewItemRange`, and refuses with `NotSupported` in `getReviewItemRevisions`. A custom node key refuses in both. Read keys from the review queue just before you use them, because edits to the document can change them.
+
+These functions are DocxEditor additions. Office.js has no review queue and no key for a revision, so the functions are not members of the Office-shaped classes.
+
+## Change the author of tracked changes
+
+A change can belong to a different person than the one who made it. For example, an agent proposes edits, and a reviewer adopts them while tracking stays on. Change the author to the reviewer. The changes stay pending, so another reviewer can still accept or reject them.
+
+`RevisionCollection.setAuthor(author, selection?, options?)` changes `w:author` on the selected changes in one story. Pass one of these as `selection`:
+
+- `{ authors }` selects every change those authors made.
+- An array of `Revision` objects selects those changes.
+- Nothing selects every change in the story, by every author.
+
+To also record a new date, pass `options.date`. Otherwise each change keeps its own date. For example, give the agent's changes to the reviewer:
+
+```ts
+await runtime.run(async (context) => {
+  const result = context.document.revisions.setAuthor(
+    'Ada Lovelace',
+    { authors: ['Contract agent'] },
+    { date: new Date() }
+  );
+  await context.sync();
+
+  console.log(result.value.updated.length, result.value.skipped);
+});
+```
+
+To select individual changes, load them first and pass the objects:
+
+```ts
+await runtime.run(async (context) => {
+  const revisions = context.document.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) {
+    revision.load(['author', 'type']);
+  }
+  await context.sync();
+
+  const insertions = revisions.items.filter(
+    (item) => item.author === 'Contract agent' && item.type === 'Insert'
+  );
+  revisions.setAuthor('Ada Lovelace', insertions);
+  await context.sync();
+});
+```
+
+Omitting a selection includes structural changes, such as tracked rows, that `items` omits. It also takes the changes of human authors, so pass a selection when you mean only some authors. An empty array selects nothing.
+
+The revision objects you pass stay valid. After the sync, load `author` again to read the new value. Selection rules and transactions match `resolve()`. Browser writes require the Pro review module and an editable document.
+
+| Error code | Cause |
+| --- | --- |
+| `InvalidArgument` | A blank author, an invalid date or selection, or a revision object from another request context. `setAuthor()` throws before it queues anything. |
+| `ConflictingChanges` | `setAuthor()` shares its sync batch with another write. Keep it as the only write in its batch. |
+| `GeneralException` | Document protection refuses the change. |
+| `NotSupported` | A browser runtime has no Pro review module. |
+
+The result reports each selected change:
+
+| Field | Meaning |
+| --- | --- |
+| `updated` | Changes that have the new author. `key` and `author` describe each change after the update; `previousKey` and `previousAuthor` describe it before. |
+| `skipped` | Requested changes that kept their author, with a key and a reason. |
+
+| Skip reason            | Next step                                                        |
+| ---------------------- | ---------------------------------------------------------------- |
+| `unknown-revision`     | Reload the collection; the target no longer exists.              |
+| `unsupported-revision` | The change has no author to change, such as a table grid record. |
+
+Document protection for tracked changes refuses author changes, because that protection keeps each change attributed to the person who made it. Read-only and comments-only protection refuse it too.
+
+### Change authors in the editor
+
+To change the author of changes in the editor, run the `setReviewChangesAuthor` command. It selects changes by exact `keys`, or by `scope` narrowed by `authors`. These two selections exclude each other. `unsupported` works as it does in `resolveAllReviewChanges`. Without `author`, it records the editor's `author`, so a reviewer adopts the changes as their own. It runs in one undo step:
+
+```ts
+const result = editor.exec({
+  type: 'setReviewChangesAuthor',
+  authors: ['Contract agent'],
+  date: new Date().toISOString(),
+});
+if (result.ok) {
+  console.log(result.revisionAuthors);
+}
+```
+
+Without `keys`, the command selects the changes shown by the active filters, or every change with `scope: 'document'`. `authors` narrows that selection and matches `w:author` exactly. With the default `scope: 'visible'`, an author that a filter hides selects nothing, so pass `scope: 'document'` to include hidden authors. `date` is an ISO 8601 string, because editor commands carry plain data; `setAuthor()` and `adopt()` take a `Date`.
+
+To select changes by the `w:id` values your application stored, match them to the revision addresses of review items, and pass their keys:
+
+```ts
+const ids: readonly string[] = storedRevisionIds;
+const keys = editor
+  .getReviewItems({ placement: false })
+  .filter(
+    (entry) =>
+      entry.kind === 'revision' && entry.item.addresses.some((address) => ids.includes(address.id))
+  )
+  .map((entry) => entry.key);
+editor.exec({ type: 'setReviewChangesAuthor', keys });
+```
+
+A `w:id` can repeat in a document, so prefer keys while the document stays open.
+
+Review keys include the author and the date, so an updated change gets a new key. Use `revisionAuthors.updated` to map each `previousKey` to its new `key`. An active review card stays active. If every selected change already has the author and date, the command succeeds with `changed: false` and adds no undo step. In that case `previousKey` equals `key`.
+
+In React and Vue, `useReview().adopt(items)` runs this command for review items. See [Adopt suggestions as your own](/docs/2.x/pro/tracked-changes#adopt-suggestions-as-your-own).
+
+A refused command returns one of these codes and changes nothing:
+
+| Code | Cause |
+| --- | --- |
+| `invalidArgs` | A blank author, no author on the command or the editor, an invalid date, an invalid selection, or `keys` with `scope` or `authors`. |
+| `locked` | The document is open for viewing, or document protection refuses the change. |
+| `notFound` | No selected change exists. |
+| `unsupported` | No Pro review module, a selection of records with no author, or a skipped change with `unsupported: 'fail'`. |
+
+If a new author would give one change the identity of another pending change, the editor gives the changed revision a new `w:id`. The two changes stay separate decisions.
+
+## Require every change to resolve
+
+Use `Revision.accept()` or `Revision.reject()` for one supported revision. Use `RevisionCollection.acceptAll()` or `rejectAll()` for a strict story-wide batch:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.revisions.acceptAll();
+  await context.sync();
+});
+```
+
+These collection methods ignore editor filters and fail the entire sync if any revision is unsupported. They include complete tracked rows omitted from `items`. An empty collection succeeds and keeps document content unchanged.
+
+Malformed content revision wrappers refuse resolution and retain their content. This includes `w:ins` or `w:del` wrappers containing paragraphs.
+
+If a strict batch fails with `NotImplemented`, use `resolve()` to process supported changes and report what remains. For `StaleDocument`, start a fresh run and reload revisions before deciding again.
+
+### Update existing integrations
+
+Existing `acceptAll()` and `rejectAll()` calls keep their behavior. To support partial batches or an explicit selection, use `resolve()`.
+
+The editor's **Accept all changes shown** and **Reject all changes shown** controls honor filters and skip unsupported groups. To keep the previous editor command behavior, pass `scope: 'document'` and `unsupported: 'fail'`.
+
+## Try the demo
+
+From a repository checkout, run:
+
+```sh
+bun install
+bun run dev:react
+```
+
+Open `http://localhost:5173/?bulkReview=1&fixture=bulk-review.docx`. Filter by author or select individual changes, then accept or reject them. Compare the filtered editor controls with the main-story API controls. Use **Undo**, **Redo**, and **Save and reopen** to check that excluded and unsupported changes remain pending.
+
+To run the browser tests:
+
+```sh
+bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction.spec.ts
+```
+
+## Next steps
+
+See the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md), [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines), and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

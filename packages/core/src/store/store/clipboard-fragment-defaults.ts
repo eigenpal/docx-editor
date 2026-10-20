@@ -15,6 +15,14 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
+import { propertyElement } from './tree-op-properties.ts';
+import type { OoxmlProperty } from './tree-op-types.ts';
+import {
+  APPLICATION_PARAGRAPH_PROPERTIES,
+  APPLICATION_RUN_PROPERTIES,
+  omittedFor,
+  type OmittedDocDefaults,
+} from '../package/application-doc-defaults.ts';
 
 export function isElementNode(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -125,6 +133,47 @@ function defaultsContainer(
     out.set(prop.localName, prop);
   }
   return out;
+}
+
+/** The styles part root a side carries, or `null` when it has none. */
+function stylesRootOf(styles: StylesInfo): OoxmlElement | null {
+  const root = styles.part?.root;
+  return root && isElementNode(root) ? root : null;
+}
+
+/**
+ * The halves a side leaves to the application, judged on the `w:docDefaults` this module reads,
+ * so omission and authored values come from one element.
+ */
+function sideOmits(styles: StylesInfo): OmittedDocDefaults {
+  return omittedFor(stylesRootOf(styles), styles.docDefaults);
+}
+
+/** The application's properties for an omitted default half, keyed by name. */
+function applicationDefaults(properties: readonly OoxmlProperty[]): Map<string, OoxmlNode> {
+  return new Map(
+    properties.map((property) => [
+      property.localName,
+      propertyElement(property, `fragment#application-${property.localName}`),
+    ])
+  );
+}
+
+/** The `w:spacing` attributes a style chain states; the cascade merges them one by one. */
+function chainSpacingAttributes(styles: StylesInfo, startId: string | undefined): Set<string> {
+  const stated = new Set<string>();
+  let id = startId;
+  for (let hop = 0; hop < 16 && id; hop += 1) {
+    const style = styles.byId.get(id);
+    if (!style) break;
+    const props = propertyContainerOf(style, 'pPr');
+    const spacing = props?.children.find((child) => isWml(child, 'spacing'));
+    if (spacing && isElementNode(spacing))
+      for (const attribute of spacing.attributes) stated.add(attribute.localName);
+    const basedOn = style.children.find((child) => isWml(child, 'basedOn'));
+    id = basedOn ? attributeValueOf(basedOn, 'val') : undefined;
+  }
+  return stated;
 }
 
 /** Follow `w:basedOn` chains checking whether any style in the chain defines `localName`. */
@@ -265,10 +314,22 @@ export function materializeDefaults(
   fragmentStyles: StylesInfo,
   targetStyles: StylesInfo
 ): readonly OoxmlNode[] {
-  const fragmentRun = defaultsContainer(fragmentStyles.docDefaults, 'rPrDefault', 'rPr');
-  const targetRun = defaultsContainer(targetStyles.docDefaults, 'rPrDefault', 'rPr');
-  const fragmentPara = defaultsContainer(fragmentStyles.docDefaults, 'pPrDefault', 'pPr');
-  const targetPara = defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
+  // A fragment without a styles part (external HTML) has no defaults of its own, so only a
+  // carried styles part, or the target, resolves the application's defaults for an omission.
+  const fragmentOmits = stylesRootOf(fragmentStyles) ? sideOmits(fragmentStyles) : null;
+  const targetOmits = sideOmits(targetStyles);
+  const fragmentRun = fragmentOmits?.run
+    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    : defaultsContainer(fragmentStyles.docDefaults, 'rPrDefault', 'rPr');
+  const targetRun = targetOmits.run
+    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    : defaultsContainer(targetStyles.docDefaults, 'rPrDefault', 'rPr');
+  const fragmentPara = fragmentOmits?.paragraph
+    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    : defaultsContainer(fragmentStyles.docDefaults, 'pPrDefault', 'pPr');
+  const targetPara = targetOmits.paragraph
+    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    : defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
 
   // Fold each side's default paragraph style over its docDefaults, the way the cascade
   // does, so "the default look" is one property set PER DOCUMENT. Folding only the
@@ -379,18 +440,68 @@ export function materializeDefaults(
     return { ...element, children: [container, ...element.children] } as OoxmlElement;
   };
 
+  /**
+   * `paragraph` with the source default spacing attributes that differ from the target's and
+   * that neither its direct `w:spacing` nor its style chain states, merged into the direct
+   * `w:spacing` or added as one.
+   */
+  const withMissingSpacing = (
+    paragraph: OoxmlElement,
+    pPr: OoxmlElement,
+    source: OoxmlElement,
+    target: OoxmlNode | undefined,
+    pStyleId: string | undefined
+  ): OoxmlElement => {
+    const stated = chainSpacingAttributes(fragmentStyles, pStyleId);
+    const direct = pPr.children.find((child) => isWml(child, 'spacing'));
+    if (direct && isElementNode(direct))
+      for (const attribute of direct.attributes) stated.add(attribute.localName);
+    const targetValues = new Map(
+      target && isElementNode(target)
+        ? target.attributes.map((attribute) => [attribute.localName, attribute.value] as const)
+        : []
+    );
+    const missing = source.attributes.filter(
+      (attribute) =>
+        !stated.has(attribute.localName) &&
+        targetValues.get(attribute.localName) !== attribute.value
+    );
+    if (missing.length === 0) return paragraph;
+    const spacing =
+      direct && isElementNode(direct)
+        ? ({ ...direct, attributes: [...direct.attributes, ...missing] } as OoxmlElement)
+        : ({ ...source, id: freshId(), attributes: missing, children: [] } as OoxmlElement);
+    const nextPPr = direct
+      ? ({
+          ...pPr,
+          children: pPr.children.map((child) => (child === direct ? spacing : child)),
+        } as OoxmlElement)
+      : (withContainer(paragraph, 'pPr', [spacing]).children.find((child) =>
+          isWml(child, 'pPr')
+        ) as OoxmlElement);
+    return {
+      ...paragraph,
+      children: paragraph.children.map((child) => (child === pPr ? nextPPr : child)),
+    } as OoxmlElement;
+  };
+
   const rewriteParagraph = (paragraph: OoxmlElement): OoxmlElement => {
     const pPr = propertyContainerOf(paragraph, 'pPr');
     const pStyleNode = pPr?.children.find((child) => isWml(child, 'pStyle'));
     const pStyleId = pStyleNode ? attributeValueOf(pStyleNode, 'val') : undefined;
 
     const paraAdditions: OoxmlNode[] = [];
+    let base = paragraph;
     for (const [localName, prop] of paraDiffers) {
       const explicit = pPr?.children.some(
         (child) => child.kind !== 'textValue' && child.localName === localName
       );
-      if (explicit) continue;
-      if (pStyleId && chainDefines(fragmentStyles, pStyleId, 'pPr', localName)) continue;
+      const chained = !!pStyleId && chainDefines(fragmentStyles, pStyleId, 'pPr', localName);
+      // `w:spacing` merges attribute by attribute, so a paragraph or style that states part of
+      // it still takes the source default for the attributes it leaves out.
+      if (localName === 'spacing' && (explicit || chained) && pPr !== null && isElementNode(prop))
+        base = withMissingSpacing(base, pPr, prop, targetPara.get('spacing'), pStyleId);
+      if (explicit || chained) continue;
       // NO skip for unstyled paragraphs: the source default paragraph style does not
       // travel with them (the target's own default resolves instead), so its values are
       // exactly what must stamp — the fold above already folded them into `paraDiffers`.
@@ -422,7 +533,7 @@ export function materializeDefaults(
         : node;
     };
 
-    const stamped = stampRuns(withContainer(paragraph, 'pPr', paraAdditions)) as OoxmlElement;
+    const stamped = stampRuns(withContainer(base, 'pPr', paraAdditions)) as OoxmlElement;
     return stamped;
   };
 

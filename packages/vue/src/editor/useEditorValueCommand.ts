@@ -1,75 +1,49 @@
-import { computed, shallowRef, type ComputedRef } from 'vue';
+import { computed, type ComputedRef } from 'vue';
 import {
   IMAGE_WRAP_TARGETS,
   runToolbarCommand,
   toolbarCommandState,
   type ImageWrapTarget,
+  type ToolbarValueMap,
 } from '@docx-editor.dev/core/editor';
+import type { EditorExecOptions, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
 /** @public */
 export interface EditorValueCommandState<T extends string | number> {
-  readonly execute: (value: T) => void;
+  readonly execute: (value: T, options?: EditorExecOptions) => ExecResult;
   readonly value: ComputedRef<T | null>;
   readonly options: ComputedRef<readonly T[]>;
   readonly isEnabled: ComputedRef<boolean>;
   readonly disabledReason: ComputedRef<string | null>;
 }
-
-interface ValueSlice {
-  readonly value: string | null;
-  readonly enabled: boolean;
-  readonly disabledReason: string | null;
-}
-
-function valueSliceEqual(a: ValueSlice, b: ValueSlice): boolean {
-  return a.value === b.value && a.enabled === b.enabled && a.disabledReason === b.disabledReason;
-}
-
-/** @public */
-export function useEditorValueCommand(
-  slotId: 'image.wrap'
-): EditorValueCommandState<ImageWrapTarget>;
-/** @public */
-export function useEditorValueCommand(slotId: 'image.altText'): EditorValueCommandState<string>;
-/** @public */
-export function useEditorValueCommand(
-  slotId: 'image.wrap' | 'image.altText'
-): EditorValueCommandState<ImageWrapTarget> | EditorValueCommandState<string> {
-  const editorRef = useDocxEditor();
-  const latest = shallowRef(slotId);
-  latest.value = slotId;
-
-  const selectSlice = (_snapshot: unknown): ValueSlice => {
-    const state = toolbarCommandState(editorRef.value, latest.value);
-    return {
-      value: state.value ?? null,
-      enabled: state.enabled,
-      disabledReason: state.disabledReason,
-    };
-  };
-
-  const slice = useEditorState(selectSlice, valueSliceEqual);
-
-  if (slotId === 'image.wrap') {
-    return {
-      execute: (value: ImageWrapTarget) => runToolbarCommand(editorRef.value, 'image.wrap', value),
-      value: computed(() => (slice.value.value as ImageWrapTarget | null) ?? null),
-      options: computed(() => IMAGE_WRAP_TARGETS),
-      isEnabled: computed(() => slice.value.enabled),
-      disabledReason: computed(() => slice.value.disabledReason),
-    };
-  }
-
+/** Bind a value slot. Font size values use half-points; colors use six digits without `#`. @public */
+export function useEditorValueCommand<K extends keyof ToolbarValueMap>(
+  slotId: K
+): EditorValueCommandState<ToolbarValueMap[K]> {
+  const editor = useDocxEditor();
+  const state = useEditorState(
+    () => toolbarCommandState(editor.value, slotId),
+    (a, b) =>
+      a.value === b.value && a.enabled === b.enabled && a.disabledReason === b.disabledReason
+  );
   return {
-    execute: (value: string) => runToolbarCommand(editorRef.value, 'image.altText', value),
-    value: computed(() => slice.value.value),
-    options: computed(() => [] as readonly string[]),
-    isEnabled: computed(() => slice.value.enabled),
-    disabledReason: computed(() => slice.value.disabledReason),
+    execute: (value, options) => runToolbarCommand(editor.value, slotId, value, options),
+    value: computed(
+      () =>
+        (state.value.value === undefined
+          ? null
+          : slotId === 'font.size' || slotId === 'list.lineSpacing'
+            ? Number(state.value.value)
+            : state.value.value) as ToolbarValueMap[K] | null
+    ),
+    options: computed(
+      () => (slotId === 'image.wrap' ? IMAGE_WRAP_TARGETS : []) as readonly ToolbarValueMap[K][]
+    ),
+    isEnabled: computed(() => state.value.enabled),
+    disabledReason: computed(() => state.value.disabledReason),
   };
 }
-
 /** @public */
 export type { ImageWrapTarget };

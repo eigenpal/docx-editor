@@ -167,3 +167,32 @@ Every user-facing string on the control surface SHALL resolve through the i18n l
 
 - **WHEN** a screen reader reaches a control showing placeholder text
 - **THEN** the text is exposed as a prompt rather than as the control's value
+
+### Requirement: A host may make content-locked inline controls one caret unit
+
+A host MAY create the editor with `lockedControlNavigation: 'atomic'`. With it, an inline control whose effective lock is `contentLocked` or `sdtContentLocked` SHALL be one caret unit, as a control showing its placeholder already is. Arrow motions SHALL step over the control, Shift with an arrow SHALL select it whole, and a press, a drag end, a shift-press, or a double click inside it SHALL select it whole. A press on its edge SHALL place a caret beside it. The option SHALL change navigation only: what a lock refuses, the stored `w:lock` value, and the document SHALL NOT change. The rule SHALL apply in every story whose controls the layout publishes as boundary records — the body, headers, and footers; notes and text boxes publish none and SHALL keep character navigation until they do. The rule SHALL cover keyboard motions and the engine's pointer gestures; a selection set programmatically SHALL be kept as given, because moving it would silently approximate the caller's request, and `pointer: 'native'` SHALL leave caret placement to the browser. Without the option, or with `'characters'`, the caret SHALL walk through the control's characters, as in Word.
+
+#### Scenario: An arrow steps over a locked inline control
+
+- **WHEN** the editor was created with `lockedControlNavigation: 'atomic'` and the caret sits at the leading edge of a `sdtContentLocked` inline control
+- **THEN** ArrowRight moves the caret to the control's trailing edge
+
+#### Scenario: A press inside selects the control
+
+- **WHEN** the editor was created with `lockedControlNavigation: 'atomic'` and the reader presses inside a `contentLocked` inline control
+- **THEN** the selection covers the whole control
+
+#### Scenario: Default navigation is unchanged
+
+- **WHEN** the editor was created without the option and the caret sits at the leading edge of a `sdtContentLocked` inline control
+- **THEN** ArrowRight moves the caret one character into the control
+
+#### Scenario: Locks still refuse
+
+- **WHEN** the editor was created with `lockedControlNavigation: 'atomic'` and the reader types over a selected locked control
+- **THEN** the edit is refused with `locked` and the control keeps its text
+
+#### Scenario: A programmatic selection is kept
+
+- **WHEN** the editor was created with `lockedControlNavigation: 'atomic'` and a host sets a collapsed selection inside a locked inline control
+- **THEN** the selection stays where the host put it, and the next arrow motion leaves the control

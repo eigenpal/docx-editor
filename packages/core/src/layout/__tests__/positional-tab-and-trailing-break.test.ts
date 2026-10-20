@@ -244,16 +244,18 @@ describe('a trailing hard break opens a line to type on', () => {
     expect(caret.x).toBe(second.box.x);
   });
 
-  test('a SOFT wrap still answers with the first line — the offset is genuinely shared', () => {
-    // The rule is scoped to hard breaks on purpose: at a wrap point both answers are
-    // defensible and the end of the visual line is the conventional one.
+  test('a SOFT wrap answers with the line that starts there, unless a line is preferred', () => {
+    // Typing at the shared offset lands on the next line, so the caret shows there. The end
+    // of the first line is the same offset with that line's affinity (End, a click past it).
     const words = Array.from({ length: 60 }, (_, index) => `w${index}`).join(' ');
     const layout = lay(`<w:p><w:r><w:t>${words}</w:t></w:r></w:p>`);
     const fragment = paragraphs(layout)[0]!;
     expect(fragment.lines.length).toBeGreaterThan(1);
     const boundary = fragment.lines[0]!.range.end;
-    const caret = caretAt(layout, { paragraphId: fragment.paragraphId, offset: boundary })!;
-    expect(caret.lineId).toBe(fragment.lines[0]!.id);
+    const position = { paragraphId: fragment.paragraphId, offset: boundary };
+    expect(caretAt(layout, position)!.lineId).toBe(fragment.lines[1]!.id);
+    const upper = fragment.lines[0]!.id;
+    expect(caretAt(layout, position, { preferredLineId: upper })!.lineId).toBe(upper);
   });
 });
 
@@ -391,4 +393,24 @@ describe('a PAGE break carries the caret onto the page it opened', () => {
     // And the caret for what the click resolved to is on the page that was clicked.
     expect(caretAt(layout, hit.position, measurer)?.pageIndex).toBe(0);
   });
+});
+
+test('a positional tab in the first TOC field result retains its leader and zero-width model range', () => {
+  const body =
+    CONTENTS.replace(
+      '<w:p>',
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>TOC</w:instrText><w:fldChar w:fldCharType="separate"/></w:r>'
+    ) + '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+  const layout = lay(body);
+  const paragraph = paragraphs(layout)[0]!;
+  const spans = paragraph.lines.flatMap((line) => line.spans);
+  const tab = spans.find((span) => span.text === '\t')!;
+  expect(tab.tabLeader).toBe('dot');
+  expect(tab.range.start).toBe(9);
+  expect(tab.range.end).toBe(9);
+  const number = spans.find((span) => span.text === '7')!;
+  expect(number.range.start).toBe(9);
+  expect(number.range.end).toBe(10);
+  expect(number.box.x + number.box.width).toBeCloseTo(468, 6);
+  expect(caretAt(layout, { paragraphId: paragraph.paragraphId, offset: 10 })).not.toBeNull();
 });

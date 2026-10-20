@@ -1,0 +1,185 @@
+---
+title: 'Search and navigation'
+description: 'Find plain text, split paragraph text into ranges, enumerate bookmarks, and select browser ranges.'
+category: 'Editing API'
+order: 54
+---
+
+Search within the smallest body or range that represents your task. Search returns `RangeCollection`; it does not modify the document. Match counts and context help you avoid edits to the wrong occurrence.
+
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+
+## Search and inspect matches
+
+`Body.search(searchText, options?)`, `Paragraph.search(searchText, options?)`, and `Range.search(searchText, options?)` accept `SearchOptions`. Load the matches and their text in one sync with an `items/` path:
+
+```ts
+const found = await runtime.run(async (context) => {
+  const matches = context.document.body.search('contract', {
+    matchCase: false,
+    matchWholeWord: true,
+  });
+  matches.load('items/text');
+  await context.sync();
+  return matches.items.map((match) => match.text);
+});
+```
+
+`Paragraph.search()` returns matches inside that paragraph only. You can search a paragraph from `getFirst()` or `getLast()` in the same sync that finds it:
+
+```ts
+const matches = await runtime.run(async (context) => {
+  const firstParagraph = context.document.body.paragraphs.getFirst();
+  // The options, such as matchCase, apply within this paragraph only.
+  const results = firstParagraph.search('Effective Date', { matchCase: true });
+  results.load('items/text');
+  await context.sync();
+  return results.items.map((match) => match.text);
+});
+```
+
+| Option | Runtime behavior |
+| --- | --- |
+| `matchCase` | Case-sensitive matching when `true` |
+| `matchWholeWord` | Whole-word matching when `true` |
+| `ignorePunct`, `ignoreSpace`, `matchWildcards` | Setting any of these to `true` fails with `NotSupported` |
+
+Search matches plain text; regular expressions are unsupported. Use nonempty search text and handle unsupported text boundaries explicitly.
+
+A hyphen in the query also matches a non-breaking hyphen. An authored optional hyphen in the document does not interrupt a match. U+2011 in the query or document compares as a hyphen. An ordinary U+00AD character matches only itself and separates words. Symbols (`w:sym`) never match, and search does not join text across them. For API text and range lengths, see [Text and ranges](/docs/2.x/editor-api/text-and-ranges#read-text-without-exporting-proxies).
+
+Search follows the runtime's `revisionTextView`, including its treatment of pending insertions and deletions. Cached field result text can appear in ordinary text reads and searches. A search result is not permission to replace protected field or revision structure.
+
+`Body.search()` searches that body's story. Main-body searches do not enter text boxes. Access the shape's `body`, sync, then search that body explicitly. For an example, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
+
+`RangeCollection` exposes `items`, `getFirst()`, `getLast()`, and `getFirstOrNullObject()`. A non-null accessor fails with `ItemNotFound` when no match exists. After `sync()`, check `isNullObject` before reading a nullable result. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for object lifetimes.
+
+Search results retain their original paragraph offsets across later syncs. A result whose text moved because of a later edit before its end fails with `StaleDocument`. After editing a matched paragraph, search again before editing another target there. For inserted text, use the range returned by the insertion after sync. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-edits) for snapshot and batching limits.
+
+## Split paragraph text into ranges
+
+`Paragraph.split(delimiters, trimDelimiters?, trimSpacing?)` returns a `RangeCollection`. It splits the paragraph at matching delimiters and returns one range per resulting paragraph. This method changes the document's paragraph structure. Use delimiter strings only when you intend to change paragraph structure:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.paragraphs.getFirst();
+  paragraph.load('text');
+  await context.sync();
+  const parts = paragraph.split([';'], true, true);
+  await context.sync(); // The write fills the returned collection.
+  for (const part of parts.items) part.load('text');
+  await context.sync();
+  console.log(parts.items.map((part) => part.text));
+});
+```
+
+A split can conflict with other structural writes on that paragraph. The runtime rejects paragraph splitting while tracking changes.
+
+For paragraph collections, use `getFirst()`, `getLast()`, `getFirstOrNullObject()`, or `getLastOrNullObject()`. To insert or remove paragraphs, use [Text and ranges](/docs/2.x/editor-api/text-and-ranges).
+
+## Discover bookmarks
+
+`Body.bookmarks` enumerates bookmarks in one story, in document order. `Range.bookmarks` provides bookmarks for the addressed range scope. A `Bookmark` exposes loaded `name`, navigation `range`, `select(selectionMode?)`, and `delete()`. `BookmarkCollection` exposes `items`; it has no `exists()` method.
+
+This example returns bookmark names from the main story:
+
+```ts
+const names = await runtime.run(async (context) => {
+  const bookmarks = context.document.body.bookmarks;
+  bookmarks.load('items');
+  await context.sync();
+  for (const bookmark of bookmarks.items) bookmark.load('name');
+  await context.sync();
+  return bookmarks.items.map((bookmark) => bookmark.name);
+});
+```
+
+A header, footer, or note body has its own bookmark collection. No accessor combines bookmarks across all stories. Bookmark ranges do not expose document-wide numeric offsets.
+
+## Add, find, and delete bookmarks by name
+
+These members follow the Office.js shape:
+
+| Member | What it does |
+| --- | --- |
+| `Range.insertBookmark(name)` | Adds a bookmark around the range, or at its position when the range is empty. |
+| `Range.getBookmarks(includeHidden?, includeAdjacent?)` | Returns a `ClientResult<string[]>` with the names of the bookmarks in or overlapping the range. |
+| `Document.getBookmarkRange(name)` | Returns the range of the bookmark with that name. |
+| `Document.getBookmarkRangeOrNullObject(name)` | Like `getBookmarkRange`, but returns a null object for a missing name. |
+| `Document.deleteBookmark(name)` | Deletes the bookmark with that name. The text stays. |
+
+Names compare without case. For `insertBookmark()`, a name starts with a letter, or with an underscore for a hidden bookmark. It holds only letters, digits, and underscores, and has at most 40 characters. Any other name makes `context.sync()` fail with `InvalidArgument`, and nothing in that batch is written. The call itself does not throw.
+
+The following example adds a bookmark, reads its text, and lists the bookmarks of a paragraph:
+
+```ts
+await runtime.run(async (context) => {
+  const found = context.document.body.search('Closing Date');
+  found.load('items');
+  await context.sync();
+  if (found.items.length !== 1) throw new Error('Choose one closing date');
+  found.items[0]!.insertBookmark('ClosingDate');
+  await context.sync();
+
+  const range = context.document.getBookmarkRange('closingdate');
+  range.load('text');
+  const paragraph = context.document.body.paragraphs.getFirst();
+  const names = paragraph.getRange('Whole').getBookmarks();
+  await context.sync();
+  console.log(range.text, names.value);
+});
+```
+
+Lookups by name search the main text first, then headers, footers, and notes. `getBookmarkRange` fails with `ItemNotFound` when no bookmark has the name, and `deleteBookmark` changes nothing. `deleteBookmark` and `Bookmark.delete` can share a `context.sync()` with edits in another story: the removal is part of the same transaction.
+
+Imported files and concurrent edits can contain duplicate bookmark names. Lookup selects the first matching bookmark in document order within the first matching story. `Document.deleteBookmark()` removes same-name copies from that bookmark's XML part. `Bookmark.delete()` removes same-name copies from its own part. Copies in other parts remain.
+
+An untracked replacement removes only bookmark pairs fully enclosed by the replaced text. Same-name copies outside that range stay in the document.
+
+`Range.getBookmarks` answers a bookmark when it shares text with the range. A point bookmark counts when it is inside the range or at its start. An empty range answers the bookmark around it. Pass `includeAdjacent` to add bookmarks that only touch the range, and `includeHidden` to add names that start with an underscore.
+
+If you add a name that the same story uses, the bookmark moves. If another story uses the name, `insertBookmark` moves the bookmark from that story in the same sync. Bookmarks are not revisions, so with `TrackMineOnly` the bookmark is written directly.
+
+Moving or deleting markers inside a content-locked or bound control refuses the whole change. Other bookmark copies and document text stay unchanged.
+
+## Select a range in the browser
+
+`Range.select(selectionMode?)` and `Bookmark.select(selectionMode?)` accept `SelectionMode`: `Select`, `Start`, or `End`. The default selects the range. Endpoint modes place the selection at that endpoint. Selecting a range on a server fails with `NotSupported`.
+
+Check the host before moving its selection:
+
+```ts
+if (runtime.capabilities.selection) {
+  await runtime.run(async (context) => {
+    const result = context.document.body.search('Signature').getFirstOrNullObject();
+    result.load('text');
+    await context.sync();
+    if (!result.isNullObject) result.select('Start');
+    await context.sync();
+  });
+}
+```
+
+Selection requires an attached browser document. The API does not expose `Document.getSelection()` or a separate range scrolling method.
+
+### Go to a bookmark
+
+To go to a bookmark by name, read its range with `getBookmarkRangeOrNullObject`, then select it. A name that no bookmark has answers a null object:
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.getBookmarkRangeOrNullObject('Intro');
+  await context.sync();
+  if (range.isNullObject) return;
+  range.select();
+  await context.sync();
+});
+```
+
+`select()` works for a bookmark in the main text, a header, a footer, or a note. The editor opens that region first, so the selection and the editing region agree. A read-only editor selects in the main text and fails with `NotSupported` for any other region. Selecting writes nothing, so it can share a sync with edits in another region. It cannot share a sync with an operation that must commit alone, such as creating a header.
+
+If the editor cannot place the selection, `sync()` fails with `NotSupported`. Other writes in that sync can already have committed. Read again before retrying; do not repeat those writes.
+
+## Next steps
+
+See [API member directory](/docs/2.x/editor-api/reference) for the public navigation surface.

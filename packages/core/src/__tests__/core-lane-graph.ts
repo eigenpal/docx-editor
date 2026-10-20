@@ -46,6 +46,14 @@ export interface Lane {
   /** Lanes this one may import. Anything else is a violation. */
   readonly mayImport: readonly LaneName[];
   /**
+   * Lanes this one may import TYPES from, in addition to {@link Lane.mayImport}.
+   *
+   * Type-only imports (`import type`, `export type ... from`) are erased at build, so they can
+   * never carry code or an environment across lanes. This is never a value edge: a value import
+   * from one of these lanes still fails, and the cycle and reachability walks ignore it.
+   */
+  readonly mayImportTypes?: readonly LaneName[];
+  /**
    * What the lane may assume it is running in.
    *
    * `neutral` must run in both, which is what keeps save, layout and the store usable on a
@@ -81,6 +89,10 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     directory: 'src/contracts',
     package: '@docx-editor.dev/core',
     mayImport: [],
+    // The public contract describes the shapes the store, layout and collaboration lanes
+    // produce (review items, revision results, projection modes, session status). No lane both
+    // sides may import exists to hold them, so the contract names them as types only.
+    mayImportTypes: ['store', 'layout', 'collaboration'],
     environment: 'neutral',
     // No bare `./contracts` entry point exists; the lane ships one subpath per contract.
     subpath: null,
@@ -113,14 +125,15 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   layout: {
     directory: 'src/layout',
     package: null,
-    mayImport: ['store'],
+    // Viewer markup defaults and validation are shared, runtime-neutral contracts.
+    mayImport: ['contracts', 'store'],
     environment: 'neutral',
     subpath: './layout',
   },
   output: {
     directory: 'src/output',
     package: null,
-    mayImport: ['store', 'layout'],
+    mayImport: ['contracts', 'store', 'layout'],
     environment: 'browser',
     subpath: './output',
   },
@@ -128,7 +141,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     directory: 'src/export',
     package: null,
     nativeToCore: true,
-    mayImport: ['store', 'layout'],
+    mayImport: ['contracts', 'store', 'layout'],
     environment: 'neutral',
     subpath: './export',
   },
@@ -140,7 +153,10 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     // The store plus its provider-neutral collaboration capability. This lane is the
     // transport-neutral host port an automation object model programs against, and a server
     // has to run it without binding, output, editor, or any CRDT/network implementation.
-    mayImport: ['store', 'collaboration'],
+    // `contracts` for the public handle types an automation run names, such as the editor's
+    // `HistoryGroup`: the contract owns them, and the runtime must name them without the
+    // editor lane. The automation lane-safety test narrows it to DOM-free contract files.
+    mayImport: ['contracts', 'store', 'collaboration', 'layout', 'export'],
     environment: 'neutral',
     subpath: './automation',
   },
@@ -168,6 +184,7 @@ export const BROWSER_REACHABLE: readonly LaneName[] = [
   'layout',
   'output',
   'automation',
+  'export',
   'editor',
 ];
 
@@ -209,7 +226,13 @@ export function sourceRootOf(lane: Lane): string {
   return `${directory === 'core' ? 'core' : directory}/src`;
 }
 
-/** Every lane, in an order where a lane's dependencies come first. */
+/**
+ * Every lane, in an order where a lane's dependencies come first.
+ *
+ * Follows VALUE edges ({@link Lane.mayImport}) only. Type-only edges ({@link Lane.mayImportTypes})
+ * are erased at build, so they cannot form a runtime cycle; `contracts` naming store types while
+ * the store names contract types is a type-level loop the build never sees.
+ */
 export function laneTopologicalOrder(): LaneName[] {
   const order: LaneName[] = [];
   const visiting = new Set<LaneName>();
@@ -227,7 +250,7 @@ export function laneTopologicalOrder(): LaneName[] {
   return order;
 }
 
-/** Lanes reachable from a starting lane, following the DAG. */
+/** Lanes reachable at runtime from a starting lane: value edges only, like the cycle walk. */
 export function reachableLanes(from: LaneName): Set<LaneName> {
   const seen = new Set<LaneName>();
   const walk = (name: LaneName): void => {

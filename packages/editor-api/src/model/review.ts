@@ -34,6 +34,7 @@ import {
   hydratedText,
   type AutomationHandle,
   type AutomationOperation,
+  type AutomationSpanRef,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -41,6 +42,16 @@ import {
 import { HandleCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
+import { clientResult, type ClientResult } from '../runtime/client-result.ts';
+import type { RevisionAuthorResult, RevisionBatchResult } from '@docx-editor.dev/core/automation';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorResult,
+  RevisionAuthorSkipReason,
+  RevisionBatchResult,
+  RevisionBatchEntry,
+  RevisionBatchSkipReason,
+} from '@docx-editor.dev/core/automation';
 
 /**
  * Word's own names for a kind of change.
@@ -181,8 +192,7 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
    * `sync()` commit atomically as one undo unit.
    */
   delete(): void {
-    const comment = this.commentHandle();
-    this.command('delete', () => ({ op: 'deleteComment', comment }));
+    this.command('delete', () => ({ op: 'deleteComment', comment: this.commentHandle() }));
   }
 
   protected loadCommentFields(request: ResolvedLoadOptions, extra: readonly string[]): void {
@@ -193,21 +203,23 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
       'text',
       ...extra,
     ]);
-    const comment = this.commentHandle();
     if (selected.includes('authorName')) {
-      this.loadTextInto('authorName', () => ({ op: 'getCommentAuthor', comment }));
+      this.loadTextInto('authorName', () => ({
+        op: 'getCommentAuthor',
+        comment: this.commentHandle(),
+      }));
     }
     if (selected.includes('text')) {
-      this.loadTextInto('text', () => ({ op: 'getCommentText', comment }));
+      this.loadTextInto('text', () => ({ op: 'getCommentText', comment: this.commentHandle() }));
     }
     if (selected.includes('id')) {
-      this.loadTextInto('id', () => ({ op: 'getCommentId', comment }));
+      this.loadTextInto('id', () => ({ op: 'getCommentId', comment: this.commentHandle() }));
     }
     if (selected.includes('creationDate')) {
       const label = `${this.path.label}.creationDate`;
       this.read(
         label,
-        () => ({ op: 'getCommentDate', comment }),
+        () => ({ op: 'getCommentDate', comment: this.commentHandle() }),
         (value) => {
           this.setLoadedProperty('creationDate', stamp(hydratedText(value, label)));
         }
@@ -217,7 +229,7 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
     const label = `${this.path.label}.resolved`;
     this.read(
       label,
-      () => ({ op: 'getCommentResolved', comment }),
+      () => ({ op: 'getCommentResolved', comment: this.commentHandle() }),
       (value) => {
         this.setLoadedProperty('resolved', hydratedFlag(value, label));
       }
@@ -351,10 +363,9 @@ export class Comment extends CommentBase {
   set resolved(value: boolean) {
     const target = `${this.path.label}.resolved`;
     if (typeof value !== 'boolean') fail({ code: 'InvalidArgument', target });
-    const comment = this.commentHandle();
     this.commandAnswering(
       target,
-      () => ({ op: 'setCommentResolved', comment, resolved: value }),
+      () => ({ op: 'setCommentResolved', comment: this.commentHandle(), resolved: value }),
       (answer) => {
         hydratedApplied(answer, target);
       }
@@ -375,11 +386,10 @@ export class Comment extends CommentBase {
   /** The words the comment is about. */
   getRange(): Range {
     const target = `${this.path.label}.getRange`;
-    const comment = this.commentHandle();
     const found = Range.promised(this.context, target, false);
     this.read(
       target,
-      () => ({ op: 'getCommentRange', comment }),
+      () => ({ op: 'getCommentRange', comment: this.commentHandle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
       }
@@ -392,7 +402,12 @@ export class Comment extends CommentBase {
    *
    * The author is the one the request context was opened with: a reply records who wrote it, and
    * `CT_TrackChange` makes that mandatory, so a context with no author refuses here rather than
-   * writing an anonymous remark the file cannot represent.
+   * writing an anonymous remark the file cannot represent. The refusal is `NotSupported` with
+   * `debugInfo.innerError.code` `edit.comment-author-required`.
+   *
+   * In a React or Vue host with the review module, use `useReview().reply` from
+   * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` instead. It replies as the
+   * editor's author.
    */
   reply(replyText: string): CommentReply {
     const target = `${this.path.label}.reply`;
@@ -401,13 +416,12 @@ export class Comment extends CommentBase {
     }
     const author = this.internals.author;
     if (typeof author !== 'string' || author.trim().length === 0) {
-      fail({ code: 'NotSupported', target });
+      fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
-    const comment = this.commentHandle();
     const created = CommentReply.promised(this.context, target, false);
     this.commandAnswering(
       target,
-      () => ({ op: 'replyToComment', comment, text: replyText, author }),
+      () => ({ op: 'replyToComment', comment: this.commentHandle(), text: replyText, author }),
       (value) => {
         // The reply's own id is minted INSIDE the package transaction, so the host answers it and
         // the proxy is bound to it — a caller can read the reply back without asking the thread.
@@ -521,11 +535,10 @@ export class Revision extends ModelObject implements PromisedItem {
   /** The words the change covers. */
   get range(): Range {
     const label = `${this.path.label}.range`;
-    const revision = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getRevisionRange', revision }),
+      () => ({ op: 'getRevisionRange', revision: this.#handle() }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }
@@ -533,37 +546,56 @@ export class Revision extends ModelObject implements PromisedItem {
     return found;
   }
 
-  /** Keep the change, resolving every site that carries its identity in one transaction. */
+  /**
+   * Keep the change, resolving every site that carries its identity in one transaction.
+   *
+   * In a React or Vue host with the review module, use `useReview().accept` from
+   * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` for a review UI.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
+   */
   accept(): void {
-    const revision = this.#handle();
-    this.command('accept', () => ({ op: 'acceptRevision', revision }));
+    this.command('accept', () => ({ op: 'acceptRevision', revision: this.#handle() }));
   }
 
-  /** Undo the change, likewise in one transaction. */
+  /**
+   * Undo the change, likewise in one transaction.
+   *
+   * In a React or Vue host with the review module, use `useReview().reject` for a review UI.
+   */
   reject(): void {
-    const revision = this.#handle();
-    this.command('reject', () => ({ op: 'rejectRevision', revision }));
+    this.command('reject', () => ({ op: 'rejectRevision', revision: this.#handle() }));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['author', 'date', 'type']);
-    const revision = this.#handle();
     if (selected.includes('author')) {
-      this.loadTextInto('author', () => ({ op: 'getRevisionAuthor', revision }));
+      this.loadTextInto('author', () => ({ op: 'getRevisionAuthor', revision: this.#handle() }));
     }
     if (selected.includes('type')) {
-      this.loadTextInto('type', () => ({ op: 'getRevisionType', revision }));
+      this.loadTextInto('type', () => ({ op: 'getRevisionType', revision: this.#handle() }));
     }
     if (!selected.includes('date')) return;
     const label = `${this.path.label}.date`;
     this.read(
       label,
-      () => ({ op: 'getRevisionDate', revision }),
+      () => ({ op: 'getRevisionDate', revision: this.#handle() }),
       (value) => {
         this.setLoadedProperty('date', stamp(hydratedText(value, label)));
       }
     );
+  }
+
+  /** @internal Capture a batch target without exposing engine identity. */
+  static batchHandle(
+    revision: Revision,
+    context: RequestContext,
+    target = 'RevisionCollection.resolve'
+  ): AutomationHandle {
+    if (!(revision instanceof Revision) || revision.context !== context)
+      fail({ code: 'InvalidArgument', target });
+    return revision.#handle();
   }
 
   #handle(): AutomationHandle {
@@ -573,16 +605,45 @@ export class Revision extends ModelObject implements PromisedItem {
 }
 
 /**
+ * Select every change these authors made, for {@link RevisionCollection.setAuthor}.
+ * Matches `w:author` exactly.
+ *
+ * @public
+ */
+export interface RevisionAuthorSelection {
+  readonly authors: readonly string[];
+}
+
+/**
+ * Options for {@link RevisionCollection.setAuthor}.
+ *
+ * @public
+ */
+export interface RevisionAuthorOptions {
+  /** The date to record. Omit it to keep each change's own date. */
+  readonly date?: Date;
+}
+
+/** What one revision collection addresses. */
+type RevisionScope =
+  | { readonly body: AutomationHandle }
+  | { readonly span: () => AutomationSpanRef }
+  | { readonly key: string };
+
+/**
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
  * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
- * Collection-wide `acceptAll` / `rejectAll` still resolve every store-resolvable revision in this
- * story and refuse atomically if any `readOnly` or otherwise unsupported revision remains.
+ * On a story's collection, `acceptAll` / `rejectAll` still resolve every store-resolvable
+ * revision in the story and refuse atomically if any `readOnly` or otherwise unsupported
+ * revision remains. On {@link Range.revisions} and `getReviewItemRevisions`, they resolve the
+ * changes the range overlaps or the key names, and `resolve` and `setAuthor` refuse with
+ * `NotSupported`.
  *
  * @public
  */
 export class RevisionCollection extends HandleCollection<Revision> {
-  readonly #body: AutomationHandle;
+  readonly #scope: RevisionScope;
 
   /** @internal The pending decisions of one story. */
   static of(
@@ -591,12 +652,32 @@ export class RevisionCollection extends HandleCollection<Revision> {
     owner: ObjectPath,
     body: AutomationHandle
   ): RevisionCollection {
-    return new RevisionCollection(context, ObjectPath.derived(label, owner), body);
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { body });
   }
 
-  private constructor(context: RequestContext, path: ObjectPath, body: AutomationHandle) {
+  /** @internal The pending decisions a range overlaps, read from the range at plan time. */
+  static inSpan(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    span: () => AutomationSpanRef
+  ): RevisionCollection {
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { span });
+  }
+
+  /** @internal The pending decisions one review-queue key names. */
+  static ofReviewKey(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    key: string
+  ): RevisionCollection {
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { key });
+  }
+
+  private constructor(context: RequestContext, path: ObjectPath, scope: RevisionScope) {
     super(context, path);
-    this.#body = body;
+    this.#scope = scope;
   }
 
   /**
@@ -606,21 +687,170 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * omitted from `items`. Refuses the sync outright where any `readOnly` or otherwise
    * unsupported revision remains, rather than reporting the story as reviewed while pending
    * changes remain.
+   *
+   * On a collection from {@link Range.revisions}, resolves every change the range overlaps at
+   * sync time, structural changes absent from `items` included. A change the range covers in
+   * part resolves whole, characters outside the range included. On a collection from
+   * `getReviewItemRevisions`, resolves the changes the key names, and refuses with
+   * `InvalidObjectPath` when the key names nothing. Either way, the sync refuses whole when one
+   * of the changes is read-only or cannot be resolved, and a change that an earlier decision in
+   * the same sync resolved the same way is skipped.
    */
   acceptAll(): void {
-    const body = this.#body;
-    this.commandOn('acceptAll', () => ({ op: 'acceptAllRevisions', body }));
+    this.commandOn('acceptAll', () => this.#decision('acceptAllRevisions'));
   }
 
   /** Undo every change, likewise as one decision. */
   rejectAll(): void {
-    const body = this.#body;
-    this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', body }));
+    this.commandOn('rejectAll', () => this.#decision('rejectAllRevisions'));
+  }
+
+  #decision(op: 'acceptAllRevisions' | 'rejectAllRevisions'): AutomationOperation {
+    return { op, ...this.#scopeRef() } as AutomationOperation;
+  }
+
+  /** What the host addresses: the story, the range read at plan time, or the review key. */
+  #scopeRef(): { body: AutomationHandle } | { scope: AutomationSpanRef } | { key: string } {
+    const scope = this.#scope;
+    if ('span' in scope) return { scope: scope.span() };
+    return 'key' in scope ? { key: scope.key } : { body: scope.body };
+  }
+
+  /** The story handle, or `NotSupported` on a collection that a range or a key scopes. */
+  #storyBody(member: string): AutomationHandle {
+    const scope = this.#scope;
+    if (!('body' in scope)) fail({ code: 'NotSupported', target: `${this.path.label}.${member}` });
+    return scope.body;
+  }
+
+  /**
+   * Resolve eligible revisions in this story and report skipped decisions after sync.
+   * Omit revisions to include unsupported and structural decisions absent from items.
+   * Pass an empty array to select nothing. Duplicate objects resolve once; stale targets
+   * are reported as unknown-revision. This must be the only write in its sync batch.
+   * Unlike acceptAll/rejectAll, unsupported decisions do not block independent changes.
+   * A collection from `Range.revisions` or `getReviewItemRevisions` refuses this call with
+   * `NotSupported`.
+   *
+   * @example
+   * ```ts
+   * const result = context.document.revisions.resolve('accept');
+   * await context.sync();
+   * console.log(result.value.resolved.length, result.value.remaining);
+   * for (const skipped of result.value.skipped) console.log(skipped.reason);
+   * ```
+   */
+  resolve(
+    action: 'accept' | 'reject',
+    revisions?: readonly Revision[]
+  ): ClientResult<RevisionBatchResult> {
+    const label = `${this.path.label}.resolve`;
+    if (
+      !['accept', 'reject'].includes(action) ||
+      (revisions !== undefined && !Array.isArray(revisions))
+    )
+      fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('resolve');
+    const targets = revisions === undefined ? undefined : [...revisions];
+    const { result, fill } = clientResult<RevisionBatchResult>(label);
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan: () => ({
+        op: 'resolveRevisionBatch',
+        body,
+        action,
+        ...(targets === undefined
+          ? {}
+          : { revisions: targets.map((revision) => Revision.batchHandle(revision, this.context)) }),
+      }),
+      settle: (value) => {
+        if (value.kind !== 'revisionBatch') fail({ code: 'GeneralException', target: label });
+        fill(value.result);
+      },
+    });
+    return result;
+  }
+
+  /**
+   * Attribute changes in this story to another author. The changes stay pending.
+   *
+   * Pass revision objects to change those changes, or `{ authors }` to change every change
+   * those authors made. Omit the selection to change every change in the story, by every
+   * author, including structural ones absent from `items`. An empty array selects nothing.
+   * Each change keeps its date unless you pass `options.date`. Keep this the only write in
+   * its sync batch. Revision objects you pass stay valid and read the new author after a load.
+   * A collection from `Range.revisions` or `getReviewItemRevisions` refuses this call with
+   * `NotSupported`.
+   *
+   * @example
+   * ```ts
+   * const result = context.document.revisions.setAuthor('Ada Lovelace', { authors: ['AI'] });
+   * await context.sync();
+   * console.log(result.value.updated.length, result.value.skipped);
+   * ```
+   */
+  setAuthor(
+    author: string,
+    selection?: readonly Revision[] | RevisionAuthorSelection,
+    options?: RevisionAuthorOptions
+  ): ClientResult<RevisionAuthorResult> {
+    const label = `${this.path.label}.setAuthor`;
+    const date = options?.date;
+    const revisions = Array.isArray(selection) ? (selection as readonly Revision[]) : undefined;
+    const authors =
+      selection !== undefined && !Array.isArray(selection)
+        ? (selection as RevisionAuthorSelection | null)?.authors
+        : undefined;
+    if (
+      typeof author !== 'string' ||
+      author.trim().length === 0 ||
+      (selection !== undefined &&
+        !Array.isArray(selection) &&
+        (typeof selection !== 'object' ||
+          selection === null ||
+          !Array.isArray(authors) ||
+          authors.some((name) => typeof name !== 'string'))) ||
+      (options !== undefined && (typeof options !== 'object' || options === null)) ||
+      (date !== undefined && (!(date instanceof Date) || Number.isNaN(date.getTime()))) ||
+      // Checked now so a foreign or non-revision object refuses before anything queues.
+      revisions?.some(
+        (revision) => !(revision instanceof Revision) || revision.context !== this.context
+      )
+    )
+      fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('setAuthor');
+    const targets = revisions === undefined ? undefined : [...revisions];
+    const { result, fill } = clientResult<RevisionAuthorResult>(label);
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan: () => ({
+        op: 'setRevisionAuthorBatch',
+        body,
+        author,
+        // Written to the second, as every other revision date is.
+        ...(date === undefined ? {} : { date: `${date.toISOString().slice(0, 19)}Z` }),
+        ...(authors === undefined ? {} : { authors: [...authors] }),
+        ...(targets === undefined
+          ? {}
+          : {
+              revisions: targets.map((revision) =>
+                Revision.batchHandle(revision, this.context, label)
+              ),
+            }),
+      }),
+      settle: (value) => {
+        if (value.kind !== 'revisionAuthors') fail({ code: 'GeneralException', target: label });
+        fill(value.result);
+      },
+    });
+    return result;
   }
 
   /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
-    return { op: 'getRevisions', body: this.#body };
+    return { op: 'getRevisions', ...this.#scopeRef() } as AutomationOperation;
   }
 
   /** @internal Build one member from an address the listing answered. */

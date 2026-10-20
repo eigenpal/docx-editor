@@ -129,7 +129,10 @@ export function applyFragmentPaste(
 
   const beforePackage = store.currentPackage();
   const checkpoint = storyStore.checkpoint();
-  const beforeDepth = storyStore.historyDepth;
+  // The working package starts at the coordinator's truth, as `transact` does: shell writes
+  // (a list the toolbar just created, a remote install) never reach the story store's own
+  // copy, and the promotion below installs the committed package as it stands.
+  storyStore.graftPackage(() => store.currentPackage());
   let blockCount = 0;
   let refusalDetail = '';
 
@@ -191,8 +194,7 @@ export function applyFragmentPaste(
       const change = store.promoteStoryTransactionToPackageUnit(
         beforePackage,
         storyStore,
-        checkpoint,
-        beforeDepth
+        checkpoint
       );
       return { ok: true as const, change, blockCount };
     },

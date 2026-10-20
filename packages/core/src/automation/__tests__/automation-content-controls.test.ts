@@ -416,7 +416,8 @@ describe('a script writes through the same refusals the keyboard meets', () => {
     });
     const xml = savedMainXml(host);
     expect(xml).toContain('w14:val="1"');
-    expect(xml).toContain('\u2612');
+    expect(xml).toContain('<w:sym w:char="2612" w:font="MS Gothic"/>');
+    expect(xml).not.toContain('<w:t>☒</w:t>');
   });
 
   test('metadata is written through the op path and reads back', () => {
@@ -730,7 +731,7 @@ describe('a nested control is refused at the locations this command writes at', 
   test('its start location is still a write, because that is its own text', () => {
     const written = writeNaming(blockOverInline(LOCKED), 'start');
     expect(written.answer).toBe('ok');
-    expect(written.saved).toContain('<w:t>PWNED</w:t><w:t>abc</w:t>');
+    expect(written.saved).toContain('<w:t>PWNEDabc</w:t>');
     // And the locked field beside it holds exactly what the file wrote.
     expect(written.saved).toContain('<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent>');
   });

@@ -227,6 +227,66 @@
       "id": 1250043,
       "signed_at": "2026-08-27T18:50:34Z",
       "pull_request_no": 539
+    },
+    {
+      "name": "KanJieTeam",
+      "id": 325109917,
+      "signed_at": "2026-09-05T01:27:14Z",
+      "pull_request_no": 732
+    },
+    {
+      "name": "biejia-manus",
+      "id": 251161311,
+      "signed_at": "2026-09-14T09:10:10Z",
+      "pull_request_no": 818
+    },
+    {
+      "name": "sallasia-tribus",
+      "id": 120402049,
+      "signed_at": "2026-09-16T09:03:29Z",
+      "pull_request_no": 839
+    },
+    {
+      "name": "uhitsdoshin",
+      "id": 40540733,
+      "signed_at": "2026-09-16T09:05:31Z",
+      "pull_request_no": 839
+    },
+    {
+      "name": "waigel",
+      "id": 25115243,
+      "signed_at": "2026-09-22T15:32:32Z",
+      "pull_request_no": 954
+    },
+    {
+      "name": "Amayakite",
+      "id": 34462489,
+      "signed_at": "2026-09-25T09:30:54Z",
+      "pull_request_no": 997
+    },
+    {
+      "name": "SurceBeats",
+      "id": 1565956,
+      "signed_at": "2026-09-25T12:20:53Z",
+      "pull_request_no": 1003
+    },
+    {
+      "name": "ramil-zakirov-dev",
+      "id": 206472764,
+      "signed_at": "2026-10-10T15:30:41Z",
+      "pull_request_no": 1232
+    },
+    {
+      "name": "SerRashin",
+      "id": 1972925,
+      "signed_at": "2026-10-11T13:31:40Z",
+      "pull_request_no": 1252
+    },
+    {
+      "name": "137137137",
+      "id": 168236155,
+      "signed_at": "2026-10-16T20:36:09Z",
+      "pull_request_no": 1400
     }
   ]
 }

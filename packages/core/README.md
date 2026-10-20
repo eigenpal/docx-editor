@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
@@ -13,74 +17,69 @@
 
 # @docx-editor.dev/core
 
-The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a
-canonical document tree, lays that tree out into pages, paints them, and writes the tree back
-to OOXML. No framework dependency and no UI.
+Use the [docx-editor.dev](https://docx-editor.dev) engine to read, edit, render, and save DOCX files. The engine stores document content in a canonical tree. It has no framework dependency.
 
-Most apps never install this directly — [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)
-carries it. Reach for it when you are writing your own adapter, or when you need the contract
-types to write a function signature.
+Install this package alongside the React or Vue adapter. Both adapters require it as a peer dependency. You can also use its public contracts to build your own adapter.
 
 ```bash
 npm install @docx-editor.dev/core
 ```
 
-Node use requires `^20.16.0 || >=22.3.0`.
+Node.js requires `^20.16.0 || >=22.3.0`.
+
+## Features
+
+- [Read and save DOCX files](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving).
+- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/word-fidelity).
+- [Build an editor with shared commands and controls](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots).
+- [Configure fonts for text measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
 ## Entry points
 
+Import editor creation, font helpers, and contract types from the package root:
+
 ```ts
-import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-The root covers most uses: creating an editor, the `Editor` contract it implements, fonts,
-the chrome registry, and the document model types. Subpaths expose the canonical tree, the
-layout pass, and the paint step directly.
+`DEFAULT_FONT` provides the default font configuration: Calibri at 11 points. `WORD_DEFAULT_FONT` is its deprecated alias. Document formatting and document-default rules determine the text size used for layout. Missing defaults and explicitly empty defaults can produce different results.
 
-| Subpath                       | What's there                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `.`                           | Create an editor, the contract, fonts, the chrome registry, the document model.              |
-| `./editor`                    | Everything the root re-exports, plus the paginated surface and ruler geometry.               |
-| `./contracts/editor`          | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.                     |
-| `./contracts/document`        | The document-level edit and query vocabulary.                                                |
-| `./contracts/interaction`     | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
-| `./contracts/types`           | Document model types.                                                                        |
-| `./contracts/modules`         | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                                |
-| `./store`                     | The canonical tree and its transactional store.                                              |
-| `./layout`                    | The DOM-free layout pass.                                                                    |
-| `./output`                    | Serialization.                                                                               |
-| `./export`                    | Reusable, DOM-free semantic layout sessions for Markdown, PDF, and future exporters.         |
-| `./automation`                | The object model behind `@docx-editor.dev/editor-api`.                                       |
-| `./collaboration`             | Provider-neutral collaboration session contracts.                                            |
-| `./collaboration/replication` | Replication helpers for collaboration providers.                                             |
-| `./styles/editor.css`         | The one editor stylesheet, shared by packaged and custom chrome.                             |
+The root exports editor creation, contracts, font helpers, control definitions, and document types. Use subpaths to access storage, layout, and rendering.
+
+| Subpath | Exports |
+| --- | --- |
+| `.` | Create an editor, the contract, fonts, the chrome registry, the document model. |
+| `./editor` | Everything the root re-exports, plus the paginated surface and ruler geometry. |
+| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`. |
+| `./contracts/document` | The document-level edit and query vocabulary. |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
+| `./contracts/types` | Document model types. |
+| `./contracts/modules` | `EditorModule` — the shape `@docx-editor.dev/pro` implements. |
+| `./store` | The canonical tree and its transactional store. |
+| `./layout` | The DOM-free layout pass. |
+| `./output` | Paint layouts and selection overlays into the DOM. |
+| `./export` | Document layout sessions for exporters. No DOM required. |
+| `./automation` | The object model behind `@docx-editor.dev/editor-api`. |
+| `./collaboration` | Provider-neutral collaboration session contracts. |
+| `./collaboration/replication` | Replication helpers for collaboration providers. |
+| `./styles/editor.css` | The one editor stylesheet, shared by packaged and custom chrome. |
 
 ## Architecture
 
-```
-bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
-```
+The engine reads DOCX bytes into a canonical OOXML tree. Layout reads the tree and produces painted pages. Saving serializes the tree back into a DOCX package.
 
-There is one document model. The painted pages are the editable surface: they are
-`contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed
-as tree operations, so the browser never invents markup inside your document.
+The document tree holds all editing state. The engine displays editable pages and converts browser input into tree operations.
 
-Nodes are typed where layout needs them and generic everywhere else, preserving the element
-verbatim. Content the engine does not model is carried rather than dropped, so a document full
-of unknown extensions still opens, edits, and saves.
+Typed nodes supply layout properties. Generic nodes preserve other element structures, including unsupported extensions.
 
-Export sessions use the editor's reader-safe revision view by default: `all-markup` keeps both
-halves of pending tracked changes visible. Pass `displayMode: 'proposed'` or
-`displayMode: 'original'` explicitly when the exporter should present a resolved view instead.
+Export sessions default to `all-markup`, which shows inserted and deleted text. Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
 
-### Building a physical-page exporter
+### Build a paginated exporter
 
-Use the document-aware font composition root for Markdown, PDF, or any exporter whose page breaks
-matter. `openDocumentForExport(bytes)` without a measurer intentionally uses deterministic
-fixed-width approximation. `openFontBackedDocumentForExport` discovers the document's actual run,
-style, header, footer, note, field, symbol, and equation families, then binds the resolved shaping
-snapshot to the layout session.
+For exports that need font-based page breaks, use `openFontBackedDocumentForExport`. It resolves the fonts used throughout the document before layout. Without a measurer, `openDocumentForExport(bytes)` uses a fixed-width approximation.
+
+Install `@docx-editor.dev/fonts` to use packaged substitutes in this example:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -89,50 +88,61 @@ import { packagedFonts } from '@docx-editor.dev/fonts';
 
 const bytes = new Uint8Array(await readFile('contract.docx'));
 const opened = await openFontBackedDocumentForExport(bytes, {
-  // First wins: put caller-supplied licensed fonts first, bundled metric substitutes next,
-  // and an optional network resolver last.
-  fonts: [callerFonts, packagedFonts({ install: false }), optionalNetworkFonts],
+  fonts: packagedFonts(),
   fontPolicy: 'strict',
-  onFontResolution: (report) => auditLogger.info(report),
+  onFontResolution: (report) => console.info(report),
 });
 
 if (!opened.ok) throw new Error(`DOCX rejected: ${opened.reason}`);
 try {
   const layout = await opened.session.layout();
-  await writeExporterOutput(layout);
+  console.log(layout); // Replace this with your exporter.
 } finally {
   opened.session.dispose(); // releases document-owned shaping bytes
 }
 ```
 
-Keep font retrieval, substitution, cancellation, diagnostics, and memory ownership in this Core
-lane. Format adapters should consume the resulting semantic pages; Markdown binds Core source
-artifacts to string offsets, while PDF can bind the same artifacts to page rectangles. For a live
-`HeadlessDocumentView`, pass the revision-stable measurer already used by its editor rather than
-starting asynchronous document-specific font resolution against mutable state.
+Let the engine manage fonts, resources, and layout. Build your output from the returned pages. For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
 
 ## Fidelity
 
-Untouched content, unsupported OOXML, and package payloads survive editing and save. The
-canonical tree preserves document structure while embedded fonts, macros, media, and other
-payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the
-tree, and a save-and-reopen semantic digest.
+Untouched content, unsupported OOXML, and package payloads survive editing and save. The canonical tree preserves document structure while embedded fonts, macros, media, and other payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
 
 ## Untrusted input
 
-A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the
-parse boundary: URL allowlisting, entity and zip-bomb limits, recursion and element caps, no
-zero-click external fetches, escaping on the way back out.
+Treat DOCX files as untrusted input. The engine validates URLs and limits XML entities, archive expansion, nesting, and element counts. It does not automatically fetch external document relationships. Serialization escapes document text.
 
-Anything you render from document data (a font name, a hyperlink target, a comment body) is
-still attacker-controlled at your boundary. Render it as text; do not build markup or URLs
-from it.
+Anything you render from document data (a font name, a hyperlink target, a comment body) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
+
+## Which API for which job
+
+| Job | Use |
+| --- | --- |
+| Build a review UI in the browser | The React or Vue adapter hooks, plus the review hooks and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. |
+| Edit in a headless, server, or agent pipeline | The editing API in `@docx-editor.dev/editor-api`, which follows the Office.js object model. |
+
+| Task | Browser host (React or Vue) | Headless, server, or agent |
+| --- | --- | --- |
+| [Comment on found text](https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
+| Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
+| [Record a tracked replacement](https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `proposeRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Accept or reject a change](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
+| [Open or reveal a change without scrolling](https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
+| [Highlight ranges](https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
+| [Custom review rail cards](https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards) | `DocxEditorReview` with `preset` set to `false`, `useReview().items`, `useStackedReviewPositions`, and `useReviewRailMetrics` | Not applicable |
+| Comment-on-selection button | `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, or `useEditorCommand('review.addComment')` | Not applicable |
+| Page setup and paragraph dialogs from a custom toolbar | `DocxEditor.PageSetupDialog` or `DocxEditor.ParagraphDialog` with `open` and a close handler (`onClose` in React, `@close` in Vue); enable the button from `usePageSetup().isEnabled` or `useParagraphFormat().isEnabled` | `Section.pageSetup`, and `Paragraph` properties such as `alignment` |
+
+The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
+
+This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
 
 ## Documentation
 
 - [Core overview](https://www.docx-editor.dev/docs/2.x/core)
 - [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
-- [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
+- [Feature support and fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
 
 ## License
 

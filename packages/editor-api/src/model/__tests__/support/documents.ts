@@ -264,6 +264,39 @@ export const WITH_BOOKMARKED_STORIES: Uint8Array = (() => {
   });
 })();
 
+/** One bookmark in each kind of story: `InBody`, `InHeader`, `InFooter` and `InNote`. */
+export const WITH_STORY_BOOKMARKS: Uint8Array = (() => {
+  const parts = unzipSync(WITH_FURNITURE);
+  const mark = (id: number, name: string, text: string) =>
+    `<w:bookmarkStart w:id="${id}" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
+    `<w:bookmarkEnd w:id="${id}"/>`;
+  const swap = (path: string, from: string, to: string) =>
+    strToU8(strFromU8(parts[path] as Uint8Array).replace(from, to));
+  return zipSync({
+    ...parts,
+    'word/document.xml': swap(
+      'word/document.xml',
+      '<w:r><w:t>in the body</w:t></w:r>',
+      mark(1, 'InBody', 'in the body')
+    ),
+    'word/header1.xml': swap(
+      'word/header1.xml',
+      '<w:r><w:t>in the header</w:t></w:r>',
+      mark(1, 'InHeader', 'in the header')
+    ),
+    'word/footer1.xml': swap(
+      'word/footer1.xml',
+      '<w:r><w:t>in the footer</w:t></w:r>',
+      mark(1, 'InFooter', 'in the footer')
+    ),
+    'word/footnotes.xml': swap(
+      'word/footnotes.xml',
+      '<w:r><w:t>in the footnote</w:t></w:r>',
+      mark(1, 'InNote', 'in the footnote')
+    ),
+  });
+})();
+
 /**
  * A document awkward enough to compare two hosts over: a style cascade, a table with cell
  * paragraphs, inline furniture (a tab and a break), and section properties.
@@ -341,4 +374,26 @@ export async function mainXmlOf(runtime: DocxEditorServerRuntime): Promise<strin
  */
 export function orNull<T>(read: T): T | null {
   return read;
+}
+
+/** Add complete real numbering definitions to a list fixture. */
+export function withNumbering(bytes: Uint8Array, ids: readonly string[]): Uint8Array {
+  const files = unzipSync(bytes);
+  files['word/numbering.xml'] = strToU8(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">${Array.from({ length: 9 }, (_, level) => `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%${level + 1}."/></w:lvl>`).join('')}</w:abstractNum>${ids.map((id) => `<w:num w:numId="${id}"><w:abstractNumId w:val="0"/></w:num>`).join('')}</w:numbering>`
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>'
+    )
+  );
+  const rels = files['word/_rels/document.xml.rels'];
+  files['word/_rels/document.xml.rels'] = strToU8(
+    (rels ? strFromU8(rels) : `<Relationships xmlns="${REL}"></Relationships>`).replace(
+      '</Relationships>',
+      '<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>'
+    )
+  );
+  return zipSync(files);
 }

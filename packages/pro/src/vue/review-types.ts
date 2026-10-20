@@ -6,7 +6,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { ReviewActivationOptions } from '@docx-editor.dev/core/contracts/editor';
 import type { VNode } from 'vue';
-import type { ReviewItemView } from './useReview.ts';
+import type { ReviewAdoptOptions, ReviewItemView } from './useReview.ts';
+import type { ReviewWriteRefusal } from '../review/review-refusal.ts';
 
 /** @public */
 export interface ReviewPartProps {
@@ -19,6 +20,41 @@ export interface ReviewPartProps {
 /** @public */
 export interface ReviewActionProps extends ReviewPartProps {
   icon?: VNode | string;
+}
+
+/**
+ * Props for `DocxEditorReview.Balloon`, the balloon that opens a review item at its text:
+ * each tracked change under `revisionsIn: 'balloons'`, and format and structural changes in
+ * every mode.
+ *
+ * @public
+ */
+export interface ReviewBalloonProps {
+  /** A class added to the balloon element. */
+  className?: string;
+  /**
+   * Remove the built-in balloon, for example to render your own. Format and structural
+   * change balloons go with it.
+   */
+  hidden?: boolean;
+}
+
+/**
+ * Props of `DocxEditorReview.Draft`.
+ *
+ * @public
+ */
+export interface ReviewDraftProps extends ReviewPartProps {
+  /**
+   * Rail-local `top` in CSS pixels. Omit it to use the packaged card stack's position. Pass
+   * your own when you render your own cards, so the box stacks with them.
+   */
+  top?: number;
+  /**
+   * Rail-local `left` for the compact rail. Omit it to use the compact card's position in the
+   * compact rail and the rail's own column otherwise. Null keeps the box in the rail's column.
+   */
+  left?: number | null;
 }
 
 /** @public */
@@ -49,9 +85,11 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 export interface ReviewActions {
   readonly items: readonly ReviewItemView[];
   readonly activeKey: string | null;
+  readonly activatedKey: string | null;
   setActive(key: string | null, options?: ReviewActivationOptions): boolean;
   accept(item: ReviewItemView): boolean;
   reject(item: ReviewItemView): boolean;
+  adopt(items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions): boolean;
   resolve(item: ReviewItemView): boolean;
   reopen(item: ReviewItemView): boolean;
   readonly commentResolutionDisabledReason: string | null;
@@ -59,6 +97,7 @@ export interface ReviewActions {
   reply(item: ReviewItemView, text: string, author?: string): boolean;
   readonly selectionAnchorY: number | null;
   comment(text: string, author?: string): boolean;
+  readonly lastRefusal: ReviewWriteRefusal | null;
   readonly paneOpen: boolean;
   setPaneOpen(open: boolean): void;
   readonly ready: boolean;

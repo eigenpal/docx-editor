@@ -124,6 +124,7 @@ export {
   type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
+export type { RevisionSiteRefusal } from './revision-site-refusal.ts';
 export {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -193,3 +194,50 @@ export {
   type SourceCrop,
 } from '../package/drawing-projection.ts';
 export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';
+
+export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
+export {
+  legacyCheckboxFieldsOf,
+  type LegacyCheckboxFieldRange,
+  type SetLegacyCheckboxOp,
+} from './legacy-checkbox-fields.ts';
+export { type InsertBuildingBlockOp } from './building-block-insert.ts';
+export {
+  enclosedBookmarkDeletions,
+  withoutBookmarkInPart,
+  type BookmarkOpPosition,
+  type DeleteBookmarkOp,
+  type InsertBookmarkOp,
+} from './tree-op-bookmarks.ts';
+export { materializeGlossaryPlaceholders } from './placeholder-materialize.ts';
+
+export { formsProtectionEnabled, sectionProtectsForms } from './tree-op-content-controls.ts';
+
+export type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
+export type { SetTextFormFieldDefaultOp } from './text-form-fields.ts';
+
+export { type TextFormFieldOptions, type TextFormFieldType } from './text-form-field-options.ts';
+export type { CommitTextFormFieldOp } from './text-form-fields.ts';
+
+export {
+  planRevisionBatch,
+  type RevisionBatchEntry,
+  type RevisionBatchResult,
+  type RevisionBatchSkipReason,
+  type RevisionBatchSkipDetail,
+} from './revision-batch.ts';
+export {
+  planRevisionAuthorChange,
+  type RevisionAuthorEntry,
+  type RevisionAuthorResult,
+  type RevisionAuthorSkipReason,
+} from './revision-author-change.ts';
+export type { HistoryGroup } from './history-group.ts';
+
+export {
+  observeHistoryGroup,
+  reportHistoryGroup,
+  type HistoryCaptureKind,
+} from './history-group.ts';
+
+export type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';

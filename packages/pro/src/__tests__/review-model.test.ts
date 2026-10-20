@@ -76,6 +76,12 @@ const ins = (id: string, inner: string, author = 'QA') =>
   `<w:ins w:id="${id}" w:author="${author}" w:date="D">${inner}</w:ins>`;
 const del = (id: string, inner: string, author = 'Dev') =>
   `<w:del w:id="${id}" w:author="${author}" w:date="D">${inner}</w:del>`;
+const delFld = (id: string, kind: string, author = 'QA') =>
+  `<w:del w:id="${id}" w:author="${author}" w:date="D">` +
+  `<w:r><w:fldChar w:fldCharType="${kind}"/></w:r></w:del>`;
+const insFld = (id: string, kind: string, author = 'QA') =>
+  `<w:ins w:id="${id}" w:author="${author}" w:date="D">` +
+  `<w:r><w:fldChar w:fldCharType="${kind}"/></w:r></w:ins>`;
 const insAt = (id: string, inner: string, date: string, author = 'QA') =>
   `<w:ins w:id="${id}" w:author="${author}" w:date="${date}">${inner}</w:ins>`;
 const delAt = (id: string, inner: string, date: string, author = 'QA') =>
@@ -162,12 +168,12 @@ describe('changes that decorate no characters still get a card', () => {
 });
 
 describe('one decision is one card', () => {
-  test('sites sharing a triple coalesce, listing every range', () => {
+  test('unchanged text separates sites sharing a triple', () => {
     const part = story(`<w:p>${ins('1', run('one'))}${run(' and ')}${ins('1', run('two'))}</w:p>`);
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.ranges).toHaveLength(2);
-    expect(items[0]!.text).toBe('onetwo');
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.ranges.length)).toEqual([1, 1]);
+    expect(items.map((item) => item.text)).toEqual(['one', 'two']);
   });
 
   test('two authors sharing an id are two cards', () => {
@@ -177,7 +183,7 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
-  test('empty deleted field controls join their visible replacement', () => {
+  test('empty deleted field controls join the deletion beside an addition', () => {
     const part = story(
       `<w:p><w:del w:id="33" w:author="QA" w:date="D">` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r></w:del>` +
@@ -187,11 +193,89 @@ describe('one decision is one card', () => {
         `${ins('36', run('new'), 'QA')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['old', 'new']);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35']);
+    expect(items[1]!.addresses.map((address) => address.id)).toEqual(['36']);
+  });
+
+  // Word wraps every part of a struck field in its own `w:del`: the two `w:fldChar` runs,
+  // the instruction run, and the result text. Four of those five cover no characters and
+  // share the result's start offset, so a grouping keyed by start position kept one and
+  // stranded the rest as blank `Deleted` cards.
+  test('a struck field is one card, however many empty controls it has', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}` +
+        `${delFld('1', 'begin')}` +
+        `<w:del w:id="2" w:author="QA" w:date="D">` +
+        `<w:r><w:delInstrText xml:space="preserve"> FORMTEXT </w:delInstrText></w:r></w:del>` +
+        `${delFld('3', 'separate')}` +
+        `${del('4', delRun('old'), 'QA')}` +
+        `${delFld('5', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
     expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.replacedText).toBe('old');
+    expect(items[0]!.revisionKind).toBe('delete');
+    expect(items[0]!.text).toBe('old');
+    // Every address rides along, so one Accept resolves the whole field.
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  test('an inserted field is one card, and its controls come with it', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}` +
+        `${insFld('1', 'begin')}${ins('2', run('new'), 'QA')}${insFld('3', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('insert');
     expect(items[0]!.text).toBe('new');
-    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35', '36']);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3']);
+  });
+
+  test('empty controls with nothing between them still make one card', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}${delFld('1', 'begin')}${delFld('2', 'separate')}${delFld('3', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3']);
+  });
+
+  // The frontier is what keeps grouping honest: two struck fields in one paragraph are two
+  // decisions, and the untracked text between them says so.
+  test('two struck fields in one paragraph stay two cards', () => {
+    const part = story(
+      `<w:p>${run('A ')}` +
+        `${delFld('1', 'separate')}${del('2', delRun('one'), 'QA')}${delFld('3', 'end')}` +
+        `${run(' B ')}` +
+        `${delFld('4', 'separate')}${del('5', delRun('two'), 'QA')}${delFld('6', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.text)).toEqual(['one', 'two']);
+  });
+
+  // A wrapper is absorbed by the neighbour it belongs to, never by a stranger's edit.
+  test('an empty control by another author stays its own decision', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}${delFld('1', 'separate', 'Dev')}${del('2', delRun('old'), 'QA')}</w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  // Grouping follows DOCUMENT position, not list position. A revision whose first site sits
+  // somewhere with no offset of its own — inside a drawing or a text box — is listed by a
+  // later range than its place in the list claims, and a sweep that trusted the list split
+  // the run it belonged to.
+  test('grouping follows document position when the item list does not', () => {
+    const part = story(
+      `<w:p><w:r><w:del w:id="5" w:author="QA" w:date="D">${delRun('x')}</w:del></w:r>` +
+        `${del('3', delRun('ab'), 'QA')}${del('5', delRun('cd'), 'QA')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['3', '5']);
   });
 
   test('card ids are unique, so a list key never collides', () => {
@@ -212,34 +296,30 @@ describe('one decision is one card', () => {
   });
 });
 
-describe('a replacement says where its halves divide', () => {
-  test('the struck ranges come first, and the card counts them', () => {
+describe('replacement halves remain independent', () => {
+  test('each half has its own range and card', () => {
     // Two independent revisions by one author, meeting end to start — the shape a foreign
     // editor writes a replacement in.
     const part = story(
       `<w:p>${run('keep ')}${del('2', delRun('old'), 'QA')}${ins('1', run('new'), 'QA')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.revisionKind).toBe('replace');
-    expect(item.ranges).toHaveLength(2);
-    // Without this a surface painting the pair has to pick one colour for both halves.
-    expect(item.replacedRangeCount).toBe(1);
-    const struck = item.ranges[0]!;
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.every((item) => item.ranges.length === 1)).toBe(true);
+    const struck = items[0]!.ranges[0]!;
     expect(struck.start.offset).toBe(5);
     expect(struck.end.offset).toBe(8);
   });
 
-  test('a deletion split across several elements is counted in full', () => {
-    // A `w:del` cannot hold the `w:tab` between the words it strikes, so one edit becomes
-    // two elements under one id — and the split point is 2, not 1.
+  test('an unchanged tab separates deletion decisions beside an addition', () => {
+    // The unchanged tab separates deletion sites with matching source attributes.
     const part = story(
       `<w:p>${del('2', delRun('one'), 'QA')}<w:r><w:tab/></w:r>` +
         `${del('2', delRun('two'), 'QA')}${ins('1', run('new'), 'QA')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.revisionKind).toBe('replace');
-    expect(item.replacedRangeCount).toBe(2);
-    expect(item.ranges).toHaveLength(3);
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'delete', 'insert']);
+    expect(items.map((item) => item.ranges.length)).toEqual([1, 1, 1]);
   });
 
   test('a plain insertion has no split point at all', () => {
@@ -248,27 +328,26 @@ describe('a replacement says where its halves divide', () => {
     expect(item.replacedRangeCount).toBeUndefined();
   });
 
-  test('halves stamped a day apart still pair — Word pairs on adjacency, not time', () => {
-    // Foreign files routinely hold a deletion struck one day and its replacement typed the
-    // next. One author, end to start: one Replaced card.
+  test('halves stamped a day apart stay independent', () => {
     const part = story(
       `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.addresses).toHaveLength(2);
-    expect(items[0]!.replacedRangeCount).toBe(1);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.every((item) => item.addresses.length === 1)).toBe(true);
   });
 
-  test('the paired card is dated when the replacement was completed', () => {
+  test('independent halves keep their source dates', () => {
     const part = story(
       `<w:p>${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.date).toBe('2024-01-02T09:00:00Z');
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.date)).toEqual([
+      '2024-01-01T10:00:00Z',
+      '2024-01-02T09:00:00Z',
+    ]);
   });
 
   test('adjacent halves by different authors stay two cards', () => {
@@ -282,23 +361,19 @@ describe('a replacement says where its halves divide', () => {
     expect(kinds).toEqual(['delete', 'insert']);
   });
 
-  test('a word struck in three gestures pairs whole against its replacement', () => {
-    // Three sibling `w:del` elements under three ids, then the insertion typed a day later:
-    // one decision, one card — never `Deleted "mor"`, `Deleted "ni"`, `Deleted "ng"`,
-    // `Added "evening"`.
+  test('split deletion wrappers stay separate from the addition', () => {
+    // The deletion remains complete while the addition has its own decision.
     const part = story(
       `<w:p>${run('at ')}${delAt('3', delRun('mor'), '2024-01-01T10:00:00Z')}` +
         `${delAt('4', delRun('ni'), '2024-01-01T10:00:00Z')}` +
-        `${delAt('5', delRun('ng'), '2024-01-01T10:00:01Z')}` +
-        `${insAt('6', run('evening'), '2024-01-02T09:00:00Z')}</w:p>`
+        `${delAt('5', delRun('ng'), '2024-01-01T10:00:00Z')}` +
+        `${insAt('6', run('evening'), '2024-01-01T10:00:00Z')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.replacedText).toBe('morning');
-    expect(items[0]!.text).toBe('evening');
-    expect(items[0]!.addresses).toHaveLength(4);
-    expect(items[0]!.replacedRangeCount).toBe(3);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['morning', 'evening']);
+    expect(items.map((item) => item.addresses.length)).toEqual([3, 1]);
+    expect(items.map((item) => item.ranges.length)).toEqual([3, 1]);
   });
 
   test('adjacent same-author deletions with no insertion are one Deleted card', () => {
@@ -322,22 +397,18 @@ describe('a replacement says where its halves divide', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
-  test('a zero-width insertion does not steal the pairing from the real one', () => {
-    // An inserted run carrying only run properties covers no characters, and it starts at
-    // exactly the offset the deletion ends at. Pairing with it produced a card that read
-    // Replaced "old" with nothing, and orphaned the words that actually replaced it.
+  test('a zero-width addition joins only the real addition', () => {
+    // Empty addition fragments stay with the added text, apart from the deletion.
     const part = story(
       `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `<w:ins w:id="3" w:author="QA" w:date="2024-01-01T10:00:00Z">` +
         `<w:r><w:rPr><w:b/></w:rPr></w:r></w:ins>` +
-        `${insAt('4', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+        `${insAt('4', run('new'), '2024-01-01T10:00:00Z')}</w:p>`
     );
-    const replaced = revisionsOf(collectReviewItems({ storyPart: part })).find(
-      (item) => item.revisionKind === 'replace'
-    );
-    expect(replaced).toBeDefined();
-    expect(replaced!.replacedText).toBe('old');
-    expect(replaced!.text).toBe('new');
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['old', 'new']);
+    expect(items.map((item) => item.addresses.length)).toEqual([1, 2]);
   });
 
   test('an insertion followed by a deletion stays two cards', () => {

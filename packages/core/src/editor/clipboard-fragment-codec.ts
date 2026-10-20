@@ -6,6 +6,7 @@
 // scan — no DOM, no regex over attacker-sized input — and the decoded bytes then face
 // `readOoxmlPackage`'s own zip/XML caps.
 
+import { WORD_HTML_MATH_NAMESPACE, hasEquationHtml } from './clipboard-html-write-equations.ts';
 import { clipboardBase64Of, clipboardDecodeBase64 } from './clipboard-html-base64.ts';
 
 /** Decoded fragment payloads above this cap never reach the package reader. */
@@ -25,12 +26,15 @@ export function wrapInteropHtml(
   innerHtml: string,
   fragment: { readonly bytes: Uint8Array; readonly lastMarkCovered: boolean } | null
 ): string {
-  if (!fragment) return `<div>${innerHtml}</div>`;
-  const end = fragment.lastMarkCovered ? 'covered' : 'open';
-  return (
-    `<div ${FRAGMENT_ATTRIBUTE}="${encodeBase64(fragment.bytes)}" ` +
-    `${END_ATTRIBUTE}="${end}">${innerHtml}</div>`
-  );
+  const end = fragment?.lastMarkCovered ? 'covered' : 'open';
+  const div = fragment
+    ? `<div ${FRAGMENT_ATTRIBUTE}="${encodeBase64(fragment.bytes)}" ` +
+      `${END_ATTRIBUTE}="${end}">${innerHtml}</div>`
+    : `<div>${innerHtml}</div>`;
+  // Word reads equation OMML only when the document root declares the `m` prefix.
+  return hasEquationHtml(innerHtml)
+    ? `<html xmlns:m="${WORD_HTML_MATH_NAMESPACE}"><body>${div}</body></html>`
+    : div;
 }
 
 export interface DecodedFragmentPayload {

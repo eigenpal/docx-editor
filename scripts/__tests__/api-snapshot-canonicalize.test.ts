@@ -49,15 +49,27 @@ describe('canonicalizeApiReport', () => {
 
   test('sorts property signatures alphabetically and recursively', () => {
     const input = report(
-      ['export const x: {', '    b: {', '        d: 1;', '        c: 2;', '    };', '    a: 3;', '};'].join(
-        '\n'
-      )
+      [
+        'export const x: {',
+        '    b: {',
+        '        d: 1;',
+        '        c: 2;',
+        '    };',
+        '    a: 3;',
+        '};',
+      ].join('\n')
     );
     expect(canonicalizeApiReport(input)).toBe(
       report(
-        ['export const x: {', '    a: 3;', '    b: {', '        c: 2;', '        d: 1;', '    };', '};'].join(
-          '\n'
-        )
+        [
+          'export const x: {',
+          '    a: 3;',
+          '    b: {',
+          '        c: 2;',
+          '        d: 1;',
+          '    };',
+          '};',
+        ].join('\n')
       )
     );
   });
@@ -86,12 +98,7 @@ describe('canonicalizeApiReport', () => {
 
   test('leaves call signatures, methods, and index signatures untouched', () => {
     const overloads = report(
-      [
-        'export const x: {',
-        '    (a: string): number;',
-        '    (a: number): string;',
-        '};',
-      ].join('\n')
+      ['export const x: {', '    (a: string): number;', '    (a: number): string;', '};'].join('\n')
     );
     expect(canonicalizeApiReport(overloads)).toBe(overloads);
 
@@ -119,44 +126,20 @@ describe('canonicalizeApiReport', () => {
 
   test('handles quoted member names and braces inside string literals', () => {
     const input = report(
-      [
-        'export const x: {',
-        "    'z-key': string;",
-        '    "a.key": \'{\';',
-        '};',
-      ].join('\n')
+      ['export const x: {', "    'z-key': string;", '    "a.key": \'{\';', '};'].join('\n')
     );
     expect(canonicalizeApiReport(input)).toBe(
-      report(
-        [
-          'export const x: {',
-          '    "a.key": \'{\';',
-          "    'z-key': string;",
-          '};',
-        ].join('\n')
-      )
+      report(['export const x: {', '    "a.key": \'{\';', "    'z-key': string;", '};'].join('\n'))
     );
   });
 
   test('an odd apostrophe in a block comment does not stop sorting', () => {
     const input = report(
-      [
-        "/** it's a thing */",
-        'export type Z = {',
-        '    d: 1;',
-        '    c: 2;',
-        '};',
-      ].join('\n')
+      ["/** it's a thing */", 'export type Z = {', '    d: 1;', '    c: 2;', '};'].join('\n')
     );
     expect(canonicalizeApiReport(input)).toBe(
       report(
-        [
-          "/** it's a thing */",
-          'export type Z = {',
-          '    c: 2;',
-          '    d: 1;',
-          '};',
-        ].join('\n')
+        ["/** it's a thing */", 'export type Z = {', '    c: 2;', '    d: 1;', '};'].join('\n')
       )
     );
   });
@@ -184,10 +167,43 @@ describe('canonicalizeApiReport', () => {
     );
   });
 
-  test('leaves markdown outside the ts fence untouched', () => {
-    const input = ['# Title {not: code; other: thing;}', '', '```ts', 'export const a: 1;', '```', ''].join(
-      '\n'
+  test('drops imports that nothing in the report uses', () => {
+    const input = [
+      '```ts',
+      '',
+      "import { Used } from 'a';",
+      "import { Unused } from 'a';",
+      "import { Thing as Alias } from 'b';",
+      '',
+      'export function f(value: Used): Alias;',
+      '```',
+    ].join('\n');
+    expect(canonicalizeApiReport(input)).toBe(
+      [
+        '```ts',
+        '',
+        "import { Used } from 'a';",
+        "import { Thing as Alias } from 'b';",
+        '',
+        'export function f(value: Used): Alias;',
+        '```',
+      ].join('\n')
     );
+    const none = ['```ts', '', "import { Unused } from 'a';", '', 'export const a: 1;', '```'];
+    expect(canonicalizeApiReport(none.join('\n'))).toBe(
+      ['```ts', '', 'export const a: 1;', '```'].join('\n')
+    );
+  });
+
+  test('leaves markdown outside the ts fence untouched', () => {
+    const input = [
+      '# Title {not: code; other: thing;}',
+      '',
+      '```ts',
+      'export const a: 1;',
+      '```',
+      '',
+    ].join('\n');
     expect(canonicalizeApiReport(input)).toBe(input);
   });
 });

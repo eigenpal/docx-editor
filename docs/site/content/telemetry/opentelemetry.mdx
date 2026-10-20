@@ -1,0 +1,26 @@
+---
+title: 'Send to OpenTelemetry'
+description: 'Record editor metrics and traces through your own OpenTelemetry SDK, for Grafana, Datadog, Honeycomb, or any OTLP backend.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The OpenTelemetry exporter records metrics and spans through the OpenTelemetry SDK that your app already runs.
+
+The exporter reads the global meter and tracer providers at each use, unless you pass your own. You can create it before your OpenTelemetry SDK starts. Measurements reach the SDK after it registers.
+
+Each histogram provides bucket bounds that the OpenTelemetry JavaScript SDK uses. These bounds match the bands in [Metrics](/docs/2.x/telemetry/metrics). A collector or Prometheus 3 OpenTelemetry Protocol (OTLP) receiver adds unit suffixes by default. The resulting Prometheus names also match that reference.
+
+The `resource` option adds attributes to events, not metrics. Set `service.name` on your SDK to populate the Prometheus `job` label.
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({ exporters: [otelExporter()] });
+```
+
+Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other events are added to the active span. If no span is active, the exporter creates a short span for each failure. In development, the exporter warns once if no SDK is registered.
+
+To see these metrics in Grafana, download the **Editor experience** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).

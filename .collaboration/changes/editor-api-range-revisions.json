@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The document automation API listed tracked changes only per story and had no way to reach a review item by its key.",
+  "after": "Range.revisions lists the changes a range overlaps, and its acceptAll and rejectAll resolve them. getReviewItemRevisions and getReviewItemRange resolve a review key to its changes or its range.",
+  "reason": "Reads add no shared state. Range- and key-scoped decisions emit the same canonical revision resolution operations as existing selected-set decisions, so released participants apply them unchanged. Review keys derive from shared document state and resolve the same item on every replica.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-api-range-revisions.test.ts",
+    "packages/editor-api/src/model/__tests__/model-range-revisions.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-review-item-range.test.ts",
+    "packages/editor-api/src/model/__tests__/model-range-revision-decisions.test.ts"
+  ],
+  "changeset": "range-revisions-review-item-range",
+  "migration": null
+}

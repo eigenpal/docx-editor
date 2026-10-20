@@ -9,13 +9,16 @@ import type {
   CollaborationStatus,
   CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
 
 /** Status returned by {@link useCollaborationStatus}. @public */
 export interface UseCollaborationStatusReturn {
+  /** Current lifecycle state, or `inactive` when no session is attached. */
   readonly status: CollaborationStatus | 'inactive';
+  /** Why the session holds `status`, or `undefined` when nothing is wrong. */
   readonly reason: CollaborationFailure | undefined;
+  /** The most recent `error` reason. Kept after the session recovers. */
   readonly lastFailure: CollaborationFailure | undefined;
   /**
    * Edits made now reach the room.
@@ -28,12 +31,28 @@ export interface UseCollaborationStatusReturn {
   /**
    * This replica no longer agrees with the room, and waiting will not fix it.
    *
-   * `error` and `destroyed`. The replica refused an update and kept the copy it had, so it is
-   * now editing a document the others do not have. The way out is
-   * {@link UseHocuspocusCollaborationReturn.rejoin}, not time — which is why this is separate
-   * from "not live" rather than folded into it.
+   * `destroyed`, or an `error` that is not `recovering`. The replica refused an update and
+   * kept the copy it had, so it is now editing a document the others do not have. The way
+   * out is {@link UseHocuspocusCollaborationReturn.rejoin}, not time — which is why this is
+   * separate from "not live" rather than folded into it.
    */
   readonly diverged: boolean;
+  /**
+   * The session is in `error` but heals by itself on the next clean update: show a passing
+   * notice, not a rejoin action.
+   */
+  readonly recovering: boolean;
+  /**
+   * Edits wait for the room: an update arrived that depends on one still on its way. The
+   * editor refuses edits until it arrives or the wait times out.
+   */
+  readonly waiting: boolean;
+  /**
+   * How many failures the session has recorded. It changes with each new failure, also when
+   * `lastFailure` repeats the same code, so a host can tell a user each time an edit is
+   * refused.
+   */
+  readonly failureCount: number;
   /**
    * An editor has attached its document port to this replica.
    *
@@ -50,6 +69,9 @@ const INACTIVE: UseCollaborationStatusReturn = Object.freeze({
   lastFailure: undefined,
   live: false,
   diverged: false,
+  recovering: false,
+  waiting: false,
+  failureCount: 0,
   attached: false,
 });
 
@@ -64,12 +86,15 @@ function failuresEqual(
 
 function sameSnapshot(
   left: UseCollaborationStatusReturn,
-  right: CollaborationStatusSnapshot | UseCollaborationStatusReturn
+  right: CollaborationStatusSnapshot
 ): boolean {
   return (
     left.status === right.status &&
     failuresEqual(left.reason, right.reason) &&
-    failuresEqual(left.lastFailure, right.lastFailure)
+    failuresEqual(left.lastFailure, right.lastFailure) &&
+    left.failureCount === (right.failureCount ?? 0) &&
+    left.recovering === (right.recovering ?? false) &&
+    left.waiting === (right.waiting ?? false)
   );
 }
 
@@ -99,7 +124,10 @@ function readSnapshot(
     reason: next.reason,
     lastFailure: next.lastFailure,
     live: next.status === 'ready',
-    diverged: next.status === 'error' || next.status === 'destroyed',
+    diverged: next.status === 'destroyed' || (next.status === 'error' && next.recovering !== true),
+    recovering: next.status === 'error' && next.recovering === true,
+    waiting: next.waiting === true,
+    failureCount: next.failureCount ?? 0,
     attached,
   });
   cache.current = snapshot;

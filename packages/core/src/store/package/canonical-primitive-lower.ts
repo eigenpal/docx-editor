@@ -219,8 +219,42 @@ function lowerChildList(
     nextEnd -= 1;
   }
 
-  const deleted = previous.slice(start, previousEnd);
-  const inserted = next.slice(start, nextEnd);
+  // Children that stay between the trimmed ends keep their place in the shared list. A
+  // rebuild that wraps a kept run (new properties before it, pasted runs after it) otherwise
+  // deleted and reinserted that run, and two peers rebuilding one paragraph then merged both
+  // lists side by side, so the kept run's text moved behind the other peer's insertion.
+  const kept = keptMiddle(previous, next, start, previousEnd, nextEnd);
+  let previousAt = start;
+  let nextAt = start;
+  let cursor = start;
+  for (const [previousIndex, nextIndex] of [...kept, [previousEnd, nextEnd] as const]) {
+    const deleted = previousIndex - previousAt;
+    const inserted = next.slice(nextAt, nextIndex);
+    if (deleted > 0 || inserted.length > 0) {
+      lowerInserted(inserted, previousById, knownIds, previousNodes);
+      recordSpliceChildren(
+        parentLogicalId,
+        cursor,
+        deleted,
+        inserted.map((child) => child.id)
+      );
+    }
+    cursor += inserted.length;
+    if (previousIndex < previousEnd) {
+      lowerSameIdentity(previous[previousIndex]!, next[nextIndex]!, knownIds, previousNodes);
+      cursor += 1;
+    }
+    previousAt = previousIndex + 1;
+    nextAt = nextIndex + 1;
+  }
+}
+
+function lowerInserted(
+  inserted: readonly OoxmlNode[],
+  previousById: ReadonlyMap<string, OoxmlNode>,
+  knownIds?: KnownIds,
+  previousNodes?: ReadonlyMap<string, OoxmlNode>
+): void {
   for (const node of inserted) {
     const prior = previousById.get(node.id) ?? previousNodes?.get(node.id);
     if (prior) {
@@ -236,12 +270,58 @@ function lowerChildList(
     // edits the subtree reaches the journal.
     expandInserted(node, knownIds, previousNodes);
   }
-  recordSpliceChildren(
-    parentLogicalId,
-    start,
-    deleted.length,
-    inserted.map((child) => child.id)
-  );
+}
+
+/** Above this many index pairs the middle is lowered as one splice, as before. */
+const MAX_KEPT_SEARCH_CELLS = 4096;
+
+/**
+ * Index pairs of the longest run of children, in order, that both middles share by id.
+ * Ascending in both lists. Empty when either middle is empty or too large to search.
+ */
+function keptMiddle(
+  previous: readonly OoxmlNode[],
+  next: readonly OoxmlNode[],
+  start: number,
+  previousEnd: number,
+  nextEnd: number
+): (readonly [number, number])[] {
+  const rows = previousEnd - start;
+  const columns = nextEnd - start;
+  if (rows === 0 || columns === 0 || rows * columns > MAX_KEPT_SEARCH_CELLS) return [];
+  const nextIndexOf = new Map<string, number>();
+  for (let index = start; index < nextEnd; index += 1) nextIndexOf.set(next[index]!.id, index);
+  let shared = false;
+  for (let index = start; index < previousEnd && !shared; index += 1) {
+    shared = nextIndexOf.has(previous[index]!.id);
+  }
+  if (!shared) return [];
+  // lengths[i][j]: longest shared order of previous[start + i ..] and next[start + j ..].
+  const width = columns + 1;
+  const lengths = new Uint16Array((rows + 1) * width);
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = columns - 1; j >= 0; j -= 1) {
+      lengths[i * width + j] =
+        previous[start + i]!.id === next[start + j]!.id
+          ? lengths[(i + 1) * width + j + 1]! + 1
+          : Math.max(lengths[(i + 1) * width + j]!, lengths[i * width + j + 1]!);
+    }
+  }
+  const pairs: (readonly [number, number])[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < rows && j < columns) {
+    if (previous[start + i]!.id === next[start + j]!.id) {
+      pairs.push([start + i, start + j]);
+      i += 1;
+      j += 1;
+    } else if (lengths[(i + 1) * width + j]! >= lengths[i * width + j + 1]!) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return pairs;
 }
 
 /** Lower `replaceChildren` after a successful edit. */
@@ -251,8 +331,15 @@ export function captureReplaceChildren(
   knownIds?: KnownIds
 ): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
-  const previousNodes = new Map<string, OoxmlNode>();
-  indexSubtree(target, previousNodes);
+  // Index only the children the edit replaces or removes. A child kept by identity lowers as
+  // no change, and no other child can hold a node of its unchanged subtree. Enter and
+  // Backspace replace the body's child list, so indexing every kept paragraph made each one
+  // cost the size of the document.
+  const previousNodes = new Map<string, OoxmlNode>([[target.id, target]]);
+  const stays = new Set(children);
+  for (const child of target.children) {
+    if (!stays.has(child)) indexSubtree(child, previousNodes);
+  }
   lowerChildList(target.id, target.children, children, knownIds, previousNodes);
 }
 

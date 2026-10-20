@@ -1,23 +1,36 @@
-// Writing content controls: values, metadata, insertion, removal — and the locks that refuse.
-//
-// EVERY refusal in this module is a STORE refusal. A widget that greys a button out is a
-// courtesy; the guarantee is that the op path itself says no, so a keyboard gesture, a toolbar
-// command and a script all meet the same answer. That is why the lock check runs in validation
-// and not beside the surface that happens to be mounted.
-//
-// A VALUE IS TYPED. A dropdown takes an item its own list declares, a combo box takes anything,
-// a date takes an ISO date and writes `@w:fullDate` beside the formatted content it paints, and
-// a checkbox writes the glyph its own `w14:checkbox` declares. Offering a value of the wrong
-// shape is `typeMismatch` rather than a coerced write, because a control that quietly accepted
-// the wrong kind of value would produce a document Word reads differently than the caller does.
-//
-// A BOUND CONTROL IS PRESERVED AND REFUSED. `w:dataBinding` names a custom XML part this engine
-// does not resolve; writing the content while the binding still points elsewhere would produce
-// a document whose two answers disagree the moment Word opens it.
+import { formatContentControlDate, parseIsoDate } from './content-control-dates.ts';
+export { formsProtectionCommandRefusal } from './forms-protection-command.ts';
+import { withDisplayedHyphens } from '../package/hyphen-text.ts';
+import {
+  isInsertableText,
+  LINE_BREAK_TEXT,
+  propertiesHoldLineBreaks,
+  textWithHyphens,
+} from './tree-op-inline-elements.ts';
+import {
+  checkboxContent,
+  checkboxStateHexes,
+  isInlineControl,
+  type CheckboxSymbol,
+} from './content-control-checkbox.ts';
+import { valueContent, withParagraphDiff } from './content-control-value-content.ts';
+import { validateCommitTextFormField } from './tree-op-field-results.ts';
+import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
+export {
+  enforcesFormsProtection,
+  formsProtectionEnabled,
+  sectionProtectsForms,
+} from './forms-protection.ts';
+import { protectedTextFormEditRefusal } from './tree-op-field-results.ts';
+import { textFormFieldForEdit, textFormFieldsOf } from './text-form-fields.ts';
+// Content-control writes enforce locks in the store for UI and script callers alike.
+// Values retain their declared type: list items, ISO dates, or checkbox glyphs.
+// Bound controls are preserved and refused; writing only their content would disagree
+// with the unresolved custom XML binding when Word opens the document.
 
 import {
   contentControlContentNodeOf,
-  contentControlPropertiesNodeOf,
+  contentControlPropertiesContainerOf,
   contentControlPropertiesOf,
   contentControlsIn,
   lockForbidsEdit,
@@ -41,10 +54,10 @@ import { isValidXmlText } from '../package/sinks.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   TEXT_DEPS,
+  contentControlContentOf,
   fromEdit,
   parentOf,
   parseCheckboxValue,
-  runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
 import {
   insertionLandingNodeId,
@@ -53,7 +66,10 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
-import { removedRowsForRevisionDecision, type RevisionOpAction } from './tree-op-revisions.ts';
+import { strikesWholeControl } from './tree-op-control-strike.ts';
+import { holdsRevisionContainer, REVISION_LOCAL_NAMES } from './revision-container-presence.ts';
+import { attributionTargets } from './revision-author-change.ts';
+import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import type {
   RevisionAddress,
   TreeDocOp,
@@ -103,6 +119,7 @@ const DEFAULT_PROMPTS: Readonly<Record<string, string>> = {
   date: 'Click here to enter a date.',
   dropDownList: 'Choose an item.',
   comboBox: 'Choose an item.',
+  docPartList: 'Choose a building block.',
 };
 const DEFAULT_TEXT_PROMPT = 'Click here to enter text.';
 
@@ -212,6 +229,7 @@ export type TreeOpReach =
       readonly action: RevisionOpAction;
       readonly revision?: RevisionAddress;
       readonly localName?: string;
+      readonly siteNodeIds?: readonly string[];
       readonly scopeRootId?: string;
     };
 
@@ -219,6 +237,14 @@ export interface TreeOpTarget {
   readonly nodeId: string;
   /** UTF-16 offsets inside the node this op addresses. Absent means the node itself. */
   readonly range?: OffsetSpan;
+  /** The applier's point-placement rule, when this target inserts content. */
+  readonly point?:
+    | 'run-content'
+    | 'paragraph-sibling'
+    | 'inline-control-split'
+    | 'container-marker';
+  /** Boundary affinity for run-content insertion. */
+  readonly bias?: 'left' | 'right';
   /**
    * The range is a point at which content is WRITTEN, so the leading edge is inside.
    *
@@ -232,18 +258,43 @@ export interface TreeOpTarget {
   readonly structural?: boolean;
   /** The node and everything under it goes away, so removal locks apply. */
   readonly removes?: boolean;
+  /**
+   * A tracked deletion: a `contentLocked` control the range wholly covers is proposed for
+   * removal as a whole, so it is asked the removal question, not the edit one.
+   */
+  readonly strikesCovered?: boolean;
 }
 
 /** A point at which content is written: the leading edge of a control belongs to the control. */
-const writingAt = (nodeId: string, offset: number): TreeOpReach => ({
+const writingAt = (
+  nodeId: string,
+  offset: number,
+  bias: 'left' | 'right' = 'left'
+): TreeOpReach => ({
   kind: 'nodes',
-  targets: [{ nodeId, range: { start: offset, end: offset }, writes: true }],
+  targets: [
+    { nodeId, range: { start: offset, end: offset }, writes: true, point: 'run-content', bias },
+  ],
+});
+
+/** A structural inline sibling that the applier always places directly in the paragraph. */
+const siblingAt = (nodeId: string, offset: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [
+    { nodeId, range: { start: offset, end: offset }, writes: true, point: 'paragraph-sibling' },
+  ],
+});
+
+/** A new inline control splits each existing inline control that strictly contains the caret. */
+const splittingControlAt = (nodeId: string, offset: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, range: { start: offset, end: offset }, point: 'inline-control-split' }],
 });
 
 /** A point that writes nothing into the run it names — a marker, or a split. */
 const beside = (nodeId: string, offset: number): TreeOpReach => ({
   kind: 'nodes',
-  targets: [{ nodeId, range: { start: offset, end: offset } }],
+  targets: [{ nodeId, range: { start: offset, end: offset }, point: 'container-marker' }],
 });
 const over = (nodeId: string, start: number, end: number): TreeOpReach => ({
   kind: 'nodes',
@@ -291,22 +342,36 @@ const TREE_OP_REACH: {
   // the control the refusals are resolved against — the offset no longer decides.
   insertText: (op) =>
     op.inside === undefined
-      ? writingAt(op.paragraphId, op.offset)
+      ? writingAt(op.paragraphId, op.offset, op.bias)
       : {
           kind: 'control',
           controlId: op.inside,
           intent: 'value',
           at: { paragraphId: op.paragraphId, offset: op.offset },
         },
-  deleteText: (op) => over(op.paragraphId, op.start, op.end),
+  deleteText: (op) =>
+    op.revision === undefined
+      ? over(op.paragraphId, op.start, op.end)
+      : {
+          kind: 'nodes',
+          targets: [
+            {
+              nodeId: op.paragraphId,
+              range: { start: op.start, end: op.end },
+              strikesCovered: true,
+            },
+          ],
+        },
   insertTab: (op) => writingAt(op.paragraphId, op.offset),
   insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
   insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
   insertPageField: (op) => writingAt(op.paragraphId, op.offset),
-  // A comment marker and a note reference are anchors beside the text, not text: neither lands
-  // in a control's content when placed at its edge.
+  // Plain anchors sit beside text. A tracked note uses the tracked run-content applier.
   insertCommentMarker: (op) => beside(op.paragraphId, op.offset),
-  insertNote: (op) => writingAt(op.paragraphId, op.offset),
+  insertNote: (op) =>
+    op.revision === undefined
+      ? beside(op.paragraphId, op.offset)
+      : writingAt(op.paragraphId, op.offset),
   setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
   insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
   // An insertion AUTHORS a control beside the runs, and never writes into one. `writes` is
@@ -316,9 +381,8 @@ const TREE_OP_REACH: {
   // like the range shape, and a caret at a control's EDGE lands outside that control, which is
   // exactly where the applier puts it.
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
-  insertInlineContentControl: (op) => writingAt(op.paragraphId, op.offset),
-  // A fragment paste writes content at the offset, exactly like typing there.
-  insertFragment: (op) => writingAt(op.paragraphId, op.offset),
+  insertInlineContentControl: (op) => splittingControlAt(op.paragraphId, op.offset),
+  insertFragment: (op) => siblingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
   splitParagraph: (op) => beside(op.paragraphId, op.offset),
@@ -329,13 +393,12 @@ const TREE_OP_REACH: {
       range: { start: offset, end: offset },
     })),
   }),
-  // A join restructures both paragraphs: whatever either one held ends up somewhere else.
+  // A join moves the second paragraph's content into the first. A control inside either one
+  // moves whole and keeps what it holds, so only the controls ENCLOSING the paragraphs are
+  // edited; naming the paragraphs without a range asks exactly those.
   joinParagraphs: (op) => ({
     kind: 'nodes',
-    targets: [
-      { nodeId: op.firstId, structural: true },
-      { nodeId: op.secondId, structural: true },
-    ],
+    targets: [{ nodeId: op.firstId }, { nodeId: op.secondId }],
   }),
   setParagraphProperties: (op) => whole(op.paragraphId),
   setParagraphMarkProperties: (op) => whole(op.paragraphId),
@@ -360,23 +423,28 @@ const TREE_OP_REACH: {
     action: 'accept',
     revision: op.revision,
     ...(op.localName === undefined ? {} : { localName: op.localName }),
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
   }),
   rejectRevision: (op) => ({
     kind: 'revisions',
     action: 'reject',
     revision: op.revision,
     ...(op.localName === undefined ? {} : { localName: op.localName }),
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
   }),
   acceptAllRevisions: (op) => ({
     kind: 'revisions',
     action: 'accept',
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
   rejectAllRevisions: (op) => ({
     kind: 'revisions',
     action: 'reject',
+    ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
+  setRevisionAttribution: (op) => ({ kind: 'nodes', targets: attributionTargets(op) }),
   // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.
   setContentControlValue: (op) => ({
     kind: 'control',
@@ -442,6 +510,16 @@ const TREE_OP_REACH: {
       { nodeId: op.tableId, removes: true },
     ],
   }),
+  // A merge removes cells and moves their content, so it asks both questions a column delete
+  // asks. A split only rearranges.
+  mergeTableCells: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.tableId, structural: true },
+      { nodeId: op.tableId, removes: true },
+    ],
+  }),
+  splitTableCell: (op) => restructuring(op.tableId),
   // Geometry and cell decoration change PROPERTIES. Every control inside keeps every character
   // it held, so only the controls ENCLOSING the addressed node are asked — the same answer
   // `setParagraphProperties` gives for a paragraph.
@@ -449,6 +527,9 @@ const TREE_OP_REACH: {
   setTableRightEdgeWidth: (op) => whole(op.tableId),
   setTableRowHeight: (op) => whole(op.rowId),
   setTableCellBorders: (op) => each(op.cellIds),
+  authorTable: (op) =>
+    op.action.kind === 'insert' ? each([op.action.paragraphId]) : each([op.action.tableId]),
+  setTableProperties: (op) => each([op.tableId]),
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
   insertDrawing: (op) => writingAt(op.paragraphId, op.offset),
@@ -479,15 +560,30 @@ const TREE_OP_REACH: {
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
+  setFieldCode: (op) => whole(op.fieldNodeId),
+  setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
+  commitTextFormField: (op) => whole(op.fieldNodeId),
+  setLegacyCheckbox: (op) => whole(op.fieldNodeId),
+  setLegacyDropdown: (op) => whole(op.fieldNodeId),
+  insertBookmark: (op) => beside(op.start.paragraphId, op.start.offset),
+  deleteBookmark: () => ({ kind: 'none' }),
+  // A building block pick rebuilds `w:sdtContent`, exactly as a value write does.
+  insertBuildingBlock: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'value',
+    replacesContent: true,
+  }),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',
     targets: [{ nodeId: op.storyRootId, structural: true }],
   }),
-  // Page setup, section furniture and note numbering are properties OF the document. They change
-  // no content, so no control's lock speaks to them; forms protection still does.
+  // Document properties: page, furniture, watermark and notes. No control lock; forms still lock.
   setSectionProperties: () => ({ kind: 'documentProperties' }),
   setSectionFurnitureOptions: () => ({ kind: 'documentProperties' }),
+  setDocumentProtection: () => ({ kind: 'documentProperties' }),
+  setWatermark: () => ({ kind: 'documentProperties' }),
   setNoteProperties: () => ({ kind: 'documentProperties' }),
   // A note's own id is not a body address, and removing or converting one rewrites the run that
   // referenced it — wherever that run happens to be.
@@ -531,6 +627,15 @@ interface ControlTouch {
    * thrown away by an op that was about something else.
    */
   readonly discarded: boolean;
+  /**
+   * For a {@link removed} control: the locks of the controls that SURVIVE around it.
+   *
+   * Removing a control edits the content of whatever encloses it, never its own: its own
+   * `contentLocked` protects what it holds and lets the control go, and the controls nested in
+   * it go with it. So the edit half of the lock is asked of the survivors only, and the removal
+   * half of the whole chain.
+   */
+  readonly survivingLocks?: readonly ContentControlLock[];
 }
 
 /** What an op reaches, resolved against the part: the controls, and the nodes it named. */
@@ -555,7 +660,7 @@ function locksOf(chain: readonly OoxmlNode[]): readonly ContentControlLock[] {
  * to answer from three different walks over three different op allowlists, which is how an inline
  * control ended up unprotected in all three.
  */
-function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
+export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   if (reach.kind === 'none') return NOTHING;
   // No control is touched — no lock, no binding — and nothing here is inside a control, so a
   // protected document refuses it.
@@ -612,12 +717,66 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
       reach.action,
       reach.revision,
       reach.localName,
+      reach.siteNodeIds,
       reach.scopeRootId
     );
   }
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
   for (const target of reach.targets) {
+    const targetNode = findNode(part, target.nodeId);
+    if (
+      targetNode?.kind === 'paragraph' &&
+      target.point === 'inline-control-split' &&
+      target.range !== undefined
+    ) {
+      const enclosing = enclosingContentControls(part, targetNode.id);
+      for (let index = 0; index < enclosing.length; index += 1) {
+        touches.push({
+          control: enclosing[index]!,
+          locks: locksOf(enclosing.slice(0, index + 1)),
+          removed: false,
+          discarded: false,
+        });
+      }
+      const inherited = locksOf(enclosing);
+      const offsets = paragraphOffsetIndex(targetNode);
+      for (const entry of contentControlsIn(targetNode)) {
+        const span = offsets.spanOf(entry.node);
+        if (!span || target.range.start <= span.start || target.range.start >= span.end) continue;
+        touches.push({
+          control: entry.node,
+          locks: inherited.concat(locksOf(entry.ancestors.concat(entry.node))),
+          removed: false,
+          discarded: false,
+        });
+      }
+      // Adding a control is document structure, not a permitted form-field value edit.
+      unprotected.push(targetNode.id);
+      continue;
+    }
+    if (
+      targetNode?.kind === 'paragraph' &&
+      (target.point === 'run-content' || target.point === 'paragraph-sibling') &&
+      target.range !== undefined &&
+      target.range.start === target.range.end
+    ) {
+      const landing =
+        target.point === 'run-content'
+          ? insertionLandingNodeId(targetNode, target.range.start, null, target.bias)
+          : targetNode.id;
+      const controls = enclosingContentControls(part, landing);
+      for (let index = 0; index < controls.length; index += 1) {
+        touches.push({
+          control: controls[index]!,
+          locks: locksOf(controls.slice(0, index + 1)),
+          removed: false,
+          discarded: false,
+        });
+      }
+      if (controls.length === 0) unprotected.push(target.nodeId);
+      continue;
+    }
     const chain = enclosingContentControls(part, target.nodeId);
     const enclosing = chain.filter((node) => node.id !== target.nodeId);
     for (let index = 0; index < enclosing.length; index += 1) {
@@ -628,7 +787,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         discarded: false,
       });
     }
-    const node = findNode(part, target.nodeId);
+    const node = targetNode;
     if (!node || node.kind === 'textValue') {
       if (enclosing.length === 0) unprotected.push(target.nodeId);
       continue;
@@ -649,10 +808,21 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     let filling = false;
     for (const entry of inside) {
       const span = spanOf(entry.node);
+      const locks = [...inherited, ...locksOf([...entry.ancestors, entry.node])];
+      // A tracked deletion that strikes the control WHOLE proposes removing the field, which is
+      // not filling it in, so forms protection must not let it through as an edit inside one.
+      const struckWhole =
+        target.strikesCovered === true &&
+        target.range !== undefined &&
+        strikesWholeControl(span, target.range, resolveContentControlLock(locks));
       // WHAT FORMS PROTECTION LETS THROUGH is an edit that stays within one field. Asking whether
       // the NAMED NODE is inside a control answers "no" for every inline field — the paragraph
       // around it is not the field — so it is asked of the addressed range instead.
-      if (target.range !== undefined && encloses(span, target.range, target.writes === true)) {
+      if (
+        !struckWhole &&
+        target.range !== undefined &&
+        encloses(span, target.range, target.writes === true)
+      ) {
         filling = true;
       }
       const affected =
@@ -660,11 +830,13 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         target.structural === true ||
         (target.range !== undefined && intersects(span, target.range, target.writes === true));
       if (!affected) continue;
+      const removed = target.removes === true || struckWhole;
       touches.push({
         control: entry.node,
-        locks: [...inherited, ...locksOf([...entry.ancestors, entry.node])],
-        removed: target.removes === true,
+        locks,
+        removed,
         discarded: false,
+        ...(removed ? { survivingLocks: inherited } : {}),
       });
     }
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
@@ -762,10 +934,12 @@ function resolveRevisionReach(
   action: RevisionOpAction,
   revision: RevisionAddress | undefined,
   localName: string | undefined,
+  siteNodeIds: readonly string[] | undefined,
   scopeRootId?: string
 ): ResolvedReach {
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
+  const siteNodeIdSet = siteNodeIds === undefined ? undefined : new Set(siteNodeIds);
   const root = scopeRootId === undefined ? part.root : scopedRevisionRoot(part, scopeRootId);
   // Reach runs before validation. An invalid scoped root must fail closed here; validation then
   // reports the malformed canonical address without granting it a narrower protection reach.
@@ -775,7 +949,8 @@ function resolveRevisionReach(
   let seen = 0;
   const walk = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
     if (node.kind === 'textValue' || seen > MAX_REVISION_NODES) return;
-    if (isRevisionNode(node, revision, localName)) {
+    if (!holdsRevisionContainer(node)) return;
+    if (isRevisionNode(node, revision, localName, siteNodeIdSet)) {
       seen += 1;
       if (controls.length === 0) unprotected.push(node.id);
       for (let index = 0; index < controls.length; index += 1) {
@@ -795,6 +970,7 @@ function resolveRevisionReach(
             locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
             removed: true,
             discarded: false,
+            survivingLocks: locksOf(controls),
           });
         }
         // Nothing below a discarded wrapper survives this decision. Its controls were marked as
@@ -811,62 +987,53 @@ function resolveRevisionReach(
     }
   };
   walk(root, []);
-  // A complete tracked-row decision removes the ROW, not its marker. Ask every control in that
-  // exact row—including sibling cells the marker walk never enters—with ancestor locks in force.
-  const removedRowIds = new Set(
-    removedRowsForRevisionDecision(part, action, revision, {
-      ...(localName === undefined ? {} : { localName }),
-      ...(scopeRootId === undefined ? {} : { scopeRootId }),
-    }).map((row) => row.id)
-  );
-  const walkRemovedRows = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
-    if (node.kind === 'textValue' || removedRowIds.size === 0) return;
-    if (removedRowIds.delete(node.id)) {
+  // Markers can sit outside the cells and controls whose content or geometry they change.
+  const structural = revisionStructuralReach(part, action, revision, {
+    ...(localName === undefined ? {} : { localName }),
+    ...(siteNodeIds === undefined ? {} : { siteNodeIds }),
+    ...(scopeRootId === undefined ? {} : { scopeRootId }),
+  });
+  const walkStructural = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
+    if (node.kind === 'textValue' || structural.size === 0) return;
+    const removed = structural.get(node.id);
+    if (removed !== undefined) {
+      for (let index = 0; index < controls.length; index += 1) {
+        touches.push({
+          control: controls[index]!,
+          locks: locksOf(controls.slice(0, index + 1)),
+          removed: false,
+          discarded: false,
+        });
+      }
       for (const entry of contentControlsIn(node)) {
         touches.push({
           control: entry.node,
           locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
-          removed: true,
+          removed,
           discarded: false,
+          ...(removed ? { survivingLocks: locksOf(controls) } : {}),
         });
       }
-      return;
+      if (removed) return;
     }
-    for (const child of node.children) {
-      walkRemovedRows(child, child.kind === 'contentControl' ? [...controls, child] : controls);
-    }
+    for (const child of node.children)
+      walkStructural(child, child.kind === 'contentControl' ? [...controls, child] : controls);
   };
-  walkRemovedRows(root, []);
+  walkStructural(root, []);
   return { touches, unprotected };
 }
 
 /** Bounds the revision scan the way every other file-driven walk in this module is bounded. */
 const MAX_REVISION_NODES = 50_000;
 
-/** Revision containers whose resolution rewrites the content they wrap. */
-const REVISION_LOCAL_NAMES: ReadonlySet<string> = new Set([
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-  'rPrChange',
-  'pPrChange',
-  'tblPrChange',
-  'trPrChange',
-  'tcPrChange',
-  'sectPrChange',
-  'tblGridChange',
-  'cellIns',
-  'cellDel',
-  'cellMerge',
-]);
-
 function isRevisionNode(
   node: OoxmlNode,
   revision: RevisionAddress | undefined,
-  localName?: string
+  localName?: string,
+  siteNodeIds?: ReadonlySet<string>
 ): boolean {
   if (node.kind === 'textValue') return false;
+  if (siteNodeIds !== undefined && !siteNodeIds.has(node.id)) return false;
   if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
   if (!REVISION_LOCAL_NAMES.has(node.localName)) return false;
   if (localName !== undefined && node.localName !== localName) return false;
@@ -876,7 +1043,11 @@ function isRevisionNode(
       (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
     )?.value;
   if (attribute('id') !== revision.id) return false;
-  if (attribute('author') !== revision.author) return false;
+  if (
+    (attribute('author') ?? (node.localName === 'tblGridChange' ? '' : undefined)) !==
+    revision.author
+  )
+    return false;
   if (revision.date !== undefined && attribute('date') !== revision.date) return false;
   return true;
 }
@@ -906,10 +1077,19 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
   // What NO applier resolves either way is a control the op was not addressed at and would
   // destroy anyway, so those are asked here whatever the intent was.
   const namedControlAnswersForItself = reach.kind === 'control' && reach.intent !== 'value';
+  // A control nested in one being removed goes with it, so only its removal half is asked.
+  const removingNamedControl = reach.kind === 'control' && reach.intent === 'removal';
   for (const touch of resolveReach(part, reach).touches) {
     if (namedControlAnswersForItself && !touch.discarded) continue;
     const resolved = resolveContentControlLock(touch.locks);
-    if (lockForbidsEdit(resolved)) return 'locked';
+    if (touch.discarded && removingNamedControl) {
+      if (lockForbidsRemoval(resolved)) return 'locked';
+      continue;
+    }
+    const edited = touch.survivingLocks
+      ? resolveContentControlLock(touch.survivingLocks)
+      : resolved;
+    if (lockForbidsEdit(edited)) return 'locked';
     if ((touch.removed || touch.discarded) && lockForbidsRemoval(resolved)) return 'locked';
   }
   return null;
@@ -962,37 +1142,6 @@ export function contentControlBindingRefusal(
 // ---------------------------------------------------------------------------
 
 /**
- * Whether `settings.xml` enforces `w:documentProtection w:edit="forms"` (§17.15.1.29).
- *
- * Enforcement is a separate attribute from the mode: Word stores the mode a document was last
- * protected with even after the protection is lifted, so a file with `w:enforcement="0"` is an
- * ordinary editable document and treating it as protected would lock users out of their own
- * text.
- */
-export function enforcesFormsProtection(settings: OoxmlPart | null | undefined): boolean {
-  if (!settings) return false;
-  for (const child of settings.root.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'documentProtection') {
-      continue;
-    }
-    const attribute = (name: string): string | undefined =>
-      child.attributes.find(
-        (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
-      )?.value;
-    if (attribute('edit') !== 'forms') return false;
-    return isTrue(attribute('enforcement'));
-  }
-  return false;
-}
-
-/** `ST_OnOff`: absent means on for a flag element, and "0"/"false"/"off" always means off. */
-function isTrue(value: string | undefined): boolean {
-  if (value === undefined) return true;
-  return value !== '0' && value !== 'false' && value !== 'off';
-}
-
-/**
  * Whether forms protection reaches a node, i.e. it is not inside a control and not in a
  * section that switched form protection off (`w:sectPr/w:formProt`, §17.6.7).
  *
@@ -1002,9 +1151,42 @@ function isTrue(value: string | undefined): boolean {
 export function formsProtectionRefusal(
   part: OoxmlPart,
   settings: OoxmlPart | null | undefined,
-  op: TreeDocOp
+  op: TreeDocOp,
+  preferredFieldId?: string
 ): TreeOpRejection | null {
   if (!enforcesFormsProtection(settings)) return null;
+  // Filling permission never grants permission to change a legacy field definition.
+  if (op.op === 'setTextFormFieldDefault' && sectionProtectsForms(part, op.paragraphId))
+    return 'locked';
+  if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
+  if (op.op === 'setLegacyCheckbox' || op.op === 'setLegacyDropdown') return null;
+  const textField = textFormFieldForEdit(part, op, preferredFieldId);
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    op.textFormFieldId !== undefined &&
+    !textField
+  )
+    return 'invalidArgs';
+  if (textField && 'paragraphId' in op && sectionProtectsForms(part, op.paragraphId))
+    return protectedTextFormEditRefusal(part, op, textField);
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    sectionProtectsForms(part, op.paragraphId)
+  ) {
+    const paragraph = findNode(part, op.paragraphId);
+    if (paragraph?.kind === 'paragraph') {
+      const start = op.op === 'insertText' ? op.offset : op.start;
+      const end = op.op === 'insertText' ? op.offset : op.end;
+      if (
+        textFormFieldsOf(paragraph).some((field) =>
+          op.op === 'insertText'
+            ? start >= field.start && start <= field.end
+            : start < field.end && end > field.start
+        )
+      )
+        return 'locked';
+    }
+  }
   const reach = treeOpReach(op);
   if (reach.kind === 'none') return null;
   for (const node of resolveReach(part, reach).unprotected) {
@@ -1014,50 +1196,6 @@ export function formsProtectionRefusal(
     return 'locked';
   }
   return null;
-}
-
-/**
- * Whether the section owning a node still has form protection on.
- *
- * `w:formProt` is per-section, so a protected document may carry an unprotected section. The
- * owning section is the first `w:sectPr` at or after the node in body order, which is how a
- * section's extent is expressed in the body at all.
- */
-function sectionProtectsForms(part: OoxmlPart, nodeId: string): boolean {
-  let seenTarget = false;
-  let answer = true;
-  const walk = (node: OoxmlNode): boolean => {
-    if (node.kind === 'textValue') return false;
-    if (node.id === nodeId) seenTarget = true;
-    if (
-      seenTarget &&
-      node.namespaceUri === WML_NAMESPACE_URI &&
-      node.localName === 'sectPr' &&
-      node.id !== nodeId
-    ) {
-      const formProt = node.children.find(
-        (child) =>
-          child.kind !== 'textValue' &&
-          child.namespaceUri === WML_NAMESPACE_URI &&
-          child.localName === 'formProt'
-      );
-      // No `w:formProt` on the section leaves the document's own protection in force.
-      if (formProt && formProt.kind !== 'textValue') {
-        answer = isTrue(
-          formProt.attributes.find(
-            (entry) => entry.localName === 'val' && entry.namespaceUri === WML_NAMESPACE_URI
-          )?.value
-        );
-      }
-      return true;
-    }
-    for (const child of node.children) {
-      if (walk(child)) return true;
-    }
-    return false;
-  };
-  walk(part.root);
-  return answer;
 }
 
 // ---------------------------------------------------------------------------
@@ -1096,17 +1234,7 @@ export function textRun(
   text: string,
   properties: OoxmlNode | undefined
 ): OoxmlNode {
-  const value: OoxmlNode = { id: nextId(), kind: 'textValue', value: text };
-  const textNode = {
-    id: nextId(),
-    kind: 'text',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 't',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children: [value],
-  } as unknown as OoxmlNode;
+  const content = textWithHyphens(nextId, text);
   return {
     id: nextId(),
     kind: 'run',
@@ -1115,29 +1243,8 @@ export function textRun(
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: properties ? [properties, textNode] : [textNode],
+    children: properties ? [properties, ...content] : content,
   } as unknown as OoxmlNode;
-}
-
-/** The `w:rPr` a control's first run carries, cloned so a value write keeps its face. */
-function firstRunProperties(
-  content: OoxmlNode | undefined,
-  nextId: () => string
-): OoxmlNode | undefined {
-  if (!content || content.kind === 'textValue') return undefined;
-  const find = (node: OoxmlNode, depth: number): OoxmlNode | undefined => {
-    if (node.kind === 'textValue' || depth > 8) return undefined;
-    if (node.kind === 'run') {
-      const properties = runPropertiesNodeOf(node);
-      return properties ? cloneWithFreshIds(properties, nextId) : undefined;
-    }
-    for (const child of node.children) {
-      const found = find(child, depth + 1);
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return find(content, 0);
 }
 
 export function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
@@ -1198,78 +1305,6 @@ function namedElementChild(
 // Value semantics
 // ---------------------------------------------------------------------------
 
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:T[\d:.]{1,15}Z?)?$/;
-
-/** ISO input, validated as a real calendar date rather than a well-shaped string. */
-function parseIsoDate(raw: string): { year: number; month: number; day: number } | null {
-  const match = ISO_DATE.exec(raw);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1) return null;
-  if (date.getUTCDate() !== day) return null;
-  return { year, month, day };
-}
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-/**
- * Format a date the way the control's own `w:dateFormat` asks.
- *
- * A BOUNDED token substitution over the patterns Word writes, not a locale engine: the format
- * comes out of an untrusted file, so it is walked once, left to right, with no backtracking and
- * no repetition driven by a file-supplied count.
- */
-export function formatContentControlDate(
-  date: { year: number; month: number; day: number },
-  pattern: string | undefined
-): string {
-  const iso = `${String(date.year).padStart(4, '0')}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
-  if (!pattern || pattern.length === 0 || pattern.length > 64) return iso;
-  let out = '';
-  let index = 0;
-  while (index < pattern.length) {
-    const char = pattern[index]!;
-    if (char !== 'y' && char !== 'M' && char !== 'd') {
-      out += char;
-      index += 1;
-      continue;
-    }
-    let run = 0;
-    while (index + run < pattern.length && pattern[index + run] === char) run += 1;
-    if (char === 'y')
-      out += run <= 2 ? String(date.year % 100).padStart(2, '0') : String(date.year);
-    else if (char === 'M') {
-      out +=
-        run >= 4
-          ? MONTH_NAMES[date.month - 1]!
-          : run === 3
-            ? MONTH_NAMES[date.month - 1]!.slice(0, 3)
-            : String(date.month).padStart(Math.min(run, 2), '0');
-    } else {
-      out += String(date.day).padStart(Math.min(run, 2), '0');
-    }
-    index += run;
-  }
-  return out;
-}
-
 interface PlannedValue {
   /** What the control's content becomes. */
   readonly text: string;
@@ -1279,6 +1314,7 @@ interface PlannedValue {
   readonly lastValue?: string;
   readonly fullDate?: string;
   readonly checked?: boolean;
+  readonly symbol?: CheckboxSymbol;
 }
 
 /**
@@ -1326,7 +1362,9 @@ function planValue(
       ) {
         return 'typeMismatch';
       }
-      if (typeof value.text !== 'string' || !isValidXmlText(value.text)) return 'invalidArgs';
+      if (typeof value.text !== 'string' || !isInsertableText(value.text)) return 'invalidArgs';
+      if (value.text.includes(LINE_BREAK_TEXT) && !propertiesHoldLineBreaks(properties))
+        return 'invalidArgs';
       if (value.text.length === 0) {
         return { text: promptFor(properties.type), showingPlaceholder: true };
       }
@@ -1354,7 +1392,16 @@ function planValue(
         : properties.checkbox.uncheckedState;
       const glyph = glyphFor(state?.value, value.checked);
       if (glyph === null) return 'invalidArgs';
-      return { text: glyph, showingPlaceholder: false, checked: value.checked };
+      return {
+        text: glyph,
+        showingPlaceholder: false,
+        checked: value.checked,
+        symbol: {
+          hex: state?.value ?? (value.checked ? '2612' : '2610'),
+          font: state?.font ?? 'MS Gothic',
+          states: checkboxStateHexes(properties.checkbox),
+        },
+      };
     }
     case 'date': {
       if (properties.type !== 'date') return 'typeMismatch';
@@ -1461,7 +1508,8 @@ export function editedProperties(
       ) {
         return child;
       }
-      return withAttribute(child, 'lastValue', edits.lastValue!);
+      // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+      return withAttribute(child, 'lastValue', withDisplayedHyphens(edits.lastValue!));
     });
   }
   if (edits.fullDate !== undefined) {
@@ -1507,23 +1555,20 @@ export function editedProperties(
 }
 
 /** Rebuild a control's content so it holds exactly `text`, keeping its block shape. */
-function contentWithText(
+export function contentWithText(
   content: OoxmlElement | undefined,
   text: string,
-  nextId: () => string
-): readonly OoxmlNode[] {
-  const properties = firstRunProperties(content, nextId);
-  const run = textRun(nextId, text, properties);
-  const firstParagraph = content?.children.find((child) => child.kind === 'paragraph');
-  if (!firstParagraph || firstParagraph.kind === 'textValue') return [run];
-  const pPr = firstParagraph.children.find(
-    (child: OoxmlNode) => child.kind !== 'textValue' && child.localName === 'pPr'
+  nextId: () => string,
+  inline: boolean,
+  preferredParagraphId?: string
+): readonly OoxmlNode[] | null {
+  return valueContent(
+    content,
+    (properties) => textRun(nextId, text, properties),
+    nextId,
+    inline,
+    preferredParagraphId
   );
-  const paragraph = {
-    ...firstParagraph,
-    children: pPr ? [pPr, run] : [run],
-  } as OoxmlNode;
-  return [paragraph];
 }
 
 export function contentControlEffect(
@@ -1571,8 +1616,15 @@ export function applySetContentControlValue(
   if (typeof planned === 'string') return { ok: false, reason: planned };
 
   const nextId = createNodeIdAllocator(part);
-  const sdtPr = contentControlPropertiesNodeOf(control);
-  const content = contentControlContentNodeOf(control);
+  const sdtPr = contentControlPropertiesContainerOf(control);
+  // By name, not by kind: a `w:sdtContent` holding a child outside its typed set (a simple
+  // field, say) demotes to generic, and must still be the one content node the write replaces.
+  const content = contentControlContentOf(control);
+  const inline = isInlineControl(part, control.id);
+  const children = planned.symbol
+    ? checkboxContent(content, planned.symbol, planned.text, nextId, inline)
+    : contentWithText(content, planned.text, nextId, inline);
+  if (!children) return { ok: false, reason: 'unsupported' };
   const nextProperties = editedProperties(
     sdtPr,
     {
@@ -1586,17 +1638,14 @@ export function applySetContentControlValue(
   const nextContent = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
-    children: contentWithText(content, planned.text, nextId),
+    children,
   } as OoxmlNode;
 
   const rebuilt = {
     ...control,
     children: [
       nextProperties,
-      ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
-      ),
+      ...control.children.filter((child) => child.id !== sdtPr?.id && child.id !== content?.id),
       nextContent,
     ],
   } as OoxmlNode;
@@ -1617,7 +1666,13 @@ export function applySetContentControlValue(
   return {
     ok: true,
     part: written.part,
-    effect: contentControlEffect(control.id, 'flow-structural'),
+    // Paragraphs the value dropped, minted or kept in place are reported to paragraph-keyed
+    // consumers.
+    effect: withParagraphDiff(
+      contentControlEffect(control.id, 'flow-structural'),
+      control,
+      rebuilt
+    ),
   };
 }
 
@@ -1629,11 +1684,23 @@ export function applySetContentControlProperties(
   const resolved = resolveControl(part, op.controlId);
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
-  if (lockForbidsEdit(lock) || lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
+  // A control's own lock protects its content/existence, not the ability to change
+  // that lock. Retain every ancestor's protection when toggling the named control.
+  const lockOnly = op.lock !== undefined && op.tag === undefined && op.alias === undefined;
+  const effective = lockOnly
+    ? resolveContentControlLock(
+        enclosingContentControls(part, control.id)
+          .slice(0, -1)
+          .map((ancestor) => contentControlPropertiesOf(ancestor).lock)
+      )
+    : lock;
+  if (lockForbidsEdit(effective) || lockForbidsRemoval(effective))
+    return { ok: false, reason: 'locked' };
 
   const nextId = createNodeIdAllocator(part);
+  const properties = contentControlPropertiesContainerOf(control);
   const nextProperties = editedProperties(
-    contentControlPropertiesNodeOf(control),
+    properties,
     {
       ...(op.tag === undefined ? {} : { tag: op.tag }),
       ...(op.alias === undefined ? {} : { alias: op.alias }),
@@ -1643,7 +1710,7 @@ export function applySetContentControlProperties(
   );
   const children = [
     nextProperties,
-    ...control.children.filter((child) => child.kind !== 'contentControlProperties'),
+    ...control.children.filter((child) => child.id !== properties?.id),
   ];
   return fromEdit(
     replaceNode(part, control.id, { ...control, children } as OoxmlNode, options),
@@ -1660,6 +1727,7 @@ export function applyRemoveContentControl(
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
   if (lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
+  // An enclosing content lock is refused in `validateRemoveContentControl`, for every form.
   // Deleting the WHOLE control is an existence operation, governed by the wrapper axis
   // alone — Word deletes a contentLocked control whole (only sdtLocked forbids deletion),
   // and Backspace over a content-locked chip relies on it. The content lock guards the
@@ -1670,6 +1738,21 @@ export function applyRemoveContentControl(
   const content = contentControlContentNodeOf(control);
   const kept = op.keepContent && content ? [...content.children] : [];
   const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+  // A control proposed as a tracked insertion goes with its `w:ins` when nothing else is in it:
+  // an empty wrapper would stay behind as a review item with nothing to accept or reject.
+  const outer =
+    children.length === 0 && owner.kind === 'revisionInsert' && parentOf(part, owner.id);
+  if (outer) {
+    return fromEdit(
+      replaceChildren(
+        part,
+        outer.id,
+        outer.children.filter((child) => child.id !== owner.id),
+        options
+      ),
+      contentControlEffect(outer.id, 'flow-structural')
+    );
+  }
   return fromEdit(
     replaceChildren(part, owner.id, children, options),
     contentControlEffect(owner.id, 'flow-structural')
@@ -1714,30 +1797,29 @@ export function placeholderControlForInsertion(
 export function clearPlaceholder(
   part: OoxmlPart,
   controlId: string,
-  options?: EditOptions
+  options?: EditOptions,
+  /** The paragraph the caller is about to write into, kept as the emptied prompt's paragraph. */
+  preferredParagraphId?: string
 ): OoxmlPart | null {
   const control = findNode(part, controlId);
   if (!control || control.kind !== 'contentControl') return null;
   const nextId = createNodeIdAllocator(part);
-  const content = contentControlContentNodeOf(control);
-  const properties = editedProperties(
-    contentControlPropertiesNodeOf(control),
-    { showingPlaceholder: false },
-    nextId
-  );
+  const content = contentControlContentOf(control);
+  const sdtPr = contentControlPropertiesContainerOf(control);
+  const properties = editedProperties(sdtPr, { showingPlaceholder: false }, nextId);
+  const inline = isInlineControl(part, control.id);
+  const children = contentWithText(content, '', nextId, inline, preferredParagraphId);
+  if (!children) return null;
   const emptied = {
     ...(content ??
       wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
-    children: contentWithText(content, '', nextId),
+    children,
   } as OoxmlNode;
   const rebuilt = {
     ...control,
     children: [
       properties,
-      ...control.children.filter(
-        (child) =>
-          child.kind !== 'contentControlProperties' && child.kind !== 'contentControlContent'
-      ),
+      ...control.children.filter((child) => child.id !== sdtPr?.id && child.id !== content?.id),
       emptied,
     ],
   } as OoxmlNode;

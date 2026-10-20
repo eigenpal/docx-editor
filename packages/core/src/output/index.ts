@@ -20,6 +20,7 @@ export {
   type FieldShadingMode,
   type PaintOptions,
 } from './semantic-paint.ts';
+export type { BreakMarkStrings } from './semantic-break-marks.ts';
 // TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
 // constant) are engine internals reached through `getReviewAuthors` on the editor; a
 // `@public` symbol is a breaking change to withdraw, so they stay off the barrel and the
@@ -43,3 +44,17 @@ export {
   type UnsupportedElementLayout,
   type UnsupportedElementRule,
 } from './unsupported-elements.ts';
+
+export {
+  collectPageChangeBars,
+  type PageChangeBars,
+  type ChangeBarsMode,
+} from './semantic-paint-change-bars.ts';
+
+/**
+ * Picture brightness/contrast as one clamped linear transfer per channel. Exporters encode the
+ * same line the screen paints.
+ *
+ * @internal
+ */
+export { lumTransfer, type LumTransfer } from './drawing-lum-filter.ts';

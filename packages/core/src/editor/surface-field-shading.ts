@@ -84,8 +84,9 @@ export function syncActiveFieldShading(
   const candidates = pagesLayer.querySelectorAll<HTMLElement>(`.${SHADABLE_CLASS}`);
   for (const candidate of candidates) {
     if (candidate.dataset.paragraphId !== caret.paragraphId) continue;
-    const start = Number(candidate.dataset.start);
-    const end = Number(candidate.dataset.end);
+    // An editable saved result publishes the range of the whole result on each of its pieces.
+    const start = Number(candidate.dataset.fieldResultStart ?? candidate.dataset.start);
+    const end = Number(candidate.dataset.fieldResultEnd ?? candidate.dataset.end);
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
     // Half-open on the left, INCLUSIVE on the right: a field is one model unit, so a caret
     // resting at either edge is a caret Word considers inside it. Excluding the trailing edge

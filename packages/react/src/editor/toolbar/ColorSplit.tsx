@@ -1,3 +1,4 @@
+import { usePickerKeyboard } from './usePickerKeyboard';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The split colour controls: font colour and text highlight.
@@ -18,7 +19,12 @@ import type { ReactNode } from 'react';
 // not applied.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  commandForSlotValue,
+  hostDocumentOf,
+  isDomNode,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -202,7 +208,7 @@ interface PopupBodyProps {
   readonly themeHexes: readonly string[];
 }
 
-function Swatch({
+export function ToolbarColorSwatch({
   value,
   css,
   title,
@@ -221,10 +227,11 @@ function Swatch({
       className="docx-toolbar__swatch"
       style={{ backgroundColor: css }}
       aria-label={title}
+      aria-pressed={selected}
       title={title}
       data-value={value}
       {...(selected ? { 'data-selected': '' } : {})}
-      {...(isLightHex(css.replace('#', '')) ? { 'data-light': '' } : {})}
+      {...(css.startsWith('var(') || isLightHex(css.replace('#', '')) ? { 'data-light': '' } : {})}
       onMouseDown={guardToolbarMousedown}
       onClick={() => apply(value)}
     />
@@ -240,7 +247,7 @@ function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
       <div className="docx-toolbar__swatch-heading">{label('colorPicker.themeColors')}</div>
       <div className="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--theme" role="group">
         {themeHexes.map((hex, column) => (
-          <Swatch
+          <ToolbarColorSwatch
             key={`base-${column}`}
             value={hex}
             css={`#${hex.toLowerCase()}`}
@@ -254,7 +261,7 @@ function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
             const variant = ladders[column]![row]!;
             const hex = variantHex(base, variant.apply);
             return (
-              <Swatch
+              <ToolbarColorSwatch
                 key={`${row}-${column}`}
                 value={hex}
                 css={`#${hex.toLowerCase()}`}
@@ -282,7 +289,7 @@ function FontColorBody(props: PopupBodyProps) {
         <div className="docx-toolbar__swatch-heading">{label('colorPicker.standardColors')}</div>
         <div className="docx-toolbar__swatch-grid" role="group">
           {STANDARD_COLOR_SWATCHES.map((swatch) => (
-            <Swatch
+            <ToolbarColorSwatch
               key={swatch.value}
               value={swatch.value}
               css={swatch.css}
@@ -371,7 +378,7 @@ function HighlightBody({ apply, label, current }: PopupBodyProps) {
       <div className="docx-toolbar__swatch-heading">{label('colorPicker.highlightColors')}</div>
       <div className="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--highlight" role="group">
         {HIGHLIGHT_GRID.map((swatch) => (
-          <Swatch
+          <ToolbarColorSwatch
             key={swatch.value}
             value={swatch.value}
             css={swatch.css}
@@ -396,6 +403,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
     const [open, setOpen] = useState(false);
     const [lastValue, setLastValue] = useState(defaultValue);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open, () => setOpen(false));
 
     // The live value at the selection, so the popup marks the current swatch. Hex
     // colours come back as `{ kind: 'hex', value }`; highlights as their name.
@@ -421,17 +429,19 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
       if (!open) return undefined;
       const onMouseDown = (event: globalThis.MouseEvent) => {
         const root = rootRef.current;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         setOpen(false);
       };
-      document.addEventListener('mousedown', onMouseDown);
-      return () => document.removeEventListener('mousedown', onMouseDown);
+      const doc = hostDocumentOf(rootRef.current);
+      doc.addEventListener('mousedown', onMouseDown);
+      return () => doc.removeEventListener('mousedown', onMouseDown);
     }, [open]);
 
     const apply = useCallback(
       (value: string) => {
         setOpen(false);
         if (!editor) return;
+        editor.focus();
         const command = commandForSlotValue(slot, value);
         if (!command) return;
         if (editor.can(command).ok) {
@@ -474,7 +484,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
           className="docx-toolbar__colorsplit-caret"
           disabled={!isEnabled}
           {...(!isEnabled ? { 'data-disabled': '' } : {})}
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-expanded={open}
           aria-label={text}
           title={disabledReason ?? text}

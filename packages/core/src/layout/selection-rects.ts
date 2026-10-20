@@ -4,17 +4,30 @@
 // this answers "which pixels does this range cover". They meet at `segmentOverlap`, which is
 // the one part of both that has to know a line can carry more than one paragraph.
 
-import { lineSegments, segmentOverlap } from './line-segments.ts';
-import { xWithinLine } from './line-geometry.ts';
+import { lineContentEdges } from './pending-line.ts';
+import {
+  fragmentParagraphs,
+  lineSegments,
+  logicalLineSegments,
+  segmentOverlap,
+} from './line-segments.ts';
+import { xWithinLine, rangeBandsWithinLine, mergeLineRangeBands } from './line-geometry.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
-import type { BlockFragmentRecord, SemanticLayout, TextMeasurer } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  PageRecord,
+  SemanticLayout,
+  TextMeasurer,
+} from './semantic-records.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 import { bottomToTopRectInLayout } from './table-cell-text-direction.ts';
 
 /**
- * The rectangles covering a selection, one per line it spans.
+ * The physical rectangles covering a selection, including disjoint bands within bidi lines.
  *
  * BODY fragments only, and a selection outside the body paints nothing. That is a real gap —
  * a retained pin in a header shows no highlight, and a comment anchored in one draws no band
@@ -67,20 +80,14 @@ export function selectionMarkRects(
 interface ParagraphTerminal {
   end: number;
   start: number;
+  /** Lines that draw one field cut across them share a range; the last one is terminal. */
+  lineId: string;
 }
 
-const paragraphTerminalsCache = new WeakMap<
-  SemanticLayout,
-  ReadonlyMap<string, ParagraphTerminal>
->();
-const orderIndexCache = new WeakMap<readonly string[], ReadonlyMap<string, number>>();
-
-/** Last visual segment range for each paragraph, including repeated visual occurrences. */
-function paragraphTerminals(layout: SemanticLayout): ReadonlyMap<string, ParagraphTerminal> {
-  const cached = paragraphTerminalsCache.get(layout);
-  if (cached) return cached;
+/** Last visual segment range for each paragraph drawn on `pages`. */
+function paragraphTerminals(pages: readonly PageRecord[]): ReadonlyMap<string, ParagraphTerminal> {
   const terminals = new Map<string, ParagraphTerminal>();
-  for (const page of layout.pages)
+  for (const page of pages)
     for (const fragment of paragraphFragmentsOf(page))
       for (const line of fragment.lines)
         for (const segment of lineSegments(line)) {
@@ -88,13 +95,128 @@ function paragraphTerminals(layout: SemanticLayout): ReadonlyMap<string, Paragra
           if (
             !previous ||
             segment.end > previous.end ||
-            (segment.end === previous.end && segment.start > previous.start)
+            (segment.end === previous.end && segment.start >= previous.start)
           ) {
-            terminals.set(segment.paragraphId, { end: segment.end, start: segment.start });
+            const { end, start } = segment;
+            terminals.set(segment.paragraphId, { end, start, lineId: line.id });
           }
         }
-  paragraphTerminalsCache.set(layout, terminals);
   return terminals;
+}
+
+const terminalsCache = new WeakMap<SemanticLayout, ReadonlyMap<string, ParagraphTerminal>>();
+
+/** {@link paragraphTerminals} over every page, once per layout. */
+function layoutTerminals(layout: SemanticLayout): ReadonlyMap<string, ParagraphTerminal> {
+  let terminals = terminalsCache.get(layout);
+  if (!terminals) terminalsCache.set(layout, (terminals = paragraphTerminals(layout.pages)));
+  return terminals;
+}
+
+const orderIndexCache = new WeakMap<readonly string[], ReadonlyMap<string, number>>();
+
+/** Per page, the last spans asked for: one per order index (layout order, story order). */
+const pageSpans = new WeakMap<
+  PageRecord,
+  { index: ReadonlyMap<string, number>; span: readonly [number, number] }[]
+>();
+
+/** The lowest and highest index `index` gives any paragraph drawn on `page`. */
+function pageOrderSpan(
+  page: PageRecord,
+  index: ReadonlyMap<string, number>
+): readonly [number, number] {
+  const entries = pageSpans.get(page) ?? [];
+  const cached = entries.find((entry) => entry.index === index);
+  if (cached) return cached.span;
+  let low = Infinity;
+  let high = -Infinity;
+  for (const fragment of paragraphFragmentsOf(page))
+    for (const paragraphId of fragmentParagraphs(fragment)) {
+      const at = index.get(paragraphId);
+      if (at === undefined) continue;
+      low = Math.min(low, at);
+      high = Math.max(high, at);
+    }
+  const span = [low, high] as const;
+  pageSpans.set(page, [{ index, span }, ...entries].slice(0, 2));
+  return span;
+}
+
+/**
+ * A test of whether a range between two paragraphs can draw on any of `pages`, by body layout
+ * order. Built once per set of pages: the spans of the visible pages are read once, not once
+ * per range.
+ *
+ * A paragraph the body order cannot place (a header's, a note's) answers true: this is only a
+ * filter in front of measuring, and a false keep costs one range's measurement.
+ */
+export function rangesOnPages(
+  layout: SemanticLayout,
+  pages: ReadonlySet<number>
+): (fromParagraphId: string, toParagraphId: string) => boolean {
+  const index = documentOrderIndex(layout);
+  const spans: (readonly [number, number])[] = [];
+  for (const pageIndex of pages) {
+    const page = layout.pages[pageIndex];
+    if (page) spans.push(pageOrderSpan(page, index));
+  }
+  return (fromParagraphId, toParagraphId) => {
+    const from = index.get(fromParagraphId);
+    const to = index.get(toParagraphId);
+    if (from === undefined || to === undefined) return true;
+    const low = Math.min(from, to);
+    const high = Math.max(from, to);
+    for (const span of spans) if (span[1] >= low && span[0] <= high) return true;
+    return false;
+  };
+}
+
+/** {@link rangesOnPages} for one range. */
+export function rangeMayShowOnPages(
+  layout: SemanticLayout,
+  pages: ReadonlySet<number>,
+  fromParagraphId: string,
+  toParagraphId: string
+): boolean {
+  return rangesOnPages(layout, pages)(fromParagraphId, toParagraphId);
+}
+
+/**
+ * The pages a range can paint on: those drawing a paragraph inside it, in either order.
+ *
+ * A segment paints only when its paragraph lies between the range's ends — by layout order for
+ * text, by story order for a paragraph mark — so a page drawing no such paragraph has nothing
+ * to paint, and every segment of a paragraph inside the range is on a page that is kept.
+ * Walking every line of a long document for a one-word selection cost tens of milliseconds per
+ * selection change. An end neither order can place keeps every page.
+ */
+function pagesHoldingRange(
+  layout: SemanticLayout,
+  from: SemanticPosition,
+  to: SemanticPosition,
+  orderIndex: ReadonlyMap<string, number>
+): readonly PageRecord[] {
+  const layoutIndex = documentOrderIndex(layout);
+  const fromLayout = layoutIndex.get(from.paragraphId);
+  const toLayout = layoutIndex.get(to.paragraphId);
+  const fromOrder = orderIndex.get(from.paragraphId);
+  const toOrder = orderIndex.get(to.paragraphId);
+  if (
+    fromLayout === undefined ||
+    toLayout === undefined ||
+    fromOrder === undefined ||
+    toOrder === undefined
+  )
+    return layout.pages;
+  return layout.pages.filter((page) => {
+    const layoutSpan = pageOrderSpan(page, layoutIndex);
+    const orderSpan = pageOrderSpan(page, orderIndex);
+    return (
+      (layoutSpan[1] >= fromLayout && layoutSpan[0] <= toLayout) ||
+      (orderSpan[1] >= fromOrder && orderSpan[0] <= toOrder)
+    );
+  });
 }
 
 function indexesOf(order: readonly string[]): ReadonlyMap<string, number> {
@@ -117,17 +239,25 @@ function rangeRects(
   includeText: boolean,
   measurer?: TextMeasurer
 ): SelectionRect[] {
+  // A caret paints no range or paragraph mark. This is the common typing path;
+  // do not build document-wide terminal/order indexes just to return no rectangles.
+  if (
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset
+  )
+    return [];
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   const orderIndex = indexesOf(order);
   const fromIndex = orderIndex.get(ordered.from.paragraphId);
   const toIndex = orderIndex.get(ordered.to.paragraphId);
-  const terminals = paragraphTerminals(layout);
+  const pages = pagesHoldingRange(layout, ordered.from, ordered.to, orderIndex);
+  const terminals = pages === layout.pages ? layoutTerminals(layout) : paragraphTerminals(pages);
   const rects: SelectionRect[] = [];
-  for (const page of layout.pages) {
+  for (const page of pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
-        const segments = lineSegments(line);
+        const segments = logicalLineSegments(line);
         for (const [segmentIndex, segment] of segments.entries()) {
           const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
           const paragraphIndex = orderIndex.get(segment.paragraphId);
@@ -140,38 +270,42 @@ function rangeRects(
             paragraphIndex !== undefined &&
             paragraphIndex >= fromIndex &&
             paragraphIndex < toIndex &&
-            terminal?.end === segment.end &&
-            terminal.start === segment.start &&
+            terminal?.lineId === line.id &&
+            terminal.end === segment.end &&
             segmentIndex === segments.length - 1;
           if ((!includeText || !overlap) && !markSelected) continue;
-          const textStartX =
-            includeText && overlap ? xWithinLine(line, overlap.start, measurer, segment) : null;
-          const textEndX =
-            includeText && overlap ? xWithinLine(line, overlap.end, measurer, segment) : null;
-          const markStartX = markSelected
-            ? xWithinLine(line, segment.end, measurer, segment)
-            : null;
-          const markEndX =
-            markStartX !== null
-              ? markStartX +
-                paragraphMarkWidth(
-                  Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0))
-                )
-              : null;
-          const edges = [textStartX, textEndX, markStartX, markEndX].filter(
-            (edge): edge is number => edge !== null
-          );
-          const startX = Math.min(...edges);
-          const endX = Math.max(...edges);
-          rects.push(
-            bottomToTopRectInLayout(layout, segment.paragraphId, {
-              pageIndex: page.index,
-              x: startX,
-              y: line.box.y,
-              width: endX - startX,
-              height: line.box.height,
-            })
-          );
+          const bands =
+            includeText && overlap
+              ? rangeBandsWithinLine(line, overlap.start, overlap.end, measurer, segment)
+              : [];
+          if (markSelected) {
+            const width = paragraphMarkWidth(
+              Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0))
+            );
+            const baseLevel = segment.spans[0]?.style.shaping?.baseLevel;
+            const rtl =
+              baseLevel === undefined ? paragraphIsRtl(fragment.props) : baseLevel % 2 === 1;
+            // The paragraph mark follows the base-direction visual edge, even when
+            // the final logical run has the opposite direction.
+            let markX = xWithinLine(line, segment.end, measurer, segment);
+            const edges = lineContentEdges(segment.spans, segment.drawings);
+            if (edges && segment.spans.some((span) => span.style.shaping !== undefined)) {
+              markX = rtl ? edges.left : edges.right;
+            }
+            bands.push({ x: rtl ? markX - width : markX, width });
+          }
+          for (const band of mergeLineRangeBands(bands)) {
+            const clipped = clipParagraphBox(
+              {
+                pageIndex: page.index,
+                ...band,
+                y: line.box.y,
+                height: line.box.height,
+              },
+              fragment.clipToBox ? fragment.box : undefined
+            );
+            if (clipped) rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
+          }
         }
       }
     }
@@ -219,24 +353,58 @@ export function keyedRangeRects(
           for (const range of ranges) {
             const overlap = segmentOverlap(layout, segment, range.from, range.to);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, measurer, segment);
-            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            rects.push(
-              bottomToTopRectInLayout(layout, segment.paragraphId, {
-                pageIndex: page.index,
-                x: Math.min(startX, endX),
-                y: line.box.y,
-                width: Math.abs(endX - startX),
-                height: line.box.height,
-              })
-            );
-            found.set(range.key, rects);
+            for (const band of rangeBandsWithinLine(
+              line,
+              overlap.start,
+              overlap.end,
+              measurer,
+              segment
+            )) {
+              const clipped = clipParagraphBox(
+                {
+                  pageIndex: page.index,
+                  ...band,
+                  y: line.box.y,
+                  height: line.box.height,
+                },
+                fragment.clipToBox ? fragment.box : undefined
+              );
+              if (!clipped) continue;
+              rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
+              found.set(range.key, rects);
+            }
           }
       }
     }
   }
   return found;
+}
+
+/**
+ * Page-content origin in stacked page coordinates.
+ *
+ * `contentBox` already lives in page-stack space. Destinations and review geometry add
+ * page-content rects to this origin; they must not reconstruct it from `page.box`.
+ */
+export function pageContentOrigin(page: PageRecord): { readonly x: number; readonly y: number } {
+  return { x: page.contentBox.x, y: page.contentBox.y };
+}
+
+/**
+ * Offset from a story box into page-content coordinates.
+ *
+ * Header, footer, and note fragments are relative to their own box. Subtract `contentBox`
+ * here so destination caret math and review geometry cannot drift apart.
+ */
+export function storyBoxContentOffset(
+  page: PageRecord,
+  storyBox: { readonly x: number; readonly y: number }
+): { readonly x: number; readonly y: number } {
+  return {
+    x: storyBox.x - page.contentBox.x,
+    y: storyBox.y - page.contentBox.y,
+  };
 }
 
 /**
@@ -257,25 +425,16 @@ export function storyContentOffset(
   const inBlocks = (blocks: readonly BlockFragmentRecord[]): boolean =>
     paragraphFragmentsOfBlocks(blocks).some((fragment) => fragment.paragraphId === paragraphId);
   if (page.header && inBlocks(page.header.fragments)) {
-    return {
-      x: page.header.box.x - page.contentBox.x,
-      y: page.header.box.y - page.contentBox.y,
-    };
+    return storyBoxContentOffset(page, page.header.box);
   }
   if (page.footer && inBlocks(page.footer.fragments)) {
-    return {
-      x: page.footer.box.x - page.contentBox.x,
-      y: page.footer.box.y - page.contentBox.y,
-    };
+    return storyBoxContentOffset(page, page.footer.box);
   }
   for (const area of [page.footnotes, page.endnotes]) {
     if (!area) continue;
     for (const note of area.notes) {
       if (!inBlocks(note.fragments)) continue;
-      return {
-        x: note.box.x - page.contentBox.x,
-        y: note.box.y - page.contentBox.y,
-      };
+      return storyBoxContentOffset(page, note.box);
     }
   }
   return { x: 0, y: 0 };
@@ -359,6 +518,7 @@ export function presenceRangeRects(
     if (pair) ordered.push({ key: range.key, from: pair.from, to: pair.to });
   }
   if (ordered.length === 0) return found;
+  const orderIndex = indexesOf(order);
   const take = (
     blocks: readonly BlockFragmentRecord[],
     pageIndex: number,
@@ -370,19 +530,29 @@ export function presenceRangeRects(
         presenceWalkLines += 1;
         for (const segment of lineSegments(line)) {
           for (const range of ordered) {
-            const overlap = segmentOverlap(layout, segment, range.from, range.to);
+            const overlap = segmentOverlap(layout, segment, range.from, range.to, orderIndex);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, measurer, segment);
-            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            rects.push({
-              pageIndex,
-              x: Math.min(startX, endX) + offsetX,
-              y: line.box.y + offsetY,
-              width: Math.abs(endX - startX),
-              height: line.box.height,
-            });
-            found.set(range.key, rects);
+            for (const band of rangeBandsWithinLine(
+              line,
+              overlap.start,
+              overlap.end,
+              measurer,
+              segment
+            )) {
+              const clipped = clipParagraphBox(
+                {
+                  pageIndex,
+                  ...band,
+                  y: line.box.y,
+                  height: line.box.height,
+                },
+                fragment.clipToBox ? fragment.box : undefined
+              );
+              if (!clipped) continue;
+              rects.push({ ...clipped, x: clipped.x + offsetX, y: clipped.y + offsetY });
+              found.set(range.key, rects);
+            }
           }
         }
       }
@@ -394,22 +564,14 @@ export function presenceRangeRects(
     take(page.fragments, page.index, 0, 0);
     for (const story of [page.header, page.footer]) {
       if (!story) continue;
-      take(
-        story.fragments,
-        page.index,
-        story.box.x - page.contentBox.x,
-        story.box.y - page.contentBox.y
-      );
+      const origin = storyBoxContentOffset(page, story.box);
+      take(story.fragments, page.index, origin.x, origin.y);
     }
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       for (const note of area.notes) {
-        take(
-          note.fragments,
-          page.index,
-          note.box.x - page.contentBox.x,
-          note.box.y - page.contentBox.y
-        );
+        const origin = storyBoxContentOffset(page, note.box);
+        take(note.fragments, page.index, origin.x, origin.y);
       }
     }
   }

@@ -1,9 +1,25 @@
+import {
+  horizontalCaretStep,
+  directionThroughGap,
+  visualLineEdge,
+  type BidiDirectionOf,
+} from './visual-caret-navigation.ts';
 import type { IndexedCaretStops } from './semantic-caret-stop-index.ts';
 
 interface VerticalCaretStop {
   readonly lineId: string;
   readonly x: number;
   readonly position: { readonly paragraphId: string; readonly offset: number };
+}
+
+/** Previous stop of this member, even when another merged member emitted stops after it. */
+export function lastStopOfParagraph<T extends VerticalCaretStop>(
+  stops: readonly T[],
+  paragraphId: string
+): T | undefined {
+  for (let index = stops.length - 1; index >= 0; index--)
+    if (stops[index]!.position.paragraphId === paragraphId) return stops[index];
+  return undefined;
 }
 
 function lineIdsOf(stops: readonly VerticalCaretStop[]): string[] {
@@ -85,15 +101,14 @@ export function stopInDirection<T extends VerticalCaretStop>(
 export function moveToLineEdge<T extends VerticalCaretStop>(
   position: VerticalCaretStop['position'],
   direction: -1 | 1,
-  indexed: IndexedCaretStops<T>
+  indexed: IndexedCaretStops<T>,
+  directionOf: BidiDirectionOf = () => undefined
 ): VerticalCaretStop['position'] | null {
   const stopIndex = indexed.index.get(position.paragraphId)?.get(position.offset);
   const stop =
     stopIndex === undefined ? nearestStop(indexed.stops, position) : indexed.stops[stopIndex]!;
   if (!stop) return null;
-  const lineId = stop.lineId;
-  const onLine = indexed.stops.filter((stop) => stop.lineId === lineId);
-  return (direction === -1 ? onLine[0] : onLine[onLine.length - 1])?.position ?? null;
+  return visualLineEdge(indexed.stops, stop, direction, directionOf).position;
 }
 
 /** Body ArrowLeft/ArrowRight using only the active and boundary-neighbour paragraphs. */
@@ -102,24 +117,26 @@ export function moveHorizontalCaret<T extends VerticalCaretStop>(
   direction: -1 | 1,
   order: readonly string[],
   paragraphIndex: number,
-  stopsForParagraph: (paragraphId: string) => IndexedCaretStops<T>
+  stopsForParagraph: (paragraphId: string) => IndexedCaretStops<T>,
+  directionOf: BidiDirectionOf = () => undefined
 ): { position: VerticalCaretStop['position']; desiredX: null } | null {
   const current = stopsForParagraph(position.paragraphId);
   const stopIndex = current.index.get(position.paragraphId)?.get(position.offset);
+  let logicalDirection = direction;
   if (stopIndex === undefined) {
-    const resolved = stopInDirection(current.stops, position, direction);
+    logicalDirection = directionThroughGap(current.stops, position, direction, directionOf);
+    const resolved = stopInDirection(current.stops, position, logicalDirection);
     if (resolved) return { position: resolved.position, desiredX: null };
     // Past every stop of this paragraph in that direction: the neighbour, like an edge step.
   } else {
-    const localTarget = stopIndex + direction;
-    if (localTarget >= 0 && localTarget < current.stops.length) {
-      return { position: current.stops[localTarget]!.position, desiredX: null };
-    }
+    const step = horizontalCaretStep(current.stops, stopIndex, direction, directionOf);
+    logicalDirection = step.logicalDirection;
+    if (step.target) return { position: step.target.position, desiredX: null };
   }
-  const neighbourId = order[paragraphIndex + direction];
+  const neighbourId = order[paragraphIndex + logicalDirection];
   if (!neighbourId) return { position, desiredX: null };
   const neighbour = stopsForParagraph(neighbourId).stops;
-  const target = direction === -1 ? neighbour[neighbour.length - 1] : neighbour[0];
+  const target = logicalDirection === -1 ? neighbour[neighbour.length - 1] : neighbour[0];
   return target ? { position: target.position, desiredX: null } : null;
 }
 

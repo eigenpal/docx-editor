@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { inject, provide, shallowRef, watch, type InjectionKey } from 'vue';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '@docx-editor.dev/vue';
+import { nextTask } from './next-task.ts';
 
 export interface EditorRenderRevision {
   readonly value: unknown;
@@ -44,24 +45,25 @@ export function useEditorRenderRevision(): EditorRenderRevision {
       let key = renderRevisionKey(current);
       revision.value = key;
       let disposed = false;
-      let scheduled: ReturnType<typeof setTimeout> | null = null;
+      // A message task, not a timer: see `next-task.ts`.
+      let scheduled = false;
       const notify = () => {
-        if (disposed || scheduled !== null) return;
-        scheduled = setTimeout(() => {
-          scheduled = null;
+        if (disposed || scheduled) return;
+        scheduled = true;
+        nextTask(() => {
+          scheduled = false;
           if (disposed) return;
           const next = renderRevisionKey(current);
           if (next === key) return;
           key = next;
           revision.value = next;
-        }, 0);
+        });
       };
       const offDocument = current.on('change', notify);
       const offSelection = current.on('selectionChange', notify);
       const offError = current.on('error', notify);
       onCleanup(() => {
         disposed = true;
-        if (scheduled !== null) clearTimeout(scheduled);
         offDocument();
         offSelection();
         offError();

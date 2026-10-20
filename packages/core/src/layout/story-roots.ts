@@ -1,4 +1,10 @@
 import { isUnsupportedLayoutParagraph, unsupportedBlockParagraph } from './unsupported-content.ts';
+import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
+import { tocCodeRanges } from './field-code-toc.ts';
+import { tocFieldChromeParagraphIds, emptyTocSuppressedResultParagraphIds } from './toc-layout.ts';
+import type { NumberingIndex } from './numbering-index.ts';
+import { withStyleSeparatorParagraphs } from './style-separator-flow.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
 // Story roots over the canonical tree (phase 2 of the legacy-lane retirement).
 //
 // A STORY is a flowable sequence of blocks: the body of the main document, the whole
@@ -20,18 +26,21 @@ import type {
   OoxmlParagraphNode,
   OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import {
-  contentControlContentChildren,
-  isContentControl,
-  MAX_CONTENT_CONTROL_NESTING,
-} from '../store/package/content-control-walk.ts';
+import { MAX_CONTENT_CONTROL_NESTING } from '../store/package/content-control-walk.ts';
+import { blockStoryContainerChildren } from '../store/package/story-blocks.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { piecesOfParagraph } from './field-projection.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
-import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
+import {
+  revisionFilterSelects,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
+import { withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
+import { projectRevisionFormatting } from './revision-formatting-projection.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
 
@@ -115,17 +124,19 @@ function withMergedParagraphs(
   parented: readonly ParentedBlock[],
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
-): OoxmlElement[] {
-  if (displayMode === 'all-markup' && !authorFilter) return parented.map((entry) => entry.block);
-  const out: OoxmlElement[] = [];
+): readonly ParentedBlock[] {
+  if (displayMode === 'all-markup' && !revisionFilterSelects(authorFilter)) return parented;
+  const out: ParentedBlock[] = [];
   let pendingMembers: OoxmlElement[] = [];
   let pendingParent: string | null = null;
   const endRun = (): void => {
-    out.push(...mergedTrailingRun(pendingMembers));
+    const parentKey = pendingParent ?? '';
+    for (const block of mergedTrailingRun(pendingMembers)) out.push({ block, parentKey });
     pendingMembers = [];
     pendingParent = null;
   };
-  for (const { block, parentKey } of parented) {
+  for (const entry of parented) {
+    const { block, parentKey } = entry;
     // A content control flattens into the flow, so its paragraphs are neighbours on the page
     // without being siblings in the tree. The store rebuilds one children array at a time and
     // never merges out of `w:sdtContent`; matching that keeps the two answers the same.
@@ -133,7 +144,7 @@ function withMergedParagraphs(
     if (block.kind !== 'paragraph' || isUnsupportedLayoutParagraph(block)) {
       // A table between two mark-removed paragraphs is a container boundary too.
       endRun();
-      out.push(block);
+      out.push(entry);
       continue;
     }
     const removed = markRemovedInMode(block, displayMode, authorFilter);
@@ -148,7 +159,7 @@ function withMergedParagraphs(
       // Cannot be measured, so cannot be merged INTO either: a survivor whose own offsets do
       // not line up would take the previous members' characters at the wrong index.
       endRun();
-      out.push(block);
+      out.push(entry);
       continue;
     }
     if (removed) {
@@ -157,18 +168,18 @@ function withMergedParagraphs(
       continue;
     }
     if (pendingMembers.length === 0) {
-      out.push(block);
+      out.push(entry);
       continue;
     }
     const members = [...pendingMembers, block];
     pendingMembers = [];
     pendingParent = null;
-    out.push(mergedParagraph(members, block));
+    out.push({ block: mergedParagraph(members, block), parentKey });
   }
   // A TRAILING run, with no unmarked paragraph after it. Word cannot delete the last mark of a
   // story, so the last member keeps its own break and the ones before it still merge into it —
   // which is what `resolveRevisions` does, one member at a time, for the same reason.
-  out.push(...mergedTrailingRun(pendingMembers));
+  endRun();
   return out;
 }
 
@@ -190,14 +201,43 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  * Every story collects its blocks through here — body, note, textbox and table cell — so a
  * container is a merge boundary by construction: a paragraph can only merge with one that
  * shares its parent, which is the same rule the store applies.
+ *
+ * Last, an empty paragraph whose mark is hidden leaves the flow; see `hidden-paragraph-mark.ts`.
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
   displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  styles?: StyleCascadeTable,
+  styleSeparators = false,
+  numberingIndex?: NumberingIndex,
+  excludedParagraphs?: ReadonlySet<string> | (() => ReadonlySet<string>)
 ): OoxmlElement[] {
-  const merged = withMergedParagraphs(flowBlocksWithParent(children), displayMode, authorFilter);
-  return merged.filter((block) => acceptStoryBlock(block, displayMode, authorFilter));
+  const blocks = flowBlocksWithParent(children).map((entry) => ({
+    ...entry,
+    block: projectRevisionFormatting(entry.block, displayMode, authorFilter),
+  }));
+  const revisionBlocks = withMergedParagraphs(blocks, displayMode, authorFilter).filter((entry) =>
+    acceptStoryBlock(entry.block, displayMode, authorFilter)
+  );
+  const accepted = styleSeparators
+    ? withStyleSeparatorParagraphs(
+        revisionBlocks,
+        styles,
+        numberingIndex,
+        excludedParagraphs,
+        (block) => memberIsAddressable(block, displayMode, authorFilter),
+        (block) => mergeGroups.has(block),
+        (merged, members) => mergeGroups.set(merged, { merged, members })
+      )
+    : revisionBlocks;
+  // A merged paragraph's identity keys its merge group, so it is never copied.
+  return withoutHiddenMarkParagraphs(
+    accepted,
+    displayMode,
+    authorFilter,
+    (block) => !mergeGroups.has(block)
+  );
 }
 
 /**
@@ -242,7 +282,7 @@ export function isEmptyCellTerminator(paragraph: OoxmlElement): boolean {
 /** A block, and which children array it actually lives in. */
 interface ParentedBlock {
   readonly block: OoxmlElement;
-  /** Node id of the enclosing content control, or `''` for the story root's own children. */
+  /** Node id of the enclosing transparent wrapper, or `''` for the story root's own children. */
   readonly parentKey: string;
 }
 
@@ -261,8 +301,9 @@ function flowBlocksWithParent(children: readonly OoxmlNode[]): readonly Parented
         blocks.push({ block: child, parentKey });
         continue;
       }
-      if (isContentControl(child) && nest < MAX_CONTENT_CONTROL_NESTING) {
-        collect(contentControlContentChildren(child), nest + 1, child.id);
+      const nested = blockStoryContainerChildren(child);
+      if (nested !== null && nest < MAX_CONTENT_CONTROL_NESTING) {
+        collect(nested, nest + 1, child.id);
       }
     }
   };
@@ -301,7 +342,7 @@ function memberIsAddressable(
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}|${currentFieldResultsMode()}`;
   const perMode = addressableByNode.get(member);
   const cached = perMode?.get(key);
   if (cached !== undefined) return cached;
@@ -387,24 +428,52 @@ function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
  */
 const storyBlocksCache = createRecentRootCache<Map<string, OoxmlElement[]>>(16);
 
+const numberingIdentities = new WeakMap<NumberingIndex, number>();
+let nextNumberingIdentity = 1;
+function numberingIdentity(index?: NumberingIndex): number {
+  if (!index) return 0;
+  let id = numberingIdentities.get(index);
+  if (!id) {
+    id = nextNumberingIdentity++;
+    numberingIdentities.set(index, id);
+  }
+  return id;
+}
 /**
- * The story's blocks — paragraphs and tables — in document order, flattening through
- * block-level content-control wrappers under the shared nesting budget.
+ * Return story blocks in document order, flattening block-level content controls.
+ * Compatible hidden paragraph marks join in body stories using the supplied styles and numbering.
+ * Repeated calls with the same part and projection inputs share one array. Treat it as read-only.
  *
- * Repeated calls with the same part and display mode return the SAME array instance,
- * shared by every caller — treat it as read-only; mutating it corrupts later callers.
+ * @public
  */
 export function storyBlocks(
   part: OoxmlPart,
   displayMode: RevisionDisplayMode = 'all-markup',
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  styles?: StyleCascadeTable,
+  numberingIndex?: NumberingIndex
 ): OoxmlElement[] {
-  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}|${styles?.cacheToken ?? ''}|${numberingIdentity(numberingIndex)}`;
   const perMode = storyBlocksCache.get(part);
   const cached = perMode?.get(key);
   if (cached) return cached;
   const root = storyRootOf(part);
-  const blocks = root ? mergedFlowBlocks(root.children, displayMode, authorFilter) : [];
+  const blocks = root
+    ? mergedFlowBlocks(
+        root.children,
+        displayMode,
+        authorFilter,
+        styles,
+        root.kind === 'body',
+        numberingIndex,
+        () =>
+          new Set([
+            ...tocCodeRanges(part).keys(),
+            ...tocFieldChromeParagraphIds(part),
+            ...emptyTocSuppressedResultParagraphIds(part),
+          ])
+      )
+    : [];
   if (perMode) cacheProjection(perMode, key, blocks);
   else storyBlocksCache.set(part, new Map([[key, blocks]]));
   return blocks;

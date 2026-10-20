@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="./.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="./.github/assets/readme-logo-light.svg" />
+      <img src="./.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
@@ -12,19 +16,22 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-Open-source WYSIWYG `.docx` editor for React and Vue. Word-faithful pagination, tracked changes, comments, and lossless round-trip: untouched content and unsupported OOXML survive the save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)** | **[Roadmap](https://github.com/orgs/eigenpal/projects/2)**
+**DOCX Editor** is a complete document ecosystem featuring a **WYSIWYG editor** with real-time collaboration, tracked changes, and rich editing capabilities, a **headless layout engine** that runs on both client and server, and a **PDF generation engine**. Together, they provide a unified foundation for document editing, rendering, and export.
+
+[Live demo](https://docx-editor.dev/editor) | [Documentation](https://www.docx-editor.dev/docs) | [Roadmap](https://github.com/orgs/eigenpal/projects/2)
 
 ## Quick start
+
+Install the adapter for your framework and its required engine peer:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core   # React
 npm install @docx-editor.dev/vue @docx-editor.dev/core     # Vue
 ```
 
-See the [React](#react) or [Vue](#vue) quick start below.
+See the [React](#react) or [Vue](#vue) quick start.
 
-Node users need `^20.16.0 || >=22.3.0`. Browser applications can use the
-packages through their normal build tool.
+For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packages with their build tool.
 
 <p align="center">
   <a href="https://docx-editor.dev/editor">
@@ -32,24 +39,45 @@ packages through their normal build tool.
   </a>
 </p>
 
+## Features
+
+| Feature | Description |
+| --- | --- |
+| [Editor API](https://www.docx-editor.dev/docs/2.x/editor-api) | Automate documents in a browser or server with a supported subset of Word Office.js. |
+| [Review workflow](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes) | Add comments and tracked changes with the review module. |
+| [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity) | Check rendering and editing support for document features. |
+| [Save and reopen](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving) | Preserve document structure, unsupported OOXML, and embedded files. |
+| [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration) | Edit together with remote cursors, shared changes, and personal undo. |
+| [Custom UI](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots) | Build controls with shared commands, components, and styles. |
+| [React and Vue](https://www.docx-editor.dev/docs/2.x/installation) | Use either adapter with the same document engine. |
+| [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls with locale catalogs and custom strings. |
+| [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
+| [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
+| [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) | Send anonymous diagnostics and metrics to Sentry, OpenTelemetry, Prometheus, or a log service. No document content or personal data is sent. |
+
+Review, collaboration, the Editor API, PDF export, and telemetry require separate packages under the EigenPal Pro License.
+
 ## Packages
 
-| Package                                                                                    | Description                                                                                                                                                                                | Docs                                                      |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Root component, provider primitives, shared hooks, and compound chrome.             | [Docs](https://www.docx-editor.dev/docs/2.x/react)        |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Root component, composition primitives, shared composables, and compound chrome. | [Docs](https://www.docx-editor.dev/docs/2.x/vue)          |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. Depend on this if you fork an adapter.                                                                | [Docs](https://www.docx-editor.dev/docs/2.x/core)         |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by the adapter.                                                                                                                                   | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)         |
-| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)           | Open-licensed substitutes for common Word fonts, with local and on-demand resolvers.                                                                                                       | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
-| `@docx-editor.dev/docx-to-markdown`                                                        | Private workspace package for server-first DOCX to Markdown conversion using the shared semantic layout engine, packaged fonts, and HarfBuzz.                                              | Internal preview                                          |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, real-time collaboration, and custom nodes.                                                                                                                      | [Docs](https://www.docx-editor.dev/docs/2.x/pro)          |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                                                        | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)   |
+| Package | Description | Docs |
+| --- | --- | --- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react) | React editor components and hooks. | [React adapter](https://www.docx-editor.dev/docs/2.x/react) |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue) | Vue 3 editor components and composables. | [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) | DOCX parsing, editing, and rendering. | [Core engine](https://www.docx-editor.dev/docs/2.x/core) |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n) | Translations and locale types. | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) |
+| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts) | Open-licensed substitutes for Word fonts. | [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
+| [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output. | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) |
+| [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) | Convert DOCX to PDF on Node.js. | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) |
+| [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, and custom nodes. | [Review and collaboration](https://www.docx-editor.dev/docs/2.x/pro) |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
+| [`@docx-editor.dev/telemetry`](https://www.npmjs.com/package/@docx-editor.dev/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers. | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) |
 
-`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
-
-> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+`@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, `@docx-editor.dev/docx-to-pdf`, and `@docx-editor.dev/telemetry` use the EigenPal Pro License. See the license terms for [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md), [docx-to-pdf](packages/docx-to-pdf/LICENSE.md), and [telemetry](packages/telemetry/LICENSE.md). Compare license and support options on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## React
+
+Import the stylesheet once and pass the selected file to the editor:
 
 ```tsx
 import { useState } from 'react';
@@ -77,11 +105,13 @@ export function App() {
 }
 ```
 
-> **Next.js / SSR:** Use dynamic import. The editor requires the DOM.
+For Next.js and server-side rendering (SSR), use `dynamic(..., { ssr: false })` in a Client Component. The editor requires browser APIs.
 
 Full docs: [React adapter](https://www.docx-editor.dev/docs/2.x/react) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props).
 
 ## Vue
+
+Import the stylesheet once and pass the selected file to the editor:
 
 ```vue
 <script setup lang="ts">
@@ -107,40 +137,39 @@ async function onPick(event: Event) {
 </template>
 ```
 
-> **Nuxt / SSR:** Load the editor in a client-only component. The editor requires the DOM.
+For Nuxt and server-side rendering, load the editor in a client-only component. The editor requires browser APIs.
 
 Full docs: [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props).
 
 ## Font measurement
 
-Pass usable font bytes for Word-accurate line and page breaks. Without them, the
-editor uses fallback measurement that does not guarantee Word-compatible
-layout.
+Pass usable font bytes to measure text for line and page breaks. Fallback measurement can change wrapping and pagination.
 
-Use `packagedFonts()` from `@docx-editor.dev/fonts` for local substitutes. Add
-`googleFonts()` only when your application accepts third-party font requests.
+Use `packagedFonts()` from `@docx-editor.dev/fonts` for packaged substitutes. Use `customFonts()` from `@docx-editor.dev/core/editor` for your own font files. Add `googleFonts()` when your application accepts third-party font requests.
 
 See [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
 ## Development
 
+Use the toolchain in [Contributing](CONTRIBUTING.md#prerequisites), then run these commands from the repository root:
+
 ```bash
 bun install
-bun run dev        # localhost:5173
-bun run dev:markdown # DOCX → paginated Markdown demo on localhost:5177
+bun run dev          # localhost:5173
+bun run dev:markdown # Markdown demo: localhost:5177
 bun run build
 bun run typecheck
 ```
 
-A live preview of `main` is auto-deployed at **[latest.docx-editor.dev](https://latest.docx-editor.dev/)** — useful for trying out changes before they ship to npm.
+Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
-Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh) | [Telemetry](examples/telemetry-single-user) | [Collaboration telemetry](examples/telemetry-collaboration)
 
-**[Documentation](https://www.docx-editor.dev/docs)** | **[React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props)** | **[Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)**
+[Documentation](https://www.docx-editor.dev/docs) | [React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props) | [Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor License Agreement (CLA).
 
 ## Translations
 
@@ -148,10 +177,12 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, 
 | ------- | -------------------- |
 | `en`    | English              |
 | `de`    | German               |
+| `es`    | Spanish              |
 | `fr`    | French               |
 | `he`    | Hebrew               |
 | `hi`    | Hindi                |
 | `id`    | Indonesian           |
+| `ja`    | Japanese             |
 | `pl`    | Polish               |
 | `pt-BR` | Portuguese (Brazil)  |
 | `tr`    | Turkish              |
@@ -160,18 +191,24 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, 
 To add a locale, see the [i18n contribution guide](docs/i18n.md).
 
 ```bash
-bun run i18n:new de      # scaffold German locale
+bun run i18n:new it      # Scaffold an Italian locale.
 bun run i18n:status      # check translation coverage
 ```
 
 ## License
 
-This repository is licensed under [Apache 2.0](LICENSE), except `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)); you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+The repository uses [Apache 2.0](LICENSE), except for the Pro packages. These packages use the EigenPal Pro License:
+
+- [`@docx-editor.dev/pro`](packages/pro/LICENSE.md): tracked changes, comments, collaboration, and custom nodes.
+- [`@docx-editor.dev/editor-api`](packages/editor-api/LICENSE.md): document automation in a browser or on a server.
+- [`@docx-editor.dev/docx-to-pdf`](packages/docx-to-pdf/LICENSE.md): PDF export on Node.js.
+- [`@docx-editor.dev/telemetry`](packages/telemetry/LICENSE.md): anonymous diagnostics, metrics, and error reporting.
+
+Production use of a Pro package requires a commercial agreement. Compare options on the [pricing page](https://www.docx-editor.dev/pricing). Bundled fonts retain their own licenses.
 
 ## Commercial support
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+For commercial support or custom features, [email the support team](mailto:docx-editor@eigenpal.com).
 
 ## Roadmap
 

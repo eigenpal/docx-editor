@@ -41,6 +41,10 @@ test.describe('Vue contextual interactions', () => {
     await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.locator('.docx-table-cell').first().click();
+    // Contextual controls can move into the responsive toolbar overflow.
+    if (!(await page.locator('[data-slot="table.borderTarget"]').first().isVisible())) {
+      await page.locator('[data-slot="toolbar.more"]').click();
+    }
     const root = page.locator('[data-slot="table.borderTarget"]').first();
     const trigger = root.locator('.docx-table-chrome__trigger');
     await expect(trigger).toBeEnabled();

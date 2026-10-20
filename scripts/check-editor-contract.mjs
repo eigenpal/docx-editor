@@ -27,6 +27,7 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   'onReady',
   'onChange',
   'onFontError',
+  'onRevisionMarkupChange',
   'onSave',
   'onOpen',
   'onTitleChange',
@@ -35,8 +36,10 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   // Title-bar render props; Vue uses named slots with the same names.
   'renderTitleBarLeft',
   'renderTitleBarRight',
-  // Unsupported-content render prop; Vue supplies a typed scoped slot.
-  'renderUnsupportedElement',
+  // The loading indicator; Vue uses a named slot with the same name.
+  'loadingIndicator',
+  // Open-failure dialog buttons; Vue uses the `openFailureActions` named slot.
+  'renderOpenFailureActions',
 ]);
 
 function extractInterfaceBody(source, name) {

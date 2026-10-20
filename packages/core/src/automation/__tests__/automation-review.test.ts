@@ -656,6 +656,22 @@ describe('a range creates a root comment through the package transaction', () =>
 });
 
 describe('a tracked change is a decision, and the ones offered are the ones the engine can make', () => {
+  test('empty collection decisions preserve document content', () => {
+    for (const op of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+      for (const form of ['body', 'document'] as const) {
+        const host = open(richDocx({ body: '<w:p><w:r><w:t>Example</w:t></w:r></w:p>' }));
+        const { body, document } = roots(host);
+        const before = savedPartBytes(host, 'word/document.xml');
+        const response =
+          op === 'acceptAllRevisions'
+            ? host.execute({ operations: [form === 'body' ? { op, body } : { op, document }] })
+            : host.execute({ operations: [form === 'body' ? { op, body } : { op, document }] });
+        expect(response.ok).toBe(true);
+        expect(savedPartBytes(host, 'word/document.xml')).toBe(before);
+      }
+    }
+  });
+
   test('a story answers its pending changes, each with its author, date and kind', () => {
     const host = reviewed();
     const { body } = roots(host);
@@ -757,9 +773,8 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(refusal(response)).toBe('invalid-handle');
   });
 
-  test('a structural change is not answered as a typed decision', () => {
-    // Incomplete `w:trPr/w:ins` (no matching `w:cellIns`) is omitted from the listing because
-    // this protocol cannot name its Word subtype. Collection membership is not the decision set.
+  test('a tracked row is answered as an insertion decision', () => {
+    // Word exposes a tracked row as an insertion, even without cell markers.
     const host = open(
       richDocx({
         body:
@@ -768,7 +783,12 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
       })
     );
     const { body } = roots(host);
-    expect(revisionsOf(host, body)).toEqual([]);
+    const revisions = revisionsOf(host, body);
+    expect(revisions).toHaveLength(1);
+    expect(
+      host.execute({ operations: [{ op: 'acceptRevision', revision: revisions[0]! }] }).ok
+    ).toBe(true);
+    expect(revisionsOf(host, body)).toHaveLength(0);
   });
 
   test('accepting a complete tracked row keeps the row and drops the marks', () => {
@@ -795,12 +815,12 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     }
   });
 
-  test('an unsupported row refuses the collection without changing the story', () => {
+  test('a malformed row refuses the collection without changing the story', () => {
     const host = open(
       richDocx({
         body:
           `<w:p><w:ins w:id="10" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>` +
-          `<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>` +
+          `<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/><w:ins w:id="20" w:author="Grace"/></w:trPr>` +
           `<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
       })
     );

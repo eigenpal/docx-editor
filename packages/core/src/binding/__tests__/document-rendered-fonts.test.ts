@@ -116,6 +116,185 @@ describe('collectRenderedFontFamilies', () => {
     expect(cjk.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
   });
 
+  test('a distinct hAnsi face renders only when the run has non-ASCII text it draws', () => {
+    const fonts = '<w:rFonts w:ascii="Garamond" w:hAnsi="Tahoma"/>';
+    const text = (value: string) =>
+      open(docx({ body: `<w:p><w:r><w:rPr>${fonts}</w:rPr><w:t>${value}</w:t></w:r></w:p>` }))
+        .renderedFontFamilies()
+        .slice();
+    expect(text('Latin')).toEqual(['Garamond']);
+    expect(text('Café')).toEqual(['Garamond', 'Tahoma']);
+    // The no-break space advances in the hAnsi face; Hebrew is not drawn through it.
+    expect(text('1 2')).toEqual(['Garamond', 'Tahoma']);
+    expect(text('1 ש')).toEqual(['Garamond']);
+
+    // The slot inherits on its own: a nearer ascii-only rFonts does not hide a style's hAnsi.
+    const inherited = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr><w:r><w:rPr>' +
+          '<w:rFonts w:ascii="Garamond"/></w:rPr><w:t>über</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>' +
+            '</w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:styleId="Body">' +
+            '<w:rPr><w:rFonts w:hAnsi="Tahoma"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(inherited.renderedFontFamilies()).toEqual(['Garamond', 'Tahoma']);
+  });
+
+  test('slots no level names report the format default faces under an authored rPrDefault', () => {
+    const formatDefaults = styles(
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>'
+    );
+    const families = (text: string) =>
+      open(
+        docx({
+          body: `<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
+          styles: formatDefaults,
+        })
+      )
+        .renderedFontFamilies()
+        .slice();
+    expect(families('Latin')).toEqual(['Garamond']);
+    expect(families('Café')).toEqual(['Garamond', 'Times New Roman']);
+    expect(families('漢字')).toEqual(['Garamond', 'SimSun']);
+    // Full-width forms draw in the East Asian face.
+    expect(families('Ａ１')).toEqual(['Garamond', 'SimSun']);
+  });
+
+  test('a run hinted East Asian reports its East Asian face for hinted Latin-1 text', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:hAnsi="Garamond" w:eastAsia="DengXian" ' +
+          'w:hint="eastAsia"/></w:rPr><w:t>§ é</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
+  });
+
+  test('a hint and East Asian face from a paragraph style report that face too', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Hinted"/></w:pPr><w:r><w:rPr>' +
+          '<w:rFonts w:ascii="Garamond" w:hAnsi="Garamond"/></w:rPr><w:t>§</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:styleId="Hinted"><w:rPr>' +
+            '<w:rFonts w:eastAsia="DengXian" w:hint="eastAsia"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
+  });
+
+  test('a w:sym face is not a rendered text face', () => {
+    // Word writes `w:sym w:font="MS Gothic"` for a checkbox and `Wingdings` for a bullet.
+    // A symbol face paints one glyph, moves no text metrics, and is not a family the picker
+    // offers or the editor asks a resolver for — so the substitution notice, which reports
+    // faces an app could have supplied, must not name it. The run's own face still counts:
+    // it is what the surrounding text renders in.
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:font="MS Gothic" w:char="2612"/><w:t>checked</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // Word's own checkbox shape, which `applySetContentControlValue` also mints when the
+    // user ticks a box: the symbol face is repeated on the RUN. Nothing paints in it —
+    // `symbolRunStyle` overrides `rFonts` with `w:sym/@w:font` — so it must not come back
+    // into the answer through the run.
+    const wordCheckbox = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic" w:eastAsia="MS Gothic" ' +
+          'w:hAnsi="MS Gothic"/></w:rPr><w:sym w:font="MS Gothic" w:char="2612"/></w:r>' +
+          '<w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr><w:t>Task done</w:t></w:r></w:p>',
+      })
+    );
+    expect(wordCheckbox.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // A `w:sym` naming no face of its own DOES paint in the run's face, so that one counts.
+    const runFaced = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(runFaced.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // Layout applies any `@w:font` within its length bound, including a name no CSS sink
+    // would take — Word's vertical-writing `@` prefix is the everyday one. The override is
+    // real, so the run's own face still paints nothing.
+    const verticalWriting = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic"/></w:rPr>' +
+          '<w:sym w:font="@MS Gothic" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(verticalWriting.renderedFontFamilies()).toEqual([]);
+    // And no resolver is asked for `@MS Gothic`: the measurer and the paint sink both
+    // reject that name, so bytes supplied under it could never reach the glyph.
+    expect(verticalWriting.symbolFontFamilies()).toEqual([]);
+
+    // A `font` in a foreign namespace is one layout ignores, so the run keeps its own face
+    // and this answer must keep reporting it.
+    const foreignNamespace = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym xmlns:x="urn:x" x:font="Wingdings" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(foreignNamespace.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // A face named BOTH by a symbol and by rendered text stays reported.
+    const alsoText = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic"/></w:rPr>' +
+          '<w:sym w:font="MS Gothic" w:char="2612"/><w:t>checked</w:t></w:r></w:p>',
+      })
+    );
+    expect(alsoText.renderedFontFamilies()).toEqual(['MS Gothic']);
+  });
+
+  test('a w:sym face is its own answer: not the picker, not the notice, but the resolver', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:font="Wingdings" w:char="F0A8"/><w:t>bullet</w:t></w:r></w:p>',
+      })
+    );
+    // Applying Wingdings to a selection would set text in a dingbat face, so the picker
+    // never offers it — but a resolver has to hear about it, or nothing can supply the face
+    // an unmapped private-use glyph needs.
+    expect(session.documentFonts()).toEqual(['Garamond']);
+    expect(session.renderedFontFamilies()).toEqual(['Garamond']);
+    expect(session.symbolFontFamilies()).toEqual(['Wingdings']);
+  });
+
+  test('symbol faces fold case-insensitively, keeping the first spelling a reader sees', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:sym w:font="Wingdings" w:char="F0A8"/><w:t>one</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:sym w:font="WINGDINGS" w:char="F0A7"/><w:t>two</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.symbolFontFamilies()).toEqual(['Wingdings']);
+  });
+
   test('a run without text contributes nothing; an empty document answers []', () => {
     const empty = open(docx({ body: '<w:p/>' }));
     expect(empty.renderedFontFamilies()).toEqual([]);
@@ -169,13 +348,13 @@ describe('collectRenderedFontFamilies', () => {
         styles: styles(
           `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
             '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr></w:style>' +
-            // The default CHARACTER style stands in for absent rStyle too.
+            // The default CHARACTER style stands in for absent rStyle too, and is nearer.
             `<w:style w:type="character" w:default="1" w:styleId="DPF">` +
             '<w:rPr><w:rFonts w:ascii="Consolas"/></w:rPr></w:style>'
         ),
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Aptos', 'Consolas']);
+    expect(session.renderedFontFamilies()).toEqual(['Consolas']);
   });
 
   test('a text-bearing table brings its tblStyle chain and conditional formats', () => {
@@ -267,7 +446,8 @@ describe('collectRenderedFontFamilies', () => {
         styles: styles(styleWithFont('character', 'FootnoteReference', 'Georgia')),
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Georgia', 'Marker Face']);
+    // The run's own face is nearer than its character style, so Georgia draws nothing.
+    expect(session.renderedFontFamilies()).toEqual(['Marker Face']);
   });
 
   test('a duplicated styleId resolves to the LAST definition, matching layout', () => {
@@ -334,5 +514,64 @@ describe('collectRenderedFontFamilies', () => {
       })
     );
     expect(session.renderedFontFamilies()).toEqual(['Georgia']);
+  });
+
+  test('a family a nearer level overrides is not reported', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>' +
+          run('Calibri', 'Heading in body face') +
+          '</w:p>',
+        styles: styles(
+          styleWithFont('paragraph', 'Heading1', 'Calibri Light') +
+            `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr></w:rPrDefault></w:docDefaults>`
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Calibri']);
+  });
+
+  test('a style face reaches runs with no face of their own, nearest level first', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Quote"/></w:pPr><w:r><w:t>quoted</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr><w:tblStyle w:val="Grid"/></w:tblPr><w:tr><w:tc>' +
+          '<w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        styles: styles(
+          styleWithFont('paragraph', 'Quote', 'Georgia') +
+            styleWithFont('table', 'Grid', 'Verdana') +
+            // A default paragraph style with no face lets the table's face through.
+            `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"/>`
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Georgia', 'Verdana']);
+  });
+
+  test('East Asian faces count only for text with East Asian characters', () => {
+    const eastAsianStyles = styles(
+      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="MS Mincho"/></w:rPr></w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="paragraph" w:styleId="Heading1"><w:rPr><w:rFonts w:eastAsia="Yu Gothic Light"/></w:rPr></w:style>`
+    );
+    const latin = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Latin only</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:rPr><w:rFonts w:eastAsia="Yu Mincho"/></w:rPr><w:t>Body</w:t></w:r></w:p>',
+        styles: eastAsianStyles,
+      })
+    );
+    expect(latin.renderedFontFamilies()).toEqual(['Calibri']);
+    const mixed = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>見出し</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>本文</w:t></w:r></w:p>',
+        styles: eastAsianStyles,
+      })
+    );
+    expect(mixed.renderedFontFamilies()).toEqual(['Calibri', 'MS Mincho', 'Yu Gothic Light']);
   });
 });

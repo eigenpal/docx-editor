@@ -50,7 +50,9 @@
 // content. `resolveStoryRefFields` returns null for the common no-REF story, which costs
 // callers nothing downstream.
 
+import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
+  flattenContentControls,
   fldSimpleInstr,
   isFldSimple,
   type OoxmlElement,
@@ -74,6 +76,10 @@ import {
 // Re-exported so every existing importer keeps its one `field-ref.ts` import site.
 export { parseRefInstruction, type RefFieldSpec } from './field-ref-parse.ts';
 import { isNormalNote, notesOf, MAX_NOTES_PER_PART } from '../store/package/note-nodes.ts';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import { noteStoryBlocks } from './story-roots.ts';
 import {
   consumeScanNode,
@@ -100,6 +106,7 @@ import {
   type AutonumFieldSpec,
 } from './field-autonum.ts';
 import { composeFullContextNumber } from './list-counters.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   NO_REVISIONS,
@@ -112,6 +119,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
+import { storyRowParagraphs } from './story-paragraph-walk.ts';
 import {
   listItemNumberSource,
   walkStoryParagraphs,
@@ -136,11 +144,13 @@ const MAX_REF_VERDICTS = 4096;
  */
 export interface RefFieldContext {
   /**
-   * Content token over every PAINTED REF output in the story, for the section prepass memo.
+   * Content token over each paragraph ID and its PAINTED REF outputs in the story, for the
+   * section prepass memo. IDs keep structural edits from moving an identical sequence of
+   * outputs between paragraphs while the aggregate falsely reports unchanged dependencies.
    * A renumbering edit can move a REF value in a section whose own blocks and list map are
    * identity-unchanged, and this token is the only validator that sees it. A field that
    * failed calibration contributes its (session-constant) cached text, so the token still
-   * moves exactly when painted output moves.
+   * moves when painted output or its owning paragraph changes.
    */
   readonly valuesToken: string;
   /** The paragraph's REF outputs folded for its block cache key; `''` when it holds none. */
@@ -312,8 +322,9 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
     pending = null;
   };
 
-  const visit = (node: OoxmlNode, depth: number): void => {
+  const visit = (node: OoxmlNode, depth: number, containerDepth: number): void => {
     if (node.kind === 'textValue') return;
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
     if (node.kind === 'bookmarkStart') {
       const name = wmlAttribute(node, 'name');
@@ -362,6 +373,17 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
             }
           } else if (grand.kind === 'tab' && pending.cached.length < MAX_REF_TEXT_CHARS) {
             pending.cached += ' ';
+          } else if (pending.cached.length < MAX_REF_TEXT_CHARS) {
+            // A hyphen joins the cache exactly when the text around it does: never in a real
+            // deletion, and never beside `w:delText`, which the cache leaves out.
+            const hyphen = visibleHyphenText(grand);
+            if (
+              hyphen &&
+              !revisions.some((revision) => revision.kind === 'delete') &&
+              !node.children.some((sibling) => sibling.kind === 'deletedText')
+            ) {
+              pending.cached += hyphen;
+            }
           }
         }
       }
@@ -394,16 +416,18 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
       if (attribution) {
         const enclosing = revisions;
         revisions = withRevision(enclosing, attribution);
-        for (const child of node.children) visit(child, depth + 1);
+        const nextDepth = nextInlineContainerDepth(node, containerDepth);
+        for (const child of node.children) visit(child, depth + 1, nextDepth);
         revisions = enclosing;
         return;
       }
     }
-    for (const child of node.children) visit(child, depth + 1);
+    const nextDepth = nextInlineContainerDepth(node, containerDepth);
+    for (const child of node.children) visit(child, depth + 1, nextDepth);
   };
   for (const child of paragraph.children) {
     if (!consumeScanNode(budget)) break;
-    visit(child, 1);
+    visit(child, 1, 0);
   }
 
   const scan: ParagraphRefScan =
@@ -775,11 +799,11 @@ function buildRefFieldContext(
     }
     const token = pieces.join('\u0003');
     tokens.set(paragraphId, token);
-    storyParts.push(token);
+    storyParts.push(paragraphId, token);
   }
 
   return {
-    valuesToken: storyParts.join('\u0004'),
+    valuesToken: framedTokenJoin(storyParts),
     tokenForParagraph: (paragraphId) => tokens.get(paragraphId) ?? '',
     liveValueOf: (anchorId, spec) => {
       const entry = liveByAnchor.get(anchorId);
@@ -881,12 +905,50 @@ export function resolveStoryRefFieldsWithNoteNumbers(
  * Aggregate the REF tokens of every paragraph a table contains, for its prepared-block memo
  * and cache key — the same shape as the table's list-token aggregate, for the same reason: a
  * REF value change inside a cell moves nothing else in the table's key.
+ *
+ * Each row's joined tokens are reused while the row node and the context's values hold. A
+ * context's `valuesToken` frames every paragraph id with its token, so two contexts with equal
+ * `valuesToken` answer every paragraph alike and share one row scope. Joining the non-empty
+ * row segments equals joining the non-empty paragraph tokens.
  */
 export function refTokenForTableBlock(table: OoxmlElement, context: RefFieldContext): string {
-  const tokens: string[] = [];
-  for (const paragraph of walkStoryParagraphs([table])) {
-    const token = context.tokenForParagraph(paragraph.id);
-    if (token) tokens.push(token);
+  if (context.valuesToken === '') return '';
+  const scope = refRowScope(context);
+  const segments: string[] = [];
+  for (const row of flattenContentControls(table.children)) {
+    if (row.kind !== 'tableRow') continue;
+    let known = refRowTokens.get(row);
+    if (known?.scope !== scope) {
+      const tokens: string[] = [];
+      for (const paragraph of storyRowParagraphs(row, REF_TABLE_DEPTH)) {
+        const token = context.tokenForParagraph(paragraph.id);
+        if (token) tokens.push(token);
+      }
+      known = { scope, token: tokens.join(';') };
+      if (known.token.length <= MAX_REF_ROW_TOKEN_LENGTH) refRowTokens.set(row, known);
+    }
+    if (known.token) segments.push(known.token);
   }
-  return tokens.join(';');
+  return segments.join(';');
+}
+
+/** The table depth `walkStoryParagraphs` allows a top-level table. */
+const REF_TABLE_DEPTH = 8;
+const MAX_REF_ROW_TOKEN_LENGTH = 1 << 18;
+const refRowTokens = new WeakMap<OoxmlNode, { readonly scope: object; readonly token: string }>();
+const refRowScopes = new WeakMap<RefFieldContext, object>();
+let lastRefContext: WeakRef<RefFieldContext> | null = null;
+
+/** One row scope per distinct `valuesToken`, carried from the previous context when equal. */
+function refRowScope(context: RefFieldContext): object {
+  let scope = refRowScopes.get(context);
+  if (scope) return scope;
+  const previous = lastRefContext?.deref();
+  scope =
+    (previous && previous.valuesToken === context.valuesToken
+      ? refRowScopes.get(previous)
+      : undefined) ?? {};
+  refRowScopes.set(context, scope);
+  lastRefContext = new WeakRef(context);
+  return scope;
 }

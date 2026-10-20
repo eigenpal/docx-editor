@@ -37,6 +37,7 @@ interface DocxParts {
 }
 
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const H = { pairReplacements: false } as const; // Store decisions: replacement halves apart.
 
 function docx({ body, comments, header, footnotes }: DocxParts): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -99,7 +100,7 @@ function bodyTextOf(editor: DocxEditorInstance): string {
 }
 
 function commentOf(editor: DocxEditorInstance) {
-  const comment = editor.getReviewItems().find((item) => item.kind === 'comment');
+  const comment = editor.getReviewItems(H).find((item) => item.kind === 'comment');
   if (!comment || comment.kind !== 'comment') throw new Error('expected a comment');
   return comment;
 }
@@ -152,7 +153,7 @@ function rev(placement: { kind: string } | undefined) {
 describe('the review queue the facade publishes', () => {
   test('a card arrives presentation-ready, so no host derives it from the tree', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(card).toBeDefined();
     expect(card!.kind).toBe('revision');
     expect(rev(card).revisionKind).toBe('insert');
@@ -169,23 +170,23 @@ describe('the review queue the facade publishes', () => {
 
   test('accepting keeps the inserted words and drops the tracking', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.acceptReviewItem(card!.key)).toEqual({ ok: true, changed: true });
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
     expect(bodyTextOf(editor)).toContain('added text');
   });
 
   test('rejecting an insertion removes the words it proposed', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.rejectReviewItem(card!.key)).toEqual({ ok: true, changed: true });
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
     expect(bodyTextOf(editor)).not.toContain('added text');
   });
 
   test('rejecting a deletion brings the struck text back as live content', () => {
     const editor = mount({ body: DELETION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(rev(card).revisionKind).toBe('delete');
     expect(editor.rejectReviewItem(card!.key)).toEqual({ ok: true, changed: true });
     expect(bodyTextOf(editor)).toContain('struck out');
@@ -201,7 +202,7 @@ describe('the review queue the facade publishes', () => {
   test('the revision counter moves on a resolve, so a subscriber re-derives once', () => {
     const editor = mount({ body: INSERTION });
     const before = editor.getReviewRevision();
-    editor.acceptReviewItem(editor.getReviewItems()[0]!.key);
+    editor.acceptReviewItem(editor.getReviewItems(H)[0]!.key);
     expect(editor.getReviewRevision()).not.toBe(before);
   });
 });
@@ -228,11 +229,11 @@ describe('tracked table rows', () => {
       paragraphId: firstParagraph,
       offset: 7,
     });
-    const replacement = editor
-      .getReviewItems()
-      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
-    expect(rev(replacement).replacedText).toBe('first');
-    expect(replacement?.text).toBe('se');
+    const revisions = editor.getReviewItems(H).filter((item) => item.kind === 'revision');
+    expect(revisions.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'first'],
+      ['insert', 'se'],
+    ]);
   });
 
   test('inserting a row paints immediately, opens one review card, and keeps typing', () => {
@@ -249,7 +250,7 @@ describe('tracked table rows', () => {
     expect(tableRows(editor).filter((row) => row.revisionKind === 'insert')).toHaveLength(1);
     expect(editor.isReviewPaneOpen()).toBe(true);
     const rowCard = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
     expect(rowCard).toBeDefined();
     expect(rowCard?.readOnly).toBe(false);
@@ -280,7 +281,7 @@ describe('tracked table rows', () => {
     expect(tableRowCount(editor)).toBe(2);
     expect(tableRows(editor).filter((row) => row.revisionKind === 'delete')).toHaveLength(1);
     const rowCard = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
     expect(rowCard).toBeDefined();
     expect(rowCard?.readOnly).toBe(false);
@@ -299,7 +300,7 @@ describe('comments in the queue', () => {
 
   test('a comment card carries its body text and its author initials', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(card!.kind).toBe('comment');
     expect(card!.author).toBe('Ada Lovelace');
     // `@w:initials` when the file carries one, rather than re-deriving from the name.
@@ -312,13 +313,13 @@ describe('comments in the queue', () => {
 
   test('a reply threads under the comment it answers instead of becoming a second card', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(card!.key, 'Yes, checked against the schedule.')).toEqual({
       ok: true,
       changed: true,
     });
 
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     const roots = items.filter((item) => item.kind === 'comment' && item.parentId === undefined);
     expect(roots).toHaveLength(1);
     expect(roots[0]!.replyIds).toHaveLength(1);
@@ -331,9 +332,9 @@ describe('comments in the queue', () => {
 
   test('deleting a comment takes its record, its markers and its card away', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.deleteReviewItem(card!.key)).toEqual({ ok: true, changed: true });
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
     // The WORDS stay. Deleting a remark is not deleting the text it was about — that is the
     // whole difference between this and selecting the range and pressing Delete.
     expect(bodyTextOf(editor)).toContain('commented words');
@@ -341,27 +342,27 @@ describe('comments in the queue', () => {
 
   test('deleting a comment takes its replies with it, and one undo brings the thread back', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(card!.key, 'Checked.').ok).toBe(true);
-    expect(editor.getReviewItems()).toHaveLength(2);
+    expect(editor.getReviewItems(H)).toHaveLength(2);
 
     const root = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'comment' && item.parentId === undefined)!;
     expect(editor.deleteReviewItem(root.key).ok).toBe(true);
     // A reply whose parent is gone has nothing left to answer, so the CONVERSATION goes —
     // the same rule resolving a thread follows.
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
 
     editor.surface!.undo();
-    expect(editor.getReviewItems()).toHaveLength(2);
+    expect(editor.getReviewItems(H)).toHaveLength(2);
   });
 
   test('deleting a comment emits a change, so a subscribed rail re-derives', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     const seen: number[] = [];
-    editor.on('change', () => seen.push(editor.getReviewItems().length));
+    editor.on('change', () => seen.push(editor.getReviewItems(H).length));
     expect(editor.deleteReviewItem(card!.key).ok).toBe(true);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toBe(0);
@@ -369,9 +370,9 @@ describe('comments in the queue', () => {
 
   test('deleting a tracked change discards the suggestion, like rejecting it', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.deleteReviewItem(card!.key)).toEqual({ ok: true, changed: true });
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
     expect(bodyTextOf(editor)).not.toContain('added text');
   });
 
@@ -384,11 +385,11 @@ describe('comments in the queue', () => {
 
   test('a reply to a tracked change nests in that change, not beside it', () => {
     const editor = mount({ body: INSERTION });
-    const [change] = editor.getReviewItems();
+    const [change] = editor.getReviewItems(H);
     expect(change!.kind).toBe('revision');
     expect(editor.replyToReviewItem(change!.key, 'Why this wording?').ok).toBe(true);
 
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     const revision = items.find((item) => item.kind === 'revision')!;
     const reply = items.find((item) => item.kind === 'comment')!;
     // OOXML gives `w:ins` no body, so the answer is a comment over the change's own range.
@@ -401,12 +402,12 @@ describe('comments in the queue', () => {
 
   test('a SECOND reply to a change is listed too, not swallowed by the first', () => {
     const editor = mount({ body: INSERTION });
-    const [change] = editor.getReviewItems();
+    const [change] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(change!.key, 'first').ok).toBe(true);
-    const revision = editor.getReviewItems().find((item) => item.kind === 'revision')!;
+    const revision = editor.getReviewItems(H).find((item) => item.kind === 'revision')!;
     expect(editor.replyToReviewItem(revision.key, 'second').ok).toBe(true);
 
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     const after = items.find((item) => item.kind === 'revision')!;
     // BOTH. The second reply is written over the same span as the first, so the coincident
     // rule threads it under the first comment — and a card that renders `replyIds` flat
@@ -424,7 +425,7 @@ describe('comments in the queue', () => {
 
   test('a keystroke never leaves a comment pointing at a change the queue no longer lists', () => {
     const editor = mount({ body: INSERTION });
-    const [change] = editor.getReviewItems();
+    const [change] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(change!.key, 'Noted.').ok).toBe(true);
 
     // A keystroke in the same paragraph takes the session's LOCAL review patch, which
@@ -439,7 +440,7 @@ describe('comments in the queue', () => {
     });
     editor.surface!.insertPlainText('x');
 
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     const revisionIds = new Set(items.filter((i) => i.kind === 'revision').map((i) => i.id));
     for (const item of items) {
       if (item.kind !== 'comment' || item.parentRevisionId === undefined) continue;
@@ -454,22 +455,22 @@ describe('comments in the queue', () => {
 
   test('a card dismissed without moving the caret reopens when it is clicked again', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     const seen: (string | null)[] = [];
     editor.on('selectionChange', () =>
-      seen.push(editor.getReviewItems().find((item) => item.isActive)?.key ?? null)
+      seen.push(editor.getReviewItems(H).find((item) => item.isActive)?.key ?? null)
     );
 
     editor.setActiveReviewItem(card!.key);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     // Dismissing leaves the caret INSIDE the range — the rail's reply-box Cancel does exactly
     // this. So putting the caret back at the range start moves nothing.
     editor.setActiveReviewItem(null);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
 
     editor.setActiveReviewItem(card!.key);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
     // PUSH, not pull. The engine reopening the card is no use if nobody is told: the surface
     // stays quiet when the caret does not move, so without an explicit emit the rail never
     // re-rendered and the reader was left clicking a card that would not open.
@@ -478,15 +479,15 @@ describe('comments in the queue', () => {
 
   test('deleting one comment leaves a different open card open', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [first] = editor.getReviewItems();
+    const [first] = editor.getReviewItems(H);
     // Open the card the reader is working in. `deleteReviewItem` used to dismiss whatever the
     // caret was in rather than the card it was deleting, and the delete button keeps the
     // caret — so removing a comment further down closed this one and lost its reply draft.
     editor.setActiveReviewItem(first!.key);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     expect(editor.deleteReviewItem('comment-does-not-exist').ok).toBe(false);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
   });
 
   test('a comment answering a change the query excludes goes back to being a root card', () => {
@@ -505,23 +506,26 @@ describe('comments in the queue', () => {
         `</w:p></w:comment>`,
     });
 
-    const linked = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    const linked = editor.getReviewItems(H).find((item) => item.kind === 'comment')!;
     expect(linked.kind === 'comment' && linked.parentRevisionId).toBeDefined();
 
     // With the format card filtered out, publishing the link would leave the comment as a
     // reply to a card nobody draws — the rail skips replies, so it would vanish outright.
-    const filtered = editor.getReviewItems({ excludeRevisionKinds: ['format', 'structural'] });
+    const filtered = editor.getReviewItems({
+      ...H,
+      excludeRevisionKinds: ['format', 'structural'],
+    });
     const comment = filtered.find((item) => item.kind === 'comment')!;
     expect(comment.kind === 'comment' && comment.parentRevisionId).toBeUndefined();
   });
 
   test('the caret in a change that has been answered opens the change, not the reply', () => {
     const editor = mount({ body: INSERTION });
-    const [change] = editor.getReviewItems();
+    const [change] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(change!.key, 'Noted.').ok).toBe(true);
-    editor.setActiveReviewItem(editor.getReviewItems().find((i) => i.kind === 'revision')!.key);
+    editor.setActiveReviewItem(editor.getReviewItems(H).find((i) => i.kind === 'revision')!.key);
 
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     // The reply covers exactly the change's characters, so it wins the innermost test. It has
     // no card of its own, so resolving to it would open an item nothing on screen draws.
     expect(items.find((item) => item.kind === 'revision')!.isActive).toBe(true);
@@ -533,8 +537,8 @@ describe('comments in the queue', () => {
       body: `${INSERTION}${COMMENTED_BODY}`,
       comments: COMMENTS,
     });
-    const comment = editor.getReviewItems().find((item) => item.kind === 'comment')!;
-    const revision = editor.getReviewItems().find((item) => item.kind === 'revision')!;
+    const comment = editor.getReviewItems(H).find((item) => item.kind === 'comment')!;
+    const revision = editor.getReviewItems(H).find((item) => item.kind === 'revision')!;
     // Different characters, so there is no evidence of a link and none is invented.
     expect(revision.replyIds).toEqual([]);
     expect(comment.kind === 'comment' && comment.parentRevisionId).toBeUndefined();
@@ -542,7 +546,7 @@ describe('comments in the queue', () => {
 
   test('a reply keeps its spaces through a save and reopen', async () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     const written = 'Agreed, keeping this.';
     expect(editor.replyToReviewItem(card!.key, written).ok).toBe(true);
 
@@ -555,16 +559,16 @@ describe('comments in the queue', () => {
       modules: [testReviewModule()],
     });
     const reply = reopened
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.text).toBe(written);
   });
 
   test('replying does not steal the open card from the thread it belongs to', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     editor.setActiveReviewItem(card!.key);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     expect(editor.replyToReviewItem(card!.key, 'first reply').ok).toBe(true);
 
@@ -572,11 +576,11 @@ describe('comments in the queue', () => {
     // being newer — wins the innermost test. It has no card of its own, so without resolving
     // to the thread root the reply box vanished from the comment that was just replied to.
     const root = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'comment' && item.parentId === undefined);
     expect(root?.isActive).toBe(true);
     const reply = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.isActive).toBe(false);
   });
@@ -588,7 +592,7 @@ describe('comments in the queue', () => {
       document: docx({ body: COMMENTED_BODY, comments: COMMENTS }),
       modules: [testReviewModule()],
     });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     const result = editor.replyToReviewItem(card!.key, 'anonymous');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('invalidArgs');
@@ -600,9 +604,9 @@ describe('comments in the queue', () => {
   // unrelated click moved the caret and fired `selectionChange` by accident.
   test('replying emits a change, so a subscribed rail re-derives without another gesture', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     const seen: number[] = [];
-    editor.on('change', () => seen.push(editor.getReviewItems().length));
+    editor.on('change', () => seen.push(editor.getReviewItems(H).length));
 
     expect(editor.replyToReviewItem(card!.key, 'Yes, checked.').ok).toBe(true);
 
@@ -619,7 +623,7 @@ describe('comments in the queue', () => {
       document: docx({ body: COMMENTED_BODY, comments: COMMENTS }),
       modules: [testReviewModule()],
     });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     let emits = 0;
     editor.on('change', () => {
       emits += 1;
@@ -631,9 +635,9 @@ describe('comments in the queue', () => {
 
   test('replying to a REVISION comments on its range — `w:ins` has no thread of its own', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(editor.replyToReviewItem(card!.key, 'Why this wording?').ok).toBe(true);
-    const comments = editor.getReviewItems().filter((item) => item.kind === 'comment');
+    const comments = editor.getReviewItems(H).filter((item) => item.kind === 'comment');
     expect(comments).toHaveLength(1);
     expect(comments[0]!.text).toBe('Why this wording?');
   });
@@ -666,7 +670,7 @@ describe('commenting on a selection', () => {
     expect(editor.getSelectionPlacement()?.anchorY).toBeGreaterThanOrEqual(0);
     expect(editor.addComment('why this word?')).toEqual({ ok: true, changed: true });
 
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(card!.kind).toBe('comment');
     expect(card!.text).toBe('why this word?');
     expect(card!.author).toBe('Grace Hopper');
@@ -695,7 +699,7 @@ describe('commenting on a selection', () => {
     select(editor, 10, 6);
     expect(editor.addComment('either direction').ok).toBe(true);
     const range = (
-      editor.getReviewItems()[0]!.item as {
+      editor.getReviewItems(H)[0]!.item as {
         range: { start: { offset: number }; end: { offset: number } };
       }
     ).range;
@@ -723,7 +727,7 @@ describe('suggesting mode', () => {
     caretAt(editor, 5);
     editor.surface!.type('X');
 
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(card?.kind).toBe('revision');
     expect(rev(card).revisionKind).toBe('insert');
     expect(card?.author).toBe('Grace Hopper');
@@ -741,7 +745,7 @@ describe('suggesting mode', () => {
     });
     editor.surface!.deleteBackward();
 
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(rev(card).revisionKind).toBe('delete');
     expect(card?.text).toBe('alpha');
     // Rejecting the proposal has to put them back, which is only possible because the
@@ -759,7 +763,7 @@ describe('suggesting mode', () => {
     editor.surface!.deleteBackward();
     editor.surface!.deleteBackward();
 
-    const cards = editor.getReviewItems();
+    const cards = editor.getReviewItems(H);
     // One decision, not three: the ids coalesce, so one Accept resolves the run.
     expect(cards).toHaveLength(1);
     expect(rev(cards[0]).revisionKind).toBe('delete');
@@ -774,31 +778,28 @@ describe('suggesting mode', () => {
     expect(bodyTextOf(editor)).toContain('alpha beta');
   });
 
-  test('a MID-SENTENCE replacement is one card too, and reads in Word order', () => {
+  test('a mid-sentence replacement has independent deletion and addition cards', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
-    // "alpha beta": replace "ha be" — a selection that starts inside a run, which is where
-    // the insertion used to land BEFORE the struck words and split the pair into two cards.
+    // Replace a selection that starts inside a run.
     editor.surface!.setSelection({
       anchor: { paragraphId: paragraphIdOf(editor), offset: 3 },
       head: { paragraphId: paragraphIdOf(editor), offset: 8 },
     });
     editor.surface!.type('XX');
 
-    const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
-    expect(rev(cards[0]).replacedText).toBe('ha be');
-    expect(cards[0]!.text).toBe('XX');
+    const cards = editor.getReviewItems(H);
+    expect(cards.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'ha be'],
+      ['insert', 'XX'],
+    ]);
     // Struck words first, replacement after — the order the sentence reads in.
     const body = editor.surface!.session.bodyText();
     expect(body.indexOf('ha be')).toBeLessThan(body.indexOf('XX'));
   });
 
-  test('a replacement over an endnote mark is still ONE card', () => {
-    // The struck text crosses a run that holds an `w:endnoteReference` and no text, so the
-    // deletion cannot be one `w:del` — it becomes several. That is a fact about the markup,
-    // not about the edit: the user selected once and typed once, and Word shows one card.
+  test('a replacement over an endnote mark keeps each half complete', () => {
+    // Split deletion wrappers remain one deletion decision beside the addition.
     const editor = mount({
       body:
         `<w:p><w:r><w:t xml:space="preserve">First endnote reference</w:t></w:r>` +
@@ -814,17 +815,16 @@ describe('suggesting mode', () => {
     // Character by character, the way it is actually typed.
     for (const character of 'note') editor.surface!.type(character);
 
-    const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
+    const cards = editor.getReviewItems(H);
+    expect(cards.map((item) => rev(item).revisionKind)).toEqual(['delete', 'insert']);
     // The reference measures ONE model unit, exactly as `segmentsOf` counts it, so [19, 39)
     // is "ence" + the reference + " and second end". Counting it as nothing shifted every
     // offset past it by one and struck a character the user had not selected.
-    expect(rev(cards[0]).replacedText).toBe('ence and second end');
-    expect(cards[0]!.text).toBe('note');
+    expect(cards[0]!.text).toBe('ence and second end');
+    expect(cards[1]!.text).toBe('note');
   });
 
-  test('accepting a replacement that spans several elements resolves all of them', () => {
+  test('accepting split deletion wrappers leaves the replacement addition pending', () => {
     const editor = mount({
       body:
         `<w:p><w:r><w:t xml:space="preserve">First endnote reference</w:t></w:r>` +
@@ -839,16 +839,12 @@ describe('suggesting mode', () => {
     });
     editor.surface!.type('note');
 
-    expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    // Nothing left pending: every `w:del` the one edit produced is resolved, not just the
-    // first. The struck words are gone and "note" took their place \u2014 the endnote reference
-    // among them, because the selection covered the one model unit it occupies and Word
-    // deletes a note whose mark a deletion runs through.
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.acceptReviewItem(editor.getReviewItems(H)[0]!.key).ok).toBe(true);
+    expect(editor.getReviewItems(H).map((item) => rev(item).revisionKind)).toEqual(['insert']);
     expect(bodyTextOf(editor)).toBe('First endnote refernotenote');
   });
 
-  test('typing over a selection is ONE card: replaced x with y', () => {
+  test('typing over a selection creates two decisions in one undo step', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -857,14 +853,17 @@ describe('suggesting mode', () => {
     });
     editor.surface!.type('omega');
 
-    const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
-    expect(rev(cards[0]).replacedText).toBe('alpha');
-    expect(cards[0]!.text).toBe('omega');
+    const cards = editor.getReviewItems(H);
+    expect(cards.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'alpha'],
+      ['insert', 'omega'],
+    ]);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(editor.getReviewItems(H)).toHaveLength(0);
+    expect(bodyTextOf(editor)).toBe('alpha beta');
   });
 
-  test('accepting a replacement resolves BOTH halves in one step', () => {
+  test('accepting a replacement deletion leaves its addition pending', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -873,13 +872,12 @@ describe('suggesting mode', () => {
     });
     editor.surface!.type('omega');
 
-    expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    // Nothing left pending, and the document reads as the replacement intended.
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.acceptReviewItem(editor.getReviewItems(H)[0]!.key).ok).toBe(true);
+    expect(editor.getReviewItems(H).map((item) => rev(item).revisionKind)).toEqual(['insert']);
     expect(bodyTextOf(editor)).toBe('omega beta');
   });
 
-  test('rejecting a replacement puts the original words back', () => {
+  test('rejecting a replacement addition leaves its deletion pending', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -888,8 +886,8 @@ describe('suggesting mode', () => {
     });
     editor.surface!.type('omega');
 
-    expect(editor.rejectReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.rejectReviewItem(editor.getReviewItems(H)[1]!.key).ok).toBe(true);
+    expect(editor.getReviewItems(H).map((item) => rev(item).revisionKind)).toEqual(['delete']);
     expect(bodyTextOf(editor)).toBe('alpha beta');
   });
 
@@ -909,12 +907,13 @@ describe('suggesting mode', () => {
     // struck and the paragraph mark carries `w:del`. Joining them outright made reject
     // restore the words and not the boundary — the original was unrecoverable.
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
-    const kinds = editor.getReviewItems().map((item) => rev(item).revisionKind);
-    expect(kinds).toContain('delete');
-    expect(kinds).toContain('paragraphMark');
+    const kinds = editor.getReviewItems(H).map((item) => rev(item).revisionKind);
+    // Word presents the text and boundary as one deletion decision.
+    expect(kinds).toEqual(['delete']);
+    expect(rev(editor.getReviewItems(H)[0]!).item.ranges).toHaveLength(3);
 
     // And rejecting puts the document back exactly as it was.
-    for (const item of editor.getReviewItems()) editor.rejectReviewItem(item.key);
+    for (const item of editor.getReviewItems(H)) editor.rejectReviewItem(item.key);
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
     expect(editor.surface!.session.bodyText()).toContain('first para');
     expect(editor.surface!.session.bodyText()).toContain('second para');
@@ -932,7 +931,7 @@ describe('suggesting mode', () => {
 
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
     const mark = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(mark).toBeDefined();
     expect(mark!.author).toBe('Grace Hopper');
@@ -961,25 +960,24 @@ describe('suggesting mode', () => {
       anchor: { paragraphId: first, offset: 5 },
       head: { paragraphId: first, offset: 5 },
     });
-    const active = editor.getReviewItems().find((item) => item.isActive);
+    const active = editor.getReviewItems(H).find((item) => item.isActive);
     expect(rev(active).revisionKind).toBe('paragraphMark');
   });
 
   test('a run of Enters is ONE decision, not one card per press', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
-    for (const offset of [5, 4, 3]) {
-      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
-      editor.surface!.setSelection({
-        anchor: { paragraphId, offset },
-        head: { paragraphId, offset },
-      });
-      editor.surface!.splitParagraph();
-    }
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 5 },
+    });
+    for (let count = 0; count < 3; count += 1) editor.surface!.splitParagraph();
     const marks = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(marks).toHaveLength(1);
+    expect(rev(marks[0]).item.ranges).toHaveLength(3);
   });
 
   test('back in editing mode an edit is an ordinary edit again', () => {
@@ -987,13 +985,13 @@ describe('suggesting mode', () => {
     editor.setEditingMode('suggesting');
     caretAt(editor, 5);
     editor.surface!.type('X');
-    expect(editor.getReviewItems()).toHaveLength(1);
+    expect(editor.getReviewItems(H)).toHaveLength(1);
 
     editor.setEditingMode('editing');
     caretAt(editor, 0);
     editor.surface!.type('Y');
     // Still one: the second keystroke proposed nothing.
-    expect(editor.getReviewItems()).toHaveLength(1);
+    expect(editor.getReviewItems(H)).toHaveLength(1);
   });
 
   test('viewing refuses EVERY surface write, not just the typing ones', () => {
@@ -1036,7 +1034,7 @@ describe('suggesting mode', () => {
     // Reported as a boolean, every refused accept cleared `lastRejection` rather than
     // setting it, so the surface forgot the one thing it knew about the failure.
     editor.setEditingMode('viewing');
-    editor.acceptReviewItem(editor.getReviewItems()[0]!.key);
+    editor.acceptReviewItem(editor.getReviewItems(H)[0]!.key);
     expect(editor.surface!.state().lastRejection).not.toBeNull();
   });
 
@@ -1047,14 +1045,15 @@ describe('suggesting mode', () => {
       document: docx({ body: PLAIN }),
       modules: [testReviewModule()],
     });
-    editor.setEditingMode('suggesting');
+    expect(editor.setEditingMode('suggesting')).toMatchObject({ ok: false, code: 'invalidArgs' });
+    editor.surface!.setEditingMode('suggest');
     editor.surface!.setSelection({
       anchor: { paragraphId: paragraphIdOf(editor), offset: 0 },
       head: { paragraphId: paragraphIdOf(editor), offset: 5 },
     });
     editor.surface!.deleteBackward();
-    // Nothing to attribute the proposal to, so nothing is proposed — and nothing is lost.
-    // Writing it untracked would remove words the reviewer was promised they could recover.
+    // The facade refuses the request (#692); the surface's own setter is the one way in, and
+    // its guard still proposes nothing and loses nothing: an untracked delete destroys text.
     expect(editor.surface!.session.bodyText()).toContain('alpha beta');
   });
 
@@ -1068,7 +1067,7 @@ describe('suggesting mode', () => {
       anchor: { paragraphId: fragment.paragraphId, offset: end },
       head: { paragraphId: fragment.paragraphId, offset: end },
     });
-    editor.rejectReviewItem(editor.getReviewItems()[0]!.key);
+    editor.rejectReviewItem(editor.getReviewItems(H)[0]!.key);
 
     // Rejecting removed the words the caret was in. Applying the ops without committing
     // through the surface left the caret past the end, and every keystroke after it was
@@ -1143,36 +1142,36 @@ describe('activating a card', () => {
 
   test('the CARET opens the card, not a click — so keyboard and find open it too', () => {
     const editor = mount({ body: COMMENTED, comments: COMMENT_PART });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     expect(card!.isActive).toBe(false);
 
     // "before " is 7 characters; anything past it is inside the commented range.
     caretAt(editor, 10);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     // Moving out closes it again. Nothing had to be cleared by hand.
     caretAt(editor, 1);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
   });
 
   test('a dismissed card stays closed until the caret leaves it', () => {
     const editor = mount({ body: COMMENTED, comments: COMMENT_PART });
     caretAt(editor, 10);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     editor.setActiveReviewItem(null);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
 
     // Moving the caret re-asks the question, which is how the reader reopens it. Setting
     // the SAME position would not: nothing moved, so nothing is re-asked.
     caretAt(editor, 1);
     caretAt(editor, 10);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
   });
 
   test('opening a card leaves a caret, not a selection, and offers no comment affordance', () => {
     const editor = mount({ body: COMMENTED, comments: COMMENT_PART });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     editor.setActiveReviewItem(card!.key);
 
     const selection = editor.surface!.state().selection;
@@ -1182,7 +1181,7 @@ describe('activating a card', () => {
     // Nothing is selected, so there is nothing to offer a comment on.
     expect(editor.getSelectionPlacement()).toBeNull();
     // And the card is open, which is the point of activating it.
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
 
     // A selection the USER makes still gets the affordance.
     editor.surface!.setSelection({
@@ -1195,7 +1194,7 @@ describe('activating a card', () => {
   test('the caret lands at the start of the span, where the reader is looking', () => {
     // `Kept ` then a tracked `added text`: the insertion starts at offset 5.
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     editor.setActiveReviewItem(card!.key);
     const selection = editor.surface!.state().selection;
     expect(selection.anchor.offset).toBe(selection.head.offset);
@@ -1204,12 +1203,12 @@ describe('activating a card', () => {
 
   test('opens the card the caret was sent to, and closes it again on null', () => {
     const editor = mount({ body: INSERTION });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     editor.setActiveReviewItem(card!.key);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
     expect(bodyTextOf(editor)).toContain('added text');
     editor.setActiveReviewItem(null);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
   });
 });
 
@@ -1222,7 +1221,7 @@ const FORMAT_AND_INSERT =
 describe('getReviewItems query filtering', () => {
   test('excludeRevisionKinds omits excluded revision cards', () => {
     const editor = mount({ body: FORMAT_AND_INSERT });
-    const all = editor.getReviewItems();
+    const all = editor.getReviewItems(H);
     const filtered = editor.getReviewItems({
       excludeRevisionKinds: ['format', 'structural'],
     });
@@ -1237,8 +1236,8 @@ describe('getReviewItems query filtering', () => {
 
   test('placement:false returns same metadata with null anchors', () => {
     const editor = mount({ body: FORMAT_AND_INSERT });
-    const unplaced = editor.getReviewItems({ placement: false });
-    const placed = editor.getReviewItems();
+    const unplaced = editor.getReviewItems({ ...H, placement: false });
+    const placed = editor.getReviewItems(H);
     expect(unplaced).toHaveLength(placed.length);
     expect(unplaced.every((item) => item.anchorY === null && item.pageIndex === null)).toBe(true);
     expect(unplaced.map((item) => item.key)).toEqual(placed.map((item) => item.key));
@@ -1265,7 +1264,7 @@ describe('getReviewItems query filtering', () => {
 
   test('omitted query returns every placement with geometry', () => {
     const editor = mount({ body: FORMAT_AND_INSERT });
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems(H);
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.anchorY !== null)).toBe(true);
   });
@@ -1282,7 +1281,7 @@ const HEADER_INSERTION =
 describe('tracked changes in headers', () => {
   test('a header revision gets a card, with geometry from the furniture layout', () => {
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const cards = editor.getReviewItems();
+    const cards = editor.getReviewItems(H);
     expect(cards).toHaveLength(2);
     const header = cards.find((card) => card.author === 'Margaret Hamilton');
     expect(header).toBeDefined();
@@ -1308,10 +1307,10 @@ describe('tracked changes in headers', () => {
 
   test('accepting a header revision resolves it inside the header story', () => {
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
     // The card is gone, the body's card is untouched, and the header kept the words.
-    const remaining = editor.getReviewItems();
+    const remaining = editor.getReviewItems(H);
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.author).toBe('Ada Lovelace');
     const storyText =
@@ -1321,7 +1320,7 @@ describe('tracked changes in headers', () => {
 
   test('rejecting a header insertion removes its words from the header story', () => {
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     expect(editor.rejectReviewItem(header.key)).toEqual({ ok: true, changed: true });
     const storyText =
       editor.surface!.session.storyText({ kind: 'headerFooter', rId: 'rIdH' }) ?? '';
@@ -1331,7 +1330,7 @@ describe('tracked changes in headers', () => {
 
   test('undoing a header accept brings the card back, with the tick moving each time', () => {
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     const before = editor.getReviewRevision();
     expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
     const afterAccept = editor.getReviewRevision();
@@ -1341,13 +1340,13 @@ describe('tracked changes in headers', () => {
     editor.surface!.undo();
     expect(editor.getReviewRevision()).not.toBe(afterAccept);
     expect(
-      editor.getReviewItems().filter((card) => card.author === 'Margaret Hamilton')
+      editor.getReviewItems(H).filter((card) => card.author === 'Margaret Hamilton')
     ).toHaveLength(1);
   });
 
   test('opening a header card enters the header scope, like Word', () => {
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     editor.setActiveReviewItem(header.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
     expect(editor.getHeaderFooterState()?.editing).toBe('header');
@@ -1358,19 +1357,16 @@ describe('tracked changes in headers', () => {
     // re-rendered: the reader clicked a header card, the document scope changed under
     // them, and no card looked open.
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     editor.setActiveReviewItem(header.key);
-    const active = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const active = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     expect(active.isActive).toBe(true);
   });
 
   test('accepting a header card leaves the caret inside the header, still typable', () => {
-    // The post-commit clamp used the BODY's paragraph list, so resolving a header card
-    // threw the caret into the document while the scope stayed on the header — and every
-    // keystroke after it was refused as `unknown-paragraph`. The reader typed and nothing
-    // happened.
+    // Resolving a card preserves its caret and active story scope.
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
     editor.setActiveReviewItem(header.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
 
@@ -1378,6 +1374,7 @@ describe('tracked changes in headers', () => {
     const caret = editor.surface!.state().selection.head.paragraphId;
     const bodyParagraphs = editor.surface!.session.paragraphIds();
     expect(bodyParagraphs).not.toContain(caret);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
   });
 
   test('replying to a header card lands, rather than being refused every time', () => {
@@ -1394,13 +1391,13 @@ describe('tracked changes in headers', () => {
         `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
         `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
     });
-    const card = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    const card = editor.getReviewItems(H).find((item) => item.kind === 'comment')!;
     expect(editor.replyToReviewItem(card.key, 'Fixed in the new template.')).toEqual({
       ok: true,
       changed: true,
     });
     const replies = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .filter((item) => item.kind === 'comment' && item.text.includes('Fixed in the new template'));
     expect(replies.length).toBeGreaterThan(0);
   });
@@ -1429,8 +1426,8 @@ describe('tracked changes in headers', () => {
     // scope, so the caret stayed clamped inside the header story and no body card could
     // become active again — the rail went dead from the first header change onward.
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
-    const body = editor.getReviewItems().find((card) => card.author === 'Ada Lovelace')!;
+    const header = editor.getReviewItems(H).find((card) => card.author === 'Margaret Hamilton')!;
+    const body = editor.getReviewItems(H).find((card) => card.author === 'Ada Lovelace')!;
 
     editor.setActiveReviewItem(header.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
@@ -1438,7 +1435,7 @@ describe('tracked changes in headers', () => {
     editor.setActiveReviewItem(body.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'body' });
     expect(editor.getHeaderFooterState()?.editing ?? null).toBeNull();
-    const cards = editor.getReviewItems();
+    const cards = editor.getReviewItems(H);
     expect(cards.find((card) => card.author === 'Ada Lovelace')!.isActive).toBe(true);
     expect(cards.find((card) => card.author === 'Margaret Hamilton')!.isActive).toBe(false);
 
@@ -1458,7 +1455,7 @@ describe('tracked changes in headers', () => {
         `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
         `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
     });
-    const card = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    const card = editor.getReviewItems(H).find((item) => item.kind === 'comment')!;
     expect(card).toBeDefined();
 
     // Opening the header OPENS its story store, which is the whole point of this case: the
@@ -1470,7 +1467,7 @@ describe('tracked changes in headers', () => {
     editor.setActiveScope({ kind: 'body' });
 
     expect(editor.deleteReviewItem(card.key).ok).toBe(true);
-    expect(editor.getReviewItems().some((item) => item.kind === 'comment')).toBe(false);
+    expect(editor.getReviewItems(H).some((item) => item.kind === 'comment')).toBe(false);
 
     const headerXml = serializeOoxmlPart(
       editor.surface!.session.currentPackage().parts.get('/word/header1.xml')!
@@ -1501,19 +1498,21 @@ describe('the caret activates the card the rail actually renders', () => {
     });
   }
 
-  test('a caret in either half of a replacement opens the ONE paired card', () => {
-    const editor = mount({ body: REPLACEMENT_DAYS_APART });
-    const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(cards[0]!.kind === 'revision' && cards[0]!.revisionKind).toBe('replace');
+  test('a caret opens only its replacement half with matching timestamps', () => {
+    const editor = mount({
+      body: REPLACEMENT_DAYS_APART.replace('2026-01-02T09:00:00Z', '2026-01-01T10:00:00Z'),
+    });
+    const cards = editor.getReviewItems(H);
+    expect(cards.map((item) => rev(item).revisionKind)).toEqual(['delete', 'insert']);
 
     // "keep " is 5 characters, then the struck "old", then the typed "new".
     caretAt(editor, 6);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(true);
     caretAt(editor, 0);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
     caretAt(editor, 9);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems(H)[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems(H)[1]!.isActive).toBe(true);
   });
 
   test('an excluded kind cannot take the activation from a kind the rail shows', () => {
@@ -1521,7 +1520,7 @@ describe('the caret activates the card the rail actually renders', () => {
     // test and open a card nothing renders — the click looked ignored.
     const editor = mount({ body: FORMAT_AND_INSERT });
     const formatCard = editor
-      .getReviewItems()
+      .getReviewItems(H)
       .find((card) => card.kind === 'revision' && card.revisionKind === 'format')!;
     expect(formatCard).toBeDefined();
 
@@ -1541,7 +1540,7 @@ describe('the caret activates the card the rail actually renders', () => {
   });
 
   test('activating a card ANNOUNCES it, so a pull-only host cannot miss the change', () => {
-    // The regression this guards is invisible to `getReviewItems()`: a snapshot read is a
+    // The regression this guards is invisible to `getReviewItems(H)`: a snapshot read is a
     // PULL, and every adapter renders off the pushed event. A `setActive` that updated
     // state without emitting left the rail showing the previously open card.
     const editor = mount({ body: INSERTION });
@@ -1549,7 +1548,7 @@ describe('the caret activates the card the rail actually renders', () => {
     const stop = editor.on('selectionChange', () => {
       announced += 1;
     });
-    const [card] = editor.getReviewItems();
+    const [card] = editor.getReviewItems(H);
     editor.setActiveReviewItem(card!.key);
     expect(announced).toBeGreaterThan(0);
 
@@ -1567,7 +1566,7 @@ describe('commenting outside the body', () => {
     // null so the affordance never rendered, and `addComment` reported that a comment
     // needs a selected range while one was plainly on screen.
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
-    const headerCard = editor.getReviewItems().find((c) => c.author === 'Margaret Hamilton')!;
+    const headerCard = editor.getReviewItems(H).find((c) => c.author === 'Margaret Hamilton')!;
     editor.setActiveReviewItem(headerCard.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
 
@@ -1603,7 +1602,7 @@ describe('tracked changes in notes', () => {
 
   test('a footnote revision reaches the queue and names its story', () => {
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson');
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson');
     expect(card).toBeDefined();
     expect(card!.text).toBe('see appendix');
     expect(card!.readOnly).toBe(false);
@@ -1617,16 +1616,18 @@ describe('tracked changes in notes', () => {
 
   test('a footnote revision resolves inside its own story', () => {
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     expect(editor.acceptReviewItem(card.key)).toEqual({ ok: true, changed: true });
-    expect(editor.getReviewItems().some((item) => item.author === 'Katherine Johnson')).toBe(false);
+    expect(editor.getReviewItems(H).some((item) => item.author === 'Katherine Johnson')).toBe(
+      false
+    );
     const noteText = editor.surface!.session.storyText({ kind: 'notesPart', noteKind: 'footnote' });
     expect(noteText).toContain('see appendix');
   });
 
   test('opening a footnote card enters that note, not the body', () => {
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     editor.setActiveReviewItem(card.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
   });
@@ -1635,7 +1636,7 @@ describe('tracked changes in notes', () => {
     // Listed with `anchorY: null` it sorted after every body card and drew no leader line:
     // a footnote change on page 2 rendered below the last page's cards.
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     expect(card.pageIndex).not.toBeNull();
     expect(card.anchorY).not.toBeNull();
   });
@@ -1645,9 +1646,9 @@ describe('tracked changes in notes', () => {
     // index that did not contain note paragraphs — so a note card could never be the open
     // one, whatever the reader clicked.
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     editor.setActiveReviewItem(card.key);
-    const active = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const active = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     expect(active.isActive).toBe(true);
   });
 
@@ -1656,12 +1657,12 @@ describe('tracked changes in notes', () => {
     // offset walk counted that atom as zero characters while the offset model counts one:
     // every offset at or after it was refused, so no note could be commented on at all.
     const editor = mount(noteDoc());
-    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    const card = editor.getReviewItems(H).find((item) => item.author === 'Katherine Johnson')!;
     expect(editor.replyToReviewItem(card.key, 'Which appendix?')).toEqual({
       ok: true,
       changed: true,
     });
-    expect(editor.getReviewItems().some((item) => item.text.includes('Which appendix?'))).toBe(
+    expect(editor.getReviewItems(H).some((item) => item.text.includes('Which appendix?'))).toBe(
       true
     );
   });
@@ -1681,7 +1682,7 @@ describe('resolving a story never opens one', () => {
       footnotes: FOOTNOTE_WITH_REVISION,
     });
 
-    const noteCard = editor.getReviewItems().find((i) => i.author === 'Katherine Johnson')!;
+    const noteCard = editor.getReviewItems(H).find((i) => i.author === 'Katherine Johnson')!;
     editor.setActiveReviewItem(noteCard.key);
     const paragraphId = editor.surface!.state().selection.head.paragraphId;
     editor.surface!.setSelection({

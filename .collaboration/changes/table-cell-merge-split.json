@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Tables refused cell merge and split, and column edits on tables with merged cells. A child adopted by a removed node whose survivor was removed again showed nowhere.",
+  "after": "Merge and split rebuild one table with existing tree primitives; moved paragraphs keep their identity, and a lower cell whose content moves is replaced by a fresh continuation cell. Adoption follows a chain of survivors to the last live one.",
+  "reason": "The operations write only putNode, setAttribute and spliceChildren effects that released readers apply the same way. Chain adoption reads the existing replacedBy and deleted fields transitively. A released reader hides a child adopted through a chain, which is the case it already lost, until any participant edits that cell and lists the child there explicitly.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-merge-split.test.ts",
+    "packages/core/src/store/__tests__/table-merge-split-ops.test.ts",
+    "packages/editor-api/src/model/__tests__/model-table-merge-split.test.ts"
+  ],
+  "changeset": "table-cell-merge-split",
+  "migration": null
+}

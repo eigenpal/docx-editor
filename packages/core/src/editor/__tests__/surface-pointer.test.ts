@@ -15,22 +15,31 @@ import {
   setPaginatedSurfaceScale,
   type PaginatedSurface,
 } from '../paginated-surface.ts';
-import { absorbPlaceholderControls } from '../surface-pointer.ts';
+import { absorbAtomicControls } from '../surface-atomic-controls.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 function docx(body: string): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -437,6 +446,24 @@ describe('shift-click', () => {
     mounted.surface.destroy();
   });
 
+  test('from a caret in a paragraph layout removed, extends from where that caret shows', () => {
+    // An empty paragraph with a hidden mark leaves the flow; its caret shows at the start of
+    // the paragraph after it, and the extension has to start there too.
+    const hidden = '<w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr></w:p>';
+    const mounted = mount(hidden + paragraph('hello world'));
+    const [removed, visible] = mounted.surface.session.paragraphIds();
+    mounted.surface.setSelection({
+      anchor: { paragraphId: removed!, offset: 0 },
+      head: { paragraphId: removed!, offset: 0 },
+    });
+    press(mounted, 60, 5, { shiftKey: true });
+    expect(mounted.surface.state().selection).toEqual({
+      anchor: { paragraphId: visible, offset: 0 },
+      head: { paragraphId: visible, offset: 10 },
+    });
+    mounted.surface.destroy();
+  });
+
   test('and pivots around it rather than around the visible start', () => {
     const mounted = mount(paragraph('hello world'));
     press(mounted, 36, 5);
@@ -802,7 +829,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
     // Simulate Shift+Arrow landing mid-prompt: a partial range must snap to the unit.
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 5 },
     });
@@ -818,7 +845,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
       )}</w:tbl>`
     );
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 5 },
     });
@@ -841,7 +868,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     expect(ids.length).toBeGreaterThanOrEqual(6);
     const firstCell = ids[1]!;
     const lastCell = ids[4]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId: firstCell, offset: 0 },
       head: { paragraphId: firstCell, offset: 1 },
     });
@@ -861,7 +888,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
       )
     );
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 3 },
       head: { paragraphId, offset: 6 },
     });
@@ -871,4 +898,40 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     expect(absorbed.anchor.paragraphId).toBe(paragraphId);
     mounted.surface.destroy();
   });
+});
+
+test('engine pointer double click opens legacy text form options', () => {
+  const mounted = mount(
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="InputA"/><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+  );
+  try {
+    for (let click = 0; click < 2; click++) {
+      const field = mounted.pages.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+      field.dispatchEvent(pointer('pointerdown', 3, 5));
+      document.dispatchEvent(pointer('pointerup', 3, 5));
+    }
+    const dialog = mounted.container.querySelector('dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.querySelector('input')!.value).toBe('Sample');
+  } finally {
+    mounted.surface.destroy();
+    mounted.container.remove();
+  }
+});
+
+test('engine pointer release selects an unprotected field without a DOM click event', () => {
+  const mounted = mount(
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="InputA"/><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+  );
+  try {
+    const field = mounted.pages.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+    field.dispatchEvent(pointer('pointerdown', 3.4, 5.4));
+    document.dispatchEvent(pointer('pointerup', 3.4, 5.4));
+    const selection = mounted.surface.state().selection;
+    expect([selection.anchor.offset, selection.head.offset]).toEqual([0, 6]);
+    expect(document.getSelection()!.toString()).toBe('Sample');
+  } finally {
+    mounted.surface.destroy();
+    mounted.container.remove();
+  }
 });

@@ -5,11 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The context a `run` hands to its callback: one queue, one document, one sync at a time.
 //
-// `sync()` is the only thing in this runtime that talks to the document, and it does so exactly
-// once per call: plan the queued actions in order, send ONE batch, hydrate the answers. That is
-// where atomicity comes from — the host commits every command in a batch as one transaction, so
-// a batch either happens whole or not at all, and the runtime never splits a consumer's `sync()`
-// into several batches behind their back.
+// `sync()` commits all queued writes in one transaction. Read-derived proxy dependencies
+// can require read-only preflight batches. They share one revision with the final write
+// batch, so a concurrent change refuses the sync instead of retargeting an edit.
+// Proxies produced by writes still require a separate sync before dependent operations.
 //
 // CONDITIONAL WRITES. A context that has read from the document remembers the revision it read
 // at, and a later batch that writes is sent conditional on that revision. This is what stops a
@@ -25,32 +24,44 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type {
   AutomationBatchRequest,
-  AutomationCapabilities,
   AutomationHost,
+  AutomationOperation,
 } from '@docx-editor.dev/core/automation';
 import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
-import { DocxEditorError, fail } from './errors.ts';
+import { DocxEditorError, fail, isDocxEditorError } from './errors.ts';
 import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
 import {
+  AUTHOR_HOOK,
+  QUEUE_HOOK,
   INTERNALS,
   REBIND,
   RELEASE,
   type ContextInternals,
   type RootHandles,
 } from './internals.ts';
-import { ActionQueue } from './queue.ts';
+import { ActionQueue, type QueuedAction } from './queue.ts';
 import { TrackedObjects } from './tracked-objects.ts';
 
 /** What a context needs from the runtime that made it. */
 export interface RuntimeSession {
   readonly host: AutomationHost;
-  readonly capabilities: AutomationCapabilities;
+  readonly capabilities: DocumentCapabilities;
   /** Who a comment this runtime writes is recorded as, or absent when it may not write one. */
   readonly author?: string;
   /** Revision view used by standard Office-compatible text reads and searches. */
   readonly revisionTextView: RevisionTextView;
+  /**
+   * Told about each refused batch before it is thrown, with the batch's operations. A listener
+   * that throws is ignored.
+   */
+  readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
+  /**
+   * Told about each batch that threw an error other than a refusal, before it propagates: an
+   * engine defect. A listener that throws is ignored.
+   */
+  readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -68,10 +79,10 @@ export interface RuntimeSession {
 /**
  * What a `run` hands its callback: one queue, one document, one sync at a time.
  *
- * `sync()` is the only thing in this runtime that talks to the document, and it does so exactly
- * once per call — plan the queued actions in order, send ONE batch, hydrate the answers. That is
- * where atomicity comes from: the host commits a batch as one transaction, and the runtime never
- * splits a consumer's `sync()` into several batches behind their back.
+ * `sync()` commits all queued commands in one atomic transaction. Supported read-derived
+ * proxy dependencies can require additional read-only transport calls before that commit.
+ * These reads and the final write share one revision; a concurrent change refuses the sync.
+ * Write-created proxies require a separate sync before dependent operations.
  *
  * Conditional writes come from the same place. A context that has READ from the document
  * remembers the revision it read at, and a later batch that writes goes out conditional on it,
@@ -93,6 +104,7 @@ export class RequestContext {
   #finished = false;
   /** The revision this context last saw. `null` until it has read from the document. */
   #readRevision: number | null = null;
+  #syncInFlight = false;
 
   private constructor(session: RuntimeSession) {
     this.#session = session;
@@ -133,6 +145,14 @@ export class RequestContext {
     this.#trackedObjects = new TrackedObjects(this.#internals, (object) =>
       this.#created.has(object)
     );
+    // Not a class member, so it stays out of the public declarations and of enumeration.
+    Object.defineProperty(this, AUTHOR_HOOK, { get: () => session.author });
+    Object.defineProperty(this, QUEUE_HOOK, {
+      value: Object.freeze({
+        writes: () => this.#queue.pending.filter((action) => action.sort === 'write').length,
+        discard: () => this.#queue.clear(),
+      }),
+    });
   }
 
   /**
@@ -159,7 +179,7 @@ export class RequestContext {
   }
 
   /**
-   * Send everything queued as one batch and hydrate the answers.
+   * Resolve read prerequisites, then commit queued writes atomically and hydrate answers.
    *
    * An empty queue is not a round trip. Office-shaped code syncs defensively at the end of a
    * batch, and turning "nothing to say" into a host call would make a no-op sync advance a
@@ -167,21 +187,141 @@ export class RequestContext {
    */
   async sync(): Promise<void> {
     this.#internals.assertUsable();
+    if (this.#syncInFlight) fail({ code: 'InvalidRequestContext' });
     const actions = this.#queue.take();
     if (actions.length === 0) return;
 
+    this.#syncInFlight = true;
+    try {
+      let remaining = actions.filter((action) => !action.nullableLoad?.isNull);
+      const hasWrites = actions.some((action) => action.sort === 'write');
+      let pinnedRevision: number | undefined;
+      // What a refusal reports as `expectedRevision`: the revision this context last read at,
+      // and only for a batch that writes. Revisions pinned internally (dependency phases,
+      // resource preparation) are not reported.
+      const reportedRevision =
+        hasWrites && this.#readRevision !== null ? this.#readRevision : undefined;
+      const blocked = (action: QueuedAction): boolean =>
+        action.dependencies?.some((path) => !path.isAddressable) ?? false;
+      // Read prerequisites never publish edits. Every phase and the final transaction use
+      // one revision so another writer cannot retarget an edit between dependency reads.
+      while (remaining.some(blocked)) {
+        pinnedRevision ??=
+          hasWrites && this.#readRevision !== null
+            ? this.#readRevision
+            : this.#session.host.revision();
+        const ready = remaining.filter((action) => action.sort === 'read' && !blocked(action));
+        if (ready.length === 0)
+          fail({ code: 'InvalidObjectPath', target: remaining.find(blocked)?.label });
+        await this.#dispatch(ready, pinnedRevision, reportedRevision);
+        await this.#continue(pinnedRevision, reportedRevision);
+        const sent = new Set(ready);
+        remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
+      }
+      // A listing whose items load properties, in a batch that writes. Every read in a batch
+      // answers the document as it was before the batch's writes, so the listing and the item
+      // reads it queues go first, on the same pinned revision as the writes.
+      const early = hasWrites ? remaining.filter((action) => action.continues === true) : [];
+      if (early.length) {
+        pinnedRevision ??=
+          this.#readRevision !== null ? this.#readRevision : this.#session.host.revision();
+        await this.#dispatch(early, pinnedRevision, reportedRevision);
+        await this.#continue(pinnedRevision, reportedRevision);
+        const sent = new Set(early);
+        remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
+      }
+      if (remaining.length) {
+        const expected =
+          pinnedRevision ??
+          (hasWrites && this.#readRevision !== null ? this.#readRevision : undefined);
+        await this.#dispatch(remaining, expected, reportedRevision);
+        // A batch with no writes: the item reads follow on the revision the listing answered.
+        await this.#continue(this.#readRevision ?? undefined, reportedRevision);
+      }
+    } finally {
+      for (const action of actions) action.dispose?.();
+      for (const action of this.#queue.takeContinuations()) action.dispose?.();
+      this.#syncInFlight = false;
+    }
+  }
+
+  /** Send the item reads that settling the previous batch queued, on the given revision. */
+  async #continue(
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
+    const reads = this.#queue.takeContinuations();
+    if (reads.length === 0) return;
+    try {
+      await this.#dispatch(reads, expectedRevision, reportedRevision);
+    } finally {
+      for (const action of reads) action.dispose?.();
+    }
+  }
+
+  async #dispatch(
+    actions: readonly QueuedAction[],
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
     const planned = planBatch(actions);
-    const conditional = planned.hasWrite && this.#readRevision !== null;
-    const expectedRevision = conditional ? (this.#readRevision as number) : undefined;
+    try {
+      await this.#execute(actions, planned, expectedRevision, reportedRevision);
+    } catch (error) {
+      if (!isDocxEditorError(error)) {
+        try {
+          this.#session.onException?.(error, planned.operations);
+        } catch {
+          /* an observer must never change what the caller sees */
+        }
+      }
+      throw error;
+    }
+  }
+
+  async #execute(
+    actions: readonly QueuedAction[],
+    planned: ReturnType<typeof planBatch>,
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
     const request: AutomationBatchRequest = {
       operations: planned.operations,
       ...(expectedRevision === undefined ? {} : { expectedRevision }),
     };
-
+    // Resource preparation is read-only. Pin even a write-only first batch before an
+    // asynchronous font/image load gives another writer a chance to change the document.
+    if (this.#session.host.prepare) {
+      const pinned = {
+        ...request,
+        expectedRevision: request.expectedRevision ?? this.#session.host.revision(),
+      };
+      try {
+        await this.#session.host.prepare(pinned);
+      } catch (error) {
+        throw isDocxEditorError(error) ? this.#refused(error, planned.operations) : error;
+      }
+      const response = this.#session.host.execute(pinned);
+      if (!response.ok)
+        throw this.#refused(batchFailure(response, actions, reportedRevision), planned.operations);
+      settleBatch(actions, response);
+      this.#readRevision = response.revision;
+      return;
+    }
     const response = this.#session.host.execute(request);
-    if (!response.ok) throw batchFailure(response, actions, expectedRevision);
+    if (!response.ok)
+      throw this.#refused(batchFailure(response, actions, reportedRevision), planned.operations);
     settleBatch(actions, response);
     if (planned.hasRead || planned.hasWrite) this.#readRevision = response.revision;
+  }
+
+  #refused(error: DocxEditorError, operations: readonly AutomationOperation[]): DocxEditorError {
+    try {
+      this.#session.onRefusal?.(error, operations);
+    } catch {
+      /* an observer must never change what the caller sees */
+    }
+    return error;
   }
 
   /** @internal The seam proxies reach the context through. */

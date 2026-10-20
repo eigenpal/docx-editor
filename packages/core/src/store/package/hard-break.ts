@@ -16,6 +16,7 @@ export type HardBreakKind = 'line' | 'page' | 'column' | 'other';
 
 /** Read the semantic break kind from a typed `w:br` node. */
 export function hardBreakKind(node: OoxmlHardBreakNode): HardBreakKind {
+  if (node.localName === 'cr') return 'line';
   for (const attribute of node.attributes) {
     if (attribute.namespaceUri !== WML_NAMESPACE_URI || attribute.localName !== 'type') continue;
     switch (attribute.value) {

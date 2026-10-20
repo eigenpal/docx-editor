@@ -4,8 +4,9 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { defineComponent, onBeforeUnmount, onMounted, watch, type PropType } from 'vue';
-import { useDocxEditor } from '@docx-editor.dev/vue';
+import { defineComponent, watch, type PropType } from 'vue';
+import { hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { useDocxEditor, useEditorHostDocument } from '@docx-editor.dev/vue';
 import {
   CUSTOM_NODE_IDENTITY_PATTERN,
   type ActivatedCustomNode,
@@ -69,13 +70,12 @@ export const CustomNodeChrome = defineComponent({
   setup(props) {
     const editorRef = useDocxEditor();
     const nodes = useCustomNodeDefinitions(() => props.nodes);
-    let stopStyleWatch: (() => void) | undefined;
     let pressedControl: string | null = null;
     let pressedTag: string | null = null;
 
     const controlAt = (event: PointerEvent) =>
       resolveCustomNodeActivation(
-        document.elementFromPoint(event.clientX, event.clientY),
+        hostDocumentOf(event.target as Node | null).elementFromPoint(event.clientX, event.clientY),
         nodes.value
       );
     const onDown = (event: PointerEvent) => {
@@ -108,50 +108,56 @@ export const CustomNodeChrome = defineComponent({
       props.onNodeHover?.(node);
     };
 
-    onMounted(() => {
-      stopStyleWatch = watch(
-        nodes,
-        (definitions, _, onCleanup) => {
-          const style = document.createElement('style');
-          const rules: string[] = [];
-          for (const definition of definitions) {
-            const selectors = layerSelectors(definition);
-            if (selectors.length === 0) continue;
-            const candidate = definition.chrome?.color;
-            const color =
-              candidate !== undefined &&
-              typeof CSS !== 'undefined' &&
-              CSS.supports('color', candidate)
-                ? candidate
-                : 'var(--doc-accent)';
-            rules.push(
-              `${selectors.map((selector) => `${selector} ${BOUNDARY}`).join(', ')} {`,
-              '  pointer-events: auto !important;',
-              '  opacity: 1;',
-              '  border: none;',
-              `  background: color-mix(in srgb, ${color} 12%, transparent);`,
-              '  border-radius: 6px;',
-              '  cursor: default;',
-              '}'
-            );
-          }
-          style.textContent = rules.join('\n');
-          document.head.append(style);
-          onCleanup(() => style.remove());
-        },
-        { immediate: true }
-      );
-      document.addEventListener('pointerdown', onDown, true);
-      document.addEventListener('pointerup', onUp, true);
-      document.addEventListener('mouseover', onOver);
-    });
-
-    onBeforeUnmount(() => {
-      stopStyleWatch?.();
-      document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('pointerup', onUp, true);
-      document.removeEventListener('mouseover', onOver);
-    });
+    // The editor's document, which a pop-out window can own: the node styles and the listeners
+    // both belong there, or neither reaches the pages. Re-bound when the editor moves.
+    const hostDocument = useEditorHostDocument();
+    watch(
+      [hostDocument, nodes] as const,
+      ([owner, definitions], _previous, onCleanup) => {
+        if (!owner) return;
+        const CSSApi = owner.defaultView?.CSS ?? (typeof CSS === 'undefined' ? undefined : CSS);
+        const style = owner.createElement('style');
+        const rules: string[] = [];
+        for (const definition of definitions) {
+          const selectors = layerSelectors(definition);
+          if (selectors.length === 0) continue;
+          const candidate = definition.chrome?.color;
+          const color =
+            candidate !== undefined && CSSApi?.supports('color', candidate)
+              ? candidate
+              : 'var(--doc-accent)';
+          rules.push(
+            `${selectors.map((selector) => `${selector} ${BOUNDARY}`).join(', ')} {`,
+            '  pointer-events: auto !important;',
+            '  opacity: 1;',
+            '  border: none;',
+            `  background: color-mix(in srgb, ${color} 12%, transparent);`,
+            '  border-radius: 6px;',
+            '  cursor: default;',
+            '}'
+          );
+        }
+        style.textContent = rules.join('\n');
+        owner.head.append(style);
+        onCleanup(() => style.remove());
+      },
+      { immediate: true }
+    );
+    watch(
+      hostDocument,
+      (owner, _previous, onCleanup) => {
+        if (!owner) return;
+        owner.addEventListener('pointerdown', onDown, true);
+        owner.addEventListener('pointerup', onUp, true);
+        owner.addEventListener('mouseover', onOver);
+        onCleanup(() => {
+          owner.removeEventListener('pointerdown', onDown, true);
+          owner.removeEventListener('pointerup', onUp, true);
+          owner.removeEventListener('mouseover', onOver);
+        });
+      },
+      { immediate: true }
+    );
 
     return () => null;
   },

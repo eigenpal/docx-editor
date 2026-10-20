@@ -1,8 +1,18 @@
 import type {
+  ContentLockPolicy,
+  FieldResultsMode,
+  FontShapingOptions,
+  ImageDecodePort,
+  LockedControlNavigation,
+  RevisionMarkupOptions,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
+import type {
   DocumentHandle,
   DocumentSource,
   Editor,
   EditorCommand,
+  EditorExecOptions,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -17,6 +27,8 @@ import type {
 import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
+import type { DocxEditorNavigationProps } from './editor/navigation';
+import type { DocxEditorOpenFailureProps } from './editor/DocxEditorOpenFailure';
 
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -31,8 +43,15 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 /** Props for the Vue `DocxEditor` sugar host. @public */
 export interface DocxEditorProps {
+  popups?: import('./editor/popup-config').DocxEditorPopups;
+  /** Font sources. A new value replaces them in place, keeping edits, selection and history. */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
+  fontShaping?: FontShapingOptions;
+  /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
+  imageDecodePort?: ImageDecodePort;
   colorMode?: 'light' | 'dark' | 'system';
+  /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;
   i18n?: Translations;
   chrome?: boolean;
@@ -40,14 +59,65 @@ export interface DocxEditorProps {
   menu?: boolean | DocxEditorMenuProps;
   hyperlinkPopup?: boolean;
   contextMenu?: boolean | DocxEditorContextMenuProps;
-  navigation?: boolean;
+  /**
+   * The packaged navigation pane: `false` removes it, an object is
+   * `DocxEditorNavigationProps`. The pane captures Ctrl+F (Cmd+F on macOS) while focus is in
+   * this editor and opens Find; `:navigation="{ findShortcut: false }"` leaves the shortcut
+   * to the browser.
+   */
+  navigation?: boolean | DocxEditorNavigationProps;
+  /**
+   * The dialog that explains a file the editor refused to open, on by default. A refused
+   * open leaves the pages blank, so without it the reader sees nothing. An object is
+   * `DocxEditorOpenFailureProps`, passed straight through. `false` removes the dialog, for a
+   * host that reports the failure itself through `useOpenFailure`. For your own buttons, use
+   * the `openFailureActions` slot.
+   */
+  openFailure?: boolean | DocxEditorOpenFailureProps;
   rulers?: boolean;
   document?: DocumentSource;
+  /** Live host mode. */
   mode?: EditorMode;
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
+
+  /**
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * UI translations are supplied separately through i18n.
+   */
   locale?: string;
   author?: string;
+  /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];
   class?: string;
 }
@@ -59,6 +129,6 @@ export interface DocxEditorRef {
   getDocumentHandle(): DocumentHandle | null;
   getEditor(): Editor | null;
   focus(): void;
-  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 }

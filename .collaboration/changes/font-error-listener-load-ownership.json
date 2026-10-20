@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A listener could replace the document while later listeners still received its font error.",
+  "after": "Font error delivery stops when a listener replaces the document or destroys the editor.",
+  "reason": "The change only guards local error callbacks. Shared operations and document state remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/font-origin-load-epoch.test.ts",
+    "packages/pro/src/collaboration/__tests__/font-origin-load-epoch-editors.test.ts"
+  ],
+  "changeset": "font-error-listener-load-ownership",
+  "migration": null
+}

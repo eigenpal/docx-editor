@@ -8,8 +8,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@docx-editor.dev/editor-api": "workspace:*",
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/fonts": "workspace:*",
+    "@docx-editor.dev/fonts-cjk": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
@@ -18,13 +20,14 @@
     "react-dom": "^19.0.0",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.32",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@docx-editor.dev/docx-to-markdown": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.1",
-    "typescript": "^6.0.3",
+    "typescript7": "npm:typescript@^7.0.2",
     "vite": "^8.0.10"
   }
 }

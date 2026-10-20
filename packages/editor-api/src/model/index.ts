@@ -21,8 +21,9 @@ export {
   type ContentControlValue,
 } from './content-controls.ts';
 export { Document } from './document.ts';
-export { Font } from './font.ts';
-export { List, ListCollection, ListItem } from './lists.ts';
+export { DocumentProperties } from './document-properties.ts';
+export { Font, UnderlineType } from './font.ts';
+export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
 export {
   Comment,
@@ -32,23 +33,57 @@ export {
   Revision,
   RevisionCollection,
   type RevisionType,
+  type RevisionBatchResult,
+  type RevisionBatchEntry,
+  type RevisionBatchSkipReason,
+  type RevisionAuthorEntry,
+  type RevisionAuthorSelection,
+  type RevisionAuthorOptions,
+  type RevisionAuthorResult,
+  type RevisionAuthorSkipReason,
 } from './review.ts';
-export {
-  PageSetup,
-  Section,
-  SectionCollection,
-  type HeaderFooterType,
-  type PageOrientation,
-} from './sections.ts';
+export { PageSetup, Section, SectionCollection, type HeaderFooterType } from './sections.ts';
 export type {
   BesideLocation,
   BodyInsertParagraphLocation,
   BodyInsertTextLocation,
-  InsertLocation,
   ParagraphInsertTextLocation,
   RangeInsertTextLocation,
   SelectionMode,
 } from './locations.ts';
-export { Paragraph, type ParagraphAlignment } from './paragraph.ts';
+export { Paragraph, type ParagraphAlignment, type ParagraphReadingOrder } from './paragraph.ts';
 export { Range } from './range.ts';
+export {
+  getReviewItemRange,
+  getReviewItemRangeOrNullObject,
+  getReviewItemRevisions,
+} from './review-items.ts';
 export type { SearchOptions } from './search-options.ts';
+
+export {
+  Table,
+  TableRow,
+  TableCell,
+  TableCollection,
+  TableRowCollection,
+  TableCellCollection,
+} from './tables.ts';
+
+export { InlinePicture, InlinePictureCollection } from './pictures.ts';
+export { Shape, ShapeCollection, ShapeType } from './shapes.ts';
+
+export { Field, FieldCollection } from './fields.ts';
+export { FieldType, type FieldTypeLiteral } from './field-types.ts';
+
+export {
+  RemoveDocInfoType,
+  InsertLocation,
+  Alignment,
+  PageOrientation,
+  ChangeTrackingMode,
+  ChangeTrackingVersion,
+  RangeLocation,
+  VerticalAlignment,
+  BreakType,
+  ContentControlType,
+} from './editing-enums.ts';

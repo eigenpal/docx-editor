@@ -12,6 +12,7 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const OMML_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 const PART_TYPES: Readonly<Record<string, string>> = {
   document: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
@@ -128,7 +129,7 @@ export function writeProjectedHtmlPackage(input: ProjectedHtmlPackageInput): Uin
   }
   const documentXml =
     `${XML_DECL}<w:document xmlns:w="${WML_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" ` +
-    `xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}"><w:body>${input.blocks.join('')}</w:body></w:document>`;
+    `xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}" xmlns:m="${OMML_NS}"><w:body>${input.blocks.join('')}</w:body></w:document>`;
   return writeHtmlFragmentPackage({
     documentXml,
     rels,

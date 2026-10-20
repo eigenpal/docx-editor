@@ -87,6 +87,12 @@ export function collectNumIds(nodes: readonly OoxmlNode[], out: Set<string>): vo
 }
 
 /** Every `r:*` relationship id referenced anywhere under the nodes. */
+export function relationshipIdsIn(nodes: readonly OoxmlNode[]): Set<string> {
+  const ids = new Set<string>();
+  collectRelationshipIds(nodes, ids);
+  return ids;
+}
+
 export function collectRelationshipIds(nodes: readonly OoxmlNode[], out: Set<string>): void {
   for (const node of nodes) {
     walkNodes(node, (current) => {

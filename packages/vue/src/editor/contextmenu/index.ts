@@ -21,6 +21,8 @@ export {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuRefreshToc,

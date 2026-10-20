@@ -1,3 +1,16 @@
+import { withDisplayedHyphens } from '../package/hyphen-text.ts';
+import { withTailStyle } from './tree-op-paragraph-tail.ts';
+import { applySetFieldCode } from './tree-op-field-code.ts';
+import { applyTableAuthoring } from './tree-op-table-batch.ts';
+import { applyTableProperties } from './tree-op-table-authoring.ts';
+import {
+  checkboxContent,
+  decodeCheckboxGlyph,
+  isInlineControl,
+} from './content-control-checkbox.ts';
+import { valueContent, withParagraphDiff } from './content-control-value-content.ts';
+import { applyFieldResultOp, isFieldResultOp } from './tree-op-field-results.ts';
+import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
 //
 // This module owns turning a VALIDATED op into a new part plus its structural effect.
@@ -6,10 +19,22 @@
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
-import { fieldAtomText } from '../package/field-nodes.ts';
-import { isContentRevisionKind, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
-import { linearMathToOmml } from '../package/omml-equation.ts';
+import {
+  simpleElement,
+  textElement,
+  textWithHyphenBuilders,
+  textWithHyphens,
+} from './tree-op-inline-elements.ts';
+import { characterStyleElement, emptyParagraphRunProperties } from './mark-character-style-run.ts';
+import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
+import {
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  W14_NAMESPACE_URI,
+} from '../package/ooxml-shared.ts';
+import { linearMathReplacementOmml } from '../package/omml-equation.ts';
+import { equationsOfAtom, isOmmlDisplay } from '../package/omml-display.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -19,6 +44,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  applyEdits,
   createNodeIdAllocator,
   findNode,
   insertChildren,
@@ -28,13 +54,16 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
-import { resolveRevisions } from './tree-op-revisions.ts';
+import { contentControlLevelOf } from '../package/content-control-nodes.ts';
+import { resolveRevisionOperation } from './tree-op-revisions.ts';
+import { applySetRevisionAttribution } from './revision-author-change.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
+import { applyDeleteTracked } from './tree-op-tracked-delete.ts';
 import {
-  applyDeleteTracked,
   applyInsertTracked,
   applyInsertTrackedElement,
   applyInsertTrackedElements,
+  insertedRunProperties,
 } from './tree-op-tracked.ts';
 import {
   applyParagraphMarkRevision,
@@ -43,10 +72,11 @@ import {
 } from './tree-op-tracked-marks.ts';
 import {
   insideOwnInsertion,
-  ownProposedMark,
+  ownProposedParagraph,
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
+import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -54,7 +84,9 @@ import {
   paraIdOf,
   usedParaIds,
   w14PrefixInScopeAt,
+  fnv1a32,
 } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   TEXT_DEPS,
   attributeValueOf,
@@ -67,7 +99,6 @@ import {
   findContentControl,
   formatSdtDateDisplay,
   fromEdit,
-  inlineContainerOf,
   innermostContentControlAround,
   isContentControlNode,
   isParagraphMarkRevision,
@@ -76,6 +107,7 @@ import {
   isShowingPlaceholder,
   isTemporaryControl,
   listItemsOf,
+  leavesInlineContainer,
   namedChild,
   normalizeSdtFullDate,
   ok,
@@ -86,12 +118,16 @@ import {
   sdtPrChild,
 } from './tree-op-nodes.ts';
 import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import { tableAncestorOf } from './tree-op-table-shared.ts';
+import {
+  planVerticalMergeHeadRepairs,
+  verticalMergeHeadRepairDirtyIds,
+  rowRemovalEdits,
+} from './tree-op-table-vmerge-removal.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
   mergedPropertyChildren,
-  propertyElement,
-  schemaInsertIndex,
 } from './tree-op-properties.ts';
 import {
   applySetListLevel,
@@ -103,6 +139,7 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
+import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
   applyRemoveContentControl as applyAutomationRemoveContentControl,
@@ -112,10 +149,10 @@ import {
   placeholderControlForInsertion,
 } from './tree-op-content-controls.ts';
 import {
-  insertionSite,
-  isParagraph,
-  paragraphLength,
+  insertionDestination,
+  fieldInsertionEndAt,
   runsUnder,
+  segmentAncestryNodeId,
   segmentsOf,
   type Segment,
 } from './tree-op-segments.ts';
@@ -124,9 +161,13 @@ import {
   applyReplaceTocResult,
   applyRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
-import { applyRefreshFieldResults } from './tree-op-field-results.ts';
 import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
+import {
+  inlineWrapperProperties,
+  wrapperChildren,
+  fieldSplitChildren,
+} from './tree-op-inline-wrapper-split.ts';
 import type {
   OoxmlProperty,
   RevisionAttributionInput,
@@ -141,55 +182,20 @@ import {
   applyTableResizeOp,
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
+import { applyMergeTableCells } from './tree-op-table-merge.ts';
+import { applySplitTableCell } from './tree-op-table-split.ts';
+import { addressesMergedColumns, applyMergedColumnOp } from './tree-op-table-merged-columns.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
-import { fnv1a32 } from '../package/para-id.ts';
-import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
+import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
-
-/**
- * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
- *
- * SPLITTING a run must not change what the run is. This built a `w:t` unconditionally, so
- * every ordinary gesture that splits a run inside a `w:del` — commenting on struck text,
- * bolding across it — silently re-labelled the deletion as live text (§17.3.3.7 requires
- * `w:delText` there), and the damage only showed when the file reached Word.
- */
-function textElement(
-  nextId: () => string,
-  text: string,
-  kind: 'text' | 'deletedText' = 'text'
-): OoxmlNode {
-  const valueId = nextId();
-  return {
-    id: nextId(),
-    kind,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: kind === 'deletedText' ? 'delText' : 't',
-    prefix: 'w',
-    namespaceBindings: [],
-    // `xml:space="preserve"` is not added here: the serializer owns lexical form, and a
-    // leading/trailing space is preserved by the tree regardless of the attribute.
-    attributes: [],
-    children: [{ id: valueId, kind: 'textValue', value: text }],
-  } as unknown as OoxmlNode;
-}
-
-function simpleElement(
-  nextId: () => string,
-  localName: 'tab' | 'br',
-  breakKind: 'line' | 'page' = 'line'
-): OoxmlNode {
-  return {
-    id: nextId(),
-    kind: localName === 'tab' ? 'tab' : 'hardBreak',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
-    children: [],
-  } as unknown as OoxmlNode;
-}
+import { applyDrawingContentEdit } from './drawing-content-edit.ts';
+import { applyInsertBuildingBlock } from './building-block-insert.ts';
+import { applyBookmarkOp, isBookmarkTreeOp, withBookmarkEditRules } from './tree-op-bookmarks.ts';
+import { closesAnOpenRange, opensARange, zeroLengthGoesToHead } from './tree-op-split-markers.ts';
+import {
+  promptInsertionOffset,
+  restoreEmptiedPlaceholder,
+} from './content-control-prompt-restore.ts';
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
@@ -199,19 +205,6 @@ const RUN_ELEMENT_INSERTS: Readonly<
   insertHardBreak: (nextId) => simpleElement(nextId, 'br', 'line'),
   insertPageBreak: (nextId) => simpleElement(nextId, 'br', 'page'),
 };
-
-/**
- * Where the caller's characters go once a prompt has been emptied.
- *
- * The prompt's own characters are gone, so the offset the caller planned against them cannot
- * be honoured — Word puts the text where the prompt started, and clamping keeps the op inside
- * a paragraph that is now shorter than it was.
- */
-function promptInsertionOffset(part: OoxmlPart, paragraphId: string, planned: number): number {
-  const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return planned;
-  return Math.min(planned, paragraphLength(paragraph));
-}
 
 function runElement(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
   return {
@@ -238,7 +231,11 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
-  const rejection = validateTreeOp(part, op);
+  return withBookmarkEditRules(part, op, options, () => applyValidatedTreeOp(part, op, options));
+}
+
+function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
+  const rejection = validateTreeOp(part, op, options);
   if (rejection) return { ok: false, reason: rejection };
 
   if (op.op === 'replaceStoryBlocks') {
@@ -254,7 +251,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     return applyAutomationRemoveContentControl(part, op, options);
   }
   if (op.op === 'insertContentControl') {
-    return applyAutomationInsertContentControl(part, op, options);
+    return op.revision
+      ? applyTrackedContentControl(part, op, options)
+      : applyAutomationInsertContentControl(part, op, options);
   }
   // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
   // caret: an automation call and a paste insert text too, and a prompt that survived them
@@ -262,21 +261,37 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'insertText' && !op.revision) {
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
     if (prompt) {
-      const emptied = clearPlaceholder(part, prompt.control.id, options);
-      if (emptied) {
-        return applyTreeOp(
-          emptied,
-          { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
-          options
-        );
-      }
+      // The caret's paragraph is the one the prompt is emptied into, so the insert below
+      // still finds it. A prompt whose content cannot be emptied in place is refused, not
+      // flattened by the insertion path: that path would replace the wrapped cell too.
+      const emptied = clearPlaceholder(part, prompt.control.id, options, op.paragraphId);
+      if (!emptied) return { ok: false, reason: 'unsupported' };
+      const result = applyTreeOp(
+        emptied,
+        {
+          ...op,
+          offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset),
+          inside: prompt.control.id,
+        },
+        options
+      );
+      // Emptying the prompt may drop its other paragraphs; the insert's effect must say so.
+      const cleared = findNode(emptied, prompt.control.id);
+      if (!result.ok || !cleared) return result;
+      return { ...result, effect: withParagraphDiff(result.effect, prompt.control, cleared) };
     }
   }
 
+  if (op.op === 'authorTable') return applyTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return applyTableProperties(part, op, options);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
-  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn') {
+    if (addressesMergedColumns(part, op)) return applyMergedColumnOp(part, op, options);
     return applyTableColumnOp(part, op, options);
+  }
+  if (op.op === 'mergeTableCells') return applyMergeTableCells(part, op, options);
+  if (op.op === 'splitTableCell') return applySplitTableCell(part, op, options);
   if (
     op.op === 'setTableColumnWidths' ||
     op.op === 'setTableRightEdgeWidth' ||
@@ -291,16 +306,22 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   ) {
     return applyTableCellPropertyOp(part, op, options);
   }
-  if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
+  if (isDrawingTreeDocOp(op)) return applyDrawingContentEdit(part, op, options);
 
   if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
+  if (op.op === 'insertBuildingBlock') return applyInsertBuildingBlock(part, op, options);
+  if (isBookmarkTreeOp(op)) return applyBookmarkOp(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
-  if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
+  if (isFieldResultOp(op)) return applyFieldResultOp(part, op, options);
+  if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if ((op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') && op.range) {
+    return applyPartialHyperlink(part, op, options);
+  }
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
   if (op.op === 'setMathEquation' || op.op === 'removeMathEquation') {
@@ -326,9 +347,17 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       impact: 'text-local',
     };
     if (op.op === 'removeMathEquation') {
-      return fromEdit(removeNode(part, equation.id, options), effect);
+      // The last equation of a display takes its `m:oMathPara` with it: an empty display
+      // is invalid OMML and would leave an invisible atom in the paragraph.
+      const display = parentOf(part, equation.id);
+      const target =
+        display && isOmmlDisplay(display) && equationsOfAtom(display).length === 1
+          ? display.id
+          : equation.id;
+      return fromEdit(removeNode(part, target, options), effect);
     }
-    const generated = linearMathToOmml(op.linear, createNodeIdAllocator(part));
+    // Default control properties of the replaced equation carry over to each new structure.
+    const generated = linearMathReplacementOmml(op.linear, createNodeIdAllocator(part), equation);
     if (!generated.ok) return { ok: false, reason: 'invalid-property-value' };
     // Retain the equation identity. An open popover and an undo record both address the
     // complete math atom, while every internal OMML node receives a fresh part-scoped id.
@@ -348,22 +377,13 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'rejectAllRevisions'
   ) {
     const accept = op.op === 'acceptRevision' || op.op === 'acceptAllRevisions';
-    const address =
-      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
-    const localName =
-      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.localName : undefined;
-    const scopeRootId =
-      op.op === 'acceptAllRevisions' || op.op === 'rejectAllRevisions' ? op.scopeRootId : undefined;
-    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, {
-      ...options,
-      ...(localName === undefined ? {} : { localName }),
-      ...(scopeRootId === undefined ? {} : { scopeRootId }),
-    });
+    const resolved = resolveRevisionOperation(part, accept ? 'accept' : 'reject', op, options);
     if (!resolved.ok || !resolved.part || !resolved.effect) {
       return { ok: false, reason: resolved.reason ?? 'tree-invariant' };
     }
     return { ok: true, part: resolved.part, effect: resolved.effect };
   }
+  if (op.op === 'setRevisionAttribution') return applySetRevisionAttribution(part, op, options);
   if (op.op === 'removeContentControl')
     return applyRemoveContentControl(part, op.controlId, options);
   if (op.op === 'setContentControlValue') {
@@ -380,6 +400,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'linkToPrevious' ||
     op.op === 'unlinkFromPrevious' ||
     op.op === 'setSectionFurnitureOptions' ||
+    op.op === 'setDocumentProtection' ||
+    op.op === 'setWatermark' ||
     op.op === 'insertNote' ||
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||
@@ -398,13 +420,21 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   switch (op.op) {
     case 'insertText':
       if (op.revision) {
-        return applyInsertTracked(part, paragraph, op.offset, op.text, op.revision, options);
+        return applyInsertTracked(
+          part,
+          paragraph,
+          op.offset,
+          op.text,
+          op.revision,
+          options,
+          op.bias
+        );
       }
       return applyInsertContent(
         part,
         paragraph,
         op.offset,
-        [(mint) => textElement(mint, op.text)],
+        textWithHyphenBuilders(op.text),
         options,
         op.inside,
         op.bias
@@ -421,7 +451,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applyInsertContent(part, paragraph, op.offset, [element], options);
     }
     case 'setListLevel':
-      return applySetListLevel(part, paragraph, op.level, options, nextId);
+      return applySetListLevel(part, paragraph, op.level, options, nextId, op.revision);
     case 'setParagraphMarkProperties':
       return applySetParagraphMarkProperties(
         part,
@@ -432,7 +462,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.revision
       );
     case 'setListNumbering':
-      return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
+      return applySetListNumbering(
+        part,
+        paragraph,
+        op.numId,
+        op.level ?? 0,
+        options,
+        nextId,
+        op.revision
+      );
     case 'setParagraphTabStops':
       return applySetParagraphTabStops(
         part,
@@ -557,7 +595,10 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       // and mark writes apply: rejecting that `w:ins` runs the paragraph into the next one and
       // takes its properties with it, so a record of what they used to be decides nothing.
       const markProperties = namedChild(existing, 'rPr')?.children ?? [];
-      if (op.revision && !ownProposedMark(markProperties, op.revision.author)) {
+      if (
+        op.revision &&
+        !ownProposedParagraph(part, paragraph.id, markProperties, op.revision.author)
+      ) {
         children = withPropertyChangeRecord({
           container: 'paragraphProperties',
           prior,
@@ -636,7 +677,43 @@ function applyInsertContent(
   const owner = found?.kind === 'textValue' ? null : found;
   // ONE resolution of where this lands, shared with the validation that refuses it. Two copies
   // of this rule is how a lock came to be resolved against a different place than the write.
-  const site = insertionSite(paragraph, offset, owner);
+  const site = insertionDestination(paragraph, offset, owner, bias).site;
+
+  // Plain typing changes the existing leaf, rather than copying its text into newly
+  // minted containers. Shared split ranges address that leaf, including after formatting
+  // has replaced its run. Tabs, breaks, atoms, and deleted text keep their structural paths.
+  const insertIntoText = (segment: Segment | undefined): TreeOpResult | null => {
+    const content = nodes.length === 1 ? nodes[0] : undefined;
+    const text =
+      content?.kind === 'text' && content.children.length === 1 ? content.children[0] : undefined;
+    if (
+      !segment ||
+      segment.removeNodeIds ||
+      segment.node.kind !== 'textValue' ||
+      text?.kind !== 'textValue'
+    )
+      return null;
+    const owner = findTextParent(paragraph, segment.node.id);
+    if (owner?.kind !== 'text' || owner.children.length !== 1) return null;
+    const local = offset - segment.start;
+    return finishContentEdit(
+      fromEdit(
+        replaceNode(
+          part,
+          segment.node.id,
+          {
+            ...segment.node,
+            value:
+              segment.node.value.slice(0, local) + text.value + segment.node.value.slice(local),
+          },
+          deferOptions(options, control)
+        ),
+        effect
+      ),
+      control,
+      options
+    );
+  };
 
   let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
@@ -662,6 +739,8 @@ function applyInsertContent(
       });
       if (relocated) return relocated;
     }
+    const plain = insertIntoText(segment);
+    if (plain) return plain;
     const kind = textNode.kind === 'deletedText' ? 'deletedText' : 'text';
     const head = textElement(nextId, value.slice(0, local), kind);
     const tail = textElement(nextId, value.slice(local), kind);
@@ -675,8 +754,31 @@ function applyInsertContent(
     return finishContentEdit(inserted, control, options);
   }
 
+  if (site.kind === 'atRunIndex') {
+    // Text right before the index takes plain typing in place, rather than gaining a sibling
+    // `w:t` per keystroke. Only that node: an earlier one would sit before the index.
+    const prior = site.run.children[site.index - 1];
+    const joined = prior
+      ? findLast(segments, (segment) => segment.runId === site.run.id && segment.end === offset)
+      : undefined;
+    if (joined && prior && contains(prior, joined.node.id)) {
+      const plain = insertIntoText(joined);
+      if (plain) return plain;
+    }
+    return finishContentEdit(
+      fromEdit(
+        insertChildren(part, site.run.id, site.index, nodes, deferOptions(options, control)),
+        effect
+      ),
+      control,
+      options
+    );
+  }
+
   if (inside !== undefined) {
     if (site.kind === 'atBoundary') {
+      const plain = insertIntoText(site.segment);
+      if (plain) return plain;
       const run = findNode(part, site.segment.runId);
       if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
       const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
@@ -687,6 +789,10 @@ function applyInsertContent(
       return finishContentEdit(inserted, control, options);
     }
     if (site.kind === 'appendToRun') {
+      const plain = insertIntoText(
+        findLast(segments, (segment) => segment.runId === site.run.id && segment.end === offset)
+      );
+      if (plain) return plain;
       inserted = fromEdit(
         insertChildren(
           part,
@@ -705,6 +811,33 @@ function applyInsertContent(
         site.holder.id,
         site.holder.children.length,
         [runElement(nextId, nodes)],
+        deferOptions(options, control)
+      ),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
+
+  if (site.kind === 'newRun') {
+    // The left run still wins its formatting. A minted run at a wrapper's leading edge sits
+    // right after the preceding run, so typing there inherits that run's properties exactly
+    // as it does at an ordinary boundary; a bare run came out unformatted instead.
+    const leftSegment = findLast(segments, (segment) => segment.end === offset);
+    const leftRun = leftSegment ? findNode(part, leftSegment.runId) : null;
+    const inheritedProperties =
+      leftRun && leftRun.kind === 'run'
+        ? fieldInsertionEndAt(paragraph, offset)
+          ? insertedRunProperties(nextId, leftRun)
+          : leftRun.children
+              .filter((child) => child.kind === 'runProperties')
+              .map((child) => withFreshIds(child, nextId))
+        : emptyParagraphRunProperties(paragraph, nextId);
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        site.holder.id,
+        site.index ?? site.holder.children.length,
+        [runElement(nextId, [...inheritedProperties, ...nodes])],
         deferOptions(options, control)
       ),
       effect
@@ -732,8 +865,9 @@ function applyInsertContent(
     bias === 'left' &&
     before &&
     before.removeNodeIds === undefined &&
+    !fieldInsertionEndAt(paragraph, offset) &&
     !crossesContentControlBoundary(part, before, after) &&
-    !leavesContainer(paragraph, before, after)
+    !leavesInlineContainer(paragraph, before, after)
   ) {
     const run = findNode(part, before.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
@@ -747,6 +881,8 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(before);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, before.node.id));
     inserted = fromEdit(
       insertChildren(
@@ -797,43 +933,14 @@ function applyInsertContent(
       options,
     });
     if (relocated) return relocated;
+    const plain = insertIntoText(after);
+    if (plain) return plain;
     const index = run.children.findIndex((child) => contains(child, after.node.id));
     inserted = fromEdit(
       insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
       effect
     );
     return finishContentEdit(inserted, control, options);
-  }
-
-  // The caret sits at a CONTAINER's outer edge with nothing beyond it — a hyperlink or a
-  // locked chip ending the paragraph. The text lands in a fresh run BESIDE the container,
-  // immediately after it in the container's OWN parent: falling through to "the last run"
-  // instead put the keystroke into whatever run happened to precede the container,
-  // characters away from the caret — and for a content-locked chip the write was refused
-  // outright, so typing at the end of the paragraph did nothing at all. The container's
-  // parent, not the paragraph: a chip nested inside an outer control (or a link) is only
-  // being LEFT one level, and validation attributes the caret to that outer container.
-  if (before) {
-    const container = inlineContainerOf(paragraph, before.runId);
-    if (container) {
-      const parent = parentOf(part, container.id);
-      if (parent) {
-        const index = parent.children.findIndex((child) => child.id === container.id);
-        if (index >= 0) {
-          inserted = fromEdit(
-            insertChildren(
-              part,
-              parent.id,
-              index + 1,
-              [runElement(nextId, nodes)],
-              deferOptions(options, control)
-            ),
-            effect
-          );
-          return finishContentEdit(inserted, control, options);
-        }
-      }
-    }
   }
 
   // A paragraph-level atom has no owning run. At its trailing boundary, insert a sibling
@@ -862,6 +969,23 @@ function applyInsertContent(
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
+  // An empty paragraph's face is its mark's character style and direction flags, or the face
+  // of an empty run that already carries them (`mark-character-style-run.ts`). The first
+  // content goes in a run of its own after the empty runs.
+  const markStyled = last ? emptyParagraphRunProperties(paragraph, nextId) : [];
+  if (last && markStyled.length > 0) {
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        paragraph.id,
+        paragraph.children.indexOf(last) + 1,
+        [runElement(nextId, [...markStyled, ...nodes])],
+        deferOptions(options, control)
+      ),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
   if (last) {
     inserted = fromEdit(
       insertChildren(part, last.id, last.children.length, nodes, deferOptions(options, control)),
@@ -875,7 +999,7 @@ function applyInsertContent(
       part,
       paragraph.id,
       paragraph.children.length,
-      [runElement(nextId, nodes)],
+      [runElement(nextId, [...emptyParagraphRunProperties(paragraph, nextId), ...nodes])],
       deferOptions(options, control)
     ),
     effect
@@ -951,16 +1075,15 @@ function deferOptions(
   return options;
 }
 
-/**
- * After a successful content edit, unwrap a `w:temporary` control in the same effect.
- * Validation already refused when the effective wrapper lock forbids removal.
- */
+/** After a content edit: a temporary control unwraps (a locked wrapper was refused by
+ * validation), and any other control the edit emptied shows its prompt again. */
 function finishContentEdit(
   result: TreeOpResult,
   control: OoxmlNode | null,
   options?: EditOptions
 ): TreeOpResult {
-  if (!result.ok || !control || !isTemporaryControl(control)) return result;
+  if (!result.ok || !control) return result;
+  if (!isTemporaryControl(control)) return restoreEmptiedPlaceholder(result, control.id, options);
   // Re-find: the control id is stable across the preceding content edit.
   const stillThere = findContentControl(result.part, control.id);
   if (!stillThere) return result;
@@ -988,38 +1111,37 @@ function applyPlaceholderReplace(
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
   const owner = parentOf(part, control.id);
-  const inline = owner?.kind === 'paragraph';
-  const run = runElement(nextId, nodes);
-  const contentChildren = inline
-    ? [run]
-    : [
-        {
-          id: nextId(),
-          kind: 'paragraph',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'p',
-          prefix: 'w',
-          namespaceBindings: [],
-          attributes: [],
-          children: [run],
-        } as unknown as OoxmlNode,
-      ];
+  const inline = contentControlLevelOf(control) === 'inline';
+  // The inserted content becomes the display run inside whatever the prompt wrapped, so a
+  // prompt around a cell keeps the cell. Content no insertion can stand in for is refused.
+  const contentChildren = valueContent(
+    contentControlContentOf(control),
+    (properties) => runElement(nextId, properties ? [properties, ...nodes] : nodes),
+    nextId,
+    inline
+  );
+  if (!contentChildren) return { ok: false, reason: 'unsupported' };
   let nextControl = replaceControlContent(control, contentChildren, nextId);
   nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
 
-  // A BLOCK placeholder replace deletes the prompt's paragraph(s) and mints a fresh one, so
-  // the paragraph set changes and the effect must say so. Reporting it as 'text-local' with
+  // A BLOCK placeholder replace can delete prompt paragraphs and mint a fresh one, so the
+  // paragraph set may change and the effect must say so. Reporting it as 'text-local' with
   // empty created/deleted told paragraph-keyed caches they could keep their answer, and a
   // retained review order index then had no entry for the minted paragraph — an item anchored
-  // in it listed in the rail but never activated from a caret. The inline branch really is
-  // text-local: the owner paragraph survives, only its runs are replaced.
-  const effect: TreeOpEffect = {
-    dirty: owner ? [owner.id] : [control.id],
-    created: inline ? [] : contentChildren.map((child) => child.id),
-    deleted: inline ? [] : placeholderParagraphIdsOf(control),
-    dependencyKeys: TEXT_DEPS,
-    impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
-  };
+  // in it listed in the rail but never activated from a caret. A prompt paragraph kept in
+  // place is dirty. The inline branch really is text-local: the owner paragraph survives,
+  // only its runs are replaced, and inline content holds no paragraph to diff.
+  const effect = withParagraphDiff(
+    {
+      dirty: owner ? [owner.id] : [control.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
+    },
+    control,
+    nextControl
+  );
 
   if (isTemporaryControl(control)) {
     // Build the unwrapped parent children from the replaced content — one tree write.
@@ -1034,24 +1156,6 @@ function applyPlaceholderReplace(
   }
 
   return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
-}
-
-/** Paragraph ids a block placeholder replace removes along with the prompt content. */
-function placeholderParagraphIdsOf(control: OoxmlNode): string[] {
-  if (control.kind === 'textValue') return [];
-  const content = contentControlContentOf(control);
-  if (!content) return [];
-  const ids: string[] = [];
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 32) return;
-    if (node.kind === 'paragraph') {
-      ids.push(node.id);
-      return;
-    }
-    for (const child of node.children) walk(child, depth + 1);
-  };
-  for (const child of content.children) walk(child, 0);
-  return ids;
 }
 
 function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
@@ -1071,45 +1175,6 @@ function crossesContentControlBoundary(
   const beforeControl = innermostContentControlAround(part, before.runId)?.id;
   const afterControl = after ? innermostContentControlAround(part, after.runId)?.id : undefined;
   return beforeControl !== afterControl;
-}
-
-/**
- * Whether typing into `before`'s run would carry the text INTO a container the caret is
- * leaving — a hyperlink or a field whose last character this is, with ordinary paragraph
- * content on the other side of the boundary.
- */
-function leavesContainer(
-  paragraph: OoxmlParagraphNode,
-  before: { readonly runId: string },
-  after: { readonly runId: string } | undefined
-): boolean {
-  const container = (runId: string): OoxmlNode | null => {
-    let held: OoxmlNode | null = null;
-    const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
-      if (node.kind === 'textValue' || held) return;
-      if (node.id === runId) {
-        held = inside;
-        return;
-      }
-      const nested =
-        node.kind === 'hyperlink' ||
-        node.kind === 'fldSimple' ||
-        // A content control is a container the same way a link is: typing at
-        // its OUTER edge must not join the run inside and grow the control —
-        // which is exactly what pressing space after a custom-node chip did
-        // before this branch (pro-review-and-custom-nodes 4.6).
-        node.kind === 'contentControl' ||
-        (node.kind === 'generic' && node.localName === 'fldSimple')
-          ? node
-          : inside;
-      for (const child of node.children) visit(child, nested);
-    };
-    for (const child of paragraph.children) visit(child, null);
-    return held;
-  };
-  const held = container(before.runId);
-  if (held === null) return false;
-  return after === undefined || container(after.runId) !== held;
 }
 
 function contains(node: OoxmlNode, id: string): boolean {
@@ -1173,7 +1238,16 @@ function applyDeleteText(
     impact: 'text-local',
   };
   let current = part;
-  const nextId = createNodeIdAllocator(part);
+
+  const fieldsRemoved = removeCoveredTextFormDefinitions(
+    current,
+    paragraph,
+    start,
+    end,
+    editOptions
+  );
+  if (!fieldsRemoved.ok) return fieldsRemoved;
+  current = fieldsRemoved.part;
 
   // Highest offset first, so earlier segment positions stay valid as edits apply.
   for (const segment of [...segments].reverse()) {
@@ -1200,17 +1274,16 @@ function applyDeleteText(
     const value = segment.node.value.slice(0, from) + segment.node.value.slice(to);
     const owner = findTextParent(paragraph, segment.node.id);
     if (!owner) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
-    const edited =
-      value.length === 0
-        ? removeNode(current, owner.id, editOptions)
-        : replaceNode(
-            current,
-            owner.id,
-            textElement(nextId, value, owner.kind === 'deletedText' ? 'deletedText' : 'text'),
-            editOptions
-          );
+    const edited = replaceNode(current, segment.node.id, { ...segment.node, value }, editOptions);
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
+    if (value.length === 0) {
+      // Publish the source deletion before removing its container. Concurrent formatting
+      // may still reference this leaf through a split range after the owner disappears.
+      const removed = removeNode(current, owner.id, editOptions);
+      if (!removed.ok) return fromEdit(removed, effect);
+      current = removed.part;
+    }
   }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would
@@ -1220,10 +1293,17 @@ function applyDeleteText(
   // behind would make the next character typed at that offset silently join the dead link.
   const after = findNode(current, paragraph.id);
   if (after && after.kind === 'paragraph') {
-    const sweep = (children: readonly OoxmlNode[]): TreeOpResult | null => {
+    const sweep = (children: readonly OoxmlNode[], depth: number): TreeOpResult | null => {
+      if (depth >= MAX_INLINE_CONTAINER_DEPTH) return null;
       for (const child of children) {
+        if (child.kind === 'generic' && isInlineRunContainer(child)) {
+          // The generic wrapper is authored structure and survives empty. Its empty runs do not.
+          const nested = sweep(child.children, depth + 1);
+          if (nested) return nested;
+          continue;
+        }
         if (child.kind === 'hyperlink') {
-          const nested = sweep(child.children);
+          const nested = sweep(child.children, depth + 1);
           if (nested) return nested;
           const link = findNode(current, child.id);
           if (link && link.kind !== 'textValue' && runsUnder(link).length === 0) {
@@ -1249,7 +1329,7 @@ function applyDeleteText(
           continue;
         }
         if (child.kind !== 'textValue' && isContentRevisionKind(child.kind)) {
-          const nested = sweep(child.children);
+          const nested = sweep(child.children, depth + 1);
           if (nested) return nested;
           const wrapper = findNode(current, child.id);
           if (wrapper && wrapper.kind !== 'textValue' && runsUnder(wrapper).length === 0) {
@@ -1285,7 +1365,7 @@ function applyDeleteText(
           // only empty runs inside them are swept.
           const content = contentControlContentOf(child);
           if (content) {
-            const nested = sweep(content.children);
+            const nested = sweep(content.children, depth + 1);
             if (nested) return nested;
           }
           continue;
@@ -1301,7 +1381,7 @@ function applyDeleteText(
       }
       return null;
     };
-    const failure = sweep(after.children);
+    const failure = sweep(after.children, 0);
     if (failure) return failure;
   }
   return finishContentEdit(ok(current, effect), control, options);
@@ -1391,40 +1471,26 @@ function hyperlinkElement(
  * two `w:rStyle` children make the `w:rPr` schema-invalid, which Word repairs by dropping
  * the run's formatting entirely.
  */
-function withCharacterStyle(node: OoxmlNode, styleId: string, nextId: () => string): OoxmlNode {
+function withCharacterStyle(
+  node: OoxmlNode,
+  styleId: string,
+  nextId: () => string,
+  depth = 0
+): OoxmlNode {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return node;
   // A revision wrapper is not a run: the style goes on the runs INSIDE it. Marking the
   // wrapper itself minted a `w:rPr` child on `w:ins` — a shape `CT_RunTrackChange` has no
   // room for — the moment a link was applied over tracked display text, which is every
   // link created in suggesting mode.
-  if (
-    node.kind !== 'textValue' &&
-    (node.kind === 'hyperlink' || isContentRevisionKind(node.kind))
-  ) {
+  if (isInlineRunContainer(node)) {
     return withChildren(
       node,
-      node.children.map((child) => withCharacterStyle(child, styleId, nextId)),
+      node.children.map((child) => withCharacterStyle(child, styleId, nextId, depth + 1)),
       null
     );
   }
   if (node.kind !== 'run') return node;
-  const rStyle = {
-    id: nextId(),
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'rStyle',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [
-      {
-        kind: 'genericExtension',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'val',
-        prefix: 'w',
-        value: styleId,
-      },
-    ],
-    children: [],
-  } as unknown as OoxmlNode;
+  const rStyle = characterStyleElement(nextId, styleId);
 
   const rPr = runPropertiesNodeOf(node);
   if (!rPr) {
@@ -1576,6 +1642,7 @@ function applyInsertInlineContentControl(
       readonly xpath: string;
       readonly storeItemId: string;
     };
+    readonly revision?: RevisionAttributionInput;
   },
   options?: EditOptions
 ): TreeOpResult {
@@ -1631,11 +1698,17 @@ function applyInsertInlineContentControl(
   const inheritedProperties =
     anchorRun && anchorRun.kind === 'run' ? runPropertiesNodeOf(anchorRun) : null;
 
-  const control = inlineContentControlElement(
+  const built = inlineContentControlElement(
     nextId,
     op,
     inheritedProperties ? remintClone(inheritedProperties, nextId) : null
   );
+  // A proposed control is one tracked insertion: the whole `w:sdt` inside a `w:ins`, so a
+  // reject takes the control with its text and an accept keeps it.
+  const revisionId = op.revision ? nextRevisionId(part)() : '';
+  const control = op.revision
+    ? build(nextId(), 'revisionInsert', 'ins', revisionAttributes(revisionId, op.revision), [built])
+    : built;
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const children = [...(pPr ? [pPr] : []), ...before, control, ...after];
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
@@ -1771,6 +1844,43 @@ function inlineContentControlElement(
     attributes: [],
     children: [properties, content],
   } as unknown as OoxmlNode;
+}
+
+/** Split only the requested text while retaining each unaffected wrapper's metadata. */
+function applyPartialHyperlink(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'setHyperlinkTarget' | 'removeHyperlink' }>,
+  options?: EditOptions
+): TreeOpResult {
+  const link = findNode(part, op.linkId);
+  const paragraph = link && parentOf(part, link.id);
+  if (!link || paragraph?.kind !== 'paragraph' || !op.range)
+    return { ok: false, reason: 'tree-invariant' };
+  const pieces = distributeInline(
+    link,
+    [op.range.start, op.range.end],
+    3,
+    segmentsOf(paragraph),
+    createNodeIdAllocator(part)
+  );
+  const selected = pieces[1]?.[0];
+  if (selected?.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
+  const replacements = pieces.flat();
+  const children = paragraph.children.flatMap((child) =>
+    child.id === link.id ? replacements : [child]
+  );
+  const split = replaceChildren(part, paragraph.id, children, options);
+  if (!split.ok)
+    return fromEdit(split, {
+      dirty: [paragraph.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'paragraph-local',
+    });
+  return op.op === 'removeHyperlink'
+    ? applyRemoveHyperlink(split.part, selected.id, options)
+    : applySetHyperlinkTarget(split.part, { ...op, linkId: selected.id }, options);
 }
 
 /** Re-aim a link: one target attribute replaces the other, and the tooltip follows. */
@@ -1921,72 +2031,7 @@ function applyRemoveContentControl(
   return fromEdit(replaceChildren(part, owner.id, children, options), effect);
 }
 
-function mintTextRun(nextId: () => string, text: string, font?: string): OoxmlNode {
-  const content: OoxmlNode[] = [];
-  if (font) {
-    content.push({
-      id: nextId(),
-      kind: 'runProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'rPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [
-        {
-          id: nextId(),
-          kind: 'generic',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'rFonts',
-          prefix: 'w',
-          namespaceBindings: [],
-          attributes: [
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'ascii',
-              value: font,
-            },
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'hAnsi',
-              value: font,
-            },
-            {
-              namespaceUri: WML_NAMESPACE_URI,
-              prefix: 'w',
-              localName: 'eastAsia',
-              value: font,
-            },
-          ],
-          children: [],
-        } as unknown as OoxmlNode,
-      ],
-    } as unknown as OoxmlNode);
-  }
-  // Checkbox glyphs are `w:sym`; plain values use `w:t`.
-  if (/^[0-9A-Fa-f]{4}$/.test(text) && font) {
-    content.push({
-      id: nextId(),
-      kind: 'generic',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'sym',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [
-        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'font', value: font },
-        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'char', value: text },
-      ],
-      children: [],
-    } as unknown as OoxmlNode);
-  } else {
-    content.push(textElement(nextId, text));
-  }
-  return runElement(nextId, content);
-}
-
-function replaceControlContent(
+export function replaceControlContent(
   control: OoxmlNode,
   contentChildren: readonly OoxmlNode[],
   nextId: () => string
@@ -2053,7 +2098,8 @@ function setLastValueOnList(list: OoxmlElement, value: string): OoxmlNode {
         namespaceUri: WML_NAMESPACE_URI,
         prefix: 'w',
         localName: 'lastValue',
-        value,
+        // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+        value: withDisplayedHyphens(value),
       },
     ],
   } as OoxmlNode;
@@ -2069,39 +2115,29 @@ function applySetContentControlValue(
   if (!control) return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
   const owner = parentOf(part, control.id);
-  const inline = owner?.kind === 'paragraph';
+  const inline = isInlineControl(part, control.id);
   const type = contentControlValueTypeOf(control);
   let nextControl: OoxmlNode = control;
 
-  const setTextContent = (display: string, font?: string): void => {
-    const run = mintTextRun(nextId, display, font);
-    const existingContent = contentControlContentOf(nextControl);
-    const existingParagraph =
-      !inline && existingContent?.children.length === 1 ? existingContent.children[0] : undefined;
-    const preservedParagraph =
-      existingParagraph?.kind === 'paragraph'
-        ? ({
-            ...existingParagraph,
-            children: [...existingParagraph.children.filter(isParagraphPropertiesNode), run],
-          } as OoxmlNode)
-        : undefined;
-    const contentChildren = inline
-      ? [run]
-      : [
-          preservedParagraph ??
-            ({
-              id: nextId(),
-              kind: 'paragraph',
-              namespaceUri: WML_NAMESPACE_URI,
-              localName: 'p',
-              prefix: 'w',
-              namespaceBindings: [],
-              attributes: [],
-              children: [run],
-            } as unknown as OoxmlNode),
-        ];
-    nextControl = replaceControlContent(nextControl, contentChildren, nextId);
+  // The value becomes one run inside whatever structure the control wraps. False means the
+  // content is a shape no value can stand in for, and the caller refuses instead of flattening.
+  const setTextContent = (display: string): boolean => {
+    const children = valueContent(
+      contentControlContentOf(nextControl),
+      (properties) =>
+        runElement(
+          nextId,
+          properties
+            ? [properties, ...textWithHyphens(nextId, display)]
+            : textWithHyphens(nextId, display)
+        ),
+      nextId,
+      inline
+    );
+    if (!children) return false;
+    nextControl = replaceControlContent(nextControl, children, nextId);
     nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
+    return true;
   };
 
   switch (type) {
@@ -2119,7 +2155,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(item.displayText);
+      if (!setTextContent(item.displayText)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'combo': {
@@ -2136,7 +2172,7 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'checkbox': {
@@ -2211,7 +2247,19 @@ function applySetContentControlValue(
       });
       const glyph = checked ? payload.checkedGlyph : payload.uncheckedGlyph;
       const font = checked ? payload.checkedFont : payload.uncheckedFont;
-      setTextContent(glyph, font);
+      // A state that names no code point cannot be written either way, as the typed path says.
+      const text = decodeCheckboxGlyph(glyph);
+      if (text === null) return { ok: false, reason: 'invalidArgs' };
+      const children = checkboxContent(
+        contentControlContentOf(nextControl),
+        { hex: glyph, font, states: [payload.checkedGlyph, payload.uncheckedGlyph] },
+        text,
+        nextId,
+        isInlineControl(part, control.id)
+      );
+      if (!children) return { ok: false, reason: 'unsupported' };
+      nextControl = replaceControlContent(nextControl, children, nextId);
+      nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
       break;
     }
     case 'date': {
@@ -2246,25 +2294,31 @@ function applySetContentControlValue(
           null
         );
       });
-      setTextContent(display);
+      if (!setTextContent(display)) return { ok: false, reason: 'unsupported' };
       break;
     }
     case 'text':
     case 'richText':
     case 'other':
-      setTextContent(value);
+      if (!setTextContent(value)) return { ok: false, reason: 'unsupported' };
       break;
     default:
       return { ok: false, reason: 'unsupported' };
   }
 
-  const effect: TreeOpEffect = {
-    dirty: owner ? [owner.id] : [control.id],
-    created: [],
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  };
+  // Paragraphs the value dropped, minted or kept in place are reported, so paragraph-keyed
+  // consumers never hold an entry for a paragraph that went or miss one that changed.
+  const effect = withParagraphDiff(
+    {
+      dirty: owner ? [owner.id] : [control.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'flow-structural',
+    },
+    control,
+    nextControl
+  );
 
   if (isTemporaryControl(control)) {
     // Value write + temporary unwrap in one parent rewrite.
@@ -2278,94 +2332,6 @@ function applySetContentControlValue(
   return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
 }
 
-/**
- * The range markers that CLOSE a span of content (17.13.6, 17.13.5.2, 17.13.4.x).
- *
- * A marker sitting exactly on the split has no character to sit before or after, so the
- * side it takes is a decision: an end marker stays with the head, leaving the range it
- * closes closed around the content it always covered, and everything else — a start
- * marker, a hyperlink, a picture's run — moves down with the caret.
- */
-const RANGE_END_MARKERS: ReadonlySet<string> = new Set([
-  'bookmarkEnd',
-  'commentRangeEnd',
-  'moveFromRangeEnd',
-  'moveToRangeEnd',
-  'permEnd',
-  'customXmlInsRangeEnd',
-  'customXmlDelRangeEnd',
-  'customXmlMoveFromRangeEnd',
-  'customXmlMoveToRangeEnd',
-]);
-
-/** The range-START element each range-END element closes; `w:id` pairs the two. */
-const RANGE_START_OF_END: ReadonlyMap<string, string> = new Map([
-  ['bookmarkEnd', 'bookmarkStart'],
-  ['commentRangeEnd', 'commentRangeStart'],
-  ['moveFromRangeEnd', 'moveFromRangeStart'],
-  ['moveToRangeEnd', 'moveToRangeStart'],
-  ['permEnd', 'permStart'],
-  ['customXmlInsRangeEnd', 'customXmlInsRangeStart'],
-  ['customXmlDelRangeEnd', 'customXmlDelRangeStart'],
-  ['customXmlMoveFromRangeEnd', 'customXmlMoveFromRangeStart'],
-  ['customXmlMoveToRangeEnd', 'customXmlMoveToRangeStart'],
-]);
-
-const RANGE_START_MARKERS: ReadonlySet<string> = new Set(RANGE_START_OF_END.values());
-
-function closesARange(node: OoxmlNode): boolean {
-  return node.kind !== 'textValue' && RANGE_END_MARKERS.has(node.localName);
-}
-
-/** A marker's identity as `name\0id`, so a start and the end that closes it share a key. */
-function rangeKey(localName: string, node: OoxmlNode): string | null {
-  if (node.kind === 'textValue') return null;
-  const id = node.attributes.find((attribute) => attribute.localName === 'id');
-  return id ? `${localName}\0${id.value}` : null;
-}
-
-function opensARange(node: OoxmlNode): string | null {
-  if (node.kind === 'textValue' || !RANGE_START_MARKERS.has(node.localName)) return null;
-  return rangeKey(node.localName, node);
-}
-
-/**
- * Whether a range-end marker closes a range that was already OPEN before this position.
- *
- * An end marker stays with the head so the range it closes stays closed around the content
- * it always covered — but only when its start is behind it. A range that opens AND closes at
- * the split (an empty bookmark, a comment anchored on the caret) has its start marker in the
- * tail: keeping the end behind emitted `<w:p>…<w:bookmarkEnd id="1"/></w:p><w:p><w:bookmark
- * Start id="1"/>…` — the pair inverted across two paragraphs, an end with no start before it.
- * Such an end follows its own start into the tail instead.
- */
-function closesAnOpenRange(child: OoxmlNode, openedHere: ReadonlySet<string>): boolean {
-  if (!closesARange(child) || child.kind === 'textValue') return false;
-  const opener = RANGE_START_OF_END.get(child.localName);
-  const key = opener ? rangeKey(opener, child) : null;
-  return key === null || !openedHere.has(key);
-}
-
-/**
- * Which half a paragraph child that measures ZERO characters belongs to.
- *
- * A hyperlink, a bookmark or comment marker, a run holding only a picture: none of them
- * contributes a text offset, but each sits at a definite POSITION between the runs that do.
- * Sending them all to the head — the rule this replaces — moved every hyperlink in a
- * sentence backwards past the caret, left comment ranges as empty marker pairs around the
- * wrong half, and carried an inline picture into the paragraph below when the user pressed
- * Enter at the end of the line.
- */
-function zeroLengthGoesToHead(
-  child: OoxmlNode,
-  position: number,
-  offset: number,
-  openedHere: ReadonlySet<string>
-): boolean {
-  if (position !== offset) return position < offset;
-  return closesAnOpenRange(child, openedHere);
-}
-
 function splitIdentityOf(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode
@@ -2377,11 +2343,16 @@ function splitIdentityOf(
   return { headId: headParaId.toUpperCase(), prefix };
 }
 
-/** The segments of one paragraph child, at any depth — a run's own, or every run in a link. */
-function segmentsForChild(child: OoxmlNode, segments: readonly Segment[]): Segment[] {
-  const runIds = new Set(runsUnder(child).map((run) => run.id));
-  if (runIds.size === 0) return [];
-  return segments.filter((segment) => runIds.has(segment.runId));
+/** Every segment owned by one paragraph child, including atoms that have no run. */
+export function segmentsForChild(child: OoxmlNode, segments: readonly Segment[]): Segment[] {
+  const descendantIds = new Set<string>();
+  const collect = (node: OoxmlNode): void => {
+    descendantIds.add(node.id);
+    if (node.kind === 'textValue') return;
+    for (const inner of node.children) collect(inner);
+  };
+  collect(child);
+  return segments.filter((segment) => descendantIds.has(segmentAncestryNodeId(segment)));
 }
 
 /**
@@ -2401,19 +2372,17 @@ function divideInline(
   child: OoxmlNode,
   offset: number,
   segments: readonly Segment[],
-  nextId: () => string
+  nextId: () => string,
+  depth = 0
 ): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return { head: child, tail: null };
   // A REVISION WRAPPER SPLITS LIKE A HYPERLINK. `w:ins` and `w:del` are containers of run
   // content, not run content, so the "not a run, keep it whole" answer below put an entire
   // tracked insertion into the HEAD half however far into it the caret was: pressing Enter in
   // the middle of somebody's suggested sentence broke the paragraph after the suggestion
   // instead of at the caret, and said nothing. Both halves keep the same author, date and id,
   // which is how a reader groups them back into one decision.
-  if (
-    child.kind === 'hyperlink' ||
-    isContentControlNode(child) ||
-    (child.kind !== 'textValue' && isContentRevisionKind(child.kind))
-  ) {
+  if (isInlineRunContainer(child) || isContentControlNode(child)) {
     // Exclude textValue so both the wrapper and its content owner expose `.children`.
     if (child.kind === 'textValue') return { head: child, tail: null };
     const contentOwner = isContentControlNode(child) ? contentControlContentOf(child) : child;
@@ -2428,7 +2397,9 @@ function divideInline(
     // starting at zero said "before every boundary" for content that sits well past one.
     let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
     const ownerChildren: readonly OoxmlNode[] = contentOwner.children;
+    const properties = inlineWrapperProperties(child);
     for (const inner of ownerChildren) {
+      if (properties.some((property) => property.id === inner.id)) continue;
       const innerSegments = segmentsForChild(inner, segments);
       if (innerSegments.length === 0) {
         (cursor < offset ? headChildren : tailChildren).push(inner);
@@ -2440,15 +2411,21 @@ function divideInline(
       if (end <= offset) headChildren.push(inner);
       else if (start >= offset) tailChildren.push(inner);
       else {
-        const divided = divideInline(inner, offset, segments, nextId);
+        const divided = divideInline(inner, offset, segments, nextId, depth + 1);
         if (divided.head) headChildren.push(divided.head);
         if (divided.tail) tailChildren.push(divided.tail);
       }
     }
-    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+    if (isInlineRunContainer(child)) {
       return {
-        head: headChildren.length > 0 ? withChildren(child, headChildren, null) : null,
-        tail: tailChildren.length > 0 ? withChildren(child, tailChildren, nextId) : null,
+        head:
+          headChildren.length > 0
+            ? withChildren(child, wrapperChildren(properties, headChildren, false, nextId), null)
+            : null,
+        tail:
+          tailChildren.length > 0
+            ? withChildren(child, wrapperChildren(properties, tailChildren, true, nextId), nextId)
+            : null,
       };
     }
     // Content control: keep sdtPr / sdtEndPr on both halves; only sdtContent splits.
@@ -2522,47 +2499,6 @@ function withChildren(
   return { ...node, ...(nextId ? { id: nextId() } : {}), children } as OoxmlNode;
 }
 
-/**
- * The tail's `w:pPr`: a clone of the head's, with `w:pStyle` restated when the caller named
- * one.
- *
- * The clone is the default because every other paragraph property survives an Enter in Word
- * — centring, spacing, borders. Only the style is a decision the paragraph mark makes anew.
- * A tail left with nothing in its `w:pPr` drops the container rather than serializing an
- * empty one, so a paragraph whose only property was its style digests like one that never
- * had any.
- */
-function withTailStyle(
-  pPr: OoxmlElement | undefined,
-  tailStyleId: string | null | undefined,
-  nextId: () => string
-): OoxmlNode | undefined {
-  if (tailStyleId === undefined) return pPr ? cloneWithNewIds(pPr, nextId) : undefined;
-  const kept = (pPr?.children ?? []).filter(
-    (child) => child.kind === 'textValue' || child.localName !== 'pStyle'
-  );
-  const children = kept.map((child) => cloneWithNewIds(child, nextId));
-  if (tailStyleId !== null) {
-    children.splice(
-      schemaInsertIndex(children, PARAGRAPH_VOCABULARY.sequence, 'pStyle'),
-      0,
-      propertyElement({ localName: 'pStyle', attributes: { val: tailStyleId } }, nextId())
-    );
-  }
-  if (children.length === 0) return undefined;
-  if (pPr) return { ...pPr, id: nextId(), children } as unknown as OoxmlNode;
-  return {
-    id: nextId(),
-    kind: 'paragraphProperties',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'pPr',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children,
-  } as unknown as OoxmlNode;
-}
-
 function applySplit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -2571,7 +2507,7 @@ function applySplit(
   tailStyleId?: string | null
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
-  const segments = segmentsOf(paragraph);
+  const { children, segments, endIds } = fieldSplitChildren(paragraph, [offset], nextId);
   const headChildren: OoxmlNode[] = [];
   const tailChildren: OoxmlNode[] = [];
   const pPr = paragraphPropertiesNodeOf(paragraph);
@@ -2582,13 +2518,15 @@ function applySplit(
   // The range starts seen AT the current position — the ones whose end markers, if they
   // also sit here, must not be left behind in the head.
   const openedHere = new Set<string>();
-  for (const child of paragraph.children) {
+  for (const child of children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
-      (zeroLengthGoesToHead(child, cursor, offset, openedHere) ? headChildren : tailChildren).push(
-        child
-      );
+      ([...endIds].some((id) => contains(child, id)) ||
+      zeroLengthGoesToHead(child, cursor, offset, openedHere)
+        ? headChildren
+        : tailChildren
+      ).push(child);
       const opened = opensARange(child);
       if (opened) openedHere.add(opened);
       continue;
@@ -2631,7 +2569,7 @@ function applySplit(
     attributes: identity
       ? mintedParagraphIdentityAttributes(
           identity.prefix,
-          mintParaId(`${identity.headId}:${offset}`, usedParaIds(part.root))
+          mintParaId(actorScopedSeed(`${identity.headId}:${offset}`), usedParaIds(part.root))
         )
       : [],
     children: (() => {
@@ -2697,14 +2635,20 @@ function pieceIndexOf(
  * The original identity is kept by the FIRST piece that gets content; later pieces are
  * clones, matching what the equivalent sequence of single splits produces.
  */
-function distributeInline(
+export function distributeInline(
   child: OoxmlNode,
   offsets: readonly number[],
   pieceCount: number,
   segments: readonly Segment[],
-  nextId: () => string
+  nextId: () => string,
+  depth = 0
 ): OoxmlNode[][] {
   const byPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) {
+    const start = segmentsForChild(child, segments)[0]?.start ?? 0;
+    byPiece[pieceIndexOf(offsets, start)]!.push(child);
+    return byPiece;
+  }
 
   // A REVISION WRAPPER DISTRIBUTES LIKE A HYPERLINK, the same rule `divideInline` states:
   // `w:ins` and `w:del` are containers of run content, not run content, so the "not a run,
@@ -2712,11 +2656,9 @@ function distributeInline(
   // many boundaries ran through it — a multi-line paste in suggesting mode kept its lines in
   // one paragraph and minted empty tails. Every piece keeps the same author, date and id,
   // which is how a reader groups them back into one decision.
-  if (
-    child.kind === 'hyperlink' ||
-    (child.kind !== 'textValue' && isContentRevisionKind(child.kind))
-  ) {
+  if (isInlineRunContainer(child)) {
     const innerByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+    const properties = inlineWrapperProperties(child);
     // Absolute paragraph offsets, seeded from the link's own start — see `divideInline`.
     // At zero, `pieceIndexOf` put every zero-length child of a link in the FIRST piece: a
     // bookmark travelled to a paragraph its text did not, an empty `w:hyperlink` husk was
@@ -2724,6 +2666,7 @@ function distributeInline(
     // while the real link got a fresh one — so a later retarget addressed the husk.
     let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
     for (const inner of child.children) {
+      if (properties.some((property) => property.id === inner.id)) continue;
       const innerSegments = segmentsForChild(inner, segments);
       if (innerSegments.length === 0) {
         innerByPiece[pieceIndexOf(offsets, cursor)]!.push(inner);
@@ -2738,7 +2681,7 @@ function distributeInline(
         innerByPiece[startPiece]!.push(inner);
         continue;
       }
-      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId);
+      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId, depth + 1);
       for (let piece = 0; piece < pieceCount; piece += 1) {
         for (const node of nested[piece]!) innerByPiece[piece]!.push(node);
       }
@@ -2747,7 +2690,13 @@ function distributeInline(
     for (let piece = 0; piece < pieceCount; piece += 1) {
       const children = innerByPiece[piece]!;
       if (children.length === 0) continue;
-      byPiece[piece]!.push(withChildren(child, children, keptOriginal ? nextId : null));
+      byPiece[piece]!.push(
+        withChildren(
+          child,
+          wrapperChildren(properties, children, keptOriginal, nextId),
+          keptOriginal ? nextId : null
+        )
+      );
       keptOriginal = true;
     }
     return byPiece;
@@ -2782,7 +2731,7 @@ function distributeInline(
         innerByPiece[startPiece]!.push(inner);
         continue;
       }
-      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId);
+      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId, depth + 1);
       for (let piece = 0; piece < pieceCount; piece += 1) {
         for (const node of nested[piece]!) innerByPiece[piece]!.push(node);
       }
@@ -2902,7 +2851,7 @@ function applySplitMany(
   options?: EditOptions
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
-  const segments = segmentsOf(paragraph);
+  const { children, segments, endIds } = fieldSplitChildren(paragraph, offsets, nextId);
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const pieceCount = offsets.length + 1;
   const pieces: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
@@ -2911,14 +2860,16 @@ function applySplitMany(
   // nothing, exactly as the single split reads it.
   let cursor = 0;
   const openedHere = new Set<string>();
-  for (const child of paragraph.children) {
+  for (const child of children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
       const piece = pieceIndexOf(
         offsets,
         cursor,
-        closesAnOpenRange(child, openedHere) ? 'head' : 'tail'
+        [...endIds].some((id) => contains(child, id)) || closesAnOpenRange(child, openedHere)
+          ? 'head'
+          : 'tail'
       );
       pieces[piece]!.push(child);
       const opened = opensARange(child);
@@ -2958,7 +2909,7 @@ function applySplitMany(
   if (identity) {
     const used = new Set(usedParaIds(part.root));
     for (let piece = pieceCount - 1; piece >= 1; piece -= 1) {
-      const value = mintParaId(`${identity.headId}:${offsets[piece - 1]!}`, used);
+      const value = mintParaId(actorScopedSeed(`${identity.headId}:${offsets[piece - 1]!}`), used);
       used.add(value);
       tailIdentityAttributes[piece] = mintedParagraphIdentityAttributes(identity.prefix, value);
     }
@@ -3009,18 +2960,6 @@ function applySplitMany(
  * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
  * would leave a layout cache holding entries for paragraphs that no longer exist.
  */
-function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  let current: string | null = nodeId;
-  while (current) {
-    const node = findNode(part, current);
-    if (!node || node.kind === 'textValue') return null;
-    if (node.kind === 'table') return node;
-    const parent = parentOf(part, current);
-    current = parent?.id ?? null;
-  }
-  return null;
-}
-
 function emptyCellParagraph(
   part: OoxmlPart,
   anchorTable: OoxmlElement,
@@ -3032,7 +2971,7 @@ function emptyCellParagraph(
   const identity: OoxmlAttribute[] = [];
   const w14Prefix = w14PrefixInScopeAt(part, anchorTable);
   if (w14Prefix !== null) {
-    const paraIdValue = mintParaId(seed, used);
+    const paraIdValue = mintParaId(actorScopedSeed(seed), used);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
   }
   return {
@@ -3067,6 +3006,14 @@ function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOption
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
+  const repairs = block.kind === 'tableRow' ? planVerticalMergeHeadRepairs(part, blockId) : null;
+  if (repairs && !repairs.ok) return { ok: false, reason: repairs.reason };
+  if (repairs?.ok && repairs.repairs.length > 0) {
+    // A row taking a merge's `restart` cell with it hands the merge to the row below.
+    const edits = rowRemovalEdits(repairs.repairs, blockId, options);
+    const dirty = verticalMergeHeadRepairDirtyIds(repairs.repairs);
+    return fromEdit(applyEdits(part, edits, options), { ...effect, dirty });
+  }
   const removed = removeNode(part, blockId, options);
   if (!removed.ok) return { ok: false, reason: 'unknown-block' };
   if (!cellNeedsParagraph || !parent) return fromEdit(removed, effect);
@@ -3422,6 +3369,10 @@ export function splitRunsAt(
   // three characters.
   const runIds: string[] = [];
   for (const segment of segments) {
+    // Simple fields are paragraph children: their atom has no owning run. Grouping
+    // their empty run IDs invents one run spanning every simple field, then attempts
+    // to split that nonexistent run at an otherwise valid boundary between fields.
+    if (!segment.runId) continue;
     if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
   }
   const straddling = runIds.find((runId) => {
@@ -3469,27 +3420,4 @@ export function splitRunsAt(
   return { ok: true, part: replaced.part };
 }
 
-/** Paragraph text as the ops address it, for tests and callers computing offsets. */
-export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | null {
-  const paragraph = findNode(part, paragraphId);
-  if (!isParagraph(paragraph)) return null;
-  let text = '';
-  for (const segment of segmentsOf(paragraph)) {
-    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
-      text += fieldAtomText();
-      continue;
-    }
-    if (segment.node.kind === 'textValue') text += segment.node.value;
-    else if (segment.node.kind === 'tab') text += '\t';
-    else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
-    else if (
-      segment.node.kind === 'fldChar' ||
-      segment.node.kind === 'fldSimple' ||
-      (segment.node.kind === 'generic' &&
-        (segment.node.localName === 'fldChar' || segment.node.localName === 'fldSimple'))
-    ) {
-      text += fieldAtomText();
-    }
-  }
-  return text;
-}
+export { paragraphTextOf } from './paragraph-model-text.ts';

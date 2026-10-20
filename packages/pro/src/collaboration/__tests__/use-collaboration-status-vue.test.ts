@@ -16,6 +16,7 @@ import type {
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { useCollaborationStatus } from '../../vue/useCollaborationStatus.ts';
+import { DocxEditorCollaboration } from '../../vue/DocxEditorCollaboration.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -23,6 +24,7 @@ afterEach(() => {
 
 function controllableSession(): EditorCollaborationSession & {
   failThenRecover(code: CollaborationFailureCode): void;
+  diverge(code: CollaborationFailureCode): void;
 } {
   const statusState = createCollaborationStatusTracker('ready');
   const listeners = new Set<
@@ -64,6 +66,10 @@ function controllableSession(): EditorCollaborationSession & {
       statusState.set('ready');
       emit();
     },
+    diverge(code: CollaborationFailureCode) {
+      statusState.set('error', code);
+      emit();
+    },
   };
 }
 
@@ -91,6 +97,33 @@ describe('useCollaborationStatus (Vue)', () => {
     expect(node.getAttribute('data-status')).toBe('ready');
     expect(node.getAttribute('data-reason')).toBe('');
     expect(node.getAttribute('data-last')).toBe('document-id-mismatch');
+    app.unmount();
+  });
+});
+
+describe('DocxEditorCollaboration.Status (Vue)', () => {
+  test('a refused edit and an out-of-sync copy each show, with a rejoin action', async () => {
+    const session = controllableSession();
+    let rejoined = 0;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const app = createApp(() =>
+      h(DocxEditorCollaboration.Status, { session, onRejoin: () => (rejoined += 1) })
+    );
+    app.mount(host);
+    await nextTick();
+    expect(host.querySelector('[data-collaboration-status]')).toBeNull();
+    session.failThenRecover('unknown-logical-id');
+    await nextTick();
+    expect(host.querySelector('[data-collaboration-status="editRefused"]')).not.toBeNull();
+    session.diverge('remote-apply-failed');
+    await nextTick();
+    const button = host.querySelector<HTMLButtonElement>(
+      '[data-collaboration-status="outOfSync"] button'
+    );
+    expect(button?.textContent).toBe('Rejoin');
+    button!.click();
+    expect(rejoined).toBe(1);
     app.unmount();
   });
 });

@@ -15,6 +15,10 @@
 // value into the paragraph as direct formatting. The divergence from upstream — which answers
 // the effective value — is recorded in `compat/manifest.json`.
 //
+// Paragraph direction is the one exception: its read resolves the cascade, and its write states
+// `w:bidi` only where the paragraph does not already read the asked way. Writing back a direction
+// read here is therefore a no-op, so the freezing hazard above does not arise.
+//
 // WRITING IS THE ACCEPTED PROPERTY BOUNDARY (design D8). Every field below maps to exactly one
 // element in `ACCEPTED_RUN_PROPERTIES` / `ACCEPTED_PARAGRAPH_PROPERTIES`, and a value the
 // boundary cannot express is REFUSED rather than approximated. Numbers are converted at this
@@ -25,6 +29,7 @@
 // file input. Both are validated as XML text here; the serializer escapes on the way out. This
 // file builds no markup, no URL and no CSS.
 
+import { extendedFontProperties, highlightHex, underlineName } from './font-values.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
@@ -44,7 +49,7 @@ import {
 } from '../store/store/tree-op-nodes.ts';
 import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
-import { points, pointsToTwips, twips, twipsToPoints } from '../store/units.ts';
+import { points, pointsToTwips, readTwipsMeasure, twips, twipsToPoints } from '../store/units.ts';
 
 /** Widest value `w:ind`/`w:spacing` will be authored with, in twips — 22 inches of slack. */
 const MAX_TWIPS = 31680;
@@ -53,6 +58,12 @@ const MAX_HALF_POINTS = 1999;
 
 /** Alignment as this protocol publishes it. `Mixed`/`Unknown` are read-only answers. */
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+
+/**
+ * A paragraph's base direction (`w:bidi`) as this protocol publishes it: the direction the
+ * paragraph reads in, after its style cascade.
+ */
+export type AutomationReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 /**
  * What a range agrees about its characters' formatting.
@@ -64,6 +75,11 @@ export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'R
 export interface AutomationFontRead {
   readonly bold: boolean | null;
   readonly italic: boolean | null;
+  readonly underline: string | null;
+  readonly strikeThrough: boolean | null;
+  readonly highlightColor: string | null;
+  readonly subscript: boolean | null;
+  readonly superscript: boolean | null;
   /** `w:rFonts/@w:ascii`. */
   readonly name: string | null;
   /** Points. */
@@ -76,6 +92,11 @@ export interface AutomationFontRead {
 export interface AutomationFontWrite {
   readonly bold?: boolean;
   readonly italic?: boolean;
+  readonly underline?: string;
+  readonly strikeThrough?: boolean;
+  readonly highlightColor?: string | null;
+  readonly subscript?: boolean;
+  readonly superscript?: boolean;
   readonly name?: string;
   readonly size?: number;
   readonly color?: string;
@@ -99,6 +120,8 @@ export interface AutomationParagraphFormatRead {
   readonly spaceBefore: number | null;
   readonly spaceAfter: number | null;
   readonly widowControl: boolean | null;
+  /** The direction the paragraph reads in: its own `w:bidi` if any, else the style cascade's. */
+  readonly readingOrder: AutomationReadingOrder;
 }
 
 /**
@@ -125,6 +148,12 @@ export interface AutomationParagraphFormatWrite {
   readonly spaceBefore?: number;
   readonly spaceAfter?: number;
   readonly widowControl?: boolean;
+  /**
+   * The direction the paragraph should read in. Nothing is written when it already does. Else the
+   * paragraph's own `w:bidi` is removed when that alone set the other direction, or stated:
+   * `<w:bidi/>`, or `<w:bidi w:val="0"/>` over a right-to-left style.
+   */
+  readonly readingOrder?: AutomationReadingOrder;
 }
 
 /** Why a formatting value could not be authored. Named so a caller learns the field. */
@@ -139,6 +168,11 @@ export type FormattingPlan<T> =
 const NO_FONT: AutomationFontRead = Object.freeze({
   bold: null,
   italic: null,
+  underline: null,
+  strikeThrough: null,
+  highlightColor: null,
+  subscript: null,
+  superscript: null,
   name: null,
   size: null,
   color: null,
@@ -186,10 +220,8 @@ function pointsFromHalfPoints(value: string | null): number | null {
 }
 
 function pointsFromTwips(value: string | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed)) return null;
-  return twipsToPoints(twips(parsed));
+  const parsed = readTwipsMeasure(value ?? undefined);
+  return parsed === null ? null : twipsToPoints(twips(parsed));
 }
 
 /** One value if every voice agrees on it, else null. An empty set of voices agrees on nothing. */
@@ -227,6 +259,15 @@ export function fontRead(
   return {
     bold: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'b')))),
     italic: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'i')))),
+    underline: agreed(
+      properties.map((rPr) => underlineName(attributeOf(namedChild(rPr, 'u'), 'val')))
+    ),
+    strikeThrough: agreed(properties.map((rPr) => onOff(namedChild(rPr, 'strike')))),
+    highlightColor: agreed(
+      properties.map((rPr) => highlightHex(attributeOf(namedChild(rPr, 'highlight'), 'val')))
+    ),
+    subscript: agreed(properties.map((rPr) => scriptValue(rPr, 'subscript'))),
+    superscript: agreed(properties.map((rPr) => scriptValue(rPr, 'superscript'))),
     name: agreed(
       properties.map((rPr) => {
         const fonts = namedChild(rPr, 'rFonts');
@@ -258,6 +299,21 @@ const JC_BY_ALIGNMENT: Readonly<Record<string, string>> = Object.freeze({
   Right: 'right',
   Justified: 'both',
 });
+
+/**
+ * The paragraph's own `w:bidi`, read as the layout reads it: the LAST one wins, and no value, `1`,
+ * `true` and `on` are right to left while every other value is left to right. `null` when the
+ * paragraph states none.
+ */
+function ownRtl(properties: OoxmlElement | undefined): boolean | null {
+  let rtl: boolean | null = null;
+  for (const child of properties?.children ?? []) {
+    if (child.kind === 'textValue' || child.localName !== 'bidi') continue;
+    const value = attributeOf(child, 'val');
+    rtl = value === null || ['1', 'true', 'on'].includes(value);
+  }
+  return rtl;
+}
 
 function alignmentOf(properties: OoxmlElement | undefined): AutomationAlignment {
   const value = attributeOf(namedChild(properties, 'jc'), 'val');
@@ -294,6 +350,11 @@ export function paragraphFormatRead(
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
+    // Direction is the one paragraph property this lane resolves through the style cascade. A
+    // write states `w:bidi` only where the paragraph does not already read the asked way, so
+    // writing back the effective direction read here changes nothing and freezes nothing.
+    readingOrder:
+      (ownRtl(pPr) ?? styles.inheritsRtl(part, paragraph)) ? 'RightToLeft' : 'LeftToRight',
   };
 }
 
@@ -336,7 +397,9 @@ function twipsFor(value: number, field: string): FormattingPlan<number> {
  * deleting a run's colour.
  */
 export function fontProperties(request: AutomationFontWrite): FormattingPlan<OoxmlProperty[]> {
-  const properties: OoxmlProperty[] = [];
+  const extra = extendedFontProperties(request);
+  if (!extra.ok) return extra;
+  const properties: OoxmlProperty[] = extra.value;
   if (request.bold !== undefined) {
     if (typeof request.bold !== 'boolean') return { ok: false, detail: 'bold: not a boolean' };
     properties.push({ localName: 'b', ...(request.bold ? {} : { attributes: { val: '0' } }) });
@@ -381,7 +444,12 @@ export function fontProperties(request: AutomationFontWrite): FormattingPlan<Oox
       attributes: { val: colour.trim().slice(1).toUpperCase() },
     });
   }
-  if (properties.length === 0) return { ok: false, detail: 'no formatting was asked for' };
+  if (
+    properties.length === 0 &&
+    request.subscript === undefined &&
+    request.superscript === undefined
+  )
+    return { ok: false, detail: 'no formatting was asked for' };
   return { ok: true, value: properties };
 }
 
@@ -400,15 +468,17 @@ export function paragraphFormatProperties(
   paragraphId: string,
   request: AutomationParagraphFormatWrite,
   styles: AutomationStyleIndex
-): FormattingPlan<OoxmlProperty[]> {
+): FormattingPlan<OoxmlProperty[]> & { readonly unchanged?: boolean } {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return { ok: false, detail: 'not a paragraph' };
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const properties: OoxmlProperty[] = [];
 
+  let styleId: string | undefined;
   if (request.style !== undefined) {
     const resolved = styleIdFor(request.style, styles);
     if (!resolved.ok) return { ok: false, detail: resolved.detail };
+    styleId = resolved.styleId;
     properties.push({ localName: 'pStyle', attributes: { val: resolved.styleId } });
   }
 
@@ -484,14 +554,45 @@ export function paragraphFormatProperties(
     });
   }
 
-  if (properties.length === 0) return { ok: false, detail: 'no formatting was asked for' };
+  let removeBidi = false;
+  if (request.readingOrder !== undefined) {
+    if (request.readingOrder !== 'RightToLeft' && request.readingOrder !== 'LeftToRight')
+      return { ok: false, detail: `readingOrder: ${String(request.readingOrder)}` };
+    const wanted = request.readingOrder === 'RightToLeft';
+    const own = ownRtl(pPr);
+    // Against the style this same write applies, so a style and a direction can share a sync.
+    const inherited = styles.inheritsRtl(part, paragraph, styleId);
+    // The same rule as the editor's direction command: no write when the paragraph already reads
+    // that way, and otherwise the smallest statement that makes it.
+    if ((own ?? inherited) !== wanted) {
+      if (inherited === wanted) removeBidi = true;
+      else properties.push({ localName: 'bidi', ...(wanted ? {} : { attributes: { val: '0' } }) });
+    }
+  }
+
+  // A direction the paragraph already has is a request satisfied, not a refusal.
+  if (properties.length === 0 && !removeBidi && request.readingOrder === undefined)
+    return { ok: false, detail: 'no formatting was asked for' };
   // `setParagraphProperties` REPLACES the container: an authorable property the op does not name
   // is DROPPED. So the op has to carry the paragraph's existing bag forward, or setting alignment
   // would delete its style, its numbering and its spacing.
-  return {
-    ok: true,
-    value: mergedProperties(directParagraphProperties(part, paragraphId), properties),
-  };
+  const current = directParagraphProperties(part, paragraphId);
+  const merged = mergedProperties(current, properties);
+  const value = removeBidi ? merged.filter((property) => property.localName !== 'bidi') : merged;
+  // A write of what the paragraph already states is no edit: no op, no change event, no undo step.
+  return { ok: true, value, unchanged: sameProperties(current, value) };
+}
+
+/** Whether two property bags state the same elements with the same attributes, in any order. */
+function sameProperties(left: readonly OoxmlProperty[], right: readonly OoxmlProperty[]): boolean {
+  if (left.length !== right.length) return false;
+  const key = (property: OoxmlProperty) =>
+    JSON.stringify([
+      property.localName,
+      Object.entries(property.attributes ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    ]);
+  const keys = new Set(left.map(key));
+  return right.every((property) => keys.has(key(property)));
 }
 
 /** A property element's `w:`-namespace attributes as a plain record, safe to copy from. */
@@ -505,4 +606,30 @@ function attributesOf(element: OoxmlElement | undefined): Record<string, string>
     record[entry.localName] = entry.value;
   }
   return record;
+}
+
+// Conditional false writes must preserve the opposite vertical alignment on each run.
+// Use this after merging the ordinary incoming properties with the run or paragraph mark.
+export function fontVerticalProperties(
+  properties: readonly OoxmlProperty[],
+  request: AutomationFontWrite
+): OoxmlProperty[] {
+  if (request.subscript === undefined && request.superscript === undefined) return [...properties];
+  const current = properties.find((p) => p.localName === 'vertAlign')?.attributes?.val;
+  const val =
+    request.subscript === true
+      ? 'subscript'
+      : request.superscript === true
+        ? 'superscript'
+        : current === 'subscript' && request.subscript === false
+          ? 'baseline'
+          : current === 'superscript' && request.superscript === false
+            ? 'baseline'
+            : (current ?? 'baseline');
+  return mergedProperties(properties, [{ localName: 'vertAlign', attributes: { val } }]);
+}
+
+function scriptValue(rPr: OoxmlElement | undefined, expected: string): boolean | null {
+  const value = attributeOf(namedChild(rPr, 'vertAlign'), 'val');
+  return value === null ? null : value === expected;
 }

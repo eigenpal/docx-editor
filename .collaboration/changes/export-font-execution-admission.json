@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Export font admission could select a face larger than the shaping execution limit, causing visible text to remain unshaped.",
+  "after": "Export admission reports oversized faces and tries later sources. Strict font policy permits execution-limit rejection of optional glyph fallbacks. It still refuses rejected document/default fonts and other source failures. Strict PDF fidelity still refuses missing glyphs.",
+  "reason": "The change affects export-session font selection only. Canonical document content, collaboration operations, and shared formats stay unchanged.",
+  "tests": [
+    "packages/core/src/export/__tests__/export-font-admission-limit.test.ts",
+    "packages/core/src/editor/__tests__/font-resolver.test.ts",
+    "packages/core/src/export/__tests__/document-export-shaping.test.ts",
+    "packages/docx-to-pdf/test/export.test.ts"
+  ],
+  "changeset": "export-font-execution-admission",
+  "migration": null
+}

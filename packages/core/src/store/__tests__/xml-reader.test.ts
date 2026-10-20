@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   readXml,
+  XML_DEFAULT_MAX_ELEMENTS,
   findElement,
   childElements,
   textContent,
@@ -31,6 +32,15 @@ describe('trust boundary rejections', () => {
       ok: false,
       reason: 'too-many-elements',
     });
+  });
+  test('honors an element budget above the default before parser allocation', () => {
+    // Intentionally malformed: distinguish the element preflight from XML validation
+    // without allocating millions of parsed nodes in the test process.
+    const xml = '<x>' + '<a/>'.repeat(XML_DEFAULT_MAX_ELEMENTS) + '</x><unclosed';
+    expect(readXml(xml)).toMatchObject({ ok: false, reason: 'too-many-elements' });
+    expect(
+      readXml(xml, { maxBytes: xml.length, maxElements: XML_DEFAULT_MAX_ELEMENTS + 2 })
+    ).toMatchObject({ ok: false, reason: 'parse-error' });
   });
   test('counts elements before parser allocation and before full XML validation', () => {
     expect(readXml('<x><a/><b/><unclosed', { maxBytes: 100, maxElements: 2 })).toMatchObject({

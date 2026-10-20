@@ -1,9 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   connectedPeers,
+  documentXml,
   firstTableCellParagraph,
+  firstTextParagraph,
   paintedHeader,
+  paragraphById,
+  paragraphs,
   revealLocator,
+  savePackageBytes,
+  setEditingMode,
 } from './collaboration-review-helpers.ts';
 
 const HEADER = 'review-header-demo.docx';
@@ -65,4 +71,46 @@ test('a caret in a header paints presence on the peer', async ({ browser, page: 
   expect(painted).toBeTruthy();
   expect(painted!.y).toBeLessThan(remoteHeader!.y + remoteHeader!.height);
   expect(painted!.y + painted!.height).toBeGreaterThan(remoteHeader!.y);
+});
+
+test('a viewing peer receives edits, and its clicks do not move its presence', async ({
+  browser,
+  page: creator,
+}) => {
+  const joiner = await connectedPeers(browser, creator);
+  // Joining leaves the room dialog open over the toolbar.
+  const room = joiner.getByRole('dialog', { name: 'Collaboration room' });
+  if (await room.isVisible()) await room.getByRole('button', { name: 'Done' }).click();
+  await expect(room).toHaveCount(0);
+  await setEditingMode(joiner, 'viewing');
+
+  const source = await firstTextParagraph(creator);
+  const marker = ' [A]';
+  await source.locator.click();
+  await creator.keyboard.press('End');
+  await creator.keyboard.type(marker);
+  const remote = paragraphById(joiner, source.id);
+  await expect(remote).toContainText(`${source.text}${marker}`);
+
+  // Whatever the creator shows for the viewer before the presses, it shows after them too.
+  const bobOnCreator = creator.locator('.docx-remote-caret-label').filter({ hasText: 'Bob' });
+  const presence = async () =>
+    (await bobOnCreator.count()) === 0 ? null : await bobOnCreator.first().boundingBox();
+  const before = await presence();
+  const other = paragraphs(joiner).filter({ hasText: /\S/ }).nth(2);
+  await expect(other).toBeVisible();
+  await other.click();
+  await other.dblclick();
+  await joiner.waitForTimeout(1_500);
+  expect(await presence()).toEqual(before);
+
+  // Back in editing, the same peer edits and both replicas converge.
+  await setEditingMode(joiner, 'editing');
+  await remote.click();
+  await joiner.keyboard.press('End');
+  await joiner.keyboard.type(' [B]');
+  await expect(source.locator).toContainText(`${source.text}${marker} [B]`);
+  expect(documentXml(await savePackageBytes(joiner))).toBe(
+    documentXml(await savePackageBytes(creator))
+  );
 });

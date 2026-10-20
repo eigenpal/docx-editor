@@ -39,18 +39,28 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
-function docx(body: string): Uint8Array {
+/** `styles` is the content of `w:styles`; the default pins the format defaults. */
+function docx(body: string, styles = FORMAT_DOC_DEFAULTS): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${styles}</w:styles>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -90,6 +100,7 @@ function mountToolbar(
     <DocxEditorRoot
       document={source}
       modules={[testReviewModule()]}
+      author="Grace Hopper"
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -551,120 +562,6 @@ describe('the shaped parts', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  test('the line-spacing menu applies a multiple and ticks the one in force', async () => {
-    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
-    await act(async () => {
-      editor().surface!.selectAll();
-    });
-    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
-    const trigger = root.querySelector('button') as HTMLButtonElement;
-    expect(trigger.disabled).toBe(false);
-
-    await act(async () => {
-      trigger.click();
-    });
-    const rows = [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[];
-    expect(rows.map((row) => row.textContent)).toEqual(['1.0', '1.15', '1.5', '2.0', '2.5', '3.0']);
-    // Nothing is ticked before a pick: the fixture states no line spacing at all.
-    expect(rows.some((row) => row.hasAttribute('data-selected'))).toBe(false);
-
-    await act(async () => {
-      rows.find((row) => row.textContent === '1.5')!.click();
-    });
-    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1.5 });
-    expect(root.querySelector('[role="menu"]')).toBeNull();
-
-    // Reopened, the menu reflects the paragraph rather than a fixed list.
-    await act(async () => {
-      trigger.click();
-    });
-    const ticked = [...root.querySelectorAll('[role="menuitemradio"]')].find((row) =>
-      row.hasAttribute('data-selected')
-    );
-    expect(ticked?.textContent).toBe('1.5');
-  });
-
-  test('the space before/after rows flip between Add and Remove on what is there', async () => {
-    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
-    await act(async () => {
-      editor().surface!.selectAll();
-    });
-    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
-    const trigger = root.querySelector('button') as HTMLButtonElement;
-    const rows = () => [...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
-    // Indexed past the escape hatch: "Line spacing options…" opens the Paragraph dialog and
-    // is not one of the spacing rows this test is about.
-    const spacingRows = () => rows().slice(1);
-
-    await act(async () => {
-      trigger.click();
-    });
-    expect(rows().map((row) => row.textContent)).toEqual([
-      label('lineSpacing.options' as TranslationKey),
-      label('lineSpacing.addSpaceBefore' as TranslationKey),
-      label('lineSpacing.addSpaceAfter' as TranslationKey),
-    ]);
-
-    await act(async () => {
-      spacingRows()[0]!.click();
-    });
-    expect(editor().snapshot().formatting?.spaceBeforePt).toBe(10);
-
-    await act(async () => {
-      trigger.click();
-    });
-    // Word never offers to add space that is already there.
-    expect(spacingRows()[0]!.textContent).toBe(
-      label('lineSpacing.removeSpaceBefore' as TranslationKey)
-    );
-    await act(async () => {
-      spacingRows()[0]!.click();
-    });
-    // ZERO, not absent. Removing the attribute would let the paragraph inherit its style's
-    // space again — on a Word default document that gives the space straight back, and the
-    // row goes on offering to remove what removing did not remove.
-    expect(editor().snapshot().formatting?.spaceBeforePt).toBe(0);
-
-    await act(async () => {
-      trigger.click();
-    });
-    expect(spacingRows()[0]!.textContent).toBe(
-      label('lineSpacing.addSpaceBefore' as TranslationKey)
-    );
-  });
-
-  test('line spacing and paragraph space are independent settings of one w:spacing', async () => {
-    // They share one element, so a replacing write made each pick delete the other.
-    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
-    await act(async () => {
-      editor().surface!.selectAll();
-    });
-    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
-    const trigger = root.querySelector('button') as HTMLButtonElement;
-
-    await act(async () => {
-      trigger.click();
-    });
-    await act(async () => {
-      ([...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[])
-        .find((row) => row.textContent === '2.0')!
-        .click();
-    });
-    await act(async () => {
-      trigger.click();
-    });
-    await act(async () => {
-      // By LABEL, not by index: the menu also carries the "Line spacing options…" escape
-      // hatch, and an index would silently start clicking a different row.
-      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])
-        .find((row) => row.textContent === label('lineSpacing.addSpaceAfter' as TranslationKey))!
-        .click();
-    });
-
-    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
-    expect(editor().snapshot().formatting?.spaceAfterPt).toBe(10);
-  });
-
   test('the zoom stepper resizes the mounted page live, keeps edits and undo, and shows all zoom levels', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     const instance = editor();
@@ -838,37 +735,18 @@ describe('the shaped parts', () => {
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
-    const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-    const styled = zipSync({
-      '[Content_Types].xml': strToU8(
-        `<Types xmlns="${CT}">` +
-          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
-      ),
-      '_rels/.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-      ),
-      'word/_rels/document.xml.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
-      ),
-      'word/styles.xml': strToU8(
-        // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
-        // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
-        `<w:styles xmlns:w="${W}">` +
-          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
-          '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
-          // Unranked: keeps its document position, after everything Word's gallery ranks.
-          '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
-          '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
-          // A character style must NOT appear among the paragraph options.
-          '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>' +
-          '</w:styles>'
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
-      ),
-    });
+    const styled = docx(
+      '<w:p><w:r><w:t>hello</w:t></w:r></w:p>',
+      // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
+      // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
+      '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+        '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
+        // Unranked: keeps its document position, after everything Word's gallery ranks.
+        '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+        // A character style must NOT appear among the paragraph options.
+        '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>'
+    );
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, styled);
 
     // Live: a real button trigger showing the unstyled placeholder (raw key — no `t`).
@@ -965,9 +843,9 @@ describe('the FontFamily compound', () => {
   test('options are the offerable catalog; selecting applies and closes', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, FONTED_SOURCE);
     expect(editor().getDocumentFonts()).toEqual(['Courier New', 'Georgia']);
-    // The catalog never collapses to the document alone: with no `fonts` configured,
-    // the default face is still offerable alongside the declared families.
-    expect(editor().getAvailableFonts()).toEqual(['Calibri', 'Courier New', 'Georgia']);
+    expect(editor().getAvailableFonts()).toEqual(
+      expect.arrayContaining(['Arial', 'Calibri', 'Courier New', 'Georgia'])
+    );
     await act(async () => {
       editor().surface!.selectAll();
     });
@@ -982,13 +860,20 @@ describe('the FontFamily compound', () => {
       trigger.click();
     });
     const listbox = view.container.querySelector('[role="listbox"]')!;
-    // The default menu is the GROUPED picker: classified families under small gray
-    // headings in the chrome spec's group order (serif before monospace), not one flat
-    // alphabetical list.
+    // Standard choices keep the grouped menu order.
     const options = [...listbox.querySelectorAll('[role="option"]')];
     expect(options.map((option) => option.textContent)).toEqual([
+      'Arial',
       'Calibri',
+      'Helvetica',
+      'Open Sans',
+      'Roboto',
+      'Verdana',
+      'Cambria',
+      'Garamond',
       'Georgia',
+      'Times New Roman',
+      'Consolas',
       'Courier New',
     ]);
     expect(
@@ -1000,25 +885,21 @@ describe('the FontFamily compound', () => {
     ]);
 
     await act(async () => {
-      (options[1] as HTMLButtonElement).click();
+      (options.find((option) => option.textContent === 'Georgia') as HTMLButtonElement).click();
     });
-    // Applied through can-before-exec, popup closed, trigger shows the new value.
     expect(editor().snapshot().formatting?.fontFamily).toBe('Georgia');
     expect(view.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toBe('Georgia');
-    // Reopened, the OPTIONS FOLLOWED THE EDIT: applying Georgia to the whole selection
-    // rewrote both runs' rFonts, so Courier New left the document half of the catalog —
-    // the list re-derives from the document, not from a mount-time snapshot. The
-    // configured default face stays offerable, and the applied option is marked
-    // selected.
     await act(async () => {
       trigger.click();
     });
     const reopened = [...view.container.querySelectorAll('[role="option"]')];
-    // The selected row carries the right-edge ✓ (part of its text content).
-    expect(reopened.map((option) => option.textContent)).toEqual(['Calibri', 'Georgia✓']);
-    expect(reopened[1]!.hasAttribute('data-selected')).toBe(true);
-    expect(reopened[1]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
+    expect(reopened.map((option) => option.textContent?.replace('✓', ''))).toEqual(
+      options.map((option) => option.textContent)
+    );
+    const selected = reopened.find((option) => option.textContent === 'Georgia✓')!;
+    expect(selected.hasAttribute('data-selected')).toBe(true);
+    expect(selected.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {

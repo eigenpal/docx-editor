@@ -5,8 +5,14 @@
 // produces. No DOM and no session here: the surface closure passes in its current layout,
 // selection and part, so every function is a plain input-to-output computation.
 
+import { selectionMarkRects } from '../layout/selection-rects.ts';
+import type { TextMeasurer } from '../layout/semantic-records.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
+import { hiddenMarkRemovedIds, type RevisionView } from './hidden-mark-joins.ts';
+import { coveredLockedControlOps } from './surface-locked-control-delete.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
+import { fieldResultSpeller } from '../layout/field-copy-text.ts';
+import { cellSelectionText, type CellSelection } from '../layout/semantic-cell-selection.ts';
 import {
   parentNodeOf,
   type FragmentCoverage,
@@ -138,29 +144,69 @@ export function selectedTextIn(
   layout: SemanticLayout,
   from: SemanticPosition,
   to: SemanticPosition,
-  order?: readonly string[]
+  order?: readonly string[],
+  atomText?: (paragraphId: string, offset: number) => string | null,
+  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout
 ): string {
+  // An atom paints as U+FFFC in the model text; a caller can spell it for plain text.
+  const spell = (paragraphId: string, text: string, start: number): string =>
+    atomText === undefined || !text.includes('\uFFFC')
+      ? text
+      : text.replace(
+          /\uFFFC/g,
+          (atom, index: number) => atomText(paragraphId, start + index) ?? atom
+        );
   if (from.paragraphId === to.paragraphId) {
-    return paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset);
+    return spell(
+      from.paragraphId,
+      paragraphText(layout, from.paragraphId).slice(from.offset, to.offset),
+      from.offset
+    );
   }
   const effectiveOrder = order ?? documentOrder(layout);
   const firstIndex = effectiveOrder.indexOf(from.paragraphId);
   const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
   const ids = effectiveOrder.slice(firstIndex, lastIndex + 1);
-  let text = paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset);
+  let text = spell(
+    from.paragraphId,
+    paragraphText(layout, from.paragraphId).slice(from.offset),
+    from.offset
+  );
   for (let index = 1; index < ids.length; index += 1) {
     const paragraphId = ids[index]!;
-    const whole = paragraphTextFromLayout(layout, paragraphId);
+    const whole = paragraphText(layout, paragraphId);
     // A break the reader cannot SEE is not one to copy. A resolved display mode draws a run
     // of paragraphs as one, so a newline here pasted two paragraphs out of a line that was
     // drawn as one — and the file the reader is looking at says the break is gone.
     const separator = mergedPredecessorsOf(layout, paragraphId).includes(ids[index - 1]!)
       ? ''
       : '\n';
-    text += separator + (index === ids.length - 1 ? whole.slice(0, to.offset) : whole);
+    text +=
+      separator +
+      spell(paragraphId, index === ids.length - 1 ? whole.slice(0, to.offset) : whole, 0);
   }
   return text;
+}
+
+/** The plain text of a range. Each computed field reads as its painted result. */
+export function rangePlainText(
+  layout: SemanticLayout,
+  from: SemanticPosition,
+  to: SemanticPosition,
+  order: readonly string[]
+): string {
+  const fields = fieldResultSpeller(layout, paragraphTextFromLayout);
+  return selectedTextIn(layout, from, to, order, fields.resultAt, fields.markedText);
+}
+
+/** The plain text of a cell rectangle, as a grid, with each field as its painted result. */
+export function cellsPlainText(layout: SemanticLayout, cells: CellSelection): string {
+  return cellSelectionText(
+    layout,
+    cells,
+    fieldResultSpeller(layout, paragraphTextFromLayout).spelledText
+  );
 }
 
 /**
@@ -398,17 +444,25 @@ export function planRangeDeletion(
   part: OoxmlPart,
   from: SemanticPosition,
   to: SemanticPosition,
-  order?: readonly string[]
+  order?: readonly string[],
+  view: RevisionView = { displayMode: layout.displayMode ?? 'all-markup', authorFilter: undefined },
+  /** A tracked deletion: the store strikes a covered content-locked control whole. */
+  tracked = false
 ): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
+  // A whole content-locked control in the range goes as a node, and only the text around it
+  // as text: deleting its characters as text edits locked content, which the store refuses.
+  const trimmed = (paragraphId: string, start: number, end: number): PlannedOp[] =>
+    (tracked
+      ? null
+      : coveredLockedControlOps(
+          layout,
+          { paragraphId, offset: start },
+          { paragraphId, offset: end }
+        )) ?? [{ op: 'deleteText', paragraphId, start, end }];
   if (from.paragraphId === to.paragraphId) {
     if (from.offset === to.offset) return { ops: [], collapseTo: from };
-    return {
-      ops: [
-        { op: 'deleteText', paragraphId: from.paragraphId, start: from.offset, end: to.offset },
-      ],
-      collapseTo: from,
-    };
+    return { ops: trimmed(from.paragraphId, from.offset, to.offset), collapseTo: from };
   }
 
   const effectiveOrder = order ?? documentOrder(layout);
@@ -465,7 +519,7 @@ export function planRangeDeletion(
     const length = textOf(id).length;
     const start = index === firstIndex ? from.offset : 0;
     const end = index === lastIndex ? to.offset : length;
-    if (start < end) ops.push({ op: 'deleteText', paragraphId: id, start, end });
+    if (start < end) ops.push(...trimmed(id, start, end));
   }
   // Then the blocks the range fully contains. Nothing in the paragraph vocabulary can do
   // this: a body paragraph and a cell paragraph have different parents, so collapsing
@@ -507,6 +561,14 @@ export function planRangeDeletion(
    * while `joinParagraphs` still requires true child-index adjacency, which vetoed the whole
    * atomic delete (`not-adjacent-siblings`) and left every table standing.
    */
+  // Paragraphs a hidden mark removed from the flow in this view, per host: invisible, so a
+  // join may absorb them. Layout's own answer, asked only where something lies between.
+  const removedUnder = new Map<string, ReadonlySet<string>>();
+  const hiddenUnder = (host: OoxmlElement): ReadonlySet<string> => {
+    let ids = removedUnder.get(host.id);
+    if (!ids) removedUnder.set(host.id, (ids = hiddenMarkRemovedIds(host.children, view)));
+    return ids;
+  };
   const eventualParagraphsUnder = (host: OoxmlElement): string[] => {
     const ids: string[] = [];
     const visit = (nodes: readonly OoxmlNode[]): void => {
@@ -531,13 +593,19 @@ export function planRangeDeletion(
     return ids;
   };
 
-  const consecutiveSiblings = (before: string, after: string): boolean => {
+  // The paragraphs a join from `before` to `after` must absorb on the way — none when they
+  // are consecutive — or null when something that is not a removed paragraph lies between.
+  const bridgeBetween = (before: string, after: string): string[] | null => {
     const host = eventualHost(before);
-    if (!host || eventualHost(after) !== host) return false;
+    if (!host || eventualHost(after) !== host) return null;
     const sequence = eventualParagraphsUnder(host);
     const start = sequence.indexOf(before);
     const end = sequence.indexOf(after);
-    return start !== -1 && end === start + 1;
+    if (start === -1 || end <= start) return null;
+    const between = sequence.slice(start + 1, end);
+    if (between.length === 0) return between;
+    const removed = hiddenUnder(host);
+    return between.every((id) => removed.has(id)) ? between : null;
   };
 
   let groupHead = survivorId;
@@ -545,8 +613,11 @@ export function planRangeDeletion(
   for (let index = survivorIndex + 1; index <= lastIndex; index += 1) {
     const id = effectiveOrder[index]!;
     if (tableOfParagraph.has(id)) continue; // going with its table; nothing to join
-    if (consecutiveSiblings(previous, id)) {
-      ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: id });
+    const bridge = bridgeBetween(previous, id);
+    if (bridge) {
+      for (const joined of [...bridge, id]) {
+        ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: joined });
+      }
     } else {
       // Something this plan does not remove sits between: start a new join group on ITS far
       // side rather than joining across it.
@@ -555,4 +626,19 @@ export function planRangeDeletion(
     previous = id;
   }
   return { ops: ops as RangeDeletionPlan['ops'], collapseTo };
+}
+
+/** A collapsed caret has no selected marks and needs no document-order index. */
+export function surfaceSelectionMarkRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  paragraphOrder: () => readonly string[],
+  measurer?: TextMeasurer
+) {
+  if (
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset
+  )
+    return [];
+  return selectionMarkRects(layout, selection, paragraphOrder(), measurer);
 }

@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { DocumentRegistry } from '../document/registry.ts';
+import { asLogicalId, type LogicalId } from '../document/identity.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -48,24 +49,28 @@ function countScans<T>(run: () => T): { readonly result: T; readonly comparisons
  * `addListing` used to run for every child of the parent whose array changed, so appending one
  * block to an 800-block body rewrote all 800 listings to record one.
  */
-function countListingWrites<T>(run: () => T): { readonly result: T; readonly writes: number } {
-  const prototype = DocumentRegistry.prototype as unknown as Record<string, unknown>;
-  const original = prototype.addListing as (...args: unknown[]) => unknown;
+/** Count writes to the registry's child listings while `run` executes. */
+function countListingWrites<T>(
+  registry: DocumentRegistry,
+  run: () => T
+): { readonly result: T; readonly writes: number } {
+  const listings = (registry as unknown as { listings: Map<string, Set<string>> }).listings;
+  const original = listings.set;
   let writes = 0;
-  prototype.addListing = function (this: unknown, ...args: unknown[]) {
+  listings.set = function (this: Map<string, Set<string>>, key, value) {
     writes += 1;
-    return original.apply(this, args);
+    return original.call(this, key, value);
   };
   try {
     return { result: run(), writes };
   } finally {
-    prototype.addListing = original;
+    listings.set = original;
   }
 }
 
 function element(registry: DocumentRegistry, logicalId: string, localName: string): void {
   registry.putElement({
-    logicalId,
+    logicalId: asLogicalId(logicalId),
     kind: 'generic',
     namespaceUri: W,
     localName,
@@ -82,13 +87,13 @@ function wideParent(childCount: number): {
   const registry = new DocumentRegistry(doc);
   doc.transact(() => {
     element(registry, 'parent', 'body');
-    const childIds: string[] = [];
+    const childIds: LogicalId[] = [];
     for (let index = 0; index < childCount; index += 1) {
-      const childId = `child-${index}`;
+      const childId = asLogicalId(`child-${index}`);
       element(registry, childId, 'p');
       childIds.push(childId);
     }
-    registry.spliceChildren('parent', 0, 0, childIds);
+    registry.spliceChildren(asLogicalId('parent'), 0, 0, childIds);
   });
   return { doc, registry };
 }
@@ -104,13 +109,13 @@ describe('child-listing maintenance is linear in child count', () => {
     const { comparisons } = countScans(() => {
       doc.transact(() => {
         element(registry, 'newborn', 'p');
-        registry.spliceChildren('parent', childCount, 0, ['newborn']);
+        registry.spliceChildren(asLogicalId('parent'), childCount, 0, [asLogicalId('newborn')]);
       });
     });
 
     expect(comparisons).toBeLessThan(childCount * 4);
-    expect(registry.parentOf('newborn')).toBe('parent');
-    expect(registry.listingParents('newborn')).toEqual(['parent']);
+    expect(registry.parentOf(asLogicalId('newborn'))).toBe(asLogicalId('parent'));
+    expect(registry.listingParents(asLogicalId('newborn'))).toEqual([asLogicalId('parent')]);
   });
 
   test('removing one child from a wide parent is linear too', () => {
@@ -119,15 +124,15 @@ describe('child-listing maintenance is linear in child count', () => {
 
     const { comparisons } = countScans(() => {
       doc.transact(() => {
-        registry.spliceChildren('parent', 400, 1, []);
+        registry.spliceChildren(asLogicalId('parent'), 400, 1, []);
       });
     });
 
     expect(comparisons).toBeLessThan(childCount * 4);
-    expect(registry.parentOf('child-400')).toBeNull();
-    expect(registry.listingParents('child-400')).toEqual([]);
-    expect(registry.parentOf('child-399')).toBe('parent');
-    expect(registry.parentOf('child-401')).toBe('parent');
+    expect(registry.parentOf(asLogicalId('child-400'))).toBeNull();
+    expect(registry.listingParents(asLogicalId('child-400'))).toEqual([]);
+    expect(registry.parentOf(asLogicalId('child-399'))).toBe(asLogicalId('parent'));
+    expect(registry.parentOf(asLogicalId('child-401'))).toBe(asLogicalId('parent'));
   });
 
   test('listings stay correct when the same child id is listed twice and dropped once', () => {
@@ -138,36 +143,41 @@ describe('child-listing maintenance is linear in child count', () => {
     doc.transact(() => {
       element(registry, 'parent', 'body');
       element(registry, 'twin', 'p');
-      registry.spliceChildren('parent', 0, 0, ['twin', 'twin']);
+      registry.spliceChildren(asLogicalId('parent'), 0, 0, [
+        asLogicalId('twin'),
+        asLogicalId('twin'),
+      ]);
     });
-    expect(registry.listingParents('twin')).toEqual(['parent']);
+    expect(registry.listingParents(asLogicalId('twin'))).toEqual([asLogicalId('parent')]);
 
     doc.transact(() => {
-      registry.spliceChildren('parent', 0, 1, []);
+      registry.spliceChildren(asLogicalId('parent'), 0, 1, []);
     });
-    expect(registry.listingParents('twin')).toEqual(['parent']);
+    expect(registry.listingParents(asLogicalId('twin'))).toEqual([asLogicalId('parent')]);
 
     doc.transact(() => {
-      registry.spliceChildren('parent', 0, 1, []);
+      registry.spliceChildren(asLogicalId('parent'), 0, 1, []);
     });
-    expect(registry.listingParents('twin')).toEqual([]);
+    expect(registry.listingParents(asLogicalId('twin'))).toEqual([]);
   });
 
   test('appending one child writes one listing, not one per sibling', () => {
     const childCount = 800;
     const { doc, registry } = wideParent(childCount);
 
-    const { writes } = countListingWrites(() => {
+    const { writes } = countListingWrites(registry, () => {
       doc.transact(() => {
         element(registry, 'newborn', 'p');
-        registry.spliceChildren('parent', childCount, 0, ['newborn']);
+        registry.spliceChildren(asLogicalId('parent'), childCount, 0, [asLogicalId('newborn')]);
       });
     });
 
     expect(writes).toBe(1);
-    expect(registry.listingParents('newborn')).toEqual(['parent']);
-    expect(registry.listingParents('child-0')).toEqual(['parent']);
-    expect(registry.listingParents(`child-${childCount - 1}`)).toEqual(['parent']);
+    expect(registry.listingParents(asLogicalId('newborn'))).toEqual([asLogicalId('parent')]);
+    expect(registry.listingParents(asLogicalId('child-0'))).toEqual([asLogicalId('parent')]);
+    expect(registry.listingParents(asLogicalId(`child-${childCount - 1}`))).toEqual([
+      asLogicalId('parent'),
+    ]);
   });
 
   test('a child moved between two wide parents ends up under the destination only', () => {
@@ -177,15 +187,15 @@ describe('child-listing maintenance is linear in child count', () => {
       element(registry, 'left', 'body');
       element(registry, 'right', 'body');
       element(registry, 'mover', 'p');
-      registry.spliceChildren('left', 0, 0, ['mover']);
+      registry.spliceChildren(asLogicalId('left'), 0, 0, [asLogicalId('mover')]);
     });
-    expect(registry.listingParents('mover')).toEqual(['left']);
+    expect(registry.listingParents(asLogicalId('mover'))).toEqual([asLogicalId('left')]);
 
     doc.transact(() => {
-      registry.moveNode('mover', 'right', 0);
+      registry.moveNode(asLogicalId('mover'), asLogicalId('right'), 0);
     });
-    expect(registry.listingParents('mover')).toEqual(['right']);
-    expect(registry.parentOf('mover')).toBe('right');
+    expect(registry.listingParents(asLogicalId('mover'))).toEqual([asLogicalId('right')]);
+    expect(registry.parentOf(asLogicalId('mover'))).toBe(asLogicalId('right'));
   });
 });
 
@@ -206,7 +216,7 @@ describe('the maintained node count matches shared state', () => {
     doc.transact(() => {
       element(registry, 'parent', 'body');
       element(registry, 'child', 'p');
-      registry.putText('text', 'hello');
+      registry.putText(asLogicalId('text'), 'hello');
       // Read inside the transaction: Yjs has not delivered the events yet, and the journal's
       // node cap is checked at exactly this point when one commit publishes two journals.
       expect(registry.nodeCount()).toBe(3);
@@ -220,7 +230,7 @@ describe('the maintained node count matches shared state', () => {
     const registry = new DocumentRegistry(doc);
     doc.transact(() => element(registry, 'node', 'p'));
     doc.transact(() => element(registry, 'node', 'p'));
-    doc.transact(() => registry.putText('node', 'replaced'));
+    doc.transact(() => registry.putText(asLogicalId('node'), 'replaced'));
     expect(registry.nodeCount()).toBe(sizeOf(registry));
     expect(registry.nodeCount()).toBe(1);
   });
@@ -230,7 +240,7 @@ describe('the maintained node count matches shared state', () => {
     const registry = new DocumentRegistry(doc);
     doc.transact(() => {
       element(registry, 'parent', 'body');
-      registry.spliceChildren('parent', 0, 0, []);
+      registry.spliceChildren(asLogicalId('parent'), 0, 0, []);
     });
 
     const peerDoc = new Y.Doc();

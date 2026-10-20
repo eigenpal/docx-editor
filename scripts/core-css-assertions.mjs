@@ -26,8 +26,8 @@ const SCOPE = '.docx-editor';
  * plausibly belong to anyone else.
  *
  * `.ProseMirror-` was here and is not ours at all — it is ProseMirror's, and
- * `.ProseMirror-yjs-cursor` is y-prosemirror's, so a host running its own
- * ProseMirror editor got our rules on its elements.
+ * `.ProseMirror-yjs-cursor` belongs to a host's own Yjs binding, so a host running
+ * its own ProseMirror editor got our rules on its elements.
  *
  * `.layout-` we do mint, but the names are generic enough that a host could
  * mint them too (`.layout-paragraph`, `.layout-run-text`).

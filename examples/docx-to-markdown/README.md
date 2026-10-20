@@ -1,31 +1,43 @@
-# DOCX to Markdown demo
+# DOCX to Markdown example
 
-A standalone browser demo for the private `@docx-editor.dev/docx-to-markdown` package. It keeps the
-editable, Word-style paginated document on the left and renders the exporter's real `pages[]` result
-on the right.
+Convert a DOCX in your browser and compare the document with its Markdown output.
+
+## Run the example
+
+From the repository root, run:
 
 ```bash
-bun dev:markdown
+bun install
+bun run dev:markdown
 ```
 
-Open <http://localhost:5177>. Upload or drag in a `.docx`, edit it, and pause briefly to refresh the
-Markdown. Preview mode renders GitHub-flavored Markdown, including tables and task lists; Source mode
-shows the exact Markdown for each page's body, header, and footer. Comments are presented from the
-separate review sidecar: Preview pairs each thread with its selected Markdown range, while Source
-shows the same information as plain text without modifying the exported document Markdown.
+Open `http://localhost:5177`. Drop a `.docx` or edit the sample. Markdown updates after you pause typing.
 
-The preview uses `react-markdown`, `remark-gfm`, `rehype-raw`, and `rehype-sanitize`. It does not
-implement a Markdown parser. Because GFM cannot represent a table inside another table, the exporter
-uses narrowly scoped inline HTML for nested tables; the demo's sanitizer admits only those known
-span classes and ARIA roles.
+## Use the demo
 
-Pictures still participate in Core layout so page boundaries reflect their geometry, but this v1
-Markdown projection deliberately omits image content. A portable asset contract will be designed
-before image syntax becomes part of the package API.
+- **Preview** renders Markdown by page.
+- **Source** shows the page Markdown. Switching between **Preview** and **Source** keeps your current page and approximate reading position.
+- **API** shows a Node.js example and the live JSON response. Click the install command to copy it.
+- **Copy** copies the active code, JSON, or full-document Markdown.
+- **Download** saves a ZIP with Markdown, image files, and JSON metadata when images are present. Otherwise, it saves Markdown.
 
-The demo uses the same font ordering as production export: packaged metric-compatible faces first,
-then the opt-in Google Fonts resolver for families declared by the current document. Both the editor
-and exporter receive the same on-demand origins. Proprietary families absent from the DOCX, packaged
-set, and pinned Google catalog remain reported as unresolved rather than receiving an invented
-metric substitute. Raw file-derived HTML is never trusted; generated inline HTML is parsed and
-sanitized before rendering.
+Preview settings select which page fields to show. They don't change the API response. Full-document Markdown excludes repeated headers and footers.
+
+Click a Markdown page to reveal the corresponding Word page, or use **View in DOCX** with the keyboard. Links, modified clicks, and text selections keep their normal behavior. On narrow screens, page navigation switches back to the Word pane.
+
+## Embed the converter
+
+Add `?embed=1` to the demo URL when the host page supplies its own branding. Embedded mode removes the duplicate logo and Reset button and centers a lighter **Open DOCX** button above the Word pane. Standalone mode retains the original header and Reset control.
+
+## Output details
+
+Fonts use packaged substitutes, then Google Fonts, which requires network access. Images use `images: { syntax: 'html' }` to preserve each occurrence's displayed size. The preview keeps inline images beside their surrounding text and shrinks oversized images to fit. Image metadata includes intrinsic pixel dimensions and each occurrence's displayed dimensions in CSS pixels. See the [image API guide](../../packages/docx-to-markdown/docs/images.md) for custom previews and server delivery. Use **See comments** or **See tracked changes** beside a page number to expand its review panel. Panels start closed and appear outside the paper in both **Preview** and **Source** views. Nested tables use inline HTML. Cropping, rotation, and floating text wrapping are not reproduced. The preview sanitizes HTML before rendering it.
+
+## Check preview layout
+
+Run `bun run --filter './examples/docx-to-markdown' check:preview` from the repository root. The check starts its own Vite server and uses Playwright Chromium. It verifies all sample pages, review controls, and content containment at desktop and mobile widths in **Preview** and **Source** views. CI runs this check after the demo builds.
+
+## Next steps
+
+- [Install the converter in your application](../../packages/docx-to-markdown/README.md).
+- [Read the Markdown export guide](https://www.docx-editor.dev/docs/2.x/export/markdown).

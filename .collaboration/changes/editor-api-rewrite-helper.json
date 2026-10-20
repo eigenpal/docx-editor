@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An agent that proposed a model's paragraph rewrite as tracked changes wrote its own word diff, rollback, and retry over the editing API.",
+  "after": "proposeRewrite in @docx-editor.dev/editor-api/agent writes the rewrite through the existing tracked text operations, rejects only its own revisions after a failed write, and prepares the paragraph again after another participant's edit.",
+  "reason": "The helper uses only existing editing API reads and writes, and core caches the field reads of a paragraph by node identity, which an edit replaces. It adds no operation, node kind, shared field, or serialization, so convergence, undo, and reconnect behavior is unchanged. The collaboration test runs a participant's edit between two of the helper's writes and during the model call, and checks that both peers converge with the participant's edit kept.",
+  "tests": [
+    "packages/editor-api/src/agent/__tests__/propose-rewrite.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-refusals.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-atoms.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-guards.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-fields.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-propose-rewrite.test.ts"
+  ],
+  "changeset": "editor-api-rewrite-helper",
+  "migration": null
+}

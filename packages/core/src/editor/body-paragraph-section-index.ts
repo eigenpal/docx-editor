@@ -5,6 +5,7 @@
 // from a structure-key rescan on lookup.
 
 import type { TreeDocxSessionView } from '../binding/tree-session.ts';
+import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { enumerateDocumentSections } from '../layout/section-properties.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import { DEPENDENCY_KEY_IDS, ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
@@ -50,10 +51,47 @@ function collectParagraphs(
   for (const child of node.children) collectParagraphs(child, sectionIndex, into, depth + 1);
 }
 
-/** Walk oracle used by parity tests and cold cache builds. */
+/**
+ * Paragraph ids under one top-level block, in walk order, per immutable block node.
+ *
+ * A structural edit (Enter, Backspace across paragraphs) rebuilds the whole map, and every
+ * table it passes was walked cell by cell again. A block the edit did not touch is the same
+ * node, so its ids come from here.
+ */
+const blockParagraphIds = new WeakMap<OoxmlNode, readonly string[]>();
+
+function collectBlockParagraphs(
+  block: OoxmlNode,
+  sectionIndex: number,
+  into: Map<string, number>,
+  memoize: boolean
+): void {
+  if (!memoize || block.kind === 'paragraph' || block.kind === 'textValue') {
+    collectParagraphs(block, sectionIndex, into, 0);
+    return;
+  }
+  let ids = blockParagraphIds.get(block);
+  if (!ids) {
+    const found = new Map<string, number>();
+    collectParagraphs(block, 0, found, 0);
+    ids = [...found.keys()];
+    blockParagraphIds.set(block, ids);
+  }
+  for (const id of ids) if (!into.has(id)) into.set(id, sectionIndex);
+}
+
+/** Walk oracle used by parity tests: no memo, so it stays independent of the cache it checks. */
 export function buildBodyParagraphSectionIndex(part: OoxmlPart): ReadonlyMap<string, number> {
+  return buildSectionIndex(part, false);
+}
+
+function buildSectionIndex(part: OoxmlPart, memoize: boolean): ReadonlyMap<string, number> {
   bodySectionTraversalVisits += 1;
   const blocks = storyBlocks(part);
+  // A paragraph a hidden mark took out of the flow is still body content. It sits just before
+  // the block that took the join, and carries no section break, so it shares that section.
+  const allBlocks = numberingFlowBlocks(blocks);
+  let cursor = 0;
   const sections = enumerateDocumentSections(part);
   const map = new Map<string, number>();
   for (let index = 0; index < sections.length; index += 1) {
@@ -64,7 +102,13 @@ export function buildBodyParagraphSectionIndex(part: OoxmlPart): ReadonlyMap<str
       blockIndex += 1
     ) {
       const block = blocks[blockIndex];
-      if (block) collectParagraphs(block, index, map, 0);
+      if (!block) continue;
+      while (cursor < allBlocks.length && allBlocks[cursor] !== block) {
+        collectBlockParagraphs(allBlocks[cursor]!, index, map, memoize);
+        cursor += 1;
+      }
+      cursor += 1;
+      collectBlockParagraphs(block, index, map, memoize);
     }
   }
   return map;
@@ -117,7 +161,7 @@ function bodySectionMapForSession(
   ensureBodySectionSubscription(session, entry);
   if (!entry.map) {
     bodySectionIndexRebuilds += 1;
-    entry.map = buildBodyParagraphSectionIndex(part);
+    entry.map = buildSectionIndex(part, true);
   }
   return entry.map;
 }

@@ -350,13 +350,10 @@
 .igloo-page {
   --doc-revision-insertion: #0f6f95;
   --doc-revision-deletion: #7d93a6;
-  --doc-revision-insertion-tint: rgba(15, 111, 149, 0.13);
-  --doc-revision-deletion-tint: rgba(125, 147, 166, 0.13);
   --doc-revision-insertion-wash: rgba(15, 111, 149, 0.06);
   --doc-revision-deletion-wash: rgba(125, 147, 166, 0.06);
   --doc-revision-format: #4a7c98;
   --doc-revision-format-wash: rgba(74, 124, 152, 0.1);
-  --doc-review-change-bar: #6fbfe0;
 }
 
 /* The stage does the centring, so the surface's own margin goes.
@@ -976,4 +973,297 @@
     opacity: 0;
     transform: translate(-50%, 0);
   }
+}
+
+/* ── The permit's pop-ups: content-control sessions, cut from ice ───────────────────────
+ *
+ * `IglooForms.tsx` renders every value pop-up over the packaged parts; these rules dress the
+ * parts' own classes and the demo's wrappers. Tokens do most of it (the panel inherits
+ * `--doc-*`), so what is left is the ice: the shard outline, a heading with a flake, tiles
+ * for the carved photos. */
+
+/* Deep water, not pale ice: the permit's pop-ups invert the theme so they read as their own
+   layer over the page. The packaged parts pick the palette up through the tokens restated
+   here — list rows, the calendar grid, the dialog footer — so nothing inside is re-styled by
+   class except the demo's own wrappers. */
+.docx-editor .docx-content-control-widget-popup.igloo-permit {
+  --doc-surface: #0d3149;
+  --doc-card: #123d5a;
+  --doc-bg: #0d3149;
+  --doc-bg-subtle: rgba(127, 227, 255, 0.1);
+  --doc-bg-hover: rgba(127, 227, 255, 0.18);
+  --doc-bg-input: rgba(6, 26, 40, 0.7);
+  --doc-primary: #7fe3ff;
+  --doc-primary-hover: #a9ecff;
+  --doc-primary-light: rgba(127, 227, 255, 0.28);
+  --doc-accent: #7fe3ff;
+  --doc-on-primary: #062a3f;
+  --doc-text: #eafbff;
+  --doc-text-muted: rgba(234, 251, 255, 0.72);
+  --doc-text-subtle: rgba(234, 251, 255, 0.5);
+  --doc-border: rgba(127, 227, 255, 0.35);
+  --doc-border-light: rgba(127, 227, 255, 0.25);
+  --doc-border-dark: rgba(127, 227, 255, 0.55);
+  --doc-border-input: rgba(127, 227, 255, 0.45);
+  --doc-focus-ring: rgba(127, 227, 255, 0.6);
+  min-width: 260px;
+  padding: 10px 10px 8px;
+  border: 1px solid rgba(127, 227, 255, 0.6);
+  border-radius: 4px 14px 4px 14px;
+  background: linear-gradient(170deg, #143f5c, #0a2a40 70%);
+  box-shadow: 0 14px 30px rgba(4, 32, 52, 0.55);
+  color: var(--doc-text);
+  color-scheme: dark;
+}
+
+.igloo-permit__switch {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--doc-primary);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.igloo-permit__native {
+  display: grid;
+  padding: 6px 2px;
+}
+
+.igloo-permit__native-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-bg-input);
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 15px;
+}
+
+.igloo-permit__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__list {
+  display: grid;
+  gap: 2px;
+}
+
+.igloo-permit__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__item[aria-selected='true'] {
+  background: var(--doc-primary-light);
+}
+
+.igloo-permit__flake {
+  color: var(--doc-accent);
+  font-size: 12px;
+}
+
+.igloo-permit__empty,
+.igloo-permit__error {
+  margin: 6px 2px 2px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__error[role='alert'] {
+  color: #9a3b2c;
+}
+
+.igloo-permit__input {
+  width: 100%;
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__calendar-header {
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-bg-subtle);
+}
+
+.igloo-permit__grid [role='gridcell'][data-selected] {
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-permit__calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.igloo-permit__today {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  font-weight: 600;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.igloo-permit__today:hover {
+  background: var(--doc-primary-hover);
+}
+
+.igloo-permit__scenes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.igloo-permit__scene {
+  display: grid;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--doc-border);
+  border-radius: 3px 10px 3px 10px;
+  background: var(--doc-card);
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.igloo-permit__scene:hover:not(:disabled) {
+  border-color: var(--doc-primary);
+  background: var(--doc-bg-hover);
+}
+
+.igloo-permit__scene:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.igloo-permit__scene-art {
+  display: block;
+  height: 54px;
+  border-radius: 2px 8px 2px 8px;
+}
+
+.igloo-permit__upload {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.igloo-permit__file {
+  font-size: 12px;
+}
+
+/* ── Content controls on the ice ──────────────────────────────────────────────────────────
+ *
+ * The library paints a control's chrome from documented classes (`docx-content-control-*`)
+ * and `--doc-*` tokens; the permit wants its fields to read as carved slots, not as the
+ * packaged blue outline. The tokens set the palette (glacier teal, aqua glow), the classes
+ * set the shape: a dashed teal underline while idle, a solid aqua shard when active, a label
+ * tab shaped like the demo's other chips, and a widget that is a round aqua button. */
+.igloo-shell .docx-content-control-chrome {
+  --igloo-control: #0b6b7a;
+  --igloo-control-glow: #7fe3ff;
+}
+
+.igloo-shell .docx-content-control-boundary {
+  border: 0;
+  border-bottom: 2px dashed color-mix(in srgb, var(--igloo-control) 55%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.igloo-shell .docx-content-control-chrome[data-active] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome[data-open] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome[data-hover] .docx-content-control-boundary,
+.igloo-shell .docx-content-control-chrome:hover .docx-content-control-boundary {
+  border-bottom-style: solid;
+  border-bottom-color: var(--igloo-control);
+  background: color-mix(in srgb, var(--igloo-control-glow) 28%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--igloo-control-glow) 35%, transparent);
+  border-radius: 3px 10px 3px 10px;
+}
+
+.igloo-shell .docx-content-control-label {
+  border-radius: 3px 10px 3px 10px;
+  background: var(--igloo-control);
+  color: #eafbff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  border-radius: 999px;
+  background: var(--igloo-control);
+  border-color: var(--igloo-control-glow) !important;
+  box-shadow: 0 4px 12px rgba(4, 32, 52, 0.35);
+}
+
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before {
+  color: #eafbff;
+}
+
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']),
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']),
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  background: var(--igloo-control-glow);
+  border-color: var(--igloo-control) !important;
+}
+
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before,
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before,
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::after,
+.igloo-shell
+  .docx-content-control-chrome[data-open]
+  .docx-content-control-widget:not([data-docx-cc-widget='checkbox'])::before {
+  color: var(--igloo-control);
+}
+
+.igloo-shell
+  .docx-content-control-chrome[data-active]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.igloo-shell
+  .docx-content-control-chrome:hover
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  background: color-mix(in srgb, var(--igloo-control-glow) 45%, transparent);
+  border-radius: 3px 8px 3px 8px;
 }

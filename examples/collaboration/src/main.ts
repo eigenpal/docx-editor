@@ -1,17 +1,17 @@
 import '@docx-editor.dev/core/styles/editor.css';
 import './style.css';
 
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '@docx-editor.dev/pro';
 import {
   createCollaborationRoomId,
   createWebrtcCollaboration,
+  DEMO_SIGNALING_ENDPOINTS,
   type WebrtcCollaborationHandle,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { demoDocumentBytes } from './demo-document';
 
-const t = createT(en);
 const strings = {
   title: t('collaborationDemo.title'),
   subtitle: t('collaborationDemo.subtitle'),
@@ -32,6 +32,9 @@ const strings = {
   scope: t('collaborationDemo.scope'),
   warning: t('collaborationDemo.warning'),
   failed: t('collaborationDemo.failed'),
+  failedHint: t('collaborationDemo.failedHint'),
+  retry: t('collaborationDemo.retry'),
+  backToLobby: t('collaborationDemo.backToLobby'),
 };
 const appElement = document.querySelector<HTMLElement>('#app');
 if (!appElement) throw new Error('missing app root');
@@ -258,6 +261,8 @@ async function startRoom(roomId: string): Promise<void> {
       color: 'var(--doc-accent)',
     },
     bootstrap: { kind: 'create-or-join', document: demoDocumentBytes() },
+    // Demo only. Production rooms pass their own signaling URLs and TURN servers.
+    signaling: DEMO_SIGNALING_ENDPOINTS,
     ...(secret ? { password: secret } : {}),
   });
   try {
@@ -273,17 +278,36 @@ async function startRoom(roomId: string): Promise<void> {
   }
 }
 
+/** Say what failed and offer the two ways out: retry the same link, or pick another room. */
+function renderFailure(error: unknown): void {
+  const message = element('main', 'lobby');
+  const retry = element('button', 'primary', strings.retry);
+  retry.type = 'button';
+  // A reload keeps the room id and the key in the fragment, so the retry joins the same room.
+  retry.addEventListener('click', () => location.reload());
+  const lobby = element('button', undefined, strings.backToLobby);
+  lobby.type = 'button';
+  lobby.addEventListener('click', () => {
+    const url = new URL(location.href);
+    url.search = '';
+    url.hash = '';
+    location.assign(url);
+  });
+  const actions = element('div', 'lobby-actions');
+  actions.append(retry, lobby);
+  message.append(
+    element('h1', undefined, strings.failed),
+    element('p', 'subtitle', strings.failedHint),
+    element('p', 'warning', error instanceof Error ? error.message : strings.failed),
+    actions
+  );
+  app.replaceChildren(message);
+}
+
 const parameters = new URL(location.href).searchParams;
 const roomId = parameters.get('room');
 if (!roomId) {
   renderLobby();
 } else {
-  startRoom(roomId).catch((error) => {
-    const message = element('main', 'lobby');
-    message.append(
-      element('h1', undefined, strings.failed),
-      element('p', 'warning', error instanceof Error ? error.message : strings.failed)
-    );
-    app.replaceChildren(message);
-  });
+  startRoom(roomId).catch((error) => renderFailure(error));
 }

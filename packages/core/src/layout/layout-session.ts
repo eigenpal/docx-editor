@@ -3,6 +3,7 @@
 // Separate from the paragraph break cache: the cache stores how a paragraph BREAKS; this
 // stores where the flow WAS. One survives reflow, the other is invalidated by it.
 
+import type { PendingParagraphFrames } from './paragraph-frame-flow.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PositionedTableAnchorSignal } from './table-float-position.ts';
@@ -15,6 +16,8 @@ export interface FlowCheckpoint {
   readonly pageFragments: readonly import('./semantic-records.ts').BlockFragmentRecord[];
   /** Anchored drawings already collected for the open page. */
   readonly pendingAnchoredDrawings: readonly AnchoredDrawingRecord[];
+  /** Local frame paragraphs waiting for their next regular paragraph anchor. */
+  readonly pendingParagraphFrames?: PendingParagraphFrames;
   /**
    * Anchored drawings overlap resolution pushed onto the NEXT page, and how many times each
    * drawing has been pushed.
@@ -27,7 +30,7 @@ export interface FlowCheckpoint {
   readonly deferredAnchoredDrawings: readonly AnchoredDrawingRecord[];
   readonly anchorPageDeferCounts: ReadonlyMap<string, number>;
   /** Sheet-positioned tables and zero-line anchors still owed by the open page. */
-  readonly pendingPositionedTableTokens?: readonly string[];
+  readonly pendingPositionedTableTokens?: import('./table-float-position.ts').PendingPositionedTableTokens;
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
   readonly cursorY: number;
   readonly lineCounter: number;
@@ -74,11 +77,15 @@ export interface SectionStackSpan {
    * section just returned.
    */
   readonly sourcePages: readonly PageRecord[];
+  /** The blank parity sheet published in front of the section, kept for identity reuse. */
+  readonly paritySheet?: PageRecord;
 }
 
 /** Orchestrator state for multi-section incremental layout. */
 export interface MultiSectionLayoutState {
   structureKey: string;
+  /** Each section's part of {@link structureKey}, so an added section keeps the others. */
+  sectionKeys: readonly string[];
   sections: LayoutSession[];
   spans: SectionStackSpan[];
   previousRemapped: readonly PageRecord[];
@@ -178,7 +185,7 @@ export interface LayoutSession {
   /**
    * Page-bottom footnote reserves from the last published notes layout.
    *
-   * Seeded into the next {@link layoutSemanticDocumentWithNotes} call so the first body
+   * Seeded into the next {@link layoutSemanticDocumentWithNotesSteps} call so the first body
    * pass already matches the reserved context key — without this, every notes document
    * starts empty, mismatches, and throws away the session on reflow.
    */

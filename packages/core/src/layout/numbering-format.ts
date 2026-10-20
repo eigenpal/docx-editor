@@ -3,6 +3,14 @@
 // Pure, DOM-free, and strictly capped: hostile `lvlText` / counter values never allocate
 // unbounded strings or run catastrophic regex.
 
+import {
+  formatArabicAbjad,
+  formatArabicAlpha,
+  formatHebrew1,
+  formatHebrew2,
+  formatHindiNumbers,
+} from './numbering-format-scripts.ts';
+
 /** Soft ceiling on an expanded marker string (codepoints). */
 export const MAX_MARKER_TEXT_LENGTH = 64;
 
@@ -230,7 +238,7 @@ export function formatOrdinalText(value: number): string {
  * literal text, and formatting it as decimal invents a number the document never had.
  * `bullet` is not formatted here — callers use the literal `lvlText`.
  *
- * The remaining enumerants (`japaneseCounting`, `hebrew1`, `thaiNumbers`, `ganada`, …) are
+ * The remaining enumerants (`japaneseCounting`, `thaiNumbers`, `ganada`, …) are
  * per-script numeral sequences we do not carry glyph tables for. They fall back to decimal
  * deliberately: the ORDINAL is still the authored one, only the script differs, which reads
  * as a number in the wrong alphabet rather than as a missing or wrong marker.
@@ -262,6 +270,16 @@ export function formatNumFmt(numFmt: string, value: number): string {
     // `numberInDash` brackets the number with dashes: 1 → "- 1 -".
     case 'numberInDash':
       return `- ${formatDecimal(value)} -`;
+    case 'hebrew1':
+      return formatHebrew1(clampListValue(value));
+    case 'hebrew2':
+      return formatHebrew2(clampListValue(value));
+    case 'arabicAlpha':
+      return formatArabicAlpha(clampListValue(value));
+    case 'arabicAbjad':
+      return formatArabicAbjad(clampListValue(value));
+    case 'hindiNumbers':
+      return formatHindiNumbers(formatDecimal(value));
     case 'none':
     case 'bullet':
       return '';

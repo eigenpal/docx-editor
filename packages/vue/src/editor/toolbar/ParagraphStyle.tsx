@@ -1,3 +1,6 @@
+import { useDocxEditor } from '../context';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { usePickerKeyboard } from './usePickerKeyboard';
 import {
   computed,
   defineComponent,
@@ -81,7 +84,7 @@ const ParagraphStyleTrigger = defineComponent({
         ...(!context.isEnabled.value ? { 'data-disabled': '' } : {}),
         'aria-haspopup': 'listbox' as const,
         'aria-expanded': context.open.value,
-        'aria-label': text,
+
         title: text,
       };
       const current = context.options.value.find(
@@ -92,7 +95,7 @@ const ParagraphStyleTrigger = defineComponent({
         (context.value.value === null
           ? [<span>{control?.valueKey ? label(control.valueKey) : '—'}</span>]
           : [<span>{current?.name ?? context.value.value}</span>]);
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -111,10 +114,13 @@ const ParagraphStyleContent = defineComponent({
   },
   setup(props, { slots }) {
     const context = useParagraphStyleContext();
+    const label = useToolbarLabel();
     return () => {
       if (!context || !context.open.value) return null;
       const shared = {
         role: 'listbox' as const,
+        tabindex: 0,
+        'aria-label': label('styles.selectAriaLabel'),
         // Anchoring, layering and colors all come from the core stylesheet — the popup
         // must sit in the overlay band, above ambient chrome like the navigation panel.
         class: `docx-toolbar__menu docx-toolbar__style-content${props.className ? ` ${props.className}` : ''}`,
@@ -124,7 +130,7 @@ const ParagraphStyleContent = defineComponent({
         context.options.value.map((option) => (
           <ParagraphStyleItem key={option.styleId} value={option.styleId} />
         ));
-      if (props.asChild) return <Slot {...shared}>{items}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => items }}</Slot>;
       return <div {...shared}>{items}</div>;
     };
   },
@@ -139,18 +145,21 @@ const ParagraphStyleItem = defineComponent({
   },
   setup(props, { slots }) {
     const context = useParagraphStyleContext();
+    const editor = useDocxEditor();
     return () => {
       if (!context) return null;
       const selected = context.value.value === props.value;
       const option = context.options.value.find((entry) => entry.styleId === props.value);
       const shared = {
         role: 'option' as const,
+        tabindex: -1,
         'aria-selected': selected,
         ...(selected ? { 'data-selected': '' } : {}),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           context.setValue(props.value);
           context.setOpen(false);
+          editor.value?.focus();
         },
         class: `docx-toolbar__style-item${props.className ? ` ${props.className}` : ''}`,
       };
@@ -159,7 +168,7 @@ const ParagraphStyleItem = defineComponent({
           {option?.name ?? props.value}
         </span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -194,16 +203,18 @@ const ParagraphStyleRoot = defineComponent({
     const state = useParagraphStyle();
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
+    usePickerKeyboard(rootRef, open);
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
     });
 
     const context: ParagraphStyleContextValue = {
@@ -226,7 +237,7 @@ const ParagraphStyleRoot = defineComponent({
       if (props.asChild) {
         return (
           <Slot {...shared} ref={rootRef}>
-            {body}
+            {{ default: () => body }}
           </Slot>
         );
       }

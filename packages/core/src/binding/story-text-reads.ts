@@ -5,6 +5,7 @@
 
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { allParagraphs } from './tree-binding.ts';
 
 /**
@@ -35,7 +36,8 @@ const MAX_ANCHOR_WALK_DEPTH = 64;
  * Memoized per immutable node, because `snapshot()` reads `hasReviewContent` every tick:
  * without the memo a comment-less document paid a full-tree walk per keystroke, since the
  * answer only early-exits when an anchor IS found. An edit replaces only the nodes on its path,
- * so every untouched subtree answers from the cache.
+ * so every untouched subtree answers from the cache. Only nodes `keepsSubtreeMemo` admits
+ * get an entry: a node of leaves answers again from those leaves.
  */
 const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
 
@@ -63,6 +65,6 @@ export function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolea
       break;
     }
   }
-  commentAnchorPresenceCache.set(node, present);
+  if (keepsSubtreeMemo(node)) commentAnchorPresenceCache.set(node, present);
   return present;
 }

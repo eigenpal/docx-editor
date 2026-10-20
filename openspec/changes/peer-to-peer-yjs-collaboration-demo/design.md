@@ -1,6 +1,6 @@
 ## Context
 
-v1 let consumers hand `y-prosemirror` plugins to a hidden ProseMirror editor. That proved Yjs ecosystem compatibility but made the PM projection authoritative and left baseline initialization, durable state, comments, IDs, and several races to the consumer. v2 removed that API and now requires every authored write to pass through `TreePackageStore.transact` / `TreeDocumentStore.transact`; ProseMirror, layout, and painted DOM are projections only.
+v1 let consumers hand Yjs binding plugins to a hidden ProseMirror editor. That proved Yjs ecosystem compatibility but made the PM projection authoritative and left baseline initialization, durable state, comments, IDs, and several races to the consumer. v2 removed that API and now requires every authored write to pass through `TreePackageStore.transact` / `TreeDocumentStore.transact`; ProseMirror, layout, and painted DOM are projections only.
 
 The current tree operations are JSON-safe and atomic but not a concurrent wire protocol. Engine node IDs, comment IDs, and revision IDs are minted from local sequential state; text operations carry absolute UTF-16 offsets; snapshot undo records every origin except projection. The smallest safe proof therefore limits collaboration to insertion and deletion in already identified body paragraphs and changes the minimum origin/history seams before any network integration.
 

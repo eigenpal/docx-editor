@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Comments and replies created by the automation layer (Range.insertComment, Comment.reply) were written without w:date unless the operation named one, so creationDate read null and saved files had no date.",
+  "after": "A comment or reply write that names no date is stamped with the current time, to the second, when it is planned on the authoring host, the same way tracked changes are stamped. The date travels in the existing comment write.",
+  "reason": "The comment write already carries an optional date field, and released participants already store and read it. This change only fills that existing field when the caller left it empty. It adds no stored field, operation, or journal primitive.",
+  "tests": ["packages/editor-api/src/runtime/__tests__/runtime-comment-dates.test.ts"],
+  "changeset": "automation-comment-dates",
+  "migration": null
+}

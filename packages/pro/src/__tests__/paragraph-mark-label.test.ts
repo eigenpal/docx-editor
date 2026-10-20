@@ -13,7 +13,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, revisionItemsOf, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { revisionLabelKey } from '../react/review-labels.ts';
+import {
+  revisionItemCountSuffix,
+  revisionItemLabelKey,
+  revisionLabelKey,
+} from '../react/review-labels.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -51,6 +55,12 @@ describe('a paragraph mark card names its own decision', () => {
     expect(revisionLabelKey(item.revisionKind, item.markDirection)).toBe(
       'revisions.paragraphMarkInserted'
     );
+    expect(revisionLabelKey(item.revisionKind, item.markDirection, 4)).toBe(
+      'revisions.paragraphMarksInserted'
+    );
+    const grouped = { ...item, ranges: [item.ranges[0]!, item.ranges[0]!] };
+    expect(revisionItemLabelKey(grouped)).toBe('revisions.paragraphMarksInserted');
+    expect(revisionItemCountSuffix(grouped)).toBe(' (2)');
   });
 
   test('the two halves of a move are opposite decisions, and read that way', () => {

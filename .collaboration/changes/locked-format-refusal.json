@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A refused text formatting command returned ok with no change.",
+  "after": "A refused text formatting command returns ok: false, and can() reports a selection that reaches a content lock before the write.",
+  "reason": "Only the local command result changes. The store already refused the transaction, so no operation, shared node, or package serialization changes.",
+  "tests": ["packages/core/src/editor/__tests__/content-lock-formatting.test.ts"],
+  "changeset": "locked-format-refusal",
+  "migration": null
+}

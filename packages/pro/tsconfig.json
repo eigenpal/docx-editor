@@ -4,9 +4,10 @@
     // `paths` below, and they use ES2022 features (`Array.prototype.at`, `Error.cause`).
     // An ES2020 floor only appears to work: `@types/bun` pulls in `@types/node`, whose
     // `compatibility/indexable.d.ts` back-declares `.at` for older libs, so the gap hides
-    // until something type-checks without those ambient types — such as the dts build.
+    // until something type-checks without those ambient types.
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -19,8 +20,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "allowImportingTsExtensions": true,
-    "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"],
+      "@docx-editor.dev/i18n/*": ["../i18n/src/*.ts"],
       // core's and react's export maps point at dist, which typecheck never builds.
       // Map every subpath this package reaches for to source, or the same type arrives
       // under two identities depending on whether a build happens to be lying around.
@@ -43,6 +45,8 @@
       ],
       "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
       "@docx-editor.dev/editor-api": ["../editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/browser": ["../editor-api/src/browser.ts"],
+      "@docx-editor.dev/editor-api/agent": ["../editor-api/src/agent.ts"],
       "@docx-editor.dev/react": ["../react/src/index.ts"],
       "@docx-editor.dev/vue": ["../vue/src/index.ts"]
     }
@@ -59,6 +63,15 @@
     "src/__tests__/collaboration-presence-ui-vue.test.ts",
     "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-sidebar-vue.test.ts",
+    "src/__tests__/review-refusal-ui-vue.test.ts",
+    "src/__tests__/review-compact-card-vue.test.ts",
+    "src/__tests__/review-rail-metrics-vue.test.ts",
+    "src/__tests__/review-reply-author-vue.test.ts",
+    "src/__tests__/review-adopt-vue.test.ts",
+    "src/__tests__/review-region-vue.test.ts",
+    "src/__tests__/formatting-page-balloon-vue.test.ts",
+    "src/__tests__/review-balloons-vue.test.ts",
+    "src/__tests__/review-draft-position-vue.test.ts",
     "src/__tests__/review-vue-harness.ts",
     "src/__tests__/use-collaboration-participants-vue.test.ts",
     "src/__tests__/use-document-collaboration-vue.test.ts",

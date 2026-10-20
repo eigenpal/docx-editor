@@ -3,7 +3,6 @@
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
-import { hasAnyComment } from './comment-reads.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { segmentsOf } from './tree-op-segments.ts';
@@ -117,12 +116,12 @@ function subtreeHasCommentMarker(
  * rather than skipping it. The reap is itself a diff and does nothing when nothing was emptied.
  */
 export function deleteMayEmptyCommentRange(
-  pkg: OoxmlPackage,
+  anyComment: () => boolean,
   part: OoxmlPart,
   op: Extract<TreeDocOp, { op: 'deleteText' | 'deleteBlock' }>,
   seenTargets: Set<string>
 ): boolean {
-  if (!hasAnyComment(pkg)) return false;
+  if (!anyComment()) return false;
   const targetId = op.op === 'deleteText' ? op.paragraphId : op.blockId;
   if (seenTargets.has(targetId)) return true;
   seenTargets.add(targetId);
@@ -188,3 +187,27 @@ function resolveInternalStoryPart(
   }
   return { ok: true, partName: part.name, part };
 }
+
+/** Revision ops whose result can remove a note reference along with the content it sits in. */
+export const RESOLUTION_OPS: ReadonlySet<string> = new Set([
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
+]);
+
+/**
+ * Ops that remove whole blocks without naming one, so no cheap subtree probe exists.
+ *
+ * Row and column deletion take a table id and carry away every cell paragraph under it —
+ * comment range markers included. Gated by kind rather than by content: the reap they open is
+ * a before/after diff and finds nothing when the table held no comment.
+ */
+export const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
+  'authorTable',
+  'deleteTableRow',
+  'deleteTableColumn',
+  'mergeTableCells',
+  'removeContentControl',
+  'removeRepeatingSectionItem',
+]);

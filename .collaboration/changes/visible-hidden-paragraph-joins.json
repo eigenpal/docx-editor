@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Visible paragraphs with only hidden marks retain separate display lines.",
+  "after": "Compatible body paragraphs share display flow across visible hidden marks.",
+  "reason": "Only display grouping changes. Canonical paragraphs, operations, and collaboration records remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/style-separator-flow.test.ts"],
+  "changeset": "visible-hidden-paragraph-joins",
+  "migration": null
+}

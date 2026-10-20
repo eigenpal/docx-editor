@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Structural table and section revisions can remain unresolved, and cell geometry and merge content are not transformed by the shared resolver.",
+  "after": "The resolver supports structural property history, independent row and cell decisions, and merge/grid transformations with selected-set dependency and protection checks.",
+  "reason": "Operations produce the existing canonical primitive journals. No stored schema or replication format changes; peers replay the resulting tree edits rather than rerunning revision decisions.",
+  "tests": [
+    "packages/core/src/store/__tests__/structural-revision-support.test.ts",
+    "packages/core/src/store/__tests__/revision-table-geometry.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-revisions.test.ts"
+  ],
+  "changeset": "structural-table-revisions",
+  "migration": null
+}

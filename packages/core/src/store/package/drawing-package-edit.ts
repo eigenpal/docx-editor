@@ -6,6 +6,7 @@
 import {
   nextDenseDecimalId,
   nextStripedDecimalId,
+  partNumberCandidates,
   resolveAllocationActor,
 } from './actor-scoped-ids.ts';
 import { resolveContentType } from './content-types.ts';
@@ -17,7 +18,7 @@ import {
   type ImageDecodePort,
   type SupportedImageMime,
 } from './image-resources.ts';
-import { projectDrawingsInPackage } from './drawing-projection.ts';
+import { canonicalMediaReferenceCount } from './canonical-media-references.ts';
 import { resolveImageResourceLimits } from '../runtime/limits.ts';
 import {
   readOoxmlPart,
@@ -33,7 +34,7 @@ import {
   withRelationship,
   withRelationshipsPartFor,
 } from './package-edit.ts';
-import { IMAGE_RELATIONSHIP_TYPE, resolveImageRelationship } from './relationships.ts';
+import { IMAGE_RELATIONSHIP_TYPE } from './relationships.ts';
 import { withoutContentTypeOverride } from './hf-lifecycle-shell.ts';
 import { sha256FontBytes as sha256Bytes } from './sha256.ts';
 import {
@@ -41,6 +42,7 @@ import {
   recordDeleteBinary,
   recordDeleteRelationship,
   recordPutBinary,
+  recordPutContentTypeOverride,
   runWithoutJournalCapture,
 } from './canonical-primitive-capture.ts';
 
@@ -210,10 +212,15 @@ function partPresent(pkg: OoxmlPackage, partName: string): boolean {
   return false;
 }
 
-function storagePartName(canonical: string, pkg: OoxmlPackage): string {
-  for (const name of [...pkg.partBytes.keys(), ...pkg.parts.keys()]) {
-    if (name.startsWith('/')) return canonical;
+function usesAbsolutePartNames(pkg: OoxmlPackage): boolean {
+  for (const map of [pkg.partBytes, pkg.parts]) {
+    for (const name of map.keys()) if (name.startsWith('/')) return true;
   }
+  return false;
+}
+
+function storagePartName(canonical: string, pkg: OoxmlPackage): string {
+  if (usesAbsolutePartNames(pkg)) return canonical;
   return canonical.startsWith('/') ? canonical.slice(1) : canonical;
 }
 
@@ -260,6 +267,9 @@ export async function validateEmbeddedImageForCommit(
   mime: SupportedImageMime,
   limits: ReturnType<typeof resolveImageResourceLimits> = resolveImageResourceLimits()
 ): Promise<Readonly<{ ok: true; bytes: Uint8Array } | { ok: false; reason: 'invalid-image' }>> {
+  if (bytes.byteLength === 0 || bytes.byteLength > limits.maxEncodedBytes) {
+    return { ok: false, reason: 'invalid-image' };
+  }
   const snapshotted = snapshotPartBytes(bytes);
   if (!validateEmbeddedImageBytes(snapshotted, mime)) {
     return { ok: false, reason: 'invalid-image' };
@@ -287,7 +297,7 @@ export async function validateEmbeddedImageForCommit(
 }
 
 function allocateMediaPartName(pkg: OoxmlPackage, ext: string): string | null {
-  for (let index = 1; index <= Number.MAX_SAFE_INTEGER; index += 1) {
+  for (const index of partNumberCandidates(Number.MAX_SAFE_INTEGER)) {
     const canonical = `/word/media/image${index}.${ext}`;
     if (!partPresent(pkg, canonical)) return storagePartName(canonical, pkg);
   }
@@ -307,22 +317,10 @@ function drawingReferencesRelationship(
   ownerPart: string,
   relationshipId: string
 ): boolean {
-  return projectDrawingsInPackage(pkg).some((projection) => {
-    if (projection.ownerPartName !== ownerPart) return false;
-    const embed = projection.picture?.embeddedRelationshipId;
-    const link = projection.picture?.linkedRelationshipId;
-    return embed === relationshipId || link === relationshipId;
-  });
-}
-
-function resolvedInternalMediaPart(
-  pkg: OoxmlPackage,
-  ownerPart: string,
-  relationshipId: string
-): string | null {
-  const records = pkg.relationships.get(ownerPart) ?? [];
-  const resolved = resolveImageRelationship(records, ownerPart, relationshipId);
-  return resolved.mode === 'internal' ? resolved.partName : null;
+  const part = pkg.parts.get(ownerPart);
+  if (!part) return true;
+  const references = canonicalMediaReferenceCount(part.root, new Set([relationshipId]));
+  return references.count > 0 || references.truncated;
 }
 
 function isPartReferencedByAnyInternalRelationship(pkg: OoxmlPackage, partName: string): boolean {
@@ -338,16 +336,28 @@ function isPartReferencedByAnyInternalRelationship(pkg: OoxmlPackage, partName: 
   return false;
 }
 
-/** Package-wide live drawing references to a media part through owner-scoped relationships. */
+/** Authored media references include preserved VML and unselected compatibility branches. */
 export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): number {
   const key = canonicalPartKey(partName);
   if (key === null) return 0;
   let count = 0;
-  for (const projection of projectDrawingsInPackage(pkg)) {
-    const embedId = projection.picture?.embeddedRelationshipId;
-    if (!embedId) continue;
-    const resolvedPart = resolvedInternalMediaPart(pkg, projection.ownerPartName, embedId);
-    if (resolvedPart !== null && canonicalPartKey(resolvedPart) === key) count += 1;
+  for (const [ownerPart, relationships] of pkg.relationships) {
+    const ids = new Set<string>();
+    for (const relationship of relationships) {
+      if (relationship.targetMode === 'External' || relationship.type !== IMAGE_RELATIONSHIP_TYPE)
+        continue;
+      const resolved = resolveInternalTarget(ownerPart, relationship.rawTarget);
+      if (resolved.ok && canonicalPartKey(resolved.partName) === key) {
+        ids.add(relationship.id);
+      }
+    }
+    if (ids.size === 0) continue;
+    const part = pkg.parts.get(ownerPart);
+    if (!part) return Math.max(1, count);
+    const references = canonicalMediaReferenceCount(part.root, ids);
+    count += references.count;
+    // A bounded scan cannot prove a resource orphaned after truncation.
+    if (references.truncated) return Math.max(1, count);
   }
   return count;
 }
@@ -402,6 +412,9 @@ export function withBinaryPart(
       size: copied.byteLength,
       mediaType: contentType,
     });
+    // The override was written with capture off, beside the bytes. A peer builds its content
+    // types from recorded overrides only, so without this record it held the bytes untyped.
+    recordPutContentTypeOverride(normalized.partName, contentType);
   }
   return next;
 }
@@ -499,18 +512,16 @@ export function withBinaryParts(
   const withBytes = runWithoutJournalCapture(() => {
     const partBytes = new Map(pkg.partBytes);
     const parts = new Map(pkg.parts);
+    const absoluteNames = usesAbsolutePartNames(pkg);
+    const replacedKeys = new Set<string>();
     for (const addition of additions) {
       const normalized = normalizePartName(addition.partName);
       if (!normalized.ok) continue;
-      const storedName = storagePartName(normalized.partName, pkg);
+      const storedName = absoluteNames ? normalized.partName : normalized.partName.slice(1);
       const copied = snapshotPartBytes(addition.bytes);
       partBytes.set(storedName, copied);
       const storedKey = canonicalPartKey(storedName);
-      if (storedKey !== null) {
-        for (const name of [...parts.keys()]) {
-          if (canonicalPartKey(name) === storedKey) parts.delete(name);
-        }
-      }
+      if (storedKey !== null) replacedKeys.add(storedKey);
       overrides.push([normalized.partName, addition.contentType]);
       if (capture) {
         recorded.push({
@@ -520,6 +531,10 @@ export function withBinaryParts(
           mediaType: addition.contentType,
         });
       }
+    }
+    for (const name of parts.keys()) {
+      const key = canonicalPartKey(name);
+      if (key !== null && replacedKeys.has(key)) parts.delete(name);
     }
     return Object.freeze({ ...pkg, partBytes, parts });
   });
@@ -550,6 +565,7 @@ const RELATIONSHIPS_NAMESPACE_URI =
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 export interface InlinePictureDrawingInput {
+  readonly lockAspectRatio?: boolean;
   readonly docPrId: number;
   readonly relationshipId: string;
   readonly extentEmu: { readonly cx: number; readonly cy: number };
@@ -594,7 +610,9 @@ export function buildInlinePictureDrawing(input: InlinePictureDrawingInput): Oox
     '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
     `<wp:extent cx="${cx}" cy="${cy}"/>` +
     `<wp:docPr ${docPrParts.join(' ')}>${hlinkChild}</wp:docPr>` +
-    '<wp:cNvGraphicFramePr/>' +
+    (input.lockAspectRatio
+      ? '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+      : '<wp:cNvGraphicFramePr/>') +
     `<a:graphic><a:graphicData uri="${PIC_URI}">` +
     '<pic:pic>' +
     '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>' +

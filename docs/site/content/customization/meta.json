@@ -1,0 +1,16 @@
+{
+  "title": "Customization",
+  "pages": [
+    "index",
+    "appearance",
+    "layout",
+    "toolbar",
+    "menus",
+    "dialogs",
+    "tracked-changes",
+    "review-cards",
+    "document-styles",
+    "fonts",
+    "language"
+  ]
+}

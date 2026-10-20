@@ -45,11 +45,8 @@ export type ReviewRevisionKind =
   | 'insert'
   | 'delete'
   /**
-   * A deletion and an insertion that are one edit: text typed over a selection.
-   *
-   * Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-   * without the other is never what the reviewer meant — accepting the deletion alone
-   * leaves the replacement text unproposed, rejecting it alone leaves both.
+   * A combined deletion and insertion decision. The built-in reader lists them separately,
+   * unless a review query asks to pair replacements or a custom review provider combines them.
    */
   | 'replace'
   | 'moveFrom'
@@ -69,21 +66,58 @@ export type ReviewRevisionKind =
  */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
-  /** Stable across renders and unique per DECISION, not per site. */
+  /** Stable across renders and unique per decision within this editor instance. */
   readonly id: string;
   /** The payload `acceptRevision` / `rejectRevision` take. */
   readonly address: RevisionAddress;
   /**
    * EVERY address this decision covers, `address` first.
    *
-   * More than one only for a replacement, whose halves a foreign editor may have written
-   * as two independent revisions. Accept and reject walk all of them in one transaction:
-   * resolving one half and leaving the other is a state no reviewer asked for.
+   * Adjacent text fragments, table fragments, and formatting changes can combine multiple
+   * original revisions into one decision. Review commands resolve the complete decision
+   * in one transaction while preserving independent changes outside the group.
    */
   readonly addresses: readonly RevisionAddress[];
   /** The words a replacement removes. Empty for every other kind. */
   readonly replacedText: string;
   readonly revisionKind: ReviewRevisionKind;
+  /** OOXML property-change element, used to resolve independently numbered formatting kinds. */
+  readonly formattingKind?: string;
+  /** Distinct structural operations covered by this decision, in document order. */
+  readonly structuralChanges?: readonly (
+    | 'rowInsert'
+    | 'rowDelete'
+    | 'cellInsert'
+    | 'cellDelete'
+    | 'cellMerge'
+    | 'numberingInsert'
+  )[];
+  /** Changed direct formatting values, ready for localized review summaries. */
+  readonly formattingChanges?: readonly {
+    readonly property:
+      | 'bold'
+      | 'italic'
+      | 'underline'
+      | 'strike'
+      | 'fontFamily'
+      | 'fontSize'
+      | 'color'
+      | 'alignment'
+      | 'leftIndent'
+      | 'rightIndent'
+      | 'firstLineIndent'
+      | 'hangingIndent'
+      | 'spaceBefore'
+      | 'spaceAfter'
+      | 'direction';
+    /**
+     * New direct value; null means inherit. Sizes and distances are in points. A direction is
+     * `rtl` or `ltr`.
+     */
+    readonly value: string | null;
+  }[];
+  /** Newly applied proofing language codes in a tracked formatting change. */
+  readonly formattingLanguages?: readonly string[];
   /**
    * WHICH decision a `paragraphMark` records, absent for every other kind.
    *
@@ -188,7 +222,8 @@ export interface ReviewCustomItem {
    *
    * False for a definition with no `reviewCard`: the item exists so the chip's own surfaces can
    * read `attrs`, `text` and `data` off it, and the rail leaves it out. A surface listing cards
-   * filters on this rather than on an empty `title`.
+   * filters on this rather than on an empty `title`. An uncarded node never becomes the active
+   * review item, so it never shows the active highlight.
    */
   readonly carded: boolean;
   /** Card title, from the definition's `reviewCard` hook. Empty when `carded` is false. */
@@ -245,6 +280,8 @@ export interface ReviewModelInput {
    * queue that only walked the body silently hid it from the rail AND from Accept All.
    */
   readonly furnitureParts?: readonly OoxmlPart[] | undefined;
+  /** Shared style definitions. Their revisions have no paragraph range. */
+  readonly stylesPart?: OoxmlPart | undefined;
   /** `word/comments.xml`, absent when the package has none. */
   readonly commentsPart?: OoxmlPart | undefined;
   /** `word/commentsExtended.xml`, absent when the package has none. */
@@ -283,6 +320,58 @@ export interface ReviewModelInput {
 /** The stable key a surface uses for the active item and for a React list. */
 export function reviewItemKey(item: ReviewItem): string {
   return `${item.kind}-${item.id}`;
+}
+
+/** Store revision ids start with their kind and a dash, so this prefix cannot collide. */
+export const REPLACEMENT_PAIR_ID_PREFIX = 'replace:';
+
+/** The id a paired replacement item carries for its deletion and insertion halves. */
+export function replacementPairId(deletionId: string, insertionId: string): string {
+  return `${REPLACEMENT_PAIR_ID_PREFIX}${deletionId}+${insertionId}`;
+}
+
+/**
+ * Whether a deletion and the insertion after it read as one replacement: the same author,
+ * review state and nesting, and the deletion ends exactly where the insertion starts.
+ */
+export function isReplacementPair(
+  deletion: ReviewRevisionItem,
+  insertion: ReviewRevisionItem
+): boolean {
+  const end = deletion.ranges[deletion.ranges.length - 1];
+  const start = insertion.ranges[0];
+  return (
+    deletion.revisionKind === 'delete' &&
+    insertion.revisionKind === 'insert' &&
+    deletion.author === insertion.author &&
+    deletion.readOnly === insertion.readOnly &&
+    deletion.nesting === insertion.nesting &&
+    end !== undefined &&
+    start !== undefined &&
+    end.partName === start.partName &&
+    end.end.paragraphId === start.start.paragraphId &&
+    end.end.offset === start.start.offset
+  );
+}
+
+/** What a review key names, or null for text no review queue produces. */
+export type ParsedReviewItemKey =
+  | { readonly kind: 'revision' | 'comment' | 'custom'; readonly id: string }
+  | { readonly kind: 'replacement'; readonly id: string; readonly halves: string };
+
+/**
+ * Split a key from {@link reviewItemKey} into its kind and id. A paired replacement keeps its
+ * joined halves, because the store ids on either side of `+` can themselves contain `+`.
+ */
+export function parseReviewItemKey(key: string): ParsedReviewItemKey | null {
+  const dash = key.indexOf('-');
+  if (dash <= 0) return null;
+  const kind = key.slice(0, dash);
+  const id = key.slice(dash + 1);
+  if (id.length === 0) return null;
+  if (kind === 'revision' && id.startsWith(REPLACEMENT_PAIR_ID_PREFIX))
+    return { kind: 'replacement', id, halves: id.slice(REPLACEMENT_PAIR_ID_PREFIX.length) };
+  return kind === 'revision' || kind === 'comment' || kind === 'custom' ? { kind, id } : null;
 }
 
 /** Every range a decision touches. One card can cover several, in different paragraphs. */
@@ -451,6 +540,105 @@ export function reviewItemsAt(
       return 0;
     })
     .map((entry) => entry.item);
+}
+
+/**
+ * Every item a SELECTION is in, innermost first: {@link reviewItemsAt} at the head, keeping only
+ * the items the selection shares characters with.
+ *
+ * The head alone is the caret rule, and a caret counts both ends of a range. A range selection
+ * is not a caret: its head sits on the selection's own boundary. Selecting a word that ends
+ * where an insertion starts put the head at the insertion's first offset, and the insertion
+ * lit up as active although none of its characters were selected. A collapsed selection keeps
+ * the caret rule unchanged.
+ */
+export function reviewItemsAtSelection(
+  items: readonly ReviewItem[],
+  anchor: ReviewPosition,
+  head: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): ReviewItem[] {
+  // One render asks this twice for the same caret (the active key, then the highlights), and
+  // each answer walks every range of every item.
+  const last = selectionAnswers.get(items);
+  if (
+    last !== undefined &&
+    last.order === order &&
+    // The surface's index moves in place across a paragraph split or join.
+    last.orderSize === order.size &&
+    samePosition(last.anchor, anchor) &&
+    samePosition(last.head, head)
+  ) {
+    return [...last.answer];
+  }
+  const answer = itemsAtSelection(items, anchor, head, order);
+  selectionAnswers.set(items, { order, orderSize: order.size, anchor, head, answer });
+  return [...answer];
+}
+
+/** The last answer per queue; weak, so a closed document's queue takes its answer with it. */
+const selectionAnswers = new WeakMap<
+  readonly ReviewItem[],
+  {
+    readonly order: ReadonlyMap<string, number>;
+    readonly orderSize: number;
+    readonly anchor: ReviewPosition;
+    readonly head: ReviewPosition;
+    readonly answer: readonly ReviewItem[];
+  }
+>();
+
+function samePosition(a: ReviewPosition, b: ReviewPosition): boolean {
+  return a.paragraphId === b.paragraphId && a.offset === b.offset;
+}
+
+function itemsAtSelection(
+  items: readonly ReviewItem[],
+  anchor: ReviewPosition,
+  head: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): ReviewItem[] {
+  const covering = reviewItemsAt(items, head, order);
+  const direction = comparePositions(anchor, head, order);
+  if (direction === null || direction === 0) return covering;
+  const [from, to] = direction < 0 ? [anchor, head] : [head, anchor];
+  return covering.filter((item) =>
+    reviewItemRanges(item).some((range) => rangeSharesSelection(range, from, to, order))
+  );
+}
+
+/** Document order of two positions, or null when either paragraph is outside `order`. */
+function comparePositions(
+  a: ReviewPosition,
+  b: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): number | null {
+  const first = order.get(a.paragraphId);
+  const second = order.get(b.paragraphId);
+  if (first === undefined || second === undefined) return null;
+  return first !== second ? first - second : a.offset - b.offset;
+}
+
+/**
+ * Whether a range and the selection `[from, to)` share at least one character.
+ *
+ * A point anchor counts when it sits inside the selection or at its start. The point decorates
+ * the position after it, such as a tracked paragraph mark at the paragraph end, so a selection
+ * that stops at that offset does not include it.
+ */
+function rangeSharesSelection(
+  range: ReviewRange,
+  from: ReviewPosition,
+  to: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): boolean {
+  const startVsTo = comparePositions(range.start, to, order);
+  const endVsFrom = comparePositions(range.end, from, order);
+  if (startVsTo === null || endVsFrom === null) return false;
+  if (comparePositions(range.start, range.end, order) === 0) {
+    return startVsTo < 0 && endVsFrom >= 0;
+  }
+  return startVsTo < 0 && endVsFrom > 0;
 }
 
 /**

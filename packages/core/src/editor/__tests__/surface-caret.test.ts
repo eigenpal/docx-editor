@@ -28,6 +28,10 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 const NUM = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 const NUMBERING =
   `<w:numbering xmlns:w="${W}">` +
@@ -42,6 +46,7 @@ function docx(body: string, withNumbering = false): Uint8Array {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         (withNumbering
           ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
           : '') +
@@ -53,13 +58,14 @@ function docx(body: string, withNumbering = false): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/>` +
+        (withNumbering ? `<Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/>` : '') +
+        '</Relationships>'
+    ),
   };
-  if (withNumbering) {
-    files['word/numbering.xml'] = strToU8(NUMBERING);
-    files['word/_rels/document.xml.rels'] = strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/></Relationships>`
-    );
-  }
+  if (withNumbering) files['word/numbering.xml'] = strToU8(NUMBERING);
   return zipSync(files);
 }
 
@@ -113,6 +119,60 @@ const geometryOf = (element: HTMLElement) => ({
 });
 
 describe('the painted caret', () => {
+  test('Enter sizes an empty paragraph caret to the format typing will inherit', () => {
+    const { surface, container } = mount(
+      '<w:p><w:r><w:rPr><w:sz w:val="72"/><w:b/></w:rPr><w:t>Title</w:t></w:r></w:p>'
+    );
+    try {
+      putCaret(surface, 5);
+      const originalHeight = caretElement(container)!.style.height;
+      surface.splitParagraph();
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      const emptyPosition = surface.state().selection.head;
+      expect(caretAt(surface.layout(), emptyPosition)!.height).toBeCloseTo(
+        parseFloat(originalHeight)
+      );
+      putCaret(surface, 2, 0);
+      surface.setSelection({ anchor: emptyPosition, head: emptyPosition });
+      expect(surface.formatting().fontSizeHalfPoints).toBe(72);
+      expect(surface.formatting().bold).toBe(true);
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.splitParagraph();
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.type('More');
+      expect(caretElement(container)!.style.height).toBe(originalHeight);
+      surface.splitParagraph();
+      surface.setRunProperty('sz', { val: '48' });
+      const resizedHeight = caretElement(container)!.style.height;
+      expect(parseFloat(resizedHeight)).toBeLessThan(parseFloat(originalHeight));
+      surface.type('Smaller');
+      expect(caretElement(container)!.style.height).toBe(resizedHeight);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('a pending font size immediately resizes a nonempty caret on the text baseline', () => {
+    const { surface, container } = mount(
+      '<w:p><w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>Large</w:t></w:r></w:p>'
+    );
+    try {
+      putCaret(surface, 5);
+      const originalHeight = parseFloat(caretElement(container)!.style.height);
+      surface.setRunProperty('sz', { val: '36' });
+      const pending = geometryOf(caretElement(container)!);
+      expect(parseFloat(pending.height)).toBeCloseTo(originalHeight / 2);
+      surface.type('x');
+      const typed = geometryOf(caretElement(container)!);
+      expect(typed.height).toBe(pending.height);
+      expect(typed.top).toBe(pending.top);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('it paints at the geometry layout published, not at a measured one', () => {
     const { surface, container } = mount(paragraph('hello world'));
     putCaret(surface, 6);
@@ -181,6 +241,57 @@ describe('the painted caret', () => {
     });
     expect(caretElement(container)).toBeNull();
     expect(pages.style.caretColor).toBe('');
+  });
+
+  test('a geometry read inside a commit paints once, with the post-edit caret', () => {
+    const { surface, container, pages } = mount(paragraph('hello') + paragraph('world'));
+    // What the review module's snapshot does from its document-change handler: read layout
+    // while the commit is still applying, before the surface has installed the new caret.
+    const unsubscribe = surface.session.subscribe(() => void surface.layout());
+    const removed: string[] = [];
+    const removeProperty = pages.style.removeProperty;
+    pages.style.removeProperty = (name: string) => {
+      removed.push(name);
+      return removeProperty.call(pages.style, name);
+    };
+    try {
+      putCaret(surface, 0, 1);
+      surface.deleteBackward();
+      // Painting from inside the commit mirrored the PRE-edit caret, which named the paragraph
+      // the join had just removed: the caret came down, the native one came back, and the
+      // commit's own paint put both back up — a full-document style recalculation each way.
+      expect(removed).not.toContain('caret-color');
+      expect(caretElement(container)).not.toBeNull();
+      expect(pages.style.caretColor).toBe('transparent');
+      expect(surface.session.paragraphIds()).toHaveLength(1);
+    } finally {
+      unsubscribe();
+      pages.style.removeProperty = removeProperty;
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('a commit whose listener throws still paints what a reader inside it published', () => {
+    const { surface, container, pages } = mount(paragraph('hello') + paragraph('world'));
+    putCaret(surface, 0, 1);
+    const unsubscribeReader = surface.session.subscribe(() => void surface.layout());
+    const unsubscribeThrower = surface.session.subscribe(() => {
+      throw new Error('host handler failed');
+    });
+    try {
+      expect(() => surface.deleteBackward()).toThrow('host handler failed');
+      // The reader published the joined paragraph and the commit never reached its own
+      // paint; the pages must not keep showing the two paragraphs the model no longer has.
+      expect(surface.session.paragraphIds()).toHaveLength(1);
+      expect(pages.querySelectorAll('.docx-paragraph-fragment')).toHaveLength(1);
+      expect(pages.textContent).toContain('helloworld');
+    } finally {
+      unsubscribeReader();
+      unsubscribeThrower();
+      surface.destroy();
+      container.remove();
+    }
   });
 
   test('a range selection draws the browser highlight, never an insertion point', () => {
@@ -320,3 +431,47 @@ describe('the caret on an empty paragraph', () => {
     expect(caretElement(container)).not.toBeNull();
   });
 });
+
+for (const alignment of ['top', 'center', 'bottom']) {
+  test(`Enter and typing keep the caret inside a ${alignment}-aligned cell with hideMark`, () => {
+    const { surface, container } = mount(
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="1200"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:trHeight w:val="20"/></w:trPr>' +
+        `<w:tc><w:tcPr><w:vAlign w:val="${alignment}"/><w:hideMark/></w:tcPr>` +
+        paragraph('Example') +
+        '</w:tc></w:tr><w:tr><w:tc>' +
+        paragraph('Next row') +
+        '</w:tc></w:tr></w:tbl>'
+    );
+    try {
+      putCaret(surface, 7);
+      const check = () => {
+        const layout = surface.layout();
+        const caret = caretAt(layout, surface.state().selection.head)!;
+        const table = layout.pages[caret.pageIndex]!.fragments.find((f) => f.kind === 'table')!;
+        if (table.kind !== 'table') throw new Error('Expected table');
+        const cell = table.rows[0]!.cells[0]!;
+        expect(caret.height).toBeGreaterThan(0);
+        expect(caret.y).toBeGreaterThanOrEqual(cell.box.y);
+        expect(caret.y + caret.height).toBeLessThanOrEqual(cell.box.y + cell.box.height + 0.001);
+        const painted = caretElement(container)!;
+        expect(painted).not.toBeNull();
+        expect(
+          parseFloat(painted.style.top) + parseFloat(painted.style.height)
+        ).toBeLessThanOrEqual(cell.box.y + cell.box.height + 0.001);
+      };
+      for (let index = 0; index < 3; index += 1) {
+        surface.splitParagraph();
+        check();
+      }
+      for (const character of 'More text that wraps onto several lines') {
+        surface.type(character);
+        check();
+      }
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+}

@@ -253,6 +253,33 @@ describe('atomic UTF-16 addressing', () => {
     expect(serializeOoxmlPart(again).includes('<w:instrText>PAGE</w:instrText>')).toBe(true);
   });
 
+  test('formatting between simple fields preserves instruction and unrelated result formatting', () => {
+    const part = parse(
+      '<w:p><w:fldSimple w:instr="PAGE" w:dirty="true"><w:r><w:t/></w:r></w:fldSimple>' +
+        '<w:r><w:t> of </w:t></w:r>' +
+        '<w:fldSimple w:instr="NUMPAGES"><w:r><w:rPr><w:i/></w:rPr><w:t>12</w:t></w:r></w:fldSimple></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+    const formatted = applyTreeOp(part, {
+      op: 'setRunProperties',
+      paragraphId: paragraph.id,
+      start: 0,
+      end: 1,
+      properties: [{ localName: 'b', attributes: { val: '1' } }],
+    });
+    expect(formatted.ok).toBe(true);
+    if (!formatted.ok) return;
+    const xml = serializeOoxmlPart(reopen(formatted.part));
+    expect(xml).toContain('w:instr="PAGE"');
+    expect(xml).toContain('w:dirty="true"');
+    const fields = xml.match(/<w:fldSimple[^>]*>[\s\S]*?<\/w:fldSimple>/g)!;
+    expect(fields).toHaveLength(2);
+    expect(fields[0]).toContain('<w:b w:val="1"/>');
+    expect(fields[1]).toContain('<w:i/>');
+    expect(fields[1]).not.toContain('<w:b');
+    expect(fields[1]).toContain('<w:t>12</w:t>');
+  });
+
   test('caret segments have no interior offsets inside a field', () => {
     const part = parse(
       `<w:p><w:r><w:t>A</w:t>` +
@@ -431,6 +458,23 @@ describe('malformed demotion (fail-open)', () => {
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
     expect(pieces.map((p) => p.text)).toEqual(['A', '99', 'Z']);
     expect(pieces.every((p) => !p.projected)).toBe(true);
+  });
+
+  test('nested field result stays inside the outer field atom', () => {
+    const part = parse(
+      '<w:p><w:r><w:t>A</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>IF</w:instrText>' +
+        '<w:fldChar w:fldCharType="separate"/><w:t>outer </w:t>' +
+        '<w:fldChar w:fldCharType="begin"/><w:instrText>DATE</w:instrText>' +
+        '<w:fldChar w:fldCharType="separate"/><w:t>inner</w:t>' +
+        '<w:fldChar w:fldCharType="end"/><w:t> tail</w:t>' +
+        '<w:fldChar w:fldCharType="end"/></w:r>' +
+        '<w:r><w:t>Z</w:t></w:r></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(1);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}Z`);
   });
 
   test('begin without separate still keeps following run text', () => {

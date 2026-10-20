@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The top-level adapters did not pass a host image decoder to the editor root.",
+  "after": "Both adapters pass imageDecodePort to the existing root. Port replacement keeps the root's remount behavior.",
+  "reason": "The port converts local image resources. It adds no document operation, shared field, or collaboration format change. Saved source image bytes remain unchanged.",
+  "tests": [
+    "packages/react/test/image-decode-port-prop.test.tsx",
+    "packages/vue/test/image-decode-port-prop.test.ts"
+  ],
+  "changeset": "paired-image-decode-port",
+  "migration": null
+}

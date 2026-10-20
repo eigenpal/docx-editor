@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Cache tokens, font identities, and canonical fingerprints hashed with the pure-JavaScript SHA-256; a rejected comparator input reported only its type.",
+  "after": "The same SHA-256 digests come from the host's native hasher in Node and Bun and from the JavaScript block elsewhere; a rejected comparator input also names its key path.",
+  "reason": "SHA-256 is SHA-256: the native path is checked against a FIPS vector and the tests assert byte-identical output to the pure path, so every hash, fingerprint, and cache token is unchanged. The comparator change only extends an error message on inputs that were already rejected. No shared data, update, or fingerprint changes meaning.",
+  "tests": [
+    "packages/core/src/store/__tests__/sha256.test.ts",
+    "packages/core/src/store/__tests__/comparators.test.ts"
+  ],
+  "changeset": "native-sha256",
+  "migration": null
+}

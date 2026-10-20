@@ -101,6 +101,30 @@ function lvlRestartTriggerIlvl(targetIlvl: number, lvlRestart: number | undefine
   return triggerIlvl;
 }
 
+/** The counter values of one bag at one point of its walk. */
+export interface ListCounterSnapshot {
+  readonly counters: ReadonlyMap<string, readonly number[]>;
+  readonly initialized: ReadonlyMap<string, readonly boolean[]>;
+}
+
+const counterSnapshots = new WeakMap<
+  ListCounterState,
+  { save(): ListCounterSnapshot; load(snapshot: ListCounterSnapshot): void }
+>();
+
+/** @internal The values `state` holds now, for a later walk to resume from. */
+export function saveListCounters(state: ListCounterState): ListCounterSnapshot {
+  return counterSnapshots.get(state)!.save();
+}
+
+/** @internal Put `state` back to `snapshot`, taken from a bag over the same numbering. */
+export function loadListCounters(state: ListCounterState, snapshot: ListCounterSnapshot): void {
+  counterSnapshots.get(state)!.load(snapshot);
+}
+
+const copyArrays = <T>(source: ReadonlyMap<string, readonly T[]>): Map<string, T[]> =>
+  new Map([...source].map(([id, values]) => [id, values.slice()]));
+
 /**
  * Create a fresh counter bag for one story (body, or one header/footer part).
  */
@@ -131,7 +155,7 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
     return { counters, initialized, starts };
   };
 
-  return {
+  const state: ListCounterState = {
     advance(numId, ilvl) {
       if (ilvl < 0 || ilvl > 8) return null;
       if (numId.length === 0 || numId.length > 64) return null;
@@ -196,6 +220,17 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
       return advance;
     },
   };
+  counterSnapshots.set(state, {
+    save: () => ({ counters: copyArrays(byNumId), initialized: copyArrays(initializedByNumId) }),
+    load(snapshot) {
+      byNumId.clear();
+      for (const [id, values] of copyArrays(snapshot.counters)) byNumId.set(id, values);
+      initializedByNumId.clear();
+      for (const [id, values] of copyArrays(snapshot.initialized))
+        initializedByNumId.set(id, values);
+    },
+  });
+  return state;
 }
 
 /** Substitution-ready counter vectors, keyed on the advance results that produced them. */
@@ -241,14 +276,43 @@ function suppressNonDelimiterLvlText(lvlText: string): string {
 }
 
 /**
- * What composing a paragraph's FULL-CONTEXT number needs: the linked index its levels resolve
- * through and the substitution-ready counters captured when the paragraph was counted.
+ * What composing a paragraph's FULL-CONTEXT number needs: levels 0..8 of its `w:num`, resolved
+ * through the linked index when the paragraph was counted, and the substitution-ready counters.
+ *
+ * The levels, not the index: a list item outlives the numbering revision it was counted under
+ * (an unchanged item is reused), and holding the index kept one whole index per revision.
  */
 export interface FullContextNumberSource {
-  readonly index: NumberingIndex;
-  readonly numId: string;
+  readonly levels: readonly (NumberingLevel | null)[];
   readonly ilvl: number;
   readonly expandCounters: readonly number[];
+}
+
+const numberLevelsByIndex = new WeakMap<
+  NumberingIndex,
+  Map<string, readonly (NumberingLevel | null)[]>
+>();
+
+/** Levels 0..8 of `numId` in `index`, shared by every item of that list. */
+export function numberLevelsOf(
+  index: NumberingIndex,
+  numId: string
+): readonly (NumberingLevel | null)[] {
+  let byNum = numberLevelsByIndex.get(index);
+  if (!byNum) {
+    byNum = new Map();
+    numberLevelsByIndex.set(index, byNum);
+  }
+  let levels = byNum.get(numId);
+  if (!levels) {
+    const resolved: (NumberingLevel | null)[] = [];
+    for (let lvl = 0; lvl <= 8; lvl += 1) {
+      resolved.push(resolveNumberingLevel(index, numId, lvl)?.level ?? null);
+    }
+    levels = resolved;
+    byNum.set(numId, levels);
+  }
+  return levels;
 }
 
 /**
@@ -273,14 +337,14 @@ export function composeFullContextNumber(
   ownLevelOnly = false,
   suppressNonDelimiterText = false
 ): string | null {
-  const { index, numId, ilvl, expandCounters } = source;
+  const { ilvl, expandCounters } = source;
   if (ilvl < 0 || ilvl > 8) return null;
   const levels: (NumberingLevel | null)[] = [];
   const formats: string[] = [];
   for (let lvl = 0; lvl <= 8; lvl += 1) {
-    const resolved = resolveNumberingLevel(index, numId, lvl);
-    levels.push(lvl <= ilvl ? (resolved?.level ?? null) : null);
-    formats.push(resolved?.level.numFmt ?? 'decimal');
+    const resolved = source.levels[lvl] ?? null;
+    levels.push(lvl <= ilvl ? resolved : null);
+    formats.push(resolved?.numFmt ?? 'decimal');
   }
   const numbered = (level: NumberingLevel | null): level is NumberingLevel =>
     level !== null &&

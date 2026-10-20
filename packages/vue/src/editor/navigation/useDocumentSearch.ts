@@ -1,127 +1,154 @@
-import { computed, ref, watch, type ComputedRef } from 'vue';
+// The find half of the navigation pane, UI-free: a thin binding over the editor's shared
+// search session (`createDocumentSearch`). Every `useDocumentSearch` call and the packaged
+// Find pane drive the same session, so state set here shows in the pane and back.
+
+import { computed, shallowRef, toValue, watch, type ComputedRef } from 'vue';
+import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
+import {
+  createDocumentSearch,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
+  SEARCH_MATCH_LIMIT,
+  type DocumentSearch,
+  type DocumentSearchFindOptions,
+  type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
+  type DocumentSearchState,
+} from '@docx-editor.dev/core/editor';
 import { scopeDispose } from '../scope-dispose';
-import type { EditorSnapshot, TextMatch } from '@docx-editor.dev/core/contracts/editor';
+import type { MaybeRefOrGetter } from '../../maybe-ref-or-getter';
 import { useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
 
-/** @public */
-export const SEARCH_DEBOUNCE_MS = 150;
+export {
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
+  SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
+  type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
+};
 
-/** @public */
-export const SEARCH_MATCH_LIMIT = 2000;
+const IDLE_STATE: DocumentSearchState = Object.freeze({
+  query: '',
+  matchCase: false,
+  wholeWord: false,
+  matches: Object.freeze([]) as readonly TextMatch[],
+  truncated: false,
+  activeIndex: -1,
+  activeMatch: null,
+  isPending: false,
+});
 
-const EMPTY_MATCHES: readonly TextMatch[] = Object.freeze([]);
-const selectSnapshot = (snapshot: EditorSnapshot) => snapshot;
+/** How `useDocumentSearch` behaves. @public */
+export interface UseDocumentSearchOptions {
+  /**
+   * Which matches to mark: every match with the active one emphasized (`'all'`), only the
+   * active match (`'active'`), or none (`'none'`). Default: `'all'`.
+   */
+  readonly highlight?: DocumentSearchHighlight;
+}
 
-/** @public */
+/** What `useDocumentSearch` answers. @public */
 export interface UseDocumentSearchResult {
+  /** The text in the search box, updated synchronously as the user types. */
   readonly query: ComputedRef<string>;
+  /** Update the typed query. The search runs after a short debounce. */
   readonly setQuery: (query: string) => void;
+  /**
+   * Search now and return the matches. `selectFirst` selects the first match; `highlight`
+   * highlights the results until `clear()`, even without this hook's own request.
+   */
+  readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
   readonly matchCase: ComputedRef<boolean>;
   readonly setMatchCase: (value: boolean) => void;
   readonly wholeWord: ComputedRef<boolean>;
   readonly setWholeWord: (value: boolean) => void;
+  /** Matches for the last searched query, in document order. */
   readonly matches: ComputedRef<readonly TextMatch[]>;
+  /** The search stopped at its cap with matches still ahead, so a count reads "2000+". */
   readonly truncated: ComputedRef<boolean>;
+  /** Index of the current match, or `-1` before any navigation. */
   readonly activeIndex: ComputedRef<number>;
-  readonly goTo: (index: number) => void;
-  readonly next: () => void;
-  readonly previous: () => void;
+  /** The current match, or `null` before any navigation. */
+  readonly activeMatch: ComputedRef<TextMatch | null>;
+  /**
+   * Select a match by index and bring its page into view. Focus stays where it is, so a
+   * search box keeps it. Returns false for an index without a match.
+   */
+  readonly goTo: (index: number) => boolean;
+  /** Next / previous match, wrapping at the ends the way Word's arrows do. */
+  readonly next: () => boolean;
+  readonly previous: () => boolean;
+  /** Empty the query and drop the results, without changing the selection. */
   readonly clear: () => void;
+  /** Whether a typed query is waiting for its debounce to elapse. */
   readonly isPending: ComputedRef<boolean>;
 }
 
-/** @public */
-export function useDocumentSearch(): UseDocumentSearchResult {
+/**
+ * The editor's shared search, with no UI attached. The packaged Find pane uses the same
+ * session, so state set here shows there.
+ *
+ * @public
+ */
+export function useDocumentSearch(
+  options: MaybeRefOrGetter<UseDocumentSearchOptions> = {}
+): UseDocumentSearchResult {
   const editorRef = useDocxEditor();
-  const snapshot = useEditorState(selectSnapshot);
-
-  const query = ref('');
-  const runQuery = ref('');
-  const matchCase = ref(false);
-  const wholeWord = ref(false);
-  const matches = ref<readonly TextMatch[]>(EMPTY_MATCHES);
-  const activeIndex = ref(-1);
-
-  scopeDispose(
-    watch([query, runQuery], ([q, rq], _previous, onCleanup) => {
-      if (q === rq) return;
-      const timer = setTimeout(() => {
-        runQuery.value = q;
-      }, SEARCH_DEBOUNCE_MS);
-      onCleanup(() => clearTimeout(timer));
-    })
-  );
-
-  const options = computed(() => ({ matchCase: matchCase.value, wholeWord: wholeWord.value }));
+  // Shallow: the engine recognizes its own match objects, and a deep ref would hand it proxies.
+  const state = shallowRef<DocumentSearchState>(IDLE_STATE);
+  const session = shallowRef<DocumentSearch | null>(null);
 
   scopeDispose(
     watch(
-      [editorRef, runQuery, options, snapshot],
-      () => {
-        const editor = editorRef.value;
-        const rq = runQuery.value;
-        if (!editor || rq.length === 0) {
-          matches.value = EMPTY_MATCHES;
-          activeIndex.value = -1;
-          return;
-        }
-        const next = editor.findMatches(rq, options.value);
-        if (matches.value !== next) matches.value = next;
+      () => editorRef.value,
+      (editor, _previous, onCleanup) => {
+        const search = editor ? createDocumentSearch(editor) : null;
+        session.value = search;
+        state.value = search?.getState() ?? IDLE_STATE;
+        if (!search) return;
+        const off = search.subscribe(() => {
+          state.value = search.getState();
+        });
+        onCleanup(off);
       },
-      { flush: 'post' }
+      { immediate: true }
     )
   );
 
+  // Ask for highlights for as long as this consumer wants them.
   scopeDispose(
-    watch(matches, (next, prev) => {
-      if (prev !== next) {
-        activeIndex.value =
-          activeIndex.value >= 0 && activeIndex.value < next.length ? activeIndex.value : -1;
-      }
-    })
+    watch(
+      [session, () => toValue(options).highlight ?? 'all'],
+      ([search, mode], _previous, onCleanup) => {
+        if (!search || mode === 'none') return;
+        onCleanup(search.showHighlights(mode));
+      },
+      { immediate: true }
+    )
   );
 
-  const goTo = (index: number) => {
-    const match = matches.value[index];
-    if (!match || !editorRef.value) return;
-    editorRef.value.focus();
-    const result = editorRef.value.selectMatch(match);
-    if (result.ok) activeIndex.value = index;
-  };
-
-  const step = (delta: number) => {
-    if (matches.value.length === 0) return;
-    const from = activeIndex.value < 0 ? (delta > 0 ? -1 : 0) : activeIndex.value;
-    const next = (from + delta + matches.value.length) % matches.value.length;
-    goTo(next);
-  };
-
   return {
-    query: computed(() => query.value),
-    setQuery: (value: string) => {
-      query.value = value;
-    },
-    matchCase: computed(() => matchCase.value),
-    setMatchCase: (value: boolean) => {
-      matchCase.value = value;
-    },
-    wholeWord: computed(() => wholeWord.value),
-    setWholeWord: (value: boolean) => {
-      wholeWord.value = value;
-    },
-    matches: computed(() => matches.value),
-    truncated: computed(() => matches.value.length >= SEARCH_MATCH_LIMIT),
-    activeIndex: computed(() => activeIndex.value),
-    goTo,
-    next: () => step(1),
-    previous: () => step(-1),
-    clear: () => {
-      query.value = '';
-      runQuery.value = '';
-      matches.value = EMPTY_MATCHES;
-      activeIndex.value = -1;
-    },
-    isPending: computed(() => query.value !== runQuery.value),
+    query: computed(() => state.value.query),
+    setQuery: (query) => session.value?.setQuery(query),
+    find: (query, findOptions) => session.value?.find(query, findOptions) ?? IDLE_STATE.matches,
+    matchCase: computed(() => state.value.matchCase),
+    setMatchCase: (value) => session.value?.setMatchCase(value),
+    wholeWord: computed(() => state.value.wholeWord),
+    setWholeWord: (value) => session.value?.setWholeWord(value),
+    matches: computed(() => state.value.matches),
+    truncated: computed(() => state.value.truncated),
+    activeIndex: computed(() => state.value.activeIndex),
+    activeMatch: computed(() => state.value.activeMatch),
+    // No options: a handler such as `@click="search.next"` passes its event here.
+    goTo: (index) => session.value?.goTo(index) ?? false,
+    next: () => session.value?.next() ?? false,
+    previous: () => session.value?.previous() ?? false,
+    clear: () => session.value?.clear(),
+    isPending: computed(() => state.value.isPending),
   };
 }

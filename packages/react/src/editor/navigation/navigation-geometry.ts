@@ -113,3 +113,24 @@ export function navigationShift({
           reservation;
   return Math.ceil(Math.max(0, total - inlineStartReservation));
 }
+
+/**
+ * The narrowest page column, in px, an open pane must leave beside it.
+ *
+ * Below it a shift cannot help: a 390px phone viewport less the default 328px reservation
+ * leaves a 62px strip of page. There the pane overlays the page instead, at the viewport's
+ * full width less its inset on each side, and the page does not move.
+ */
+export const NAVIGATION_PANE_MIN_PAGE_ROOM = 320;
+
+/**
+ * Whether an open pane overlays the page rather than moving it: true when the viewport
+ * leaves less than {@link NAVIGATION_PANE_MIN_PAGE_ROOM} beside the reservation. Uses the
+ * viewport's client width only, never a padding the pane itself causes, so the answer cannot
+ * feed back into its own input. `false` for a viewport that has not been measured.
+ */
+export function navigationPaneOverlays(viewportWidth: number, reservation: number): boolean {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return false;
+  if (!Number.isFinite(reservation) || reservation <= 0) return false;
+  return viewportWidth - reservation < NAVIGATION_PANE_MIN_PAGE_ROOM;
+}

@@ -6,9 +6,11 @@ import type { DocumentStyleSummary } from '../lib/stylePreview';
 import type { FontOption } from '../lib/fontOptions';
 import type { ListState } from '../lib/listState';
 
-type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
+/** A paragraph alignment the legacy toolbar shows and sets. */
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
 
-type TableAction =
+/** A table command the legacy toolbar dispatches. */
+export type TableAction =
   | 'addRowAbove'
   | 'addRowBelow'
   | 'addColumnLeft'

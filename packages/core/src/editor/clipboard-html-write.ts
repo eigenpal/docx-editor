@@ -1,13 +1,13 @@
 // Serializes a clipboard fragment package — the miniature WordprocessingML OPC zip the copy
 // lane produces — into the visible half of the `text/html` flavour. Structure comes from the
 // canonical tree (headings, real lists, tables, anchors); formatting comes from a small
-// self-contained cascade over the FRAGMENT's own styles part, emitted as inline CSS so Word
-// and Google Docs need no stylesheet.
+// cascade over the FRAGMENT's styles part, emitted as inline CSS for external editors.
 //
 // Security posture: the fragment is read through the bounded `readOoxmlPackage` trust
 // boundary, and this writer is a pure string builder — no DOM APIs, no insertion sinks.
 // Every file-derived value is escaped or allowlist-validated before it reaches the output.
 
+import { hyphenDisplayOf } from '../layout/field-run-text.ts';
 import { readOoxmlPackage, type OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { resolveContentType } from '../store/package/content-types.ts';
 import {
@@ -22,7 +22,16 @@ import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { contentControlContentOf } from '../store/package/content-control-walk.ts';
+import { isFldSimple } from '../store/package/field-nodes.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
+import { equationHtml } from './clipboard-html-write-equations.ts';
+import { isOmmlEquationAtom } from '../store/package/omml-display.ts';
 import {
   foldAttribute,
   lastProperty,
@@ -45,6 +54,7 @@ import {
   findDescendant,
   isElement,
   parseIntValue,
+  parseTwipsValue,
   ptFromTwips,
   textUnder,
   wmlChild,
@@ -55,6 +65,7 @@ import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import { noteIdsOf, renderNoteList, shippedNoteIds } from './clipboard-html-write-notes.ts';
 import { renderHtmlTable } from './clipboard-html-write-table.ts';
+import { wordTabStopsCss } from './clipboard-html-tab-stops.ts';
 import {
   WORD_HIGHLIGHT_COLORS,
   WORD_JC_TO_TEXT_ALIGN,
@@ -182,7 +193,7 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
 
   const color = cssHexColor(foldAttribute(sources, 'color', 'val'));
   if (color) rules.push(`color:${color}`);
-  const spacing = parseIntValue(foldAttribute(sources, 'spacing', 'val'));
+  const spacing = parseTwipsValue(foldAttribute(sources, 'spacing', 'val'));
   if (spacing !== null) rules.push(`letter-spacing:${Math.round((spacing / 20) * 100) / 100}pt`);
 
   // Highlight wins over shading when both are present.
@@ -220,20 +231,27 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   return { css: rules.join(';'), vanish: false, vertAlign, lang, rtl };
 }
 
-function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolean): string {
+function paragraphCssOf(
+  sources: readonly OoxmlElement[],
+  omitLeftMargin: boolean,
+  rtl = false
+): string {
   const rules: string[] = [];
   const jc = wmlVal(lastProperty(sources, 'jc'));
   const align =
     jc !== undefined && Object.hasOwn(WORD_JC_TO_TEXT_ALIGN, jc)
       ? WORD_JC_TO_TEXT_ALIGN[jc]
       : undefined;
-  if (align) rules.push(`text-align:${align}`);
+  if (align)
+    rules.push(
+      `text-align:${rtl && align !== 'center' && align !== 'justify' ? (align === 'left' ? 'right' : 'left') : align}`
+    );
 
-  const before = parseIntValue(foldAttribute(sources, 'spacing', 'before'));
+  const before = parseTwipsValue(foldAttribute(sources, 'spacing', 'before'));
   if (before !== null && before >= 0) rules.push(`margin-top:${ptFromTwips(before)}`);
-  const after = parseIntValue(foldAttribute(sources, 'spacing', 'after'));
+  const after = parseTwipsValue(foldAttribute(sources, 'spacing', 'after'));
   if (after !== null && after >= 0) rules.push(`margin-bottom:${ptFromTwips(after)}`);
-  const line = parseIntValue(foldAttribute(sources, 'spacing', 'line'));
+  const line = parseTwipsValue(foldAttribute(sources, 'spacing', 'line'));
   const lineRule = foldAttribute(sources, 'spacing', 'lineRule');
   rules.push(...wordLineSpacingCss(line, lineRule));
 
@@ -247,16 +265,16 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   for (const source of sources) {
     const ind = wmlChild(source, 'ind');
     if (!ind) continue;
-    const leftValue = parseIntValue(
+    const leftValue = parseTwipsValue(
       attrOf(ind, 'left', WML_NAMESPACE_URI) ?? attrOf(ind, 'start', WML_NAMESPACE_URI)
     );
     if (leftValue !== null) left = leftValue;
-    const rightValue = parseIntValue(
+    const rightValue = parseTwipsValue(
       attrOf(ind, 'right', WML_NAMESPACE_URI) ?? attrOf(ind, 'end', WML_NAMESPACE_URI)
     );
     if (rightValue !== null) right = rightValue;
-    const hangingValue = parseIntValue(attrOf(ind, 'hanging', WML_NAMESPACE_URI));
-    const firstLineValue = parseIntValue(attrOf(ind, 'firstLine', WML_NAMESPACE_URI));
+    const hangingValue = parseTwipsValue(attrOf(ind, 'hanging', WML_NAMESPACE_URI));
+    const firstLineValue = parseTwipsValue(attrOf(ind, 'firstLine', WML_NAMESPACE_URI));
     if (hangingValue !== null) {
       hanging = hangingValue;
       firstLine = null;
@@ -265,49 +283,15 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
       hanging = null;
     }
   }
-  if (!omitLeftMargin && left !== null) rules.push(`margin-left:${ptFromTwips(left)}`);
-  if (right !== null) rules.push(`margin-right:${ptFromTwips(right)}`);
+  if (!omitLeftMargin && left !== null)
+    rules.push(`margin-${rtl ? 'right' : 'left'}:${ptFromTwips(left)}`);
+  if (right !== null) rules.push(`margin-${rtl ? 'left' : 'right'}:${ptFromTwips(right)}`);
   if (hanging !== null && hanging !== 0) rules.push(`text-indent:${ptFromTwips(-hanging)}`);
   else if (firstLine !== null && firstLine !== 0)
     rules.push(`text-indent:${ptFromTwips(firstLine)}`);
 
-  const tabs = lastProperty(sources, 'tabs');
-  if (tabs) {
-    const values: string[] = [];
-    for (const child of tabs.children) {
-      if (!isElement(child) || child.localName !== 'tab') continue;
-      const val = wmlVal(child);
-      const pos = parseIntValue(attributeValueOf(child, 'pos', WML_NAMESPACE_URI));
-      if (
-        pos === null ||
-        pos < 0 ||
-        (val !== 'left' &&
-          val !== 'center' &&
-          val !== 'right' &&
-          val !== 'decimal' &&
-          val !== 'bar')
-      ) {
-        continue;
-      }
-      const leader = wmlVal(child, 'leader');
-      // The read side accepts every token here, so the engine's own round trip
-      // keeps middleDot and heavy leaders too.
-      const cssLeader =
-        leader === 'dot'
-          ? 'dotted'
-          : leader === 'hyphen'
-            ? 'dashed'
-            : leader === 'underscore'
-              ? 'lined'
-              : leader === 'middleDot'
-                ? 'middledot'
-                : leader === 'heavy'
-                  ? 'heavy'
-                  : '';
-      values.push(`${val}${cssLeader ? ` ${cssLeader}` : ''} ${ptFromTwips(pos)}`);
-    }
-    if (values.length > 0) rules.push(`tab-stops:${values.join(' ')}`);
-  }
+  const tabStops = wordTabStopsCss(lastProperty(sources, 'tabs'));
+  if (tabStops) rules.push(tabStops);
 
   if (toggleOn(sources, 'pageBreakBefore')) rules.push('page-break-before:always');
   if (toggleOn(sources, 'keepNext')) rules.push('page-break-after:avoid');
@@ -522,20 +506,22 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
  *  Walks EXACTLY what the renderer walks: a fldChar inside a drawing's textbox or
  *  an SDT's properties never reaches renderRun, so counting it would desync the
  *  balance probe from the render pass and blank everything after it. */
-function advanceFieldState(node: OoxmlElement, fields: FieldState): void {
+function advanceFieldState(node: OoxmlElement, fields: FieldState, depth = 0): void {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+  const childDepth = isFldSimple(node) ? depth + 1 : nextInlineContainerDepth(node, depth);
   for (const child of node.children) {
     if (!isElement(child)) continue;
     if (child.kind === 'drawing') continue;
     if (child.kind === 'contentControl') {
       const content = child.children.find((inner) => inner.kind === 'contentControlContent');
-      if (content && isElement(content)) advanceFieldState(content, fields);
+      if (content && isElement(content)) advanceFieldState(content, fields, childDepth + 1);
       continue;
     }
     if (child.kind === 'fldChar') {
       advanceFieldCharacter(child, fields);
       continue;
     }
-    advanceFieldState(child, fields);
+    advanceFieldState(child, fields, childDepth);
   }
 }
 
@@ -608,6 +594,8 @@ function renderRun(
         break;
       // deletedText only appears under deletions; noteReference has no HTML mapping in v1.
       default:
+        // A non-breaking hyphen copies as U+2011 and an optional hyphen as U+00AD.
+        inner += hyphenDisplayOf(child)?.text ?? '';
         break;
     }
   }
@@ -625,17 +613,19 @@ function renderInline(
   ctx: RenderContext,
   children: readonly OoxmlNode[],
   paragraphPPr: OoxmlElement | null,
-  fields: FieldState
+  fields: FieldState,
+  depth = 0
 ): string {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return '';
   let out = '';
   for (const child of children) {
     if (!isElement(child)) continue;
-    switch (child.kind) {
+    switch (isFldSimple(child) ? 'fldSimple' : child.kind) {
       case 'run':
         out += renderRun(ctx, child, paragraphPPr, fields);
         break;
       case 'hyperlink': {
-        const inner = renderInline(ctx, child.children, paragraphPPr, fields);
+        const inner = renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         if (inner === '') break;
         const relId = attributeValueOf(child, 'id', RELATIONSHIPS_NAMESPACE_URI);
         // Match by id alone: producers vary the relationship Type string, and the
@@ -662,31 +652,36 @@ function renderInline(
         break;
       }
       case 'fldSimple':
-        // The cached result runs are the visible value.
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
+        // Cached results remain visible when nested simple fields become generic.
+        out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         break;
       case 'contentControl': {
         const content = child.children.find((inner) => inner.kind === 'contentControlContent');
         if (content && isElement(content)) {
-          out += renderInline(ctx, content.children, paragraphPPr, fields);
+          out += renderInline(ctx, content.children, paragraphPPr, fields, depth + 1);
         }
         break;
       }
       case 'revisionInsert':
       case 'revisionMoveTo':
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
+        out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         break;
       // Deleted and moved-away content never travels to external apps — but its
       // fldChars still terminate fields, or an unbalanced 'instr' state would blank
       // every later paragraph.
       case 'revisionDelete':
       case 'revisionMoveFrom':
-        advanceFieldState(child, fields);
+        advanceFieldState(child, fields, depth);
         break;
       case 'generic':
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
-        break;
-      default:
+        if (isOmmlEquationAtom(child)) {
+          out += equationHtml(child);
+        } else if (isInlineRunContainer(child)) {
+          out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
+        } else {
+          const content = contentControlContentOf(child);
+          if (content) out += renderInline(ctx, content, paragraphPPr, fields, depth + 1);
+        }
         break;
     }
   }
@@ -739,7 +734,7 @@ function renderParagraph(
   const pPrNode = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const pPr = pPrNode && isElement(pPrNode) ? pPrNode : null;
   const sources = paragraphPropertySources(ctx.styles, pPr, ctx.tablePPr);
-  const css = paragraphCssOf(sources, options.asListItem);
+  const css = paragraphCssOf(sources, options.asListItem, toggleOn(sources, 'bidi'));
   const inner = renderInline(ctx, paragraph.children, pPr, fields);
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
   const dirAttr = toggleOn(sources, 'bidi') ? ' dir="rtl"' : '';

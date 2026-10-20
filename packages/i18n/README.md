@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
   </a>
 </p>
 
@@ -14,36 +18,39 @@
 
 # @docx-editor.dev/i18n
 
-Locale strings, types, and runtime helpers for the [docx-editor.dev](https://docx-editor.dev) editor chrome. Ten languages, with per-key fallback to English.
+Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides twelve languages and falls back to English for missing translations.
 
-## Quick Start
+## Quick start
+
+Install the locale package:
 
 ```bash
 npm install @docx-editor.dev/i18n
 ```
 
-Hand the catalog to the editor:
+Pass a locale to the editor. This example requires the React adapter and its engine peer:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { de } from '@docx-editor.dev/i18n';
+import { es } from '@docx-editor.dev/i18n';
 
-<DocxEditor document={bytes} i18n={de} />;
+<DocxEditor document={bytes} i18n={es} locale="es-ES" />;
 ```
 
-For several editors, or for chrome parts you compose yourself, put it in context once with
-`LocaleProvider` instead:
+The `i18n` prop translates controls. Set `locale` separately for regional date input and generated document labels. It defaults to `en-US`.
+
+To share a locale across editors and custom controls, use `LocaleProvider`:
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { de } from '@docx-editor.dev/i18n';
 
 <LocaleProvider i18n={de}>
-  <DocxEditor.Toolbar />
   <DocxEditor document={bytes} />
 </LocaleProvider>;
 ```
 
-Chrome you write yourself reads the same catalog through `useTranslation()`.
+Custom controls read the same catalog through `useTranslation()`.
 
 Mix a community locale with custom overrides:
 
@@ -52,23 +59,11 @@ import { de } from '@docx-editor.dev/i18n';
 
 const myLocale = {
   ...de,
-  toolbar: { ...de.toolbar, bold: 'Fettdruck' },
+  formattingBar: { ...de.formattingBar, bold: 'Fettdruck' },
 };
 ```
 
-Keys set to `null` in any locale fall back to English.
-
-## Packages
-
-| Package                                                                                    | Description                                                                                       |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome.                   |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint.              |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types.                                                                  |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
-
-> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+Missing or `null` keys keep the inherited catalog value. Without an outer `LocaleProvider`, they fall back to English.
 
 ## Available locales
 
@@ -76,10 +71,12 @@ Keys set to `null` in any locale fall back to English.
 | ------- | ------ | ------------------- |
 | `en`    | `en`   | English (source)    |
 | `de`    | `de`   | German              |
+| `es`    | `es`   | Spanish             |
 | `fr`    | `fr`   | French              |
 | `he`    | `he`   | Hebrew              |
 | `hi`    | `hi`   | Hindi               |
 | `id`    | `id`   | Indonesian          |
+| `ja`    | `ja`   | Japanese            |
 | `pl`    | `pl`   | Polish              |
 | `pt-BR` | `ptBR` | Portuguese (Brazil) |
 | `tr`    | `tr`   | Turkish             |
@@ -95,23 +92,28 @@ import { locales } from '@docx-editor.dev/i18n';
 </LocaleProvider>;
 ```
 
-> Importing `locales` pulls every locale into your bundle. For a smaller bundle, import only the ones you need by name; `sideEffects: false` lets the rest tree-shake.
+Importing `locales` includes every locale in your bundle. Import individual locales to reduce the bundle size.
 
 ## Per-locale subpaths
 
-For apps that pick the locale at runtime, the named exports above don't tree-shake — the bundler can't know which locale wins, so it ships them all. Use the per-locale subpaths instead. Each one bundles a single locale (~30KB) and code-splits cleanly:
+If you choose a locale at runtime, import its subpath to load only that locale. Static imports include it in the bundle. Dynamic imports let the bundler create a separate chunk:
 
 ```ts
-// Static — bundler ships only this locale's strings
+// Static import: include only this locale's strings.
 import pl from '@docx-editor.dev/i18n/pl';
+```
 
-// Dynamic — splits into its own chunk, loaded on demand
+For on-demand loading, use a dynamic import instead:
+
+```ts
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/es`, `/fr`, `/he`, `/hi`, `/id`, `/ja`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
+
+Import types to describe locale data and translation functions:
 
 ```ts
 import type {
@@ -141,9 +143,12 @@ t('navigation.find.total', { total: 15 }); // ICU plurals
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+The catalogs contain editor controls. Examples keep English text in `examples/shared/example-text.ts`.
 
-## Commercial Support
+If you use `collaborationDemo`, `documentRefresh`, `anchorNavigation`, or `writerAgent` keys, move those messages into your application's text catalog. Also move `toolbar.exportPdfServerUnavailable`. These keys are removed from `LocaleStrings` and `TranslationKey`.
 
-> [!TIP]
-> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+To contribute, see [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+
+## Commercial support
+
+For commercial support or custom features, [email the support team](mailto:docx-editor@eigenpal.com).

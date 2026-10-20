@@ -137,4 +137,12 @@ describe('editor stylesheet custom properties', () => {
     // ring the caret read as a slab that overlapped neighbouring glyphs.
     expect(rule![1]).toMatch(/width:\s*1\.5px/);
   });
+
+  test('the painted image rule applies EXIF orientation rather than the browser default', () => {
+    // The resource extent is the EXIF-oriented one; a browser that ignores EXIF would
+    // paint a portrait photo sideways inside a portrait frame.
+    const rule = /\.docx-drawing-image\s*\{([^}]*)\}/.exec(withoutComments);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toMatch(/image-orientation:\s*from-image/);
+  });
 });

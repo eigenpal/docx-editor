@@ -17,7 +17,6 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { MAX_TABLE_COLUMNS } from '../semantic-table.ts';
-import { TablePaginationError } from '../semantic-table-layout.ts';
 import {
   paragraphFragmentsOf,
   type PageGeometry,
@@ -90,7 +89,7 @@ describe('semantic table layout', () => {
 
   test('cells in a row share the row height and sit inside the row box', () => {
     const part = loadPart(
-      `<w:tbl>${tr(tc(p('short')) + tc(p('a much longer cell text that wraps across several lines of the narrow column')))}</w:tbl>`
+      `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>${tr(tc(p('short')) + tc(p('a much longer cell text that wraps across several lines of the narrow column')))}</w:tbl>`
     );
     const result = layout(part);
     const [table] = allTableFragments(result);
@@ -253,9 +252,12 @@ describe('semantic table layout', () => {
       ).join('');
     const nested = Array.from(
       { length: nestCount },
-      (_, i) => `<w:tbl>${makeChain(`t${i}`)}</w:tbl>`
+      (_, i) =>
+        `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>${makeChain(`t${i}`)}</w:tbl>`
     ).join('');
-    const part = loadPart(`<w:tbl>${tr(tc(nested))}</w:tbl>`);
+    const part = loadPart(
+      `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>${tr(tc(nested))}</w:tbl>`
+    );
     const result = layout(part);
     const [outer] = allTableFragments(result);
     const host = outer!.rows[0]!.cells[0]!;
@@ -406,7 +408,7 @@ describe('semantic table layout', () => {
 
   test('vAlign center shifts cell content within the row', () => {
     const part = loadPart(
-      '<w:tbl>' +
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
         tr(
           tc(p('short'), '<w:tcPr><w:vAlign w:val="center"/></w:tcPr>') +
             tc(p('a much longer cell text that wraps across several lines of the narrow column'))
@@ -424,15 +426,28 @@ describe('semantic table layout', () => {
 
   test('column widths come from the grid when present', () => {
     const part = loadPart(
-      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="4800"/></w:tblGrid>' +
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="4800"/></w:tblGrid>' +
         tr(tc(p('a')) + tc(p('b'))) +
         '</w:tbl>'
     );
     const result = layout(part);
     const row = allTableFragments(result)[0]!.rows[0]!;
-    expect(row.cells[0]!.box.width).toBe(120); // 2400 twips = 120 pt
-    expect(row.cells[1]!.box.width).toBe(240); // 4800 twips = 240 pt
-    expect(row.cells[1]!.box.x).toBe(120);
+    // 2400 and 4800 twips, less the half outer side rule a fixed table keeps inside its grid.
+    expect(Math.abs(row.cells[0]!.box.width - 120)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.cells[1]!.box.width - 240)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(row.cells[1]!.box.x - row.cells[0]!.box.x - 120)).toBeLessThanOrEqual(0.5);
+  });
+
+  test('an autofit table whose cells state no width sizes its columns by their content', () => {
+    const part = loadPart(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="4800"/></w:tblGrid>' +
+        tr(tc(p('a')) + tc(p('bbbb'))) +
+        '</w:tbl>'
+    );
+    const row = allTableFragments(layout(part))[0]!.rows[0]!;
+    // No width of its own: each column takes its content, whatever the grid says.
+    expect(row.cells[0]!.box.width).toBeLessThan(row.cells[1]!.box.width);
+    expect(row.cells[1]!.box.width).toBeLessThan(120);
   });
 
   test('cell shading is read validated and vetted values only', () => {
@@ -628,16 +643,15 @@ describe('table row pagination (tiny page)', () => {
     }
   });
 
-  test('w:cantSplit overheight fails closed instead of overflowing', () => {
+  test('w:cantSplit taller than a page splits instead of overflowing', () => {
     const paras = Array.from({ length: 30 }, (_, i) => p(`X${i}`)).join('');
     const part = loadPart(`<w:tbl>${tr(tc(paras), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`);
-    expect(() => layoutTiny(part)).toThrow(TablePaginationError);
-    try {
-      layoutTiny(part);
-    } catch (error) {
-      expect(error).toBeInstanceOf(TablePaginationError);
-      expect((error as TablePaginationError).code).toBe('table-row-overheight');
-    }
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+    const bodyRows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(new Set(bodyRows.map((row) => row.id)).size).toBe(1);
+    expect(bodyRows.slice(1).every((row) => row.isContinuation)).toBe(true);
   });
 
   test('w:cantSplit that fits a fresh page moves whole rather than splitting', () => {
@@ -837,14 +851,14 @@ describe('table row pagination (tiny page)', () => {
       tc(p('HEAD')),
       '<w:trPr><w:tblHeader/><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
     );
-    const nested = `<w:tbl>${tr(tc(p('nested-0')))}${tr(tc(p('nested-1')))}</w:tbl>`;
+    const nested = `<w:tbl>${tr(tc(p('nested-0') + p('nested-1')), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`;
     const tail = Array.from({ length: 8 }, (_, index) => p(`tail-${index}`)).join('');
     const part = loadPart(`<w:tbl>${header}${tr(tc(nested + tail))}</w:tbl>`);
     const result = layoutTiny(part);
     assertNoContentOverflow(result);
     expect(result.pages.length).toBeGreaterThan(2);
     const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
-    // Page 2 omits the header because its 15pt remainder cannot hold the nested table. Once
+    // Page 2 omits the header because its 15pt remainder cannot hold the atomic nested row. Once
     // the nested block is consumed, later paragraph continuations can use that remainder.
     expect(tableFragments(result.pages[1]!)[0]!.rows[0]!.isHeaderRepeat).not.toBe(true);
     expect(rows.some((row) => row.isHeaderRepeat)).toBe(true);

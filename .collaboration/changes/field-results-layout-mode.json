@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Layout lays out every closed field as one model unit.",
+  "after": "Layout keeps every field one unit by default. A new editable layout mode lays out saved field results as text at the offsets the store's editable mode addresses. The editor still lays out in the default mode.",
+  "reason": "The default mode is unchanged, and no editor or collaboration path uses the editable mode yet, so paragraph text and the shared document format stay the same. The editor change that offers the mode also refuses it in a collaboration session (issue #1197).",
+  "tests": ["packages/core/src/layout/__tests__/field-result-mode-layout.test.ts"],
+  "changeset": "editable-field-results-layout",
+  "migration": null
+}

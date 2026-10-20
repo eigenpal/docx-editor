@@ -21,6 +21,7 @@ import type { CSSProperties } from 'react';
 import { useTranslation } from '../i18n';
 import { useContentControl, type ContentControlInspectorState } from './useContentControl';
 import { Slot } from './toolbar/Slot';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -139,6 +140,8 @@ function typeLabelKey(type: ContentControlInspectorState['controlType']): string
       return 'contentControl.types.date';
     case 'picture':
       return 'contentControl.types.picture';
+    case 'buildingBlockGallery':
+      return 'contentControl.types.buildingBlockGallery';
     case 'repeatingSection':
       return 'contentControl.types.repeatingSection';
     case 'richText':
@@ -191,14 +194,15 @@ function ContentControlRoot({
     };
     const onMouseDown = (event: MouseEvent): void => {
       const panel = panelRef.current;
-      if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+      if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
       closeInspector();
     };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(panelRef.current);
+    doc.addEventListener('keydown', onKeyDown);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [inspectorOpen, closeInspector]);
 

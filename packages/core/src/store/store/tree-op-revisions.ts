@@ -1,12 +1,34 @@
-// Accept and reject over the canonical tree.
-//
+import { revisionSiteRefusal, type RevisionSiteRefusal } from './revision-site-refusal.ts';
+import {
+  hasRevisionMarkerContent,
+  heldOnlyResolvedMarks,
+  isInertMarker,
+} from './revision-marker-content.ts';
+import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
+import { unboundTableHistories } from './revision-table-unbound-history.ts';
+import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
+import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
+import {
+  applyCellMerge,
+  restoredCellRows,
+  rebuildRevisionTable,
+  compactRevisionGrid,
+} from './revision-table-rebuild.ts';
+import {
+  CELL_REVISION_NAMES,
+  validTableRevision,
+  tableRevisionTarget,
+  tableRevisionContentTarget,
+  tableRevisionNeighbours,
+  tableRevisionRemovals,
+  tableMergeDependencies,
+  revisionAttribute,
+} from './revision-table-plan.ts';
 // A revision is identified by the triple `(id, author, date)` WITHIN a part, never by id alone.
 // `@w:id` is `ST_DecimalNumber` on `CT_Markup` with no uniqueness constraint and no author
 // scoping, so two authors' revisions may legally share an id in one part, and one logical
 // revision deliberately spans many elements sharing an id. Addressing by id would merge the
 // first case and could not express the second.
-//
-// Two rules here are load-bearing and easy to get wrong:
 //
 //   - CONTAINMENT governs nesting. Resolving an outer wrapper settles whether its content
 //     exists; an inner revision survives exactly when the content does. Because removal takes
@@ -15,10 +37,11 @@
 //   - A MOVE is one decision. Accepting a `moveTo` without its `moveFrom` duplicates the
 //     content, so the pair resolves together, joined by `@w:name` on the range markers.
 //
-// Structural revisions are refused unless their complete semantics are implemented. Tracked
-// rows are the supported exception: their row and cell markers resolve as one decision.
+// Row/cell topology and property history have separate resolution plans. Malformed
+// records are refused before any mutation; historical copies never become live decisions.
 
 import {
+  createNodeIdAllocator,
   findNode,
   parentNodeOf,
   replaceChildren,
@@ -31,45 +54,31 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { isWmlNamed } from './tree-op-tracked.ts';
-import { isContentControl } from '../package/content-control-walk.ts';
+import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
-import { isParagraphMarkRevision } from './tree-op-nodes.ts';
-import { PROPERTY_CHANGE_WRAPPER_OF_OP, recordedProperties } from './tree-op-tracked-properties.ts';
+import {
+  rebuildReach,
+  resolutionOf,
+  withDeletedTextRestored,
+  type Resolution,
+} from './revision-rebuild-helpers.ts';
+import { holdsMoveNode } from './revision-container-presence.ts';
+import {
+  REVISION_PROPERTY_CONTAINERS,
+  preservedRevisionProperty,
+  validRevisionPropertyRecord,
+  restoredSectionProperties,
+  validNumberingRevision,
+} from './revision-property-records.ts';
+import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
 
 /** What resolving does to one wrapper. */
-type Resolution = 'unwrap' | 'remove' | 'restore';
 
-/**
- * Element names that carry a revision but whose accept/reject semantics are structural and not
- * implemented in this pass.
- *
- * Every one of these needs to change the table or section around it, not just remove its own
- * markup. Until that exists they refuse; see the module header.
- */
-const REFUSED_REVISION_NAMES: ReadonlySet<string> = new Set([
-  'cellIns',
-  'cellDel',
-  'cellMerge',
-  'trPrChange',
-  'tcPrChange',
-  'tblPrChange',
-  'tblPrExChange',
-  'tblGridChange',
-  'sectPrChange',
-]);
-
-/**
- * Property-change wrappers this pass does resolve: the run and paragraph property records.
- *
- * Taken FROM the write side's own table rather than restated. Two lists of these names drift,
- * and a name in one but not the other is a record this pass would either refuse to resolve or
- * descend into as if its copies were decisions.
- */
-const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(PROPERTY_CHANGE_WRAPPER_OF_OP.values());
+/** The shared property-history vocabulary prevents read/write classification drift. */
+const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(REVISION_PROPERTY_CONTAINERS.keys());
 
 /** The two members of `EG_ParaRPrTrackChanges` that record a MOVE of the paragraph mark. */
 const MARK_MOVE_NAMES: ReadonlySet<string> = new Set(['moveFrom', 'moveTo']);
@@ -81,18 +90,20 @@ export function isPotentialRevisionElement(node: OoxmlNode): boolean {
     node.namespaceUri === WML_NAMESPACE_URI &&
     (isContentRevisionKind(node.kind) ||
       MARK_MOVE_NAMES.has(node.localName) ||
-      REFUSED_REVISION_NAMES.has(node.localName) ||
+      CELL_REVISION_NAMES.has(node.localName) ||
       PROPERTY_CHANGE_NAMES.has(node.localName) ||
       node.localName === 'ins' ||
-      node.localName === 'del')
+      node.localName === 'del' ||
+      node.kind === 'moveFromRangeStart' ||
+      node.kind === 'moveToRangeStart')
   );
 }
 
 /**
  * Parents that make a `w:ins`/`w:del` a STRUCTURAL revision rather than a content one.
  *
- * `w:trPr/w:del` deletes a row; `w:numPr/w:ins` inserts a numbering reference. Neither is
- * resolved by removing the element, so both refuse. `w:pPr/w:rPr` — the paragraph mark — is
+ * `w:trPr/w:del` deletes a row; `w:numPr/w:ins` inserts a numbering reference. These need
+ * explicit handling rather than wrapper removal. `w:pPr/w:rPr` — the paragraph mark — is
  * absent on purpose: it is resolved, below.
  */
 const STRUCTURAL_REVISION_PARENTS: ReadonlySet<string> = new Set([
@@ -115,9 +126,11 @@ export interface RevisionSite {
   readonly parent: OoxmlElement | null;
   /** True when this site cannot be resolved and the whole op must refuse. */
   readonly refused: boolean;
+  /** Why, when `refused` is true. */
+  readonly refusal?: RevisionSiteRefusal;
   /** True for `w:pPr/w:rPr/w:ins|w:del` — the paragraph MARK, not content. */
   readonly paragraphMark: boolean;
-  /** True for `w:rPrChange` / `w:pPrChange`. */
+  /** True for a supported property-history wrapper. */
   readonly propertyChange: boolean;
   /**
    * How many content-revision wrappers ENCLOSE this one, counted within its own paragraph.
@@ -135,32 +148,6 @@ export interface RevisionSite {
   readonly nesting: number;
 }
 
-interface TrackedRowRevision {
-  readonly kind: 'ins' | 'del';
-  rowMarkerCount: number;
-  cellMarkerCount: number;
-  readonly markerIds: string[];
-}
-
-function isTrackedRowSite(
-  node: OoxmlElement,
-  parentName: string | undefined,
-  grandparentName: string | undefined
-): boolean {
-  if (
-    (node.localName === 'ins' || node.localName === 'del') &&
-    parentName === 'trPr' &&
-    grandparentName === 'tr'
-  ) {
-    return true;
-  }
-  return (
-    (node.localName === 'cellIns' || node.localName === 'cellDel') &&
-    parentName === 'tcPr' &&
-    grandparentName === 'tc'
-  );
-}
-
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
   for (const attribute of node.attributes) {
     if (attribute.localName !== localName) continue;
@@ -172,7 +159,8 @@ function wmlAttribute(node: OoxmlElement, localName: string): string | undefined
 
 function addressOf(node: OoxmlElement): RevisionAddress | null {
   const id = wmlAttribute(node, 'id');
-  const author = wmlAttribute(node, 'author');
+  const author =
+    wmlAttribute(node, 'author') ?? (node.localName === 'tblGridChange' ? '' : undefined);
   if (id === undefined || author === undefined) return null;
   const date = wmlAttribute(node, 'date');
   return date === undefined ? { id, author } : { id, author, date };
@@ -217,16 +205,15 @@ function collectRevisionSitesIn(
     nesting: number
   ): void => {
     if (node.kind === 'textValue') return;
-    // A PARAGRAPH's — or a TABLE's — sites depend on nothing outside it. Classification
-    // reads the parent and grandparent, and every case that consults them (`w:rPr` under
-    // `w:pPr`, a structural `w:trPr`/`w:tcPr` parent) is at least two levels inside the
-    // memoized subtree — so the answer for that subtree is a pure function of it, and an
-    // unchanged one can hand back what it said last time. Without this, a document with no
-    // tracked changes at all still paid a full-tree walk per keystroke, on this path and on
-    // the review queue's. Tables are memoized as a unit because their row and cell markers
-    // live OUTSIDE any paragraph: a long document of tables otherwise re-walked every
-    // `w:trPr`/`w:tcPr` per derivation even though only one paragraph had changed.
-    if (node.kind === 'paragraph' || node.kind === 'table') {
+    // Paragraphs, tables, and rows own the parents needed to classify their revision sites.
+    // A row's structural markers sit inside its properties or cells, so an unchanged row
+    // need not rescan those children after another row changes. Zero nesting makes its
+    // content depth independent of an enclosing content revision.
+    if (
+      node.kind === 'paragraph' ||
+      node.kind === 'table' ||
+      (node.kind === 'tableRow' && nesting === 0)
+    ) {
       const cached = retainAcrossReads ? subtreeSitesCache.get(node) : undefined;
       if (cached) {
         // A plain loop, not a spread: spreading is bounded by the engine's argument-count
@@ -249,50 +236,60 @@ function collectRevisionSitesIn(
       grandparent?.namespaceUri === WML_NAMESPACE_URI ? grandparent.localName : undefined;
     if (node.namespaceUri === WML_NAMESPACE_URI) {
       const isContent = isContentRevisionKind(node.kind);
-      // A mark-position `w:moveFrom`/`w:moveTo` is generic in the tree, so `isContent` misses
-      // it; naming it here is what raises the card for a paragraph that was MOVED whole.
       const markMove =
         parentName === 'rPr' && grandparentName === 'pPr' && MARK_MOVE_NAMES.has(node.localName);
-      // The broad preflight intentionally recognizes mark-move names anywhere so artifact scans
-      // do not miss hostile markup. Resolution is narrower: only the schema-valid paragraph-mark
-      // position is an actionable move decision.
       const isNamedRevision =
         isContent ||
-        markMove ||
-        REFUSED_REVISION_NAMES.has(node.localName) ||
+        MARK_MOVE_NAMES.has(node.localName) ||
+        CELL_REVISION_NAMES.has(node.localName) ||
         PROPERTY_CHANGE_NAMES.has(node.localName) ||
         node.localName === 'ins' ||
         node.localName === 'del';
-      if (isNamedRevision && addressOf(node) !== null) {
-        // A revision on a RUN's `w:rPr` is not schema-valid — the paragraph mark is the only
-        // `w:rPr` that carries one — so it is refused rather than resolved. Treating it as a
-        // paragraph mark made accepting it merge two paragraphs; treating it as ordinary
-        // content would make accepting it edit a run's properties. Neither is what the file
-        // says, and the file says something impossible.
+      if (
+        isNamedRevision &&
+        (wmlAttribute(node, 'id') !== undefined || part.root.localName === 'styles')
+      ) {
         const misplacedMark =
           parentName === 'rPr' &&
           grandparentName !== 'pPr' &&
           (node.localName === 'ins' || node.localName === 'del');
-        const trackedRow = isTrackedRowSite(node, parentName, grandparentName);
+        const tableRevision = validTableRevision(node, parent, grandparent);
+        const numberingRevision = grandparentName === 'pPr' && validNumberingRevision(node, parent);
         const structural =
           misplacedMark ||
-          REFUSED_REVISION_NAMES.has(node.localName) ||
-          (parentName !== undefined && STRUCTURAL_REVISION_PARENTS.has(parentName));
-        // `w:pPr/w:rPr/w:ins` marks the paragraph mark. `w:rPr` also appears inside a run,
-        // where an `ins` child is not schema-valid; treating both as a paragraph mark would
-        // be wrong, so the grandparent decides.
-        // ...and now it does. A `w:rPr` inside a RUN carrying a `w:del` is malformed input,
-        // not a paragraph mark, and treating it as one made accepting it merge two
-        // paragraphs — a silent structural edit from markup no valid file contains.
+          CELL_REVISION_NAMES.has(node.localName) ||
+          (PROPERTY_CHANGE_NAMES.has(node.localName)
+            ? !validRevisionPropertyRecord(node, parent)
+            : parentName !== undefined && STRUCTURAL_REVISION_PARENTS.has(parentName));
         const paragraphMark =
           (!isContent || markMove) &&
           parentName === 'rPr' &&
           grandparentName === 'pPr' &&
           !structural;
+        // Generic content wrappers have unsupported children or placement. Removing
+        // them would discard preserved content instead of resolving a known revision.
+        const unsupportedContent =
+          !isContent &&
+          (node.localName === 'ins' ||
+            node.localName === 'del' ||
+            MARK_MOVE_NAMES.has(node.localName)) &&
+          !paragraphMark &&
+          !tableRevision &&
+          !numberingRevision;
+        const refusal = revisionSiteRefusal({
+          unaddressed: addressOf(node) === null,
+          misplacedMarker: unsupportedContent,
+          nestedMarker:
+            !isContent &&
+            !PROPERTY_CHANGE_NAMES.has(node.localName) &&
+            hasRevisionMarkerContent(node),
+          unsupportedStructure: structural && !tableRevision && !numberingRevision,
+        });
         sites.push({
           node,
           parent,
-          refused: structural && !trackedRow,
+          refused: refusal !== undefined,
+          ...(refusal ? { refusal } : {}),
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,
@@ -320,7 +317,19 @@ function collectRevisionSitesIn(
     for (const child of node.children) visit(child, node, parent, inner);
   };
   const root = scopeRootId === undefined ? part.root : findNode(part, scopeRootId);
-  if (root !== null) visit(root, null, null, 0);
+  if (root !== null) {
+    visit(root, null, null, 0);
+    for (const range of ordinaryMoveRanges(root))
+      sites.push({
+        node: range.start,
+        parent: range.parent,
+        refused: !range.supported,
+        ...(range.supported ? {} : { refusal: 'unsupported-move' as const }),
+        paragraphMark: false,
+        propertyChange: false,
+        nesting: 0,
+      });
+  }
   return sites;
 }
 
@@ -341,7 +350,7 @@ export function collectRevisionSitesTransient(part: OoxmlPart): RevisionSite[] {
  * `@w:name` pairs a `moveFrom` RANGE with its `moveTo` RANGE; `@w:id` pairs a range START with
  * its own range END. In a real document the two halves of a named pair carry different ids.
  */
-function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
+export function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
   const byName = new Map<string, MoveRange>();
   const bucketFor = (name: string): MoveRange => {
     const existing = byName.get(name);
@@ -385,11 +394,37 @@ function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
         const enclosing = open[open.length - 1];
         if (enclosing !== undefined) bucketFor(enclosing.name).wrappers.push(child);
       }
-      visit(child);
+      // Only markers and move wrappers change the result; skip subtrees without one.
+      if (holdsMoveNode(child)) visit(child);
     }
   };
   visit(root);
   return byName;
+}
+
+/** Word preserves a named destination with no source, including its paragraph mark. */
+export function orphanMoveDestinationSites(
+  root: OoxmlNode,
+  sites: readonly RevisionSite[]
+): ReadonlySet<string> {
+  const addresses = new Set<string>();
+  if (!sites.some((site) => site.node.localName === 'moveTo')) return new Set();
+  const ids = new Set<string>();
+  for (const range of namedMoveRanges(root).values()) {
+    if (range.wrappers.some((node) => node.kind === 'revisionMoveFrom')) continue;
+    for (const node of range.wrappers) {
+      if (node.kind !== 'revisionMoveTo') continue;
+      ids.add(node.id);
+      const address = addressOf(node);
+      if (address) addresses.add(revisionGroupKey(address, 'moveTo'));
+    }
+  }
+  for (const site of sites) {
+    if (!site.paragraphMark || site.node.localName !== 'moveTo') continue;
+    const address = addressOf(site.node);
+    if (address && addresses.has(revisionGroupKey(address, 'moveTo'))) ids.add(site.node.id);
+  }
+  return ids;
 }
 
 /** The `w:p` a node sits inside, by id, or null when it is not inside one. */
@@ -402,176 +437,103 @@ function paragraphOwning(part: OoxmlPart, nodeId: string): string | null {
   return null;
 }
 
-function tableRowOwning(part: OoxmlPart, nodeId: string): string | null {
-  let current = findNode(part, nodeId);
-  while (current !== null) {
-    if (current.kind === 'tableRow') return current.id;
-    current = parentNodeOf(part, current.id);
-  }
-  return null;
-}
-
-function elementById(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  const found = findNode(part, nodeId);
-  return found === null || found.kind === 'textValue' ? null : found;
-}
-
 function matchingRevisionSites(
   sites: readonly RevisionSite[],
   address: RevisionAddress | undefined,
-  localName?: string
+  localName?: string,
+  siteNodeIds?: ReadonlySet<string>
 ): RevisionSite[] {
-  if (address === undefined) return [...sites];
+  if (address === undefined && siteNodeIds === undefined) return [...sites];
   return sites.filter((site) => {
+    if (siteNodeIds !== undefined && !siteNodeIds.has(site.node.id)) return false;
+    if (address === undefined) return true;
     const own = addressOf(site.node);
     if (own === null || !sameRevision(own, address)) return false;
     return localName === undefined || site.node.localName === localName;
   });
 }
 
-/**
- * Complete tracked-row decisions among the matched sites.
- *
- * One classifier feeds both mutation planning and protection reach, so a row cannot be considered
- * removable by one path and incomplete by the other.
- */
-function trackedRowRevisions(
-  part: OoxmlPart,
-  matched: readonly RevisionSite[]
-): ReadonlyMap<string, TrackedRowRevision> | TreeOpRejection {
-  const revisions = new Map<string, TrackedRowRevision>();
-  for (const site of matched) {
-    const markerKind =
-      site.node.localName === 'ins' || site.node.localName === 'cellIns'
-        ? 'ins'
-        : site.node.localName === 'del' || site.node.localName === 'cellDel'
-          ? 'del'
-          : null;
-    const rowSite =
-      markerKind !== null &&
-      ((site.parent?.localName === 'trPr' &&
-        (site.node.localName === 'ins' || site.node.localName === 'del')) ||
-        (site.parent?.localName === 'tcPr' &&
-          (site.node.localName === 'cellIns' || site.node.localName === 'cellDel')));
-    if (!rowSite || markerKind === null) continue;
-    const rowId = tableRowOwning(part, site.node.id);
-    if (rowId === null) return 'unsupported-revision';
-    const existing = revisions.get(rowId);
-    if (existing && existing.kind !== markerKind) return 'unsupported-revision';
-    const entry = existing ?? {
-      kind: markerKind,
-      rowMarkerCount: 0,
-      cellMarkerCount: 0,
-      markerIds: [],
-    };
-    entry.markerIds.push(site.node.id);
-    if (site.parent?.localName === 'trPr') entry.rowMarkerCount += 1;
-    else entry.cellMarkerCount += 1;
-    revisions.set(rowId, entry);
-  }
-  for (const [rowId, revision] of revisions) {
-    const row = elementById(part, rowId);
-    const cellCount = row?.children.filter((child) => child.kind === 'tableCell').length ?? 0;
-    if (
-      revision.rowMarkerCount !== 1 ||
-      cellCount === 0 ||
-      revision.cellMarkerCount !== cellCount
-    ) {
-      return 'unsupported-revision';
-    }
-  }
-  return revisions;
-}
-
-/**
- * Exact rows a revision decision will remove, using the mutation path's own completeness rules.
- *
- * Invalid or unsupported decisions answer no rows here; normal validation still reports their
- * typed refusal, while protection reach remains conservative around every matched marker.
- */
-export function removedRowsForRevisionDecision(
+/** Structural protection reach: node id → whether its descendant controls are removed. */
+export function revisionStructuralReach(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: { readonly localName?: string; readonly scopeRootId?: string }
-): readonly OoxmlElement[] {
-  if (
-    options?.scopeRootId !== undefined &&
-    scopedRevisionRoot(part, options.scopeRootId) === null
-  ) {
-    return [];
+  options?: {
+    readonly localName?: string;
+    readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
   }
+): ReadonlyMap<string, boolean> {
+  if (options?.scopeRootId !== undefined && scopedRevisionRoot(part, options.scopeRootId) === null)
+    return new Map();
   const matched = matchingRevisionSites(
     collectRevisionSitesIn(part, options?.scopeRootId),
     address,
-    options?.localName
+    options?.localName,
+    options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
   );
-  const revisions = trackedRowRevisions(part, matched);
-  if (typeof revisions === 'string') return [];
-  const rows: OoxmlElement[] = [];
-  for (const [rowId, revision] of revisions) {
-    const removes =
-      (revision.kind === 'ins' && action === 'reject') ||
-      (revision.kind === 'del' && action === 'accept');
-    if (!removes) continue;
-    const row = elementById(part, rowId);
-    if (row) rows.push(row);
+  if (matched.some((site) => site.refused)) return new Map();
+  const orphanDestinations = orphanMoveDestinationSites(
+    options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
+    matched
+  );
+  const reach = new Map<string, boolean>();
+  if (action === 'reject') {
+    for (const row of implicitTableRowProperties(part, matched).values()) reach.set(row, false);
+    for (const row of restoredCellRows(part, matched)) reach.set(row, false);
   }
-  return rows;
-}
-
-/** How one wrapper resolves, given the action. */
-function resolutionOf(node: OoxmlElement, action: 'accept' | 'reject'): Resolution {
-  switch (node.kind) {
-    case 'revisionInsert':
-    case 'revisionMoveTo':
-      // Accepting keeps the content and drops the wrapper; rejecting takes both.
-      return action === 'accept' ? 'unwrap' : 'remove';
-    case 'revisionDelete':
-    case 'revisionMoveFrom':
-      // Accepting removes the content; rejecting restores it, which also turns `w:delText`
-      // back into `w:t`.
-      return action === 'accept' ? 'remove' : 'restore';
-    default:
-      return 'remove';
+  const moves = planOrdinaryMoves(
+    options?.scopeRootId ? scopedRevisionRoot(part, options.scopeRootId)! : part.root,
+    collectRevisionSitesIn(part, options?.scopeRootId),
+    new Set(matched.map((site) => site.node.id)),
+    action
+  );
+  for (const id of moves.markers) reach.set(id, false);
+  for (const id of moves.remove) reach.set(id, true);
+  for (const id of moves.relocate.keys()) {
+    const parent = parentNodeOf(part, id);
+    if (parent) reach.set(parent.id, false);
   }
-}
-
-function textElementFrom(node: OoxmlElement): OoxmlElement {
-  return { ...node, kind: 'text', localName: 't' } as OoxmlElement;
-}
-
-/**
- * Undo the deleted forms of run content when a deletion is rejected.
- *
- * `w:delText` is the deleted form of `w:t`, and `w:delInstrText` is the deleted form of
- * `w:instrText` (`EG_RunInnerContent`, §17.3.3.7 / §17.16.23). BOTH have to be inverted.
- * Restoring the text but leaving the instruction in its deleted form outside any `w:del` means
- * Word stops reading it as an instruction: the field's code is silently lost and the field
- * never updates again.
- */
-function withDeletedTextRestored(node: OoxmlNode): OoxmlNode {
-  if (node.kind === 'textValue') return node;
-  const children = node.children.map(withDeletedTextRestored);
-  const rebuilt = children.some((child, index) => child !== node.children[index])
-    ? ({ ...node, children } as OoxmlElement)
-    : node;
-  if (rebuilt.kind === 'deletedText') return textElementFrom(rebuilt);
-  // `w:delInstrText` has no typed kind — it is layout-inert either way — so it is matched by
-  // name and renamed in place.
-  if (
-    rebuilt.kind === 'generic' &&
-    rebuilt.namespaceUri === WML_NAMESPACE_URI &&
-    rebuilt.localName === 'delInstrText'
-  ) {
-    return { ...rebuilt, localName: 'instrText' } as OoxmlElement;
+  for (const id of tableRevisionNeighbours(part, matched, action).keys()) reach.set(id, false);
+  const removed = new Set(tableRevisionRemovals(part, matched, action).keys());
+  for (const id of removed) reach.set(id, true);
+  for (const site of matched) {
+    const target = tableRevisionContentTarget(part, site, action);
+    if (target) reach.set(target.id, true);
   }
-  return rebuilt;
+  for (const site of matched) {
+    if (
+      !site.paragraphMark ||
+      orphanDestinations.has(site.node.id) ||
+      !(
+        (action === 'accept' && ['del', 'moveFrom'].includes(site.node.localName)) ||
+        (action === 'reject' && ['ins', 'moveTo'].includes(site.node.localName))
+      )
+    )
+      continue;
+    const id = paragraphOwning(part, site.node.id);
+    const container = id && parentNodeOf(part, id);
+    if (!container) continue;
+    const at = container.children.findIndex((n) => n.id === id);
+    const next = container.children
+      .slice(at + 1)
+      .find(
+        (n) =>
+          !removed.has(n.id) &&
+          (n.kind === 'paragraph' || n.kind === 'table' || n.kind === 'contentControl')
+      );
+    if (next) {
+      const target = tableParagraphMergeTarget(next, removed);
+      if (target) reach.set(target.id, false);
+    }
+  }
+  return reach;
 }
 
 interface RebuildPlan {
   /** Wrapper node id → what to do with it. */
   readonly actions: ReadonlyMap<string, Resolution>;
+  readonly relocate: ReadonlyMap<string, readonly OoxmlNode[]>;
   /** Nodes to drop outright: resolved paragraph marks and spent move-range markers. */
   readonly dropMarks: ReadonlySet<string>;
   /** Property-change wrappers, node id → restore the recorded properties into the parent. */
@@ -585,8 +547,13 @@ interface RebuildPlan {
    * class of error as removing a `w:trPr/w:del` and leaving the row.
    */
   readonly mergeForward: ReadonlySet<string>;
-  /** Tracked inserted rows rejected, or tracked deleted rows accepted. */
-  readonly removeRows: ReadonlySet<string>;
+  /** Removed cells, rows, and tables, including containers emptied by this decision. */
+  readonly removeStructures: ReadonlySet<string>;
+  readonly mergeCells: ReadonlyMap<string, OoxmlElement>;
+  readonly mint: () => string;
+  readonly tables: ReadonlySet<string>;
+  /** The nodes on a path to a target; every other subtree is kept as it is. */
+  readonly reach: ReadonlySet<string>;
 }
 
 /**
@@ -597,37 +564,22 @@ interface RebuildPlan {
  * rejected insertion inside a rejected deletion survived: the outer unwrap consumed the inner
  * wrapper as ordinary content.
  */
-/**
- * Is this a block-level sibling — something a paragraph cannot merge THROUGH?
- *
- * Paragraphs and tables are the flow's own blocks. A content control is one too for this
- * question: its paragraphs live in `w:sdtContent`, so the paragraph before it and the first
- * paragraph inside it have different parents and are not siblings at all.
- */
-function isBlockLevel(node: OoxmlNode): boolean {
-  if (node.kind === 'paragraph' || node.kind === 'table') return true;
-  return node.kind !== 'textValue' && isContentControl(node);
-}
-
 function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
-  let carried: OoxmlNode[] = [];
 
-  for (const [index, child] of children.entries()) {
-    if (child.kind !== 'textValue' && plan.removeRows.has(child.id)) continue;
-    // A TABLE WITHOUT ROWS IS NOT A TABLE. `CT_Tbl` requires at least one `w:tr`, and the
-    // structural op says the same by refusing to delete a table's last row (`block-required`).
-    // Accepting the tracked deletion of the only row wrote exactly that shape: an invisible
-    // zero-row block left standing above the reader's content, which the rest of the engine
-    // then treats as illegal. The table goes with its last row, as it does in Word.
-    if (
-      child.kind === 'table' &&
-      child.children.every((row) => row.kind !== 'tableRow' || plan.removeRows.has(row.id)) &&
-      child.children.some((row) => row.kind === 'tableRow')
-    ) {
+  for (const child of children) {
+    if (child.kind !== 'textValue' && !plan.reach.has(child.id)) {
+      out.push(child);
       continue;
     }
+    const relocated = plan.relocate.get(child.id);
+    if (relocated) {
+      const removeStructures = new Set(plan.removeStructures);
+      for (const node of relocated) removeStructures.delete(node.id);
+      out.push(...rebuildChildren(relocated, { ...plan, removeStructures }));
+    }
+    if (child.kind !== 'textValue' && plan.removeStructures.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.dropMarks.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.restoreProperties.has(child.id)) continue;
     const action = child.kind === 'textValue' ? undefined : plan.actions.get(child.id);
@@ -649,63 +601,89 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     // accepting leaves a hollow one still occupying the model position the reviewer agreed to
     // remove. A `w:hyperlink` with no runs is a link to nowhere holding a relationship alive.
     // Word drops both, and an untracked delete over the same range already does.
-    if (child.kind === 'fldSimple' || child.kind === 'hyperlink') {
-      const survivor = rebuilt[0];
-      if (
-        rebuilt.length === 1 &&
-        survivor !== undefined &&
-        survivor.kind !== 'textValue' &&
-        survivor.children.length === 0
-      ) {
-        continue;
-      }
-    }
-    if (child.kind === 'paragraph') {
-      const paragraph = rebuilt[0];
-      if (paragraph !== undefined && paragraph.kind !== 'textValue') {
-        // Everything this paragraph would hold: what earlier paragraphs handed it, then its
-        // own. Its `w:pPr` is kept apart, because the properties that govern a merge are the
-        // surviving mark's — this paragraph's, if the mark survives here.
-        const properties = paragraph.children.filter((entry) => isWmlNamed(entry, 'pPr'));
-        const content = [...carried, ...paragraph.children.filter((e) => !isWmlNamed(e, 'pPr'))];
-        carried = [];
-        // Only when there IS a following paragraph in this container. Otherwise the paragraph
-        // keeps its content and simply loses the mark revision — spilling its runs into
-        // `w:body` or `w:tc` produced a tree the invariants reject, so the whole transaction
-        // was refused and Accept All failed for the entire document with an opaque reason.
-        // Deleting a trailing paragraph with tracking on is exactly what Word writes, so this
-        // was not an exotic file.
-        // The NEXT BLOCK, not any later paragraph, and EVERY kind of block counts. Scanning
-        // ahead past a `w:tbl` — or past a `w:sdt`, which holds paragraphs of its own that
-        // this one is not a sibling of — reported a paragraph that is not this one's
-        // neighbour, and the content then merged into it, arriving behind the block in a
-        // place the reader never put it.
-        const nextBlock = children.slice(index + 1).find((entry) => isBlockLevel(entry));
-        const followed = nextBlock?.kind === 'paragraph';
-        if (plan.mergeForward.has(child.id) && followed) {
-          // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
-          // at its end rather than pairwise. Word merges all of them; stopping at the first
-          // absorption left every second paragraph behind, so accepting sixteen deleted marks
-          // in a row produced eight paragraphs and eight blank lines that no decision asked for.
-          carried = content;
-          continue;
-        }
-        if (content.length > paragraph.children.length - properties.length) {
-          out.push({ ...paragraph, children: [...properties, ...content] } as OoxmlElement);
-          continue;
-        }
-      }
+    //
+    const survivor = rebuilt[0];
+    const hollow =
+      rebuilt.length === 1 && survivor !== undefined && survivor.kind !== 'textValue'
+        ? survivor
+        : null;
+    if ((child.kind === 'fldSimple' || child.kind === 'hyperlink') && hollow?.children.length === 0)
+      continue;
+    if (hollow?.children.length === 0 && heldOnlyResolvedMarks(child, plan.dropMarks)) continue;
+    // A revision wrapper the resolution emptied goes the same way. Accepting one author's
+    // deletion of another author's insertion removes the deleted runs and leaves the `w:ins`
+    // holding no characters to decide about — yet it carded as a blank entry and kept the
+    // document reporting tracked changes. "Emptied" means no CONTENT left: Word writes
+    // bookmark, comment-range and proofing markers directly inside a wrapper, and a wrapper
+    // reduced to those is as hollow as one with nothing. The markers themselves are hoisted,
+    // not dropped, because each pairs with a counterpart elsewhere. Move halves sweep too: the
+    // range markers are siblings of the wrapper, so the other half still resolves by name.
+    // Only a wrapper THIS resolution emptied is swept — one that arrived empty is not this
+    // decision's to remove.
+    if (
+      hollow !== null &&
+      child.kind !== 'textValue' &&
+      isContentRevisionKind(child.kind) &&
+      child.children.some((entry) => !isInertMarker(entry)) &&
+      hollow.children.every(isInertMarker)
+    ) {
+      for (const marker of hollow.children) out.push(marker);
+      continue;
     }
     out.push(...rebuilt);
   }
 
-  // Unreachable now that the merge only starts when a paragraph follows; kept as a belt
-  // against a plan built some other way, where losing the content would be silent.
-  if (carried.length > 0) out.push(...carried);
-  return out;
+  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
+  const rebuilt = rebuildNode(node, plan);
+  return rebuilt.map((result) => {
+    if (result.kind === 'textValue') return result;
+    if (result.kind === 'table') {
+      return plan.tables.has(result.id)
+        ? compactRevisionGrid(
+            rebuildRevisionTable(
+              node as OoxmlElement,
+              result,
+              plan.removeStructures,
+              plan.mint,
+              plan.mergeCells,
+              plan.restoreProperties
+            ),
+            plan.mint
+          )
+        : result;
+    }
+    const merge = plan.mergeCells.get(result.id);
+    if (merge) result = applyCellMerge(result, revisionAttribute(merge, 'vMerge'), plan.mint);
+    if (
+      result.kind === 'tableCell' &&
+      !result.children.some(
+        (child) =>
+          child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'contentControl'
+      )
+    ) {
+      return {
+        ...result,
+        children: [
+          ...result.children,
+          {
+            ...result,
+            id: plan.mint(),
+            kind: 'paragraph',
+            localName: 'p',
+            attributes: [],
+            children: [],
+          },
+        ],
+      } as OoxmlElement;
+    }
+    return result;
+  });
+}
+
+function rebuildNode(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
   if (node.kind === 'textValue') return [node];
 
   // A property-change reject replaces the CONTAINER's children with what the wrapper recorded,
@@ -716,59 +694,35 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
   if (restoring !== undefined && restoring.kind !== 'textValue') {
     const recorded = recordedProperties(restoring);
     if (recorded !== null) {
-      // `CT_PPrChange` records a `CT_PPrBase`, which BY CONSTRUCTION cannot contain `w:rPr` or
-      // `w:sectPr` — `CT_PPr` is `CT_PPrBase`, then `w:rPr`, then `w:sectPr`, then the change
-      // wrapper. Replacing the container wholesale therefore deletes both. Losing `w:sectPr`
-      // deletes a SECTION BREAK: page size, margins and per-section header/footer references
-      // go with it, and every following paragraph reflows into the previous section.
-      //
-      // `CT_RPrChange` is nearly the opposite case: `CT_RPrOriginal` genuinely is the whole
-      // `w:rPr` content minus the change wrapper, so wholesale replacement is right — EXCEPT
-      // on a paragraph MARK, whose `w:pPr/w:rPr` also holds `EG_ParaRPrTrackChanges`. Those
-      // are somebody's pending decision about the paragraph BREAK, and it may have been taken
-      // after this format change was proposed. Restoring the container from the record alone
-      // deleted them, so rejecting a formatting suggestion silently answered an unrelated one.
-      //
-      // The LIVE ones win and the recorded copies are dropped. Both halves are load-bearing:
-      // `CT_ParaRPrOriginal` admits `w:ins`, so a Word-written record legitimately carries one,
-      // and keeping both emits two `w:ins` in a container whose schema allows one — a `w:pPr`
-      // Word reports as unreadable. A run's own `w:rPr` holds no such children either way.
-      //
-      // THE PRESERVED CHILDREN GO THROUGH THE PLAN. They are live sites, not copies: THIS
-      // resolution may also be removing one of them, and lifting them out verbatim made
-      // Reject All report success over a paragraph-mark revision it had just been asked to
-      // reject — the reviewer saw an empty pane and a tracked change still in the file.
-      if (restoring.localName === 'pPrChange') {
-        const preserved = rebuildChildren(
-          node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')),
-          plan
-        );
-        // `w:rPr` and `w:sectPr` CLOSE `CT_PPr`, so they follow the recorded base — and the
-        // record's own copies of them go, or a malformed `CT_PPrBase` holding either produces
-        // a `w:pPr` with two, which the tree invariants refuse and the reviewer sees as a
-        // Reject that failed on a file Word opens.
-        const base = recorded.filter(
-          (child) => !isWmlNamed(child, 'rPr') && !isWmlNamed(child, 'sectPr')
-        );
-        return [{ ...node, children: [...base, ...preserved] } as OoxmlElement];
-      }
-      const liveMarks = rebuildChildren(
-        node.children.filter((child) => isParagraphMarkRevision(child)),
+      // Property snapshots exclude independently tracked paragraph/section marks.
+      // Preserve their live versions, ignoring historical copies, and run them
+      // through this plan so bulk resolution still resolves selected marks.
+      const preserved = rebuildChildren(
+        node.children.filter((child) => preservedRevisionProperty(restoring.localName, child)),
         plan
       );
-      // `EG_ParaRPrTrackChanges` OPENS `CT_ParaRPr`, so the live marks lead — and the copies
-      // inside the record go, or the container ends up with two `w:ins` where its schema
-      // allows one.
-      return [
-        {
-          ...node,
-          children: [...liveMarks, ...recorded.filter((child) => !isParagraphMarkRevision(child))],
-        } as OoxmlElement,
-      ];
+      let base = recorded.filter((child) => !preservedRevisionProperty(restoring.localName, child));
+      if (restoring.localName === 'sectPrChange')
+        base = restoredSectionProperties(
+          node.children.filter(
+            (child) =>
+              child.id !== restoring.id && !preservedRevisionProperty(restoring.localName, child)
+          ),
+          base
+        );
+      const children =
+        restoring.localName === 'rPrChange' || restoring.localName === 'sectPrChange'
+          ? [...preserved, ...base]
+          : [...base, ...preserved];
+      return [{ ...node, children } as OoxmlElement];
     }
   }
 
-  return [{ ...node, children: rebuildChildren(node.children, plan) } as OoxmlElement];
+  // An untouched subtree keeps its identity, so layout and digest caches still hit.
+  const children = rebuildChildren(node.children, plan);
+  const same =
+    children.length === node.children.length && children.every((c, i) => c === node.children[i]);
+  return [same ? node : ({ ...node, children } as OoxmlElement)];
 }
 
 export type RevisionOpAction = 'accept' | 'reject';
@@ -780,64 +734,154 @@ export interface RevisionResolveResult {
   readonly effect?: TreeOpEffect;
 }
 
-/**
- * Resolve every site carrying `address` (or every revision in the part, when `address` is
- * absent) in one transaction.
- *
- * Refuses without touching the tree when the revision is absent, or when ANY matched site is a
- * kind this pass does not resolve. Refusing per site would leave a row half-tracked: a tracked
- * row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell, all sharing one
- * triple, and resolving only the inline half is worse than resolving none.
- */
+interface RevisionResolutionOperation {
+  readonly revision?: RevisionAddress;
+  readonly localName?: string;
+  readonly siteNodeIds?: readonly string[];
+  readonly scopeRootId?: string;
+}
+
+/** Adapt one revision tree operation to the shared resolver. */
+export function resolveRevisionOperation(
+  part: OoxmlPart,
+  action: RevisionOpAction,
+  operation: RevisionResolutionOperation,
+  options?: EditOptions
+): RevisionResolveResult {
+  return resolveRevisions(part, action, operation.revision, {
+    ...options,
+    ...(operation.localName === undefined ? {} : { localName: operation.localName }),
+    ...(operation.siteNodeIds === undefined ? {} : { siteNodeIds: operation.siteNodeIds }),
+    ...(operation.scopeRootId === undefined ? {} : { scopeRootId: operation.scopeRootId }),
+  });
+}
+
+/** Resolve the selected canonical sites atomically; refuse unsupported sites without mutation. */
 export function resolveRevisions(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: EditOptions & { readonly localName?: string; readonly scopeRootId?: string }
+  options?: EditOptions & {
+    readonly localName?: string;
+    readonly scopeRootId?: string;
+    readonly siteNodeIds?: readonly string[];
+  }
 ): RevisionResolveResult {
   const scopeRoot =
     options?.scopeRootId === undefined ? part.root : scopedRevisionRoot(part, options.scopeRootId);
-  if (scopeRoot === null) {
+  if (scopeRoot === null || scopeRoot.kind === 'textValue') {
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
-  const matched = matchingRevisionSites(sites, address, options?.localName);
+  const unboundHistories = unboundTableHistories(part, sites);
+  const retainedRows = retainedNestedRowSites(part, sites, action);
+  let matched = matchingRevisionSites(
+    sites,
+    address,
+    options?.localName,
+    options?.siteNodeIds === undefined ? undefined : new Set(options.siteNodeIds)
+  );
   if (matched.length === 0) return { ok: false, reason: 'unknown-revision' };
-  if (matched.some((site) => site.refused)) return { ok: false, reason: 'unsupported-revision' };
+  const movePlan = planOrdinaryMoves(
+    scopeRoot,
+    sites,
+    new Set(matched.map((site) => site.node.id)),
+    action
+  );
+  const selected = movePlan.selected;
+  matched = sites.filter((site) => selected.has(site.node.id));
+  const mergeIds = new Set(
+    sites.filter((site) => site.node.localName === 'cellMerge').map((site) => site.node.id)
+  );
+  if (
+    mergeIds.size &&
+    tableMergeDependencies({ ...part, root: scopeRoot }).some(
+      (group) =>
+        group.some((id) => mergeIds.has(id)) &&
+        group.some((id) => selected.has(id)) &&
+        group.some((id) => !selected.has(id))
+    )
+  )
+    return { ok: false, reason: 'unsupported-revision' };
+  if (
+    matched.some(
+      (site) =>
+        site.refused ||
+        (action === 'reject' && site.propertyChange && recordedProperties(site.node) === null)
+    )
+  )
+    return { ok: false, reason: 'unsupported-revision' };
 
+  const orphanDestinations = orphanMoveDestinationSites(scopeRoot, sites);
   const actions = new Map<string, Resolution>();
-  const dropMarks = new Set<string>();
+  const dropMarks = new Set(movePlan.markers);
+  if (action === 'reject')
+    for (const id of implicitTableRowProperties(part, matched).keys()) dropMarks.add(id);
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
-  const removeRows = new Set<string>();
-
-  const rowRevisions = trackedRowRevisions(part, matched);
-  if (typeof rowRevisions === 'string') return { ok: false, reason: rowRevisions };
-  for (const [rowId, revision] of rowRevisions) {
-    const removesRow =
-      (revision.kind === 'ins' && action === 'reject') ||
-      (revision.kind === 'del' && action === 'accept');
-    if (removesRow) removeRows.add(rowId);
-    else for (const markerId of revision.markerIds) dropMarks.add(markerId);
+  const removeStructures = new Set([
+    ...tableRevisionRemovals(part, matched, action).keys(),
+    ...movePlan.remove,
+  ]);
+  const mergeCells = new Map<string, OoxmlElement>();
+  const tables = new Set<string>();
+  for (const site of matched) {
+    if (
+      !tableRevisionTarget(part, site) &&
+      !(
+        site.propertyChange &&
+        !['rPrChange', 'pPrChange', 'sectPrChange'].includes(site.node.localName)
+      )
+    )
+      continue;
+    let ancestor = site.parent;
+    while (ancestor) {
+      if (ancestor.kind === 'table') {
+        tables.add(ancestor.id);
+        break;
+      }
+      ancestor = parentNodeOf(part, ancestor.id);
+    }
   }
 
   const addWrapper = (node: OoxmlElement): void => {
-    actions.set(node.id, resolutionOf(node, action));
+    actions.set(
+      node.id,
+      movePlan.wrapperActions.get(node.id) ??
+        (orphanDestinations.has(node.id) ? 'unwrap' : resolutionOf(node, action))
+    );
   };
 
   for (const site of matched) {
-    if (
-      site.node.localName === 'cellIns' ||
-      site.node.localName === 'cellDel' ||
-      ((site.node.localName === 'ins' || site.node.localName === 'del') &&
-        site.parent?.localName === 'trPr')
-    ) {
+    if (retainedRows.has(site.node.id)) continue;
+    if (site.node.kind === 'moveFromRangeStart' || site.node.kind === 'moveToRangeStart') continue;
+    if (tableRevisionTarget(part, site)) {
+      dropMarks.add(site.node.id);
+      if (site.node.localName === 'cellMerge' && site.parent) {
+        const value = revisionAttribute(site.node, action === 'accept' ? 'vMerge' : 'vMergeOrig');
+        mergeCells.set(tableRevisionTarget(part, site)!.id, {
+          ...site.node,
+          attributes: site.node.attributes
+            .filter((attribute) => attribute.localName !== 'vMerge')
+            .concat(
+              value === undefined
+                ? []
+                : [
+                    {
+                      kind: 'genericExtension' as const,
+                      namespaceUri: WML_NAMESPACE_URI,
+                      prefix: site.node.prefix,
+                      localName: 'vMerge',
+                      value,
+                    },
+                  ]
+            ),
+        });
+      }
       continue;
     }
     if (site.propertyChange) {
-      // Accepting keeps the current properties and drops the record; rejecting puts the
-      // recorded properties back.
-      if (action === 'accept') dropMarks.add(site.node.id);
+      if (action === 'accept' || unboundHistories.has(site.node.id)) dropMarks.add(site.node.id);
       else restoreProperties.add(site.node.id);
       continue;
     }
@@ -855,7 +899,7 @@ export function resolveRevisions(
         (action === 'reject' &&
           (site.node.localName === 'ins' || site.node.localName === 'moveTo'));
       dropMarks.add(site.node.id);
-      if (removesMark) {
+      if (removesMark && !orphanDestinations.has(site.node.id)) {
         const paragraph = paragraphOwning(part, site.node.id);
         if (paragraph === null) return { ok: false, reason: 'unsupported-revision' };
         mergeForward.add(paragraph);
@@ -865,28 +909,42 @@ export function resolveRevisions(
     addWrapper(site.node);
   }
 
-  // A move resolves as a pair. Pull in every wrapper sharing a `@w:name` with a matched half,
-  // so accepting the `moveTo` alone — which duplicates the content — is unreachable.
   const movesMatched = matched.filter(
     (site) => site.node.kind === 'revisionMoveFrom' || site.node.kind === 'revisionMoveTo'
   );
   if (movesMatched.length > 0) {
     for (const [, range] of namedMoveRanges(scopeRoot)) {
-      if (!range.wrappers.some((wrapper) => actions.has(wrapper.id))) continue;
+      if (
+        range.wrappers.some((wrapper) => movePlan.wrapperActions.has(wrapper.id)) ||
+        !range.wrappers.some((wrapper) => actions.has(wrapper.id))
+      )
+        continue;
       for (const wrapper of range.wrappers) addWrapper(wrapper);
-      // The range markers describe a move that no longer exists once it is resolved. Leaving
-      // them behind would keep an empty named bookmark pair in the file, which Word removes
-      // and which would pair with nothing on the next read.
+      // Legacy paired wrappers consume their range metadata together.
       for (const marker of range.markers) dropMarks.add(marker.id);
     }
   }
 
   const plan: RebuildPlan = {
     actions,
+    relocate: movePlan.relocate,
     dropMarks,
     restoreProperties,
     mergeForward,
-    removeRows,
+    removeStructures,
+    mergeCells,
+    tables,
+    mint: createNodeIdAllocator(part),
+    reach: rebuildReach(part, [
+      ...actions.keys(),
+      ...movePlan.relocate.keys(),
+      ...dropMarks,
+      ...restoreProperties,
+      ...mergeForward,
+      ...removeStructures,
+      ...mergeCells.keys(),
+      ...tables,
+    ]),
   };
   const rebuilt = rebuild(part.root, plan);
   const root = rebuilt[0];

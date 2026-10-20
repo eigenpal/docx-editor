@@ -21,6 +21,7 @@ import {
 } from '../document/index.ts';
 import { NODE_SPLIT_BASE_TEXT_FIELD, nodeRecordSplitBaseText } from '../document/schema.ts';
 import * as Y from 'yjs';
+import { idOf } from '../document/identity.ts';
 
 describe('shared-state security and limits', () => {
   test('rejects prototype-polluting keys on putNode and attributes', async () => {
@@ -149,7 +150,7 @@ describe('shared-state security and limits', () => {
     const replica = await seedReplica(loadPackage(collaborationDocx()));
     try {
       const text = findText(packageOf(replica), 'Alpha paragraph');
-      const paragraph = replica.registry.parentOf(text.id);
+      const paragraph = replica.registry.parentOf(idOf(text));
       expect(paragraph).toBeTruthy();
       replica.doc.transact(() => {
         replica.registry.schema.nodes.get(paragraph!)?.set('parent', 'nope');

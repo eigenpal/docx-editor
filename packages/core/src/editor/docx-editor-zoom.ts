@@ -12,7 +12,8 @@
 // percentage.
 
 import type { ExecResult, ZoomMode } from '../contracts/editor.ts';
-import { setPaginatedSurfaceScale, type PaginatedSurface } from './paginated-surface.ts';
+import type { PaginatedSurface } from './paginated-surface.ts';
+import { setPaginatedSurfaceScale } from './surface-scale.ts';
 import { createZoomController } from './zoom-controller.ts';
 import {
   AUTO_ZOOM_MODE,
@@ -33,6 +34,8 @@ export interface ZoomLaneHost {
   /** Move the state tick, so `snapshot()` re-derives. */
   bump(): void;
   emitSelectionChange(): void;
+  /** Whether the review pane scrolls beside the page instead of shrinking a capped fit (`overflow: 'scroll'`). */
+  reviewPaneScrolls?(): boolean;
 }
 
 /** The zoom half of `createDocxEditor`. */
@@ -133,6 +136,7 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
     applyZoom: (next) => {
       applyZoom(next);
     },
+    reviewPaneScrolls: () => host.reviewPaneScrolls?.() === true,
   });
 
   return {

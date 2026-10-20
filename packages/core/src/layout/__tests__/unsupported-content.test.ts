@@ -5,6 +5,7 @@ import {
   serializeOoxmlPart,
   WML_NAMESPACE_URI,
   type OoxmlPart,
+  type HeadlessDocumentView,
 } from '@docx-editor.dev/core/store';
 import { createUnsupportedContentProjector } from '../unsupported-content.ts';
 import type { UnsupportedElement } from '../unsupported-content-types.ts';
@@ -165,6 +166,24 @@ describe('opaque unsupported content layout projection', () => {
         .map((piece) => piece.text)
         .join('')
     ).toBe('Before');
+  });
+
+  test('projected views preserve new capabilities and frozen canonical receivers', () => {
+    const source = load('<w:p><x:chip/></w:p>');
+    const canonical = Object.freeze({
+      part: () => source,
+      readFutureCapability() {
+        return this === canonical ? 'canonical receiver' : 'wrong receiver';
+      },
+    });
+    const projected = createUnsupportedContentProjector(() => dimensions).view(
+      canonical as unknown as HeadlessDocumentView
+    );
+    expect(projected.part()).not.toBe(source);
+    expect((projected as unknown as typeof canonical).readFutureCapability()).toBe(
+      'canonical receiver'
+    );
+    expect(canonical.part()).toBe(source);
   });
 
   test('unmatched and invalid dimensions preserve invisible content', () => {

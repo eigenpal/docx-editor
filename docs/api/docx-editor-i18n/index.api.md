@@ -22,6 +22,9 @@ export type DeepPartial<T> = {
 export const en: LocaleStrings;
 
 // @public
+export const es: PartialLocaleStrings;
+
+// @public
 export const fr: PartialLocaleStrings;
 
 // @public
@@ -34,7 +37,13 @@ export const hi: PartialLocaleStrings;
 export const id: PartialLocaleStrings;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export function isApplePlatform(): boolean;
+
+// @public
+export const ja: PartialLocaleStrings;
+
+// @public
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;
@@ -58,6 +67,9 @@ export function platformShortcut(text: string): string;
 
 // @public
 export const ptBR: PartialLocaleStrings;
+
+// @public
+export const ru: PartialLocaleStrings;
 
 // @public
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;

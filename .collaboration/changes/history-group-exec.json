@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Every command commit is its own local undo entry, and the shared undo manager groups local journals only by its capture window.",
+  "after": "A command can name a history group; consecutive commits in one group are one local undo entry, and the shared undo manager starts a new item at each group boundary and keeps one item across a group however long it lasts.",
+  "reason": "The group token is process-local identity kept beside the journal, never on it, so operations, snapshots, shared state, and protocol messages are unchanged. A replica without the change interoperates because grouping only shapes each replica's own undo stack.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-history-groups.test.ts",
+    "packages/pro/src/collaboration/__tests__/history-group-capture.test.ts",
+    "packages/core/src/store/__tests__/history-groups.test.ts",
+    "packages/core/src/editor/__tests__/history-group-exec.test.ts"
+  ],
+  "changeset": "history-group-exec",
+  "migration": null
+}

@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/vue",
-  "version": "2.14.1",
+  "version": "2.31.0",
   "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -15,18 +15,19 @@
   },
   "files": [
     "dist",
+    "docs",
     "src/styles",
     "!dist/metafile-*.json",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc --noEmit",
+    "build": "node ../../scripts/check-built-siblings.mjs && tsup",
+    "typecheck": "bun check",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.14.0",
+    "@docx-editor.dev/core": "~2.31.0",
     "vue": "^3.3.0"
   },
   "peerDependenciesMeta": {
@@ -37,10 +38,11 @@
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
     "fflate": "^0.8.2",
-    "vue": "^3.5.29"
+    "vue": "^3.5.29",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "dependencies": {
-    "@docx-editor.dev/i18n": "^2.14.1"
+    "@docx-editor.dev/i18n": "^2.31.0"
   },
   "keywords": [
     "docx",

@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Editor popups stayed open behind any modal dialog on the page, the Vue table toolbar passed vnode arrays as default slots, and the pointer caret parameter used an inline type import.",
+  "after": "Editor popups stay open only behind the editor's own modal dialogs, the Vue table toolbar passes function slots, and the pointer caret parameter uses a top-level type import.",
+  "reason": "Only local chrome dismissal, Vue slot rendering, and a type annotation change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/popup-escape.test.ts",
+    "packages/vue/test/hydration-renderer-slots.test.ts",
+    "packages/core/src/editor/__tests__/surface-field-caret-affinity.test.ts",
+    "packages/pro/src/collaboration/__tests__/field-caret-affinity.test.ts"
+  ],
+  "changeset": "popup-modal-scope-and-caret-type",
+  "migration": null
+}

@@ -7,9 +7,13 @@ import {
 } from './drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import { holdsOnlyPageBreak } from './pending-line.ts';
+import { marginInset } from './page-body-margins.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
-type BodyAnchorFrameBase = Omit<
+/** The page and column facts an anchored drawing or table resolves its frame against. */
+export type BodyAnchorFrameBase = Omit<
   DrawingAnchorFrameContext,
   'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
 >;
@@ -38,7 +42,7 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     pageHeight: geometry.height,
     marginLeft: geometry.margin.left,
     marginRight: geometry.margin.right,
-    marginBottom: geometry.margin.bottom,
+    marginBottom: marginInset(geometry.margin.bottom),
     // Effective insets keep page-relative anchors stable when tall furniture moves body text.
     contentInsetTop: insets.top,
     contentInsetBottom: insets.bottom,
@@ -63,9 +67,21 @@ export function paragraphPaintsNothing(
   lines: readonly PendingLine[],
   drawingContext: InlineDrawingLayoutContext | undefined
 ): boolean {
-  if (entry.listItem !== undefined || entry.shading !== undefined) return false;
-  const { top, bottom, left, right, between } = entry.borders;
-  if (top ?? bottom ?? left ?? right ?? between) return false;
+  return entry.shading === undefined && paragraphHoldsNothing(entry, lines, drawingContext);
+}
+
+/**
+ * Whether a paragraph holds nothing but its mark: no text, list marker, drawing, break, or
+ * border rule. Shading is not content: it only fills the box the paragraph occupies.
+ */
+export function paragraphHoldsNothing(
+  entry: PaintableParagraph,
+  lines: readonly PendingLine[],
+  drawingContext: InlineDrawingLayoutContext | undefined
+): boolean {
+  if (entry.listItem !== undefined) return false;
+  const { top, bottom, left, right, between, bar } = entry.borders;
+  if (top ?? bottom ?? left ?? right ?? between ?? bar) return false;
   if (
     drawingContext &&
     anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0
@@ -79,4 +95,63 @@ export function paragraphPaintsNothing(
       !line.columnBreakAfter &&
       line.spans.every((span) => span.text.length === 0)
   );
+}
+
+/** Whether a line holds text or a picture, not just break characters. */
+const lineHoldsContent = (line: PendingLine): boolean =>
+  line.drawings.length > 0 || line.spans.some((span) => /[^\f\n]/.test(span.text));
+
+/** Whether a line after the opening break holds text, a picture, or a page or column break. */
+const lineFollowsBreak = (line: PendingLine): boolean =>
+  line.pageBreakAfter === true || line.columnBreakAfter === true || lineHoldsContent(line);
+
+/**
+ * Whether a paragraph opens with a page break and has content or another break after it:
+ * its first line holds nothing but the break. That line never takes a sheet of its own. It
+ * stays at the bottom of the page it starts on, and the break then starts the content on the
+ * next sheet.
+ *
+ * A list marker is not content there: it moves to the first line after the break. Borders,
+ * shading, and space before are not either: the break line draws no rule, the space before
+ * and the top rule open the text on the next sheet, and shading fills the break line where
+ * it would sit. An anchored drawing is content, so those paragraphs keep the ordinary fit
+ * rule. So does a paragraph with nothing after the break, and one that anchors floating
+ * tables or text frames. A paragraph with only one page break keeps the ordinary fit: after a
+ * full page, its break line takes the next sheet and the content after it starts one sheet
+ * later. A line that holds only a column break stays even with nothing after it: the break
+ * starts the next column, or the next sheet after the last column.
+ */
+export function opensWithPageBreak(
+  entry: PaintableParagraph,
+  lines: readonly PendingLine[],
+  drawingContext: InlineDrawingLayoutContext | undefined
+): boolean {
+  const first = lines[0];
+  return (
+    first !== undefined &&
+    first.start === 0 &&
+    (holdsOnlyColumnBreak(first) ||
+      (holdsOnlyPageBreak(first) &&
+        lines.some((line, index) => index > 0 && lineFollowsBreak(line)))) &&
+    !(drawingContext && anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0)
+  );
+}
+
+/** Whether a line holds nothing but the column break that ends it. */
+export const holdsOnlyColumnBreak = (line: PendingLine): boolean =>
+  line.columnBreakAfter === true &&
+  line.drawings.length === 0 &&
+  line.spans.every((span) => !/[^\n]/.test(span.text));
+
+/**
+ * A kept break line's shading fills where the line would sit, below the band that holds it,
+ * and stops at the page edge.
+ */
+export function atKeptBreakY(
+  box: LayoutBox,
+  kept: { readonly y: number; readonly clip: LayoutBox } | undefined
+): LayoutBox {
+  if (kept === undefined) return box;
+  const height = Math.min(box.height, kept.clip.y + kept.clip.height - kept.y);
+  return { ...box, y: kept.y, height: Math.max(height, 0) };
 }

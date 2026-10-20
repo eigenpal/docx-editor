@@ -26,12 +26,7 @@ import { fail } from './errors.ts';
  * sync fills it, and reading it early is `ValueNotLoaded` rather than `undefined` flowing onwards
  * into something that misinterprets it.
  *
- * @example
- * ```ts
- * const count = body.getParagraphCount();
- * await context.sync();
- * console.log(count.value);
- * ```
+ * RevisionCollection.resolve returns a ClientResult with the resolved and skipped decisions.
  *
  * @public
  */

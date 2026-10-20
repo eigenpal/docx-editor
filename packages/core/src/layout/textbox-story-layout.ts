@@ -2,9 +2,10 @@
 //
 // A text-box drawing (`wps:wsp` → `wps:txbx` → `w:txbxContent`) carries a STORY: ordinary
 // paragraphs flowed inside the drawing's declared extent — same shape as a footnote story
-// ({@link layoutNoteStory}), but bounded by the box instead of the page. The extent is
+// ({@link layoutNoteStory}), but bounded by the box instead of the page. The extent height is
 // authoritative: content that does not fit clips with a named fallback reason, never grows
-// the box.
+// the box. The width is authoritative too, except for unwrapped text (`noWrap`): those lines
+// never break at the box edge, and the box takes its widest line plus the insets.
 //
 // PAGE / NUMPAGES / SECTIONPAGES fields inside the story project through the same
 // `pageContext` path the host story uses, so a footer whose page number lives inside an
@@ -15,6 +16,7 @@
 // convergence counter never moves because a textbox changed. All bounds are explicit:
 // nesting depth, fragment count, and the extent clip all fail closed with reasons.
 
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { emuToPoints } from './drawing-layout.ts';
@@ -30,13 +32,19 @@ import {
 import type { NumberingIndex } from './numbering-index.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { flowBlocksInBox, type HostedStoryFlowDeps } from './semantic-table-layout.ts';
 import type { BlockFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { textboxStoryBlocks } from './story-roots.ts';
 
 /** Hard ceiling on textbox-in-textbox story descent (mirrors `MAX_TABLE_NESTING`'s role). */
 export const MAX_TEXTBOX_STORY_NESTING = 4;
+
+/**
+ * Line measure for the first pass over unwrapped text: the widest page OOXML allows (22in).
+ * A line longer than this still breaks here, which keeps every bound fixed.
+ */
+const UNWRAPPED_MEASURE_PT = 1584;
 
 /** Hard ceiling on fragments emitted for one textbox story. */
 export const MAX_TEXTBOX_STORY_FRAGMENTS = 256;
@@ -67,8 +75,13 @@ export interface TextboxStoryLayout {
   readonly flowHeight: number;
   /** Offset of the content box inside the drawing extent: insets plus vertical anchoring. */
   readonly contentOffset: Readonly<{ x: number; y: number }>;
-  /** Content box width (extent minus horizontal insets). */
+  /** Content box width (extent minus horizontal insets; the widest line when unwrapped). */
   readonly contentWidth: number;
+  /**
+   * Box width (points) that unwrapped text sizes its shape to: the widest line plus the
+   * insets. Placement resolves the shape at this width. Absent when the extent width holds.
+   */
+  readonly extentWidth?: number;
   /** Content box height (extent minus vertical insets). */
   readonly contentHeight: number;
   /** Solid fill of the hosting shape, painted behind the story; null for no fill. */
@@ -99,6 +112,7 @@ export interface TextboxStoryLayoutOptions {
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
@@ -108,6 +122,8 @@ export interface TextboxStoryLayoutOptions {
   /** Sanitized hyperlink seams inherited from the story containing this text box. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** Field-code inspection projection. @internal */
+  readonly showFieldCodes?: boolean;
   /** Story nesting depth; a textbox laid out from inside another textbox passes depth + 1. */
   readonly depth?: number;
   /**
@@ -143,11 +159,29 @@ export function textboxLineIdPrefix(drawingNodeId: string): string {
   return `txbx-${drawingNodeId}`;
 }
 
+/** Stable per-object ids for memo inputs, so a memo never keeps an older input alive. */
+let nextInputId = 1;
+const inputIds = new WeakMap<object, number>();
+function inputId(input: object | undefined): number {
+  if (input === undefined) return 0;
+  let id = inputIds.get(input);
+  if (id === undefined) {
+    id = nextInputId;
+    nextInputId += 1;
+    inputIds.set(input, id);
+  }
+  return id;
+}
+
+/**
+ * Inputs are held as ids, not objects: the undo history keeps old nodes alive, and a memo on
+ * each holding its numbering index kept one whole index per revision.
+ */
 interface TextboxStoryListResolve {
-  readonly rawIndex: NumberingIndex;
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly rawIndex: number;
+  readonly styleCascade: number;
   readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly authorFilter: number;
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
 }
 
@@ -177,10 +211,10 @@ export function textboxStoryListItems(
   const memo = textboxStoryListResolves.get(content);
   if (
     memo &&
-    memo.rawIndex === numberingIndex &&
-    memo.styleCascade === styleCascade &&
+    memo.rawIndex === inputId(numberingIndex) &&
+    memo.styleCascade === inputId(styleCascade) &&
     memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
+    memo.authorFilter === inputId(authorFilter)
   ) {
     return memo.listItems;
   }
@@ -189,10 +223,10 @@ export function textboxStoryListItems(
   const resolved = resolveStoryListItems(blocks, linked, styleCascade);
   const listItems = resolved.size > 0 ? resolved : undefined;
   textboxStoryListResolves.set(content, {
-    rawIndex: numberingIndex,
-    styleCascade,
+    rawIndex: inputId(numberingIndex),
+    styleCascade: inputId(styleCascade),
     displayMode,
-    authorFilter,
+    authorFilter: inputId(authorFilter),
     listItems,
   });
   return listItems;
@@ -223,16 +257,77 @@ const NO_HOSTED_CONTENTS: HostedContentsScan = Object.freeze({
  */
 const hostedTextboxContentsByBlock = new WeakMap<OoxmlNode, HostedContentsScan>();
 
-/** Discover text-box stories hosted by one layout block. @internal */
-export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
-  const cached = hostedTextboxContentsByBlock.get(block);
-  if (cached) return cached;
+/** The allocation-light path for the overwhelmingly common non-table block. */
+function scanHostedTextboxContents(block: OoxmlNode): HostedContentsScan {
   const found: OoxmlNode[] = [];
   let visited = 0;
   let truncated = false;
   const stack: OoxmlNode[] = [block];
   while (stack.length > 0) {
     const node = stack.pop()!;
+    visited += 1;
+    if (visited > MAX_HOSTED_STORY_SCAN_NODES) {
+      truncated = true;
+      break;
+    }
+    if (node.kind !== 'textValue' && node.localName === 'txbxContent') {
+      found.push(node);
+      continue;
+    }
+    if (!('children' in node)) continue;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]!);
+    }
+  }
+  return found.length > 0 || truncated
+    ? Object.freeze({ contents: Object.freeze(found), truncated })
+    : NO_HOSTED_CONTENTS;
+}
+
+/** Discover text-box stories hosted by one layout block. @internal */
+export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
+  const cached = hostedTextboxContentsByBlock.get(block);
+  if (cached) return cached;
+  // Only a table-level scan is followed by cold scans of many descendant cell paragraphs.
+  // Preserve the raw-node stack for direct paragraph calls instead of paying a frame object
+  // per visited node where there are no descendant paragraph results to seed.
+  if (block.kind !== 'table') {
+    const scan = scanHostedTextboxContents(block);
+    hostedTextboxContentsByBlock.set(block, scan);
+    return scan;
+  }
+  const found: OoxmlNode[] = [];
+  let visited = 0;
+  let truncated = false;
+  interface ParagraphScan {
+    readonly paragraph: OoxmlNode;
+    readonly contents: OoxmlNode[];
+  }
+  type ScanFrame =
+    | {
+        readonly phase: 'enter';
+        readonly node: OoxmlNode;
+        readonly paragraphOwners: readonly ParagraphScan[];
+      }
+    | { readonly phase: 'exit-paragraph'; readonly scan: ParagraphScan };
+  const stack: ScanFrame[] = [{ phase: 'enter', node: block, paragraphOwners: [] }];
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (frame.phase === 'exit-paragraph') {
+      if (!hostedTextboxContentsByBlock.has(frame.scan.paragraph)) {
+        hostedTextboxContentsByBlock.set(
+          frame.scan.paragraph,
+          frame.scan.contents.length > 0
+            ? Object.freeze({
+                contents: Object.freeze(frame.scan.contents),
+                truncated: false,
+              })
+            : NO_HOSTED_CONTENTS
+        );
+      }
+      continue;
+    }
+    const node = frame.node;
     visited += 1;
     // Defensive, like every other file-derived walk — but a stopped scan can MISS a box, and
     // an unseen box's list state must fail OPEN, not stale. The truncation flag is recorded
@@ -245,11 +340,18 @@ export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
     }
     if (node.kind !== 'textValue' && node.localName === 'txbxContent') {
       found.push(node);
+      for (const owner of frame.paragraphOwners) owner.contents.push(node);
       continue;
     }
     if (!('children' in node)) continue;
+    let paragraphOwners = frame.paragraphOwners;
+    if (node.kind === 'paragraph') {
+      const paragraphScan: ParagraphScan = { paragraph: node, contents: [] };
+      paragraphOwners = Object.freeze([...paragraphOwners, paragraphScan]);
+      stack.push({ phase: 'exit-paragraph', scan: paragraphScan });
+    }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push(node.children[index]!);
+      stack.push({ phase: 'enter', node: node.children[index]!, paragraphOwners });
     }
   }
   const scan: HostedContentsScan =
@@ -280,11 +382,12 @@ function numberingIndexTokenId(index: NumberingIndex): number {
   return id;
 }
 
+/** Inputs are held as ids, like {@link TextboxStoryListResolve}. */
 interface HostedListTokenMemo {
-  readonly rawIndex: NumberingIndex;
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly rawIndex: number;
+  readonly styleCascade: number;
   readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly authorFilter: number;
   readonly token: string;
 }
 
@@ -313,10 +416,10 @@ function hostedTextboxListToken(
   const memo = hostedListTokensByBlock.get(block);
   if (
     memo &&
-    memo.rawIndex === numberingIndex &&
-    memo.styleCascade === styleCascade &&
+    memo.rawIndex === inputId(numberingIndex) &&
+    memo.styleCascade === inputId(styleCascade) &&
     memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
+    memo.authorFilter === inputId(authorFilter)
   ) {
     return memo.token;
   }
@@ -342,33 +445,43 @@ function hostedTextboxListToken(
   // to one token and hold a break key still across a numbering edit.
   const token = parts.length === 0 ? '' : `|txbxlist:${framedTokenJoin(parts)}`;
   hostedListTokensByBlock.set(block, {
-    rawIndex: numberingIndex,
-    styleCascade,
+    rawIndex: inputId(numberingIndex),
+    styleCascade: inputId(styleCascade),
     displayMode,
-    authorFilter,
+    authorFilter: inputId(authorFilter),
     token,
   });
   return token;
 }
 
 /**
- * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
- * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
- * on the (index, cascade, mode) call shape. Empty without numbering DEFINITIONS — not just
- * without an index — so a document with no lists installs no provider and the cell lane
- * pays no per-paragraph call at all; the same emptiness check guards the token function.
+ * Build the structurally coupled hosted-story capability for a table flow lane.
+ *
+ * The layout callback and list-token provider are returned together so a new lane cannot
+ * publish text-box stories while silently reusing stale host breaks after numbering changes.
+ * `null` without numbering definitions preserves the zero-call fast path for box-free cells.
  */
-export function hostedListTokenDeps(
+export function hostedStoryFlowDeps(
+  layoutTextboxStoryFor: HostedStoryFlowDeps['layoutTextboxStoryFor'],
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
   displayMode?: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
-): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
-  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
-  return {
-    hostedListTokenForParagraph: (paragraph) =>
-      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode, authorFilter),
-  };
+): HostedStoryFlowDeps {
+  return Object.freeze({
+    layoutTextboxStoryFor,
+    hostedListTokenForParagraph:
+      !numberingIndex || numberingIndex.nums.size === 0
+        ? null
+        : (paragraph: OoxmlNode) =>
+            hostedTextboxListToken(
+              paragraph,
+              numberingIndex,
+              styleCascade,
+              displayMode,
+              authorFilter
+            ),
+  });
 }
 
 /**
@@ -386,19 +499,21 @@ export function layoutTextboxStory(
 
   const extentWidth = emuToPoints(projection.extentEmu.cx);
   const extentHeight = emuToPoints(projection.extentEmu.cy);
-  const insetLeft = emuToPoints(story.insetsEmu.left);
-  const insetRight = emuToPoints(story.insetsEmu.right);
-  const insetTop = emuToPoints(story.insetsEmu.top);
-  const insetBottom = emuToPoints(story.insetsEmu.bottom);
-  const contentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
-  const contentHeight = Math.max(0, extentHeight - insetTop - insetBottom);
   const strokeWidthPt = emuToPoints(story.strokeWidthEmu);
+  // The outline is centered on the shape edge, so its inner half also insets the text.
+  const outlineInset = story.strokeHex !== null ? strokeWidthPt / 2 : 0;
+  const insetLeft = emuToPoints(story.insetsEmu.left) + outlineInset;
+  const insetRight = emuToPoints(story.insetsEmu.right) + outlineInset;
+  const insetTop = emuToPoints(story.insetsEmu.top) + outlineInset;
+  const insetBottom = emuToPoints(story.insetsEmu.bottom) + outlineInset;
+  const extentContentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
+  const contentHeight = Math.max(0, extentHeight - insetTop - insetBottom);
 
   const chrome = {
     fillHex: story.fillHex,
     strokeHex: story.strokeHex,
     strokeWidthPt,
-    contentWidth,
+    contentWidth: extentContentWidth,
     contentHeight,
   };
 
@@ -431,33 +546,58 @@ export function layoutTextboxStory(
   const prefix = textboxLineIdPrefix(projection.drawingNodeId);
   let lineCounter = 0;
 
-  const flow = flowBlocksInBox(blocks, 0, contentWidth, 0, 0, {
-    measurer: options.measurer,
-    cache: options.cache,
-    producer: `${options.producer}|txbx:${projection.drawingNodeId}`,
-    nextLineId: () => `${prefix}-line-${lineCounter++}`,
-    styleCascade: options.styleCascade,
-    ...(listItems ? { listItems } : {}),
-    ...(options.pageContext ? { pageContext: options.pageContext } : {}),
-    ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
-    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
-    ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
-    ...(options.defaultTabStopPt !== undefined
-      ? { defaultTabStopPt: options.defaultTabStopPt }
-      : {}),
-    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
-    ...(options.revisionAuthorFilter ? { revisionAuthorFilter: options.revisionAuthorFilter } : {}),
-    ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
-    ...(options.drawingTokenForParagraph
-      ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
-      : {}),
-    ...(options.projectionTokenForParagraph
-      ? { projectionTokenForParagraph: options.projectionTokenForParagraph }
-      : {}),
-    ...(options.projectionTokenForTable
-      ? { projectionTokenForTable: options.projectionTokenForTable }
-      : {}),
-  });
+  // Every pass numbers its lines from zero, so line ids do not depend on the pass count.
+  const flowAt = (width: number) => (
+    (lineCounter = 0),
+    flowBlocksInBox(blocks, 0, width, 0, 0, {
+      measurer: options.measurer,
+      cache: options.cache,
+      producer: `${withFieldResultsProducer(options.producer)}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
+      nextLineId: () => `${prefix}-line-${lineCounter++}`,
+      styleCascade: options.styleCascade,
+      ...(listItems ? { listItems } : {}),
+      ...(options.pageContext ? { pageContext: options.pageContext } : {}),
+      ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+      ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+      ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+      showFieldCodes: options.showFieldCodes,
+      compatibilityMode: options.compatibilityMode,
+      tableNestingOffset: 1,
+      textBoxStory: true,
+      ...(options.defaultTabStopPt !== undefined
+        ? { defaultTabStopPt: options.defaultTabStopPt }
+        : {}),
+      ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+      ...(options.revisionAuthorFilter
+        ? { revisionAuthorFilter: options.revisionAuthorFilter }
+        : {}),
+      ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
+      ...(options.drawingTokenForParagraph
+        ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
+        : {}),
+      ...(options.projectionTokenForParagraph
+        ? { projectionTokenForParagraph: options.projectionTokenForParagraph }
+        : {}),
+      ...(options.projectionTokenForTable
+        ? { projectionTokenForTable: options.projectionTokenForTable }
+        : {}),
+    })
+  );
+
+  // Unwrapped text lays out once at an unbounded measure to find its widest line, then again
+  // at that width, so paragraph alignment places each line inside the widest line's column.
+  // An inline box keeps its extent: the host line already reserved that advance, so a box
+  // that grew here would paint and hit-test outside the space its line gave it.
+  const noWrap = story.noWrap === true && projection.wrap !== 'inline';
+  let contentWidth = extentContentWidth;
+  let flow = flowAt(noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
+  const unwrappedWidth = noWrap ? widestLineWidth(flow.blocks) : 0;
+  if (unwrappedWidth > 0) {
+    contentWidth = unwrappedWidth;
+    flow = flowAt(contentWidth);
+  } else if (noWrap) {
+    flow = flowAt(contentWidth);
+  }
 
   let fragments = flow.blocks;
   let flowHeight = flow.bottom;
@@ -500,6 +640,8 @@ export function layoutTextboxStory(
     flowHeight,
     contentOffset: { x: insetLeft, y: insetTop + anchorOffset },
     ...chrome,
+    contentWidth,
+    ...(unwrappedWidth > 0 ? { extentWidth: unwrappedWidth + insetLeft + insetRight } : {}),
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
       ? // Length-framed — resource keys embed file-derived ids, so any separator boundary
@@ -507,6 +649,37 @@ export function layoutTextboxStory(
         { clippedResourceToken: framedTokenJoin(clippedResourceTokens) }
       : {}),
   };
+}
+
+/**
+ * The width unwrapped paragraph lines need: each line's content extent plus its paragraph's
+ * start and end indents, with the first-line offset (hanging wins over firstLine) on the
+ * paragraph's first line only. Indents are direction-free sums, so RTL needs no mirror.
+ * Zero when no line holds content, so the extent width holds. Other blocks reflow inside.
+ */
+function widestLineWidth(blocks: readonly BlockFragmentRecord[]): number {
+  let widest = 0;
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') continue;
+    const { left, right: end, firstLine, hanging } = block.indent;
+    const firstLineOffset = hanging > 0 ? -hanging : firstLine;
+    block.lines.forEach((line, index) => {
+      let right = Number.NEGATIVE_INFINITY;
+      for (const span of line.spans) right = Math.max(right, span.box.x + span.box.width);
+      for (const drawing of line.drawings ?? []) {
+        right = Math.max(right, drawing.x + drawing.width);
+      }
+      if (!Number.isFinite(right) || right <= line.contentX) return;
+      const opensParagraph = index === 0 && block.fragmentIndex === 0;
+      const start = left + (opensParagraph ? firstLineOffset : 0);
+      // A list marker is furniture, not a span, but it opens the line at the hanging slot.
+      const markerX = opensParagraph ? block.marker?.box.x : undefined;
+      const origin = markerX === undefined ? line.contentX : Math.min(line.contentX, markerX);
+      widest = Math.max(widest, start + right - origin + end);
+    });
+  }
+  // A hair of slack so the second pass, at exactly this width, cannot break a line on rounding.
+  return widest > 0 ? Math.min(UNWRAPPED_MEASURE_PT, widest + 0.01) : 0;
 }
 
 /**

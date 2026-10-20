@@ -16,7 +16,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 // The SAME predicate and accessor the offset authority walks with. A second pair that
 // disagreed — `content-control-nodes.ts` matches only a TYPED control, while the authority
 // also measures a demoted generic `w:sdt` — would refuse offsets the authority hands out.
@@ -25,6 +25,7 @@ import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import type { TreeOpResult } from './tree-op-validate.ts';
+import type { TreeOpRejection } from './tree-op-types.ts';
 
 /** Which piece of comment markup an `insertCommentMarker` op places. */
 export type CommentMarkerKind = 'start' | 'end' | 'reference';
@@ -46,6 +47,7 @@ function locateOffset(
   offset: number,
   depth: number
 ): { readonly containerId: string; readonly index: number } | null {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return null;
   const index = paragraphOffsetIndex(paragraph);
   const span =
     container.id === paragraph.id ? { start: 0, end: index.length } : index.spanOf(container);
@@ -100,7 +102,7 @@ function locateOffset(
     // inside a tracked insertion is ordinary. A comment anchored inside tracked text belongs
     // inside the wrapper that tracks it, or the markup claims the comment covers text the
     // revision does not.
-    if (offset > cursor && offset < cursor + length && depth < MAX_CONTAINER_DEPTH) {
+    if (offset > cursor && offset < cursor + length) {
       const inner = descendableContainer(child);
       if (inner) {
         const found = locateOffset(paragraph, inner, offset, depth + 1);
@@ -112,9 +114,6 @@ function locateOffset(
   return cursor === offset ? { containerId: container.id, index: container.children.length } : null;
 }
 
-/** Matches the offset authority's own nesting bound. */
-const MAX_CONTAINER_DEPTH = 32;
-
 /**
  * The element to descend into for an offset inside `child`, or null when the offset is
  * inside something indivisible.
@@ -125,7 +124,7 @@ const MAX_CONTAINER_DEPTH = 32;
  */
 function descendableContainer(child: OoxmlNode): OoxmlElement | null {
   if (child.kind === 'textValue') return null;
-  if (isContentRevisionKind(child.kind) || child.kind === 'hyperlink') {
+  if (isInlineRunContainer(child)) {
     return child as OoxmlElement;
   }
   // An inline content control holds its content in `w:sdtContent`; the wrapper's other
@@ -240,6 +239,33 @@ function coincidentInsertIndex(
   return insertIndex;
 }
 
+/**
+ * Where a zero-width range marker goes at a model offset: the run straddling the offset is
+ * split first, then the offset is located the way the paragraph offset authority measures it.
+ * Shared by comment and bookmark markers, which are the same class of `EG_RangeMarkupElements`.
+ */
+export function markerSiteAt(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  options?: EditOptions
+):
+  | {
+      readonly ok: true;
+      readonly part: OoxmlPart;
+      readonly containerId: string;
+      readonly index: number;
+    }
+  | { readonly ok: false; readonly reason: TreeOpRejection } {
+  const split = splitRunsAt(part, paragraph, offset, options);
+  if (!split.ok) return { ok: false, reason: split.reason };
+  const reloaded = findNode(split.part, paragraph.id);
+  if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
+  const at = locateOffset(reloaded, reloaded, offset, 0);
+  if (!at) return { ok: false, reason: 'offset-out-of-range' };
+  return { ok: true, part: split.part, containerId: at.containerId, index: at.index };
+}
+
 export interface InsertCommentMarkerOp {
   readonly op: 'insertCommentMarker';
   readonly paragraphId: string;
@@ -264,14 +290,9 @@ export function applyInsertCommentMarker(
   op: InsertCommentMarkerOp,
   options?: EditOptions
 ): TreeOpResult {
-  const split = splitRunsAt(part, paragraph, op.offset, options);
-  if (!split.ok) return { ok: false, reason: split.reason };
-
-  const reloaded = findNode(split.part, paragraph.id);
-  if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-
-  const at = locateOffset(reloaded, reloaded, op.offset, 0);
-  if (!at) return { ok: false, reason: 'offset-out-of-range' };
+  const at = markerSiteAt(part, paragraph, op.offset, options);
+  if (!at.ok) return at;
+  const split = at;
 
   let insertIndex = at.index;
   const container = findNode(split.part, at.containerId);

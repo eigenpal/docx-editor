@@ -1,8 +1,8 @@
 // Empty final section pagination: body-level sectPr with no remaining blocks.
 //
 // enumerateDocumentSections intentionally keeps that trailing empty section. Layout must
-// materialize a blank sheet for default/nextPage (and deferred-parity even/odd), apply its
-// geometry and furniture, and must not invent a page for continuous.
+// materialize a blank sheet for default/nextPage/evenPage/oddPage (after any parity sheet),
+// apply its geometry and furniture, and must not invent a page for continuous.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -154,18 +154,24 @@ describe('empty final continuous does not manufacture a page', () => {
   });
 });
 
-describe('empty final evenPage/oddPage parity (deferred: like nextPage)', () => {
-  test.each(['evenPage', 'oddPage'] as const)(
-    '%s empty final materializes one blank page like nextPage',
-    (breakType) => {
-      const next = lay(load(emptyFinalBody('nextPage', '<w:pgSz w:w="15840" w:h="12240"/>')));
-      const parity = lay(load(emptyFinalBody(breakType, '<w:pgSz w:w="15840" w:h="12240"/>')));
-      expect(parity.pages).toHaveLength(next.pages.length);
-      expect(parity.pages[1]!.box.width).toBe(next.pages[1]!.box.width);
-      expect(parity.pages[1]!.box.height).toBe(next.pages[1]!.box.height);
-      expect(pageText(parity, 1)).toBe('');
-    }
-  );
+describe('empty final evenPage/oddPage parity', () => {
+  test('evenPage after page 1 materializes one blank page like nextPage', () => {
+    const next = lay(load(emptyFinalBody('nextPage', '<w:pgSz w:w="15840" w:h="12240"/>')));
+    const parity = lay(load(emptyFinalBody('evenPage', '<w:pgSz w:w="15840" w:h="12240"/>')));
+    expect(parity.pages).toHaveLength(next.pages.length);
+    expect(parity.pages[1]!.box.width).toBe(next.pages[1]!.box.width);
+    expect(parity.pages[1]!.box.height).toBe(next.pages[1]!.box.height);
+    expect(pageText(parity, 1)).toBe('');
+  });
+
+  test('oddPage after page 1 puts a blank parity sheet before the section page', () => {
+    const parity = lay(load(emptyFinalBody('oddPage', '<w:pgSz w:w="15840" w:h="12240"/>')));
+    expect(parity.pages).toHaveLength(3);
+    expect(parity.pages[1]!.parityBlank).toBe(true);
+    expect(parity.pages[2]!.parityBlank).toBeUndefined();
+    expect(parity.pages[2]!.box.width).toBe(792);
+    expect(parity.pages[2]!.pageFieldSource?.pageNumber).toBe(3);
+  });
 });
 
 describe('empty final furniture and ordinary nonempty sections', () => {

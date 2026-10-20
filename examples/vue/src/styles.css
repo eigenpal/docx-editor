@@ -325,6 +325,17 @@
 
 /* Mobile responsive overrides */
 @media (max-width: 768px) {
+  .demo-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .demo-header__right {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
   /* The toolbar collapses its groups into More instead of wrapping. It must not become a
      scroll container: that would clip the More panel below it. */
   .docx-editor [role='toolbar'] {

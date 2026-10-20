@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "insertInlineContentControl and custom node inserts always wrote an untracked w:sdt.",
+  "after": "With a revision, or in suggesting mode for insertCustomNode, the w:sdt is written inside a w:ins. Removing a control whose w:ins parent is left empty removes that w:ins too.",
+  "reason": "The shared document receives an ordinary w:ins holding a w:sdt, a shape peers already read, accept, and reject. No shared field or operation shape changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/tracked-inline-content-control.test.ts",
+    "packages/pro/src/__tests__/insert-custom-node.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-custom-nodes.test.ts"
+  ],
+  "changeset": "tracked-inline-control",
+  "migration": null
+}

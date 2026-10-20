@@ -79,6 +79,7 @@ export function mapContentControlType(
     if (kind === 'contentControlComboBox' || localName === 'comboBox') return 'comboBox';
     if (kind === 'contentControlDate' || localName === 'date') return 'date';
     if (localName === 'picture') return 'picture';
+    if (localName === 'docPartList') return 'buildingBlockGallery';
     if (kind === 'contentControlText' || localName === 'text') return 'plainText';
     if (localName === 'richText') return 'richText';
     if (

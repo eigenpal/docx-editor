@@ -94,6 +94,11 @@ describe('reading a font over a range', () => {
     const body = roots(host).body;
     const [only] = paragraphsOf(host, body);
     expect(fontOf(host, only!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: null,
       italic: null,
       name: null,
@@ -107,6 +112,11 @@ describe('reading a font over a range', () => {
     const body = roots(host).body;
     const [only] = paragraphsOf(host, body);
     expect(fontOf(host, only!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: true,
       italic: true,
       name: 'Georgia',
@@ -155,6 +165,11 @@ describe('writing a font', () => {
     const next = reopen(host);
     const [again] = paragraphsOf(next.host, next.body);
     expect(fontOf(next.host, again!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: true,
       italic: true,
       name: 'Georgia',
@@ -192,6 +207,11 @@ describe('writing a font', () => {
     const [again] = paragraphsOf(next.host, next.body);
     // The size is agreed because both runs got it; the name is not, because neither lost its own.
     expect(fontOf(next.host, again!)).toEqual({
+      underline: null,
+      strikeThrough: null,
+      highlightColor: null,
+      subscript: null,
+      superscript: null,
       bold: null,
       italic: null,
       name: null,
@@ -283,6 +303,7 @@ describe('reading a paragraph format', () => {
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
+      readingOrder: 'LeftToRight',
     });
   });
 
@@ -300,6 +321,7 @@ describe('reading a paragraph format', () => {
       spaceBefore: null,
       spaceAfter: null,
       widowControl: null,
+      readingOrder: 'LeftToRight',
     });
   });
 });
@@ -368,6 +390,7 @@ describe('writing a paragraph format', () => {
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
+      readingOrder: 'LeftToRight',
     });
   });
 
@@ -387,6 +410,42 @@ describe('writing a paragraph format', () => {
       ],
     });
     expect(refusal(response)).toBe('unsupported-content');
+  });
+
+  test('writes a reading order as w:bidi and refuses one this API does not have', () => {
+    const host = open(SPACED);
+    const body = roots(host).body;
+    const [spaced] = paragraphsOf(host, body);
+    for (const readingOrder of ['Unknown', 'Mixed', 'rtl', '', 1, null]) {
+      const response = host.execute({
+        operations: [
+          {
+            op: 'setParagraphFormat',
+            paragraph: { paragraph: spaced! },
+            format: { readingOrder } as never,
+          },
+        ],
+      });
+      expect(refusal(response)).toBe('unsupported-content');
+    }
+    expect(formatOf(host, spaced!)).toMatchObject({
+      readingOrder: 'LeftToRight',
+      alignment: 'Centered',
+    });
+    for (const readingOrder of ['RightToLeft', 'LeftToRight'] as const) {
+      const response = host.execute({
+        operations: [
+          { op: 'setParagraphFormat', paragraph: { paragraph: spaced! }, format: { readingOrder } },
+        ],
+      });
+      expect(response.ok).toBe(true);
+      // The rest of the paragraph's own properties ride along unchanged.
+      expect(formatOf(host, spaced!)).toMatchObject({
+        readingOrder,
+        alignment: 'Centered',
+        leftIndent: 36,
+      });
+    }
   });
 
   test('refuses an indent outside the range OOXML can express', () => {

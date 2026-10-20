@@ -16,6 +16,7 @@
 // and the paginated surface into the PM-free Editor contract.
 
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
+export type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
 export {
   createLayoutShaping,
@@ -25,6 +26,7 @@ export {
 export { LOADING_SNAPSHOT } from './loading-snapshot.ts';
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   type FontConfigurationBase,
@@ -46,6 +48,30 @@ export {
 } from './font-resolver.ts';
 export { blankDocumentBytes } from './blank-document.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
+export {
+  copyEditorStyles,
+  openEditorWindow,
+  type EditorWindow,
+  type OpenEditorWindowOptions,
+} from './editor-window.ts';
+export {
+  editorHostDocument,
+  editorHostElement,
+  editorHostWindow,
+  hostDocumentOf,
+  hostTimers,
+  hostWindowOf,
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+  isInputEvent,
+  isKeyboardEvent,
+  isMouseEvent,
+  isPointerEvent,
+  isTextNode,
+  type HostTimers,
+  type HostWindow,
+} from './host-realm.ts';
 /**
  * The part a node id names, read from the live package.
  *
@@ -60,6 +86,7 @@ export { partOfNodeId } from './surface-scope.ts';
  * against that member could otherwise not name what it gets back.
  */
 export type { SectionAnchor } from './section-scope.ts';
+export { customFonts, type CustomFontsOptions, type CustomFontsResolver } from './custom-fonts.ts';
 export {
   createFontSource,
   loadFonts,
@@ -108,6 +135,34 @@ export {
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 export { editorCommandKey } from './command-key.ts';
+export {
+  arrangeToolbarGroups,
+  collapseOrder,
+  sameOverflow,
+  toolbarGroupPriority,
+  toolbarOverflowGroups,
+  toolbarPanelPlacement,
+  toolbarPopupLeft,
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_PANEL_EDGE_MARGIN,
+  TOOLBAR_PINNED_GROUPS,
+  type ToolbarFitInput,
+  type ToolbarHostGroupPlacement,
+  type ToolbarPanelPlacement,
+} from './toolbar-fit.ts';
+export {
+  barRoomWidth,
+  collapsibleGroupCost,
+  controlsOverflow,
+  readAvailableWidth,
+  readColumnGap,
+  readInlineMargins,
+  separatorLeadingCost,
+  trailingGapCost,
+  type BarRoomInput,
+} from './toolbar-measure.ts';
+export { chordLetter, isGoToChord } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,
@@ -171,20 +226,49 @@ export {
   type ReviewWriteIntent,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
+export type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
 export {
   createDocxEditor,
   type DocxEditorInstance,
   type DocxEditorConfig,
   type EquationChromeHandlers,
   type HyperlinkChromeHandlers,
+  type BookmarkChromeHandlers,
 } from './docx-editor.ts';
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
-export type { FontMeasurementState } from './docx-editor-types.ts';
+export type {
+  AttachOptions,
+  BookmarkMarkInfo,
+  BookmarkMarkOptions,
+  CommentDraftChromeHandlers,
+  FontMeasurementState,
+  GoToChromeHandlers,
+} from './docx-editor-types.ts';
+export type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
+// `DocxEditorConfig.fieldResults` takes it.
+export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
+// `DocxEditorConfig.contentLockPolicy` takes it.
+export type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+// `DocxEditorConfig.lockedControlNavigation` takes it.
+export type { LockedControlNavigation } from './paginated-surface-options.ts';
 // Automation over an editor that is already open. The protocol itself lives in the neutral
 // automation subpath — only the adapter that needs a live editor ships from here, and only as
 // a factory: there is no composition hook a consumer could point at a second document model.
-export { BROWSER_AUTOMATION_CAPABILITIES, createBrowserAutomationHost } from './automation-host.ts';
+export {
+  BROWSER_AUTOMATION_CAPABILITIES,
+  createBrowserAutomationHost,
+  type BrowserAutomationHost,
+  type HistoryGroupRun,
+} from './automation-host.ts';
+// The fork a browser automation preview paints from. Internal to the editor-api runtime.
+export {
+  beginEditorPreview,
+  editorPreviewActive,
+  type EditorPreviewFork,
+  type EditorPreviewRefusal,
+} from './editor-preview.ts';
+export { reportAutomationException, reportAutomationRefusal } from './editor-diagnostics.ts';
 // The capability seam: what `createDocxEditor({ modules })` accepts and what a
 // capability package (the pro review module) implements.
 export {
@@ -193,6 +277,7 @@ export {
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,
+  type ReviewDisplayMode,
   type ReviewModuleContribution,
   type CollaborationModuleContribution,
 } from '../contracts/modules.ts';
@@ -227,6 +312,7 @@ export {
   type ImageResizeHandle,
   type SelectedDrawingOverlayTarget,
 } from './docx-editor-images.ts';
+export { historyShortcutOf, type HistoryShortcutKeys } from './history-shortcut.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 // The fit's vocabulary — only the part an adapter actually needs, so the published surface
 // stays something we can keep. The two canonical modes, because a zoom control has to render
@@ -240,8 +326,18 @@ export {
   ZOOM_MAX,
   ZOOM_MIN,
   resolveZoomMode,
+  REVIEW_MARKERS_GUTTER_PX,
+  reviewPaneEntitledZoom,
   sameZoomMode,
 } from './zoom-fit.ts';
+export {
+  editorInstanceScope,
+  hasOpenNestedPopup,
+  listenForPopupEscape,
+  listenForPopupFocusLeave,
+  type PopupEscapeOptions,
+  type PopupFocusLeaveOptions,
+} from './popup-escape.ts';
 export {
   computeImageResizeResult,
   createImageOverlayScrollPort,
@@ -324,3 +420,226 @@ export type {
   RevisionAuthorStyle,
   RevisionStyles,
 } from '../output/revision-presentation.ts';
+
+export type {
+  TextFormFieldDialogSession,
+  TextFormFieldChromeHandlers,
+} from './text-form-field-session.ts';
+
+export type {
+  ParagraphFlagState,
+  ParagraphFormatRead,
+  ParagraphFormatUpdate,
+} from './paragraph-dialog-types.ts';
+export {
+  twipsToInches,
+  formatInches,
+  inchesToTwips,
+  type TabAlignment,
+  type TabLeaderName,
+  TAB_ALIGNMENT_LABELS,
+  type SpecialIndent,
+  specialOf,
+  signedFirstLineOf,
+  type ParagraphDialogFields,
+  seedFields,
+  type ParagraphDialogMixed,
+  type ParagraphFlagKey,
+  NO_MIXED_FIELDS,
+  mixedFieldsOf,
+  sameTabStops,
+  changedFields,
+  alignmentAfterDirectionChange,
+  withTabStop,
+  trapTabWithin,
+} from './paragraph-dialog-fields.ts';
+export {
+  SPLIT_CELL_FALLBACK_MAX,
+  initialSplitCellCounts,
+  readSplitCellCounts,
+  type SplitCellCountProblem,
+  type SplitCellCounts,
+  type SplitCellLimits,
+} from './split-cell-dialog-model.ts';
+export { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
+
+export type {
+  PopupChromeRegistrationOptions,
+  ContentControlWidgetSession,
+  ContentControlWidgetChromeHandlers,
+  InvalidTextFormFieldSession,
+  InvalidTextFormFieldChromeHandlers,
+} from './popup-sessions.ts';
+export {
+  calendarMonth,
+  calendarMonthTitle,
+  calendarWeekdays,
+  firstDayOfWeek,
+  isoDateOf,
+  parseIsoDate,
+  shiftMonth,
+} from './content-control-calendar.ts';
+export type {
+  CalendarDay,
+  CalendarMonth,
+  CalendarMonthOptions,
+} from './content-control-calendar.ts';
+
+export {
+  calendarDateForKey,
+  calendarDateText,
+  calendarDateFromText,
+} from './content-control-calendar.ts';
+export {
+  positionContentControlPopup,
+  observeContentControlPopup,
+  contentControlPopupKeyDown,
+} from './content-control-popup-behavior.ts';
+export { createContentControlListNavigation } from './content-control-list-navigation.ts';
+export type { ContentControlListNavigation } from './content-control-list-navigation.ts';
+
+export { calendarMonthNames } from './content-control-calendar.ts';
+
+export { contentControlPopupOpener } from './content-control-popup-behavior.ts';
+export { CONTENT_CONTROL_PICTURE_ACCEPT } from './content-control-picture-widget.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './bind-history-group.ts';
+
+export {
+  commandExecOptions,
+  type EditorCommandExecute,
+  type ToolbarValueMap,
+  type ToolbarValueSlot,
+  type ToolbarSlotValue,
+} from './toolbar-values.ts';
+export {
+  LINE_SPACING_PRESETS,
+  lineSpacingMenuRowLabel,
+  lineSpacingMenuRows,
+  type LineSpacingMenuRow,
+  type LineSpacingMenuValue,
+} from './line-spacing-menu.ts';
+
+export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
+export type {
+  HighlightSource,
+  HighlightWatch,
+  WatchHighlightsOptions,
+} from './watch-highlights.ts';
+export {
+  createDocumentSearch,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
+  SEARCH_MATCH_LIMIT,
+} from './document-search.ts';
+export type {
+  DocumentSearch,
+  DocumentSearchFindOptions,
+  DocumentSearchHighlight,
+  DocumentSearchNavigateOptions,
+  DocumentSearchOptions,
+  DocumentSearchState,
+} from './document-search.ts';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
+} from './document-refresh.ts';
+export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
+  ReviewItemHit,
+  ScrollPlacement,
+  ScrollToAnchorOptions,
+  HistoryGroup,
+  HistoryGroupOptions,
+  // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
+  TextMatch,
+} from '../contracts/editor.ts';
+
+export { runChromeExport, ChromeExportError } from './chrome-export.ts';
+export type {
+  ChromeExportView,
+  ChromeExportFormat,
+  ChromeExportHandlers,
+  ChromeExportResult,
+} from './chrome-export.ts';
+export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
+export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
+
+export {
+  DEFAULT_REVIEW_PANE,
+  resolveReviewPane,
+  reviewPaneListsItem,
+} from '../contracts/review-pane.ts';
+export type {
+  CommentMarkerStyle,
+  ResolvedReviewPane,
+  ReviewPaneItemFields,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+  RevisionDisplay,
+} from '../contracts/review-pane.ts';
+export {
+  DEFAULT_REVISION_MARKUP,
+  REVISION_MARKUP_COLORS,
+  resolveRevisionMarkup,
+} from '../contracts/revision-markup.ts';
+export type {
+  RevisionMarkupOptions,
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
+  ResolvedRevisionMarkup,
+  RevisionMarkupNamedColor,
+  RevisionMarkupColor,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  RevisionMarkupStyle,
+  RevisionMarkupTextStyle,
+} from '../contracts/revision-markup.ts';
+export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';
+
+/** The watermark shape box that `setWatermark` writes, for previews. */
+export {
+  DEFAULT_WATERMARK_FONT,
+  watermarkShapeBox,
+  type WatermarkSize,
+} from './watermark-geometry.ts';
+
+/** The Bookmark dialog's list order and name rules, shared by the React and Vue dialogs. */
+export {
+  bookmarkDialogInitialName,
+  bookmarkDialogNameState,
+  bookmarkDialogRows,
+  goToBookmarkGroups,
+  goToBookmarkMatch,
+  goToBookmarkRows,
+  goToBookmarkTarget,
+  type BookmarkDialogNameState,
+  type GoToBookmarkGroup,
+  type BookmarkSortOrder,
+} from './bookmark-dialog-model.ts';

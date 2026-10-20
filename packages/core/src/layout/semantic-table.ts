@@ -1,3 +1,17 @@
+import { cachedTableStructure } from './table-structure-cache.ts';
+import { tableHasHidableRevisions } from './table-revision-markup.ts';
+import {
+  revisionCellMetadata,
+  wmlRevisionChild,
+  wmlRevisionAttribute,
+} from './revision-cell-shading.ts';
+import { readTableAlignment } from './table-alignment.ts';
+import {
+  autoWidthOuterRulePt,
+  withSharedGridLineSideRules,
+  retargetSharedGridLineSideRules,
+} from './legacy-table-side-rules.ts';
+import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
 // Reads `w:tbl`/`w:tr`/`w:tc` into the bounded structure consumed by table layout. All widths
@@ -10,13 +24,28 @@
 // covering it across every row, not any one node visited here.
 import {
   flattenContentControls,
-  WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
+  readFlag,
+  readGridSkip,
+  readGridSpan,
+  readRowHeight,
+  readShading,
+  readVMerge,
+} from './table-row-properties.ts';
+import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
+export type {
+  TableFloatAnchor,
+  TableFloatPosition,
+  TableFloatXSpec,
+  TableFloatYSpec,
+} from './table-float-properties.ts';
+import {
+  revisionNodeIncluded,
   revisionNodeProjectionMode,
+  type RevisionAttribution,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -36,6 +65,7 @@ import {
   EMPTY_TABLE_BORDER_BOX,
   readCellBorders,
   readTableBorders,
+  rowExceptionBorders,
   type CellBorderBox,
   type TableBorderBox,
 } from './table-borders.ts';
@@ -45,6 +75,8 @@ import {
   gridColumnElements,
   preferredLengthPt,
   readPreferredWidth,
+  readTableIndentPt,
+  readTablePreferredWidth,
   resolveColumnWidthsPt,
   type CellWidthClaim,
   type PreferredWidth,
@@ -60,6 +92,17 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
+import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
+import { resolveTableWidthPlacement } from './table-width-placement.ts';
+import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
+import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
+import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
+import {
+  autofitColumnWidthsPt,
+  narrowNestedReader,
+  type TableAutofitContext,
+} from './table-autofit-widths.ts';
+export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
 export {
@@ -114,61 +157,18 @@ export type TableRowHeight =
 /** Highest grid column a cell may start on; keeps a row's total span bounded. */
 const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;
 
-/** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
+/** Bound conditional cell formatting per immutable resolved table style. */
 const MAX_CELL_CONDITION_SETS = 256;
+const cellStyleFormattingMemos = new WeakMap<object, Map<string, TableCellStyleFormatting>>();
 
 /** `w:tblPr/w:jc` (17.4.29, ST_JcTable): where the table sits within the text column. */
 export type TableAlignment = 'left' | 'center' | 'right';
 
 /**
- * Ceiling on `w:tblInd`, so a stated indent cannot push a table off the sheet. Read through
- * the same unsigned path as every other width here: a negative indent (Word pulls a table
- * into the margin with one) is rejected rather than applied.
+ * Bound on the size of `w:tblInd` in either direction. The indent is signed and has its own
+ * reader (`readTableIndentPt`); the table widths and margins stay unsigned.
  */
 const MAX_TABLE_INDENT_PT = 31_680 / 20;
-
-/** `w:tblPr/w:jc`, defaulting to left when absent or unrecognised. */
-function readTableAlignment(container: OoxmlElement | undefined): TableAlignment | undefined {
-  const jc = container && childNamed(container, 'jc');
-  if (!jc) return undefined;
-  const value = attributeValue(jc, 'val');
-  // `start`/`end` are the strict-conformant spellings of `left`/`right`.
-  if (value === 'center') return 'center';
-  if (value === 'right' || value === 'end') return 'right';
-  if (value === 'left' || value === 'start') return 'left';
-  return undefined;
-}
-
-/**
- * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
- * table's offsets are measured from. Absent means `text` for both.
- */
-export type TableFloatAnchor = 'text' | 'margin' | 'page';
-
-/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
-export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
-
-/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
-export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
-
-/**
- * `w:tblPr/w:tblpPr` (17.4.57) — a table positioned against an anchor box rather than at
- * the point in the text where it was authored.
- *
- * A spec (`tblpXSpec`/`tblpYSpec`) supersedes the matching offset when both are present:
- * 17.4.57 states the alignment outright, and the offset only answers "how far from the
- * anchor" for the case where no alignment was stated.
- */
-export interface TableFloatPosition {
-  readonly horzAnchor: TableFloatAnchor;
-  readonly vertAnchor: TableFloatAnchor;
-  readonly xSpec?: TableFloatXSpec;
-  /** `w:tblpX` in points; signed, so a table can be pulled into the margin. */
-  readonly xPt: number;
-  readonly ySpec?: TableFloatYSpec;
-  /** `w:tblpY` in points; signed. */
-  readonly yPt: number;
-}
 
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
 export interface TableAnchorFrame {
@@ -187,32 +187,35 @@ export interface TableAnchorFrames {
 }
 
 /**
- * Ceiling on a `w:tblpX`/`w:tblpY` offset (~22"), matching the other bounded geometry
- * reads here. Both are signed, so the clamp is two-sided.
- */
-const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
-
-/**
  * One cell in the resolved table structure.
  *
  * `gridSpan` is clamped at READ time and layout never re-derives it — the value comes from a file
  * and would otherwise be a loop bound an attacker controls.
  */
 export interface SemanticTableCell {
+  readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
+  readonly revisionShadingAuthor?: string;
   readonly id: string;
+  /** Derived content-edge geometry for a verified legacy percentage-width parent table. */
+  readonly legacyContentAlignment?: true;
+  /** Resolved simple side rules centered on a legacy absolute-width table grid. */
+  readonly centeredSideRules?: true;
+  /** Simple side rules painted centered on the grid line, without moving the content edge. */
+  readonly centeredSidePaint?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
-  /**
-   * Absolute grid column this cell starts on, after `w:gridBefore` and every preceding
-   * span. Structural conditional formats and cell geometry both key on this, never on the
-   * cell's position in the row: one `gridSpan` cell otherwise shifts firstCol/lastCol and
-   * the vertical bands for every cell after it.
-   */
+  /** Physical grid column after width/style resolution and the bidiVisual projection. */
   readonly gridColumn: number;
+  /** Stored grid index when bidiVisual maps this cell into a physical RTL grid. */
+  readonly logicalGridColumn?: number;
   /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
   readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
+  /** This cell starts a vertical merge that the next row continues. */
+  readonly headsVerticalMerge?: true;
+  /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
+  readonly hideEndMark?: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
   /** `w:textDirection`; unsupported values keep horizontal layout. */
@@ -221,6 +224,18 @@ export interface SemanticTableCell {
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
   readonly borders: CellBorderBox;
+  /** The row's `w:tblPrEx` table borders, which replace the table's own for this cell. */
+  readonly rowTableBorders?: TableBorderBox;
+  /** Resolved incident edges used for content clearance, preserving authored border provenance. */
+  readonly contentBorders?: CellBorderBox;
+  /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
+  readonly contentBottomIsOuter?: boolean;
+  /** Clearance this AUTHORED ROW reserves above its content for its own top rule, in points. */
+  readonly topBandClearancePt?: number;
+  /** The CELL declares `w:tcBorders/w:top` as `nil`, rather than a table style doing so. */
+  readonly suppressesTopBand?: true;
+  /** Row-local clearance in points for authored minima, before vMerge combines content boxes. */
+  readonly minimumContentInsets?: { readonly top: number; readonly bottom: number };
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**
@@ -256,11 +271,13 @@ export interface SemanticTableRow {
   readonly revisionId?: string;
   readonly revisionAuthor?: string;
   readonly revisionDate?: string;
+  /** The row insertion a resolved view kept the row through; see the fragment record. */
+  readonly changeSites?: readonly RevisionAttribution[];
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
-   * `w:trPr/w:cantSplit` — the row must stay on one page. When it cannot fit a fresh page,
-   * layout fails closed rather than fragmenting or overflowing the content box.
+   * `w:trPr/w:cantSplit` — the row must stay on one page. When no page can hold it, the
+   * row starts on a fresh page and splits there, so its content is kept.
    */
   readonly cantSplit: boolean;
   /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */
@@ -275,14 +292,34 @@ export interface SemanticTableRow {
  * spans — vertical merges and column spans are already accounted for.
  */
 export interface SemanticTableStructure {
+  /** Whether stored columns and horizontal table properties display right to left. */
+  readonly bidiVisual?: true;
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
+  /** Verified pre-2013 percentage-width inline table; derived, never serialized. */
+  readonly legacyContentAlignment?: true;
+  /** A legacy content-aligned table whose outer trailing edge, not its content, meets the
+   * trailing text edge: a top-level table in a text box. Derived, never serialized. */
+  readonly legacyTrailingOuterEdge?: true;
+  /**
+   * Derived, never serialized: how far the grid moves from the aligned table edge, in points.
+   * A supported mode-14 fixed table shifts by its leading cell margin in the other direction.
+   * A compatibility-mode-15 left- or right-aligned table puts the outer edge of its side rule
+   * on that edge, so its first grid line sits half a rule inward. Positive moves right.
+   */
+  readonly outerRuleOffsetPt?: number;
+  /**
+   * Derived, never serialized: the outer side rule an automatic-width mode-15 AutoFit table
+   * keeps inside its container, so its grid settles that much narrower than the room.
+   */
+  readonly autoOuterRulePt?: number;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
   /**
    * `w:tblInd` (17.4.50) in points — "this indentation should shift the table into the text
    * margin by the specified amount". Applies to a left-aligned table; `w:jc` decides the
-   * placement outright for the other two.
+   * placement outright for the other two. Negative on a top-level table, which the indent
+   * pulls into the leading margin; never negative on a nested table.
    */
   readonly indentPt: number;
   /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
@@ -293,11 +330,11 @@ export interface SemanticTableStructure {
    */
   readonly float?: TableFloatPosition;
   /**
-   * `w:tblCellSpacing` (17.4.45) in points: the gap between adjacent cell edges. Applied as
-   * a half-gap inset on each side of every cell, so cells separate visually without the grid
-   * itself moving. Word ALSO grows the table's overall width by the spacing it adds around
-   * the outside; that part is not modelled, so a spaced table is laid out on the same grid
-   * its file states rather than a wider one.
+   * `w:tblCellSpacing` (17.4.45) in points: the space on each side of every cell. Cells sit
+   * twice this apart and from the table edge; the gaps come out of the table width, and each
+   * column gives up its share in proportion (`table-cell-spacing.ts`). Rows do not yet get
+   * the matching gaps above and below them, so a spaced table's rows stay as tall as they
+   * would be without it.
    */
   readonly cellSpacingPt: number;
   /**
@@ -323,402 +360,15 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
 }
 
-function wmlRevisionChild(
-  node: OoxmlElement,
-  localName: 'trPr' | 'ins' | 'del'
-): OoxmlElement | undefined {
-  for (const child of node.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    ) {
-      return child;
-    }
-  }
-  return undefined;
-}
-
-function wmlRevisionAttribute(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find(
-    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
-  )?.value;
-}
-
-function readGridSpan(cellProperties: OoxmlElement | undefined): number {
-  const raw = cellProperties && childNamed(cellProperties, 'gridSpan');
-  const value = raw && attributeValue(raw, 'val');
-  if (!value || !/^\d{1,7}$/.test(value)) return 1;
-  const span = Number(value);
-  return Number.isInteger(span) && span > 1 ? Math.min(span, MAX_TABLE_COLUMNS) : 1;
-}
-
-/** `w:gridBefore` / `w:gridAfter` (17.4.14 / 17.4.13): grid columns the row leaves empty. */
-function readGridSkip(rowProperties: OoxmlElement | undefined, localName: string): number {
-  const raw = rowProperties && childNamed(rowProperties, localName);
-  const value = raw && attributeValue(raw, 'val');
-  if (!value || !/^\d{1,7}$/.test(value)) return 0;
-  const count = Number(value);
-  return Number.isInteger(count) && count > 0 ? Math.min(count, MAX_TABLE_COLUMNS) : 0;
-}
-
-function readVMergeContinue(cellProperties: OoxmlElement | undefined): boolean {
-  const vMerge = cellProperties && childNamed(cellProperties, 'vMerge');
-  if (!vMerge) return false;
-  // Explicit "continue" or a bare <w:vMerge/> continues; only "restart" starts a cell.
-  return attributeValue(vMerge, 'val') !== 'restart';
-}
-
-function readShading(cellProperties: OoxmlElement | undefined): string | undefined {
-  return shadingFillFromElement(cellProperties && childNamed(cellProperties, 'shd'));
-}
-
 /**
- * A `w:trPr` toggle (`w:tblHeader`, `w:cantSplit`), absent meaning off.
- *
- * `off` is an off value (§17.17.4), like `0` and `false` — the `onOff` helper below already
- * accepts all three. Missing it here meant `<w:tblHeader w:val="off"/>` read as ON, and the
- * row repeated as a header on every page of a long table.
+ * Widened structures per base, by their widths. Readers that widen one base differently (two
+ * measurers, two field contexts) keep separate entries instead of evicting each other.
  */
-function readFlag(container: OoxmlElement | undefined, localName: string): boolean {
-  const flag = container && childNamed(container, localName);
-  if (!flag) return false;
-  const value = attributeValue(flag, 'val');
-  return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
-}
-
-const AUTO_ROW_HEIGHT: TableRowHeight = Object.freeze({ rule: 'auto' });
-
-/**
- * Read `w:trHeight` (17.4.81). Hostile / unreadable values demote to auto so layout still
- * sizes from content rather than inventing geometry.
- */
-function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight {
-  const node = rowProperties && childNamed(rowProperties, 'trHeight');
-  if (!node) return AUTO_ROW_HEIGHT;
-  const rawRule = attributeValue(node, 'hRule');
-  const rule: TableRowHeightRule | undefined =
-    rawRule === 'auto' || rawRule === 'exact' || rawRule === 'atLeast' ? rawRule : undefined;
-  if (rule === 'auto') return AUTO_ROW_HEIGHT;
-
-  const rawVal = attributeValue(node, 'val');
-  if (rawVal === undefined || !/^\d{1,9}$/.test(rawVal)) return AUTO_ROW_HEIGHT;
-  const twips = Number(rawVal);
-  if (!Number.isFinite(twips) || twips <= 0) return AUTO_ROW_HEIGHT;
-  const valuePt = Math.min(twips / 20, MAX_TABLE_ROW_HEIGHT_PT);
-  if (!(valuePt > 0)) return AUTO_ROW_HEIGHT;
-
-  // Omitted hRule + present val → atLeast (Word), not ECMA's auto-with-ignored-val.
-  const effective: 'atLeast' | 'exact' = rule === 'exact' ? 'exact' : 'atLeast';
-  return { rule: effective, valuePt };
-}
-
-/**
- * Where a table's left edge sits inside the box that contains it.
- *
- * 17.4.50 puts a left-aligned table at `w:tblInd` from the leading margin. 17.4.29's other
- * two placements are stated relative to the containing box instead, so the indent does not
- * also apply to them — Word centres a centred table in the text column whatever indent the
- * file carries. A table wider than its container starts flush so its leading edge stays on
- * the page rather than being centred off it.
- */
-export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
-  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const slack = containerWidthPt - width;
-  if (!Number.isFinite(slack) || slack <= 0) return 0;
-  if (structure.alignment === 'center') return slack / 2;
-  if (structure.alignment === 'right') return slack;
-  return Math.min(structure.indentPt, slack);
-}
-
-function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined {
-  if (raw === 'page') return 'page';
-  if (raw === 'margin') return 'margin';
-  if (raw === 'text') return 'text';
-  return undefined;
-}
-
-function readSignedTwipsPt(raw: string | undefined): number | undefined {
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips)) return undefined;
-  const pt = twips / 20;
-  return Math.max(-MAX_TABLE_FLOAT_OFFSET_PT, Math.min(MAX_TABLE_FLOAT_OFFSET_PT, pt));
-}
-
-/**
- * Read `w:tblpPr`. Absent anchors default to `text` (17.4.58/17.4.66); an unrecognised
- * spec is dropped rather than guessed at, which leaves the offset to place the table.
- */
-function readTableFloatPosition(
-  container: OoxmlElement | undefined
-): TableFloatPosition | undefined {
-  const tblpPr = container && childNamed(container, 'tblpPr');
-  if (!tblpPr) return undefined;
-  const rawXSpec = attributeValue(tblpPr, 'tblpXSpec');
-  const xSpec: TableFloatXSpec | undefined =
-    rawXSpec === 'left' ||
-    rawXSpec === 'center' ||
-    rawXSpec === 'right' ||
-    rawXSpec === 'inside' ||
-    rawXSpec === 'outside'
-      ? rawXSpec
-      : undefined;
-  const rawYSpec = attributeValue(tblpPr, 'tblpYSpec');
-  const ySpec: TableFloatYSpec | undefined =
-    rawYSpec === 'inline' ||
-    rawYSpec === 'top' ||
-    rawYSpec === 'center' ||
-    rawYSpec === 'bottom' ||
-    rawYSpec === 'inside' ||
-    rawYSpec === 'outside'
-      ? rawYSpec
-      : undefined;
-  return {
-    horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
-    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
-    ...(xSpec ? { xSpec } : {}),
-    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX')) ?? 0,
-    ...(ySpec ? { ySpec } : {}),
-    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY')) ?? 0,
-  };
-}
-
-/**
- * Where a floated table's left edge sits, in the coordinates layout reports boxes in.
- *
- * `w:tblpXSpec` aligns the table inside its anchor box; `w:tblpX` offsets it from that
- * box's leading edge instead. `inside`/`outside` are the mirrored-margin spellings of
- * `left`/`right` and render as those — the odd/even page flip they ask for only exists in
- * a document with mirrored margins, which this layout does not model.
- *
- * The result keeps the table's leading edge on the sheet whatever the file states, so a
- * hostile offset moves the table rather than painting it off the page entirely.
- */
-export function tableFloatOriginX(
-  float: TableFloatPosition,
-  tableWidthPt: number,
-  frames: TableAnchorFrames
-): number {
-  const frame = frames[float.horzAnchor];
-  const slack = frame.width - tableWidthPt;
-  let x: number;
-  if (float.xSpec === 'center') x = frame.left + slack / 2;
-  else if (float.xSpec === 'right' || float.xSpec === 'outside') x = frame.left + slack;
-  else if (float.xSpec) x = frame.left;
-  else x = frame.left + float.xPt;
-  if (!Number.isFinite(x)) return frame.left;
-  const pageRight = frames.page.left + frames.page.width;
-  return Math.max(frames.page.left, Math.min(x, pageRight));
-}
-
-/**
- * `w:tblLook` (17.4.56): which conditional formats of the table style are live.
- *
- * Word writes both the modern attributes (`w:firstRow="1"`) and the legacy `w:val`
- * bitmask, and older producers write only the bitmask. Both are read; an attribute wins
- * where the two disagree, because that is the newer statement.
- */
-interface TableLook {
-  readonly firstRow: boolean;
-  readonly lastRow: boolean;
-  readonly firstColumn: boolean;
-  readonly lastColumn: boolean;
-  readonly rowBanding: boolean;
-  readonly columnBanding: boolean;
-}
-
-/**
- * No `w:tblLook` at all says exactly what an empty `<w:tblLook/>` says. `noHBand`/`noVBand`
- * are NEGATIVE flags and the legacy bitmask defaults to `0000`, so 17.4.56's default is to
- * apply row and column banding but neither the first/last row nor the first/last column
- * format. Reading the absent element as "nothing is live" made the same semantic state
- * render two different ways depending on whether the producer wrote the empty tag.
- */
-const DEFAULT_TABLE_LOOK: TableLook = Object.freeze({
-  firstRow: false,
-  lastRow: false,
-  firstColumn: false,
-  lastColumn: false,
-  rowBanding: true,
-  columnBanding: true,
-});
-
-function onOff(node: OoxmlElement, name: string): boolean | undefined {
-  const raw = attributeValue(node, name);
-  if (raw === undefined) return undefined;
-  return raw !== '0' && raw !== 'false' && raw !== 'off';
-}
-
-/**
- * `w:tblLook` is read from the TABLE's own `w:tblPr` only, never cascaded from the style it
- * names. The schema admits `w:tblLook` inside a table style's `w:tblPr`, but the look is
- * Word's per-table "Table Style Options" checkbox set — a property of this table's use of
- * the style, not of the style — and Word writes one on every table it creates.
- */
-function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
-  const look = tblPr && childNamed(tblPr, 'tblLook');
-  if (!look) return DEFAULT_TABLE_LOOK;
-  // The legacy bitmask: 0x0020 firstRow, 0x0040 lastRow, 0x0080 firstColumn,
-  // 0x0100 lastColumn, 0x0200 NO row banding, 0x0400 NO column banding.
-  const rawVal = attributeValue(look, 'val');
-  const mask = rawVal && /^[0-9A-Fa-f]{1,4}$/.test(rawVal) ? Number.parseInt(rawVal, 16) : 0;
-  return {
-    firstRow: onOff(look, 'firstRow') ?? (mask & 0x0020) !== 0,
-    lastRow: onOff(look, 'lastRow') ?? (mask & 0x0040) !== 0,
-    firstColumn: onOff(look, 'firstColumn') ?? (mask & 0x0080) !== 0,
-    lastColumn: onOff(look, 'lastColumn') ?? (mask & 0x0100) !== 0,
-    rowBanding:
-      onOff(look, 'noHBand') === undefined ? (mask & 0x0200) === 0 : !onOff(look, 'noHBand'),
-    columnBanding:
-      onOff(look, 'noVBand') === undefined ? (mask & 0x0400) === 0 : !onOff(look, 'noVBand'),
-  };
-}
-
-/** Bit positions of `w:cnfStyle/@w:val` (17.4.7 row, 17.4.8 cell), most significant first. */
-const CNF_BITS = [
-  'firstRow',
-  'lastRow',
-  'firstCol',
-  'lastCol',
-  'band1Vert',
-  'band2Vert',
-  'band1Horz',
-  'band2Horz',
-  'nwCell',
-  'neCell',
-  'swCell',
-  'seCell',
-] as const;
-
-/** The same twelve conditions as named `w:cnfStyle` attributes (CT_Cnf), in bit order. */
-const CNF_ATTRIBUTES = [
-  'firstRow',
-  'lastRow',
-  'firstColumn',
-  'lastColumn',
-  'oddVBand',
-  'evenVBand',
-  'oddHBand',
-  'evenHBand',
-  'firstRowFirstColumn',
-  'firstRowLastColumn',
-  'lastRowFirstColumn',
-  'lastRowLastColumn',
-] as const;
-
-/**
- * `w:cnfStyle`: the producer stating which conditions a row or cell is under.
- *
- * Read like `w:tblLook`, from both encodings — the legacy `w:val` bitmask and the named
- * attributes, which are all a strict-conformant producer writes.
- */
-function readCnfStyle(container: OoxmlElement | undefined, into: Set<string>): void {
-  const cnf = container && childNamed(container, 'cnfStyle');
-  if (!cnf) return;
-  const raw = attributeValue(cnf, 'val');
-  if (raw && /^[01]{1,12}$/.test(raw)) {
-    for (let index = 0; index < raw.length && index < CNF_BITS.length; index += 1) {
-      if (raw[index] === '1') into.add(CNF_BITS[index]!);
-    }
-  }
-  for (let index = 0; index < CNF_ATTRIBUTES.length; index += 1) {
-    if (onOff(cnf, CNF_ATTRIBUTES[index]!) === true) into.add(CNF_BITS[index]!);
-  }
-}
-
-/**
- * Word layers a table style's conditional formats weakest first: the whole table, then the
- * bands, then first/last column, then first/last row, then the four corners (17.7.6). Both
- * the derived and the stated conditions emit through this one order — `w:cnfStyle` lists
- * its conditions in BIT order, which puts the bands last and let a banding fill overwrite
- * the shading of a styled header row.
- */
-const CONDITION_PRECEDENCE = [
-  'band1Vert',
-  'band2Vert',
-  'band1Horz',
-  'band2Horz',
-  'firstCol',
-  'lastCol',
-  'firstRow',
-  'lastRow',
-  'nwCell',
-  'neCell',
-  'swCell',
-  'seCell',
-] as const;
-
-/**
- * Which of the style's conditional formats apply to one cell, weakest first.
- *
- * A `w:cnfStyle` is added to the derivation rather than replacing it: it is a cache the
- * producer wrote, and a row that states "I am the header" is still in whichever column and
- * band the grid puts it in. Structural conditions key on the GRID COLUMN the cell occupies,
- * so a `gridSpan` or a `w:gridBefore` earlier in the row cannot shift them.
- */
-function conditionalTypesFor(input: {
-  readonly look: TableLook;
-  readonly rowIndex: number;
-  readonly rowCount: number;
-  readonly gridColumn: number;
-  readonly gridSpan: number;
-  readonly columnCount: number;
-  readonly rowProperties: OoxmlElement | undefined;
-  readonly cellProperties: OoxmlElement | undefined;
-}): readonly string[] {
-  const active = new Set<string>();
-  readCnfStyle(input.rowProperties, active);
-  readCnfStyle(input.cellProperties, active);
-
-  const { look, rowIndex, rowCount, gridColumn, gridSpan, columnCount } = input;
-  const isFirstRow = active.has('firstRow') || (look.firstRow && rowIndex === 0);
-  const isLastRow = active.has('lastRow') || (look.lastRow && rowIndex === rowCount - 1);
-  const isFirstColumn = active.has('firstCol') || (look.firstColumn && gridColumn === 0);
-  const isLastColumn =
-    active.has('lastCol') || (look.lastColumn && gridColumn + gridSpan >= columnCount);
-
-  const statedVBand = active.has('band1Vert') || active.has('band2Vert');
-  if (!statedVBand && look.columnBanding && !isFirstColumn && !isLastColumn) {
-    const band = gridColumn - (look.firstColumn ? 1 : 0);
-    active.add(band % 2 === 0 ? 'band1Vert' : 'band2Vert');
-  }
-  const statedHBand = active.has('band1Horz') || active.has('band2Horz');
-  if (!statedHBand && look.rowBanding && !isFirstRow && !isLastRow) {
-    const band = rowIndex - (look.firstRow ? 1 : 0);
-    active.add(band % 2 === 0 ? 'band1Horz' : 'band2Horz');
-  }
-  if (isFirstColumn) active.add('firstCol');
-  if (isLastColumn) active.add('lastCol');
-  if (isFirstRow) active.add('firstRow');
-  if (isLastRow) active.add('lastRow');
-  if (isFirstRow && isFirstColumn) active.add('nwCell');
-  if (isFirstRow && isLastColumn) active.add('neCell');
-  if (isLastRow && isFirstColumn) active.add('swCell');
-  if (isLastRow && isLastColumn) active.add('seCell');
-
-  const ordered: string[] = [];
-  for (const condition of CONDITION_PRECEDENCE) if (active.has(condition)) ordered.push(condition);
-  return ordered;
-}
-
-interface TableStructureMemo {
-  readonly contentWidthPt: number;
-  readonly depth: number;
-  readonly styleCascade: StyleCascadeTable | undefined;
-  readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
-  readonly structure: SemanticTableStructure | null;
-}
-
-/** The last unfiltered structure for each immutable table node. */
-const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
-
-/**
- * The last filtered structure for each immutable table node. A separate cache lets save-time
- * canonical layout keep both projections warm without slowing the common unfiltered lookup.
- */
-const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
+const widenedStructureMemos = new WeakMap<
+  SemanticTableStructure,
+  Map<string, SemanticTableStructure>
+>();
+const MAX_WIDENED_PER_BASE = 4;
 
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
@@ -731,39 +381,104 @@ export function readTableStructure(
   styleCascade?: StyleCascadeTable,
   /** Which revisions the view resolves away; only the proposed result performs the join. */
   displayMode: RevisionDisplayMode = 'all-markup',
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number,
+  /** Widens autofit columns to their content minimums; layout passes its measurer. */
+  autofit?: TableAutofitContext,
+  /** The table is a top-level table of a text box story. */
+  textBox = false
 ): SemanticTableStructure | null {
-  const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
-  const memo = memoStore.get(table);
-  if (
-    memo &&
-    memo.contentWidthPt === contentWidthPt &&
-    memo.depth === depth &&
-    // Identity compare is sound because a cascade table is built once per styles part and
-    // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
-    memo.styleCascade === styleCascade &&
-    memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
-  ) {
-    return memo.structure;
-  }
-  const structure = readTableStructureUncached(
+  const base = cachedTableStructure(
     table,
-    contentWidthPt,
-    depth,
-    styleCascade,
-    displayMode,
-    authorFilter
+    {
+      contentWidthPt,
+      depth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode,
+      textBox,
+    },
+    () =>
+      readTableStructureUncached(
+        table,
+        contentWidthPt,
+        depth,
+        styleCascade,
+        displayMode,
+        authorFilter,
+        compatibilityMode,
+        textBox
+      )
   );
-  const entry: TableStructureMemo = {
-    contentWidthPt,
-    depth,
+  if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
+  // Deleted and inserted content sizes the columns in every view.
+  const markupStructure =
+    displayMode === 'all-markup' || !tableHasHidableRevisions(table)
+      ? undefined
+      : readTableStructure(
+          table,
+          contentWidthPt,
+          depth,
+          styleCascade,
+          'all-markup',
+          authorFilter,
+          compatibilityMode,
+          undefined,
+          textBox
+        );
+  // Most tables already hold their content: they come back as the shared base structure.
+  const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
     styleCascade,
     displayMode,
     authorFilter,
-    structure,
+    depth,
+    ...(markupStructure ? { markupStructure } : {}),
+    readNested: narrowNestedReader(
+      readTableStructure,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode
+    ),
+  });
+  if (widths === base.columnWidthsPt) return base;
+  const widthsKey = widths.join(',');
+  let widened = widenedStructureMemos.get(base);
+  const known = widened?.get(widthsKey);
+  if (known) return known;
+  const sideRules = retargetSharedGridLineSideRules(
+    base.rows,
+    {
+      compatibilityMode,
+      depth,
+      bidiVisual: base.bidiVisual === true,
+      floating: base.float !== undefined,
+      cellSpacingPt: base.cellSpacingPt,
+      widthType: base.tableWidth.type,
+      alignment: base.alignment,
+      layoutFixed: base.layoutFixed,
+      indentPt: base.indentPt,
+      columnWidthsPt: base.columnWidthsPt,
+      containerWidthPt: contentWidthPt,
+    },
+    widths
+  );
+  // Top-level fixed tables returned above; nested fixed tables have no legacy content offset.
+  const { outerRuleOffsetPt: _previousOffset, ...unchanged } = base;
+  const structure: SemanticTableStructure = {
+    ...unchanged,
+    columnWidthsPt: widths,
+    rows: sideRules.rows,
+    ...(sideRules.outerRuleOffsetPt === undefined
+      ? {}
+      : { outerRuleOffsetPt: sideRules.outerRuleOffsetPt }),
   };
-  memoStore.set(table, entry);
+  if (structure) {
+    if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
+    if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
+    widened.set(widthsKey, structure);
+  }
   return structure;
 }
 
@@ -773,7 +488,9 @@ function readTableStructureUncached(
   depth: number,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number,
+  textBox = false
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -790,8 +507,17 @@ function readTableStructureUncached(
     ? cascadeTableFormatting(styleCascade, styleId)
     : EMPTY_TABLE_FORMATTING;
   const look = readTableLook(tblPr);
+  let bidiVisual = false;
+  for (const node of tableStyle.tablePropertyNodes) {
+    if (childNamed(node, 'bidiVisual')) bidiVisual = readFlag(node, 'bidiVisual');
+  }
+  if (tblPr && childNamed(tblPr, 'bidiVisual')) bidiVisual = readFlag(tblPr, 'bidiVisual');
 
-  let styleMargins = DEFAULT_CELL_MARGINS;
+  // A missing margin resolves to 10 twips, including legacy documents. The
+  // familiar 108-twip inset belongs to the authored default table style, not
+  // this application fallback. Styles, table properties and cells override
+  // each side independently, including explicit zero.
+  let styleMargins: CellMarginsPt = { top: 0, right: 0.5, bottom: 0, left: 0.5 };
   let styleBorders = EMPTY_TABLE_BORDER_BOX;
   for (const node of tableStyle.tablePropertyNodes) {
     styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
@@ -806,12 +532,10 @@ function readTableStructureUncached(
     tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX
   );
 
-  // Cells under the same conditions resolve to the same paragraph/run material, and a table
-  // has few distinct condition sets. Memoized per table so a 10k-cell table flattens the
-  // style chain a handful of times, not once per cell. A hostile `w:cnfStyle` can still name
-  // up to 4096 distinct sets, so the memo stops growing at the ceiling and later cells simply
-  // resolve unmemoized — same bounded per-cell work either way.
-  const styleByConditions = new Map<string, TableCellStyleFormatting>();
+  // The same immutable style and conditions apply across tables and width variants.
+  // Bound the shared memo so hostile condition combinations do not grow it indefinitely.
+  let styleByConditions = cellStyleFormattingMemos.get(tableStyle);
+  if (!styleByConditions) cellStyleFormattingMemos.set(tableStyle, (styleByConditions = new Map()));
   // Word's `TableNormal` states `w:tblPr` and nothing else, and every table now resolves it,
   // so the identity check against `EMPTY_TABLE_FORMATTING` that used to short-circuit here
   // stopped firing — every cell of every unstyled table flattened a chain that could only
@@ -837,6 +561,7 @@ function readTableStructureUncached(
   interface RowPlan {
     readonly node: OoxmlElement;
     readonly revision: OoxmlElement | undefined;
+    readonly changeSites: readonly RevisionAttribution[] | undefined;
     /** The row's cells with any `CT_SdtCell` wrapper unwrapped, so both passes see one list. */
     readonly cells: readonly OoxmlNode[];
     readonly properties: OoxmlElement | undefined;
@@ -847,6 +572,7 @@ function readTableStructureUncached(
   }
   const plans: RowPlan[] = [];
   const claims: CellWidthClaim[] = [];
+  let hasOmittedRows = false;
   let derivedColumns = 1;
   // A content control may sit between the table and its rows (`CT_SdtRow`) or between a row and
   // its cells (`CT_SdtCell`). It is a label on that row or cell, not a box around it, so it is
@@ -870,9 +596,29 @@ function readTableStructureUncached(
       (projectedMode === 'proposed' && revisionKind === 'del') ||
       (projectedMode === 'original' && revisionKind === 'ins')
     ) {
+      hasOmittedRows = true;
       continue;
     }
     const revision = projectedMode === 'all-markup' ? authoredRevision : undefined;
+    // A resolved view that KEEPS a tracked row (an accepted insertion) still owes the reader
+    // a change bar beside it, unless the reviewer filter hides the decision.
+    const changeSites =
+      authoredRevision &&
+      projectedMode !== 'all-markup' &&
+      revisionAuthor !== undefined &&
+      (!authorFilter || revisionNodeIncluded(authorFilter, authoredRevision.id, revisionAuthor))
+        ? [
+            {
+              kind: revisionKind === 'ins' ? ('insert' as const) : ('delete' as const),
+              id: wmlRevisionAttribute(authoredRevision, 'id') ?? '',
+              author: revisionAuthor,
+              ...(wmlRevisionAttribute(authoredRevision, 'date') === undefined
+                ? {}
+                : { date: wmlRevisionAttribute(authoredRevision, 'date')! }),
+              nodeId: authoredRevision.id,
+            },
+          ]
+        : undefined;
     const starts: number[] = [];
     const spans: number[] = [];
     const preferred: PreferredWidth[] = [];
@@ -919,6 +665,7 @@ function readTableStructureUncached(
     plans.push({
       node: rowNode,
       revision,
+      changeSites,
       cells: rowCells,
       properties,
       starts,
@@ -933,6 +680,11 @@ function readTableStructureUncached(
   const bodyRows = plans.length;
 
   const rows: SemanticTableRow[] = [];
+  // Grid columns where the previous row has a cell with `w:vMerge`. A continuation only
+  // continues such a cell (17.4.85). Below an unmerged cell, or in the first row, it has
+  // nothing to continue, so it starts its own merge and paints its own content.
+  let mergedAbove = new Set<number>();
+  let cellsAbove: SemanticTableCell[] = [];
   for (let rowIndex = 0; rowIndex < plans.length; rowIndex += 1) {
     const plan = plans[rowIndex]!;
     const rowNode = plan.node;
@@ -948,8 +700,10 @@ function readTableStructureUncached(
       cellProperties: undefined,
     });
     const isHeader = tableRowIsHeader(tableStyle, rowConditions, rowProperties);
+    const rowTableBorders = rowExceptionBorders(rowNode, tableBorders);
     let cellIndex = 0;
     const cells: SemanticTableCell[] = [];
+    const mergedHere = new Set<number>();
     for (const cellNode of plan.cells) {
       if (cellNode.kind !== 'tableCell') continue;
       const cellProperties = childNamed(cellNode, 'tcPr');
@@ -990,25 +744,37 @@ function readTableStructureUncached(
       // Through the shared collector: a cell is a story like any other, so a tracked mark
       // merges inside it and a paragraph a revision removed leaves no blank line behind.
       const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter);
+      const ownBorders = cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX;
+      const vMerge = readVMerge(cellProperties);
+      if (vMerge !== 'none') mergedHere.add(gridColumn);
+      if (vMerge === 'continue' && mergedAbove.has(gridColumn)) {
+        const above = cellsAbove.findIndex((c) => c.gridColumn === gridColumn);
+        const head = cellsAbove[above];
+        if (head && !head.vMergeContinue && !head.headsVerticalMerge)
+          cellsAbove[above] = { ...head, headsVerticalMerge: true };
+      }
       cells.push({
         id: cellNode.id,
+        ...revisionCellMetadata(cellProperties, displayMode, authorFilter, plan.revision),
         gridSpan,
         gridColumn,
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
-        vMergeContinue: readVMergeContinue(cellProperties),
+        vMergeContinue: vMerge === 'continue' && mergedAbove.has(gridColumn),
+        hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
-        borders: mergeCellBorders(
-          conditionalBorders,
-          cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
-        ),
+        borders: mergeCellBorders(conditionalBorders, ownBorders),
+        ...(rowTableBorders ? { rowTableBorders } : {}),
+        ...(ownBorders.top.state === 'none' ? { suppressesTopBand: true as const } : {}),
         ...(shading === undefined ? {} : { shading }),
         preferredWidth,
         styleFormatting: styleFormattingFor(conditions),
         blocks,
       });
     }
+    mergedAbove = mergedHere;
+    cellsAbove = cells;
     const rowRevision = plan.revision;
     const rowRevisionKind = rowRevision
       ? rowRevision.localName === 'ins'
@@ -1024,6 +790,7 @@ function readTableStructureUncached(
       ...(rowRevisionId !== undefined ? { revisionId: rowRevisionId } : {}),
       ...(rowRevisionAuthor !== undefined ? { revisionAuthor: rowRevisionAuthor } : {}),
       ...(rowRevisionDate !== undefined ? { revisionDate: rowRevisionDate } : {}),
+      ...(plan.changeSites ? { changeSites: plan.changeSites } : {}),
       isHeader,
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),
@@ -1043,11 +810,11 @@ function readTableStructureUncached(
   let styleFloat: TableFloatPosition | undefined;
   for (const node of tableStyle.tablePropertyNodes) {
     const styleW = childNamed(node, 'tblW');
-    if (styleW) styleTableWidth = readPreferredWidth(styleW);
+    if (styleW) styleTableWidth = readTablePreferredWidth(styleW);
     const styleLayout = childNamed(node, 'tblLayout');
     if (styleLayout) styleLayoutFixed = attributeValue(styleLayout, 'type') === 'fixed';
     styleIndentPt =
-      preferredLengthPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
+      readTableIndentPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
     styleAlignment = readTableAlignment(node) ?? styleAlignment;
     styleCellSpacingPt =
       preferredLengthPt(childNamed(node, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
@@ -1055,15 +822,18 @@ function readTableStructureUncached(
     styleFloat = readTableFloatPosition(node) ?? styleFloat;
   }
   const ownTblW = tblPr && childNamed(tblPr, 'tblW');
-  const tableWidth = ownTblW ? readPreferredWidth(ownTblW) : styleTableWidth;
+  const tableWidth = ownTblW ? readTablePreferredWidth(ownTblW) : styleTableWidth;
   const tblLayout = tblPr && childNamed(tblPr, 'tblLayout');
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'
     : (styleLayoutFixed ?? false);
-  const indentPt =
-    preferredLengthPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
+  const statedIndentPt =
+    readTableIndentPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
     styleIndentPt ??
     0;
+  // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
+  // negative indent, and leave a nested table where a zero indent puts it.
+  const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
@@ -1071,25 +841,143 @@ function readTableStructureUncached(
   const cellSpacingPt =
     preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
     styleCellSpacingPt ??
+    uniformRowCellSpacingPt(table) ??
     0;
 
-  return {
-    columnWidthsPt: resolveColumnWidthsPt({
-      gridCols,
-      claims,
-      columnCount,
-      contentWidthPt,
-      tableWidth,
-      layoutFixed,
-    }),
+  const placement = resolveTableWidthPlacement({
+    table,
+    propertyNodes: tableStyle.tablePropertyNodes,
     rows,
+    columnCount,
+    contentWidthPt,
+    compatibilityMode,
+    depth,
+    tableWidth,
+    cellSpacingPt,
+    floating: float !== undefined,
+    layoutFixed,
+    alignment,
+    bidiVisual,
+    indentPt: readIndentPt,
+    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || styleIndentPt !== undefined,
+    tableBorders,
+    claims,
+    gridCols,
+    textBox,
+  });
+  const { legacy, indentPt } = placement;
+  const legacyWidth = legacy?.widthPt;
+
+  const columnWidthsPt = resolveColumnWidthsPt({
+    gridCols,
+    claims: placement.claims,
+    columnCount,
+    contentWidthPt: placement.contentWidthPt,
+    tableWidth: placement.tableWidth,
+    layoutFixed,
+    // A hidden revision row can still account for part of the authored grid.
+    hasOmittedRows,
+  });
+  // Project the grid visually; cell arrays retain document order for keyboard traversal.
+  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
+  let contentRows = withTableContentBorders(
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
+  contentRows = withRowMinimumContentInsets(
+    contentRows,
+    visualRows,
+    bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    columnWidthsPt.length,
+    cellSpacingPt === 0
+  );
+  const sideRuleShape = {
+    compatibilityMode,
+    depth,
+    bidiVisual,
+    floating: float !== undefined,
+    cellSpacingPt,
+    widthType: tableWidth.type,
+    alignment,
+    layoutFixed,
+    indentPt,
+    columnWidthsPt,
+    containerWidthPt: contentWidthPt,
+  };
+  const sideRules = withSharedGridLineSideRules(contentRows, sideRuleShape);
+  const contentOffset = legacyFixedTableContentOffset(
+    table,
+    tableStyle.tablePropertyNodes,
+    contentRows,
+    sideRuleShape
+  );
+  contentRows =
+    contentOffset !== undefined && tableWidth.type === 'auto'
+      ? withLegacyTableSideRules(sideRules.rows)
+      : sideRules.rows;
+  const outerRuleOffsetPt =
+    contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
+  const autoOuterRulePt =
+    contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
+  return {
+    ...(bidiVisual ? { bidiVisual: true as const } : {}),
+    columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
+    rows:
+      legacyWidth === undefined
+        ? contentRows
+        : contentRows.map((row) => ({
+            ...row,
+            cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
+          })),
+    ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
+    ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
+    ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
+    ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
     tableWidth,
     layoutFixed,
     indentPt,
-    alignment,
+    alignment: bidiVisual
+      ? alignment === 'left'
+        ? 'right'
+        : alignment === 'right'
+          ? 'left'
+          : alignment
+      : alignment,
     ...(float ? { float } : {}),
     cellSpacingPt,
-    tableBorders,
-    defaultMargins,
+    tableBorders: bidiVisual
+      ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
+      : tableBorders,
+    defaultMargins: bidiVisual
+      ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
+      : defaultMargins,
   };
 }
+
+/**
+ * `w:trPr/w:tblCellSpacing` (17.4.44) when every row states the same value and the table
+ * states none. A value shared by all rows is the table's spacing; rows that differ are an
+ * exception this layout does not model, so they keep the table's own spacing.
+ */
+function uniformRowCellSpacingPt(table: OoxmlElement): number | undefined {
+  let spacing: number | undefined;
+  for (const rowNode of flattenContentControls(table.children)) {
+    if (rowNode.kind !== 'tableRow') continue;
+    const properties = wmlRevisionChild(rowNode, 'trPr');
+    const value = preferredLengthPt(
+      properties && childNamed(properties, 'tblCellSpacing'),
+      MAX_CELL_MARGIN_PT
+    );
+    if (value === undefined || (spacing !== undefined && Math.abs(value - spacing) > 0.001))
+      return undefined;
+    spacing = value;
+  }
+  return spacing;
+}
+import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';

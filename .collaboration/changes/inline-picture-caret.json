@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A caret after an inline picture that no text follows was written to the browser as the paragraph start, so typing could land before the picture.",
+  "after": "That caret is written just after the picture's advance spacer and reads back as the position after the picture.",
+  "reason": "The change only maps the local browser selection to and from model positions. It does not change shared document data, operations, awareness, or package formats. Two peers in one collaboration room typed, undid, and deleted after a centered inline picture, and both converged with the text and remote caret after the picture.",
+  "tests": [
+    "packages/core/src/editor/__tests__/dom-selection.test.ts",
+    "packages/core/src/output/__tests__/inline-drawing-line-origin.test.ts",
+    "packages/core/src/layout/__tests__/inline-picture-line-start-hit.test.ts"
+  ],
+  "changeset": "inline-picture-line-start",
+  "migration": null
+}

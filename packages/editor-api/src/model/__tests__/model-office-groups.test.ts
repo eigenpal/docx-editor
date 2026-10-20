@@ -17,6 +17,7 @@ import { createServer } from '../../runtime/server.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import {
   docx,
+  withNumbering,
   p,
   reopen,
   serverRuntime,
@@ -30,8 +31,9 @@ const numbered = (text: string, numId: string, level = 0): string =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${String(level)}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
   `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
-const LIST_DOCUMENT = docx(
-  numbered('first', '3') + numbered('second', '3') + '<w:p><w:r><w:t>prose</w:t></w:r></w:p>'
+const LIST_DOCUMENT = withNumbering(
+  docx(numbered('first', '3') + numbered('second', '3') + '<w:p><w:r><w:t>prose</w:t></w:r></w:p>'),
+  ['3']
 );
 
 const BOOKMARKED = docx(
@@ -46,7 +48,7 @@ const TRACKED = docx(
 
 const TRACKED_WITH_UNSUPPORTED_ROW = docx(
   '<w:p><w:ins w:id="10" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
-    '<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>' +
+    '<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/><w:ins w:id="20" w:author="Grace"/></w:trPr>' +
     '<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
 );
 
@@ -495,7 +497,7 @@ describe('a section is the page a story is laid out on', () => {
     });
     expect(found).toEqual([
       { type: 'Footnote', text: '' },
-      { type: 'Footnote', text: 'first\t<unsafe>\nline\rsecond' },
+      { type: 'Footnote', text: 'first\t<unsafe>\vline\rsecond' },
       { type: 'Endnote', text: 'end note' },
     ]);
   });
@@ -518,7 +520,7 @@ describe('a section is the page a story is laid out on', () => {
     });
     expect(found).toEqual([
       ['', ''],
-      ['first\t<unsafe>\nline\rsecond', 'first\t<unsafe>\nline\rsecond'],
+      ['first\t<unsafe>\vline\rsecond', 'first\t<unsafe>\vline\rsecond'],
     ]);
   });
 

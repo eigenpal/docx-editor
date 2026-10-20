@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Table and formatting revisions can appear as separate review decisions, and resolving grouped sites sequentially can invalidate later constituents.",
+  "after": "Verified table and formatting revisions share review decisions. Shared grid histories survive pending row decisions, and ordinary move ranges preserve native dependent text semantics. Canonical sites resolve atomically with dependency and protection checks.",
+  "reason": "Grouping changes derived review items only. Resolution uses existing revision operations and canonical primitive journal updates. Document schemas, replication formats, and released-peer replay semantics are unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/review-table-grouping.test.ts",
+    "packages/core/src/editor/__tests__/review-table-groups.test.ts",
+    "packages/core/src/automation/__tests__/automation-table-review-groups.test.ts",
+    "packages/core/src/store/__tests__/revision-shared-grid.test.ts",
+    "packages/core/src/store/__tests__/revision-ordinary-moves.test.ts"
+  ],
+  "changeset": "tidy-table-review-groups",
+  "migration": null
+}

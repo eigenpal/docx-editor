@@ -52,8 +52,16 @@ export const LocaleProvider = defineComponent({
   },
 });
 
-/** @public */
-export function useTranslation(): { t: TFunction; catalogue: ShallowRef<LocaleStrings> } {
+/**
+ * The active catalogue's `t()`, the catalogue itself, and its language tag (`_lang`, `en`
+ * by default), which formats numbers the way the strings around them read.
+ * @public
+ */
+export function useTranslation(): {
+  t: TFunction;
+  catalogue: ShallowRef<LocaleStrings>;
+  lang: string;
+} {
   const strings = inject(localeKey, shallowRef(en));
   const lang = inject(langKey, shallowRef('en'));
   const t = shallowRef(createT(strings.value, lang.value));
@@ -64,6 +72,9 @@ export function useTranslation(): { t: TFunction; catalogue: ShallowRef<LocaleSt
     catalogue: strings,
     get t() {
       return t.value;
+    },
+    get lang() {
+      return lang.value;
     },
   };
 }

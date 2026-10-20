@@ -35,6 +35,15 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { isBottomToTopCaret } from '../layout/table-cell-text-direction.ts';
+import {
+  baselineShiftPtOf,
+  DEFAULT_RUN_STYLE,
+  type ResolvedRunStyle,
+} from '../layout/run-style.ts';
+import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
+import { clipParagraphBox } from '../layout/paragraph-frame-clip.ts';
+import { selectionRunStyle } from './surface-formatting.ts';
+import { hostTimers } from './host-realm.ts';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {
@@ -48,16 +57,25 @@ export interface SurfaceCaretInput {
    * letter rather than beside it.
    */
   readonly measurer?: TextMeasurer;
+  /** Font metrics for an armed typing format that has no painted run yet. */
+  readonly typingStyle?: () => Pick<
+    ResolvedRunStyle,
+    'fontSizePt' | 'fontFamily' | 'bold' | 'italic' | 'verticalAlign'
+  > | null;
   /** When true, hide the engine caret (range selection / IME still take precedence). */
   readonly suppress?: boolean;
   /**
    * Prefer this sheet when the same paragraph paints on multiple pages (open shared HF).
    */
   readonly preferredPageIndex?: number;
+  /** The visual line chosen by the most recent pointer gesture. */
+  readonly preferredLineId?: string;
   /** Host for an open header/footer or note whose caret geometry is story-relative. */
   readonly scopedHost?: HTMLElement | null;
   /** Distinguishes stable placement keys for the two scoped story kinds. */
-  readonly scopedHostKind?: 'headerFooter' | 'note';
+  readonly scopedHostKind?: 'headerFooter' | 'note' | 'textbox';
+  /** Layout origin of a scoped host when geometry remains page-content-relative. */
+  readonly scopedOrigin?: { readonly x: number; readonly y: number };
 }
 
 export interface SurfaceCaret {
@@ -85,8 +103,7 @@ export function createSurfaceCaret(
   scale: () => number,
   read: () => SurfaceCaretInput
 ): SurfaceCaret {
-  const document = pagesLayer.ownerDocument;
-  const element = document.createElement('div');
+  const element = pagesLayer.ownerDocument.createElement('div');
   element.className = CARET_CLASS;
   // Named for a host that wants to find it; the REFUSAL is the marker attribute below.
   element.dataset.docxCaret = '';
@@ -112,14 +129,16 @@ export function createSurfaceCaret(
 
   /** The browser needs its own caret while an input method is holding text. */
   let composing = false;
-  let steadyTimer: ReturnType<typeof setTimeout> | null = null;
+  // The pages' own window: an opener's timers are throttled while the opener is hidden.
+  const timers = hostTimers(() => pagesLayer);
+  let steadyTimer: number | null = null;
   /** The geometry last painted, so a repaint in place is told from a real move. */
   let placed: string | null = null;
   /** Last scoped host whose native caret was suppressed. */
   let suppressedHost: HTMLElement | null = null;
 
   function hasFocus(): boolean {
-    const active = document.activeElement;
+    const active = pagesLayer.ownerDocument.activeElement;
     return active === pagesLayer || (!!active && pagesLayer.contains(active));
   }
 
@@ -134,7 +153,7 @@ export function createSurfaceCaret(
   function hide(): void {
     placed = null;
     if (steadyTimer !== null) {
-      clearTimeout(steadyTimer);
+      timers.clearTimeout(steadyTimer);
       steadyTimer = null;
     }
     element.classList.remove(STEADY_CLASS);
@@ -147,8 +166,8 @@ export function createSurfaceCaret(
   /** Hold the caret solid while it is moving, then let the blink resume. */
   function markMoving(): void {
     element.classList.add(STEADY_CLASS);
-    if (steadyTimer !== null) clearTimeout(steadyTimer);
-    steadyTimer = setTimeout(() => {
+    if (steadyTimer !== null) timers.clearTimeout(steadyTimer);
+    steadyTimer = timers.setTimeout(() => {
       steadyTimer = null;
       element.classList.remove(STEADY_CLASS);
     }, STEADY_MS);
@@ -159,7 +178,17 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    const { layout, selection, scopedHost, scopedHostKind, preferredPageIndex, measurer } = read();
+    const {
+      layout,
+      selection,
+      scopedHost,
+      scopedHostKind,
+      scopedOrigin,
+      preferredPageIndex,
+      preferredLineId,
+      measurer,
+      typingStyle,
+    } = read();
     const currentScale = scale();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
@@ -169,13 +198,58 @@ export function createSurfaceCaret(
     }
     // Measured, not interpolated: the caret has to sit at a glyph edge, and a span's advance
     // divided by its character count only lands there in a monospaced face.
-    const geometry = caretAt(layout, selection.head, {
+    let geometry = caretAt(layout, selection.head, {
       ...(measurer ? { measurer } : {}),
       ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+      ...(preferredLineId !== undefined ? { preferredLineId } : {}),
     });
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();
       return;
+    }
+    if (typingStyle && measurer) {
+      const { pageIndex, lineId } = geometry;
+      const placedLine = paragraphLinesFor(layout, selection.head.paragraphId)?.find(
+        (placed) => placed.pageIndex === pageIndex && placed.line.id === lineId
+      );
+      const line = placedLine?.line;
+      // Stored marks describe the next glyph before any run carries that face.
+      // Align nonempty lines to their baseline; empty lines retain their top. A collapsed
+      // empty line has no box, and its layout caret already ends at the collapse point.
+      if (
+        line &&
+        !line.drawings?.length &&
+        !isBottomToTopCaret(geometry) &&
+        (line.spans.length > 0 || line.box.height > 0)
+      ) {
+        const style = typingStyle();
+        if (style) {
+          const resolved = {
+            ...(selectionRunStyle(layout, selection) ?? DEFAULT_RUN_STYLE),
+            ...style,
+          };
+          const metrics = measurer.lineMetrics(resolved);
+          if (metrics.height > 0) {
+            const box = clipParagraphBox(
+              {
+                ...geometry,
+                width: 0,
+                y:
+                  line.spans.length > 0
+                    ? line.box.y + line.baseline - metrics.baseline - baselineShiftPtOf(resolved)
+                    : geometry.y,
+                height: metrics.height,
+              },
+              placedLine?.clipBox
+            );
+            if (!box) {
+              hide();
+              return;
+            }
+            geometry = box;
+          }
+        }
+      }
     }
     // Open scoped story: parent into the story host (story-relative coords). Body: page
     // content box (content-relative coords). Never paint scoped geometry into the body box.
@@ -197,8 +271,8 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    element.style.left = `${geometry.x * currentScale}px`;
-    element.style.top = `${geometry.y * currentScale}px`;
+    element.style.left = `${(geometry.x - (scopedOrigin?.x ?? 0)) * currentScale}px`;
+    element.style.top = `${(geometry.y - (scopedOrigin?.y ?? 0)) * currentScale}px`;
     element.style.height = `${geometry.height * currentScale}px`;
     const bottomToTop = isBottomToTopCaret(geometry);
     element.style.transformOrigin = bottomToTop ? '0 0' : '';

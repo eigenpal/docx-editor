@@ -32,6 +32,10 @@ const IconKeyboardArrowUp = pathIcon(
 const IconKeyboardArrowDown = pathIcon(
   'M480-360 280-560l56-56 144 144 144-144 56 56-200 200-200-200Z'
 );
+// The Insert > Bookmark icon, for the Bookmarks tab of the navigation pane.
+const IconBookmark = pathIcon(
+  'M200-120v-640q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v640L480-240 200-120Zm80-122 200-86 200 86v-518H280v518Zm0-518h400-400Z'
+);
 const IconToc = pathIcon('M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z');
 
 const iconMap: Record<string, ReturnType<typeof pathIcon>> = {
@@ -41,6 +45,7 @@ const iconMap: Record<string, ReturnType<typeof pathIcon>> = {
   keyboard_arrow_up: IconKeyboardArrowUp,
   keyboard_arrow_down: IconKeyboardArrowDown,
   toc: IconToc,
+  bookmark: IconBookmark,
 };
 
 /** MaterialSymbol-compatible component using inline SVGs. @public */

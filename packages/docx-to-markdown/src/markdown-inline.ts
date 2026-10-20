@@ -449,10 +449,15 @@ export class MarkdownInlineWriter {
   }
 
   writeText(token: MarkdownTextToken): void {
-    const boundary = /^(\s*)([\s\S]*?)(\s*)$/.exec(token.sourceText);
-    const leading = boundary?.[1] ?? '';
-    const text = boundary?.[2] ?? token.sourceText;
-    const trailing = boundary?.[3] ?? '';
+    // `trimStart`/`trimEnd` split on the same `\s` set as `/^(\s*)([\s\S]*?)(\s*)$/`, in
+    // linear time. The lazy middle retried the trailing `\s*$` at every inner whitespace
+    // run, which is quadratic on a long run that does not reach the end.
+    const source = token.sourceText;
+    const textStart = source.length - source.trimStart().length;
+    const textEnd = textStart === source.length ? textStart : source.trimEnd().length;
+    const leading = source.slice(0, textStart);
+    const text = source.slice(textStart, textEnd);
+    const trailing = source.slice(textEnd);
     const exact =
       token.exact ??
       (token.span.projected !== true &&

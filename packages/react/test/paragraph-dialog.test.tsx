@@ -26,6 +26,10 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 const p = (text: string, pPr = '') =>
   `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
@@ -34,11 +38,16 @@ function docx(body: string): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -218,14 +227,15 @@ describe('the Paragraph dialog', () => {
   });
 
   test('changing the line-spacing rule re-bases the value, so lines are not read as points', async () => {
-    // The value means LINES under Multiple and POINTS otherwise. Carrying 1.08 into
+    // The value means LINES under Multiple and POINTS otherwise. Carrying 1 into
     // "Exactly" would ask for a 1pt line box and swallow the text.
     const { view, editor, openDialog } = mountDialog(p('alpha'));
     await act(async () => {
       editor().surface!.selectAll();
     });
     await openDialog();
-    expect(field(view, 'At').value).toBe('1.08');
+    // Nothing states a line spacing, so the box shows the single spacing the page uses.
+    expect(field(view, 'At').value).toBe('1');
     await act(async () => {
       fireEvent.change(field(view, 'Line spacing'), { target: { value: 'atLeast' } });
     });
@@ -622,5 +632,94 @@ describe('the Paragraph dialog', () => {
     });
     // Nothing authored: the paragraph still holds only what it opened with.
     expect(editor().snapshot().canUndo).toBe(false);
+  });
+});
+
+describe('the Paragraph dialog Direction field', () => {
+  const direction = (view: ReturnType<typeof render>) =>
+    field(view, 'Direction') as HTMLSelectElement;
+
+  test('seeds the current direction, and OK writes the one you pick', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha', '<w:bidi/>'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(direction(view).value).toBe('rtl');
+
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'ltr' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting?.direction).toBe('ltr');
+  });
+
+  test('a paragraph with no w:bidi opens as left-to-right, and Right-to-left writes w:bidi', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(direction(view).value).toBe('ltr');
+
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(xmlOf(editor())).toContain('<w:bidi');
+    expect(editor().snapshot().formatting?.direction).toBe('rtl');
+  });
+
+  test('Direction trades the Alignment field edge and moves the paragraph like the toolbar', async () => {
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    const alignment = field(view, 'Alignment') as HTMLSelectElement;
+    expect(alignment.value).toBe('left');
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    // The start edge is now the right one, and the field says so before OK.
+    expect(alignment.value).toBe('right');
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting).toMatchObject({ direction: 'rtl', alignment: 'right' });
+    // Same XML as the toolbar button: the stored alignment is untouched.
+    expect(xmlOf(editor())).not.toContain('<w:jc');
+  });
+
+  test('a mixed selection opens blank, stays mixed if untouched, and resolves when set', async () => {
+    const { view, editor, openDialog, close } = mountDialog(p('one', '<w:bidi/>') + p('two'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(editor().snapshot().formatting?.disagrees?.direction).toBe(true);
+    expect(direction(view).value).toBe('');
+
+    // Untouched: OK writes nothing, so the paragraphs keep their own directions.
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().canUndo).toBe(false);
+    await close();
+
+    await openDialog();
+    expect(direction(view).value).toBe('');
+    await act(async () => {
+      fireEvent.change(direction(view), { target: { value: 'rtl' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().snapshot().formatting?.direction).toBe('rtl');
+    expect(editor().snapshot().formatting?.disagrees?.direction).toBe(false);
   });
 });

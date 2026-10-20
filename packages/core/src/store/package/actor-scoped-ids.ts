@@ -87,6 +87,19 @@ export function resolveAllocationActor(actorId?: string): string | undefined {
 }
 
 /**
+ * A hash seed scoped to the transaction's actor.
+ *
+ * Deterministic mints (`mintParaId`) seed from structure — the paragraph and offset a paste
+ * lands at — and two replicas pasting at one position from one snapshot compute the same
+ * seed, so they would mint the same identity for different paragraphs. The actor keeps the
+ * seeds apart. Without one the seed is unchanged, so a solo document mints what it always did.
+ */
+export function actorScopedSeed(seed: string, actorId?: string): string {
+  const actor = resolveAllocationActor(actorId);
+  return actor === undefined ? seed : `${actor}|${seed}`;
+}
+
+/**
  * Next unused id in `actorId`'s residue class.
  *
  * Walks `stripe, stripe+N, stripe+2N, …` and skips ids already in `used`. Past the ceiling
@@ -153,6 +166,25 @@ export function nextDenseDecimalId(
     if (!used.has(String(candidate))) return String(candidate);
   }
   throw new TypeError('no free decimal id');
+}
+
+/**
+ * Stripe count for part numbers, as `header3.xml` or `image12.png`. Smaller than
+ * {@link ACTOR_ID_STRIPE}: header and footer names take five digits at most, and part names
+ * are seen by people.
+ */
+export const PART_NUMBER_STRIPE = 4096;
+
+/**
+ * The part numbers to try for a new part, in order: 1, 2, 3, ... with no actor, the dense
+ * numbering a solo document uses, or one actor's stripe of them, so two collaborators who each
+ * add a header or an image from one snapshot do not name both parts the same.
+ */
+export function* partNumberCandidates(max: number, actorId?: string): Generator<number> {
+  const actor = resolveAllocationActor(actorId);
+  const step = actor === undefined ? 1 : PART_NUMBER_STRIPE;
+  const start = actor === undefined ? 1 : (actorStripe(actor) % PART_NUMBER_STRIPE) + 1;
+  for (let candidate = start; candidate <= max; candidate += step) yield candidate;
 }
 
 const RELATIONSHIP_NUMBER = /^rId(\d{1,9})$/;

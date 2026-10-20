@@ -14,62 +14,94 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
+import { trackUnsyncedChanges } from './webrtc-unsynced.ts';
 import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from './document-session.ts';
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
+import { createLinkHealth, linkHealthStatus, type LinkHealth } from './webrtc-link-health.ts';
 import { validateRoomId } from './room-id.ts';
-import type { CollaborationBootstrap } from './session.ts';
+import { installSignalingScope } from './webrtc-signaling-scope.ts';
+import type { CollaborationBootstrap } from './types.ts';
 
 /**
  * Public demo signaling endpoints. Use these endpoints for demos only.
  *
- * Production deployments must pass their own `signaling` URLs and TURN
- * servers. WebRTC peers cannot connect across many networks without TURN.
+ * The host is a shared, unauthenticated public service. It receives every room id and,
+ * without a `password`, every signaling message in plaintext. `createWebrtcCollaboration`
+ * never selects it for you: pass it as `signaling` to opt in. Production deployments pass
+ * their own `signaling` URLs and TURN servers. WebRTC peers cannot connect across many
+ * networks without TURN.
  * @public
  */
 export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/ws']);
 
-let warnedDemoSignalingFallback = false;
-
 /**
- * Warn once per process when a room silently falls back to the demo signaling endpoints.
+ * Refuse a room without explicit signaling endpoints.
  *
- * Passing `signaling: DEMO_SIGNALING_ENDPOINTS` is a deliberate choice and never warns —
- * only an omitted `signaling` does.
+ * A default would send room ids and signaling traffic to a host the integrator never chose,
+ * so a missing option fails before any connection opens. An empty list is explicit: it opens
+ * no signaling connection, and only tabs of the same browser find each other. Each entry
+ * must be a `ws://` or `wss://` URL, so a typo fails here and not inside the socket.
  *
  * @internal
  */
-export function warnOnDemoSignalingFallback(signaling: readonly string[] | undefined): void {
-  if (signaling !== undefined) return;
-  if (warnedDemoSignalingFallback) return;
-  warnedDemoSignalingFallback = true;
-  console.warn(
-    '[docx-editor] createWebrtcCollaboration was called without `signaling`, so it uses the ' +
-      'public demo endpoints. They are shared, unauthenticated, and can go away. Pass your ' +
-      'own `signaling` URLs (and TURN `iceServers`) in production, or pass ' +
-      '`signaling: DEMO_SIGNALING_ENDPOINTS` explicitly to accept the demo endpoints.'
-  );
+export function requireSignaling(signaling: readonly string[] | undefined): readonly string[] {
+  if (!Array.isArray(signaling)) {
+    throw new TypeError(
+      'WebRTC collaboration requires `signaling`, an array of signaling server URLs. ' +
+        'Pass your own URLs in production. For demos, pass ' +
+        "`signaling: DEMO_SIGNALING_ENDPOINTS` from '@docx-editor.dev/pro/collaboration/webrtc'. " +
+        'To connect only tabs of the same browser, pass `signaling: []`.'
+    );
+  }
+  signaling.forEach((url: unknown, index) => {
+    // The index, not the value: a signaling URL can carry an access token.
+    if (!isSignalingUrl(url)) {
+      throw new TypeError(
+        `WebRTC collaboration needs signaling[${index}] to be a ws:// or wss:// URL without a #fragment.`
+      );
+    }
+  });
+  return signaling;
 }
 
-/** Test-only reset for the once-per-process demo signaling warning. @internal */
-export function resetDemoSignalingWarningForTests(): void {
-  warnedDemoSignalingFallback = false;
-}
+const isSignalingUrl = (url: unknown): boolean => {
+  if (typeof url !== 'string') return false;
+  try {
+    // `new WebSocket` also refuses a fragment, even an empty one. Checked here, it fails before
+    // an earlier entry in the list opens its socket.
+    const { protocol } = new URL(url);
+    return (protocol === 'ws:' || protocol === 'wss:') && !url.includes('#');
+  } catch {
+    return false;
+  }
+};
 
 /** Options for the owned WebRTC collaboration convenience wrapper. @public */
 export interface CreateWebrtcCollaborationOptions {
+  /** The room to join: a `createCollaborationRoomId` value every participant shares. */
   readonly roomId: string;
+  /** Who this participant is, as peers see them. */
   readonly identity: CollaborationIdentity;
+  /** Create the room from a document, or join one that peers already hold. */
   readonly bootstrap: CollaborationBootstrap;
   /**
    * Admit local edits while the transport is `disconnected`. Buffered updates merge on
-   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
-  readonly signaling?: readonly string[];
+  /**
+   * Signaling server URLs that introduce peers to each other. There is no default. Pass your
+   * own URLs in production, {@link DEMO_SIGNALING_ENDPOINTS} for demos, or `[]` to connect
+   * only tabs of the same browser. A call without this value rejects with a `TypeError`
+   * before any connection opens.
+   */
+  readonly signaling: readonly string[];
+  /** STUN and TURN servers for the peer connections. Use TURN across restrictive networks. */
   readonly iceServers?: readonly RTCIceServer[];
   /**
    * Signaling encryption secret for `y-webrtc`.
@@ -84,8 +116,17 @@ export interface CreateWebrtcCollaborationOptions {
 
 /** Owned WebRTC provider and provider-neutral collaboration resources. @public */
 export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
+  /** The room's shared Yjs document, owned by this handle. */
   readonly ydoc: Y.Doc;
+  /** The owned `y-webrtc` provider. `destroy()` destroys it. */
   readonly provider: WebrtcProvider;
+  /**
+   * Local changes no peer has received: made while no peer was connected, and not synced
+   * since. A WebRTC room has no server, so these changes exist only in this browser.
+   */
+  unsyncedChanges(): number;
+  /** Call `listener` when `unsyncedChanges()` changes. Returns the unsubscribe function. */
+  subscribeUnsyncedChanges(listener: () => void): () => void;
 }
 
 export { createCollaborationRoomId, validateRoomId } from './room-id.ts';
@@ -154,39 +195,57 @@ const passwordFromUrlFragment = (href?: string): string | undefined => {
  */
 const installChunkedTransport = (
   provider: WebrtcProvider,
-  onAbandonedMessage: () => void
+  health: Pick<LinkHealth, 'abandoned' | 'delivered'>
 ): void => {
   void Promise.resolve(provider.key).then(() => {
     const room = provider.room;
     if (!room) return;
     const connections = room.webrtcConns;
-    const attach = (connection: { readonly peer: unknown }): void => {
-      installChunkedFraming(connection.peer as ChunkablePeer, { onAbandonedMessage });
+    const attach = (peerId: string, connection: { readonly peer: unknown }): void => {
+      installChunkedFraming(connection.peer as ChunkablePeer, {
+        onAbandonedMessage: () => health.abandoned(peerId),
+        onDeliveredMessage: () => health.delivered(peerId),
+      });
     };
-    for (const connection of connections.values()) attach(connection);
+    for (const [peerId, connection] of connections) attach(peerId, connection);
     const originalSet = connections.set.bind(connections);
     connections.set = (peerId, connection) => {
-      attach(connection);
+      attach(peerId, connection);
       return originalSet(peerId, connection);
     };
   });
 };
 
-/** Create one owned `y-webrtc` room and provider-neutral collaboration session. @public */
+/**
+ * Create one owned `y-webrtc` room and provider-neutral collaboration session.
+ *
+ * The room reaches only the signaling servers in `signaling`. It never falls back to public
+ * endpoints. The first room applies the same scoping to every `y-webrtc` provider in the
+ * page, including providers the host creates directly. A provider created before the first
+ * room keeps its own `destroy()`: call its `disconnect()` first to close its signaling.
+ *
+ * @throws `TypeError` (as a rejection) when `roomId` is invalid, or `signaling` is not an
+ * array of `ws://` or `wss://` URLs without a fragment. No connection opens.
+ * @public
+ */
 export async function createWebrtcCollaboration(
   options: CreateWebrtcCollaborationOptions
 ): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
-  warnOnDemoSignalingFallback(options.signaling);
+  const signaling = requireSignaling(options.signaling);
+  // `y-webrtc` shares one connection per URL across the page; keep this room on its own. The
+  // scope also makes `provider.destroy()` close the provider's signaling connections.
+  installSignalingScope();
   const password = resolveWebrtcRoomPassword({ password: options.password });
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   let provider: WebrtcProvider | null = null;
-  let onAbandonedChunk = (): void => {};
+  // Bound once the session exists; a link can only lose a message after the room is up.
+  let linkHealth: Pick<LinkHealth, 'abandoned' | 'delivered'> = { abandoned() {}, delivered() {} };
   const connectProvider = (): WebrtcProvider => {
     const created = new WebrtcProvider(roomId, ydoc, {
       awareness,
-      signaling: [...(options.signaling ?? DEMO_SIGNALING_ENDPOINTS)],
+      signaling: [...signaling],
       ...(password !== undefined ? { password } : {}),
       ...(options.iceServers
         ? {
@@ -198,7 +257,10 @@ export async function createWebrtcCollaboration(
           }
         : {}),
     });
-    installChunkedTransport(created, () => onAbandonedChunk());
+    installChunkedTransport(created, {
+      abandoned: (peerId) => linkHealth.abandoned(peerId),
+      delivered: (peerId) => linkHealth.delivered(peerId),
+    });
     return created;
   };
   let handle: DocumentCollaborationHandle;
@@ -231,10 +293,18 @@ export async function createWebrtcCollaboration(
   const connectedProvider = provider;
 
   const session = handle.session;
-  onAbandonedChunk = () => {
-    session.setTransportStatus('error', 'transport', 'incomplete chunk');
-  };
+  // An incomplete chunked message closes only that peer connection (see
+  // `webrtc-chunking.ts`). y-webrtc announces again on close, so the peers reconnect and
+  // resync; the session stays usable instead of ending on one slow channel. A link that keeps
+  // failing is reported, because the room's own status cannot see one peer. The room stays
+  // `ready`: the other peers still receive every edit, and with `offlineEditing: false` a
+  // `disconnected` status would pause editing for everyone over one link.
+  let signalingConnected = true;
+  const health = createLinkHealth(linkHealthStatus(session, () => signalingConnected));
+  linkHealth = health;
   const onStatus = (event: { readonly connected: boolean }): void => {
+    signalingConnected = event.connected;
+    if (event.connected) health.reset();
     session.setTransportStatus(
       event.connected ? 'ready' : 'disconnected',
       event.connected ? undefined : 'transport-disconnected',
@@ -242,6 +312,7 @@ export async function createWebrtcCollaboration(
     );
   };
   connectedProvider.on('status', onStatus);
+  const unsynced = trackUnsyncedChanges(ydoc, connectedProvider);
 
   let destroyed = false;
   return Object.freeze({
@@ -249,10 +320,14 @@ export async function createWebrtcCollaboration(
     session,
     ydoc,
     provider: connectedProvider,
+    unsyncedChanges: () => unsynced.count(),
+    subscribeUnsyncedChanges: (listener: () => void) => unsynced.subscribe(listener),
     destroy() {
       if (destroyed) return;
       destroyed = true;
       connectedProvider.off('status', onStatus);
+      unsynced.destroy();
+      health.destroy();
       handle.destroy();
       connectedProvider.destroy();
       awareness.destroy();

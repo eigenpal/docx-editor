@@ -3,7 +3,7 @@
 // the runtime dependency stays one-way.
 
 import { stripNoteMarks, type ClipboardNoteKind } from './clipboard-html-notes.ts';
-import type { Projection } from './clipboard-html-read.ts';
+import type { Projection } from './clipboard-html-projection.ts';
 
 /**
  * Reconcile: a claimed note is kept only when REACHABLE from the body through

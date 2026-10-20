@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A drawing group with a text box member painted nothing. Under mc:AlternateContent an inline payload that could not paint also took no space on its line.",
+  "after": "The group paints its picture and shape members. A text box member paints its fill and outline but not its text. An inline mc:AlternateContent payload that cannot paint keeps its extent on its line and paints nothing.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. The mc:AlternateContent wrapper was already one paragraph offset, so paragraph offsets do not change.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-group-picture.test.ts",
+    "packages/core/src/store/__tests__/drawing-wrap-footprint.test.ts",
+    "packages/core/src/editor/__tests__/inline-group-textbox-member.test.ts"
+  ],
+  "changeset": "header-drawing-fidelity",
+  "migration": null
+}

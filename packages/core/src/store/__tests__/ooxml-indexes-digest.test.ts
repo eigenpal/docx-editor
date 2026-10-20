@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
-import { deriveOoxmlIndexes } from '../package/ooxml-indexes.ts';
+import { deriveOoxmlIndexes, stylesPartOf } from '../package/ooxml-indexes.ts';
 import {
   diffSemanticDigests,
   semanticDigest,
@@ -127,6 +127,30 @@ describe('derived semantic indexes (task 4.7)', () => {
       name: 'heading 1',
       basedOn: 'Normal',
     });
+  });
+
+  test('the main document styles relationship takes precedence over an unrelated conventional filename', () => {
+    const pkg = loadPackage();
+    const part = pkg.parts.get('/word/styles.xml')!;
+    const relocated = { ...part, name: '/custom/formatting.xml' };
+    const decoy = { ...part, root: { ...part.root, children: [] } };
+    const changed = {
+      ...pkg,
+      parts: new Map([...pkg.parts, [part.name, decoy], [relocated.name, relocated]]),
+      relationships: new Map([
+        ...pkg.relationships,
+        [
+          pkg.mainDocumentPart,
+          pkg.relationships
+            .get(pkg.mainDocumentPart)!
+            .map((record) => ({ ...record, rawTarget: '../custom/formatting.xml' })),
+        ],
+      ]),
+    };
+    expect(stylesPartOf(changed)).toBe(relocated);
+    expect(deriveOoxmlIndexes(changed, 1).styles.has('Heading1')).toBe(true);
+    const withoutRelationship = { ...changed, relationships: new Map() };
+    expect(stylesPartOf(withoutRelationship)).toBe(decoy);
   });
 
   test('a generic drawing contributes no text but does not drop its run', () => {

@@ -10,17 +10,12 @@ import {
   semanticHtmlListKind,
   semanticHtmlListStart,
   wordListDefinitionsFromStyleText,
-  type HtmlListAllocation as ListAllocation,
-  type WordListLevelDefinition,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { createGestureMemo } from './clipboard-html-memo.ts';
 import { reconcileUnreachableNotes } from './clipboard-html-note-reconcile.ts';
 import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
-import {
-  writeProjectedHtmlPackage,
-  type HtmlFragmentRel as RelEntry,
-} from './clipboard-html-package.ts';
+import { writeProjectedHtmlPackage } from './clipboard-html-package.ts';
 import {
   clipboardNoteDefinitions,
   clipboardNoteReference,
@@ -51,10 +46,15 @@ import {
   wordClassAlignmentsFromDocument,
   wordParagraphStyleId,
   wordStyleTextFromDocument,
-  type HtmlParagraphAlign,
   type HtmlParaProps,
   type HtmlRunProps,
 } from './clipboard-html-styles.ts';
+import {
+  hasWordEquationMarkup,
+  isEquationPiece,
+  prepareWordEquations,
+} from './clipboard-html-equations.ts';
+import type { FlowContext, ListState, Projection } from './clipboard-html-projection.ts';
 import { projectHtmlTable } from './clipboard-html-table-project.ts';
 import { htmlPositionalTabXml, htmlTabRunContents } from './clipboard-html-tabs.ts';
 import {
@@ -103,60 +103,6 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 
 type RunProps = HtmlRunProps;
 type ParaProps = HtmlParaProps;
-
-type ListState = { readonly numId: string; readonly level: number };
-
-export interface FlowContext {
-  readonly run: RunProps;
-  readonly para: ParaProps;
-  readonly paragraphMarkCovered: boolean;
-  readonly pre: boolean;
-  readonly list: ListState | null;
-  /** Set while projecting a note definition body: the note the blocks belong to. */
-  readonly noteBody?: { readonly kind: ClipboardNoteKind; readonly id: number };
-  readonly rels?: RelEntry[];
-}
-
-export interface Projection {
-  nodesLeft: number;
-  /** Set when a walk stopped with work remaining because the budget ran out. */
-  truncated: boolean;
-  readonly maxDepth: number;
-  readonly maxImageBytes: number;
-  readonly wordHtml: boolean;
-  lastMarkCovered: boolean;
-  readonly rels: RelEntry[];
-  readonly media: Map<string, Uint8Array>;
-  readonly mediaExtensions: Map<string, string>;
-  /** Media part per `src`, so a repeated image decodes and ships exactly once. */
-  readonly mediaBySrc: Map<string, string>;
-  readonly lists: Map<string, ListAllocation>;
-  /** Secondary index over `lists`, so nested lists resolve without a linear scan. */
-  readonly listsByNumId: Map<string, ListAllocation>;
-  semanticListCount: number;
-  imageCount: number;
-  docPrId: number;
-  nextBookmarkId: number;
-  readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
-  /** Word's structured `@list lN:levelM` head rules, keyed `l<N>:level<M>`. */
-  readonly listDefinitions: ReadonlyMap<string, WordListLevelDefinition>;
-  readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
-  readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
-  /** Ids with a PROJECTED definition — the only ids a live note reference may carry. */
-  readonly definedNotes: Record<ClipboardNoteKind, ReadonlySet<number>>;
-  /** Ids the BODY emitted a live reference for — the reachability seeds. */
-  readonly bodyNoteRefs: Record<ClipboardNoteKind, Set<number>>;
-  /** Cross-note reference edges, keyed by the CITING note (`kind:id`). A claimed
-   *  note unreachable from the body through these edges is reconciled back into
-   *  visible body text after the walk. */
-  readonly noteNoteRefs: Map<string, Array<{ kind: ClipboardNoteKind; id: number }>>;
-  /** Emitted mark's visible text (as a run), keyed `kind:id` — the strip fallback
-   *  when a claimed note is later dropped or moved, so '[1]' stays visible. */
-  readonly noteMarkFallbacks: Map<string, string>;
-  /** The exact definition elements the notes pass consumed; only these skip the body
-   *  walk, so a duplicate-id or unreferenced definition stays lossless in the body. */
-  readonly definedNoteElements: ReadonlySet<Element>;
-}
 
 // --- Allocation
 
@@ -219,6 +165,12 @@ function collectInline(
     return;
   }
   if (!isElement(node)) return;
+  // A recovered Word equation lands as canonical OMML; the prepass charged its nodes.
+  const equations = p.equations.get(node);
+  if (equations !== undefined) {
+    for (const equation of equations) runs.push(equation);
+    return;
+  }
   const tag = tagOf(node);
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
@@ -533,7 +485,7 @@ function projectFlow(
   });
   const flush = (): void => {
     if (pending.length === 0) return;
-    if (!pending.some((piece) => piece.includes('<w:r'))) {
+    if (!pending.some((piece) => piece.includes('<w:r') || isEquationPiece(piece))) {
       // Furniture-only pending (a standalone bookmark anchor): fold it into the
       // previous paragraph. Before this flow's first block it queues as LEADING
       // furniture; after a non-paragraph block (a table) it takes its own
@@ -583,7 +535,8 @@ function projectFlow(
         pageBreak.skipSpacer = true;
         continue;
       }
-      if (IGNORED_TAGS.has(tag)) {
+      // A recovered `<math>` is ignored markup only when it holds no equation.
+      if (IGNORED_TAGS.has(tag) && !p.equations.has(node)) {
         p.nodesLeft -= 1;
         continue;
       }
@@ -711,7 +664,7 @@ function projectFlow(
     forceEmit &&
     out.length === before &&
     pending.length > 0 &&
-    !pending.some((piece) => piece.includes('<w:r'))
+    !pending.some((piece) => piece.includes('<w:r') || isEquationPiece(piece))
   ) {
     out.push(paragraphXml(flushPara, pending));
     pending = [];
@@ -809,6 +762,9 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   }
   const body = parsed.body;
   if (!body) return { ok: false, reason: 'no-content' };
+  const maxNodes = limits.maxNodes ?? DEFAULT_MAX_NODES;
+  // Before any other pass: it unwraps equation comments and drops fallback pictures.
+  const equations = hasWordEquationMarkup(html) ? prepareWordEquations(parsed, maxNodes) : null;
 
   const noteDefinitions = clipboardNoteDefinitions(parsed);
   const definedNotes: Record<ClipboardNoteKind, Set<number>> = {
@@ -824,7 +780,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   };
   collectReferencedNoteIds(parsed, noteDefinitions, referencedNotes);
   const projection: Projection = {
-    nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
+    nodesLeft: maxNodes - (equations?.visited ?? 0),
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
     maxImageBytes: limits.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     wordHtml: isWordClipboardHtml(html),
@@ -849,6 +805,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     noteNoteRefs: new Map(),
     noteMarkFallbacks: new Map(),
     definedNoteElements,
+    equations: equations?.byElement ?? new Map(),
   };
   let rootRun: RunProps = {};
   rootRun = applyElementRunProps(rootRun, parsed.documentElement);

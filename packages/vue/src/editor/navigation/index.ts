@@ -3,6 +3,7 @@ export {
   Navigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -14,6 +15,12 @@ export {
   type NavigationPartProps,
   type NavigationTabProps,
 } from './DocxEditorNavigation';
+export {
+  useGoToBookmark,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
+} from './useGoToBookmark';
 export {
   useNavigationPane,
   type NavigationTab as NavigationTabValue,
@@ -29,13 +36,22 @@ export {
 export {
   useDocumentSearch,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
+  type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
 } from './useDocumentSearch';
 export {
   NAVIGATION_PANE_GAP,
   NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_MIN_PAGE_ROOM,
   NAVIGATION_PANE_WIDTH,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
   type NavigationShiftInput,

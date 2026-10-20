@@ -22,6 +22,10 @@ const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawi
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 function pkg(
   body: string,
   linkTarget?: string,
@@ -39,6 +43,7 @@ function pkg(
       '[Content_Types].xml': strToU8(
         `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
           '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
           (extra.contentTypes ?? '') +
           '</Types>'
       ),
@@ -46,8 +51,9 @@ function pkg(
         `<Relationships xmlns="${REL}"><Relationship Id="rDoc" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
       ),
       'word/_rels/document.xml.rels': strToU8(
-        `<Relationships xmlns="${REL}">${relationship}${extra.relationships ?? ''}</Relationships>`
+        `<Relationships xmlns="${REL}"><Relationship Id="rStyles" Type="${R}/styles" Target="styles.xml"/>${relationship}${extra.relationships ?? ''}</Relationships>`
       ),
+      'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
       'word/document.xml': strToU8(
         `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
       ),
@@ -63,7 +69,7 @@ function liveView(store: TreePackageStore): HeadlessDocumentView {
     part: () => store.bodyStore().part,
     currentPackage: () => store.currentPackage(),
     packageRevision: () => store.packageRevision,
-    stylesRoot: () => null,
+    stylesRoot: () => store.currentPackage().parts.get('/word/styles.xml')?.root ?? null,
     numberingRoot: () => null,
     settingsRoot: () => null,
     documentThemeFonts: () => ({ major: null, minor: null }),
@@ -705,4 +711,45 @@ test('orphan-only review metadata does not walk the semantic page graph', () => 
   expect(projectReviewArtifacts(layout, source)).toMatchObject([
     { kind: 'comment', text: 'Orphan only', orphaned: true, occurrences: [] },
   ]);
+});
+
+test('a property change that leaves the formatting unchanged has no artifact and no markup', async () => {
+  const change = (value: string, text: string) =>
+    `<w:p><w:pPr><w:jc w:val="${value}"/><w:pPrChange w:id="${text.length}" w:author="Ada" w:date="2026-03-01T10:00:00Z"><w:pPr/></w:pPrChange></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const source = pkg(change('left', 'Unlisted') + change('center', 'Listed'));
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const opened = openDocumentForExport(
+    liveView(new TreePackageStore(source, normalizeParagraphIdentity(main)))
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const layout = await opened.session.layout();
+    const revisions = layout.reviewArtifacts?.filter(
+      (artifact) => artifact.kind === 'tracked-change'
+    );
+    expect(revisions).toHaveLength(1);
+    // Paragraph ids whose laid-out properties still carry the paragraph-property change.
+    const marked = new Set<string>();
+    const seen = new Set<object>();
+    const visit = (value: unknown, paragraphId: string | undefined, depth: number): void => {
+      if (depth > 40 || value === null || typeof value !== 'object' || seen.has(value)) return;
+      seen.add(value);
+      const record = value as Record<string, unknown>;
+      const here = typeof record.paragraphId === 'string' ? record.paragraphId : paragraphId;
+      const props = record.props;
+      if (
+        here &&
+        Array.isArray(props) &&
+        props.some((property) => (property as { localName?: string }).localName === 'pPrChange')
+      ) {
+        marked.add(here);
+      }
+      for (const entry of Object.values(record)) visit(entry, here, depth + 1);
+    };
+    visit(layout.pages, undefined, 0);
+    expect(marked.size).toBe(1);
+  } finally {
+    opened.session.dispose();
+  }
 });

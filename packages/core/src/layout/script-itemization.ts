@@ -1,6 +1,8 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
 import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
+import { isEastAsiaHinted, type EastAsiaHintScope } from './east-asia-symbol-hint.ts';
+import { segmentGraphemes } from './grapheme.ts';
 
 /**
  * Which `w:rFonts` slot a character resolves its face through.
@@ -40,6 +42,21 @@ type Classified = Omit<ScriptItem, 'from' | 'to' | 'direction' | 'bidiLevel'> | 
 
 const inRange = (value: number, from: number, to: number): boolean => value >= from && value <= to;
 
+// Punctuation that takes the hAnsi face without an East Asian hint, even beside Han text.
+const HANSI_PUNCTUATION: ReadonlySet<number> = new Set([
+  0x00b7, // middle dot
+  0x2013, // en dash
+  0x2014, // em dash
+  0x2018, // left single quotation mark
+  0x2019, // right single quotation mark
+  0x201a, // single low-9 quotation mark
+  0x201c, // left double quotation mark
+  0x201d, // right double quotation mark
+  0x201e, // double low-9 quotation mark
+  0x2026, // horizontal ellipsis
+]);
+const isHAnsiPunctuation = (codePoint: number): boolean => HANSI_PUNCTUATION.has(codePoint);
+
 /**
  * A code point whose script this engine does not itemize.
  *
@@ -63,8 +80,20 @@ export class UnsupportedScriptError extends Error {
  * strong item on conflicts, and the following strong item only for leading Common text.
  */
 const classify = (codePoint: number): Classified => {
+  // MS-OI29500 2.1.88: curly quotes, low quotes, en and em dashes, the ellipsis and the
+  // middle dot use hAnsi without an East Asian hint. They keep the Common script, but never
+  // inherit a neighbouring Han font slot.
+  // eastAsiaRunsOfSegments applies an explicit hint before this default classification.
+  if (isHAnsiPunctuation(codePoint)) {
+    return { slot: 'hAnsi', script: 'Zyyy' };
+  }
+  // Full-width forms draw in the East Asian face, letters and digits included. The letters
+  // keep their Latin script for shaping; the rest are punctuation, symbols and digits.
   if (inRange(codePoint, 0xff21, 0xff3a) || inRange(codePoint, 0xff41, 0xff5a)) {
-    return { slot: 'hAnsi', script: 'Latn' };
+    return { slot: 'eastAsia', script: 'Latn' };
+  }
+  if (inRange(codePoint, 0xff01, 0xff65) || inRange(codePoint, 0xffe0, 0xffe6)) {
+    return { slot: 'eastAsia', script: 'Zyyy' };
   }
   if (inRange(codePoint, 0x0590, 0x05ff) || inRange(codePoint, 0xfb1d, 0xfb4f)) {
     return { slot: 'cs', script: 'Hebr' };
@@ -314,7 +343,10 @@ const pureAscii = (text: string): boolean => {
  * whose docDefaults author an East Asian face pay two compares per character, not a
  * classifier call.
  */
-export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly SegmentSlotRange[] {
+export function eastAsiaRunsOfSegments(
+  segments: readonly string[],
+  hintedSegments: readonly (boolean | EastAsiaHintScope)[] = []
+): readonly SegmentSlotRange[] {
   const out: SegmentSlotRange[] = [];
   const addEastAsia = (segment: number, from: number, to: number): void => {
     const previous = out.at(-1);
@@ -327,6 +359,19 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
 
   /** Strongly classified text seen so far, or null while only Common text has streamed by. */
   let precedingStrong: Exclude<SlotClass, 'common'> | null = null;
+  // Segment only when the hint can change a face. Joining once keeps clusters intact
+  // across w:t boundaries, without adding segmentation to ordinary Latin/CJK paragraphs.
+  const needsGraphemes = segments.some((text, index) => {
+    if (!hintedSegments[index] || pureAscii(text)) return false;
+    for (const character of text) {
+      if (isEastAsiaHinted(character.codePointAt(0)!, hintedSegments[index])) return true;
+    }
+    return false;
+  });
+  const graphemes = needsGraphemes ? segmentGraphemes(segments.join('')) : null;
+  let graphemeIndex = 0;
+  let segmentOffset = 0;
+  let clusterHinted = false;
   /** Leading Common units waiting for the FOLLOWING strong item; `ascii` blocks eastAsia. */
   const pending: { segment: number; from: number; to: number; ascii: boolean }[] = [];
   const resolvePending = (strong: Exclude<SlotClass, 'common'>): void => {
@@ -338,7 +383,9 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
 
   for (let segment = 0; segment < segments.length; segment += 1) {
     const text = segments[segment]!;
-    if (pureAscii(text)) {
+    const offset = segmentOffset;
+    segmentOffset += text.length;
+    if (!graphemes && pureAscii(text)) {
       // Never eastAsia, so only the strong/Common distinction matters: any alphanumeric
       // is a strong Latin item; pure punctuation and whitespace stay transparent.
       if (/[0-9A-Za-z]/.test(text)) {
@@ -348,8 +395,33 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
       continue;
     }
     for (let from = 0; from < text.length; ) {
-      const codePoint = text.codePointAt(from)!;
-      const to = from + (codePoint > 0xffff ? 2 : 1);
+      let codePoint = text.codePointAt(from)!;
+      let to = from + (codePoint > 0xffff ? 2 : 1);
+      let hinted = false;
+      if (graphemes) {
+        const position = offset + from;
+        while (graphemes[graphemeIndex]!.utf16To <= position) graphemeIndex += 1;
+        const cluster = graphemes[graphemeIndex]!;
+        codePoint = cluster.text.codePointAt(0)!;
+        to = Math.min(text.length, cluster.utf16To - offset);
+        if (position === cluster.utf16From) {
+          clusterHinted = isEastAsiaHinted(codePoint, hintedSegments[segment]);
+        }
+        hinted = clusterHinted;
+      }
+      // The base selects the face for its whole cluster. Marks and ZWJ components
+      // cannot select another face, even when a cluster crosses a text segment.
+      // The hint changes the face, but preserves the base's script strength.
+      if (hinted) {
+        const underlyingClass = slotClassOf(codePoint);
+        if (underlyingClass !== 'common') {
+          resolvePending(underlyingClass);
+          precedingStrong = underlyingClass;
+        }
+        addEastAsia(segment, from, to);
+        from = to;
+        continue;
+      }
       const slotClass = slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {
@@ -367,5 +439,21 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
   }
   // A sequence of nothing but Common text has no strong item to inherit from on either
   // side; it stays in the base slots, exactly as it did before slot resolution existed.
-  return out;
+  //
+  // Leading Common units resolve only once the strong item AFTER them arrives, and a hinted
+  // symbol between the two is emitted first, so the list can be out of document order.
+  // The consumer slices pieces with a monotonic cursor, so order and merge here.
+  if (out.length < 2) return out;
+  out.sort((a, b) => a.segment - b.segment || a.from - b.from);
+  const merged: { segment: number; from: number; to: number }[] = [out[0]!];
+  for (let index = 1; index < out.length; index += 1) {
+    const range = out[index]!;
+    const previous = merged[merged.length - 1]!;
+    if (previous.segment === range.segment && range.from <= previous.to) {
+      if (range.to > previous.to) merged[merged.length - 1] = { ...previous, to: range.to };
+    } else {
+      merged.push(range);
+    }
+  }
+  return merged;
 }

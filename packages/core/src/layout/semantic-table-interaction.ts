@@ -12,6 +12,7 @@ import type {
   TableRowFragmentRecord,
 } from './semantic-records.ts';
 import { pageAtY } from './semantic-hit-test.ts';
+import { isCarriedHeadRow } from './table-carried-head-row.ts';
 
 /** Cumulative column boundary positions in table-local points. */
 export function columnEdgesFromWidths(columnWidthsPt: readonly number[]): readonly number[] {
@@ -141,6 +142,53 @@ export interface TableInteractionIndex {
 
 const indexCache = new WeakMap<SemanticLayout, TableInteractionIndex>();
 
+interface MergedTableColumns {
+  /** Grid column index to its `w:gridCol` id, read from the cells that start there. */
+  readonly ids: ReadonlyMap<number, string>;
+  /** In RTL a merged cell's physical start can name the wrong grid boundary. */
+  readonly rtl: boolean;
+}
+
+const mergedTablesCache = new WeakMap<
+  TableInteractionIndex,
+  ReadonlyMap<string, MergedTableColumns>
+>();
+
+/** Tables with merged cells, with the grid column ids their dividers resize. */
+function tablesWithMergedCells(
+  index: TableInteractionIndex
+): ReadonlyMap<string, MergedTableColumns> {
+  const cached = mergedTablesCache.get(index);
+  if (cached) return cached;
+  const merged = new Map<string, { ids: Map<number, string>; rtl: boolean; merged: boolean }>();
+  for (const occurrence of index.occurrences) {
+    let entry = merged.get(occurrence.table.tableId);
+    if (!entry) {
+      entry = { ids: new Map(), rtl: false, merged: false };
+      merged.set(occurrence.table.tableId, entry);
+    }
+    for (const cell of occurrence.row.cells) {
+      if (cell.logicalGridColumn !== undefined) entry.rtl = true;
+      if (cell.gridSpan > 1 || cell.vMergeContinue || (cell.rowSpan ?? 1) > 1) entry.merged = true;
+      if (cell.gridColumnId !== undefined) entry.ids.set(cell.gridColumn, cell.gridColumnId);
+    }
+  }
+  const result = new Map<string, MergedTableColumns>();
+  for (const [tableId, entry] of merged) {
+    if (entry.merged) result.set(tableId, { ids: entry.ids, rtl: entry.rtl });
+  }
+  mergedTablesCache.set(index, result);
+  return result;
+}
+
+/** Whether a cell edge of this row falls on grid boundary `edgeIndex`. */
+function rowHasBoundaryAt(row: TableRowFragmentRecord, edgeIndex: number): boolean {
+  return (
+    row.cells.some((cell) => cell.gridColumn === edgeIndex) ||
+    row.cells.some((cell) => cell.gridColumn + cell.gridSpan === edgeIndex)
+  );
+}
+
 const DIVIDER_HIT_PX = 4;
 const INSERT_ROW_BAND_PX = 6;
 /** Matches `paintInsertControl` column furniture offset above the table top. */
@@ -191,6 +239,8 @@ export function tableInteractionIndex(layout: SemanticLayout): TableInteractionI
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
     const take = (occ: TableInteractionOccurrence): void => {
+      // A carried head row has zero height: no band to resize or insert beside.
+      if (isCarriedHeadRow(occ.row)) return;
       occurrences.push(occ);
     };
     visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, take);
@@ -417,11 +467,19 @@ function dividerHit(
   ) {
     return null;
   }
+  // In a table with merged cells a divider shows only where this row has a cell edge, and it
+  // names the grid columns on either side from any row. In RTL a merged cell's physical start
+  // can name the wrong grid boundary, so those tables keep no divider.
+  const merged = tablesWithMergedCells(index).get(table.tableId);
+  if (merged?.rtl) return null;
   for (let edgeIndex = 1; edgeIndex < table.columnEdges.length - 1; edgeIndex += 1) {
     const edgeX = table.columnEdges[edgeIndex]!;
     if (Math.abs(localX - edgeX) > DIVIDER_HIT_PX) continue;
-    const left = gridColumnIdAt(occ.row, edgeIndex - 1);
-    const right = gridColumnIdAt(occ.row, edgeIndex);
+    if (merged && !rowHasBoundaryAt(occ.row, edgeIndex)) continue;
+    const left = merged
+      ? (merged.ids.get(edgeIndex - 1) ?? null)
+      : gridColumnIdAt(occ.row, edgeIndex - 1);
+    const right = merged ? (merged.ids.get(edgeIndex) ?? null) : gridColumnIdAt(occ.row, edgeIndex);
     if (!left || !right) continue;
     return {
       kind: 'columnDivider',
@@ -442,6 +500,9 @@ function dividerHit(
     const lastCol = table.columnEdges.length - 2;
     const gridColumnId = gridColumnIdAt(occ.row, lastCol);
     if (!gridColumnId) return null;
+    // The store's outer-edge operation resizes the last STORED column. In RTL that
+    // is the left edge. Do not offer a right-edge handle that edits the wrong cell.
+    if (occ.row.cells.some((cell) => cell.logicalGridColumn !== undefined)) return null;
     return {
       kind: 'rightEdge',
       pageIndex: occ.pageIndex,

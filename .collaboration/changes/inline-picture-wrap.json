@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Inline pictures refuse wrap changes in the editor.",
+  "after": "A floating wrap on an inline picture sends the existing wrap and position operations in one transaction.",
+  "reason": "The editor sends existing drawing operations only. Shared nodes, operation shapes, and package serialization stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-structure-races.test.ts",
+    "packages/core/src/editor/__tests__/docx-editor-images.test.ts"
+  ],
+  "changeset": "inline-picture-wrap",
+  "migration": null
+}

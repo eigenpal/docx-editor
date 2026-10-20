@@ -145,8 +145,12 @@
   /* Revision indicators */
   --doc-revision-insertion: #2e7d32;
   --doc-revision-deletion: #c62828;
-  --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
-  --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
+  /* Word marks inserted text with a thin solid underline that sits slightly below the
+     glyphs. Hosts can change these three presentation tokens without changing revision
+     data or editor configuration. */
+  --doc-revision-insertion-decoration-style: solid;
+  --doc-revision-insertion-decoration-thickness: 0.06em;
+  --doc-revision-insertion-underline-offset: 0.15em;
   /* THE HIGHLIGHT LAYER, which reads the same for tracked changes and for comments:
      `-bg` is the band's fill and `-border` the rule under it, and an `-active-` pair is
      the same two for the one the reader has open. The comment family is below.
@@ -181,12 +185,21 @@
      part of the revision ramp: a field is not a pending decision. Kept light enough that a
      contents page dense with them still reads as text. Never printed. */
   --doc-field-shading: rgba(0, 0, 0, 0.09);
+  /* Bracket marks at bookmarks when "Show bookmarks" is on. A neutral grey, printed only when
+     the host opts in. The width is the stroke; the size is the bracket arm at 100% zoom. */
+  --doc-bookmark-mark: #808080;
+  --doc-bookmark-mark-width: 1px;
+  --doc-bookmark-mark-size: 3px;
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
      the deletion colour — grey says "the appearance is the decision". The wash plus a faint
      dotted rule make the range findable (it is the hover balloon's target); both are quiet
      enough that a heavily restyled page reads as text, not as marking. */
   --doc-revision-format: #6b7f8c;
   --doc-revision-format-wash: rgba(107, 127, 140, 0.1);
+  /* The tint a paragraph with a tracked paragraph-property change takes under the pointer. Its
+     words carry no wash of their own, so without it a reader could not tell which paragraph
+     a "Formatted" card is about. */
+  --doc-revision-format-hover: rgba(107, 127, 140, 0.08);
   /* Word's tracked-change palette. Deletions read as removal, insertions as addition, and the
      margin rules take the same two colours so the margin says WHAT happened, not only that
      something did. */
@@ -204,9 +217,24 @@
   --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
   --doc-review-author-7: #2e7d32;
-  /* Retained as an override hook for a host that wants one neutral margin rule instead of the
-     kind-coloured pair. Nothing reads it by default. */
-  --doc-review-change-bar: #767676;
+  /* Ink for initials on a filled author disc or badge. Every ramp slot above reaches at least
+     5.1:1 against it, which clears the 4.5:1 text minimum. A disc softened toward white does
+     not: at 82% the light disc fails in six slots, and the 62% dark disc fails in all eight.
+     The chrome is not inverted in dark mode, so one ink serves both themes. */
+  --doc-review-avatar-ink: #ffffff;
+  /* The change bar: the rule in the left margin beside every line a tracked change touches.
+     Word's All Markup paints it neutral grey whatever the change was (its red bar belongs to
+     Simple Markup), and the ink here is Word's own on-screen grey. The width is a one-pixel
+     hairline at every zoom, as in Word. The bar also carries `docx-change-bar-insertion` /
+     `-deletion` / `-format` classes for a host that wants the kind back in the margin, and
+     `data-docx-story` naming the story it stands beside. */
+  --doc-review-change-bar: #a4a4a4;
+  --doc-review-change-bar-width: 1px;
+  /* Simple Markup's bar: red and heavier, as Word draws it (Word's on-screen red, half again
+     the grey bar's width), beside every line a resolved change touched. A click on either
+     bar swaps the two views. */
+  --doc-review-change-bar-simple: #ea3425;
+  --doc-review-change-bar-simple-width: 2px;
 
   /* Selected table cells. A native selection is a run of characters and cannot
     * express a rectangle of cells, so that one highlight is drawn rather than
@@ -233,6 +261,12 @@
   /* Focus ring & text selection (derived from primary) */
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
+  --doc-refresh-highlight-color: #3b82f6;
+  --doc-anchor-highlight-color: #3b82f6;
+  /* Text highlights (Find results, host marks). Opaque, because the layer multiplies. */
+  --doc-text-highlight-color: #fff176;
+  --doc-text-highlight-active-color: #ff9632;
+  --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
     * Chrome layering.
@@ -366,6 +400,9 @@
   --doc-comment-border: rgba(253, 214, 99, 0.5);
   --doc-comment-active-bg: rgba(253, 214, 99, 0.32);
   --doc-comment-active-border: rgba(253, 214, 99, 0.95);
+  /* The text highlight layer screens in dark mode, so these lift the dark sheet. */
+  --doc-text-highlight-color: rgba(255, 214, 0, 0.32);
+  --doc-text-highlight-active-color: rgba(255, 150, 50, 0.62);
   /* NOT the author ramp. It used to be lifted here, back when only the review cards read
      it — but the ramp now colours the painted DOCUMENT too, and the dark page is rendered
      through `invert(1) hue-rotate(180deg)` (see `.docx-page-content` below). A colour
@@ -374,7 +411,10 @@
      AA. The same reason `--doc-revision-insertion` / `-deletion` are not overridden here.
      The CARDS sit outside the filter and lift the accent themselves, further down. */
   --doc-revision-format: #9fb3bf;
+  /* Painted on the sheet, outside the content-box inversion, so this value is the ink. */
   --doc-review-change-bar: #9e9e9e;
+  --doc-bookmark-mark: #9e9e9e;
+  --doc-review-change-bar-simple: #f0524a;
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */
   --doc-text-subtle: #6e6e6e; /* tertiary/disabled text */
@@ -621,6 +661,22 @@
   color: inherit !important;
 }
 
+/* Native selection suppresses ordinary text shadows and restores the unshifted glyph.
+   Keep compressed punctuation at its ink origin while retaining the native range band.
+   Use the system selection ink colour when forced colours replace the highlight. */
+.docx-line [data-docx-shifted-ink]::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: transparent !important;
+  text-shadow: var(--docx-glyph-ink-offset, 0px) 0 var(--docx-glyph-ink-color, CanvasText);
+}
+
+@media (forced-colors: active) {
+  .docx-line [data-docx-shifted-ink]::selection {
+    background-color: Highlight !important;
+    text-shadow: var(--docx-glyph-ink-offset, 0px) 0 HighlightText;
+  }
+}
+
 /* Firefox selection */
 .docx-run-editable::-moz-selection,
 .docx-run-editable *::-moz-selection,
@@ -840,10 +896,65 @@ a.docx-hyperlink:focus-visible {
   background: color-mix(in srgb, var(--doc-primary) 6%, var(--doc-page-bg-rendered));
 }
 
+/* Bookmark marks: a bracket at a bookmark's start and end, an I-beam at a point bookmark.
+ * Painted in an overlay sheet beside the pages from layout geometry, so they never take part
+ * in selection, hit testing or the caret, and they are never part of an export. The painter
+ * sets the position and the line height; everything else is here, so a host restyles a mark
+ * with the `--doc-bookmark-mark*` tokens, or with `[data-bookmark-edge]` and
+ * `[data-bookmark-name]` selectors. `--doc-bookmark-point-glyph` replaces the I-beam's stem. */
+.docx-bookmark-mark {
+  box-sizing: border-box;
+  pointer-events: none;
+  width: max(
+    var(--doc-bookmark-mark-size),
+    calc(var(--doc-bookmark-mark-size) * var(--docx-bookmark-scale, 1))
+  );
+  border: 0 solid var(--doc-bookmark-mark);
+}
+
+/* Brackets sit OUTSIDE the range: the start one just before the first bookmarked character,
+ * the end one just after the last, so neither covers a glyph. */
+.docx-bookmark-mark--start {
+  border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width);
+  transform: translateX(-100%);
+}
+
+.docx-bookmark-mark--end {
+  border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width) 0;
+}
+
+.docx-bookmark-mark--point {
+  border-width: var(--doc-bookmark-mark-width) 0;
+  transform: translateX(-50%);
+  background: var(
+    --doc-bookmark-point-glyph,
+    linear-gradient(var(--doc-bookmark-mark), var(--doc-bookmark-mark)) center /
+      var(--doc-bookmark-mark-width) 100% no-repeat
+  );
+}
+
+.docx-bookmark-mark--start.docx-bookmark-mark--rtl {
+  border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width) 0;
+  transform: none;
+}
+
+.docx-bookmark-mark--end.docx-bookmark-mark--rtl {
+  border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width);
+  transform: translateX(-100%);
+}
+
+@media print {
+  .docx-bookmark-overlay:not(.docx-bookmark-overlay--print) {
+    display: none;
+  }
+}
+
 /* Non-editable elements within editor */
 .docx-list-marker,
-.docx-bookmark-start,
-.docx-bookmark-end,
 .docx-field,
 .docx-drawing-placeholder,
 .docx-shape-placeholder,
@@ -951,6 +1062,31 @@ a.docx-hyperlink:focus-visible {
   border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
 }
 
+/* Word shows a control's tab only while the pointer or the caret is on the control; a page
+   of forms is otherwise plain text. The widget keeps its box (the press target and the
+   focus stop stay where they are) and only its paint waits: it appears under the pointer,
+   at the caret, while its pop-up is open, under show-all, and when it holds keyboard focus.
+   A checkbox paints nothing of its own anyway, so it is exempt. */
+.docx-content-control-widget:not([data-docx-cc-widget='checkbox']) {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-widget,
+.docx-content-control-chrome[data-open] .docx-content-control-widget,
+.docx-content-control-chrome[data-hover] .docx-content-control-widget,
+.docx-content-control-chrome[data-boundary-visible] .docx-content-control-widget,
+.docx-content-control-chrome:hover .docx-content-control-widget,
+.docx-content-control-widget:focus-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-content-control-widget {
+    transition: none;
+  }
+}
+
 /* Same rule for the widget: a disabled button that lights under the pointer reads as live. */
 .docx-content-control-chrome[data-read-only]:hover .docx-content-control-widget {
   background: color-mix(in srgb, var(--doc-primary) 4%, var(--doc-page-bg-rendered));
@@ -963,49 +1099,107 @@ a.docx-hyperlink:focus-visible {
   display: grid;
   place-items: center;
   color: var(--doc-primary);
+  /* The painter sets the widget's font-size to its painted side, so every glyph below is
+     drawn in `em` and follows the page zoom instead of staying a 16px chip at every scale. */
   font:
-    600 10px/1 system-ui,
+    600 0.625em/1 system-ui,
     sans-serif;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='dropdown']::after,
-.docx-content-control-widget[data-docx-cc-widget='comboBox']::after {
+.docx-content-control-widget[data-docx-cc-widget='comboBox']::after,
+.docx-content-control-widget[data-docx-cc-widget='buildingBlockGallery']::after {
   content: '▾';
+}
+
+.docx-content-control-picture-input {
+  font: inherit;
+}
+
+/* The engine's own picture picker is a file input that only ever opens the browser's dialog;
+   it takes no space on the sheet and never paints. */
+.docx-pages .docx-content-control-picture-picker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A picture control's widget opens a file picker: a small frame with a "mountain" inside,
+   the same glyph Word draws on its picture placeholder, in `em` so it follows the zoom. */
+.docx-content-control-widget[data-docx-cc-widget='picture']::after {
+  content: '';
+  inset: 0.1875em;
+  display: block;
+  border: 0.09em solid currentcolor;
+  border-radius: 0.125em;
+  background:
+    linear-gradient(currentcolor, currentcolor) 0.125em 0.125em / 0.125em 0.125em no-repeat,
+    linear-gradient(
+        to top right,
+        transparent 46%,
+        currentcolor 50%,
+        currentcolor 62%,
+        transparent 66%
+      )
+      0 0 / 100% 100% no-repeat;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='date']::after {
   content: '';
-  inset: 3px;
+  inset: 0.1875em;
   display: block;
-  border: 1.5px solid currentcolor;
-  border-radius: 2px;
-  background: linear-gradient(currentcolor, currentcolor) 0 3px / 100% 1px no-repeat;
+  border: 0.09em solid currentcolor;
+  border-radius: 0.125em;
+  background: linear-gradient(currentcolor, currentcolor) 0 0.1875em / 100% 0.0625em no-repeat;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='date']::before {
   content: '';
   position: absolute;
   z-index: 1;
-  top: 2px;
-  left: 5px;
-  width: 1px;
-  height: 3px;
+  top: 0.125em;
+  left: 0.3125em;
+  width: 0.0625em;
+  height: 0.1875em;
   background: currentcolor;
-  box-shadow: 4px 0 currentcolor;
+  box-shadow: 0.25em 0 currentcolor;
+}
+
+/* A checkbox control's widget is a hit target over the document's own state glyph (☐ / ☒ in
+   the state font, exactly what Word shows), so it paints nothing of its own: a drawn check over
+   a see-through chip showed both the check and the glyph on hover. The chip hugs the glyph box
+   (the painter sizes it from the glyph's span), so hover and active states are a soft tint
+   behind the glyph, the way Word lights a control under the pointer, never a second box. */
+.docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-read-only]:hover
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  border-radius: 0.2em;
+  background: transparent;
+  border-color: transparent !important;
+}
+
+.docx-content-control-chrome[data-active]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome[data-open]
+  .docx-content-control-widget[data-docx-cc-widget='checkbox'],
+.docx-content-control-chrome:hover .docx-content-control-widget[data-docx-cc-widget='checkbox'] {
+  background: color-mix(in srgb, var(--doc-primary) 16%, transparent);
+  border-color: transparent !important;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']:active {
+  background: color-mix(in srgb, var(--doc-primary) 28%, transparent);
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
 }
 
 .docx-content-control-widget[data-docx-cc-widget='checkbox']::after {
-  content: '';
-  inset: 2px 5px 4px;
-  display: block;
-  border-right: 2px solid currentcolor;
-  border-bottom: 2px solid currentcolor;
-  opacity: 0;
-  transform: rotate(45deg);
-}
-
-.docx-content-control-widget[data-docx-cc-widget='checkbox'][data-checked='true']::after {
-  opacity: 1;
+  content: none;
 }
 
 .docx-content-control-widget:disabled,
@@ -1015,7 +1209,11 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-content-control-menu {
-  min-width: 13rem;
+  min-width: 0;
+  width: 17rem;
+  box-sizing: border-box;
+  font: var(--doc-dialog-font-size, 13px) / 1.5 var(--doc-font-ui, system-ui, sans-serif);
+  color: var(--doc-text);
   max-width: 18rem;
   max-height: 16rem;
   overflow: auto;
@@ -1055,36 +1253,44 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-content-control-calendar {
-  width: 17rem;
-  max-width: calc(100vw - 1.5rem);
-  padding: 0.65rem;
+  width: 19rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: none;
+  padding: 6px;
   border-radius: 12px;
 }
 
-.docx-content-control-calendar-input {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0 0 0.6rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--doc-border);
-  border-radius: 7px;
-  background: var(--doc-surface);
-  color: var(--doc-text);
+/* The picker footer holds the Today shortcut, as Word's does. */
+.docx-content-control-calendar-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-content-control-calendar-today {
+  padding: 0.3rem 0.85rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-primary);
+  cursor: pointer;
   font: inherit;
+  font-weight: 600;
 }
 
-.docx-content-control-calendar-input:focus {
-  border-color: var(--doc-primary);
-  outline: 2px solid var(--doc-primary-light);
+.docx-content-control-calendar-today:hover,
+.docx-content-control-calendar-today:focus-visible {
+  background: var(--doc-primary-light);
+  outline: none;
+}
+
+.docx-content-control-calendar-day:focus-visible,
+.docx-content-control-calendar-nav:focus-visible {
+  outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
-}
-
-.docx-content-control-calendar-input[aria-invalid='true'] {
-  border-color: var(--doc-danger);
-}
-
-.docx-content-control-calendar-input::-webkit-calendar-picker-indicator {
-  display: none;
 }
 
 .docx-content-control-calendar-header {
@@ -1092,7 +1298,7 @@ a.docx-hyperlink:focus-visible {
   grid-template-columns: 2rem 1fr 2rem;
   align-items: center;
   gap: 0.35rem;
-  margin-bottom: 0.45rem;
+  margin-bottom: 4px;
 }
 
 .docx-content-control-calendar-title {
@@ -1122,19 +1328,24 @@ a.docx-hyperlink:focus-visible {
 .docx-content-control-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.2rem;
+  gap: 2px;
 }
 
 .docx-content-control-calendar-weekdays {
   margin-bottom: 0.2rem;
   color: var(--doc-text-muted);
   font-size: 0.75rem;
+  line-height: 1;
   text-align: center;
+}
+
+.docx-content-control-calendar-week {
+  display: contents;
 }
 
 .docx-content-control-calendar-day {
   width: 2rem;
-  height: 2rem;
+  height: 28px;
   border-radius: 7px;
 }
 
@@ -1155,6 +1366,81 @@ a.docx-hyperlink:focus-visible {
 
 .docx-content-control-calendar-day[data-today]:not([data-selected]) {
   box-shadow: inset 0 0 0 1px var(--doc-primary);
+}
+
+.docx-content-control-calendar-navigation {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.docx-content-control-calendar-month,
+.docx-content-control-calendar-year,
+.docx-content-control-menu-input {
+  font: inherit;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  min-height: 2rem;
+  min-width: 0;
+}
+.docx-content-control-calendar-month {
+  flex: 1;
+}
+.docx-content-control-calendar-year {
+  width: 4rem;
+}
+.docx-content-control-menu-list {
+  overflow: auto;
+  max-height: 16rem;
+}
+.docx-content-control-menu-item[aria-selected='true'] {
+  background: var(--doc-primary-light);
+}
+.docx-content-control-menu-item:focus-visible,
+.docx-content-control-calendar :is(input, select, button):focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: -2px;
+}
+.docx-content-control-calendar-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.docx-content-control-calendar-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.docx-content-control-calendar-entry .docx-content-control-menu-input {
+  margin: 0;
+  height: 32px;
+  padding: 0 8px;
+}
+.docx-editor .docx-content-control-calendar .docx-dialog__footer {
+  margin-top: 6px;
+  padding: 0;
+}
+.docx-content-control-calendar .docx-dialog__button {
+  min-height: 32px;
+  padding: 4px 10px;
+}
+.docx-content-control-calendar-day {
+  width: 100%;
+  min-width: 0;
+}
+.docx-form-checkbox-hit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 24px);
+  height: max(100%, 24px);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
 }
 
 .docx-drawing {
@@ -1180,6 +1466,22 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-drawing-layer-front {
+  z-index: 2;
+}
+
+/* The header and footer layer paints under the main document, so its page-anchored
+ * in-front drawings stay at the body's level and in the sheet's child order instead of
+ * rising over the body. `0`, not `auto`, keeps the layer a stacking context, so a raised
+ * table border or tab leader inside a drawing cannot escape over the body either. The
+ * band's own in-front drawings are contained by the band, whose clip makes it a stacking
+ * context. */
+.docx-page > .docx-drawing-layer-front[data-docx-hf-front] {
+  z-index: 0;
+}
+
+/* A `front` page border is over every drawing on the sheet, the body's in-front drawings
+ * included: the same level as their layer, and later in the sheet's child order. */
+.docx-page > .docx-page-borders[data-docx-z-order='front'] {
   z-index: 2;
 }
 
@@ -1231,6 +1533,8 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   max-width: none;
   max-height: none;
+  /* The resource extent is the EXIF-oriented one; the pixels must be too. */
+  image-orientation: from-image;
 }
 
 .docx-editor.dark .docx-drawing-placeholder-card:not([data-docx-customized]),
@@ -1661,12 +1965,11 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg-hover);
 }
 
-/* Default styles for y-prosemirror remote cursor decorations. Consumers can
-  * override by providing their own `.ProseMirror-yjs-cursor` rules.
+/* Default styles for `.ProseMirror-yjs-cursor` remote cursor decorations. Consumers
+  * can override them with their own `.ProseMirror-yjs-cursor` rules.
   *
-  * Scoped, because `.ProseMirror-yjs-cursor` is y-prosemirror's class name and
-  * not ours: unscoped, these rules restyled the remote cursors of a HOST's own
-  * ProseMirror + Yjs editor sharing the page. */
+  * Scoped, because the class name is not ours: unscoped, these rules restyled the
+  * remote cursors of a HOST's own ProseMirror + Yjs editor sharing the page. */
 .docx-editor .ProseMirror-yjs-cursor {
   position: relative;
   margin-left: -1px;
@@ -1696,24 +1999,7 @@ a.docx-hyperlink:focus-visible {
   * Visible painter cues live here so React and Vue stay in lockstep.
   * ========================================================================== */
 
-.docx-table-row--revision::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -8px;
-  width: 2px;
-  pointer-events: none;
-}
-
-.docx-table-row--revision.layout-revision-ins::before {
-  background-color: var(--doc-revision-insertion);
-}
-
-.docx-table-row--revision.layout-revision-del::before {
-  background-color: var(--doc-revision-deletion);
-}
-
+/* Tracked rows use the shared page-margin change-bar overlay, like text revisions. */
 .docx-table-row--revision.layout-revision-ins .layout-run-text {
   color: var(--doc-revision-insertion);
 }
@@ -1735,20 +2021,9 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-revision-deletion-wash);
 }
 
-/* A DRAWING inside a tracked change. The outline is the box's underline/strike: there is no
-   text to decorate, so the frame carries the claim, in the same kind tokens the text rules
-   use. Drawn INSIDE the box (negative offset) because pages, cells and clipped paint bounds
-   crop at the box edge and would shave an outer ring off. Under author colouring the painter
-   overrides `outline-color` inline, exactly as span ink follows the author. */
-.docx-drawing--revision-insertion {
-  outline: 2px solid var(--doc-revision-insertion);
-  outline-offset: -2px;
-}
-
+/* Tracked drawings share the page-margin change bars. A pending removal stays dimmed
+   so it remains distinguishable from an insertion without a second revision frame. */
 .docx-drawing--revision-deletion {
-  outline: 2px solid var(--doc-revision-deletion);
-  outline-offset: -2px;
-  /* Pending removal reads as on its way out — the box twin of the strike-through. */
   opacity: 0.6;
 }
 
@@ -1767,6 +2042,81 @@ a.docx-hyperlink:focus-visible {
 .docx-field-atom--shaded,
 .docx-field-atom--active {
   background-color: var(--doc-field-shading);
+}
+
+/* A legacy FORMCHECKBOX paints Word's square box over its glyph. The run's font decides the
+   size (`w:size` lands as `w:sz`), and the box is 1em square, which is Word's 12pt box for a
+   12pt field. The box, not the fallback font's ballot glyph, is what the reader sees and
+   presses. The glyph stays in the DOM for copy and search. */
+.docx-page [data-docx-form-checkbox] {
+  position: relative;
+  /* Hide the fallback glyph without touching `color`: the box and its X are drawn in
+     `currentcolor`, so they follow the run's own colour and stay canvas ink (which the dark
+     theme inverts with the page) instead of picking up chrome tokens. */
+  -webkit-text-fill-color: transparent;
+}
+
+.docx-page [data-docx-form-checkbox]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  transform: translate(-50%, -50%);
+  border: 0.0625em solid currentcolor;
+  border-radius: 0;
+  background: inherit;
+  z-index: 1;
+}
+
+.docx-page [data-docx-form-checkbox][data-checked='true']::after {
+  content: '';
+  z-index: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1em;
+  height: 1em;
+  transform: translate(-50%, -50%);
+  /* Word's checked state is a bold X across the box. */
+  background:
+    linear-gradient(
+      to top right,
+      transparent 44%,
+      currentcolor 46%,
+      currentcolor 54%,
+      transparent 56%
+    ),
+    linear-gradient(
+      to top left,
+      transparent 44%,
+      currentcolor 46%,
+      currentcolor 54%,
+      transparent 56%
+    );
+}
+
+/* Focus and hover affordances are canvas ink too, so they survive the dark theme's inversion. */
+.docx-page [data-docx-form-checkbox]:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 2px;
+}
+
+.docx-page [data-docx-form-checkbox]:hover::before {
+  border-width: 0.125em;
+}
+
+/* The box prints, exactly like the field's glyph would; only the affordances drop. */
+@media print {
+  .docx-page [data-docx-form-checkbox]:focus-visible {
+    outline: none;
+  }
+
+  .docx-page [data-docx-form-checkbox]:hover::before {
+    border-width: 0.0625em;
+  }
 }
 
 /* Field shading NEVER prints — Word does not print it either. A printed form has no blanks
@@ -1791,21 +2141,20 @@ a.docx-hyperlink:focus-visible {
   text-decoration-color: var(--doc-revision-format);
 }
 
-.docx-editor-revision-cell.docx-editor-revision-ins {
-  box-shadow: inset 0 3px 0 var(--doc-revision-insertion);
-  background-color: var(--doc-revision-insertion-tint);
+/* A paragraph whose own properties carry a tracked change tints under the pointer and while
+   its card is open. An inset shadow rather than a background: it paints over the
+   paragraph's own shading without replacing it, and under the text. */
+.docx-paragraph-fragment[data-formatting-kind='pPrChange']:hover,
+.docx-paragraph-fragment[data-formatting-kind='pPrChange'][data-review-balloon-open] {
+  box-shadow: inset 0 0 0 100vmax var(--doc-revision-format-hover);
 }
 
-.docx-editor-revision-cell.docx-editor-revision-del {
-  box-shadow: inset 0 3px 0 var(--doc-revision-deletion);
-  background-color: var(--doc-revision-deletion-tint);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--doc-revision-deletion) 60%, transparent);
+/* Show/Hide is independent of the active revision, as in Word. */
+.docx-paragraph-mark {
+  opacity: 0;
 }
-
-.docx-editor-revision-cell.docx-editor-revision-merge {
-  box-shadow: inset 0 3px 0 var(--doc-text-muted);
-  background-color: color-mix(in srgb, var(--doc-text-muted) 8%, transparent);
+.docx-show-paragraph-marks .docx-paragraph-mark {
+  opacity: 1;
 }
 
 /* ========================================================================
@@ -1848,6 +2197,12 @@ a.docx-hyperlink:focus-visible {
 
 /* Scroll container. The host reports scrollTop/scrollLeft to the engine as
  * InteractionHostMetrics.scrollOffset — the engine never reads the DOM. */
+.docx-editor-one-surface__viewport:focus-visible,
+.docx-editor .docx-ruler-marker:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -2px;
+}
+
 .docx-editor-one-surface__viewport {
   position: relative;
   overflow: auto;
@@ -2199,9 +2554,15 @@ a.docx-hyperlink:focus-visible {
   padding-left: 18px;
 }
 
+/* The scroller keeps a left-to-right base whatever the host page declares. Under an
+ * inherited `rtl`, `scrollLeft` runs from 0 to negative values and overflow grows
+ * leftward, which breaks every horizontal offset the editor derives from it: zoom
+ * anchoring, rulers, the review rail and popups. Document text direction comes only
+ * from the document; the pages pin their own base as well. */
 .docx-editor__scroll-container {
   display: flex;
   flex-direction: column;
+  direction: ltr;
 }
 
 .docx-editor__content {
@@ -2276,8 +2637,9 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* Public React page-number primitive. It is an overlay sibling of the viewport inside the
- * positioned workspace, so scrolling the document never moves the readout itself. */
+/* Public page-number primitive. It is an overlay sibling of the viewport inside the
+ * positioned workspace, so scrolling the document never moves the readout itself. A part
+ * placed inside the viewport renders into the viewport's parent element for the same reason. */
 .docx-editor__page-number {
   position: absolute;
   right: 24px;
@@ -2798,7 +3160,7 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   outline: none;
 }
-.docx-editor.dark .docx-paginated-surface .docx-page {
+.docx-editor.dark :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
   background: var(--doc-page-bg-rendered);
 }
 /* Paper is always white, whatever the screen theme. Without resetting the CONTENT
@@ -2813,7 +3175,7 @@ a.docx-hyperlink:focus-visible {
   .docx-editor.dark .docx-page-content [data-no-color-invert] {
     filter: none !important;
   }
-  .docx-paginated-surface .docx-page {
+  :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -2821,7 +3183,7 @@ a.docx-hyperlink:focus-visible {
     -webkit-print-color-adjust: exact;
   }
 }
-.docx-paginated-surface .docx-page {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
   /* A rebuilt sheet must not invalidate style/layout/paint across hundreds of sibling pages. */
   contain: layout style paint;
   /* The TOKEN, not a literal. Dark mode sets `--doc-page-bg` to #ccc precisely so the
@@ -2840,7 +3202,7 @@ a.docx-hyperlink:focus-visible {
 }
 /* The caret and the TEXT highlight are the BROWSER's, so they follow real glyph shapes and
    per-line metrics instead of the uniform band a hand-drawn rectangle produces. */
-.docx-paginated-surface .docx-pages {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-pages {
   outline: none;
 }
 
@@ -2848,14 +3210,14 @@ a.docx-hyperlink:focus-visible {
  * between paragraphs and below the last one, not only over glyphs (where selectable
  * text already produces one). Anchored drawings live in sibling layers; inline
  * drawings opt back to the arrow on `.docx-drawing`. */
-.docx-paginated-surface .docx-page-content {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-page-content {
   cursor: text;
 }
 
 /* Inactive furniture: Word-like affordance that the band is enterable. Active band and
  * open-scope dimming live under `.docx-pages--hf-editing` so screen chrome never mutates
  * painted ink for print (print media resets opacity). */
-.docx-paginated-surface .docx-hf:not([data-docx-hf-active]),
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-hf:not([data-docx-hf-active]),
 .docx-pages .docx-hf:not([data-docx-hf-active]) {
   cursor: text;
 }
@@ -2893,7 +3255,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
  * without this the enterable header answered a hover with nothing at all. The pill is a
- * sibling because the `+` selector below needs it right after the band. */
+ * sibling of the band so the `~` selector below can reach it. */
 .docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
   background: var(--doc-primary-light);
   border-radius: 4px;
@@ -2907,7 +3269,14 @@ a.docx-hyperlink:focus-visible {
   transition: opacity 0.1s ease;
 }
 
-.docx-pages .docx-hf:not([data-docx-hf-active]):hover + .docx-hf-edit-hint {
+/* The pill is a LATER sibling, not the next one: the band paints under the body and the
+ * pill over it, so the kinds are matched here instead of by adjacency. */
+.docx-pages
+  .docx-hf[data-docx-hf='header']:not([data-docx-hf-active]):hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='header'],
+.docx-pages
+  .docx-hf[data-docx-hf='footer']:not([data-docx-hf-active]):hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
   opacity: 1;
 }
 
@@ -2938,6 +3307,35 @@ a.docx-hyperlink:focus-visible {
   margin-bottom: 4px;
 }
 
+/* A closed band over body lines (negative vertical page margin) never takes the pointer, so
+ * body links, note citations, pictures and form fields under it get their own events. The
+ * pointer geometry opens the story. `!important` and the universal child selector beat the
+ * explicit `auto` on drawings and equations, which would otherwise make the band hoverable.
+ * The hover target is `.docx-hf-hover`, over the margin part only and painted under the ink,
+ * so the tint never covers body text. */
+.docx-pages .docx-hf[data-docx-hf-over-body]:not([data-docx-hf-active]),
+.docx-pages .docx-hf[data-docx-hf-over-body]:not([data-docx-hf-active]) * {
+  pointer-events: none !important;
+}
+
+.docx-pages .docx-hf-hover {
+  cursor: text;
+}
+
+.docx-pages .docx-hf-hover:hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages
+  .docx-hf-hover[data-docx-hf-hover='header']:hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='header'],
+.docx-pages
+  .docx-hf-hover[data-docx-hf-hover='footer']:hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
+  opacity: 1;
+}
+
 /* No affordance while another furniture scope is open, in view mode, or in print.
  * Each selector MIRRORS the qualifiers of the rule it cancels: the existing-band tint
  * carries two `:not()`s and the footer hint carries an attribute selector, so a plainer
@@ -2946,7 +3344,9 @@ a.docx-hyperlink:focus-visible {
 .docx-paginated-surface--viewing .docx-hf--placeholder:hover,
 .docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover,
 .docx-paginated-surface--viewing
-  .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
+  .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover,
+.docx-pages--hf-editing .docx-hf-hover:hover,
+.docx-paginated-surface--viewing .docx-hf-hover:hover {
   background: none;
 }
 
@@ -2966,12 +3366,24 @@ a.docx-hyperlink:focus-visible {
 /* The last half of the affordance: an I-beam over a band nobody can enter reads as "put a
  * caret here", which viewing refuses. Furniture text never maps to a model position anyway
  * — see `dom-selection` — so the arrow is the honest cursor here. */
-.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]) {
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]),
+.docx-pages--hf-editing .docx-hf-hover,
+.docx-paginated-surface--viewing .docx-hf-hover {
+  cursor: default;
+}
+
+/* Viewing places no caret, so the body shows the arrow too. Links keep their pointer:
+ * `a.docx-hyperlink` sets it on itself. Text stays `user-select: text`, because the browser
+ * paints the highlight of a selection the host sets (a find match); the surface refuses the
+ * reader's own selections in `selectstart` instead. */
+.docx-paginated-surface--viewing .docx-page-content,
+.docx-paginated-surface--viewing .docx-drawing-textbox {
   cursor: default;
 }
 
 @media print {
   .docx-hf--placeholder,
+  .docx-hf-hover,
   .docx-hf-edit-hint {
     display: none !important;
   }
@@ -2983,10 +3395,41 @@ a.docx-hyperlink:focus-visible {
   transition: opacity 0.15s ease;
 }
 
+/* The header and footer layer paints UNDER the body, so the body's own anchored drawings and
+ * inline objects sit over the open story. While it is open they dim with the body text and
+ * never take a press meant for it. `!important` and the universal child selector beat the
+ * explicit `auto` that drawings carry inline. */
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]) {
+  opacity: var(--doc-hf-dim-opacity);
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing .docx-page-content *,
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]),
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]) * {
+  pointer-events: none !important;
+}
+
 .docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]) {
   opacity: var(--doc-hf-dim-opacity);
   cursor: default;
   transition: opacity 0.15s ease;
+}
+
+/* The change bars beside dimmed stories dim with them; the bars beside the band being
+   edited stay at full ink. The sheet says which band that is. */
+.docx-pages--hf-editing .docx-change-bar {
+  opacity: var(--doc-hf-dim-opacity);
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing
+  .docx-page[data-docx-hf-active-kind='header']
+  .docx-change-bar[data-docx-story='header'],
+.docx-pages--hf-editing
+  .docx-page[data-docx-hf-active-kind='footer']
+  .docx-change-bar[data-docx-story='footer'] {
+  opacity: 1;
 }
 
 .docx-pages--hf-editing .docx-hf[data-docx-hf-active] {
@@ -3004,6 +3447,7 @@ a.docx-hyperlink:focus-visible {
 
 @media print {
   .docx-pages--hf-editing .docx-page-content,
+  .docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]),
   .docx-pages--hf-editing .docx-hf {
     opacity: 1 !important;
     pointer-events: auto !important;
@@ -3014,13 +3458,13 @@ a.docx-hyperlink:focus-visible {
 /* The one highlight a native selection cannot express: a rectangle of table cells. Drawn on
    a sibling layer of the pages — never inside them, where the page painter would sweep it
    away and a keystroke could land in it. */
-.docx-paginated-surface .docx-selection-overlay {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-selection-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.docx-paginated-surface .docx-cell-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-cell-selection-rect {
   background-color: var(--doc-cell-selection);
 }
 
@@ -3031,27 +3475,27 @@ a.docx-hyperlink:focus-visible {
  * that: the user's highlight did not change, only which element the browser thinks is
  * focused. A different colour here would read as a different KIND of selection.
  */
-.docx-paginated-surface .docx-retained-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-retained-selection-rect {
   background-color: var(--doc-selection);
 }
 
 /* A native range has no glyph box for a paragraph mark or an empty line. */
-.docx-paginated-surface .docx-selection-mark-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-selection-mark-rect {
   background-color: var(--doc-selection);
 }
 
-.docx-paginated-surface .docx-remote-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-selection-rect {
   background-color: color-mix(in srgb, var(--doc-remote-color, var(--doc-accent)) 28%, transparent);
   border-radius: 2px;
 }
 
-.docx-paginated-surface .docx-remote-caret {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-caret {
   background-color: var(--doc-remote-color, var(--doc-accent));
   border-radius: 1px;
   box-shadow: 0 0 0 1px var(--doc-surface);
 }
 
-.docx-paginated-surface .docx-remote-caret-label {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-caret-label {
   position: absolute;
   max-width: 180px;
   overflow: hidden;
@@ -3122,6 +3566,53 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-text-muted);
 }
 
+/*
+ * The collaboration status notice (`DocxEditorCollaboration.Status`). It renders only while
+ * the user needs to know something; a passing state is neutral, a state that needs the user
+ * is a warning.
+ */
+.docx-collaboration-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* The live region stays mounted for screen readers; it takes no space while empty. */
+.docx-collaboration-status:empty {
+  display: none;
+}
+
+.docx-collaboration-status[data-collaboration-status='outOfSync'],
+.docx-collaboration-status[data-collaboration-status='upgradeRequired'],
+.docx-collaboration-status[data-collaboration-status='newRoomRequired'],
+.docx-collaboration-status[data-collaboration-status='stalled'],
+.docx-collaboration-status[data-collaboration-status='editRefused'] {
+  background: var(--doc-warning-bg);
+  color: var(--doc-warning-text);
+}
+
+.docx-collaboration-status__action {
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.docx-collaboration-status__action:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:
@@ -3151,7 +3642,7 @@ a.docx-hyperlink:focus-visible {
   display: flex;
   align-items: center;
   min-inline-size: 0;
-  margin: 0;
+  margin: 8px 12px;
   border: 0;
   /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
    * (font menu, swatch grids) positioned absolutely inside their parts, and any
@@ -3264,8 +3755,14 @@ a.docx-hyperlink:focus-visible {
 .docx-pages[data-format-painter] .docx-page,
 .docx-pages[data-format-painter] .docx-drawing-textbox,
 .docx-pages[data-format-painter] .docx-hf,
+.docx-pages[data-format-painter] .docx-hf-hover,
 .docx-pages[data-format-painter] .docx-hyperlink {
   cursor: copy;
+}
+
+/* Link paint supplies an inline cursor for standalone hosts. The active painter wins. */
+.docx-pages[data-format-painter] .docx-hyperlink {
+  cursor: copy !important;
 }
 
 /* A content-control widget states `cursor: pointer !important`, so nothing but `!important`
@@ -3481,6 +3978,47 @@ a.docx-hyperlink:focus-visible {
   text-overflow: ellipsis;
 }
 
+/* A collapsed host group's content. Actions render as full-width command rows; other
+ * host content keeps its own shape and wraps in the row. */
+.docx-toolbar__more-host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 10px;
+}
+
+.docx-toolbar__more-host > .docx-toolbar__more-command {
+  flex: 1 0 100%;
+  margin-inline-start: -4px;
+}
+
+/* Insert Table: the size grid opens under its button. */
+.docx-toolbar__table-insert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.docx-toolbar__table-insert-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--doc-z-overlay);
+  margin-top: 4px;
+}
+
+/* In the "⋯" panel the grid is panel content: it opens in the flow under its row, so the
+ * panel keeps its max-height and scrolls instead of letting the grid spill past it. */
+.docx-toolbar__more-panel .docx-toolbar__table-insert {
+  flex-wrap: wrap;
+}
+
+.docx-toolbar__more-panel .docx-toolbar__table-insert-menu {
+  position: static;
+  flex-basis: 100%;
+}
+
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
 .docx-toolbar__separator {
   width: 1px;
@@ -3575,6 +4113,27 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.12s ease;
 }
 
+/* Shared font picker appearance for default toolbars and composed hosts. */
+.docx-toolbar__font-family-trigger {
+  min-width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.docx-toolbar__font-family-trigger:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.docx-toolbar__font-family-trigger[data-disabled] {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
 .docx-toolbar__font-family-trigger::after,
 .docx-toolbar__style-trigger::after {
   content: '▾';
@@ -3582,7 +4141,6 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
-.docx-toolbar__font-family-trigger:hover:not(:disabled),
 .docx-toolbar__style-trigger:hover:not(:disabled) {
   background: var(--doc-border);
 }
@@ -3677,6 +4235,35 @@ a.docx-hyperlink:focus-visible {
   min-width: 100%;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.docx-toolbar__font-family-content {
+  min-width: 220px;
+}
+
+.docx-toolbar__font-family-content:has(> .docx-toolbar__font-search) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+}
+
+.docx-toolbar__font-search {
+  flex: none;
+  box-sizing: border-box;
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  font: inherit;
+}
+
+.docx-toolbar__font-options {
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .docx-toolbar__font-family-item,
@@ -4503,8 +5090,9 @@ a.docx-hyperlink:focus-visible {
 
 /* The overlay variant (`<DocxEditor.Loading overlay />`): pinned over the nearest
    positioned ancestor — the workspace row in the packaged frame — and opaque, so it
-   covers the previous document while the next one opens. The 150ms appearance delay
-   keeps an open that finishes inside a few frames from flashing a spinner.
+   covers the previous document while the next one opens. It takes every pointer event
+   until the open completes. The 150ms appearance delay keeps an open that finishes
+   inside a few frames from flashing a spinner.
 
    The fade MUST be a real compositor animation. The engine paints exactly one frame
    (overlay committed, still in its delay) and then blocks the main thread with the
@@ -4540,6 +5128,28 @@ a.docx-hyperlink:focus-visible {
   height: 100%;
 }
 
+/* Once the opening document has mounted and lays out its remaining pages, the engine marks
+   its container for exactly that phase. The overlay steps aside, so the scroll container
+   scrolls and the pages take input. The indicator sits in a band BELOW THE LAST LAID-OUT
+   PAGE (`.docx-opening-indicator`), so it scrolls with the document instead of floating
+   over it. */
+:where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
+  display: none;
+}
+
+/* A real element the engine positions below the laid-out pages, so a host can render its own
+   content into it. Only its content takes pointer input, so a host can offer a button there. */
+.docx-opening-indicator {
+  position: absolute;
+  z-index: var(--doc-z-overlay);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.docx-opening-indicator > .docx-editor__loading-page-status > * {
+  pointer-events: auto;
+}
+
 .docx-editor__loading-page {
   position: absolute;
   inset: 0;
@@ -4549,9 +5159,11 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/* At most 30% of the window height below the page top, so a tall page at a high zoom still
+   shows the indicator without scrolling. */
 .docx-editor__loading-page-status {
   position: absolute;
-  top: 50%;
+  top: min(50%, 30vh);
   right: 0;
   left: 0;
   display: flex;
@@ -4800,9 +5412,11 @@ a.docx-hyperlink:focus-visible {
  * The reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
  * `--docx-review-gutter` (this edge) and `--docx-review-gutter-start` (mirrored onto the
  * inline start, composed into the navigation rule below) from the viewport's width and the
- * page's entitled width. A viewport with room for both keeps the full column; one without
- * gets the marker strip on BOTH edges, so the sheet sits centred instead of parked beside
- * a mostly-empty band. The fallbacks — the full column while open, the strip while
+ * page's entitled width. A viewport with room for both keeps the full column. One without
+ * gets the marker strip on BOTH edges under `overflow: 'float'`, so the sheet sits
+ * centred instead of parked beside a mostly-empty band; under `overflow: 'scroll'` it
+ * keeps the full column with the page's clearance at the start, and the viewport scrolls
+ * sideways to the cards. The fallbacks — the full column while open, the strip while
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
  * it always did. */
 .docx-editor__scroll-container[data-review-pane='open'] {
@@ -4835,7 +5449,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Compact rail (`data-compact`: the pane is open but the viewport reserved only the
- * mirrored marker strip). The strip shows the markers, and the ONE active card floats at
+ * mirrored marker strip, which `overflow: 'scroll'` never does). The strip shows the
+ * markers, and the ONE active card floats at
  * column width, pinned inside the viewport's right edge — over the page, where a shadow
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
@@ -4933,6 +5548,252 @@ a.docx-hyperlink:focus-visible {
   pointer-events: auto;
 }
 
+/* `commentMarkers: 'initials'`: a comment thread's marker is a speech bubble in its author's colour —
+   round, with the bottom-left corner left square as the tail. The button stays the 28px hit
+   target and carries the focus ring; the badge inside carries the look. */
+.docx-review__marker[data-marker='initials'] {
+  border-radius: 13px 13px 13px 3px;
+  color: inherit;
+  overflow: visible;
+}
+
+.docx-review__marker[data-marker='initials']:hover {
+  background: transparent;
+}
+
+.docx-review__marker[data-marker='initials']:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  /* Outside the badge's 2px surface ring, so the focus ring stays visible. */
+  outline-offset: 3px;
+}
+
+.docx-review__badge {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: 26px;
+  /* Three initials fit; the cap keeps a long value inside the 44px marker strip. */
+  max-width: 36px;
+  height: 26px;
+  padding: 0 4px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 13px 13px 13px 3px;
+  /* The full author colour, not the softened disc: see `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
+  /* A ring in the surface colour lifts the miniature off the page edge and off a
+     neighbouring marker; the soft drop shadow gives it depth. */
+  box-shadow:
+    0 0 0 2px var(--doc-surface),
+    0 2px 6px -1px var(--doc-shadow);
+  color: var(--doc-review-avatar-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  transition:
+    transform 160ms var(--doc-motion-ease-out),
+    box-shadow 160ms ease;
+}
+
+/* The badge itself cannot clip: its reply count sits outside its box. The initials clip
+   instead, so a value wider than the cap stays inside the badge. */
+.docx-review__badge-initials {
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* On a dark surface the darker author colours lose their edge; a hairline outside the ring
+   keeps it. */
+.docx-editor.dark .docx-review__badge:not([data-resolved]) {
+  box-shadow:
+    0 0 0 2px var(--doc-surface),
+    0 0 0 3px var(--doc-border),
+    0 2px 6px -1px var(--doc-shadow);
+}
+
+/* Resolved: quiet. Surface ground, muted ink, a hairline ring — present, not calling out. */
+.docx-review__badge[data-resolved] {
+  background: var(--doc-surface);
+  box-shadow:
+    0 0 0 1px var(--doc-border),
+    0 1px 2px var(--doc-shadow-subtle);
+  color: var(--doc-text-muted);
+}
+
+.docx-review__badge > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__badge-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--doc-surface);
+  box-shadow: 0 0 0 1px var(--doc-border);
+  /* The count reads in the thread author's colour, so it belongs to its badge. */
+  color: var(--doc-review-author-current, var(--doc-text));
+  font-size: 9px;
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge {
+    transform: translateY(-1px);
+  }
+
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge:not([data-resolved]) {
+    box-shadow:
+      0 0 0 2px var(--doc-surface),
+      0 4px 10px -2px var(--doc-shadow);
+  }
+
+  /* Dark: the lifted shadow keeps the hairline outside the ring. */
+  .docx-editor.dark
+    .docx-review__marker[data-marker='initials']:hover
+    .docx-review__badge:not([data-resolved]) {
+    box-shadow:
+      0 0 0 2px var(--doc-surface),
+      0 0 0 3px var(--doc-border),
+      0 4px 10px -2px var(--doc-shadow);
+  }
+}
+
+.docx-review__marker[data-marker='initials']:active .docx-review__badge,
+.docx-review__resolved-toggle:active .docx-review__badge {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-review__badge {
+    transition: none;
+  }
+
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge,
+  .docx-review__marker[data-marker='initials']:active .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge,
+  .docx-review__resolved-toggle:active .docx-review__badge {
+    transform: none;
+  }
+}
+
+/* The resolved miniature in the open rail wears the same quiet badge as the closed marker. */
+.docx-review__resolved-toggle .docx-review__badge {
+  margin: auto;
+}
+
+/* `revisionsIn: 'balloons'`: the change's card, its thread and its reply line in one balloon. */
+.docx-review__balloon[data-variant='change'] {
+  width: 300px;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__summary {
+  overflow-wrap: anywhere;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added,
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 500;
+  cursor: inherit;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added {
+  color: var(--doc-revision-insertion);
+  text-decoration: underline;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
+}
+
+/* The reply line, shared by the open card and the change balloon: the writer's avatar, a
+   borderless field, and a round send button. */
+.docx-review__reply-box[data-reply-line] {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__input {
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* The field has no border of its own, so the line shows focus: its rule takes the accent. */
+.docx-review__reply-box[data-reply-line] .docx-review__input:focus-visible {
+  outline: none;
+}
+
+.docx-review__reply-box[data-reply-line]:focus-within {
+  border-top-color: var(--doc-primary);
+  box-shadow: inset 0 1px 0 var(--doc-primary);
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__refused {
+  flex: 0 1 auto;
+}
+
+.docx-review__reply-box[data-reply-line]:has(.docx-review__refused) {
+  flex-wrap: wrap;
+}
+
+.docx-review__reply-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.docx-review__send {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  cursor: pointer;
+}
+
+.docx-review__send > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__send:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-review__send:disabled {
+  background: var(--doc-surface-hover, var(--doc-shadow-subtle));
+  color: var(--doc-text-muted);
+  cursor: default;
+}
+
 /* ============================================================================
  * DOCUMENT NAVIGATION PANE  (`DocxEditor.Navigation`)
  *
@@ -4958,8 +5819,9 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-editor__scroll-container,
 .docx-editor.docx-editor__scroll-container {
   /* Two reservations compose on this edge: the navigation pane's displacement, and the
-   * review gutter's mirrored strip (`--docx-review-gutter-start`, 0 whenever the full
-   * column stands on the right). One declaration, because `padding-inline-start` and
+   * review gutter's start reservation (`--docx-review-gutter-start`: the mirrored strip,
+   * the page clearance under `overflow: 'scroll'`, or 0 whenever the full column fits).
+   * One declaration, because `padding-inline-start` and
    * `padding-left` are the same slot in LTR and a second rule would just lose the
    * specificity fight. */
   padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
@@ -5011,6 +5873,62 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor .docx-nav--open .docx-nav__panel-shell {
   display: flex;
+}
+
+/* A pane mounted INSIDE `DocxEditor.Viewport`. The viewport is the scroller and is
+ * itself positioned, so an absolute pane would scroll away with the pages. Sticky keeps
+ * it on the scrollport instead: a zero-height strip pinned to the top-left, first in the
+ * column whatever its source order, holding the panel at the viewport's content height
+ * (`--docx-nav-block-size`, published by the adapter). Sticky offsets resolve inside the
+ * scroller's padding, so the start offset cancels the shift padding the pane causes and
+ * the review gutter's mirrored strip; the page still moves, the pane does not. */
+.docx-editor .docx-editor__scroll-container > .docx-nav,
+.docx-editor.docx-editor__scroll-container > .docx-nav {
+  position: sticky;
+  order: -1;
+  flex: none;
+  align-self: flex-start;
+  inset-block: 0 auto;
+  /* The margin moves the strip's normal position back over the start padding; the
+   * negative offset lets sticky keep it there. Both are needed. The margin follows the
+   * padding's transition, so the two cancel at every frame and the pane holds still. */
+  inset-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  margin-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  transition: margin-inline-start 0.2s ease;
+  height: 0;
+}
+
+.docx-editor .docx-editor__scroll-container[data-zoom-fit] > .docx-nav,
+.docx-editor.docx-editor__scroll-container[data-zoom-fit] > .docx-nav {
+  transition: none;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell,
+.docx-editor.docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell {
+  inset-block-end: auto;
+  height: var(--docx-nav-block-size, 100vh);
+}
+
+/* Narrow viewports: the pane covers the page instead of pushing it off screen. The
+ * adapter sets the class below `NAVIGATION_PANE_MIN_PAGE_ROOM` and publishes no shift.
+ * The panel spans the viewport less the inset on each side. */
+.docx-editor .docx-nav--overlay {
+  width: 100%;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav--overlay,
+.docx-editor.docx-editor__scroll-container > .docx-nav--overlay {
+  width: var(--docx-nav-inline-size, 100%);
+}
+
+.docx-editor .docx-nav--overlay .docx-nav__panel-shell {
+  width: auto;
+  inset-inline-end: var(--docx-nav-inset, 32px);
+  box-shadow: 0 4px 16px var(--doc-shadow);
 }
 
 /* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
@@ -5332,8 +6250,12 @@ a.docx-hyperlink:focus-visible {
    references `--doc-review-author-current` has to be computed where that property is actually set —
    an ancestor rule would resolve the fallback and inherit it down.
    Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
-   inverting filter and the chrome is not, so only the chrome lifts. */
+   inverting filter and the chrome is not, so only the chrome lifts.
+   `--doc-review-author-disc` is kept for host CSS only: the packaged avatar and badge fill
+   with the full author colour instead (see `--doc-review-avatar-ink`). */
 .docx-review__card,
+.docx-review__reply,
+.docx-review__reply-avatar,
 .docx-review__marker {
   --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
   --doc-review-author-disc: color-mix(
@@ -5344,6 +6266,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor.dark .docx-review__card,
+.docx-editor.dark .docx-review__reply,
+.docx-editor.dark .docx-review__reply-avatar,
 .docx-editor.dark .docx-review__marker {
   --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
   --doc-review-author-disc: color-mix(
@@ -5531,10 +6455,10 @@ a.docx-hyperlink:focus-visible {
   height: 30px;
   flex: 0 0 auto;
   border-radius: 50%;
-  /* Softened against white: the ramp is chosen to stay legible as TEXT on the page, and the
-     same values as a 30px filled disc read as eight warning lights down the margin. */
-  background: var(--doc-review-author-disc, #c0392b);
-  color: #fff;
+  /* The full author colour, not the softened disc: white initials on the softened disc fell
+     below the 4.5:1 text minimum in most slots. See `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
+  color: var(--doc-review-avatar-ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -5769,6 +6693,11 @@ a.docx-hyperlink:focus-visible {
   font-size: 11px;
 }
 
+/* A refused card action names its cause under the card's summary. */
+p.docx-review__refused {
+  margin: 4px 0 0;
+}
+
 .docx-review__empty {
   padding: 12px;
   color: var(--doc-text-muted, #8a8f98);
@@ -5868,6 +6797,38 @@ a.docx-hyperlink:focus-visible {
    is the same relationship the light theme has — the paper shifts, the glyphs do not. */
 .docx-editor.dark .docx-comment-overlay {
   mix-blend-mode: screen;
+}
+
+/* Text highlights from `setHighlights()`: Find results and host marks such as glossary terms.
+ *
+ * Same compositing as comment bands: the layer multiplies over light paper and screens over
+ * dark paper, so the glyphs under a mark keep their color. Each named set is one
+ * `[data-highlight-set]` sheet; a set's `color` and `activeColor` options arrive as the two
+ * `--doc-text-highlight-set-*` properties on that sheet. A host restyles one set with
+ *
+ *   .docx-editor [data-highlight-set='glossary'] .docx-text-highlight { ... }
+ *
+ * or with the set's `className`, which lands on every mark. */
+.docx-text-highlight-overlay {
+  mix-blend-mode: multiply;
+}
+
+.docx-editor.dark .docx-text-highlight-overlay {
+  mix-blend-mode: screen;
+}
+
+.docx-text-highlight {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 1px;
+  background-color: var(--doc-text-highlight-set-color, var(--doc-text-highlight-color));
+}
+
+.docx-text-highlight--active {
+  background-color: var(
+    --doc-text-highlight-set-active-color,
+    var(--doc-text-highlight-active-color)
+  );
 }
 
 /* The editing-mode control: a pill that shows the current mode and a menu that changes it.
@@ -6053,6 +7014,255 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/* ── Bookmarks (Go to) ─────────────────────────────────────────────────────
+ * Used from the keyboard many times a day, so nothing here animates. The keyboard's active
+ * row and a hovered row look different, hover applies to a fine pointer only, and a press
+ * shows as a background change on :active.
+ */
+
+.docx-editor .docx-nav__goto-enter {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--doc-border-light);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  flex: none;
+  padding-inline: 2px;
+}
+
+.docx-editor .docx-nav__segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--doc-bg-hover);
+}
+
+.docx-editor .docx-nav__segment {
+  position: relative;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.docx-editor .docx-nav__segment[data-checked] {
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 1px 2px var(--doc-shadow-subtle);
+}
+
+.docx-editor .docx-nav__segment:has(.docx-nav__segment-input:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+/* The native radio keeps the arrow keys and the accessible state; only its dot is hidden. */
+.docx-editor .docx-nav__segment-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.docx-editor .docx-nav__goto-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  padding-inline: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-count {
+  font-weight: 400;
+  /* "3 of 16" reads as words, not a label. */
+  text-transform: none;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-count::before {
+  content: '\00B7';
+  margin-inline-end: 6px;
+}
+
+.docx-editor .docx-nav__goto-message {
+  flex: none;
+  margin: 0;
+  padding-inline: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-message:empty {
+  display: none;
+}
+
+/* Room below the last row: floating controls at the bottom of the window cover it otherwise. */
+.docx-editor .docx-nav__goto-list {
+  padding-block-end: 64px;
+  scroll-padding-block-end: 64px;
+}
+
+.docx-editor .docx-nav__goto-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.docx-editor .docx-nav__goto-group + .docx-nav__goto-group {
+  margin-block-start: 8px;
+}
+
+.docx-editor .docx-nav__goto-group-label {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-nav__goto-row:hover {
+    background: var(--doc-bg-hover);
+  }
+}
+
+.docx-editor .docx-nav__goto-row--active,
+.docx-editor .docx-nav__goto-row--active:hover {
+  background: var(--doc-primary-light);
+}
+
+.docx-editor .docx-nav__goto-row:active {
+  background: var(--doc-border-light);
+}
+
+.docx-editor .docx-nav__goto-icon {
+  display: flex;
+  flex: none;
+  color: var(--doc-primary);
+}
+
+.docx-editor .docx-nav__goto-row > .docx-nav__result-text {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docx-editor .docx-nav__goto-match {
+  font-weight: 600;
+}
+
+/* The bookmark the caret is in. */
+.docx-editor .docx-nav__goto-here {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--doc-primary);
+}
+
+.docx-editor .docx-nav__goto-place {
+  flex: none;
+  font-size: 11px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+.docx-editor .docx-nav__goto-empty-icon {
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.docx-editor .docx-nav__goto-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-add {
+  margin-block-start: 6px;
+  height: 28px;
+  padding-inline: 12px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-nav__goto-add:hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
+}
+
+.docx-editor .docx-nav__goto-add:active:not(:disabled) {
+  background: var(--doc-border-light);
+}
+
+.docx-editor .docx-nav__goto-add:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-editor .docx-nav__goto-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .docx-editor .docx-nav__result-hit {
   background: none;
   color: var(--doc-text);
@@ -6092,7 +7302,9 @@ a.docx-hyperlink:focus-visible {
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
   .docx-editor .docx-editor__scroll-container,
-  .docx-editor.docx-editor__scroll-container {
+  .docx-editor.docx-editor__scroll-container,
+  .docx-editor .docx-editor__scroll-container > .docx-nav,
+  .docx-editor.docx-editor__scroll-container > .docx-nav {
     transition-duration: 0s;
   }
 }
@@ -6146,9 +7358,39 @@ a.docx-hyperlink:focus-visible {
   color: inherit;
 }
 
+/* A measuring bar stays on one line; menus that do not fit move into the "⋯" menu. It
+ * must be able to shrink below its content for the measurement to see the limit. */
+.docx-editor .docx-menubar[data-overflow] {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Host children that are not menus: measured as fixed width, never moved into "⋯". */
+.docx-editor .docx-menubar__host {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] .docx-menubar__trigger-icon {
+  margin-right: 0;
+}
+
+/* The "⋯" menu's panel is never wider than the viewport less its margins. */
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] > .docx-menubar__menu {
+  max-width: calc(100vw - 16px);
+}
+
 .docx-editor .docx-menubar__trigger:hover,
 .docx-editor .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
+}
+
+/* Disabled while a document opens, like the toolbar. */
+.docx-editor .docx-menubar__trigger:disabled {
+  background: transparent;
+  color: var(--doc-text-subtle);
+  cursor: default;
 }
 
 /* The panel: the shared card, dropped below its trigger. */
@@ -6316,6 +7558,19 @@ a.docx-hyperlink:focus-visible {
  * to be an inline style on the element, which a class cannot override at all. */
 :where(.docx-paginated-surface) {
   margin: 24px auto;
+}
+
+/* While a preview shows over the pages, the live document's chrome describes pages the reader
+   cannot see: picture handles, control widgets, and popups stay hidden until it ends. */
+[data-docx-previewing]
+  :is(
+    .docx-image-selection-overlay,
+    .docx-content-control-widget,
+    .docx-content-control-menu,
+    .docx-equation-popup,
+    .docx-hyperlink-popup
+  ):not(.docx-preview-surface *) {
+  display: none;
 }
 
 /* ── The context menu ──────────────────────────────────────────────────────────────────
@@ -6538,4 +7793,1073 @@ a.docx-hyperlink:focus-visible {
 .docx-font-notice__dismiss:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
+}
+
+/* Field options use the Page Setup / Paragraph dialog visual language. */
+.docx-text-form-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, calc(100vw - 40px));
+  max-width: calc(100vw - 40px);
+  max-height: 90dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  box-shadow: 0 4px 20px var(--doc-shadow);
+  font: 13px/1.5 var(--doc-font-ui, system-ui, sans-serif);
+  overflow: hidden;
+}
+.docx-text-form-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.docx-text-form-dialog::backdrop {
+  background: var(--doc-overlay);
+}
+.docx-text-form-dialog__header {
+  margin: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--doc-border);
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.docx-text-form-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.docx-text-form-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.docx-text-form-dialog__label {
+  flex: 0 0 132px;
+  color: var(--doc-text-muted);
+}
+.docx-text-form-dialog__input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+}
+.docx-text-form-dialog__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.docx-text-form-dialog__checkbox-row input {
+  accent-color: var(--doc-primary);
+}
+.docx-text-form-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--doc-border);
+  flex-shrink: 0;
+}
+.docx-text-form-dialog__button {
+  padding: 6px 16px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+  cursor: pointer;
+}
+.docx-text-form-dialog__button:hover {
+  background: var(--doc-bg-hover);
+}
+.docx-text-form-dialog__button--primary {
+  border-color: var(--doc-primary);
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+.docx-text-form-dialog__button--primary:hover {
+  background: var(--doc-primary-hover);
+}
+.docx-text-form-dialog :is(input, select, button):focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+.docx-text-form-dialog__error {
+  margin: 0;
+  color: var(--doc-danger);
+  font-size: 12px;
+}
+.docx-text-form-dialog__error:empty {
+  display: none;
+}
+@media (max-width: 420px) {
+  .docx-text-form-dialog__row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .docx-text-form-dialog__label {
+    flex-basis: auto;
+  }
+}
+
+.docx-text-form-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+/* Field results can span many word boxes. Native selection and field shading
+   provide feedback without outlining each separately painted word. */
+
+.docx-text-form-status[data-field-error] {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  z-index: 100;
+  width: auto;
+  height: auto;
+  max-width: min(420px, 90vw);
+  clip-path: none;
+  padding: 12px 16px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 6px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+
+/* ── Dialogs ───────────────────────────────────────────────────────────────
+   Dialog parts are a public styling contract: `.docx-dialog__*` classes,
+   `data-docx-dialog` kinds and `data-docx-part` names. The defaults follow the
+   Word and Google Docs dialog idiom: a white panel with rounded corners, bordered
+   inputs, a filled primary button and an outlined secondary one.
+
+   Every default rule is anchored to `.docx-editor` and carries exactly two-class
+   specificity; state pseudo-classes sit inside `:where()` so they add nothing.
+   A host override with two classes loaded after this sheet, or any three-class
+   one (`.docx-editor [data-docx-dialog='pageSetup'] .app-apply`), wins.
+
+   Zero-specificity defaults were tried and lost to element resets hosts ship:
+   Tailwind preflight and normalize.css set `border-width: 0` on `*` and
+   `background-color: transparent` on `[type='button']`, which stripped every
+   input border and button fill from the packaged dialogs.
+
+   Tokens:
+     --doc-dialog-font-family  panel font stack
+     --doc-dialog-font-size    base size; titles, labels and hints scale in em
+     --doc-dialog-radius       panel corner radius
+     --doc-dialog-control-radius  input and button corner radius
+     --doc-dialog-padding      ONE length: side inset of header, body, footer
+     --doc-dialog-gap          vertical rhythm between rows and sections */
+
+.docx-editor .docx-dialog,
+.docx-editor.docx-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  width: calc(100vw - 40px);
+  max-width: 480px;
+  max-height: 90dvh;
+  padding: 0;
+  overflow: hidden;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow:
+    0 12px 32px var(--doc-shadow),
+    0 2px 6px var(--doc-shadow-subtle);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-editor .docx-dialog[open],
+.docx-editor.docx-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.docx-editor .docx-dialog::backdrop,
+.docx-editor.docx-dialog::backdrop {
+  background: var(--doc-overlay);
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='paragraph']),
+.docx-editor.docx-dialog:where([data-docx-dialog='paragraph']) {
+  max-width: 720px;
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='textFormField']),
+.docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) {
+  max-width: 520px;
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='watermark']),
+.docx-editor.docx-dialog:where([data-docx-dialog='watermark']) {
+  max-width: 520px;
+}
+/* Watermark: each choice's controls sit indented under its radio. */
+.docx-editor .docx-dialog__section--indented {
+  padding-inline-start: 24px;
+}
+/* Watermark: the page preview beside the choices; it wraps above them in a narrow dialog. */
+.docx-editor .docx-dialog__watermark-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 20px;
+}
+.docx-editor .docx-dialog__fieldset {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.docx-editor .docx-dialog__preview {
+  position: relative;
+  flex: 0 0 auto;
+  width: 120px;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--doc-border);
+  box-shadow: var(--doc-card-shadow);
+}
+.docx-editor .docx-dialog__preview-page {
+  /* The section's page proportion comes from the SVG view box. */
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.docx-editor .docx-dialog__preview-sheet {
+  fill: var(--doc-page-bg-rendered, var(--doc-surface));
+}
+.docx-editor .docx-dialog__preview-line {
+  /* Stands for text on the sheet, so it follows the page colour in both themes. */
+  fill: color-mix(in srgb, var(--doc-text) 22%, var(--doc-page-bg-rendered));
+}
+.docx-editor .docx-dialog__checkbox-row :where(input[type='radio']) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--doc-primary);
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__checkbox-row:where(:has(input:disabled)) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+.docx-editor .docx-dialog__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--doc-primary);
+}
+.docx-editor .docx-dialog__input--narrow {
+  flex: 0 0 64px;
+  width: 64px;
+}
+.docx-editor .docx-dialog__color {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+}
+.docx-editor .docx-dialog__color:where(:disabled) {
+  background: var(--doc-bg-subtle);
+  border-color: var(--doc-border);
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* The image properties dialog is a plain element under its own overlay. */
+.docx-editor .docx-dialog-overlay,
+.docx-editor.docx-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--doc-overlay);
+}
+.docx-editor .docx-dialog-overlay .docx-dialog,
+.docx-editor.docx-dialog-overlay .docx-dialog {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header and title */
+.docx-editor .docx-dialog__header {
+  flex-shrink: 0;
+  padding-block: 20px 4px;
+  padding-inline: var(--doc-dialog-padding, 24px);
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__title {
+  display: block;
+  font-size: 1.385em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__header:where(:not(:has(.docx-dialog__title))) {
+  font-size: 1.385em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Body */
+.docx-editor .docx-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+  min-height: 0;
+  padding-block: 12px 8px;
+  padding-inline: var(--doc-dialog-padding, 24px);
+  overflow-y: auto;
+}
+/* The open-failure dialog: its message and the error code a person can quote. */
+.docx-editor .docx-dialog__message {
+  margin: 0;
+}
+.docx-editor .docx-dialog__code {
+  margin: 0;
+  color: var(--doc-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+.docx-editor .docx-dialog__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 32px;
+}
+.docx-editor .docx-dialog__column,
+.docx-editor .docx-dialog__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+  min-width: 0;
+}
+.docx-editor .docx-dialog__section-label {
+  margin-top: 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-dialog__section-label:where(:first-child) {
+  margin-top: 0;
+}
+.docx-editor .docx-dialog__section-label--spaced {
+  margin-top: 8px;
+}
+.docx-editor .docx-dialog [data-docx-field='tabStops'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+}
+
+/* Rows and labels */
+.docx-editor .docx-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.docx-editor .docx-dialog__row--actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+.docx-editor .docx-dialog__label,
+.docx-editor .docx-dialog__field-label {
+  flex: 0 0 auto;
+  width: 96px;
+  font-size: 1em;
+  line-height: 1.3;
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label,
+.docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) .docx-dialog__label {
+  width: 132px;
+}
+/* Outside a row the label stacks above its control, so it sizes to its text. */
+.docx-editor .docx-dialog__section > .docx-dialog__label,
+.docx-editor .docx-dialog__section > .docx-dialog__field-label {
+  width: auto;
+}
+.docx-editor .docx-dialog__unit {
+  flex: 0 0 auto;
+  min-width: 20px;
+  font-size: 0.92em;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-dialog__tab-position {
+  color: var(--doc-text);
+}
+.docx-editor .docx-dialog__tab-description {
+  flex: 1;
+  min-width: 0;
+  font-size: 1em;
+  color: var(--doc-text-muted);
+}
+.docx-editor .docx-dialog__note,
+.docx-editor .docx-dialog__hint {
+  margin: 0;
+  font-size: 0.92em;
+  line-height: 1.4;
+  color: var(--doc-text-muted);
+}
+
+/* Inputs, selects and text areas */
+.docx-editor .docx-dialog__input,
+.docx-editor .docx-dialog__select,
+.docx-editor .docx-dialog__textarea {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  line-height: 30px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  outline: none;
+  box-shadow: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.docx-editor .docx-dialog__select {
+  padding-right: 4px;
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__textarea {
+  height: auto;
+  min-height: 72px;
+  padding: 6px 8px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.docx-editor .docx-dialog__input--full {
+  flex: none;
+  width: 100%;
+}
+/* The Bookmark dialog's list: a native list box, tall enough for several names. */
+.docx-editor .docx-bookmark-dialog__list {
+  height: auto;
+  min-height: 10em;
+  padding: 2px;
+}
+.docx-editor.docx-dialog:where([data-docx-dialog='bookmark']) .docx-dialog__label,
+.docx-editor .docx-dialog:where([data-docx-dialog='bookmark']) .docx-dialog__label {
+  width: 120px;
+}
+/* One line kept free, so the dialog does not jump when a note appears. */
+.docx-editor .docx-bookmark-dialog__status {
+  min-height: 1.4em;
+  justify-content: space-between;
+}
+.docx-editor .docx-bookmark-dialog__status > .docx-dialog__button {
+  flex: 0 0 auto;
+}
+.docx-editor .docx-dialog__input:where(:hover),
+.docx-editor .docx-dialog__select:where(:hover),
+.docx-editor .docx-dialog__textarea:where(:hover) {
+  border-color: var(--doc-border-dark);
+}
+.docx-editor .docx-dialog__input:where(:focus, :focus-visible),
+.docx-editor .docx-dialog__select:where(:focus, :focus-visible),
+.docx-editor .docx-dialog__textarea:where(:focus, :focus-visible) {
+  border-color: var(--doc-primary);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--doc-primary);
+}
+.docx-editor .docx-dialog__input:where(:disabled),
+.docx-editor .docx-dialog__select:where(:disabled),
+.docx-editor .docx-dialog__textarea:where(:disabled) {
+  color: var(--doc-text-subtle);
+  background: var(--doc-bg-subtle);
+  border-color: var(--doc-border);
+  cursor: default;
+}
+.docx-editor .docx-dialog__input:where([aria-invalid='true']),
+.docx-editor .docx-dialog__select:where([aria-invalid='true']),
+.docx-editor .docx-dialog__textarea:where([aria-invalid='true']) {
+  border-color: var(--doc-danger);
+}
+
+/* Checkboxes */
+.docx-editor .docx-dialog__checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 1em;
+  line-height: 1.4;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__checkbox-row :where(input[type='checkbox']) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--doc-primary);
+  cursor: pointer;
+}
+
+/* Footer and buttons */
+.docx-editor .docx-dialog__footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-block: 12px 20px;
+  padding-inline: var(--doc-dialog-padding, 24px);
+}
+.docx-editor .docx-dialog__error {
+  margin: 0 auto 0 0;
+  font-size: 0.92em;
+  line-height: 1.4;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-dialog__error:where(:empty) {
+  display: none;
+}
+.docx-editor .docx-dialog__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 72px;
+  margin: 0;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+/* A link styled as a dialog button, such as an open-failure support action. */
+.docx-editor a.docx-dialog__button {
+  text-decoration: none;
+}
+.docx-editor .docx-dialog__button:where(:hover) {
+  background: var(--doc-bg-hover);
+  border-color: var(--doc-border-dark);
+}
+.docx-editor .docx-dialog__button:where(:active) {
+  background: var(--doc-bg-subtle);
+}
+.docx-editor .docx-dialog__apply,
+.docx-editor .docx-dialog__button--primary {
+  color: var(--doc-on-primary);
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+.docx-editor .docx-dialog__apply:where(:hover),
+.docx-editor .docx-dialog__button--primary:where(:hover) {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+}
+.docx-editor .docx-dialog__apply:where(:active),
+.docx-editor .docx-dialog__button--primary:where(:active) {
+  background: var(--doc-primary-hover);
+}
+/* Host actions sit beside Close, so the row wraps on a narrow screen and long translated
+   labels wrap inside their button rather than pushing the row past the panel. */
+.docx-editor .docx-dialog:where([data-docx-dialog='openFailure']) .docx-dialog__footer,
+.docx-editor.docx-dialog:where([data-docx-dialog='openFailure']) .docx-dialog__footer {
+  flex-wrap: wrap;
+}
+.docx-editor :where([data-docx-dialog='openFailure']) .docx-dialog__button,
+.docx-editor:where([data-docx-dialog='openFailure']) .docx-dialog__button {
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  padding-block: 6px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
+.docx-editor .docx-dialog__link-button {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--doc-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+}
+.docx-editor .docx-dialog__link-button:where(:hover) {
+  background: var(--doc-primary-light);
+}
+.docx-editor .docx-dialog__button:where(:disabled),
+.docx-editor .docx-dialog__link-button:where(:disabled) {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+.docx-editor .docx-dialog__button:where(:focus-visible),
+.docx-editor .docx-dialog__link-button:where(:focus-visible),
+.docx-editor .docx-dialog__checkbox-row :where(input:focus-visible) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .docx-editor .docx-dialog__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Content control widget popup: an anchored popover, not a modal. */
+.docx-editor .docx-content-control-widget-popup {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  color: var(--doc-text);
+  background: var(--doc-popover-bg, white);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px var(--doc-shadow),
+    0 1px 3px var(--doc-shadow-subtle);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-editor .docx-content-control-widget-popup > :where(input, select) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  outline: none;
+}
+.docx-editor .docx-content-control-widget-popup > :where(input, select):where(:focus-visible) {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 1px var(--doc-primary);
+}
+.docx-editor .docx-content-control-widget-popup > :where(button) {
+  margin: 0;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--doc-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--doc-dialog-control-radius, 4px);
+  cursor: pointer;
+  appearance: none;
+}
+.docx-editor .docx-content-control-widget-popup > :where(button):where(:hover) {
+  background: var(--doc-bg-hover);
+}
+.docx-editor .docx-content-control-widget-popup > :where([role='alert']) {
+  font-size: 0.92em;
+  color: var(--doc-danger);
+}
+.docx-editor .docx-content-control-widget-popup .docx-dialog__footer {
+  padding: 4px 0 0;
+}
+.docx-editor .docx-content-control-widget-popup[data-kind='date'] {
+  padding: 0;
+  gap: 0;
+}
+.docx-editor
+  .docx-content-control-widget-popup
+  .docx-content-control-calendar
+  .docx-dialog__footer {
+  padding: 0;
+}
+
+/* Alt text popover: a stacked label, text area and footer inside the toolbar panel. */
+.docx-editor .docx-toolbar__alt-text-panel > .docx-dialog__label {
+  display: block;
+  width: auto;
+  margin-bottom: 6px;
+}
+.docx-editor .docx-toolbar__alt-text-panel .docx-dialog__textarea {
+  width: 100%;
+}
+.docx-editor .docx-toolbar__alt-text-panel .docx-dialog__footer {
+  padding: 12px 0 0;
+}
+
+/* The native dropdown is transparent; focus belongs to the painted field value. */
+.docx-editor [data-docx-field]:has(> select[data-docx-form-dropdown]:focus-visible) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+
+/* Keep dark document text legible beneath decorative change overlays. */
+:where(.docx-editor) :is([data-docx-refresh-highlight], [data-docx-anchor-highlight]) {
+  mix-blend-mode: multiply;
+}
+
+.docx-editor .docx-export-dialog,
+.docx-editor.docx-export-dialog {
+  max-width: 380px;
+}
+.docx-editor .docx-export-dialog__progress {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 16px;
+}
+.docx-editor .docx-export-dialog--pending,
+.docx-editor.docx-export-dialog--pending {
+  text-align: center;
+}
+.docx-editor .docx-export-dialog--pending .docx-dialog__footer,
+.docx-editor.docx-export-dialog--pending .docx-dialog__footer {
+  justify-content: center;
+}
+.docx-editor .docx-print-dialog .docx-dialog__footer,
+.docx-editor.docx-print-dialog .docx-dialog__footer {
+  flex-wrap: wrap;
+}
+.docx-editor .docx-print-dialog__open {
+  margin-inline-end: auto;
+  text-decoration: none;
+}
+.docx-editor .docx-export-dialog__message {
+  margin: 0;
+  color: var(--doc-text-muted);
+  overflow-wrap: anywhere;
+}
+.docx-editor .docx-export-dialog__spinner {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 2px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
+  border-radius: 50%;
+  animation: docx-export-spin 0.8s linear infinite;
+}
+@keyframes docx-export-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-editor .docx-export-dialog__spinner {
+    animation: none;
+  }
+}
+
+/* The frame captures its border while pointer input reaches textbox contents. */
+.docx-image-selection-overlay__frame[data-textbox='true'] {
+  clip-path: polygon(
+    evenodd,
+    0 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 0,
+    6px 6px,
+    6px calc(100% - 6px),
+    calc(100% - 6px) calc(100% - 6px),
+    calc(100% - 6px) 6px,
+    6px 6px
+  );
+}
+
+.docx-editor {
+  --doc-revision-color-black: #000000;
+  --doc-revision-color-blue: #0000ff;
+  --doc-revision-color-turquoise: #00ffff;
+  --doc-revision-color-green: #008000;
+  --doc-revision-color-pink: #ffc0cb;
+  --doc-revision-color-red: #ff0000;
+  --doc-revision-color-yellow: #ffff00;
+  --doc-revision-color-white: #ffffff;
+  --doc-revision-color-darkBlue: #000080;
+  --doc-revision-color-teal: #008080;
+  --doc-revision-color-darkGreen: #006400;
+  --doc-revision-color-violet: #800080;
+  --doc-revision-color-darkRed: #800000;
+  --doc-revision-color-darkYellow: #808000;
+  --doc-revision-color-gray50: #808080;
+  --doc-revision-color-gray25: #c0c0c0;
+  --doc-revision-color-lightBlue: #e0f3fa;
+  --doc-revision-color-lightYellow: #fff8dc;
+  --doc-revision-color-lightOrange: #ffe5cc;
+  --doc-revision-color-lightPurple: #eadcf4;
+  --doc-revision-color-lightGreen: #e2efd9;
+  --doc-revision-color-gray: #d9d9d9;
+}
+
+/* Track changes options dialog. */
+.docx-editor .docx-revision-markup-dialog,
+.docx-editor.docx-revision-markup-dialog,
+.docx-revision-markup-dialog {
+  box-sizing: border-box;
+  max-width: 39rem;
+  width: min(39rem, calc(100vw - 2rem));
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: calc(100dvh - 3rem);
+  overflow: hidden;
+  padding: var(--doc-dialog-padding, 1.25rem);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 0.75rem);
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-revision-markup-dialog > [data-docx-part='header'] {
+  flex: none;
+}
+.docx-revision-markup-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.docx-revision-markup-dialog h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  flex: none;
+}
+.docx-revision-markup-body {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.125rem;
+}
+.docx-revision-markup-dialog fieldset {
+  margin: 0 0 0.75rem;
+  padding: 0.625rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.375rem;
+}
+.docx-revision-markup-dialog legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+.docx-revision-markup-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.docx-revision-markup-row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.375rem;
+}
+.docx-revision-markup-row label {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.docx-revision-markup-dialog select {
+  min-width: 0;
+  padding: 0.3rem 0.375rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.25rem;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+}
+.docx-revision-markup-dialog select:disabled {
+  opacity: 0.5;
+}
+.docx-revision-markup-dialog p {
+  font-size: 0.75rem;
+  color: var(--doc-text-muted);
+  margin: 0.375rem 0 0.75rem;
+}
+.docx-revision-markup-actions {
+  flex: none;
+  padding-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.docx-revision-markup-actions button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.375rem;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+  cursor: pointer;
+}
+.docx-revision-markup-actions button:first-child {
+  margin-inline-end: auto;
+}
+.docx-revision-markup-dialog button:focus-visible,
+.docx-revision-markup-dialog select:focus-visible,
+.docx-revision-markup-dialog input:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+.docx-revision-markup-tableCells {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+}
+.docx-revision-markup-tableCells label {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+.docx-revision-markup-actions button:last-child {
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
+}
+.docx-revision-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  min-width: 0;
+}
+.docx-revision-color-trigger {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.375rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.25rem;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.docx-revision-color-trigger:disabled {
+  opacity: 0.5;
+}
+.docx-revision-color-swatch {
+  display: inline-block;
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 0.125rem;
+}
+.docx-revision-color-options:not([hidden]) {
+  position: fixed;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(16rem, calc(100vw - 1rem));
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.5rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 0.25rem;
+  background: var(--doc-bg);
+  box-shadow: var(--doc-shadow-lg);
+}
+.docx-revision-color-special {
+  margin-bottom: 0.5rem;
+}
+
+.docx-revision-markup-row-title {
+  font-size: 0.8125rem;
+}
+.docx-revision-markup-row > label > .docx-revision-markup-field-label,
+.docx-revision-markup-row > .docx-revision-color-picker > span:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.docx-revision-color-trigger::after {
+  content: '';
+  flex: none;
+  margin-inline-start: auto;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+@media (max-width: 540px) {
+  .docx-revision-markup-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .docx-revision-markup-row-title {
+    grid-column: 1 / -1;
+  }
+}
+
+.docx-revision-markup-background {
+  margin: 0 0 0.75rem;
+}
+.docx-revision-markup-background > .docx-revision-color-picker {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+.docx-revision-markup-background > .docx-revision-color-picker > span:first-child {
+  color: var(--doc-text-muted);
+  font-size: 0.75rem;
+}
+@media (max-width: 540px) {
+  .docx-revision-markup-background > .docx-revision-color-picker {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .docx-revision-markup-row,
+  .docx-revision-markup-tableCells,
+  .docx-revision-markup-background > .docx-revision-color-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .docx-revision-markup-actions {
+    flex-wrap: wrap;
+  }
 }

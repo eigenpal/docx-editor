@@ -9,18 +9,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // stories, and this slice publishes one of them (`body`) plus the main story's paragraphs as a
 // convenience, because `document.paragraphs` is how source-compatible code walks a document.
 //
-// WHAT IS NOT HERE IS NOT HERE ON PURPOSE. `contentControls`, `comments` and `sections` are declared
-// in the compatibility surface and are not implemented in this slice; a getter that answered an
-// empty collection would be indistinguishable from a document that has none, which is exactly the
-// kind of quiet wrong answer this lane is built to avoid. They arrive with the slices that can read
-// them.
 
 import {
   ObjectPath,
+  fail,
+  hydratedSpans,
   internalsOf,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+import { DocumentProperties } from './document-properties.ts';
 import { Body } from './body.ts';
 import type { ParagraphCollection } from './collections.ts';
 import { ContentControlCollection } from './content-controls.ts';
@@ -28,6 +26,11 @@ import { ModelObject } from './model-object.ts';
 import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
+import { Range } from './range.ts';
+
+/** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
+export { ChangeTrackingMode } from './editing-enums.ts';
+import { ChangeTrackingMode, RemoveDocInfoType } from './editing-enums.ts';
 
 /**
  * The document: the root every other object is reached from.
@@ -59,6 +62,7 @@ import { SectionCollection } from './sections.ts';
  * @public
  */
 export class Document extends ModelObject {
+  #properties: DocumentProperties | undefined;
   #body: Body | undefined;
   #paragraphs: ParagraphCollection | undefined;
   #sections: SectionCollection | undefined;
@@ -78,6 +82,29 @@ export class Document extends ModelObject {
   }
 
   /**
+   * Tracking for this automation runtime. Load 'changeTrackingMode' explicitly before reading.
+   * Document.load() keeps an empty default property set across hosts. Assignments take effect at sync.
+   * TrackMineOnly tracks this runtime's inline text edits using its configured author.
+   * TrackAll is unsupported. Browser tracked writes require the review module; this setting
+   * does not change the editor UI mode. Unsupported tracked mutation
+   * kinds refuse; the setting is session-local and is not saved as a document-wide policy.
+   */
+  get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly' {
+    return this.loadedProperty<ChangeTrackingMode>('changeTrackingMode');
+  }
+
+  set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly') {
+    if (!['Off', 'TrackAll', 'TrackMineOnly'].includes(mode))
+      fail({ code: 'InvalidArgument', target: 'document.changeTrackingMode' });
+    const author = this.internals.author;
+    this.commandAnswering(
+      'document.changeTrackingMode',
+      () => ({ op: 'setChangeTrackingMode', mode, ...(author === undefined ? {} : { author }) }),
+      () => this.setLoadedProperty('changeTrackingMode', mode)
+    );
+  }
+
+  /**
    * The main story.
    *
    * The same proxy every time, like every navigation property in this API: a consumer who loads
@@ -87,6 +114,48 @@ export class Document extends ModelObject {
   get body(): Body {
     this.#body ??= Body.main(this.context, 'document.body');
     return this.#body;
+  }
+
+  /**
+   * Remove standard core, extended, and custom document-property parts in one sync.
+   * Only DocumentProperties is supported. Tracking and collaboration refuse with NotSupported.
+   * This command must be the only write in its sync. It does not anonymize document content.
+   */
+  removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+  removeDocumentInformation(
+    removeDocInfoType:
+      | 'Comments'
+      | 'Revisions'
+      | 'Versions'
+      | 'RemovePersonalInformation'
+      | 'EmailHeader'
+      | 'RoutingSlip'
+      | 'SendForReview'
+      | 'DocumentProperties'
+      | 'Template'
+      | 'DocumentWorkspace'
+      | 'InkAnnotations'
+      | 'DocumentServerProperties'
+      | 'DocumentManagementPolicy'
+      | 'ContentType'
+      | 'TaskpaneWebExtensions'
+      | 'AtMentions'
+      | 'DocumentTasks'
+      | 'DocumentIntelligence'
+      | 'CommentReactions'
+      | 'All'
+  ): void;
+  removeDocumentInformation(removeDocInfoType: string): void {
+    this.command(`${this.path.label}.removeDocumentInformation`, () => ({
+      op: 'removeDocumentInformation',
+      removeDocInfoType,
+    }));
+  }
+
+  /** Core document metadata. Reads require load; writes commit at sync. */
+  get properties(): DocumentProperties {
+    this.#properties ??= DocumentProperties.of(this.context, this.path);
+    return this.#properties;
   }
 
   /** The main story's paragraphs, in reading order. */
@@ -128,7 +197,8 @@ export class Document extends ModelObject {
   /**
    * The tracked changes of the main-body story that this API can publish as typed objects.
    *
-   * Structural cards whose exact Word subtype cannot be named are omitted from `items`.
+   * Structural cards whose exact Word subtype cannot be named are omitted from `items`, and so
+   * are property changes that leave the resolved formatting unchanged.
    * `acceptAll` / `rejectAll` still resolve every store-resolvable revision in the main body
    * and refuse atomically if any `readOnly` or otherwise unsupported revision remains. Header,
    * footer, and note revisions live on those stories' own `Body.revisions` collections.
@@ -146,9 +216,7 @@ export class Document extends ModelObject {
   /**
    * The document's footnotes, in the order its notes part writes them.
    *
-   * DocxEditor's own accessor: upstream reaches notes through `Body#footnotes`, whose collection type
-   * the pinned reference fixture does not carry — see `compat/manifest.json`. Without an accessor a
-   * note would be unreachable, so it is published here and recorded as unmeasured.
+   * Legacy document-wide accessor. Prefer the Office.js-shaped `body.footnotes` accessor.
    */
   get footnotes(): NoteItemCollection {
     const document = this.path.handle();
@@ -172,10 +240,77 @@ export class Document extends ModelObject {
     return this.#endnotes;
   }
 
+  /**
+   * Delete the bookmark with this name, compared without case, from whichever story declares
+   * it. The text stays. A name no bookmark has changes nothing.
+   *
+   * @example
+   * ```ts
+   * context.document.deleteBookmark('Intro');
+   * await context.sync();
+   * ```
+   */
+  deleteBookmark(name: string): void {
+    const target = `${this.path.label}.deleteBookmark`;
+    const document = this.path.handle();
+    // Checked when the batch is sent, so a bad name fails `context.sync()`, not the call.
+    this.command('deleteBookmark', () => {
+      if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+      return { op: 'deleteBookmark', target: { document, name } };
+    });
+  }
+
+  /**
+   * The range of the bookmark with this name, compared without case. The main text is searched
+   * first, then headers, footers and notes. `ItemNotFound` at the sync when no bookmark has the
+   * name.
+   *
+   * @example
+   * ```ts
+   * const range = context.document.getBookmarkRange('Intro');
+   * range.load('text');
+   * await context.sync();
+   * ```
+   */
+  getBookmarkRange(name: string): Range {
+    return this.#bookmarkRange(name, 'getBookmarkRange', false);
+  }
+
+  /** Like {@link Document.getBookmarkRange}, but a missing bookmark answers a null object. */
+  getBookmarkRangeOrNullObject(name: string): Range {
+    return this.#bookmarkRange(name, 'getBookmarkRangeOrNullObject', true);
+  }
+
+  #bookmarkRange(name: string, accessor: string, nullable: boolean): Range {
+    const target = `${this.path.label}.${accessor}`;
+    const document = this.path.handle();
+    const found = Range.promised(this.context, target, nullable);
+    this.read(
+      target,
+      () => {
+        if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+        return { op: 'getBookmarkRangeByName', document, name };
+      },
+      (value) => {
+        const spans = hydratedSpans(value, target);
+        const span = spans[0];
+        if (!span) {
+          if (!nullable) fail({ code: 'ItemNotFound', target });
+          found.hydrateNull();
+          return;
+        }
+        found.hydrateAddress({ kind: 'span', span });
+      }
+    );
+    return found;
+  }
+
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
-    // The document offers no readable property of its own in this slice, so the only selection it
-    // accepts is the empty one — and naming a property it does not have is refused, not ignored.
-    this.selection(request, []);
+    // Keep the default load valid across hosts; tracking requires an explicit property load.
+    if (request.select.length === 0) return;
+    const selected = this.selection(request, ['changeTrackingMode']);
+    if (selected.includes('changeTrackingMode'))
+      this.loadTextInto('changeTrackingMode', () => ({ op: 'getChangeTrackingMode' }));
   }
 }

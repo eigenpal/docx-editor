@@ -1,9 +1,19 @@
-import { computed, defineComponent, ref, type CSSProperties, type PropType } from 'vue';
+import {
+  computed,
+  defineComponent,
+  onMounted,
+  ref,
+  watch,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
 import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
-import { useNavigationContext } from './navigation-context';
+import { usePlatformShortcut } from '../usePlatformShortcut';
+import { useLiveNavigationContext } from './navigation-context';
+import { findKeyShortcuts, goToKeyShortcuts, goToShortcutLabel } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -20,7 +30,7 @@ export interface NavigationTabProps extends NavigationPartProps {
   value: NavigationTabId;
 }
 
-const TABS: NavigationTabId[] = ['headings', 'find'];
+const TABS: NavigationTabId[] = ['headings', 'find', 'goto'];
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
 
@@ -53,7 +63,14 @@ export const NavigationClose = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Close');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Close');
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     return () => (
       <button
         type="button"
@@ -61,7 +78,7 @@ export const NavigationClose = defineComponent({
         style={props.style}
         aria-label={t('navigation.closeAriaLabel')}
         title={t('navigation.closeTitle')}
-        onClick={() => pane.setOpen(false)}
+        onClick={intents.close}
       >
         {slots.default?.() ?? <MaterialSymbol name="arrow_back" size={20} />}
       </button>
@@ -77,7 +94,9 @@ export const NavigationTitle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { t } = useNavigationContext('Title');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Title');
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     return () => (
       <h2 class={cx('docx-nav__title', props.className)} style={props.style}>
         {slots.default?.() ?? t('navigation.title')}
@@ -94,7 +113,10 @@ export const NavigationTabs = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Tabs');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Tabs');
+    const { pane } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     const onKeyDown = (event: KeyboardEvent) => {
       const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
       if (delta === 0) return;
@@ -125,9 +147,18 @@ export const NavigationTab = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Tab');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Tab');
+    const { pane } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const shortcut = usePlatformShortcut();
     return () => {
       const selected = pane.tab.value === props.value;
+      // The Go to tab names its shortcut while it is bound.
+      const goToTitle =
+        props.value === 'goto' && nav.goToShortcut
+          ? t('navigation.goTo.tabTitle', { shortcut: shortcut(goToShortcutLabel()) })
+          : undefined;
       return (
         <button
           type="button"
@@ -138,6 +169,7 @@ export const NavigationTab = defineComponent({
           tabindex={selected ? 0 : -1}
           class={cx('docx-nav__tab', selected && 'docx-nav__tab--selected', props.className)}
           style={props.style}
+          {...(goToTitle ? { title: goToTitle, 'aria-keyshortcuts': goToKeyShortcuts() } : {})}
           onClick={() => pane.setTab(props.value)}
         >
           {slots.default?.() ?? t(`navigation.tabs.${props.value}`)}
@@ -157,12 +189,24 @@ const SearchBox = defineComponent({
     label: { type: String, required: true },
     clearLabel: { type: String, required: true },
     autoFocus: { type: Boolean, default: undefined },
+    /** Enter and Shift+Enter, with `backward` true for Shift. */
+    onEnter: { type: Function as PropType<(backward: boolean) => void>, default: undefined },
   },
   setup(props) {
+    // The find panel stays mounted (hidden or inert) so a typed query survives a close.
+    // HTML autofocus only runs on first mount, which is the closed pane — focus when
+    // the field actually becomes the visible target.
+    const inputRef = ref<HTMLInputElement | null>(null);
+    const focusIfRequested = () => {
+      if (props.autoFocus) inputRef.value?.focus();
+    };
+    onMounted(focusIfRequested);
+    watch(() => props.autoFocus, focusIfRequested, { flush: 'post' });
     return () => (
       <div class="docx-nav__searchbox">
         <MaterialSymbol name="search" size={18} className="docx-nav__search-icon" />
         <input
+          ref={inputRef}
           type="search"
           class="docx-nav__search-input"
           value={props.value}
@@ -170,6 +214,11 @@ const SearchBox = defineComponent({
           aria-label={props.label}
           autofocus={props.autoFocus}
           onInput={(event) => props.onChange((event.target as HTMLInputElement).value)}
+          onKeydown={(event: KeyboardEvent) => {
+            if (!props.onEnter || event.key !== 'Enter' || event.isComposing) return;
+            event.preventDefault();
+            props.onEnter(event.shiftKey);
+          }}
         />
         {props.value.length > 0 && (
           <button
@@ -194,7 +243,15 @@ export const NavigationHeadings = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, outline, t } = useNavigationContext('Headings');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Headings');
+    const { pane, outline } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     const filter = ref('');
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const items = computed(() => {
@@ -242,7 +299,10 @@ export const NavigationHeadings = defineComponent({
                     )}
                     style={{ paddingInlineStart: `${8 + item.depth * 14}px` }}
                     title={item.heading.text}
-                    onClick={() => outline.goTo(item.heading.blockId)}
+                    onClick={() => {
+                      outline.goTo(item.heading.blockId);
+                      intents.picked();
+                    }}
                   >
                     {item.heading.text}
                   </button>
@@ -291,9 +351,18 @@ export const NavigationFind = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, search, t } = useNavigationContext('Find');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Find');
+    const { pane, search } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     return () => {
       const hidden = pane.tab.value !== 'find';
+      const autoFocus = pane.open.value && !hidden;
       const hasQuery = search.query.value.trim().length > 0;
       const counter =
         search.matches.value.length === 0
@@ -330,6 +399,13 @@ export const NavigationFind = defineComponent({
             placeholder={t('navigation.find.placeholder')}
             label={t('navigation.find.inputAriaLabel')}
             clearLabel={t('navigation.find.clearAriaLabel')}
+            autoFocus={autoFocus}
+            onEnter={(backward: boolean) => {
+              // Enter runs a query still waiting for its debounce, then moves to a match.
+              if (search.isPending.value) search.find(search.query.value);
+              if (backward) search.previous();
+              else search.next();
+            }}
           />
           <div
             class="docx-nav__options"
@@ -393,7 +469,10 @@ export const NavigationFind = defineComponent({
                   key={`${match.blockId}-${match.start}-${index}`}
                   match={match}
                   active={index === search.activeIndex.value}
-                  onSelect={() => search.goTo(index)}
+                  onSelect={() => {
+                    search.goTo(index);
+                    intents.picked();
+                  }}
                 />
               ))}
             </ul>
@@ -412,20 +491,36 @@ export const NavigationToggle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Toggle');
-    return () => (
-      <button
-        type="button"
-        class={cx('docx-nav__toggle', props.className)}
-        style={props.style}
-        aria-label={t('navigation.openAriaLabel')}
-        aria-expanded={pane.open.value}
-        title={t('navigation.openTitle')}
-        onMousedown={(event) => event.preventDefault()}
-        onClick={pane.toggle}
-      >
-        {slots.default?.() ?? <MaterialSymbol name="toc" size={20} />}
-      </button>
-    );
+    // Read in render, not destructured here: `t` and `findShortcut` are pane props that a
+    // host can change while the disc stays mounted.
+    const context = useLiveNavigationContext('Toggle');
+    const shortcut = usePlatformShortcut();
+    return () => {
+      const { pane, intents, findShortcut, t } = context;
+      const label = shortcut('Ctrl+F');
+      return (
+        <button
+          type="button"
+          class={cx('docx-nav__toggle', props.className)}
+          style={props.style}
+          aria-label={t('navigation.openAriaLabel')}
+          aria-expanded={pane.open.value}
+          // Names the Find shortcut, the one way to open the pane besides this disc, only
+          // while it is bound.
+          aria-keyshortcuts={findShortcut ? findKeyShortcuts(label) : undefined}
+          title={
+            findShortcut
+              ? // The resolved label goes in as a parameter, never as catalog text: a translated
+                // modifier (German "Strg") would name a key that does not open Find on macOS.
+                t('navigation.openShortcutTitle', { shortcut: label })
+              : t('navigation.openTitle')
+          }
+          onMousedown={(event) => event.preventDefault()}
+          onClick={intents.toggle}
+        >
+          {slots.default?.() ?? <MaterialSymbol name="toc" size={20} />}
+        </button>
+      );
+    };
   },
 });

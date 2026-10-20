@@ -29,7 +29,7 @@ import type {
   CollaborationRemoteSelection,
 } from '@docx-editor.dev/core/collaboration';
 import type { RemoteCaretLabelAnchor } from '@docx-editor.dev/core/editor';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import {
   orderedParticipants,
   participantInitials,
@@ -38,6 +38,7 @@ import {
   presenceAvatarUrlOf,
   type PresenceAccent,
 } from '../collaboration/presence-chrome.ts';
+import { CollaborationStatusNotice } from './CollaborationStatusNotice.ts';
 import { useCollaborationParticipants } from './useCollaborationParticipants.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
 
@@ -95,6 +96,7 @@ export interface CollaborationCaretLabelsProps {
 
 /** Render props for {@link DocxEditorCollaboration}.Avatars' per-participant override. @public */
 export interface CollaborationAvatarRenderProps {
+  /** The participant this avatar shows. */
   readonly participant: CollaborationParticipant;
   /** The resolved accent — published colour, or the review roster's colour for the name. */
   readonly color: string;
@@ -113,6 +115,7 @@ export interface CollaborationAvatarsProps {
   readonly session?: CollaborationSession | null;
   /** Avatars shown before the rest collapse into one "+N" chip. Omit to show everyone. */
   readonly max?: number;
+  /** Classes added to the part's root element. */
   readonly className?: string;
   /** Scoped slot: `#default="{ participant, color, initials, avatarUrl }"` replaces the disc. */
   readonly children?: (props: CollaborationAvatarRenderProps) => VNode | VNode[];
@@ -120,7 +123,9 @@ export interface CollaborationAvatarsProps {
 
 /** Props for {@link DocxEditorCollaboration}.Avatar. @public */
 export interface CollaborationAvatarProps {
+  /** The participant to show. */
   readonly participant: CollaborationParticipant;
+  /** Classes added to the part's root element. */
   readonly className?: string;
   /** Default slot: replaces the initials inside the disc; the accent background stays. */
   readonly children?: VNode | VNode[];
@@ -402,6 +407,7 @@ const CollaborationCaretLabels = defineComponent({
  * @example
  * ```html
  * <DocxEditorCollaboration.Avatars :session="session" :max="4" />
+ * <DocxEditorCollaboration.Status :session="session" :on-rejoin="rejoin" />
  * <DocxEditorCollaboration.CaretLabels :session="session" v-slot="{ selection, color }">
  *   <MyLabel :name="selection.name" :color="color" />
  * </DocxEditorCollaboration.CaretLabels>
@@ -416,7 +422,9 @@ export const DocxEditorCollaboration = {
   Avatars: CollaborationAvatars,
   /** One participant's avatar, for hosts arranging their own presence chrome. */
   Avatar: CollaborationAvatar,
+  /** The room's state in one line, shown only when the user needs to know. */
+  Status: CollaborationStatusNotice,
 };
 
-/** @public */
+/** The collaboration presence compound: its parts, by name. @public */
 export type DocxEditorCollaborationNamespace = typeof DocxEditorCollaboration;

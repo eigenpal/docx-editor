@@ -13,10 +13,12 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import { isHTMLElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -26,7 +28,16 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotIdOfVNode,
+} from '../menu/parts';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { contextMenuRowId } from './row-alias';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -39,6 +50,8 @@ import {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
@@ -72,35 +85,57 @@ type DefaultEntry =
 const ContextMenuAddComment = defineComponent({
   name: 'ContextMenuAddComment',
   setup() {
-    const editorRef = useDocxEditor();
     const rail = useReviewRailRegistry();
     const menu = useMenuContext();
     const label = useMenuLabel();
+    // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one
+    // source: `toolbarCommandState`. The row needs a mounted review rail to open the draft,
+    // so without one it is left out, whatever the engine answers.
+    const { isEnabled, reason } = useAddCommentState(label);
     return () => {
-      const editor = editorRef.value;
-      const gate = editor?.can({ type: 'toggleReviewPane' });
-      const disabled =
-        !gate?.ok || rail.value.mounted === 0 || editor?.getSelectionPlacement() === null;
-      const control = chromeControlForSlot('review.comments');
+      if (rail.value.mounted === 0) return null;
+      const control = chromeControlForSlot('review.addComment');
       return (
         <MenuRow
           icon={chromeIcon(control?.paths) ?? undefined}
-          {...{ rowSlot: 'review.comments' }}
-          disabled={disabled}
-          title={gate && !gate.ok ? gate.reason : undefined}
+          {...{ rowSlot: 'review.addComment' }}
+          disabled={!isEnabled.value}
+          title={reason.value ?? undefined}
           selectHandler={() => {
             if (!rail.value.requestCommentDraft()) return;
             menu.value.setOpenMenu(null);
           }}
         >
-          {label('comments.addComment')}
+          {{ default: () => label('comments.addComment') }}
         </MenuRow>
       );
     };
   },
 });
 
+const ContextMenuEditField = defineComponent({
+  name: 'ContextMenuEditField',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    return () =>
+      !editor.value?.can({ type: 'editTextFormField' }).ok ? null : (
+        <MenuRow
+          rowSlot="field.edit"
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            editor.value?.exec({ type: 'editTextFormField' });
+          }}
+        >
+          {{ default: () => label('textFormField.edit') }}
+        </MenuRow>
+      );
+  },
+});
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
+  { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
@@ -122,16 +157,11 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => (
-      <MenuItem
-        {...({ slot: 'text.link' } as { slot: 'text.link' })}
-        labelKey="formattingBar.insertLink"
-      />
-    ),
+    render: () => <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />,
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];
@@ -159,6 +189,17 @@ function tableContextEntries(): readonly DefaultEntry[] {
       kind: 'row',
       id: ContextMenuInsertColumnRight.docxRow,
       render: () => <ContextMenuInsertColumnRight />,
+    },
+    { kind: 'separator', id: 'sep.table.cells' },
+    {
+      kind: 'row',
+      id: ContextMenuMergeCells.docxRow,
+      render: () => <ContextMenuMergeCells />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuSplitCell.docxRow,
+      render: () => <ContextMenuSplitCell />,
     },
     { kind: 'separator', id: 'sep.table.destructive' },
     {
@@ -221,8 +262,8 @@ function rowOfChild(child: unknown): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotIdOfVNode(child as VNode);
+    if (slot) return slot;
   }
   return null;
 }
@@ -290,21 +331,26 @@ export const DocxEditorContextMenu = defineComponent({
       }
     );
 
+    /** The scroller the open menu came from: its document and window own the menu. */
+    let menuScroller: HTMLElement | null = null;
     watchEffect((onCleanup) => {
       void stateTick.value;
       if (props.disabled) return;
       const scroller =
         scrollerFor(hostRef.value) ??
-        (typeof document !== 'undefined'
-          ? document.querySelector<HTMLElement>('.docx-editor__scroll-container')
+        (hostRef.value
+          ? hostDocumentOf(hostRef.value).querySelector<HTMLElement>(
+              '.docx-editor__scroll-container'
+            )
           : null);
       if (!scroller) return;
       const onContextMenu = (event: MouseEvent) => {
         event.preventDefault();
         const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
         const box = scroller.getBoundingClientRect();
+        menuScroller = scroller;
         tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
-        target.value = keyboard || !(event.target instanceof HTMLElement) ? null : event.target;
+        target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
         anchor.value = keyboard
           ? { x: box.left + 16, y: box.top + 16 }
           : { x: event.clientX, y: event.clientY };
@@ -329,17 +375,19 @@ export const DocxEditorContextMenu = defineComponent({
           }
         };
         const onScroll = () => close();
-        document.addEventListener('pointerdown', onPointerDown, true);
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-        window.addEventListener('blur', onScroll);
-        window.addEventListener('resize', onScroll);
+        const doc = hostDocumentOf(menuScroller ?? hostRef.value);
+        const win = hostWindowOf(menuScroller ?? hostRef.value);
+        doc.addEventListener('pointerdown', onPointerDown, true);
+        doc.addEventListener('keydown', onKeyDown);
+        doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
+        win.addEventListener('blur', onScroll);
+        win.addEventListener('resize', onScroll);
         onCleanup(() => {
-          document.removeEventListener('pointerdown', onPointerDown, true);
-          document.removeEventListener('keydown', onKeyDown);
-          document.removeEventListener('scroll', onScroll, true);
-          window.removeEventListener('blur', onScroll);
-          window.removeEventListener('resize', onScroll);
+          doc.removeEventListener('pointerdown', onPointerDown, true);
+          doc.removeEventListener('keydown', onKeyDown);
+          doc.removeEventListener('scroll', onScroll, true);
+          win.removeEventListener('blur', onScroll);
+          win.removeEventListener('resize', onScroll);
         });
       },
       { flush: 'sync' }
@@ -354,8 +402,9 @@ export const DocxEditorContextMenu = defineComponent({
         const panel = panelRef.value;
         if (!panel || !anchor.value) return;
         const { width, height } = panel.getBoundingClientRect();
-        const maxX = window.innerWidth - width - VIEWPORT_INSET;
-        const maxY = window.innerHeight - height - VIEWPORT_INSET;
+        const win = hostWindowOf(panel);
+        const maxX = win.innerWidth - width - VIEWPORT_INSET;
+        const maxY = win.innerHeight - height - VIEWPORT_INSET;
         const x = Math.max(
           VIEWPORT_INSET,
           anchor.value.x > maxX ? anchor.value.x - width : anchor.value.x
@@ -430,9 +479,14 @@ export const DocxEditorContextMenu = defineComponent({
                 children: restChildren,
                 preset: props.preset,
                 keyOfEntry: (entry) => entry.id,
-                keyOfChild: rowOfChild,
+                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, vnode) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  const hidden = vnode.props?.hidden;
+                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                },
               }),
             ];
 
@@ -440,7 +494,10 @@ export const DocxEditorContextMenu = defineComponent({
         'div',
         {
           ref: (element: unknown) => {
-            hostRef.value = element instanceof HTMLDivElement ? element : null;
+            hostRef.value =
+              isHTMLElementNode(element) && element.localName === 'div'
+                ? (element as HTMLDivElement)
+                : null;
           },
           class: 'docx-contextmenu-host',
           style: {
@@ -457,7 +514,10 @@ export const DocxEditorContextMenu = defineComponent({
                 'div',
                 {
                   ref: (element: unknown) => {
-                    panelRef.value = element instanceof HTMLDivElement ? element : null;
+                    panelRef.value =
+                      isHTMLElementNode(element) && element.localName === 'div'
+                        ? (element as HTMLDivElement)
+                        : null;
                   },
                   role: 'menu',
                   'aria-label':
@@ -472,10 +532,10 @@ export const DocxEditorContextMenu = defineComponent({
                     const items = panelItems(panel);
                     if (event.key === 'ArrowDown') {
                       event.preventDefault();
-                      focusBy(items, document.activeElement, 1);
+                      focusBy(items, hostDocumentOf(panel).activeElement, 1);
                     } else if (event.key === 'ArrowUp') {
                       event.preventDefault();
-                      focusBy(items, document.activeElement, -1);
+                      focusBy(items, hostDocumentOf(panel).activeElement, -1);
                     } else if (event.key === 'Home') {
                       event.preventDefault();
                       focusEdge(items, 'first');
@@ -507,6 +567,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
   readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
   readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+  readonly MergeCells: typeof ContextMenuMergeCells;
+  readonly SplitCell: typeof ContextMenuSplitCell;
   readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
@@ -533,6 +595,8 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   InsertRowBelow: ContextMenuInsertRowBelow,
   InsertColumnLeft: ContextMenuInsertColumnLeft,
   InsertColumnRight: ContextMenuInsertColumnRight,
+  MergeCells: ContextMenuMergeCells,
+  SplitCell: ContextMenuSplitCell,
   DeleteTableRow: ContextMenuDeleteTableRow,
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,

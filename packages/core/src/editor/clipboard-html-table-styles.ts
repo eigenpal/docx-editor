@@ -1,3 +1,4 @@
+import { tableSide } from './clipboard-table-direction.ts';
 import {
   cssBackgroundFill,
   parseCssColor,
@@ -280,7 +281,7 @@ function borderElementXml(name: string, border: BorderValue): string {
 }
 
 /** Preserve Word's table border styles instead of replacing them with generic black lines. */
-export function tableBordersXml(table: Element): string {
+export function tableBordersXml(table: Element, rtl = false): string {
   const style = parseInlineStyle(table);
   // Per-PARSE fallback: an mso-border-alt token outside the parser must not
   // shadow the parseable CSS shorthand beside it.
@@ -302,7 +303,8 @@ export function tableBordersXml(table: Element): string {
     ['insideV', 'insidev'],
   ] as const;
   let inner = '';
-  for (const [xmlName, cssName] of names) {
+  for (const [xmlName, physicalName] of names) {
+    const cssName = tableSide(physicalName, rtl);
     const border =
       borderValueOf(style.get(`mso-border-${cssName}-alt`)) ??
       borderValueOf(style.get(`mso-border-${cssName}`)) ??
@@ -325,7 +327,7 @@ export function tableRowPropertiesXml(row: Element): string {
   return `<w:trPr><w:trHeight w:val="${height}" w:hRule="${hRule}"/></w:trPr>`;
 }
 
-function cellMarginsXml(style: ReadonlyMap<string, string>): string {
+function cellMarginsXml(style: ReadonlyMap<string, string>, rtl: boolean): string {
   const edges: Record<'top' | 'right' | 'bottom' | 'left', number | null> = {
     top: null,
     right: null,
@@ -363,7 +365,8 @@ function cellMarginsXml(style: ReadonlyMap<string, string>): string {
   let inner = '';
   // CT_TcMar sequence order: top, left, bottom, right.
   for (const name of ['top', 'left', 'bottom', 'right'] as const) {
-    const points = edges[name];
+    const physical = tableSide(name, rtl) as keyof typeof edges;
+    const points = edges[physical];
     if (points === null) continue;
     inner += `<w:${name} w:w="${clamp(Math.round(points * 20), 0, MAX_TABLE_TWIPS)}" w:type="dxa"/>`;
   }
@@ -371,7 +374,7 @@ function cellMarginsXml(style: ReadonlyMap<string, string>): string {
 }
 
 /** Emit cell borders, shading, margins, and vertical alignment in CT_TcPr order. */
-export function cellCssPropertiesXml(cell: Element): string {
+export function cellCssPropertiesXml(cell: Element, rtl = false): string {
   const style = parseInlineStyle(cell);
   // Per-PARSE fallback, same rule as tableBordersXml.
   const common =
@@ -379,19 +382,20 @@ export function cellCssPropertiesXml(cell: Element): string {
     borderValueOf(style.get('border')) ??
     longhandBorderOf(style, 'border');
   let borders = '';
-  for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
+  for (const name of ['top', 'left', 'bottom', 'right'] as const) {
+    const edge = tableSide(name, rtl);
     const border =
       borderValueOf(style.get(`mso-border-${edge}-alt`)) ??
       borderValueOf(style.get(`mso-border-${edge}`)) ??
       borderValueOf(style.get(`border-${edge}`)) ??
       longhandBorderOf(style, `border-${edge}`) ??
       common;
-    if (border !== undefined) borders += borderElementXml(edge, border);
+    if (border !== undefined) borders += borderElementXml(name, border);
   }
   let xml = borders.length > 0 ? `<w:tcBorders>${borders}</w:tcBorders>` : '';
   const fill = cssBackgroundFill(style);
   if (fill) xml += `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>`;
-  xml += cellMarginsXml(style);
+  xml += cellMarginsXml(style, rtl);
   const vertical =
     style.get('vertical-align')?.toLowerCase() ?? cell.getAttribute('valign')?.toLowerCase();
   if (vertical === 'top') xml += '<w:vAlign w:val="top"/>';

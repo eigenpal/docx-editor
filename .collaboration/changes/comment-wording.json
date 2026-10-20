@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Source comments carry their previous wording.",
+  "after": "The same comments carry updated wording.",
+  "reason": "The change edits comment text only. No executable statement, stored field, operation, snapshot, or protocol message changes.",
+  "tests": [],
+  "changeset": "comment-wording",
+  "migration": null
+}

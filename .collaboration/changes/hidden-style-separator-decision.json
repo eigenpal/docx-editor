@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Hidden paragraph marks with visible content retain separate display paragraphs.",
+  "after": "Supported body style separators share display flow while each source paragraph stays intact.",
+  "reason": "This change affects layout only. Canonical nodes, operations, and collaboration messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/style-separator-flow.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

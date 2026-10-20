@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Unavailable symbol-encoded faces take the document text default, paint missing glyphs, and use text-face line metrics.",
+  "after": "Unavailable symbol-encoded faces stay unresolved. List markers and symbols keep the authored face, layout uses that face's line box and advances, and export paints their Unicode equivalents.",
+  "reason": "The change affects only local font resolution and measurement. Canonical XML, model offsets, replicated operations, selections, and awareness are unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/symbol-face-metrics.test.ts",
+    "packages/core/src/layout/__tests__/list-marker-symbol-face.test.ts",
+    "packages/core/src/layout/__tests__/list-marker-line-metrics.test.ts",
+    "packages/core/src/layout/__tests__/symbol-bullet-encoding.test.ts"
+  ],
+  "changeset": "symbol-face-geometry",
+  "migration": null
+}

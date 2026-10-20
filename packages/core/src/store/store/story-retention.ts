@@ -5,8 +5,13 @@
 // identities history can still restore, so eviction never severs an undoable pointer
 // while unreachable entries stop holding `maxEditableStoryParts` forever.
 
-import type { OoxmlPackage } from '../package/ooxml-package.ts';
-import type { TreeStoryRef } from './tree-store.ts';
+import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
+import {
+  pruneUnreachableHyperlinkShell,
+  retainShellHyperlinks,
+} from '../package/package-shell-persistence.ts';
+import type { SelectionMark, TreeModelChange, TreeStoryRef } from './tree-store.ts';
+import type { ImpactClass } from './tree-op-types.ts';
 
 export interface StoryHistoryPointer {
   readonly kind: 'story';
@@ -18,6 +23,10 @@ export interface PackageHistoryPointer {
   readonly kind: 'package';
   readonly before: OoxmlPackage;
   readonly after: OoxmlPackage;
+  readonly selectionBefore?: SelectionMark | null;
+  readonly selectionAfter?: SelectionMark | null;
+  /** This transaction owns numbering changes; later shell allocations still survive. */
+  readonly restoreNumbering?: boolean;
 }
 
 export type HistoryPointer = StoryHistoryPointer | PackageHistoryPointer;
@@ -85,4 +94,69 @@ function retainPointerHyperlinkOwners(pointer: HistoryPointer, retained: Set<str
   }
   for (const name of pointer.before.parts.keys()) retained.add(name);
   for (const name of pointer.after.parts.keys()) retained.add(name);
+}
+
+/**
+ * Drop parked story stores no history pointer can restore, with their relationship ids, and
+ * prune the hyperlink shell entries whose owners went with them.
+ */
+export function evictUnreachableStoryStores(state: {
+  readonly pkg: OoxmlPackage;
+  readonly stories: Map<string, unknown>;
+  readonly rIdToPartName: Map<string, string>;
+  readonly bodyPartName: string;
+  readonly shellHyperlinks: readonly OoxmlExternalTarget[];
+  readonly undoOrder: readonly HistoryPointer[];
+  readonly redoOrder: readonly HistoryPointer[];
+}): { readonly pkg: OoxmlPackage; readonly shellHyperlinks: readonly OoxmlExternalTarget[] } {
+  const { stories, rIdToPartName, undoOrder, redoOrder } = state;
+  const retained = retainedStoryPartNames(state.pkg, stories.keys(), undoOrder, redoOrder);
+  for (const [name] of [...stories]) {
+    if (retained.has(name)) continue;
+    stories.delete(name);
+    for (const [rId, partName] of [...rIdToPartName]) {
+      if (partName === name) rIdToPartName.delete(rId);
+    }
+  }
+  const hyperlinkOwners = retainedHyperlinkOwnerParts(
+    retained,
+    state.pkg.mainDocumentPart,
+    state.bodyPartName,
+    undoOrder,
+    redoOrder
+  );
+  const pkg = pruneUnreachableHyperlinkShell(state.pkg, hyperlinkOwners);
+  return {
+    pkg,
+    shellHyperlinks: retainShellHyperlinks(
+      state.shellHyperlinks,
+      hyperlinkOwners,
+      pkg.mainDocumentPart
+    ),
+  };
+}
+
+/** The change a package-level commit publishes: no dirty paragraphs, its own impact. */
+export function syntheticPackageChange(
+  commitCounter: number,
+  packageRevision: number,
+  origin: string,
+  impact: ImpactClass,
+  story: TreeStoryRef,
+  created: readonly string[]
+): TreeModelChange {
+  return {
+    change: 'model-change',
+    fromRevision: Math.max(0, packageRevision - 1),
+    toRevision: packageRevision,
+    commitId: `pkg-commit-${commitCounter}`,
+    origin,
+    dirty: [],
+    created: [...created],
+    deleted: [],
+    splitJoin: [],
+    dependencyKeys: [],
+    impact,
+    story,
+  };
 }

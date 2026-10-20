@@ -52,6 +52,8 @@ export interface NoteMarkContext {
    * inherit identity from the enclosing note via this key.
    */
   readonly activeNoteKey?: string;
+  /** Project separator markers as inline rules inside their authored stories. */
+  readonly measureSeparatorMarkers?: true;
 }
 
 /** Empty context — note atoms contribute no visible glyphs. */
@@ -77,6 +79,7 @@ export function noteMarkKey(noteKind: NoteKind, noteId: number): string {
 export type NoteNavDirection = 'to-note' | 'to-body';
 
 export interface ProjectedNoteMark {
+  readonly noteSeparator?: 'separator' | 'continuationSeparator';
   readonly text: string;
   readonly measureText?: string;
   readonly projected: boolean;
@@ -94,7 +97,19 @@ export function projectedNoteMarkText(
   if (!isNoteAtomNode(node)) return null;
 
   if (isSeparatorNode(node) || isContinuationSeparatorNode(node)) {
-    return { text: '', projected: true, kind: null, noteId: null };
+    return {
+      text: context?.measureSeparatorMarkers ? NOTE_ATOM_CHAR : '',
+      ...(context?.measureSeparatorMarkers
+        ? {
+            noteSeparator: isSeparatorNode(node)
+              ? ('separator' as const)
+              : ('continuationSeparator' as const),
+          }
+        : {}),
+      projected: true,
+      kind: null,
+      noteId: null,
+    };
   }
 
   const isBodyRef = isNoteReferenceNode(node);
@@ -207,6 +222,7 @@ export function noteMarksCacheToken(context: NoteMarkContext | undefined): strin
     [...context.marks],
     context.reservedMarkText ?? null,
     context.activeNoteKey ?? null,
+    ...(context.measureSeparatorMarkers ? [true] : []),
   ]);
   // HASHED to a constant width, because this reaches the key of every paragraph in the
   // document, not just the section context. A thousand-note document would otherwise carry
@@ -225,4 +241,33 @@ export function noteKindAndIdOf(
   const noteId = noteIdOf(node);
   if (!noteKind || noteId === null) return null;
   return { noteKind, noteId };
+}
+
+/** The piece a projectable note atom paints over its one model unit, or null for none. */
+export function noteAtomPiece(
+  node: OoxmlNode,
+  context: NoteMarkContext | undefined
+): {
+  readonly text: string;
+  readonly extras: {
+    readonly measureText?: string;
+    readonly noteNav?: { readonly scopeId: string; readonly direction: NoteNavDirection };
+    readonly noteSeparator?: 'separator' | 'continuationSeparator';
+  };
+} | null {
+  const projected = projectedNoteMarkText(node, context);
+  // Empty projected displays still consume their canonical model unit.
+  if (!projected || (projected.text.length === 0 && !projected.measureText)) return null;
+  const noteNav =
+    projected.scopeId && projected.nav
+      ? { scopeId: projected.scopeId, direction: projected.nav }
+      : undefined;
+  return {
+    text: projected.text.length > 0 ? projected.text : (projected.measureText ?? ''),
+    extras: {
+      ...(projected.measureText !== undefined ? { measureText: projected.measureText } : {}),
+      ...(noteNav ? { noteNav } : {}),
+      ...(projected.noteSeparator ? { noteSeparator: projected.noteSeparator } : {}),
+    },
+  };
 }

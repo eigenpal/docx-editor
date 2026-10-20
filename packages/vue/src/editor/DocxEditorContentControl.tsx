@@ -1,4 +1,5 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useStableDocxId } from '../lib/stable-id';
 import { useTranslation } from '../i18n';
@@ -119,6 +120,8 @@ function typeLabelKey(type: ContentControlInspectorState['controlType']): string
       return 'contentControl.types.date';
     case 'picture':
       return 'contentControl.types.picture';
+    case 'buildingBlockGallery':
+      return 'contentControl.types.buildingBlockGallery';
     case 'repeatingSection':
       return 'contentControl.types.repeatingSection';
     case 'richText':
@@ -195,7 +198,7 @@ const ContentControlHeader = defineComponent({
           </button>
         </>
       );
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => content }}</Slot>;
       return <div {...shared}>{content}</div>;
     };
   },
@@ -271,7 +274,7 @@ const ContentControlFields = defineComponent({
         'data-testid': 'content-control-inspector-fields',
         style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' },
       };
-      if (props.asChild) return <Slot {...shared}>{fields}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => fields }}</Slot>;
       return <div {...shared}>{fields}</div>;
     };
   },
@@ -313,7 +316,7 @@ const ContentControlRemove = defineComponent({
           <span>{label}</span>
         </>
       );
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => content }}</Slot>;
       return <button {...shared}>{content}</button>;
     };
   },
@@ -344,14 +347,15 @@ const ContentControlRoot = defineComponent({
         };
         const onMouseDown = (event: MouseEvent): void => {
           const panel = panelRef.value;
-          if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+          if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
           chrome.closeInspector();
         };
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('mousedown', onMouseDown, true);
+        const doc = hostDocumentOf(panelRef.value);
+        doc.addEventListener('keydown', onKeyDown);
+        doc.addEventListener('mousedown', onMouseDown, true);
         onCleanup(() => {
-          document.removeEventListener('keydown', onKeyDown);
-          document.removeEventListener('mousedown', onMouseDown, true);
+          doc.removeEventListener('keydown', onKeyDown);
+          doc.removeEventListener('mousedown', onMouseDown, true);
         });
       }
     );
@@ -405,7 +409,7 @@ const ContentControlRoot = defineComponent({
         </>
       );
 
-      if (props.asChild) return <Slot {...shared}>{titled}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => titled }}</Slot>;
       return <div {...shared}>{titled}</div>;
     };
   },

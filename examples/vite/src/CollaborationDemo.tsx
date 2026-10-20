@@ -9,16 +9,16 @@ import {
   useCollaborationStatus,
 } from '@docx-editor.dev/pro/react';
 import type { CollaborationSession } from '@docx-editor.dev/pro/react';
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import {
   createCollaborationRoomId,
+  DEMO_SIGNALING_ENDPOINTS,
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
-import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
+import type { UseWebrtcCollaborationReturn } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
-const t = createT(en);
 const strings = {
   name: t('collaborationDemo.name'),
   room: t('collaborationDemo.room'),
@@ -181,7 +181,7 @@ export function CollaborationCaretLabelDemo({
 export interface CollaborationControlProps {
   readonly session: CollaborationSession | null;
   readonly pending: boolean;
-  readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  readonly connect: UseWebrtcCollaborationReturn['connect'];
   readonly leave: (nextDocument: Uint8Array) => void;
 }
 
@@ -248,7 +248,7 @@ export function CollaborationControl({
       // Passed explicitly rather than left for the engine to read off the address bar, so the
       // URL only changes once a room actually exists.
       const secret = kind === 'create' ? createRoomSecret() : roomSecretFrom(roomInput);
-      await connect({
+      const failure = await connect({
         roomId,
         identity: {
           actorId: `${displayName}:${crypto.randomUUID()}`,
@@ -259,8 +259,14 @@ export function CollaborationControl({
           kind === 'create'
             ? { kind: 'create', document: new Uint8Array(await editor.save()) }
             : { kind: 'join' },
+        // Demo only. Production rooms pass their own signaling URLs and TURN servers.
+        signaling: DEMO_SIGNALING_ENDPOINTS,
         ...(secret ? { password: secret } : {}),
       });
+      if (failure) {
+        setError(failure.detail ?? strings.connectFailed);
+        return;
+      }
       const url = new URL(location.href);
       url.search = '';
       url.searchParams.set('room', roomId);

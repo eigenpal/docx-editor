@@ -57,6 +57,7 @@ export abstract class ClientObject implements RuntimeManagedObject {
   readonly #path: ObjectPath;
   readonly #nullable: boolean;
   readonly #loaded = new Map<string, unknown>();
+  #loading = false;
 
   protected constructor(
     context: RequestContext,
@@ -99,13 +100,30 @@ export abstract class ClientObject implements RuntimeManagedObject {
    * readable after the next `sync()`, and reading before then is `PropertyNotLoaded`.
    */
   load(option?: LoadOption): this {
-    this.requireAddressable();
-    this.onLoad(resolveLoadOption(option, this.#path.label));
-    return this;
+    this.#loading = true;
+    try {
+      this.requireUsablePath();
+      const request = resolveLoadOption(option, this.#path.label);
+      // An `items/` path selects properties of a collection's members. Anything that is not a
+      // collection has no members, so the path names nothing this object can load.
+      const item = request.itemSelect[0];
+      if (item !== undefined && !this.loadsItemPaths) {
+        fail({ code: 'InvalidArgument', target: `${this.#path.label}.items/${item}` });
+      }
+      this.onLoad(request);
+      return this;
+    } finally {
+      this.#loading = false;
+    }
   }
 
   /** What this kind of object does with a resolved load request. */
   protected abstract onLoad(request: ResolvedLoadOptions): void;
+
+  /** @internal Whether `load(...)` accepts `items/<property>` paths. Only collections do. */
+  protected get loadsItemPaths(): boolean {
+    return false;
+  }
 
   /** @internal This object's address, or the placeholder standing in until a sync resolves it. */
   protected get path(): ObjectPath {
@@ -140,10 +158,23 @@ export abstract class ClientObject implements RuntimeManagedObject {
     this.#internals.assertUsable(this.#path.label);
   }
 
+  /** Permit queued read dependencies and optional scalar loads; refuse released proxies. */
+  protected requireUsablePath(): void {
+    if (this.#path.isReleased || (this.#path.isNull && !(this.#loading && this.#nullable)))
+      fail({ code: 'InvalidObjectPath', target: this.#path.label });
+    this.#internals.assertUsable(this.#path.label);
+  }
+
   /** @internal Add one action to the context's queue, to be planned at the next sync. */
   protected enqueue(action: QueuedAction): void {
-    this.requireAddressable();
-    this.#internals.queue.push(action);
+    this.requireUsablePath();
+    this.#internals.queue.push({
+      ...action,
+      dependencies: [...(action.dependencies ?? []), this.#path],
+      ...(this.#loading && this.#nullable && action.sort === 'read'
+        ? { nullableLoad: this.#path }
+        : {}),
+    });
   }
 
   /** @internal Read a property a completed `load` filled in; refuses if none did. */

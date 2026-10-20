@@ -29,9 +29,12 @@ import type { ReactNode } from 'react';
 // token scope and paint an unresolved, contrast-free ring. This emits `docx-editor` itself,
 // exactly as `DocxEditorViewport` does, so it looks right wherever it is composed.
 
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { useDocxEditor } from './context';
 import { useTranslation } from '../i18n';
+import { isDevelopment } from '../lib/is-development';
 import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
 
@@ -81,9 +84,22 @@ export interface DocxEditorLoadingProps {
   /** Inline styles for the loading container, as on `DocxEditor.Viewport`. */
   style?: CSSProperties;
   /**
-   * The loading screen. Omitted, a full-size document page with the packaged indicator
-   * and localized status is used. Compose your own around `DocxEditor.Loading.Spinner`
-   * to keep the packaged indicator beside your own copy.
+   * Your own loading indicator, in place of the packaged spinner. The packaged screen keeps
+   * its page and centers this on it. With `overlay`, it then moves below the laid-out pages
+   * while a large document lays out its remaining pages, and scrolls with them.
+   *
+   * Include text for screen readers, as the packaged indicator does.
+   *
+   * ```tsx
+   * <DocxEditor.Loading overlay indicator={<MyLogoSpinner label="Opening document" />} />
+   * ```
+   */
+  indicator?: DocxEditorChildren;
+  /**
+   * The whole first loading screen, in place of the packaged page. Compose your own around
+   * `DocxEditor.Loading.Spinner` to keep the packaged indicator beside your own copy. To
+   * change only the indicator, and keep it below the laid-out pages as the document opens,
+   * use `indicator`.
    */
   children?: DocxEditorChildren;
 }
@@ -113,16 +129,57 @@ export function DocxEditorLoadingSpinner({ className }: DocxEditorLoadingSpinner
   );
 }
 
+let warnedWithoutChrome = false;
+
+/** Warn once that `loadingIndicator` does nothing under `chrome={false}`, in development. */
+export function warnLoadingIndicatorWithoutChrome(): void {
+  if (warnedWithoutChrome || !isDevelopment()) return;
+  warnedWithoutChrome = true;
+  console.warn(
+    '[docx-editor] loadingIndicator is ignored with chrome={false}, which renders no loading ' +
+      'screen. Compose <DocxEditor.Loading overlay indicator={...} /> in a positioned box instead.'
+  );
+}
+
+/**
+ * The element below the laid-out pages that holds the indicator while a large document lays
+ * out its remaining pages, or null. Only the overlay registers: the packaged frame has one.
+ */
+function useOpeningIndicator(enabled: boolean): HTMLElement | null {
+  const editor = useDocxEditor();
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!editor || !enabled) return undefined;
+    editor.setOpeningIndicatorHost({ publish: setElement });
+    return () => {
+      editor.setOpeningIndicatorHost(null);
+      setElement(null);
+    };
+  }, [editor, enabled]);
+  return element;
+}
+
 function DocxEditorLoadingImpl({
   when = false,
   overlay = false,
   className,
   style,
+  indicator,
   children,
 }: DocxEditorLoadingProps) {
   const showLoading = useEditorState(selectShowLoading);
   const pageSize = useEditorState(selectLoadingPageSize, sameLoadingPageSize);
+  const below = useOpeningIndicator(overlay);
   const { t } = useTranslation();
+  const status = indicator ?? (
+    <>
+      <DocxEditorLoadingSpinner />
+      <span className="docx-editor-sr-only">{t('loading.label')}</span>
+    </>
+  );
+  // The first pages show and take input, so the opening state is over; the indicator moves
+  // below the laid-out pages until the last one is laid out.
+  if (below) return createPortal(status, below);
   if (!when && !showLoading) return null;
 
   const classes = `docx-editor docx-editor__loading${
@@ -137,10 +194,7 @@ function DocxEditorLoadingImpl({
         >
           <div className="docx-pages">
             <div className="docx-page docx-editor__loading-page">
-              <div className="docx-editor__loading-page-status">
-                <DocxEditorLoadingSpinner />
-                <span className="docx-editor-sr-only">{t('loading.label')}</span>
-              </div>
+              <div className="docx-editor__loading-page-status">{status}</div>
             </div>
           </div>
         </div>
@@ -179,7 +233,13 @@ export interface DocxEditorLoadingComponent {
  * It covers TWO windows. Before bytes arrive it is the empty-state screen. And while a
  * LARGE document opens — the engine mounts it behind one painted frame precisely so this
  * screen can paint before the blocking parse and layout — it holds until the pages land;
- * pass `overlay` to pin it over the previous document for that window. A parse failure
+ * pass `overlay` to pin it over the previous document for that window. With `overlay`, once
+ * the first pages show, the indicator moves below the laid-out pages until the rest are laid out.
+ * Pass `indicator` to replace only the spinner, in both places:
+ *
+ * ```tsx
+ * <DocxEditor.Loading overlay indicator={<MyLogoSpinner label="Opening document" />} />
+ * ``` A parse failure
  * clears both, so a broken document never spins forever; report that from
  * `snapshot().parseError` or the `error` event. Add `when` only for async the editor
  * cannot observe, typically a host that mounts the provider after its own fetch.

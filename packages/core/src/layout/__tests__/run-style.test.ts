@@ -9,6 +9,8 @@ import {
   withFontFamily,
 } from '../run-style.ts';
 import { styleForFontSlot } from '../script-itemization.ts';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { collectThemeSchemeFaces } from '../../store/package/theme-font-scheme.ts';
 
 const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
@@ -172,11 +174,20 @@ describe('the w:rFonts eastAsia slot resolves beside the Latin one', () => {
   test('an explicit w:eastAsia resolves without touching the Latin family', () => {
     const style = resolved({ eastAsia: 'SimSun' });
     expect(style.fontFamilyEastAsia).toBe('SimSun');
-    expect(style.fontFamily).toBeNull();
+    expect(style.fontFamily).toBe('Grandview');
   });
 
   test('a Latin-only rFonts leaves the eastAsia slot inherited', () => {
-    expect(resolved({ ascii: 'Arial' }).fontFamilyEastAsia).toBeNull();
+    expect(
+      resolveRunStyle(
+        [
+          { localName: 'rFonts', attributes: { eastAsia: 'Inherited CJK' } },
+          { localName: 'rFonts', attributes: { ascii: 'Arial' } },
+        ],
+        theme
+      ).fontFamilyEastAsia
+    ).toBe('Inherited CJK');
+    expect(resolved({ ascii: 'Arial' }).fontFamilyEastAsia).toBe('SimSun');
   });
 
   test('w:eastAsiaTheme resolves against the a:ea typefaces', () => {
@@ -288,5 +299,125 @@ describe('style equality drives span merging', () => {
 
   test('strike is not equal to double strike', () => {
     expect(runStylesEqual(resolve('strike'), resolve('dstrike'))).toBe(false);
+  });
+});
+
+// Probes e03, e06-e08, x07 and z01-z03 in local/evidence/hansi-font-slots: the run's
+// East Asian language never selects a theme face; the theme language does (e02, e09, x03).
+describe('empty East Asian theme faces follow the theme language, not the run language', () => {
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const root = (xml: string, name: string) => {
+    const parsed = readOoxmlPart(xml, { name, contentType: 'application/xml' });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    return parsed.part.root;
+  };
+  const theme = (supplemental = '') =>
+    root(
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="T">` +
+        `<a:majorFont><a:latin typeface="Cambria"/><a:ea typeface=""/>${supplemental}</a:majorFont>` +
+        `<a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/>${supplemental}</a:minorFont>` +
+        '</a:fontScheme></a:themeElements></a:theme>',
+      '/word/theme/theme1.xml'
+    );
+  const settings = (language: string) =>
+    root(
+      `<w:settings xmlns:w="${W}"><w:themeFontLang w:eastAsia="${language}"/></w:settings>`,
+      '/word/settings.xml'
+    );
+  const face = (fonts: ReturnType<typeof collectThemeSchemeFaces>, language: string) =>
+    resolveRunStyle(
+      [
+        {
+          localName: 'rFonts',
+          attributes: { asciiTheme: 'minorHAnsi', eastAsiaTheme: 'minorEastAsia' },
+        },
+        { localName: 'lang', attributes: { val: 'en-US', eastAsia: language } },
+      ],
+      fonts
+    );
+  test.each(['zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'en-US', ''])(
+    'a %s run takes the Simplified Chinese default',
+    (language) => {
+      const style = face(collectThemeSchemeFaces(theme()), language);
+      expect(style.fontFamilyEastAsia).toBe('SimSun');
+      expect(style.fontFamily).toBe('Calibri');
+    }
+  );
+  test.each([
+    ['zh-CN', 'SimSun'],
+    ['zh-TW', 'PMingLiU'],
+    ['ja-JP', 'MS Mincho'],
+    ['ko-KR', 'Batang'],
+  ])('a %s theme language selects %s', (language, family) => {
+    const fonts = collectThemeSchemeFaces(theme(), settings(language));
+    expect(face(fonts, 'en-US').fontFamilyEastAsia).toBe(family);
+  });
+  test('the Simplified Chinese supplemental face applies whatever the run language', () => {
+    const fonts = collectThemeSchemeFaces(
+      theme(
+        '<a:font script="Hans" typeface="Chinese Body"/><a:font script="Jpan" typeface="Japanese Body"/>'
+      )
+    );
+    expect(face(fonts, 'ja-JP').fontFamilyEastAsia).toBe('Chinese Body');
+  });
+  test('an empty slot replaces the explicit face beside its token (probe e04)', () => {
+    const style = resolveRunStyle(
+      [{ localName: 'rFonts', attributes: { eastAsiaTheme: 'minorEastAsia', eastAsia: 'Named' } }],
+      collectThemeSchemeFaces(theme())
+    );
+    expect(style.fontFamilyEastAsia).toBe('SimSun');
+  });
+});
+
+// Word 16 PDF output is the oracle for every expectation in this block.
+describe('complex-script runs use Word complex-script properties', () => {
+  const p = (localName: string, attributes?: Record<string, string>) =>
+    attributes ? { localName, attributes } : { localName };
+  const faces = [p('rFonts', { ascii: 'Courier New', hAnsi: 'Courier New', cs: 'Arial' })];
+
+  test('w:rtl selects the cs face, szCs, bCs, and iCs for the whole run', () => {
+    const style = resolveRunStyle([
+      ...faces,
+      p('sz', { val: '20' }),
+      p('szCs', { val: '40' }),
+      p('b'),
+      p('iCs'),
+      p('rtl'),
+    ]);
+    expect(style.fontFamily).toBe('Arial');
+    expect(style.fontSizePt).toBe(20);
+    expect(style.bold).toBe(false);
+    expect(style.italic).toBe(true);
+  });
+
+  test('w:cs forces the complex-script lane without a direction', () => {
+    const style = resolveRunStyle([...faces, p('bCs'), p('szCs', { val: '30' }), p('cs')]);
+    expect(style).toMatchObject({ fontFamily: 'Arial', fontSizePt: 15, bold: true });
+  });
+
+  test('a run without w:rtl or w:cs keeps the Latin properties', () => {
+    const style = resolveRunStyle([...faces, p('sz', { val: '40' }), p('szCs', { val: '16' })]);
+    expect(style.fontFamily).toBe('Courier New');
+    expect(style.fontSizePt).toBe(20);
+    expect(resolveRunStyle([...faces, p('rtl', { val: '0' }), p('bCs')]).bold).toBe(false);
+  });
+
+  test('unauthored complex-script values use Word defaults, not the Latin ones', () => {
+    const style = resolveRunStyle([
+      p('rFonts', { ascii: 'Courier New' }),
+      p('sz', { val: '40' }),
+      p('rtl'),
+    ]);
+    expect(style.fontFamily).toBe('Times New Roman');
+    expect(style.fontSizePt).toBe(10);
+  });
+
+  test('cstheme resolves through the theme bidi faces', () => {
+    const themed = [p('rFonts', { cstheme: 'minorBidi', cs: 'Arial' }), p('rtl')];
+    const theme = { major: null, minor: null };
+    expect(resolveRunStyle(themed, { ...theme, minorBidi: 'Tahoma' }).fontFamily).toBe('Tahoma');
+    // An empty theme face falls back to the explicit name beside it.
+    expect(resolveRunStyle(themed, { ...theme, minorBidi: '' }).fontFamily).toBe('Arial');
   });
 });

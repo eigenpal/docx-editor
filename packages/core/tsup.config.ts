@@ -182,13 +182,11 @@ export default defineConfig([
   {
     ...shared,
     format: ['esm'],
-    // Emit the package's one public declaration graph here. Every `types`
-    // condition in package.json points at these `.d.ts` files, independent of
-    // whether the consumer selects the ESM or CJS runtime. Asking the CJS build
-    // for declarations as well creates an unused parallel `.d.cts` graph and,
-    // because tsup evaluates this config array with Promise.all, nearly doubles
-    // peak declaration-build memory on constrained CI/preview builders.
-    dts: true,
+    // Declarations are not built by tsup. `scripts/build-core-declarations.mjs` emits
+    // them after this build, in a quarter of the memory tsup's declaration bundler
+    // needs. Every `types` condition in package.json points at that one graph,
+    // whichever runtime the consumer selects.
+    dts: false,
     clean: false,
     onSuccess: copyHarfBuzzBinary,
     // THE POINT OF THE SPLIT. Left external, harfbuzzjs reaches the consumer's bundler with
@@ -222,9 +220,8 @@ export default defineConfig([
   {
     ...shared,
     format: ['cjs'],
-    // Runtime-only: the ESM build above owns the declarations selected by the
-    // export map. Keep this explicit so a future refactor cannot accidentally
-    // restore two concurrent declaration bundlers.
+    // Runtime-only, like the ESM build above. Keep this explicit so a future refactor
+    // cannot restore a declaration bundler here.
     dts: false,
     clean: false,
     define: { __DOCX_HARFBUZZ_WASM_URL_SUPPORTED__: 'false' },

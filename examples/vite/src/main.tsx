@@ -9,7 +9,7 @@ const base = import.meta.env.BASE_URL;
 // What a visitor sees by default is the demo document built by `scripts/demo-doc/build.ts`
 // — the same content as the comprehensive fixture, rebranded and colour-tuned for public
 // viewing. It ships in this app's `public/`, so it is served without the fixture plugin.
-const DEFAULT_DOCUMENT = 'sample.docx';
+const DEFAULT_DOCUMENT = params.get('textboxes') === '1' ? 'textboxes.docx' : 'sample.docx';
 
 // `?fixture=<name>.docx` swaps in a fixture instead, served straight from `e2e/fixtures/`
 // by a vite plugin so the demo and the e2e suite read the SAME bytes. Sanitized to a bare
@@ -30,13 +30,23 @@ const container = document.getElementById('app');
 if (container) {
   const root = createRoot(container);
   void (async () => {
-    const View = treeHarness
-      ? (await import('./test-harness/TreeSurfaceHarness.tsx')).TreeSurfaceHarness
-      : performanceE2E
-        ? (await import('./test-harness/PerformanceE2EHarness.tsx')).PerformanceE2EHarness
-        : tableE2E
-          ? (await import('./test-harness/TableEditingE2EHarness.tsx')).TableEditingE2EHarness
-          : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
+    const View =
+      params.get('refresh') === '1'
+        ? (await import('./RefreshDemo')).RefreshDemo
+        : params.get('bulkReview') === '1'
+          ? (await import('./BulkReviewDemo')).BulkReviewDemo
+          : params.get('dialogs') === '1'
+            ? (await import('./DialogCustomizationDemo')).DialogCustomizationDemo
+            : params.get('popout') === '1'
+              ? (await import('./PopoutDemo')).PopoutDemo
+              : treeHarness
+                ? (await import('./test-harness/TreeSurfaceHarness.tsx')).TreeSurfaceHarness
+                : performanceE2E
+                  ? (await import('./test-harness/PerformanceE2EHarness.tsx')).PerformanceE2EHarness
+                  : tableE2E
+                    ? (await import('./test-harness/TableEditingE2EHarness.tsx'))
+                        .TableEditingE2EHarness
+                    : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
     root.render(
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <PreviewBanner />

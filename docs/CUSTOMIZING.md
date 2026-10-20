@@ -1,22 +1,17 @@
-# Customizing the editor
+# Customize the editor
 
-There are three ways to change how the editor looks and behaves, and they are meant to be
-tried in this order. Reaching for the next one is a signal that the previous one has a gap —
-if you find yourself at the bottom of this page, open an issue rather than living with it.
+Start with component props, then CSS tokens. Use custom composition when you need a different layout.
 
-`examples/igloo/` is a working demonstration of all three. `bun run dev:igloo`.
+Run `bun run dev:igloo` to explore all three approaches in the [Igloo example](../examples/igloo).
 
 ---
 
-## 1. Props on the parts
+## Customize component parts
 
-Every packaged control is a compound with the same contract: render it with no children and
-you get the default arrangement; a child that names one of its members **replaces that member
-in place**; `hidden` removes it; `preset={false}` starts from nothing; and there is a part for
-adding something the library does not model.
+Packaged compounds expose named parts. Render a compound without children to use its default arrangement. A named child replaces the corresponding part in place. Use `hidden` to remove a part and `preset={false}` to supply your own arrangement. The available parts depend on the component. In these snippets, `t` is the resolver returned by `useChromeTranslate()` inside your component.
 
 ```tsx
-<DocxEditor.Toolbar>
+<DocxEditor.Toolbar t={t}>
   {/* replaces the packaged Bold button, keeps everything else */}
   <DocxEditor.Toolbar.Bold icon={<MyBoldIcon />} />
   {/* your own action — no chrome slot, no engine wiring */}
@@ -24,17 +19,16 @@ adding something the library does not model.
 </DocxEditor.Toolbar>
 ```
 
-The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu` and
-`DocxEditor.Navigation`.
+The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu`, and `DocxEditor.Navigation`.
 
-### Prefer your own classes over styling ours
+Page Setup, Paragraph Options, and legacy text Field Options also expose named parts. Use the editor's `popups` configuration for automatically opened instances. See [Customize popups](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
 
-Every compound exposes its internals as statics, and every part takes a `className`. So
-instead of writing CSS against our class names, **compose the parts and hang your own class
-on each one**:
+### Add classes to parts
+
+Use the documented part statics and their `className` props to attach your own classes. For example:
 
 ```tsx
-<DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
+<DocxEditor.Navigation t={t} className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
   <DocxEditor.Navigation.Header className="my-nav__header">
     <DocxEditor.Navigation.Close className="my-nav__close" />
     <DocxEditor.Navigation.Title className="my-nav__title" />
@@ -45,45 +39,39 @@ on each one**:
 </DocxEditor.Navigation>
 ```
 
-The parts still do all the work — that headings list is still fed by the engine's outline.
-You have only taken ownership of the class names, which is the difference between customizing
-the API and working around it. A selector you wrote cannot break in a release; one of ours
-can.
+Parts retain their behavior when you supply classes. For example, `Headings` still reads the document outline. Prefer these public props to selectors that depend on internal markup.
 
-Where a sub-element is rendered outside `children` and so cannot be composed — the
-navigation toggle, which has to stay clickable while the panel is `inert` — the prop takes
-props: `toggle={{ className }}`. `menu` and `contextMenu` on `<DocxEditor>` accept
-`boolean | Props` the same way.
+Some elements render outside `children`. For example, the navigation toggle stays available while the panel is `inert`. Customize it with `toggle={{ className }}`. The root `menu`, `contextMenu`, and `navigation` props also accept either a boolean or a props object.
 
-**What you can pass**
+Use these props to customize parts:
 
 | Prop | Where | Notes |
 | --- | --- | --- |
-| `icon` | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls |
+| `icon` | toolbar parts, menu rows, menu triggers, color splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls |
 | `t` | any compound | Your i18n resolver. Without it the raw keys render, never English |
 | `preset={false}` | any compound | Renders your children verbatim, in your order |
 | `hidden` | any packaged part | Removes it from the default arrangement |
 | `className` | every part | Appended after the load-bearing classes |
 | `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row` | Host-owned actions |
 
-**Host actions still ask the engine.** A control the registry does not describe has no
-enabled state of its own — but you can borrow the engine's:
+For custom actions, use `useEditorCommand` to read whether the engine permits the command:
 
 ```tsx
-const { isEnabled, disabledReason } = useEditorCommand({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'cyan' });
+const { isEnabled, disabledReason } = useEditorCommand({
+  type: 'setMarkAttr',
+  mark: 'highlight',
+  attr: 'val',
+  value: 'cyan',
+});
 ```
 
-`useEditorCommand` takes a `ChromeSlotId` **or** a raw `EditorCommand`, so your own action
-greys out for the engine's reason rather than a guess of yours. Never invent a disabled
-reason; if the engine did not give you one, do not show one.
+`useEditorCommand` accepts a `ChromeSlotId` or an `EditorCommand`. Use the returned `isEnabled` and `disabledReason` values to explain command availability.
 
 ---
 
-## 2. Tokens
+## Set color tokens
 
-All chrome colour lives on CSS custom properties. Restating them under any scope re-themes
-everything inside it — toolbar, menu bar, panels, pickers, rulers, the navigation pane —
-without touching a single component.
+Editor controls use CSS custom properties for colors. Set these tokens on a wrapper to theme its toolbar, menus, panels, pickers, rulers, and navigation pane.
 
 ```css
 .my-editor {
@@ -93,9 +81,7 @@ without touching a single component.
 }
 ```
 
-Custom properties inherit, so **the scope is the override**. Narrow it to re-theme one
-region: Igloo makes its navigation pane transparent white-on-water with a token block on the
-pane alone, and nothing else in the app changes.
+Custom properties inherit. To theme one region, set the tokens on that region's wrapper.
 
 ### The palette
 
@@ -105,7 +91,7 @@ pane alone, and nothing else in the app changes.
 | `--doc-card` | Comment and suggestion cards |
 | `--doc-bg` | The workspace behind the page |
 | `--doc-bg-subtle`, `--doc-bg-input` | Section backgrounds, input fields |
-| `--doc-bg-hover` | Hover states — **and** the navigation toggle's resting plate |
+| `--doc-bg-hover` | Hover states and the navigation toggle background |
 | `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light` | Accent, selected states |
 | `--doc-accent`, `--doc-accent-bg` | Secondary accent |
 | `--doc-on-primary` | Text on an accent fill |
@@ -121,25 +107,18 @@ Dark mode is the same list re-declared under `.docx-editor.dark`.
 
 ### Two requirements
 
-- **`docx-editor` must be an ancestor** of any chrome you mount. `DocxEditor.Viewport` applies it
-  to itself; a toolbar or menu bar you place outside the viewport needs it on a wrapper, or
-  the whole Tailwind layer and every token silently resolve to nothing.
-- **Import the stylesheet**: `@import '@docx-editor.dev/core/styles/editor.css'`.
+- Place custom controls inside a `docx-editor` wrapper to apply scoped styles and theme tokens. Packaged components such as `DocxEditor.Toolbar` and `DocxEditor.Viewport` apply their own scope.
+- Import the stylesheet with `@import '@docx-editor.dev/core/styles/editor.css'`.
 
 ### What is deliberately not themeable
 
-**The document canvas.** Painter output stays Word-faithful — a page that matched your brand
-would be a lie about what the file contains. Theme the space *around* the page instead; Igloo
-puts the page on an iceberg rather than tinting it.
+The document canvas uses the file's formatting. Theme the surrounding editor UI without changing how document pages appear.
 
 ---
 
-## 3. Your own React
+## Compose a React layout
 
-Anything composes under `DocxEditor.Root`. The primitives are `Root` (owns the editor's
-lifetime), `Viewport` (the scroll container the engine discovers by class), and `Content` (the
-element it paints into). Everything else — your header, your panels, your art — is just
-children.
+Compose your layout under `DocxEditor.Root`, which manages the editor's lifetime. `Viewport` provides the scroll container, and `Content` provides the document surface. Add your header and panels as children.
 
 ```tsx
 <DocxEditor.Root document={bytes} fonts={fonts}>
@@ -151,31 +130,23 @@ children.
 </DocxEditor.Root>
 ```
 
-`Content`'s centring margin is defined behind `:where()`, so it carries no specificity: place
-the page yourself with a plain class, never `!important`.
+`Content`'s centering margin is defined behind `:where()`, so it carries no specificity: place the page yourself with a plain class, never `!important`.
 
-To read editor state, use `useEditorState(selector)`; to open a document,
-[`useDocxSource`](#opening-a-document).
+To read editor state, use `useEditorState(selector)`; to open a document, [`useDocxSource`](#open-a-document).
 
 ---
 
-## Two layout traps
+## Avoid layout conflicts
 
-Both cost real debugging time in Igloo, and both are ordinary CSS a host would write.
+`backdrop-filter` changes the containing block for `position: fixed` children. An element with `backdrop-filter` (or `filter`, or `transform`) becomes the containing block for every fixed descendant. A frosted header containing the menu bar makes the Page Setup dialog's `inset: 0` overlay resolve against the header, so the dialog centers inside a 120px strip. Put the effect on a `::before` pseudo-element instead.
 
-**`backdrop-filter` captures `position: fixed` children.** An element with
-`backdrop-filter` (or `filter`, or `transform`) becomes the containing block for every fixed
-descendant. A frosted header containing the menu bar makes the Page Setup dialog's
-`inset: 0` overlay resolve against the *header*, so the dialog centres inside a 120px strip.
-Put the effect on a `::before` pseudo-element instead.
-
-**`z-index` traps popovers.** A `z-index` on the wrapper around `Viewport` opens a stacking
-context that the context menu cannot escape, however high its own `z-index` goes. Use
-`position: relative` with an auto `z-index` where you can.
+A stacking context can constrain popovers. A `z-index` on the wrapper around `Viewport` opens a stacking context that the context menu cannot escape, however high its own `z-index` goes. Use `position: relative` with an auto `z-index` where you can.
 
 ---
 
-## Opening a document
+## Open a document
+
+Call `useDocxSource` inside your component to fetch document bytes and resolve fonts:
 
 ```tsx
 import { useDocxSource } from '@docx-editor.dev/react';
@@ -184,22 +155,14 @@ import { defaultFonts } from '@docx-editor.dev/fonts';
 const { document, fonts, error, isLoading } = useDocxSource(url, { fonts: defaultFonts });
 ```
 
-It fetches the bytes, resolves the fonts, composes them, and cancels both on unmount. It
-holds `document` back until fonts settle, because layout **measures** with them — releasing
-bytes first paginates the document on the fixed fallback and then re-paginates, which reads
-as the text jumping.
+With an eager font loader such as `defaultFonts`, the hook waits for fonts before exposing the document bytes. This avoids an initial layout with fallback measurements. On-demand resolvers such as `packagedFonts()` expose bytes immediately so the engine can discover the required fonts. The engine paginates again when those fonts load.
 
-Fonts are passed in rather than imported, so a host bringing its own faces does not ship the
-default font bytes. A font failure never fails the document: that family degrades to
-fixed-width measurement and `error` stays null.
+Fonts are passed in rather than imported, so a host bringing its own faces does not ship the default font bytes. A font failure never fails the document: that family degrades to fixed-width measurement and `error` stays null.
 
 ---
 
-## When none of this is enough
+## Request a customization API
 
-The `docx-*` class names are **implementation details**, not API. Styling them works until it
-does not, and nothing tells you when a release moves one.
+Internal `docx-*` classes can change between releases. Prefer documented props, parts, and tokens.
 
-If you need something the three layers above cannot express, that is a gap worth reporting —
-this page exists because building `examples/igloo/` found several, and each one became a prop
-or a token rather than a workaround.
+If the public API cannot express your layout, [open an issue](https://github.com/eigenpal/docx-editor/issues).

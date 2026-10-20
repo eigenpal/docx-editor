@@ -7,6 +7,7 @@ import {
   boundedStructuralFontValidator,
   createFontResourceSnapshot,
   createHarfBuzzTextShaper,
+  createShapedRun,
   createShapingEnvironment,
   harfBuzzFontValidator,
   initializeHarfBuzz,
@@ -176,6 +177,53 @@ describe('HarfBuzz production shaper', () => {
     outlined.dispose();
   });
 
+  test('keeps outline identities separate across faces and native face eviction', () => {
+    let calls = 0;
+    const outlined = createHarfBuzzTextShaper({
+      maxCachedFaces: 1,
+      instrumentation: { onOutlinePathCall: () => calls++ },
+    });
+    try {
+      const first = outlined.shape(input('A', regular)).glyphs[0]!.outline;
+      const other = outlined.shape(input('A', bold)).glyphs[0]!.outline;
+      const revisited = outlined.shape(input('AA', regular)).glyphs[0]!.outline;
+      expect(first).not.toBe(other);
+      expect(first.path).not.toBe(other.path);
+      expect(revisited).toBe(first);
+      expect(calls).toBe(2);
+    } finally {
+      outlined.dispose();
+    }
+  });
+
+  test('builds logical cluster ends for both directions with marks, ligatures, and context', () => {
+    for (const direction of ['ltr', 'rtl'] as const) {
+      for (const [text, script] of [
+        ['office a\u0301\u0323 😀', 'Latn'],
+        ['السَّلام عليكم', 'Arab'],
+        ['שָׁלוֹם', 'Hebr'],
+      ] as const) {
+        const run = shaper.shape({
+          ...input(text, regular, { direction, script }),
+          context: { before: 'a', after: 'b' },
+        });
+        const starts = [...new Set(run.glyphs.map((glyph) => glyph.cluster))].sort(
+          (left, right) => left - right
+        );
+        for (const cluster of run.clusters) {
+          expect(cluster.textEnd).toBe(
+            starts[starts.indexOf(cluster.textStart) + 1] ?? text.length
+          );
+          expect(
+            run.glyphs
+              .slice(cluster.glyphStart, cluster.glyphEnd)
+              .every((glyph) => glyph.cluster === cluster.textStart)
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   test('typed-rejects an outline beyond the hard per-outline admission budget', () => {
     const outlined = createHarfBuzzTextShaper({ maxOutlineBytes: 32 });
     expect(() => outlined.shape(input('A'))).toThrow(
@@ -210,6 +258,26 @@ describe('HarfBuzz production shaper', () => {
     expect(Math.max(...retained)).toBeLessThanOrEqual(4096);
     outlined.dispose();
     expect(retained.at(-1)).toBe(0);
+  });
+
+  test('rebuilds an evicted outline without retaining a stale face index entry', () => {
+    let calls = 0;
+    const outlined = createHarfBuzzTextShaper({
+      maxCachedOutlineBytes: 4096,
+      maxCachedShapes: 1,
+      instrumentation: { onOutlinePathCall: () => calls++ },
+    });
+    try {
+      const first = outlined.shape(input('A')).glyphs[0]!.outline;
+      outlined.shape(input('BCDEFGHIJKLMNOPQRSTUVWXYZ'));
+      const before = calls;
+      const next = outlined.shape(input('AA')).glyphs[0]!.outline;
+      expect(calls).toBe(before + 1);
+      expect(next).toEqual(first);
+      expect(next).not.toBe(first);
+    } finally {
+      outlined.dispose();
+    }
   });
 
   test('preserves UTF-16 combining-mark cluster provenance', () => {
@@ -296,9 +364,20 @@ describe('HarfBuzz production shaper', () => {
     );
   });
 
-  test('rejects color-font tables with a typed capability error', () => {
+  test('rejects a color font without outlines with a typed capability error', () => {
+    // Relabel the outline table as a bitmap strike table: color glyphs and nothing to draw
+    // them from.
     const colorBytes = regularBytes.slice();
-    colorBytes.set([0x43, 0x4f, 0x4c, 0x52], 12);
+    const count = (colorBytes[4]! << 8) | colorBytes[5]!;
+    let relabeled = false;
+    for (let index = 0; index < count; index++) {
+      const at = 12 + index * 16;
+      if (String.fromCharCode(...colorBytes.slice(at, at + 4)) === 'glyf') {
+        colorBytes.set([0x43, 0x42, 0x44, 0x54], at);
+        relabeled = true;
+      }
+    }
+    expect(relabeled).toBe(true);
     const colorFont = resolvedFixture(
       { family: 'Color Fixture', weight: 400, style: 'normal' },
       colorBytes
@@ -310,6 +389,23 @@ describe('HarfBuzz production shaper', () => {
         code: 'unsupportedColorFont',
       })
     );
+  });
+
+  test('a color font that also carries outlines shapes like any other', () => {
+    // A COLR-tagged copy of a face that keeps its glyf table: layers for a painter that has
+    // them, outlines for everyone else.
+    const colorBytes = regularBytes.slice();
+    const count = (colorBytes[4]! << 8) | colorBytes[5]!;
+    for (let index = 0; index < count; index++) {
+      const at = 12 + index * 16;
+      if (String.fromCharCode(...colorBytes.slice(at, at + 4)) === 'gasp')
+        colorBytes.set([0x43, 0x4f, 0x4c, 0x52], at);
+    }
+    const colorFont = resolvedFixture(
+      { family: 'Color Fixture', weight: 400, style: 'normal' },
+      colorBytes
+    );
+    expect(shaper.shape(input('A', colorFont)).glyphs.length).toBeGreaterThan(0);
   });
 
   test('rejects malformed and over-ceiling font bytes before shaping', () => {
@@ -356,6 +452,18 @@ describe('HarfBuzz production shaper', () => {
     for (const [mode, positive, negative] of cases) {
       expect(roundFontUnitToFixedPoint(5, 2, 1, mode)).toBe(positive);
       expect(roundFontUnitToFixedPoint(-5, 2, 1, mode)).toBe(negative);
+    }
+  });
+
+  test('a glyph-limit refusal leaves the shaper usable for a smaller run', () => {
+    const limited = createHarfBuzzTextShaper({ maxGlyphs: 1 });
+    try {
+      expect(() => limited.shape(input('AB'))).toThrow(
+        expect.objectContaining<HarfBuzzShapingError>({ code: 'glyphOverLimit', actual: 2 })
+      );
+      expect(limited.shape(input('A')).glyphs).toEqual(shaper.shape(input('A')).glyphs);
+    } finally {
+      limited.dispose();
     }
   });
 
@@ -495,7 +603,7 @@ describe('HarfBuzz production shaper', () => {
     expect(retained.at(-1)).toBe(0);
   });
 
-  test('many tiny shape entries include key and map overhead before cache admission', () => {
+  test('many tiny shape entries include key, wrapper and map overhead before cache admission', () => {
     const events: HarfBuzzShapeCacheEvent[] = [];
     let shapeCalls = 0;
     const bounded = createHarfBuzzTextShaper({
@@ -512,9 +620,10 @@ describe('HarfBuzz production shaper', () => {
     expect(events.filter(({ kind }) => kind === 'stored')).toHaveLength(32);
     expect(events.some(({ kind }) => kind === 'evicted')).toBe(true);
     expect(Math.max(...events.map(({ retainedBytes }) => retainedBytes))).toBeLessThanOrEqual(3500);
-    const callsBeforeSecondLast = shapeCalls;
-    bounded.shape(input('', regular, { language: 'en-x30' }));
-    expect(shapeCalls).toBe(callsBeforeSecondLast + 1);
+    // The byte budget holds fewer than 32 entries, so the oldest one was evicted.
+    const callsBeforeOldest = shapeCalls;
+    bounded.shape(input('', regular, { language: 'en-x0' }));
+    expect(shapeCalls).toBe(callsBeforeOldest + 1);
     bounded.dispose();
     expect(events.at(-1)).toMatchObject({ kind: 'cleared', retainedBytes: 0 });
   });
@@ -536,6 +645,9 @@ describe('HarfBuzz production shaper', () => {
       { maxCodepoints: Number.NaN },
       { maxGlyphs: Number.NEGATIVE_INFINITY },
       { maxCachedFaces: 1.5 },
+      { maxCachedFontBytes: 0 },
+      { maxCachedFontBytes: 0.5 },
+      { maxCachedFontBytes: 64 * 1024 * 1024 + 1 },
       { maxCachedShapes: Number.MAX_SAFE_INTEGER },
       { maxGlyphs: Number.MAX_SAFE_INTEGER },
       { maxOutlineBytes: Number.MAX_SAFE_INTEGER },
@@ -615,6 +727,74 @@ describe('HarfBuzz production shaper', () => {
       { kind: 'created', identity: bold.identity },
     ]);
     bounded.dispose();
+  });
+
+  test('font byte budget evicts even below the face-count limit without changing shaping', () => {
+    const events: HarfBuzzFaceCacheEvent[] = [];
+    const bounded = createHarfBuzzTextShaper({
+      maxCachedFaces: 32,
+      maxCachedFontBytes: regular.byteLength + bold.byteLength - 1,
+      instrumentation: { onFaceCacheEvent: (event) => events.push(event) },
+    });
+    const reference = createHarfBuzzTextShaper();
+    try {
+      for (const [text, font] of [
+        ['A', regular],
+        ['B', bold],
+        ['C', regular],
+      ] as const)
+        expect(bounded.shape(input(text, font))).toEqual(reference.shape(input(text, font)));
+      expect(events.filter((e) => e.kind === 'evicted').map((e) => e.identity)).toEqual([
+        regular.identity,
+        bold.identity,
+      ]);
+    } finally {
+      bounded.dispose();
+      reference.dispose();
+    }
+  });
+
+  test('a font larger than retention budget still shapes without being cached', () => {
+    const events: HarfBuzzFaceCacheEvent[] = [];
+    const bounded = createHarfBuzzTextShaper({
+      maxCachedFontBytes: 1,
+      instrumentation: { onFaceCacheEvent: (event) => events.push(event) },
+    });
+    try {
+      expect(bounded.shape(input('A', regular)).glyphs.length).toBeGreaterThan(0);
+      expect(bounded.shape(input('B', regular)).glyphs.length).toBeGreaterThan(0);
+      expect(events.map((e) => e.kind)).toEqual(['created', 'created']);
+    } finally {
+      bounded.dispose();
+    }
+  });
+
+  test('publishes the unrounded advance beside the rounded one', () => {
+    // 24 half-points at scale 64 over a 2048-unit em converts one font unit to 0.375
+    // fixed-point units, so DejaVu's 1253-unit 'o' is 469.875 and rounds to 470.
+    const run = shaper.shape(input('ooo'));
+    expect(run.glyphs.map((glyph) => glyph.advanceX)).toEqual([470, 470, 470]);
+    expect(run.exactAdvancesX).toEqual([469.875, 469.875, 469.875]);
+  });
+
+  test('the unrounded advances do not accumulate the drift the rounded origins do', () => {
+    const run = shaper.shape(input('o'.repeat(100)));
+    const last = run.glyphs[99]!;
+    const exact = run.exactAdvancesX!.slice(0, 99).reduce((sum, value) => sum + value, 0);
+
+    // The pen position `originX` sums advances already rounded UP by 0.125 each, so by the
+    // hundredth glyph it sits 12.375 fixed-point units — 0.193pt at this scale — past the
+    // position the same advances describe before rounding.
+    expect(last.originX).toBe(99 * 470);
+    expect(exact).toBeCloseTo(99 * 469.875, 9);
+    expect(last.originX - exact).toBeCloseTo(12.375, 9);
+  });
+
+  test('refuses exact advances that are not parallel to the glyphs', () => {
+    const run = shaper.shape(input('office'));
+    expect(() =>
+      createShapedRun({ ...run, exactAdvancesX: [1, 2] }, input('office').environment)
+    ).toThrow(RangeError);
   });
 
   test('releases owned HarfBuzz references and rejects use after disposal', () => {

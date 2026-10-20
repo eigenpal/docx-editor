@@ -1,9 +1,10 @@
+import type { MarkdownImageAsset, MarkdownProjectionOptions } from './media-types.ts';
 import type {
   ExportFontResolutionReport,
   OpenDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/export';
-import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
+import type { RevisionDisplayMode, FontShapingOptions } from '@docx-editor.dev/core/layout';
 import type {
   MarkdownComment,
   MarkdownReviewArtifact,
@@ -49,8 +50,30 @@ export interface MarkdownPaginationInfo {
   readonly displayMode: RevisionDisplayMode;
 }
 
+/** Content or resources that could not be represented fully. @public */
+export interface MarkdownWarning {
+  /** Stable code for filtering warnings without parsing messages. */
+  readonly code:
+    | 'omitted-drawing'
+    | 'omitted-textbox'
+    | 'font-origin-failed'
+    | 'incomplete-font'
+    | 'content-scan-limit'
+    | 'image-placement-fallback';
+  /** Human-readable description of the limitation. */
+  readonly message: string;
+  /** One-based page number, when the warning concerns a drawing occurrence. */
+  readonly pageNumber?: number;
+  /** Package part when the warning comes from source inspection. */
+  readonly partName?: string;
+}
+
 /** Full logical document plus page-scoped projections. @public */
 export interface MarkdownExportResult {
+  /** Unique extracted images; empty unless images are enabled. */
+  readonly media: readonly MarkdownImageAsset[];
+  /** Omitted content and font problems that may affect completeness or pagination. */
+  readonly warnings: readonly MarkdownWarning[];
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
   /**
@@ -76,6 +99,8 @@ export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrig
 
 /** Layout controls for a reusable Markdown export session. @public */
 export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExportOptions {
+  /** Explicit per-face shaping byte ceiling; defaults to 16 MiB. */
+  readonly fontShaping?: FontShapingOptions;
   /**
    * Retains incremental state for a live view or caller-measured session. Document-aware byte
    * sessions are immutable and reject `true` instead of silently ignoring it.
@@ -105,4 +130,5 @@ export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExp
 }
 
 /** Layout and resource controls for one-shot Markdown export. @public */
-export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {}
+export interface MarkdownExportOptions
+  extends OpenMarkdownDocumentForExportOptions, MarkdownProjectionOptions {}

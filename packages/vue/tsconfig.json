@@ -4,10 +4,11 @@
     // `paths` below, and they use ES2022 features (`Array.prototype.at`, `Error.cause`).
     // An ES2020 floor only appears to work: `@types/bun` pulls in `@types/node`, whose
     // `compatibility/indexable.d.ts` back-declares `.at` for older libs, so the gap hides
-    // until something type-checks without those ambient types — such as the dts build.
+    // until something type-checks without those ambient types.
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "jsx": "preserve",
     "jsxImportSource": "vue",
@@ -23,11 +24,12 @@
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     // Every published subpath, mapped to source and kept in step with `packages/core/tsconfig.json`.
     // Bun resolves test imports through these, and the export map points at `dist`, so a stale or
     // missing entry does not fall back — it fails to resolve on a tree that has never been built.
     "paths": {
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"],
+      "@docx-editor.dev/i18n/*": ["../i18n/src/*.ts"],
       "@docx-editor.dev/core": ["../core/src/index.ts"],
       "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
       "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],

@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/i18n",
-  "version": "2.14.1",
+  "version": "2.31.0",
   "description": "Shared UI locale strings and types for the @docx-editor.dev editor adapters (React and Vue).",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -22,6 +22,11 @@
       "import": "./dist/de.mjs",
       "require": "./dist/de.js"
     },
+    "./es": {
+      "types": "./dist/es.d.ts",
+      "import": "./dist/es.mjs",
+      "require": "./dist/es.js"
+    },
     "./fr": {
       "types": "./dist/fr.d.ts",
       "import": "./dist/fr.mjs",
@@ -42,6 +47,11 @@
       "import": "./dist/id.mjs",
       "require": "./dist/id.js"
     },
+    "./ja": {
+      "types": "./dist/ja.d.ts",
+      "import": "./dist/ja.mjs",
+      "require": "./dist/ja.js"
+    },
     "./pl": {
       "types": "./dist/pl.d.ts",
       "import": "./dist/pl.mjs",
@@ -51,6 +61,11 @@
       "types": "./dist/pt-BR.d.ts",
       "import": "./dist/pt-BR.mjs",
       "require": "./dist/pt-BR.js"
+    },
+    "./ru": {
+      "types": "./dist/ru.d.ts",
+      "import": "./dist/ru.mjs",
+      "require": "./dist/ru.js"
     },
     "./tr": {
       "types": "./dist/tr.d.ts",
@@ -72,13 +87,13 @@
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n"
   },
   "devDependencies": {
     "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

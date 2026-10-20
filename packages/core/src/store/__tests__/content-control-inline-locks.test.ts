@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import {
+  contentControlPropertiesOf,
   contentControlTextOf,
   contentControlsIn,
   paragraphOffsetIndex,
@@ -219,12 +220,13 @@ describe('the boundary is where the refusal starts and stops', () => {
     );
   });
 
-  // THE TWO EDGES ARE NOT THE SAME PLACE. The applier owns a boundary offset by the run that
-  // STARTS there, so content inserted at the leading edge lands in the control's first run and
-  // content inserted at the trailing edge lands in whatever follows the control. Validation has
-  // to say the same thing, or a locked field can be typed into from the front — the refusal
-  // would be looking at a rule the write does not follow.
-  describe('the leading edge belongs to the control and the trailing edge does not', () => {
+  // THE TWO EDGES ARE NOT THE SAME PLACE for a control that takes typing. The applier owns a
+  // boundary offset by the run that STARTS there, so content inserted at an unlocked control's
+  // leading edge lands in its first run, and content inserted at the trailing edge lands in
+  // whatever follows. A control that typing can never enter (content lock, data binding,
+  // checkbox, picture) is left at BOTH edges, because its first run is a place no keystroke can
+  // land. Validation reads the same landing, or a locked field could be typed into from the front.
+  describe('which side of a control edge an insertion lands on', () => {
     test('unlocked: text typed at the leading edge lands inside', () => {
       const part = inlineLocked('unlocked', 'abc', 'MID', 'xyz');
       const span = controlSpan(part);
@@ -250,14 +252,27 @@ describe('the boundary is where the refusal starts and stops', () => {
       expect(textOf(written)).toContain('MID#xyz');
     });
 
-    test('locked: the leading edge is refused, because that is where the text would go', () => {
-      const part = inlineLocked('sdtContentLocked', 'abc');
+    test('locked: text typed at the leading edge lands beside the control', () => {
+      const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
+      const span = controlSpan(part);
+      const written = applied(part, {
+        op: 'insertText',
+        paragraphId: firstParagraph(part).id,
+        offset: span.start,
+        text: '#',
+      });
+      expect(controlTextOf(written)).toBe('MID');
+      expect(textOf(written)).toContain('abc#MID');
+    });
+
+    test('locked: text typed one character inside the control is refused', () => {
+      const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
       const span = controlSpan(part);
       expect(
         refusal(part, {
           op: 'insertText',
           paragraphId: firstParagraph(part).id,
-          offset: span.start,
+          offset: span.start + 1,
           text: '#',
         })
       ).toBe('locked');
@@ -277,23 +292,29 @@ describe('the boundary is where the refusal starts and stops', () => {
 
     // Every op that writes content at an offset lands in the same place, so every one of them
     // meets the same edge rule.
-    test('a tab, a line break and a page break are refused at the leading edge too', () => {
-      const span = controlSpan(inlineLocked('sdtContentLocked', 'abc'));
+    test('a tab, a line break and a page break at the leading edge land beside it too', () => {
       for (const build of [
-        (paragraphId: string): TreeDocOp => ({ op: 'insertTab', paragraphId, offset: span.start }),
-        (paragraphId: string): TreeDocOp => ({
+        (paragraphId: string, offset: number): TreeDocOp => ({
+          op: 'insertTab',
+          paragraphId,
+          offset,
+        }),
+        (paragraphId: string, offset: number): TreeDocOp => ({
           op: 'insertHardBreak',
           paragraphId,
-          offset: span.start,
+          offset,
         }),
-        (paragraphId: string): TreeDocOp => ({
+        (paragraphId: string, offset: number): TreeDocOp => ({
           op: 'insertPageBreak',
           paragraphId,
-          offset: span.start,
+          offset,
         }),
       ]) {
-        const part = inlineLocked('sdtContentLocked', 'abc');
-        expect(refusal(part, build(firstParagraph(part).id))).toBe('locked');
+        const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
+        const span = controlSpan(part);
+        const paragraphId = firstParagraph(part).id;
+        expect(controlTextOf(applied(part, build(paragraphId, span.start)))).toBe('MID');
+        expect(refusal(part, build(paragraphId, span.start + 1))).toBe('locked');
       }
     });
 
@@ -322,7 +343,7 @@ describe('the boundary is where the refusal starts and stops', () => {
       ).toBeNull();
     });
 
-    test('a nested control’s leading edge is the outer control’s too', () => {
+    test('a nested control’s leading edge lands beside the locked outer control', () => {
       const part = parseDoc(
         `<w:p><w:r><w:t>a</w:t></w:r>` +
           `<w:sdt><w:sdtPr><w:tag w:val="outer"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
@@ -330,15 +351,13 @@ describe('the boundary is where the refusal starts and stops', () => {
           `<w:sdtContent><w:r><w:t>deep</w:t></w:r></w:sdtContent></w:sdt></w:sdtContent></w:sdt>` +
           `<w:r><w:t>z</w:t></w:r></w:p>`
       );
-      // Both controls start at offset 1, so the leading edge is inside both of them.
-      expect(
-        refusal(part, {
-          op: 'insertText',
-          paragraphId: firstParagraph(part).id,
-          offset: 1,
-          text: '#',
-        })
-      ).toBe('locked');
+      // Both controls start at offset 1. The outer lock covers the inner control, so the text
+      // leaves both of them; one character further in, the outer lock refuses it.
+      const paragraphId = firstParagraph(part).id;
+      const written = applied(part, { op: 'insertText', paragraphId, offset: 1, text: '#' });
+      expect(textOf(written)).toBe('a#deepz');
+      expect(controlTextOf(written)).toBe('deep');
+      expect(refusal(part, { op: 'insertText', paragraphId, offset: 2, text: '#' })).toBe('locked');
     });
   });
 
@@ -437,20 +456,137 @@ describe('the paragraph an inline control sits in is still structural', () => {
     expect(refusal(part, { op: 'deleteBlock', blockId: firstParagraph(part).id })).toBe('locked');
   });
 
-  test('joining two paragraphs is refused when either holds locked content', () => {
+  test('joining two paragraphs moves a locked inline control whole', () => {
+    // The join edits neither control: each one moves intact and keeps what it holds.
+    for (const lock of ['contentLocked', 'sdtLocked', 'sdtContentLocked']) {
+      const control = (tag: string) =>
+        `<w:sdt><w:sdtPr><w:tag w:val="${tag}"/><w:lock w:val="${lock}"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>LOCKED</w:t></w:r></w:sdtContent></w:sdt>`;
+      const part = parseDoc(
+        `<w:p><w:r><w:t>first</w:t></w:r>${control('a')}</w:p>` + `<w:p>${control('b')}</w:p>`
+      );
+      const body = bodyStoryRoot(part);
+      const found = body ? storyParagraphs(body) : [];
+      const op: TreeDocOp = { op: 'joinParagraphs', firstId: found[0]!.id, secondId: found[1]!.id };
+      expect(refusal(part, op)).toBeNull();
+      const result = applyTreeOp(part, op);
+      expect(result.ok).toBe(true);
+    }
+  });
+
+  test('joining paragraphs inside a contentLocked block control is still refused', () => {
     const part = parseDoc(
-      `<w:p><w:r><w:t>first</w:t></w:r></w:p>` +
-        `<w:p><w:sdt><w:sdtPr><w:tag w:val="f"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
-        `<w:sdtContent><w:r><w:t>LOCKED</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+      `<w:sdt><w:sdtPr><w:tag w:val="block"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+        `<w:sdtContent><w:p><w:r><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p>` +
+        `</w:sdtContent></w:sdt>`
     );
     const body = bodyStoryRoot(part);
     const found = body ? storyParagraphs(body) : [];
     expect(
+      refusal(part, { op: 'joinParagraphs', firstId: found[0]!.id, secondId: found[1]!.id })
+    ).toBe('locked');
+  });
+});
+
+describe('removing a control nested in another', () => {
+  const sdt = (tag: string, lock: string, inner: string) =>
+    `<w:sdt><w:sdtPr><w:tag w:val="${tag}"/>${lock === 'none' ? '' : `<w:lock w:val="${lock}"/>`}</w:sdtPr>` +
+    `<w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+  const text = (value: string) => `<w:r><w:t>${value}</w:t></w:r>`;
+  const controlId = (part: OoxmlPart, tag: string) =>
+    contentControlsIn(part.root).find(
+      (entry) => contentControlPropertiesOf(entry.node).tag === tag
+    )!.node.id;
+
+  for (const [name, lock] of [
+    ['an unlocked', 'none'],
+    ['a contentLocked', 'contentLocked'],
+  ] as const) {
+    test(`${name} control inside an inline contentLocked control is refused`, () => {
+      const part = parseDoc(
+        `<w:p>${text('pre')}${sdt('outer', 'contentLocked', text('a') + sdt('inner', lock, text('b')))}</w:p>`
+      );
+      for (const keepContent of [false, true, undefined]) {
+        expect(
+          refusal(part, {
+            op: 'removeContentControl',
+            controlId: controlId(part, 'inner'),
+            keepContent,
+          })
+        ).toBe('locked');
+      }
+    });
+
+    test(`${name} control inside a block contentLocked control is refused`, () => {
+      const part = parseDoc(
+        sdt('outer', 'contentLocked', `<w:p>${text('a')}${sdt('inner', lock, text('b'))}</w:p>`)
+      );
+      expect(
+        refusal(part, {
+          op: 'removeContentControl',
+          controlId: controlId(part, 'inner'),
+          keepContent: false,
+        })
+      ).toBe('locked');
+    });
+  }
+
+  test('a contentLocked control that holds another contentLocked control can be removed', () => {
+    const part = parseDoc(
+      `<w:p>${text('pre')}${sdt('outer', 'contentLocked', text('a') + sdt('inner', 'contentLocked', text('b')))}</w:p>`
+    );
+    const after = applied(part, {
+      op: 'removeContentControl',
+      controlId: controlId(part, 'outer'),
+      keepContent: false,
+    });
+    expect(contentControlsIn(after.root)).toHaveLength(0);
+  });
+
+  test('a contentLocked control that holds an sdtLocked control is refused', () => {
+    const part = parseDoc(
+      `<w:p>${sdt('outer', 'contentLocked', sdt('inner', 'sdtLocked', text('b')))}</w:p>`
+    );
+    expect(
       refusal(part, {
-        op: 'joinParagraphs',
-        firstId: found[0]!.id,
-        secondId: found[1]!.id,
+        op: 'removeContentControl',
+        controlId: controlId(part, 'outer'),
+        keepContent: false,
       })
     ).toBe('locked');
+  });
+});
+
+describe('a review decision that removes a whole locked control', () => {
+  const inserted = (lock: string) =>
+    parseDoc(
+      `<w:p><w:r><w:t>a</w:t></w:r>` +
+        `<w:ins w:id="1" w:author="X" w:date="2026-01-01T00:00:00Z">` +
+        `<w:sdt><w:sdtPr><w:tag w:val="f"/><w:lock w:val="${lock}"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>LOCKED</w:t></w:r></w:sdtContent></w:sdt></w:ins></w:p>`
+    );
+  const reject: TreeDocOp = {
+    op: 'rejectRevision',
+    revision: { id: '1', author: 'X', date: '2026-01-01T00:00:00Z' },
+  };
+
+  test('rejecting an insertion that wraps a contentLocked control removes it', () => {
+    const after = applied(inserted('contentLocked'), reject);
+    expect(contentControlsIn(after.root)).toHaveLength(0);
+  });
+
+  test('rejecting an insertion that wraps an sdtLocked control is refused', () => {
+    expect(refusal(inserted('sdtLocked'), reject)).toBe('locked');
+    expect(refusal(inserted('sdtContentLocked'), reject)).toBe('locked');
+  });
+
+  test('rejecting an insertion inside a contentLocked control is still refused', () => {
+    const part = parseDoc(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="f"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>a</w:t></w:r>` +
+        `<w:ins w:id="1" w:author="X" w:date="2026-01-01T00:00:00Z"><w:r><w:t>b</w:t></w:r></w:ins>` +
+        `</w:sdtContent></w:sdt></w:p>`
+    );
+    expect(refusal(part, reject)).toBe('locked');
   });
 });

@@ -1,3 +1,16 @@
+import { isInsertableText } from './tree-op-inline-elements.ts';
+import { validateSetLegacyDropdown } from './legacy-dropdown-fields.ts';
+import { validateBookmarkOp } from './tree-op-bookmarks.ts';
+import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
+import { validateSetFieldCode } from './tree-op-field-code.ts';
+import { validateTableAuthoring } from './tree-op-table-batch.ts';
+import { validateTableProperties } from './tree-op-table-authoring.ts';
+import { validateCommitTextFormField } from './tree-op-field-results.ts';
+import { textFormFieldForEdit } from './text-form-fields.ts';
+import { coveredTextFormDefinitionRefusal } from './text-form-field-deletion.ts';
+import { validateTextFormFieldDefault } from './tree-op-field-results.ts';
+import { validateSetLegacyCheckbox } from './legacy-checkbox-fields.ts';
+import { validateInsertBuildingBlock } from './building-block-insert.ts';
 // Pre-application validation for tree ops (tree-ops seam).
 //
 // `validateTreeOp` runs BEFORE any tree work so a rejected op leaves the tree, revision
@@ -6,27 +19,34 @@
 // Application lives in tree-op-apply.ts; public entry is tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { findNode } from '../package/ooxml-edit.ts';
+import { findNode, type EditOptions } from '../package/ooxml-edit.ts';
+import { restylePassesContentLock } from './content-lock-policy.ts';
 import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
+import { validateSetRevisionAttribution } from './revision-author-change.ts';
 import {
+  CONTENT_CONTROL_LOCKS,
+  validateInsertContentControl,
   deleteBlockTouchesContentRestriction,
   holds,
   rejectContentEdit,
   nodeTouchesContentRestriction,
   validateRemoveContentControl,
+  controlsStruckWhole,
+  enclosingContentLockRefusal,
   validateSetContentControlValue,
 } from './tree-op-validate-controls.ts';
 import {
-  INSERTABLE_CONTENT_CONTROL_TYPES,
   contentControlBindingRefusal,
   contentControlLockRefusal,
   isWritableContentControlMetadata,
 } from './tree-op-content-controls.ts';
 import {
+  contentControlContentOf,
+  contentControlValueTypeOf,
   effectiveContentLockAt,
   effectiveLockOf,
   innermostContentControlAround,
@@ -34,6 +54,18 @@ import {
   isTemporaryControl,
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
+import { checkboxContentWritable, isInlineControl } from './content-control-checkbox.ts';
+import { valueContentWritable } from './content-control-value-content.ts';
+
+/** Control types whose value is display text, so a text-like write lands in their content. */
+const TEXT_VALUE_TYPES: ReadonlySet<ReturnType<typeof contentControlValueTypeOf>> = new Set([
+  'text',
+  'richText',
+  'other',
+  'dropdown',
+  'combo',
+  'date',
+]);
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import {
   validateTableRowOp,
@@ -41,6 +73,9 @@ import {
   validateTableResizeOp,
   validateTableCellPropertyOp,
 } from './tree-op-tables.ts';
+import { validateMergeTableCells } from './tree-op-table-merge.ts';
+import { validateSplitTableCell } from './tree-op-table-split.ts';
+import { addressesMergedColumns, validateMergedColumnOp } from './tree-op-table-merged-columns.ts';
 import {
   bodyNodeOf,
   governingSectionOwnerId,
@@ -55,7 +90,6 @@ import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { validateInsertFragment } from './tree-op-fragment.ts';
 import {
-  indivisibleAt,
   isParagraph,
   paragraphLength,
   paragraphOffsetIndex,
@@ -81,12 +115,6 @@ import {
 } from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
-const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
-  'unlocked',
-  'sdtLocked',
-  'contentLocked',
-  'sdtContentLocked',
-]);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
 
 function validateProperties(
@@ -201,7 +229,7 @@ function validateHyperlinkTarget(op: {
  * covers the whole of a paragraph it holds, an inline one covers its own offsets, and "any offset
  * in an enclosed paragraph is fine" was a rule only one of them was ever checked against.
  */
-function namedOwnerRefusal(
+export function namedOwnerRefusal(
   part: OoxmlPart,
   paragraphId: string,
   offset: number,
@@ -226,9 +254,23 @@ function namedOwnerRefusal(
 }
 
 /** Structural validation, run before any tree work so a rejection changes nothing. */
-export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
+export function validateTreeOp(
+  part: OoxmlPart,
+  op: TreeDocOp,
+  options?: Pick<EditOptions, 'contentLockPolicy'>
+): TreeOpRejection | null {
+  const policy = options?.contentLockPolicy;
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
-  if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    op.textFormFieldId !== undefined &&
+    !textFormFieldForEdit(part, op)
+  )
+    return 'invalidArgs';
+  if (isDrawingTreeDocOp(op)) {
+    const drawingRefusal = validateDrawingOp(part, op);
+    if (drawingRefusal) return drawingRefusal;
+  }
   if (op.op === 'replaceStoryBlocks') {
     return validateReplaceStoryBlocks(part, op.storyRootId, op.paragraphs);
   }
@@ -242,7 +284,11 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (owner) return owner;
   }
 
-  if (op.op !== 'deleteBlock') {
+  // OPT-IN: restyling does not rewrite what a control SAYS, so a host that protects the words and
+  // not their look lets it past the content half of the lock. Neither op it covers removes a
+  // control, so the removal half has nothing to ask; `w:dataBinding` still refuses below.
+  const restylePasses = restylePassesContentLock(op, policy);
+  if (op.op !== 'deleteBlock' && !restylePasses) {
     const lockRefusal = contentControlLockRefusal(part, op);
     if (lockRefusal) return lockRefusal;
   }
@@ -252,6 +298,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   // so every content mutation meets it, not only the value write that names the control.
   const bindingRefusal = contentControlBindingRefusal(part, op);
   if (bindingRefusal) return bindingRefusal;
+  if (isDrawingTreeDocOp(op)) return null;
 
   if (
     op.op === 'setContentControlProperties' ||
@@ -261,6 +308,20 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     const control = findNode(part, op.controlId);
     if (!control) return 'unknown-content-control';
     if (control.kind !== 'contentControl') return 'not-a-content-control';
+    // After the type question, which the applier answers with `typeMismatch`: only a checkbox
+    // control's content shape decides whether a checkbox value can be written in place.
+    // Only after the type question, which the applier answers with `typeMismatch`: the content
+    // shape decides whether a value the control's type accepts can be written in place.
+    if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
+      const type = contentControlValueTypeOf(control);
+      const inline = isInlineControl(part, control.id);
+      const content = contentControlContentOf(control);
+      const writable =
+        op.value.kind === 'checkbox'
+          ? type !== 'checkbox' || checkboxContentWritable(content, inline)
+          : !TEXT_VALUE_TYPES.has(type) || valueContentWritable(content, inline);
+      if (!writable) return 'unsupported';
+    }
     if (op.op === 'setContentControlProperties') {
       if (op.tag === undefined && op.alias === undefined && op.lock === undefined) {
         return 'invalidArgs';
@@ -270,37 +331,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       }
       if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
     }
+    if (op.op === 'removeContentControl') return enclosingContentLockRefusal(part, control.id);
     return null;
   }
-  if (op.op === 'insertContentControl') {
-    if (!INSERTABLE_CONTENT_CONTROL_TYPES.includes(op.type)) return 'invalidArgs';
-    for (const value of [op.tag, op.alias]) {
-      if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
-    }
-    if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
-    if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
-    const paragraph = findNode(part, op.paragraphId);
-    if (!paragraph) return 'unknown-paragraph';
-    if (!isParagraph(paragraph)) return 'not-a-paragraph';
-    if (op.start < 0 || op.end > paragraphLength(paragraph) || op.start > op.end) {
-      return 'invalid-range';
-    }
-    if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
-      return 'splits-surrogate-pair';
-    }
-    // BOTH EDGES, and here rather than in the applier: a control is a sibling of runs, so an
-    // edge strictly inside a hyperlink, an inline control or an atomic field is not a place one
-    // can start or stop. The applier refused these too, but only after `can` had already told a
-    // caller the command was live — a disabled button that runs, or an enabled one that fails.
-    if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
-      return 'indivisible-content';
-    }
-    // The same restriction check every other range op runs: a locked or bound control the span
-    // touches, and forms protection. The applier answered it, so the write was refused — but
-    // only after `can` had already told chrome the command was live, on exactly the document
-    // class this verb is for.
-    return rejectContentEdit(part, paragraph, op.start, op.end);
-  }
+  if (op.op === 'insertContentControl') return validateInsertContentControl(part, op);
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
@@ -341,7 +375,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||
     op.op === 'convertAllNotes' ||
-    op.op === 'setNoteProperties'
+    op.op === 'setNoteProperties' ||
+    op.op === 'setDocumentProtection' ||
+    op.op === 'setWatermark'
   ) {
     return 'invalidArgs';
   }
@@ -376,6 +412,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (op.op === 'rewriteTocPageNumbers') {
     return validateRewriteTocPageNumbers(part, op);
   }
+  if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
+  if (op.op === 'setFieldCode') return validateSetFieldCode(part, op);
+  if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
+  if (op.op === 'setLegacyDropdown') return validateSetLegacyDropdown(part, op);
+  if (op.op === 'setLegacyCheckbox') return validateSetLegacyCheckbox(part, op);
+  if (op.op === 'insertBuildingBlock') return validateInsertBuildingBlock(part, op);
+  if (op.op === 'insertBookmark' || op.op === 'deleteBookmark') return validateBookmarkOp(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);
   }
@@ -434,7 +477,12 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       const right = op.marginRightTwips ?? current.rightTwips;
       const bottom = op.marginBottomTwips ?? current.bottomTwips;
       const left = op.marginLeftTwips ?? current.leftTwips;
-      if (widthTwips - left - current.gutterTwips - right <= 0 || heightTwips - top - bottom <= 0) {
+      // A kept authored negative top/bottom is an exact inset of its size, as the read side
+      // resolves it, so the vertical test reads the magnitudes.
+      if (
+        widthTwips - left - current.gutterTwips - right <= 0 ||
+        heightTwips - Math.abs(top) - Math.abs(bottom) <= 0
+      ) {
         return 'invalid-property-value';
       }
     }
@@ -449,9 +497,15 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     return validateDeleteBlock(part, op.blockId);
   }
+  if (op.op === 'authorTable') return validateTableAuthoring(part, op);
+  if (op.op === 'setTableProperties') return validateTableProperties(part, op);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow') return validateTableRowOp(part, op);
-  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn') {
+    if (addressesMergedColumns(part, op)) return validateMergedColumnOp(part, op);
     return validateTableColumnOp(part, op);
+  }
+  if (op.op === 'mergeTableCells') return validateMergeTableCells(part, op);
+  if (op.op === 'splitTableCell') return validateSplitTableCell(part, op);
   if (
     op.op === 'setTableColumnWidths' ||
     op.op === 'setTableRightEdgeWidth' ||
@@ -497,6 +551,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     {
       const restriction = nodeTouchesContentRestriction(part, op.linkId);
       if (restriction) return restriction;
+    }
+    if (op.range !== undefined) {
+      const rejection = validateHyperlinkRange(part, op.linkId, op.range);
+      if (rejection) return rejection;
     }
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
     return null;
@@ -558,10 +616,19 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // arbitrary subtree would invent public mutation semantics no caller has agreed to.
       if (scopedRevisionRoot(part, op.scopeRootId) === null) return 'invalid-property-value';
     }
+    if (
+      op.siteNodeIds !== undefined &&
+      (!Array.isArray(op.siteNodeIds) ||
+        op.siteNodeIds.length === 0 ||
+        op.siteNodeIds.length > 50_000 ||
+        op.siteNodeIds.some((id) => typeof id !== 'string' || id.length === 0))
+    )
+      return 'invalid-property-value';
     // Presence and resolvability are decided by the same walk that applies the op, so they
     // are checked there rather than duplicated into a second traversal that could disagree.
     return null;
   }
+  if (op.op === 'setRevisionAttribution') return validateSetRevisionAttribution(op);
 
   const paragraph = findNode(part, op.paragraphId);
   if (!paragraph) return 'unknown-paragraph';
@@ -573,15 +640,18 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
-      if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
+      // U+001E and U+001F insert hyphen elements, which is how a text read reports them.
+      if (typeof op.text !== 'string' || !isInsertableText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
       // A named automation insertion was already resolved against that owner's exact landing
       // site above. Re-resolving the raw caret with editor boundary bias can select a sibling.
       if (op.inside !== undefined) return null;
-      return rejectContentEdit(part, paragraph, op.offset, op.offset, op.bias);
+      return rejectContentEdit(part, paragraph, op.offset, op.offset, { bias: op.bias });
     }
     case 'setListLevel': {
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+        return 'invalid-property-value';
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
@@ -616,7 +686,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'invalid-property-value';
       }
       if (isBoundAt(part, op.paragraphId)) return 'bound';
-      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      if (!restylePasses && effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     case 'setParagraphTabStops': {
       // Bounded here because nothing downstream is: `w:pos` is a layout dimension, and a
@@ -671,6 +741,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return null;
     }
     case 'setListNumbering': {
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+        return 'invalid-property-value';
       const level = op.level ?? 0;
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
       // A numId is file-addressable and becomes an attribute value: digits only.
@@ -757,7 +829,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'splits-surrogate-pair';
       }
       if (rangePartiallyOverlapsDrawing(paragraph, op.start, op.end)) return 'invalid-range';
-      return rejectContentEdit(part, paragraph, op.start, op.end);
+      if (!op.revision) {
+        const refusal = coveredTextFormDefinitionRefusal(part, paragraph, op.start, op.end);
+        if (refusal) return refusal;
+      }
+      const struck = op.revision && controlsStruckWhole(part, paragraph, op.start, op.end);
+      return rejectContentEdit(part, paragraph, op.start, op.end, {
+        struckWhole: struck || undefined,
+      });
     }
     case 'setRunProperties': {
       if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
@@ -770,7 +849,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
-      return rejectContentEdit(part, paragraph, op.start, op.end);
+      return rejectContentEdit(part, paragraph, op.start, op.end, { restyle: restylePasses });
     }
     case 'setParagraphProperties': {
       const propertiesRejection = validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
@@ -798,6 +877,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'invalid-property-value';
       }
       if (op.dataBinding !== undefined && !isAuthorableDataBinding(op.dataBinding)) {
+        return 'invalid-property-value';
+      }
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
       return null;

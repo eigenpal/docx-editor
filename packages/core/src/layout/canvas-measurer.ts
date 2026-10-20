@@ -1,3 +1,4 @@
+import { isRunKerningEnabled } from './run-kerning.ts';
 // Browser/canvas-backed text measurement for the semantic layout lane.
 //
 // Layout itself stays DOM-free: this module is an optional adapter of the `TextMeasurer`
@@ -47,8 +48,10 @@
 // is why the face box alone wanders at small sizes.
 
 import type { TextMeasurer } from './semantic-records.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { createFixedMeasurer } from './fixed-measurer.ts';
+import { segmentGraphemes } from './grapheme.ts';
+import { fontFamilyClassFromName } from '../store/package/font-family-class.ts';
 
 /**
  * The stack used when a run names no font (or names one the sink refuses).
@@ -59,6 +62,27 @@ import { createFixedMeasurer } from './fixed-measurer.ts';
  */
 export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sans-serif';
 
+const SERIF_FALLBACK_STACK = '"Times New Roman", "Liberation Serif", Tinos, serif';
+const MONO_FALLBACK_STACK = '"Courier New", "Liberation Mono", Cousine, monospace';
+
+/**
+ * The stack a declared family falls through to when no face for it is installed: one of the
+ * family's own class when its name states one ("… Serif", "… Mono"), else `base`. A missing
+ * serif family set in the sans-serif default changed the look of every line it drew. Paint
+ * and the canvas measurer both build their stack here, so they keep falling back to the same
+ * face. The class decides alone, not `base`: paint never sees a host's own base, so a
+ * classed family taking that base in one path and the class stack in the other would draw
+ * with a face the layout did not measure.
+ */
+export function fallbackStackForFamily(
+  family: string | null,
+  base: string = DEFAULT_CANVAS_FONT_STACK
+): string {
+  if (!family) return base;
+  const kind = fontFamilyClassFromName(family);
+  return kind === 'serif' ? SERIF_FALLBACK_STACK : kind === 'mono' ? MONO_FALLBACK_STACK : base;
+}
+
 /**
  * Declared family (case-folded) → the METRIC-COMPATIBLE face this stack falls through to
  * when the declared one is not installed.
@@ -68,7 +92,7 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
  * `Times New Roman` is measured against `"Times New Roman", ${DEFAULT_CANVAS_FONT_STACK}`,
  * which names no serif substitute, so an installed Liberation Serif never gets used and
  * must not be claimed. Carlito is Calibri's metric twin — identical advance widths — so a
- * Calibri run on a host with Carlito wraps and paginates exactly where Word puts it, in
+ * Calibri run on a host with Carlito wraps and paginates on the same advance widths, in
  * both measurement and paint (the paint sink trails the same stack).
  *
  * The compatibility notice reads this to avoid warning about a substitution that costs no
@@ -141,7 +165,7 @@ function createBoundedLruCache<K, V>(capacity: number): BoundedLruCache<K, V> {
  * Kept in sync by value rather than import: layout must not depend on the output lane, and
  * the paint module re-validates at its own sink either way.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /**
  * The canvas text-metrics surface the editor injects.
@@ -151,6 +175,10 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
  */
 export interface CanvasTextMetrics {
   readonly width: number;
+  readonly actualBoundingBoxLeft?: number;
+  readonly actualBoundingBoxRight?: number;
+  readonly actualBoundingBoxAscent?: number;
+  readonly actualBoundingBoxDescent?: number;
   readonly fontBoundingBoxAscent?: number;
   readonly fontBoundingBoxDescent?: number;
 }
@@ -163,6 +191,11 @@ export interface CanvasTextMetrics {
  */
 export interface CanvasTextContext {
   font: string;
+  /** Optional browser kerning control; older contexts retain their native behavior. */
+  fontKerning?: 'auto' | 'normal' | 'none';
+  textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
+  direction?: 'ltr' | 'rtl' | 'inherit';
+  textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
   measureText(text: string): CanvasTextMetrics;
 }
 
@@ -270,15 +303,16 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     const declared = style.fontFamily && FONT_NAME.test(style.fontFamily) ? style.fontFamily : null;
     const aliased = declared ? fontAlias?.(declared) : undefined;
     const alias = aliased && FONT_NAME.test(aliased) ? aliased : null;
+    const stack = fallbackStackForFamily(declared, fallbackFamily);
     const family = declared
       ? alias
-        ? `"${alias}", "${declared}", ${fallbackFamily}`
-        : `"${declared}", ${fallbackFamily}`
+        ? `"${alias}", "${declared}", ${stack}`
+        : `"${declared}", ${stack}`
       : fallbackFamily;
     const weight = style.bold ? 'bold' : 'normal';
     const slant = style.italic ? 'italic' : 'normal';
     const variant = style.smallCaps ? 'small-caps' : 'normal';
-    const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75) * scale;
+    const size = style.fontSizePt * glyphSizeFactorOf(style) * scale;
     return `${slant} ${variant} ${weight} ${size}px ${family}`;
   };
 
@@ -290,16 +324,78 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = fontOf(style);
-      const key = `${font}\0${text}`;
+      const key = `${font}\0${isRunKerningEnabled(style)}\0${text}`;
       const cached = widthCache.get(key);
       if (cached !== undefined) return scaled(cached, text, style);
       ctx.font = font;
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
       const width = ctx.measureText(text).width;
       widthCache.set(key, width);
       return scaled(width, text, style);
     },
+    inkBounds(text, style) {
+      if (
+        !text ||
+        text.length > 2 ||
+        style.shaping?.direction === 'rtl' ||
+        segmentGraphemes(text).length !== 1
+      )
+        return undefined;
+      ctx.font = fontOf(style);
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
+      // Canvas bearings are relative to textAlign. Paint uses a left glyph origin.
+      const alignment = ctx.textAlign;
+      const direction = ctx.direction;
+      let metrics: CanvasTextMetrics;
+      try {
+        if (alignment !== undefined) ctx.textAlign = 'left';
+        if (direction !== undefined) ctx.direction = 'ltr';
+        metrics = ctx.measureText(text);
+      } finally {
+        if (alignment !== undefined) ctx.textAlign = alignment;
+        if (direction !== undefined) ctx.direction = direction;
+      }
+      const left = metrics.actualBoundingBoxLeft;
+      const right = metrics.actualBoundingBoxRight;
+      if (
+        left === undefined ||
+        right === undefined ||
+        !Number.isFinite(left) ||
+        !Number.isFinite(right)
+      )
+        return undefined;
+      const factor = style.horizontalScalePercent / (100 * scale);
+      return { left: -left * factor, right: right * factor };
+    },
+    textOutline(text, style) {
+      if (!text || style.shaping?.direction === 'rtl') return undefined;
+      ctx.font = fontOf(style);
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
+      const alignment = ctx.textAlign;
+      const baseline = ctx.textBaseline;
+      let metrics: CanvasTextMetrics;
+      try {
+        if (alignment !== undefined) ctx.textAlign = 'left';
+        if (baseline !== undefined) ctx.textBaseline = 'alphabetic';
+        metrics = ctx.measureText(text);
+      } finally {
+        if (alignment !== undefined) ctx.textAlign = alignment;
+        if (baseline !== undefined) ctx.textBaseline = baseline;
+      }
+      const edges = [
+        -(metrics.actualBoundingBoxLeft ?? NaN),
+        -(metrics.actualBoundingBoxAscent ?? NaN),
+        metrics.actualBoundingBoxRight ?? NaN,
+        metrics.actualBoundingBoxDescent ?? NaN,
+      ].map((value) => value / scale);
+      if (edges.some((value) => !Number.isFinite(value))) return undefined;
+      const [left, top, right, bottom] = edges as [number, number, number, number];
+      if (!(right > left) || !(bottom > top)) return undefined;
+      // Canvas knows the ink box but not the outlines; paint draws the text itself.
+      return { path: null, ink: { left, top, right, bottom } };
+    },
     lineMetrics(style) {
-      const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75);
+      const size = style.fontSizePt * glyphSizeFactorOf(style);
       const font = fontOf(style);
       const cached = metricsCache.get(font);
       if (cached) return cached;
@@ -310,6 +406,7 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       let baseline = size * 0.8;
 
       ctx.font = font;
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
       const metrics = ctx.measureText('Hxg');
       const ascent = metrics.fontBoundingBoxAscent;
       const descent = metrics.fontBoundingBoxDescent;

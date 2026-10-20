@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Opening refused a package with a small, highly compressible entry, an XML 1.0 name with non-ASCII letters, or one content-type record with malformed MIME syntax.",
+  "after": "These packages open. The compression ratio applies to the whole archive above 8 MiB, names follow XML 1.0, and an invalid content-type record is ignored unless it decides the type of a required part.",
+  "reason": "Every package that opened before opens to the same canonical trees, because the accepted set only grows. Shared operations, baseline encoding, and synchronization stay unchanged. No released participant reads the newly accepted content with a different meaning. A released participant re-reads the baseline with its own loader, so it refuses to join a room seeded from a package that only this release opens: one with a small, highly compressible entry, a non-ASCII XML name, or an ignored content-type record. If a newer participant later adds a non-ASCII XML name to shared content, the released participant reports remote-apply-failed and installs nothing. Rooms seeded from packages that released participants open behave as before in mixed versions.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-package-tolerance.test.ts",
+    "packages/core/src/store/__tests__/package-open-tolerance.test.ts"
+  ],
+  "changeset": "package-open-tolerance",
+  "migration": null
+}

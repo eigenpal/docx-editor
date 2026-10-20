@@ -8,6 +8,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { DocxEditorRootProps } from '@docx-editor.dev/react';
 import * as react from 'react';
 import { ReactNode } from 'react';
+import { RefObject } from 'react';
 import { ReviewAuthorInfo } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
 import * as Y from 'yjs';
@@ -18,9 +19,7 @@ export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, ed
 // @public
 export interface CollaborationAvatarProps {
     readonly children?: ReactNode;
-    // (undocumented)
     readonly className?: string;
-    // (undocumented)
     readonly participant: CollaborationParticipant;
 }
 
@@ -29,14 +28,12 @@ export interface CollaborationAvatarRenderProps {
     readonly avatarUrl?: string;
     readonly color: string;
     readonly initials: string;
-    // (undocumented)
     readonly participant: CollaborationParticipant;
 }
 
 // @public
 export interface CollaborationAvatarsProps {
     readonly children?: (props: CollaborationAvatarRenderProps) => ReactNode;
-    // (undocumented)
     readonly className?: string;
     readonly max?: number;
     readonly session?: CollaborationSession | null;
@@ -75,32 +72,46 @@ export interface CollaborationCaretLabelsProps {
 
 // @public
 export interface CollaborationFailure {
-    // (undocumented)
     readonly code: CollaborationFailureCode;
-    // (undocumented)
     readonly detail?: string;
 }
 
 // @public
-export type CollaborationFailureCode = 'already-initialized' | 'authentication-failed' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'transport-disconnected' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+export type CollaborationFailureCode =
+/** Edit refused by the session gate. The status does not change. Wait for `ready`. */
+'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'experimental-collaboration-body-text-only'
+/** Factory input rejected before joining. Fix the value the host passed. */
+| 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-session-id'
+/** Join or seed did not complete. Connect the provider, check the room id, and retry. */
+| 'already-initialized' | 'document-id-mismatch' | 'initialization-aborted' | 'initialization-timeout' | 'not-initialized'
+/** The seed document cannot seed a room. Fix the file. */
+| 'baseline-too-large' | 'blob-read' | 'invalid-baseline' | 'missing-local-blob' | 'no-main-document-part'
+/** This client and the room have different formats. Terminal. Save local work. */
+| 'collaboration-format-mismatch' | 'protocol-version-mismatch' | 'schema-version-mismatch'
+/** The room is unusable. Terminal. Create a new room from saved bytes. */
+| 'blob-digest-mismatch' | 'concurrent-seed' | 'port-already-attached'
+/** A remote update is not applied yet. Heals when a later update arrives. Wait. */
+| 'duplicate-paragraph-id' | 'invalid-relationships' | 'materialize-dropped-content' | 'missing-blob' | 'missing-root' | 'remote-apply-failed' | 'unknown-paragraph-id'
+/** Over a resource limit. A local edit realigns; shared state over a limit is terminal. */
+| 'blob-store-full' | 'blob-too-large' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-logical-id' | 'invalid-string' | 'prototype-key' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'tree-too-deep' | 'unknown-logical-id' | 'unsafe-part-name'
+/** Transport state. Only `transport-disconnected` recovers on its own. */
+| 'authentication-failed' | 'room-generation-changed' | 'transport' | 'transport-disconnected'
+/** Reserved for a room server that refuses a saved room. Passed through, never emitted. */
+| 'invalid-saved-room' | 'saved-room-unavailable'
+/** @deprecated Emitted by nothing. Kept for compatibility; do not branch on these. */
+| 'baseline-digest-mismatch' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'invalid-shared-metadata' | 'local-mirror-failed' | 'paragraph-set-mismatch' | 'shared-schema-invalid' | 'unsupported-root-key';
 
 // @public
 export interface CollaborationIdentity {
-    // (undocumented)
     readonly actorId: string;
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name: string;
-    // (undocumented)
     readonly role?: 'human' | 'agent';
 }
 
 // @public
 export interface CollaborationIdentityUpdate {
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name?: string;
 }
 
@@ -109,49 +120,38 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-    // (undocumented)
     readonly session: EditorCollaborationSession;
 }
 
 // @public
+export type CollaborationNoticeKind = 'connecting' | 'offline' | 'offlinePaused' | 'syncing' | 'waiting' | 'stalled' | 'editRefused' | 'outOfSync' | 'upgradeRequired' | 'newRoomRequired';
+
+// @public
 export interface CollaborationParticipant extends CollaborationIdentity {
-    // (undocumented)
     readonly isLocal: boolean;
 }
 
 // @public
 export interface CollaborationRemoteSelection {
-    // (undocumented)
     readonly actorId: string;
-    // (undocumented)
     readonly anchor: CollaborationRemoteSelectionAddress;
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly head: CollaborationRemoteSelectionAddress;
-    // (undocumented)
     readonly kind?: CollaborationSelectionKind;
-    // (undocumented)
     readonly name: string;
 }
 
 // @public
 export interface CollaborationRemoteSelectionAddress {
-    // (undocumented)
     readonly nodeId: string;
-    // (undocumented)
     readonly offset: number;
-    // (undocumented)
     readonly paragraphId: string;
 }
 
 // @public
 export interface CollaborationRootSource {
-    // (undocumented)
     readonly document: Uint8Array | null;
-    // (undocumented)
     readonly modules: readonly EditorModule[];
-    // (undocumented)
     readonly session: CollaborationSession | null;
 }
 
@@ -160,32 +160,21 @@ export type CollaborationSelectionKind = 'cells';
 
 // @public
 export interface CollaborationSession {
-    // (undocumented)
     canRedo(): boolean;
-    // (undocumented)
     canUndo(): boolean;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
-    // (undocumented)
+    readonly offlineEditing?: boolean;
     participants(): readonly CollaborationParticipant[];
-    // (undocumented)
     redo(): boolean;
-    // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
     setIdentity?(update: CollaborationIdentityUpdate): void;
-    // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
-    // (undocumented)
     subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
-    // (undocumented)
     subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
-    // (undocumented)
     subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
-    // (undocumented)
     undo(): boolean;
 }
 
@@ -193,28 +182,41 @@ export interface CollaborationSession {
 export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
 
 // @public
-export interface CollaborationStatusSnapshot {
-    // (undocumented)
-    readonly lastFailure: CollaborationFailure | undefined;
-    // (undocumented)
-    readonly reason: CollaborationFailure | undefined;
-    // (undocumented)
-    readonly status: CollaborationStatus;
+export interface CollaborationStatusNoticeProps {
+    readonly children?: (props: CollaborationStatusNoticeRenderProps) => ReactNode;
+    readonly className?: string;
+    readonly onRejoin?: () => void;
+    readonly session?: CollaborationSession | null;
 }
 
 // @public
+export interface CollaborationStatusNoticeRenderProps {
+    readonly kind: CollaborationNoticeKind;
+    readonly message: string;
+    readonly rejoin?: () => void;
+}
+
+// @public
+export interface CollaborationStatusSnapshot {
+    readonly failureCount?: number;
+    readonly lastFailure: CollaborationFailure | undefined;
+    readonly reason: CollaborationFailure | undefined;
+    readonly recovering?: boolean;
+    readonly status: CollaborationStatus;
+    readonly waiting?: boolean;
+}
+
+// @public
+export type CommentMarkerStyle = 'initials' | 'icon';
+
+// @public
 export interface CreateDocumentCollaborationOptions {
-    // (undocumented)
     readonly awareness: Awareness;
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
     readonly sessionId?: string;
-    // (undocumented)
     readonly ydoc: Y.Doc;
 }
 
@@ -254,6 +256,7 @@ export interface DocxEditorCollaborationNamespace {
     readonly Avatar: typeof CollaborationAvatar;
     readonly Avatars: typeof CollaborationAvatars;
     readonly CaretLabels: typeof CollaborationCaretLabels;
+    readonly Status: typeof CollaborationStatusNotice;
 }
 
 // @public
@@ -289,6 +292,7 @@ export interface DocxEditorReviewNamespace {
     // (undocumented)
     readonly List: typeof ReviewList;
     readonly Markers: typeof ReviewMarkers;
+    readonly Refusal: typeof ReviewRefusal;
     // (undocumented)
     readonly Reject: typeof ReviewReject;
     // (undocumented)
@@ -322,14 +326,51 @@ export interface ResolvedCustomNodeActivation {
 }
 
 // @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkerStyle;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionDisplay;
+}
+
+// @public
 export interface ReviewActionProps extends ReviewPartProps {
     icon?: ReactNode;
 }
 
 // @public
 export interface ReviewActivationOptions {
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly announce?: boolean;
+    readonly reveal?: ScrollPlacement | false;
 }
+
+// @public
+export interface ReviewAdoptOptions {
+    readonly author?: string;
+    readonly date?: Date;
+}
+
+// @public
+export interface ReviewBalloonProps {
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface ReviewDraftProps extends ReviewPartProps {
+    left?: number | null;
+    top?: number;
+}
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly pairKey?: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public
 export type ReviewItemView = ReviewItemPlacement;
@@ -356,7 +397,22 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkerStyle;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionDisplay;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public
 export interface ReviewPartProps {
@@ -385,6 +441,33 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export interface ReviewRailMetrics {
+    readonly compact: boolean;
+    readonly compactCardLeft: number | null;
+    readonly left: number | null;
+    readonly scale: number;
+    readonly top: number;
+}
+
+// @public
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+
+// @public
+export interface ReviewWriteRefusal {
+    readonly action: ReviewWriteAction;
+    readonly code: EditDiagnosticCode;
+    readonly final: boolean;
+    readonly key: string | null;
+    readonly sequence: number;
+}
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
 export function useCollaborationParticipants(session?: CollaborationSession | null): readonly CollaborationParticipant[];
 
 // @public
@@ -397,13 +480,13 @@ export function useCollaborationStatus(session?: CollaborationSession | null): U
 export interface UseCollaborationStatusReturn {
     readonly attached: boolean;
     readonly diverged: boolean;
-    // (undocumented)
+    readonly failureCount: number;
     readonly lastFailure: CollaborationFailure | undefined;
     readonly live: boolean;
-    // (undocumented)
     readonly reason: CollaborationFailure | undefined;
-    // (undocumented)
+    readonly recovering: boolean;
     readonly status: CollaborationStatus | 'inactive';
+    readonly waiting: boolean;
 }
 
 // @public
@@ -424,16 +507,11 @@ export interface UseDocumentCollaborationOptions {
 // @public
 export interface UseDocumentCollaborationReturn {
     readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
-    // (undocumented)
     readonly document: Uint8Array | null;
-    // (undocumented)
     readonly error: CollaborationFailure | null;
     readonly leave: (nextDocument: Uint8Array) => void;
-    // (undocumented)
     readonly modules: readonly EditorModule[];
-    // (undocumented)
     readonly pending: boolean;
-    // (undocumented)
     readonly session: CollaborationSession | null;
 }
 
@@ -450,12 +528,24 @@ export function useReviewItem(): ReviewItemView | null;
 export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn;
 
 // @public
+export function useReviewRailMetrics(railRef?: RefObject<HTMLElement | null> | null, options?: UseReviewRailMetricsOptions): ReviewRailMetrics;
+
+// @public
+export interface UseReviewRailMetricsOptions {
+    readonly reserveGutter?: boolean;
+    readonly trackScroll?: boolean;
+}
+
+// @public
 export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
+    readonly activatedKey: string | null;
     readonly activeKey: string | null;
+    readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
     readonly items: readonly ReviewItemView[];
+    readonly lastRefusal: ReviewWriteRefusal | null;
     readonly paneOpen: boolean;
     readonly ready: boolean;
     readonly reject: (item: ReviewItemView) => boolean;
@@ -471,13 +561,12 @@ export interface UseReviewReturn {
 // @public
 export function useStackedReviewPositions(items: readonly {
     readonly anchorY: number | null;
+    readonly isActive?: boolean;
     readonly key: string;
 }[], heights: ReadonlyMap<string, number>, options?: {
     readonly defaultHeight?: number;
     readonly gap?: number;
     readonly scale?: number;
 }): ReadonlyMap<string, number>;
-
-// (No @packageDocumentation comment for this package)
 
 ```

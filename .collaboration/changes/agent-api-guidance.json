@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Editing API tracked changes and author changes stamped w:date with milliseconds, review writes such as accept, reject, and comment could scroll to the caret, and some refusals did not name the browser API to use.",
+  "after": "Every revision and comment date is stamped to the second through one helper, review writes do not scroll, and comment-author refusals and dialog toolbar reasons name the API to use.",
+  "reason": "The date change only shortens the value written into existing w:date attributes, which every peer already reads at second precision. Suppressing the caret follow during review writes affects only the local viewport. Diagnostic codes, refusal hints, and toolbar reasons are local messages. The collaboration schema, operation encoding, and shared state do not change.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-hook-path-conformance.test.ts",
+    "packages/core/src/editor/__tests__/review-activation-scroll.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-hosts.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-foreign-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-history-groups-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/balloon-remote-resolve.test.tsx",
+    "packages/pro/src/__tests__/review-adopt-vue.test.ts"
+  ],
+  "changeset": "agent-api-guidance",
+  "migration": null
+}

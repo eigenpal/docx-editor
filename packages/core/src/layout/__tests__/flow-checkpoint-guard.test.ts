@@ -1,14 +1,7 @@
-// The flow-checkpoint guard map stays true (companion to flow-checkpoint-guards.ts).
-//
-// The map's `satisfies` clause catches a `FlowCheckpoint` field that was never classified.
-// These tests catch the two failures the compiler cannot see:
-//  - a checkpoint BUILT with a field the interface never declared (runtime walk), and
-//  - the convergence comparison in semantic-layout.ts silently dropping a `'compared'`
-//    field, or quietly starting to compare a `'restore-only'` one (source scan).
+// Behavioral coverage of every declared checkpoint role. A compared field must reject
+// a changed state, while page and line counts remain outside in-page convergence.
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
@@ -21,6 +14,17 @@ import {
   unguardedCheckpointFields,
   type FlowCheckpointGuard,
 } from '../flow-checkpoint-guards.ts';
+
+import { FlowCheckpointOwner, flowCheckpointsMatch } from '../flow-checkpoint.ts';
+import type { FlowCheckpoint } from '../layout-session.ts';
+import type { AnchoredDrawingRecord } from '../drawing-layout.ts';
+import { ParagraphFrameFlow } from '../paragraph-frame-flow.ts';
+import { readParagraphFrame } from '../paragraph-frame.ts';
+import {
+  positionedTableFlow,
+  type PositionedTableAnchor,
+  type PositionedTableAnchorSignal,
+} from '../table-float-position.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -56,41 +60,169 @@ describe('every checkpoint field is classified', () => {
   });
 });
 
+function populatedCheckpoint() {
+  const session = createLayoutSession();
+  layoutSemanticDocument(load(DOCUMENT), 1, { measurer, geometry: GEOMETRY, session });
+  const source = session.checkpoints.find((checkpoint) => checkpoint.pageFragments.length > 0)!;
+  const fragment = source.pageFragments[0]!;
+  if (fragment.kind !== 'paragraph') throw new Error('Expected paragraph fixture');
+  const paragraphFrames = new ParagraphFrameFlow();
+  const frame = readParagraphFrame([
+    { localName: 'framePr', attributes: { x: '400', y: '600', w: '2000' } },
+  ])!;
+  paragraphFrames.add(frame, fragment);
+  // Only the immutable table ID is consumed by this flow owner, as in positioned-table-flow.test.
+  const anchors = [
+    { table: { id: 'table' }, sourceIndex: 0, anchorId: 'anchor' },
+  ] as PositionedTableAnchor[];
+  const positionedFlow = positionedTableFlow(anchors, ['table-key']);
+  const pendingFloatIds = new Set<string>();
+  const floatSignals: PositionedTableAnchorSignal[] = [];
+  positionedFlow.add(pendingFloatIds, 'table');
+  positionedFlow.note(floatSignals, 'anchor', 0, 0, 12);
+  const anchorPageDeferCounts = new Map([['drawing', 1]]);
+  const owner = new FlowCheckpointOwner({
+    paragraphFrames,
+    positionedFlow,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
+  });
+  // Drawing convergence is identity-only; the checkpoint owner never reads record contents.
+  const drawing = { kind: 'anchoredDrawing' } as AnchoredDrawingRecord;
+  const state = {
+    ...source,
+    pageFragments: [...source.pageFragments],
+    pendingAnchoredDrawings: [drawing],
+    deferredAnchoredDrawings: [drawing],
+  };
+  const checkpoint = owner.capture(state);
+  return {
+    owner,
+    state,
+    checkpoint,
+    paragraphFrames,
+    positionedFlow,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
+  };
+}
+
+const changes = {
+  pageCount: (c) => ({ ...c, pageCount: c.pageCount + 1 }),
+  pageFragments: (c) => ({ ...c, pageFragments: [] }),
+  pendingParagraphFrames: (c) => ({ ...c, pendingParagraphFrames: undefined }),
+  pendingAnchoredDrawings: (c) => ({
+    ...c,
+    pendingAnchoredDrawings: [{ ...c.pendingAnchoredDrawings[0]! }],
+  }),
+  deferredAnchoredDrawings: (c) => ({ ...c, deferredAnchoredDrawings: [] }),
+  anchorPageDeferCounts: (c) => ({ ...c, anchorPageDeferCounts: new Map([['drawing', 2]]) }),
+  pendingPositionedTableTokens: (c) => ({ ...c, pendingPositionedTableTokens: undefined }),
+  positionedTableAnchorSignals: (c) => ({
+    ...c,
+    positionedTableAnchorSignals: [{ ...c.positionedTableAnchorSignals![0]!, anchorY: 99 }],
+  }),
+  cursorY: (c) => ({ ...c, cursorY: c.cursorY + 1 }),
+  lineCounter: (c) => ({ ...c, lineCounter: c.lineCounter + 1 }),
+  previousSpaceAfter: (c) => ({ ...c, previousSpaceAfter: c.previousSpaceAfter + 1 }),
+  flowColumnIndex: (c) => ({ ...c, flowColumnIndex: c.flowColumnIndex + 1 }),
+} satisfies Record<keyof FlowCheckpoint, (checkpoint: FlowCheckpoint) => FlowCheckpoint>;
+
 describe('the convergence comparison agrees with the map', () => {
-  // The comparison lives in semantic-layout.ts as a hand-written `mark && ...` condition.
-  // Slice the region from where the previous checkpoint is fetched to where the shift
-  // verdict is taken; every field's fate is decided inside it.
-  const source = readFileSync(
-    fileURLToPath(new URL('../semantic-layout.ts', import.meta.url)),
-    'utf8'
-  );
-  const start = source.indexOf('const mark = session.checkpoints[');
-  // The CALL, not the name: a comment inside the region mentions the function too.
-  const end = source.indexOf('convergenceTailShiftAllowed({', start);
-  expect(start).toBeGreaterThan(-1);
-  expect(end).toBeGreaterThan(start);
-  const region = source.slice(start, end);
-
-  const fields = Object.entries(FLOW_CHECKPOINT_GUARDS) as [string, FlowCheckpointGuard][];
-
-  for (const [field, guard] of fields) {
-    // Word boundary, not substring: a future `mark.pageFragmentsExtra` must not satisfy
-    // the `pageFragments` gate.
-    const reads = new RegExp(`\\bmark\\.${field}\\b`);
-    if (guard === 'restore-only') {
-      test(`'${field}' is restore-only and the convergence region never reads it`, () => {
-        // If convergence starts comparing it, the map (and its documented argument for
-        // never comparing it) is stale — reclassify it, do not just silence this. The
-        // region deliberately ends BEFORE convergenceTailShiftAllowed: the shift-delta
-        // arithmetic after the condition may read any field it likes.
-        expect(reads.test(region)).toBe(false);
-      });
-    } else {
-      test(`'${field}' (${guard}) is read by the convergence region`, () => {
-        // A 'compared' field that vanished from the condition converges a mismatched
-        // flow: the exact silent failure deferredAnchoredDrawings shipped once.
-        expect(reads.test(region)).toBe(true);
-      });
-    }
+  const { checkpoint } = populatedCheckpoint();
+  test('equivalent snapshots match', () => {
+    expect(flowCheckpointsMatch(checkpoint, checkpoint)).toBe(true);
+    expect(
+      flowCheckpointsMatch(checkpoint, {
+        ...checkpoint,
+        pageFragments: checkpoint.pageFragments.map((fragment) => ({ ...fragment })),
+        anchorPageDeferCounts: new Map(checkpoint.anchorPageDeferCounts),
+        pendingParagraphFrames: { ...checkpoint.pendingParagraphFrames! },
+        pendingPositionedTableTokens: { ...checkpoint.pendingPositionedTableTokens! },
+        positionedTableAnchorSignals: checkpoint.positionedTableAnchorSignals!.map((signal) => ({
+          ...signal,
+        })),
+      })
+    ).toBe(true);
+  });
+  for (const field of Object.keys(changes) as (keyof FlowCheckpoint)[]) {
+    const guard: FlowCheckpointGuard = FLOW_CHECKPOINT_GUARDS[field];
+    test(`${field}: ${guard}`, () => {
+      const changed = changes[field](checkpoint);
+      expect(flowCheckpointsMatch(checkpoint, changed)).toBe(guard !== 'compared');
+      expect(flowCheckpointsMatch(changed, checkpoint)).toBe(guard !== 'compared');
+    });
   }
+});
+
+test('capture and restore isolate mutable collections but preserve immutable records and prefixes', () => {
+  const fixture = populatedCheckpoint();
+  const {
+    owner,
+    checkpoint,
+    state,
+    paragraphFrames,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
+  } = fixture;
+  const before = structuredClone(checkpoint);
+  state.pageFragments.length = 0;
+  state.pendingAnchoredDrawings.length = 0;
+  state.deferredAnchoredDrawings.length = 0;
+  paragraphFrames.restore(undefined);
+  pendingFloatIds.clear();
+  floatSignals.length = 0;
+  anchorPageDeferCounts.clear();
+  expect(checkpoint).toEqual(before);
+
+  const restored = owner.restore(checkpoint);
+  expect(owner.capture(restored)).toEqual(checkpoint);
+  expect(restored.pageFragments).not.toBe(checkpoint.pageFragments);
+  expect(restored.pageFragments[0]).toBe(checkpoint.pageFragments[0]);
+  expect(restored.pendingAnchoredDrawings[0]).toBe(checkpoint.pendingAnchoredDrawings[0]);
+  expect(paragraphFrames.checkpoint()).toBe(checkpoint.pendingParagraphFrames);
+  expect(
+    fixture.positionedFlow.checkpoint(pendingFloatIds, floatSignals).pendingPositionedTableTokens
+  ).toBe(checkpoint.pendingPositionedTableTokens);
+  expect([...pendingFloatIds]).toEqual(['table']);
+
+  restored.pageFragments.length = 0;
+  restored.pendingAnchoredDrawings.length = 0;
+  restored.deferredAnchoredDrawings.length = 0;
+  floatSignals.push({ anchorId: 'other', column: 1, fragmentIndex: 3, anchorY: 42 });
+  anchorPageDeferCounts.set('drawing', 9);
+  expect(checkpoint).toEqual(before);
+});
+
+test('restoring an empty checkpoint clears pending owners and keeps shared empty snapshots safe', () => {
+  const {
+    owner,
+    checkpoint,
+    paragraphFrames,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
+  } = populatedCheckpoint();
+  const empty = {
+    ...checkpoint,
+    pendingParagraphFrames: undefined,
+    pendingPositionedTableTokens: undefined,
+    positionedTableAnchorSignals: undefined,
+    deferredAnchoredDrawings: [],
+    anchorPageDeferCounts: new Map<string, number>(),
+  };
+  const state = owner.restore(empty);
+  expect(paragraphFrames.checkpoint()).toBeUndefined();
+  expect(pendingFloatIds.size).toBe(0);
+  expect(floatSignals).toEqual([]);
+  expect(anchorPageDeferCounts.size).toBe(0);
+  const captured = owner.capture(state);
+  const restored = owner.restore(captured);
+  restored.deferredAnchoredDrawings.push(checkpoint.pendingAnchoredDrawings[0]!);
+  anchorPageDeferCounts.set('new', 1);
+  expect(captured.deferredAnchoredDrawings).toEqual([]);
+  expect(captured.anchorPageDeferCounts.size).toBe(0);
 });

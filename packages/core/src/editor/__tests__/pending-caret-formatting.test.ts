@@ -262,6 +262,48 @@ describe('pending caret formatting', () => {
     });
   });
 
+  test('an invalid armed size cannot prevent Enter or the next character', () => {
+    withSurface(paragraph(textRun('hello')), (surface) => {
+      caretAt(surface, 5);
+      surface.setRunProperty('sz', { 'bad attribute': '72' });
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toHaveLength(2);
+      expect(surface.state().lastRejection).toBeNull();
+      surface.type('x');
+      expect(runsOf(surface, 1)).toEqual([['x']]);
+    });
+  });
+
+  for (const lineBreak of [false, true]) {
+    test(`${lineBreak ? 'Shift+Enter' : 'Enter'} carries formatting applied to selected text`, () => {
+      withSurface(paragraph(''), (surface) => {
+        caretAt(surface, 0);
+        surface.type('hello');
+        const id = surface.session.paragraphIds()[0]!;
+        surface.setSelection({
+          anchor: { paragraphId: id, offset: 0 },
+          head: { paragraphId: id, offset: 5 },
+        });
+        surface.setRunProperty('sz', { val: '32' });
+        surface.setRunProperty('rFonts', { ascii: 'Georgia', hAnsi: 'Georgia' });
+        surface.toggleRunProperty('b');
+        caretAt(surface, 5);
+        expect(surface.state().pendingFormat).toBeNull();
+        if (lineBreak) surface.insertLineBreak();
+        else surface.splitParagraph();
+        expect(surface.formatting().fontSizeHalfPoints).toBe(32);
+        expect(surface.formatting().fontFamily).toBe('Georgia');
+        expect(surface.formatting().bold).toBe(true);
+        surface.type('next');
+        const run = runsOf(surface, lineBreak ? 0 : 1).at(-1)!;
+        expect(run[0]).toContain('next');
+        expect(run).toContain('sz=32');
+        expect(run).toContain('rFonts');
+        expect(run).toContain('b');
+      });
+    });
+  }
+
   test('the base captured at arm time survives deleting the run beside the caret', () => {
     // Word keeps the FACE you armed, not whatever run the caret drifts against: arm
     // italic beside a bold character, backspace the bold character away, and the next
@@ -325,14 +367,15 @@ describe('pending caret formatting', () => {
     });
   });
 
-  test('undo discards the armed format instead of leaving it over the reverted tree', () => {
+  test('undo clears the armed format before reverting earlier text', () => {
     withSurface(paragraph(textRun('hello')), (surface) => {
       caretAt(surface, 5);
       surface.type('a');
       caretAt(surface, 5);
       surface.toggleRunProperty('b');
-      // The history entry restores the caret to exactly the armed position, so a
-      // position check alone would leave it armed against a tree that no longer exists.
+      surface.undo();
+      expect(runsOf(surface)).toEqual([['helloa']]);
+      expect(surface.formatting().bold).toBe(false);
       surface.undo();
       expect(surface.formatting().bold).toBe(false);
       surface.type('z');

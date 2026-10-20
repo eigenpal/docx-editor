@@ -1,3 +1,5 @@
+import { scopedStoryReads } from './reads.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
 // Turning the protocol's positions into positions in a document.
 //
 // INTERNAL. A caller says "the paragraph behind this handle, sixteen UTF-16 units in", or "the
@@ -75,6 +77,11 @@ export function storyOfHandle(
     return fail('invalid-handle', `not-a-${kind}-handle`);
   const story = reads.story(resolved.story);
   if (!story) return fail('invalid-handle', `no-such-story:${storyKey(resolved.story)}`);
+  if (resolved.kind === 'body' && resolved.rootNodeId) {
+    const root = findNode(story.part, resolved.rootNodeId);
+    if (!root || root.kind !== 'tableCell') return fail('invalid-handle', 'cell-not-in-story');
+    return ok(scopedStoryReads(story, root));
+  }
   return ok(story);
 }
 
@@ -105,7 +112,7 @@ export function resolveEndpoint(
   const paragraph = resolveParagraphHandle(endpoint.paragraph, handles, reads);
   if (!paragraph.ok) return paragraph;
   const story = reads.story(paragraph.value.story);
-  const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+  const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
   const { offset } = endpoint;
   if (!Number.isInteger(offset) || offset < 0 || offset > length)
     return fail('invalid-offset', `offset ${String(offset)} outside 0..${String(length)}`);
@@ -124,7 +131,7 @@ export function resolvePoint(
     if (!paragraph.ok) return paragraph;
     if (point.at === 'start') return paragraph;
     const story = reads.story(paragraph.value.story);
-    const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
     return ok({ ...paragraph.value, offset: length });
   }
   const story = storyOfHandle(point.body, 'body', handles, reads);
@@ -132,14 +139,19 @@ export function resolvePoint(
   const ids = story.value.paragraphIds;
   if (ids.length === 0) return fail('invalid-offset', 'empty-story');
   if (point.at === 'start')
-    return ok({ story: story.value.story, paragraphId: ids[0] as string, index: 0, offset: 0 });
+    return ok({
+      story: story.value.story,
+      paragraphId: ids[0] as string,
+      index: story.value.indexOf(ids[0]!),
+      offset: 0,
+    });
   const index = ids.length - 1;
   const paragraphId = ids[index] as string;
   return ok({
     story: story.value.story,
     paragraphId,
-    index,
-    offset: (story.value.paragraphText(paragraphId) ?? '').length,
+    index: story.value.indexOf(paragraphId),
+    offset: (story.value.rawText(paragraphId) ?? '').length,
   });
 }
 
@@ -155,12 +167,17 @@ function wholeStory(reads: AutomationStoryReads): ResolvedSpan {
   const lastIndex = ids.length - 1;
   const lastId = ids[lastIndex] as string;
   return {
-    start: { story: reads.story, paragraphId: ids[0] as string, index: 0, offset: 0 },
+    start: {
+      story: reads.story,
+      paragraphId: ids[0] as string,
+      index: reads.indexOf(ids[0]!),
+      offset: 0,
+    },
     end: {
       story: reads.story,
       paragraphId: lastId,
-      index: lastIndex,
-      offset: (reads.paragraphText(lastId) ?? '').length,
+      index: reads.indexOf(lastId),
+      offset: (reads.rawText(lastId) ?? '').length,
     },
   };
 }
@@ -180,7 +197,7 @@ export function resolveSpanRef(
     const paragraph = resolveParagraphHandle(span.paragraph, handles, reads);
     if (!paragraph.ok) return paragraph;
     const story = reads.story(paragraph.value.story);
-    const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
     return ok({ start: paragraph.value, end: { ...paragraph.value, offset: length } });
   }
   const start = resolvePoint(span.start, handles, reads);
@@ -242,7 +259,18 @@ export function spanParagraphIds(
   reads: AutomationStoryReads
 ): readonly string[] {
   if (!span) return [];
-  return reads.paragraphIds.slice(span.start.index, span.end.index + 1);
+  const ids = reads.paragraphIds;
+  // Resolved positions use whole-story indexes. A cell-scoped read exposes only
+  // its own paragraphs, so those positions need indexes within this array.
+  const start =
+    ids[span.start.index] === span.start.paragraphId
+      ? span.start.index
+      : ids.indexOf(span.start.paragraphId);
+  const end =
+    ids[span.end.index] === span.end.paragraphId
+      ? span.end.index
+      : ids.indexOf(span.end.paragraphId);
+  return start < 0 || end < start ? [] : ids.slice(start, end + 1);
 }
 
 /** One paragraph's share of a span: the offsets inside it the span actually reaches. */
@@ -269,7 +297,7 @@ export function spanOffsets(
   const ids = spanParagraphIds(span, reads);
   const last = ids.length - 1;
   return ids.map((paragraphId, position) => {
-    const length = (reads.paragraphText(paragraphId) ?? '').length;
+    const length = (reads.rawText(paragraphId) ?? '').length;
     const start = position === 0 ? span.start.offset : 0;
     const end = position === last ? span.end.offset : length;
     return { paragraphId, start, end, whole: start === 0 && end === length };
@@ -279,9 +307,8 @@ export function spanOffsets(
 /**
  * The text a span covers, with a paragraph mark at every paragraph boundary it crosses.
  *
- * The mark count is what makes this text usable as an offset vocabulary: a span over three
- * paragraphs reads two marks, so a caller counting characters counts the same positions the
- * engine writes at.
+ * This is display text. Field atoms can expand beyond their model length. Paragraph marks still
+ * preserve visible story boundaries, but callers must use raw reads for model offset math.
  */
 export function spanText(
   span: ResolvedSpan,
@@ -302,7 +329,7 @@ export function spanText(
     .map((id, position) => {
       const projected = reads.projectedText(id, projection);
       if (!projected) return '';
-      const rawLength = (reads.paragraphText(id) ?? '').length;
+      const rawLength = (reads.rawText(id) ?? '').length;
       if (position === 0) return projected.sliceRaw(span.start.offset, rawLength);
       if (position === ids.length - 1) return projected.sliceRaw(0, span.end.offset);
       return projected.text;

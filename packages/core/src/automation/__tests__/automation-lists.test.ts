@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   docx,
+  withNumbering,
   handleAt,
   handlesAt,
   open,
@@ -26,13 +27,16 @@ const numbered = (text: string, numId: string, level = 0): string =>
 /** Two lists and a plain paragraph between them, which is the ordinary shape of a document. */
 function withLists(): AutomationHost {
   return open(
-    docx(
-      numbered('one', '3') +
-        numbered('two', '3') +
-        numbered('nested', '3', 1) +
-        `<w:p><w:r><w:t>prose</w:t></w:r></w:p>` +
-        numbered('other', '7') +
-        numbered('three', '3')
+    withNumbering(
+      docx(
+        numbered('one', '3') +
+          numbered('two', '3') +
+          numbered('nested', '3', 1) +
+          `<w:p><w:r><w:t>prose</w:t></w:r></w:p>` +
+          numbered('other', '7') +
+          numbered('three', '3')
+      ),
+      ['3', '7']
     )
   );
 }

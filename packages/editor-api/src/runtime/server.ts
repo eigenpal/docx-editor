@@ -13,18 +13,19 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // UNTRUSTED BYTES. A `.docx` is a zip of XML an attacker controls end to end, and every one of
 // those defences lives in the core reader this calls: decompression-ratio and size caps, part and
 // relationship path validation, DTD/entity-free XML. This module adds no parsing of its own, and
-// a refusal comes back as `InvalidArgument` rather than as a throw from inside a zip decoder.
-// Nothing about WHY the document was refused is put in the message: a caller opening files they
-// did not author gets "not a document this API can open", and a probe cannot use the error to
-// learn about the reader's limits.
+// malformed input comes back as `InvalidArgument`. Resource refusals use a stable API limit
+// name without forwarding file-controlled details or internal parser messages.
 
-import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
+import { serverPagination, type ServerPaginationOptions } from './pagination.ts';
+export type { ServerPaginationOptions } from './pagination.ts';
+import { createServerAutomationHost, openDiagnosticCode } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
-import { fail } from './errors.ts';
+import { fail, type DocxEditorErrorInit } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
+import { runtimeDiagnostics, type RuntimeDiagnostic } from './diagnostics.ts';
 
 /**
  * Capability module accepted by {@link createServer}. Collaboration attaches
@@ -35,6 +36,11 @@ import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } fr
 export interface EditorModule {
   readonly id: string;
   readonly collaboration?: CollaborationModuleContribution;
+  /**
+   * Told about this runtime's anonymous diagnostics: the open, and each refused batch with a
+   * known reason. A telemetry module's listener fits here unchanged.
+   */
+  readonly onDiagnostic?: (event: RuntimeDiagnostic) => void;
 }
 
 function collaborationModelOf(
@@ -53,7 +59,11 @@ export interface DocumentZipLimits {
   readonly maxEntries: number;
   /** Most bytes the archive may decompress to in total. */
   readonly maxTotalBytes: number;
-  /** Highest tolerated decompression ratio — the zip-bomb guard. */
+  /**
+   * Highest tolerated ratio of the archive's total uncompressed bytes to its own byte
+   * length — the zip-bomb guard. Applies once the total exceeds 8 MiB, so a small
+   * archive is never refused for compressing well.
+   */
   readonly maxRatio?: number;
 }
 
@@ -61,11 +71,14 @@ export interface DocumentZipLimits {
 export interface DocumentXmlLimits {
   /** Most bytes any one XML part may be. */
   readonly maxBytes: number;
-  /** Most elements any one XML part may contain. */
+  /**
+   * Most elements any one XML part may contain. Defaults to the engine budget
+   * (10,000,000); callers may raise it up to the engine ceiling (50,000,000).
+   */
   readonly maxElements?: number;
 }
 
-/** Optional tighter limits applied while opening untrusted DOCX bytes. */
+/** Resource budgets applied while opening DOCX bytes, subject to engine ceilings. */
 export interface DocumentLimits {
   /** Archive-level caps. */
   readonly zip?: DocumentZipLimits;
@@ -81,10 +94,9 @@ export interface DocumentLimits {
  * How `DocxEditor.createServer` opens a document.
  *
  * Opening DOCX bytes is a bounded parse: decompression-ratio and size caps, part and relationship
- * path validation, DTD- and entity-free XML. A refusal comes back as `InvalidArgument` rather
- * than as a throw from inside a zip decoder, and says nothing about WHY — a caller opening files
- * they did not author gets "not a document this API can open", so a probe cannot use the error to
- * learn the reader's limits.
+ * path validation, DTD- and entity-free XML. Malformed input returns `InvalidArgument`.
+ * Resource refusals return `ResourceLimitExceeded`, with `limit` identifying the exceeded cap.
+ * File-controlled details and internal parser messages are never included.
  *
  * The bounded parse is complete when this promise resolves. The runtime does not retain the
  * caller's `Uint8Array`, so the caller may reuse or transfer that input buffer afterward.
@@ -92,23 +104,28 @@ export interface DocumentLimits {
  * @public
  */
 export interface CreateServerOptions {
+  /** Font-aware pagination required to calculate PAGE/NUMPAGES fields headlessly. */
+  readonly pagination?: ServerPaginationOptions;
   /**
    * Capability modules to register. Collaboration attaches only through a
-   * collaboration contribution on this list.
+   * collaboration contribution on this list. A module with `onDiagnostic`, such as a telemetry
+   * module, receives the anonymous diagnostics of this runtime: the open, and each refused
+   * batch with a known reason.
    */
   readonly modules?: readonly EditorModule[];
   /**
-   * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
+   * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
-   * Exposed because a server opening documents it did not author is exactly where a caller may
-   * want smaller limits than the defaults. Omitted means the engine's own defaults.
+   * Omitted means the engine defaults. Lower budgets for untrusted input, or raise
+   * `xml.maxElements` for larger documents when the host has sufficient memory.
+   * Engine ceilings still apply.
    */
   readonly limits?: DocumentLimits;
   /**
-   * Who comments this runtime writes are recorded as.
+   * Who comments and tracked text edits written by this runtime are recorded as.
    *
-   * Required to write one at all: `CT_TrackChange` makes `@w:author` mandatory and a server has no
-   * signed-in user, so a runtime opened without this refuses comment writes rather than putting a
+   * Required for comment writes and `document.changeTrackingMode = 'TrackMineOnly'`: `CT_TrackChange` makes `@w:author` mandatory and a server has no
+   * signed-in user, so a runtime opened without this refuses these operations rather than putting a
    * placeholder name into someone's document.
    */
   readonly author?: string;
@@ -120,16 +137,71 @@ export interface CreateServerOptions {
   readonly revisionTextView?: RevisionTextView;
 }
 
+/** Invalid caller budgets are argument errors, not document resource refusals. */
+function validateDocumentLimits(limits: DocumentLimits | undefined): void {
+  const counts = [
+    limits?.zip?.maxEntries,
+    limits?.zip?.maxTotalBytes,
+    limits?.xml?.maxBytes,
+    limits?.xml?.maxElements,
+    limits?.maxXmlParts,
+    limits?.maxRelationships,
+  ];
+  const ratio = limits?.zip?.maxRatio;
+  if (
+    counts.some((value) => value !== undefined && (!Number.isInteger(value) || value < 0)) ||
+    (ratio !== undefined && (!Number.isFinite(ratio) || ratio < 0))
+  ) {
+    fail({ code: 'InvalidArgument', target: 'createServer' });
+  }
+}
+
 export async function createServer(
   bytes: Uint8Array,
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
+  const diagnostics = runtimeDiagnostics(
+    (options.modules ?? []).flatMap((module) => (module.onDiagnostic ? [module.onDiagnostic] : []))
+  );
+  const started = Date.now();
+  try {
+    validateDocumentLimits(options.limits);
+  } catch (error) {
+    diagnostics?.openRejected(bytes, 'invalid-limits');
+    throw error;
+  }
   const collaborationModel = collaborationModelOf(options.modules);
-  const opened = createServerAutomationHost(bytes, {
-    ...(options.limits === undefined ? {} : { limits: options.limits }),
-    ...(collaborationModel === undefined ? {} : { collaborationModel }),
-  });
-  if (!opened.ok) fail({ code: 'InvalidArgument', target: 'createServer' });
+  let opened: ReturnType<typeof createServerAutomationHost>;
+  try {
+    opened = createServerAutomationHost(bytes, {
+      ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
+      ...(options.limits === undefined ? {} : { limits: options.limits }),
+      ...(collaborationModel === undefined ? {} : { collaborationModel }),
+    });
+  } catch (error) {
+    // An engine fault, not a refusal: reported as an open that failed, then rethrown.
+    diagnostics?.openCrashed(bytes, error);
+    throw error;
+  }
+  if (!opened.ok) {
+    const limits: Partial<Record<typeof opened.reason, DocxEditorErrorInit['limit']>> = {
+      'too-many-entries': 'zip.maxEntries',
+      'too-large': 'xml.maxBytes',
+      'too-many-elements': 'xml.maxElements',
+      'too-deep': 'xml.maxDepth',
+      'too-many-xml-parts': 'maxXmlParts',
+      'too-many-relationships': 'maxRelationships',
+    };
+    const limit = opened.limit ?? limits[opened.reason];
+    diagnostics?.openRejected(bytes, opened.reason, opened.limit, opened.detail);
+    fail({
+      code: limit === undefined ? 'InvalidArgument' : 'ResourceLimitExceeded',
+      target: 'createServer',
+      ...(limit === undefined ? {} : { limit }),
+      diagnostic: openDiagnosticCode(opened.reason, opened.limit),
+    });
+  }
+  diagnostics?.opened(bytes, Date.now() - started);
   return createRuntime({
     host: opened.host,
     save: true,
@@ -137,6 +209,12 @@ export async function createServer(
     ...(options.revisionTextView === undefined
       ? {}
       : { revisionTextView: options.revisionTextView }),
+    ...(diagnostics
+      ? {
+          onRefusal: (error, operations) => diagnostics.refused(error, opened.host, operations),
+          onException: (error, operations) => diagnostics.crashed(error, opened.host, operations),
+        }
+      : {}),
   });
 }
 

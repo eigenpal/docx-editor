@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
@@ -11,6 +11,7 @@ import { useEditorState } from '../useEditorState';
 import { useReviewAuthors } from '../useReviewAuthors';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 
 const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
@@ -44,25 +45,23 @@ export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersPr
       if (rootRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [open]);
+  // Escape through the shared rule: a host input keeps its own Escape.
+  usePopupEscape(open, rootRef, (fromInside) => {
+    setOpen(false);
+    if (fromInside) triggerRef.current?.focus();
+  });
 
   const onMenuKeyDown = useCallback((event: React.KeyboardEvent): void => {
     const items = [
       ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]') ?? []),
     ];
-    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const at = items.indexOf(hostDocumentOf(menuRef.current).activeElement as HTMLButtonElement);
     const move = (to: number): void => {
       event.preventDefault();
       items[(to + items.length) % items.length]?.focus();

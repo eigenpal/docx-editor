@@ -1,4 +1,15 @@
-import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
+import { warnDeprecatedSlotProp, warnMissingSlotId } from './menu-warnings';
+import {
+  computed,
+  defineComponent,
+  inject,
+  provide,
+  h,
+  isVNode,
+  ref,
+  type PropType,
+  type VNode,
+} from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -11,15 +22,25 @@ import {
   type ChromeMenuEntry,
   type ChromeMenuId,
   type ChromeSlotId,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
-import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
+import {
+  MenuRowTabIndexContext,
+  MENU_OVERFLOW_ID,
+  useMenuContext,
+  useMenuLabel,
+  useMenuOverflow,
+} from './menu-context';
+import type { MenuContextValue, MenuId } from './menu-context';
+import { menuOverflowPlacement } from './menu-overflow-state';
+import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
+import { MenuWatermark } from './menu-watermark';
+import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
 //
 // A row is PRESENTATION over a chrome slot: the icon, the label and the enabled state all
 // come from the registry entry the row names, exactly like a toolbar button, so the same
@@ -27,11 +48,7 @@ import { useImageInsertOptional } from '../images/ImageInsert';
 // (icon, label, right-aligned shortcut, submenu caret) and the fact that selecting a row
 // closes the menu.
 //
-// THREE ROWS DO NOT DISPATCH A COMMAND. Open and save move BYTES across the host
-// boundary, and page setup needs a dialog's values; the engine has no command for any of
-// them (`toolbarCommandState` says so in those words). Those rows read their handler from
-// the menu context, which the root resolves once — host override, else the packaged
-// default — so the row itself holds no policy.
+// Host actions read their handlers from the menu context. Editing rows use engine commands.
 
 /** Vue reserves `slot` for vnode slots; MenuRow accepts `rowSlot` and paints `data-slot`. */
 export function menuRowSlot(id: string): { rowSlot: string } {
@@ -106,6 +123,7 @@ export const MenuRow = defineComponent({
   },
   setup(props, { slots }) {
     const reasonId = useStableDocxId('menu-reason');
+    const tabIndex = inject(MenuRowTabIndexContext, -1);
     const shortcutText = usePlatformShortcut();
     // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
     // order and stops firing pointer events, so its `title` never renders and a screen
@@ -130,10 +148,8 @@ export const MenuRow = defineComponent({
           type="button"
           role={role}
           class={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-          // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
-          // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
-          // tab stops).
-          tabindex={-1}
+          // Popup rows use arrow keys. Direct menubar actions remain reachable by Tab.
+          tabindex={tabIndex}
           {...(dataSlot ? { 'data-slot': dataSlot } : {})}
           {...(active ? { 'data-active': '' } : {})}
           {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
@@ -226,17 +242,58 @@ export const MenuGroup = defineComponent({
 // Slot-driven row
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export interface MenuItemProps {
+/**
+ * Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. Set `slotId`. A row with
+ * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+ * An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuItemProps extends MenuItemBaseProps {
   /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slot: ChromeSlotId;
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
+}
+
+/** The props every `Menu.Item` takes besides the slot it names. @public */
+export interface MenuItemBaseProps {
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
   shortcutKey?: string;
   className?: string;
-  /** Render nothing — inside a packaged menu this removes the row. */
+  /**
+   * Render nothing: inside a packaged menu this removes the row in place. A named row part
+   * with `hidden`, such as `<ContextMenu.Cut hidden />`, is shorthand for this override
+   * with that row's `slotId`.
+   */
   hidden?: boolean;
+}
+
+/** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
+export function menuItemSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) {
+    warnDeprecatedSlotProp(props.slot);
+    return props.slot;
+  }
+  warnMissingSlotId();
+  return undefined;
+}
+
+/** {@link menuItemSlotId} read off a vnode, whose template props may be kebab-case. @internal */
+export function menuItemSlotIdOfVNode(child: VNode): ChromeSlotId | undefined {
+  const props = (child.props ?? {}) as Record<string, unknown>;
+  const slotId = props.slotId ?? props['slot-id'];
+  const slot = props.slot;
+  return menuItemSlotId({
+    ...(typeof slotId === 'string' ? { slotId: slotId as ChromeSlotId } : {}),
+    ...(typeof slot === 'string' ? { slot: slot as ChromeSlotId } : {}),
+  });
 }
 
 /**
@@ -249,19 +306,20 @@ export interface MenuItemProps {
 export const MenuItem = defineComponent({
   name: 'MenuItem',
   props: {
-    slot: { type: String as PropType<ChromeSlotId>, required: true },
+    slotId: { type: String as PropType<ChromeSlotId>, default: undefined },
+    slot: { type: String as PropType<ChromeSlotId>, default: undefined },
     labelKey: { type: String, default: undefined },
     shortcutKey: { type: String, default: undefined },
     className: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const slotId = computed(() => props.slot as ChromeSlotId);
+    const slotId = computed(() => menuItemSlotId(props) ?? ('' as ChromeSlotId));
     const slotCmd = useEditorCommand(slotId as unknown as ChromeSlotId);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
-      if (props.hidden) return null;
+      if (props.hidden || !slotId.value) return null;
       const { setOpenMenu } = menuContext.value;
       const slot = slotId.value;
       const control = chromeControlForSlot(slot);
@@ -272,7 +330,9 @@ export const MenuItem = defineComponent({
       // press.
       const isToggle = chromeSlotIsToggle(slot);
       // The four alignments are one-of-four, not four independent toggles.
-      const isRadio = commandForSlot(slot)?.type === 'setAlignment';
+      const isRadio = ['setAlignment', 'setParagraphDirection', 'setReviewDisplayMode'].includes(
+        commandForSlot(slot)?.type ?? ''
+      );
       return (
         <MenuRow
           {...menuRowSlot(slot)}
@@ -289,7 +349,7 @@ export const MenuItem = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -320,7 +380,8 @@ function defineActionRow(
   slot: ChromeSlotId,
   labelKey: string | undefined,
   shortcutKey: string | undefined,
-  pick: (context: MenuContextValue) => (() => void) | undefined
+  pick: (context: MenuContextValue) => (() => void) | undefined,
+  showShortcut: (context: MenuContextValue) => boolean = () => true
 ) {
   const Part = defineComponent({
     name: `MenuAction_${slot}`,
@@ -337,11 +398,12 @@ function defineActionRow(
         if (props.hidden) return null;
         const control = chromeControlForSlot(slot);
         const text = label(labelKey ?? control?.labelKey ?? slot);
+        const shortcut = shortcutKey && showShortcut(context) ? shortcutKey : undefined;
         return (
           <MenuRow
             {...menuRowSlot(slot)}
             icon={chromeIcon(control?.paths) ?? undefined}
-            {...(shortcutKey ? { shortcut: label(shortcutKey) } : {})}
+            {...(shortcut ? { shortcut: label(shortcut) } : {})}
             disabled={!handler}
             selectHandler={() => {
               handler?.();
@@ -349,7 +411,7 @@ function defineActionRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {text}
+            {{ default: () => text }}
           </MenuRow>
         );
       };
@@ -371,6 +433,26 @@ export const MenuSave = defineActionRow(
   (context) => context.onSave
 );
 
+/** Exports continuous Markdown through the menu handler. @public */
+export const MenuExportMarkdown = defineActionRow(
+  'file.exportMarkdown',
+  undefined,
+  undefined,
+  (context) => (context.onExport ? () => context.onExport?.('markdown') : undefined)
+);
+/** Exports PDF through the menu handler. @public */
+export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
+  context.onExport ? () => context.onExport?.('pdf') : undefined
+);
+/** Prints through the menu's PDF handler. @public */
+export const MenuPrint = defineActionRow(
+  'file.print',
+  undefined,
+  'toolbar.printShortcut',
+  (context) => context.onPrint,
+  (context) => context.printShortcut === true
+);
+
 /**
  * Page setup. Unlike open and save, the ENGINE has an opinion here — `setPageSetup` is a
  * real command, it just needs the dialog's values — so the row asks through the slot's
@@ -383,16 +465,14 @@ const MenuPageSetupImpl = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const command = useEditorCommand(chromeProbeForSlot('file.pageSetup')!);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
       const context = menuContext.value;
-      const probe = chromeProbeForSlot('file.pageSetup');
-      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
-      const engineOk = allowed?.ok === true;
-      const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+      const engineOk = command.isEnabled.value;
+      const engineReason = command.disabledReason.value;
       const control = chromeControlForSlot('file.pageSetup');
       const text = label(control?.labelKey ?? 'file.pageSetup');
       const enabled = engineOk && !!context.onPageSetup;
@@ -408,7 +488,7 @@ const MenuPageSetupImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -430,16 +510,14 @@ const MenuParagraphDialogImpl = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const command = useEditorCommand(chromeProbeForSlot('paragraph.dialog')!);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
       const context = menuContext.value;
-      const probe = chromeProbeForSlot('paragraph.dialog');
-      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
-      const engineOk = allowed?.ok === true;
-      const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+      const engineOk = command.isEnabled.value;
+      const engineReason = command.disabledReason.value;
       const control = chromeControlForSlot('paragraph.dialog');
       const text = label(control?.labelKey ?? 'lineSpacing.options');
       const enabled = engineOk && !!context.onParagraphDialog;
@@ -455,7 +533,7 @@ const MenuParagraphDialogImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -504,7 +582,7 @@ const MenuImageInsertImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -517,7 +595,7 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 
 import { MenuSubmenu, MenuTablePicker } from './menu-flyouts';
 export { MenuSubmenu, MenuTableGrid } from './menu-flyouts';
-export type { MenuSubmenuProps, MenuTableGridProps } from './menu-flyouts';
+export type { MenuSubmenuBaseProps, MenuSubmenuProps, MenuTableGridProps } from './menu-flyouts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Separator, and the registry-driven entry renderer
@@ -556,28 +634,36 @@ export const MenuEntry = defineComponent({
   props: {
     entry: { type: Object as PropType<ChromeMenuEntry>, required: true },
   },
-  setup(props) {
+  setup(props, { slots }) {
     return () => {
       const entry = props.entry;
       if (entry.kind === 'separator') return <MenuSeparator />;
       if (entry.kind === 'submenu') {
         return (
           <MenuSubmenu labelKey={entry.labelKey} paths={entry.paths}>
-            {entry.items.map((item, index) => (
-              <MenuEntry key={index} entry={item} />
-            ))}
+            {{
+              default: () =>
+                slots.default?.() ??
+                entry.items.map((item, index) => <MenuEntry key={index} entry={item} />),
+            }}
           </MenuSubmenu>
         );
       }
       if (entry.slot === 'file.open') return <MenuOpen />;
       if (entry.slot === 'file.save') return <MenuSave />;
+      if (entry.slot === 'file.exportMarkdown') return <MenuExportMarkdown />;
+      if (entry.slot === 'file.exportPdf') return <MenuExportPdf />;
+      if (entry.slot === 'file.print') return <MenuPrint />;
       if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
       if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
+      if (entry.slot === 'insert.watermark') return <MenuWatermark />;
+      if (entry.slot === 'insert.bookmark') return <MenuBookmark />;
+      if (entry.slot === 'insert.goToBookmark') return <MenuGoToBookmarkRow />;
       if (entry.slot === 'image.insert') return <MenuImageInsert />;
       if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
       return (
         <MenuItem
-          {...({ slot: entry.slot } as { slot: ChromeSlotId })}
+          slotId={entry.slot}
           {...(entry.labelKey ? { labelKey: entry.labelKey } : {})}
           {...(entry.shortcutKey ? { shortcutKey: entry.shortcutKey } : {})}
         />
@@ -594,8 +680,7 @@ function rowKeyOfChild(child: VNode): string | null {
   if (slot) return slot;
   const type = child.type as { docxMenuRow?: unknown };
   if (typeof type === 'object' && type !== null && type.docxMenuRow === true) {
-    const slotProp = child.props?.slot;
-    if (typeof slotProp === 'string') return slotProp;
+    return menuItemSlotIdOfVNode(child) ?? null;
   }
   return null;
 }
@@ -630,7 +715,9 @@ function mergePanel(
     preset,
     keyOfEntry: rowKeyOfEntry,
     keyOfChild: rowKeyOfChild,
-    renderEntry: (entry) => <MenuEntry entry={entry} />,
+    childrenOfEntry: (entry) => (entry.kind === 'submenu' ? entry.items : undefined),
+    renderEntry: (entry, _index, nested) =>
+      h(MenuEntry, { entry }, nested ? { default: () => nested } : undefined),
   }) as VNode[];
 }
 
@@ -694,13 +781,21 @@ export const Menu = defineComponent({
     preset: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
+    provide(MenuRowTabIndexContext, -1);
     const menuContext = useMenuContext();
+    const menuOverflow = useMenuOverflow();
     const label = useMenuLabel();
     const panelId = useStableDocxId('menu-panel');
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const panelRef = ref<HTMLDivElement | null>(null);
     const openedByKey = ref(false);
     const switchedByHover = ref(false);
+    const isMore = () => (props.id as string) === MENU_OVERFLOW_ID;
+    const panelStyle = useMenuPanelPlacement(
+      () => isMore() && menuContext.value.openMenu === props.id,
+      triggerRef,
+      panelRef
+    );
 
     const closeToTrigger = () => {
       menuContext.value.setOpenMenu(null);
@@ -709,10 +804,28 @@ export const Menu = defineComponent({
 
     return () => {
       if (props.hidden) return null;
-      const { openMenu, setOpenMenu, activeMenu } = menuContext.value;
+      const { openMenu, setOpenMenu, activeMenu, opening } = menuContext.value;
       const registry = CHROME_MENUS.find((menu) => menu.id === props.id);
       const open = openMenu === props.id;
       const text = props.label ?? label(props.labelKey ?? registry?.labelKey ?? props.id);
+      // A menu that does not fit renders as a submenu row of the "⋯" menu instead of the bar.
+      const placement = menuOverflowPlacement(menuOverflow.value, props.id, activeMenu);
+      if (placement.skip) return null;
+      if (placement.asSubmenu) {
+        return (
+          <MenuSubmenu labelKey={props.labelKey ?? registry?.labelKey ?? props.id} label={text}>
+            {{
+              default: () =>
+                mergePanel(
+                  registry?.entries,
+                  flattenChildren(slots.default?.() ?? []),
+                  props.preset
+                ),
+            }}
+          </MenuSubmenu>
+        );
+      }
+      const iconOnly = placement.iconOnly;
       const rows = mergePanel(
         registry?.entries,
         flattenChildren(slots.default?.() ?? []),
@@ -724,6 +837,7 @@ export const Menu = defineComponent({
           role="none"
           class={`docx-menubar__menu-root${props.className ? ` ${props.className}` : ''}`}
           data-menu={props.id}
+          {...placement.rootAttributes}
         >
           <button
             ref={triggerRef}
@@ -733,8 +847,11 @@ export const Menu = defineComponent({
             aria-expanded={open}
             aria-controls={open ? panelId : undefined}
             class="docx-menubar__trigger"
-            tabindex={activeMenu === props.id ? 0 : -1}
+            disabled={opening === true}
+            tabindex={placement.tabStop ? 0 : -1}
             {...(open ? { 'data-open': '' } : {})}
+            // The "⋯" trigger shows only its icon, so its name goes on the element.
+            {...(iconOnly ? { 'aria-label': text, title: text } : {})}
             onMousedown={guardToolbarMousedown}
             onKeydown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -772,7 +889,7 @@ export const Menu = defineComponent({
                 {props.icon}
               </span>
             ) : null}
-            {text}
+            {iconOnly ? null : text}
           </button>
           {open ? (
             <div
@@ -786,12 +903,13 @@ export const Menu = defineComponent({
               id={panelId}
               role="menu"
               aria-label={text}
+              style={(panelStyle.value ?? undefined) as Record<string, string> | undefined}
               class="docx-toolbar__menu docx-menubar__menu"
               onKeydown={(event) => {
                 const panel = panelRef.value;
                 if (!panel) return;
                 const items = panelItems(panel);
-                const focused = document.activeElement;
+                const focused = hostDocumentOf(panel).activeElement;
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   focusBy(items, focused, 1);
@@ -843,104 +961,3 @@ function defineMenu(id: ChromeMenuId): MenuPartComponent {
 export const MenuFile = defineMenu('file');
 export const MenuFormat = defineMenu('format');
 export const MenuInsert = defineMenu('insert');
-
-/** Props for `DocxEditor.Menu.ReportIssue`. @public */
-export interface MenuReportIssueProps {
-  className?: string;
-  /** Render nothing — inside the packaged Help menu this removes the row. */
-  hidden?: boolean;
-  /** Replaces the packaged handler. Falls back to the menu's `onReportIssue`, then to
-   *  this project's own tracker. */
-  onSelect?: () => void;
-}
-
-/**
- * Help › Report issue.
- *
- * A NAMED part rather than anonymous markup inside the Help menu, because it is the one
- * packaged row that reaches OUTSIDE the host's product: it opens this project's issue
- * tracker with the current page URL and user agent prefilled. A host embedding the editorRef.value
- * in its own app has every reason to point that somewhere else or drop it, and it should
- * not have to rebuild the menu to do either — `reportIssue={false}` removes it,
- * `onReportIssue` redirects it, and this part composes it back by name.
- *
- * @public
- */
-const MenuReportIssueImpl = defineComponent({
-  name: 'MenuReportIssueImpl',
-  props: {
-    className: { type: String, default: undefined },
-    hidden: { type: Boolean, default: undefined },
-    onSelect: { type: Function as PropType<() => void>, default: undefined },
-  },
-  setup(props) {
-    const menuContext = useMenuContext();
-    const label = useMenuLabel();
-    return () => {
-      const { setOpenMenu, onReportIssue, reportIssue } = menuContext.value;
-      if (props.hidden || reportIssue === false) return null;
-      const run = props.onSelect ?? onReportIssue ?? openReportIssue;
-      return (
-        <MenuRow
-          {...menuRowSlot('help.reportIssue')}
-          selectHandler={() => {
-            run();
-            setOpenMenu(null);
-          }}
-          {...(props.className ? { className: props.className } : {})}
-        >
-          {label('toolbar.reportIssue')}
-        </MenuRow>
-      );
-    };
-  },
-});
-
-/**
- * The report-issue row, with its row-identity marker.
- *
- * The key is NOT a `ChromeSlotId` — the row is React's, not the shared registry's — but the
- * merge only needs a stable string, and using one here is what lets a host write
- * `<Menu.ReportIssue hidden/>` and have it REPLACE the packaged row rather than render a
- * second, invisible one beside it.
- *
- * @public
- */
-export const MenuReportIssue = Object.assign(MenuReportIssueImpl, {
-  docxSlot: 'help.reportIssue',
-});
-
-/**
- * Help.
- *
- * The registry leaves this menu EMPTY on purpose — a product's documentation and support
- * channel are the host's, not the library's. The one row the library can honestly own is
- * a report for this project's own tracker, so the packaged Help menu supplies it here
- * rather than in the shared registry, where a Vue or vanilla host would inherit a link it
- * never asked for. Replace the whole menu by name to say something else.
- *
- * With no children and `reportIssue` unset the menu carries that one row; with
- * `reportIssue={false}` it carries nothing, and Help is dropped rather than left as a
- * trigger that opens an empty panel.
- */
-const MenuHelpImpl = defineComponent({
-  name: 'MenuHelpImpl',
-  inheritAttrs: false,
-  setup(_, { attrs, slots }) {
-    const menuContext = useMenuContext();
-    return () => {
-      const { reportIssue } = menuContext.value;
-      if (slots.default === undefined && reportIssue === false) return null;
-      return (
-        <Menu id="help" {...attrs}>
-          <MenuReportIssue />
-          {slots.default?.()}
-        </Menu>
-      );
-    };
-  },
-});
-
-export const MenuHelp = Object.assign(MenuHelpImpl, {
-  docxMenu: 'help' as ChromeMenuId,
-}) as unknown as MenuPartComponent;

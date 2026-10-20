@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Shared edits can combine unrelated commands in a timed undo item. Undo can lose the original selection.",
+  "after": "Separate commands have separate undo steps, while explicit gestures and typing runs stay grouped. Undo and redo restore local text selections.",
+  "reason": "Selection metadata remains local and uses existing undo item identities. Shared schemas and operation formats remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-typing-history.test.ts",
+    "packages/core/src/editor/__tests__/document-selection-history.test.ts"
+  ],
+  "changeset": "undo-command-selection",
+  "migration": null
+}

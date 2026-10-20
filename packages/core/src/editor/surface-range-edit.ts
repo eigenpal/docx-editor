@@ -43,7 +43,12 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
+import { trackedReplacementLanding } from './surface-tracked-ops.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
+import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
+import { findContentControl } from '../store/store/tree-op-nodes.ts';
+import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
+import type { RevisionView } from './hidden-mark-joins.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
   orderedRangeOf,
@@ -52,6 +57,11 @@ import {
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
+import {
+  atomicControlDeletion as planAtomicControlDeletion,
+  type AtomicControlDeletion,
+  type InlineControlBesideCaret,
+} from './surface-locked-control-delete.ts';
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 export interface SurfaceRangeEditDeps {
@@ -64,6 +74,8 @@ export interface SurfaceRangeEditDeps {
   editingMode(): SurfaceEditingMode;
   /** The configured tracked-change author, unnormalized — each reader trims its own. */
   author(): string | undefined;
+  /** The stamp a tracked edit made now would carry; see `sameEditingMoment`. */
+  trackedDate(): string;
   storyScope(): StoryScope;
   /** Scoped document order: a header/footer or note selection orders within its own story. */
   paragraphOrder(): readonly string[];
@@ -78,6 +90,8 @@ export interface SurfaceRangeEditDeps {
   trackedAuthorOrNone(): string | undefined;
   /** `w:next` lane: whether an offset sits at the end of a paragraph's MODEL text. */
   atParagraphEnd(paragraphId: string, offset: number): boolean;
+  /** The revision view the page is laid out in, which decides what a join may absorb. */
+  revisionView(): RevisionView;
 }
 
 export interface SurfaceRangeEditOps {
@@ -91,15 +105,32 @@ export interface SurfaceRangeEditOps {
   inlineControlBeside(
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
-  ): { readonly controlId: string; readonly start: number; readonly end: number } | null;
+  ): InlineControlBesideCaret | null;
+  /** Backspace / Delete beside or over an atomic inline control; see `atomicControlDeletion`. */
+  atomicControlDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition
+  ): AtomicControlDeletion | null;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
   deleteSelectionOps(): readonly TreeDocOp[];
+  /** The plan for an explicit range of the active story; the selection does not move. */
+  deleteRangePlan(range: SemanticSelection): {
+    readonly ops: readonly TreeDocOp[];
+    readonly replaceAt: SemanticPosition;
+  };
   replacementOffset(from: SemanticPosition, to: SemanticPosition, trackedAuthor?: string): number;
 }
 
 export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRangeEditOps {
   const { session } = deps;
+  /**
+   * The range a plan is built for in place of the selection, set only inside
+   * {@link deleteRangePlan}. The selection itself never moves, so nothing is published.
+   */
+  let rangeOverride: SemanticSelection | null = null;
+  const planSelection = (): SemanticSelection => rangeOverride ?? deps.selection();
+  const planCells = (): CellSelection | null => (rangeOverride ? null : deps.cellSelection());
 
   /** The current selection as a history mark — one paragraph or nothing. */
   function selectionMark(): { paragraphId: string; start: number; end: number } | null {
@@ -112,7 +143,13 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // and layout the typed text produced — including a layout pass a commit
     // deferred under input pressure. (No-op mid-flush and when empty.)
     deps.flushPendingInputAndLayout();
-    return orderedRangeOf(deps.layout(), deps.selection(), deps.paragraphOrder());
+    const selection = planSelection();
+    // One paragraph is ordered by offset alone; skip the document-wide order walk.
+    const order =
+      selection.anchor.paragraphId === selection.head.paragraphId
+        ? undefined
+        : deps.paragraphOrder();
+    return orderedRangeOf(deps.layout(), selection, order);
   }
 
   function orderedStart(): SemanticPosition {
@@ -134,13 +171,56 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
   function inlineControlBeside(
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
-  ): { readonly controlId: string; readonly start: number; readonly end: number } | null {
+  ): InlineControlBesideCaret | null {
     const part = session.partFor(deps.storyScope()) ?? session.part();
     const paragraph = findNode(part, position.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return null;
-    return side === 'before'
-      ? inlineControlEndingAt(paragraph, position.offset)
-      : inlineControlStartingAt(paragraph, position.offset);
+    const span =
+      side === 'before'
+        ? inlineControlEndingAt(paragraph, position.offset)
+        : inlineControlStartingAt(paragraph, position.offset);
+    if (!span) return null;
+    // Only an ATOM goes as one unit: a content-locked chip (custom nodes), a checkbox glyph, a
+    // picture. A text, date or list control is typed into, so the key at its edge takes one
+    // character, as in Word, and a control emptied that way shows its prompt again instead of
+    // vanishing with its wrapper.
+    const control = findContentControl(part, span.controlId);
+    const summary = control ? contentControlPropertiesOf(control) : null;
+    if (!summary) return null;
+    const contentLocked = summary.lock === 'contentLocked' || summary.lock === 'sdtContentLocked';
+    const atom = contentLocked || summary.type === 'checkbox' || summary.type === 'picture';
+    if (!atom || !control) return null;
+    // A control already proposed for deletion is struck text the key steps over, not a unit
+    // to select again: selecting it would leave the caret where it was, press after press.
+    // Only while tracking: an untracked press removes struck content outright, as it does text.
+    let struck = false;
+    const tracked = deps.trackedAuthorOrNone() !== undefined;
+    for (
+      let node = tracked ? parentNodeOf(part, control.id) : null;
+      node;
+      node = parentNodeOf(part, node.id)
+    ) {
+      if (node.kind === 'revisionDelete') struck = true;
+      if (struck || node.kind === 'paragraph') break;
+    }
+    return { ...span, contentLocked, ...(struck ? { struck } : {}) };
+  }
+
+  function atomicControlDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition
+  ): AtomicControlDeletion | null {
+    // Queued typing lands first, so the caret and the layout are the ones the reader sees.
+    deps.flushPendingInputAndLayout();
+    if (deps.cellSelection()) return null;
+    return planAtomicControlDeletion({
+      layout: deps.layout(),
+      selection: deps.selection(),
+      direction,
+      shown,
+      controlBeside: inlineControlBeside,
+      tracked: deps.trackedAuthorOrNone() !== undefined,
+    });
   }
 
   /**
@@ -189,13 +269,16 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // mode is, and under an author who may not be the configured one. Normalized here so
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
-    const plan = rangeDeletionPlan();
+    const plan = withEnclosedBookmarks(
+      rangeDeletionPlan(author !== undefined || deps.trackedAuthorOrNone() !== undefined),
+      !author && deps.editingMode() !== 'suggest'
+    );
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
     // landing they do not read. Replacing lanes read it once, before the ops apply, which is
     // the only window where the pre-edit layout it consults is the right oracle. The
     // rectangle is captured NOW, not read at getter time: `commit` nulls `cellSelection` at
     // its head, so a late read would answer for a selection the plan was not built from.
-    const rectangle = deps.cellSelection();
+    const rectangle = planCells();
     let landing: SemanticPosition | null = null;
     return {
       ...plan,
@@ -206,14 +289,30 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     };
   }
 
-  function rangeDeletionPlan(): RangeDeletionPlan {
+  /**
+   * An untracked deletion across paragraphs takes the bookmarks it encloses with it, the way a
+   * deletion inside one paragraph does (`tree-op-bookmark-edits.ts`). A tracked one keeps them.
+   */
+  function withEnclosedBookmarks(plan: RangeDeletionPlan, untracked: boolean): RangeDeletionPlan {
+    if (!untracked || plan.ops.length === 0 || planCells()) return plan;
+    const { from, to } = orderedRange();
+    if (from.paragraphId === to.paragraphId) return plan;
+    // A pure ancestry read: `partOfNodeId`, never `partFor`, which would retain a story store.
+    const part = partOfNodeId(session, from.paragraphId) ?? session.part();
+    const drops = enclosedBookmarkDeletions(part, from, to, deps.paragraphOrder());
+    return drops.length === 0 ? plan : { ...plan, ops: [...drops, ...plan.ops] };
+  }
+
+  function rangeDeletionPlan(
+    tracked = deps.trackedAuthorOrNone() !== undefined
+  ): RangeDeletionPlan {
     // Every edit op builds its plan from here first, so this is where queued
     // typing must land: a plan computed against the pre-buffer selection would
     // edit beside text the user has already typed. The plan reads `currentLayout`
     // as its text oracle, so a deferred layout pass lands with it. (No-op
     // mid-flush.)
     deps.flushPendingInputAndLayout();
-    const rectangle = deps.cellSelection();
+    const rectangle = planCells();
     // A RECTANGLE is not the range it stands in for. Rows one and two of column one, read as
     // a range, run through every cell between them — so deleting through the range empties
     // cells the drag never covered, which is the exact failure the rectangle exists to
@@ -228,7 +327,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       // Nothing structural goes, so the range start is still there to collapse onto.
       return { ops, collapseTo: orderedStart() };
     }
-    const selection = deps.selection();
+    const selection = planSelection();
     if (
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset
@@ -245,12 +344,34 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       session.partFor(deps.storyScope()) ?? session.part(),
       from,
       to,
-      deps.paragraphOrder()
+      deps.paragraphOrder(),
+      deps.revisionView(),
+      tracked
     );
   }
 
   function deleteSelectionOps(): readonly TreeDocOp[] {
     return deleteSelectionPlan().ops;
+  }
+
+  /**
+   * {@link deleteSelectionPlan} for an explicit range of the active story, with the landing
+   * resolved now. The selection stays where the reader left it: a host replacing a found match
+   * must not move the caret or scroll the page.
+   */
+  function deleteRangePlan(range: SemanticSelection): {
+    readonly ops: readonly TreeDocOp[];
+    readonly replaceAt: SemanticPosition;
+  } {
+    const outer = rangeOverride;
+    rangeOverride = range;
+    try {
+      const plan = deleteSelectionPlan();
+      // Read INSIDE the override: the getter orders the range it lands after.
+      return { ops: plan.ops, replaceAt: plan.replaceAt ?? plan.collapseTo };
+    } finally {
+      rangeOverride = outer;
+    }
   }
 
   /**
@@ -271,12 +392,23 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // automation lane's — so the after-the-strike rule applies under that author instead.
     const tracked = trackedAuthor !== undefined || deps.editingMode() === 'suggest';
     if (!tracked || from.paragraphId !== to.paragraphId) return from.offset;
+    // NOTHING TO REPLACE, nothing to land after. A zero-width range strikes no words, and
+    // mapping it out of a deletion it merely touches carried a scripted insert past struck
+    // text the operation never named — further than the same text inserted at that point.
+    if (to.offset <= from.offset) return from.offset;
     // A range end INSIDE a pre-existing deletion aims the insert at the interior of that
-    // `w:del`: the store relocates it past the deletion, the caret math does not hear about
-    // it, and the next keystroke lands before the previous one. Map past the old deletion
-    // FIRST; the retracted characters all sit before it, so the subtraction still holds.
-    const past = positionPastDeletion(deps.layout(), to);
-    return past.offset - retractedByInsertionAuthor(from, past, trackedAuthor ?? deps.author());
+    // `w:del`: the store relocates it past the deletion, and the caret math has to hear about
+    // it or the next keystroke lands before the previous one. That mapping, the adjacency
+    // question and the strike's end all come from the paragraph's OWN tree — one rule, the
+    // store's, so the surface cannot predict a landing the store will not use.
+    const author = (trackedAuthor ?? deps.author())?.trim();
+    if (!author) return positionPastDeletion(deps.layout(), to).offset;
+    const part = partOfNodeId(session, to.paragraphId) ?? session.part();
+    const paragraph = findNode(part, to.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') {
+      return positionPastDeletion(deps.layout(), to).offset;
+    }
+    return trackedReplacementLanding(paragraph, from.offset, to.offset, author, deps.trackedDate());
   }
 
   /**
@@ -480,7 +612,12 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const author = authorValue?.trim();
     if (!author) return 0;
     if (from.paragraphId !== to.paragraphId) return 0;
-    const part = session.partFor(deps.storyScope()) ?? session.part();
+    // The paragraph's OWN part, by its id: a scripted replacement addresses the body while
+    // the reader has a header open, and the reader's story would answer no paragraph and no
+    // retraction, landing the copy past its own pending text. `partOfNodeId` is a pure
+    // ancestry read; `partFor` would retain a story store for what is only a lookup.
+    const part =
+      partOfNodeId(session, to.paragraphId) ?? session.partFor(deps.storyScope()) ?? session.part();
     const paragraph = findNode(part, to.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return 0;
     return retractedLengthOf(paragraph, from.offset, to.offset, author);
@@ -492,9 +629,11 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     orderedStart,
     textOf,
     inlineControlBeside,
+    atomicControlDeletion,
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
+    deleteRangePlan,
     replacementOffset,
   };
 }

@@ -56,8 +56,7 @@ const TABLE_2X2 = docx(
     '<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
 );
 
-const STYLE_REL =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
 
 /** A package with a styles part, so a heading style resolves to an outline level. */
 function docxWithStyles(body: string): Uint8Array {
@@ -246,7 +245,6 @@ describe('opening', () => {
       'edit.delete',
       'edit.selectAll',
       'text.link',
-      'review.comments',
     ]);
   });
 
@@ -397,6 +395,48 @@ describe('rows act through the engine', () => {
     expect(written).toEqual(['hello ']);
   });
 
+  test('Paste closes the panel before the clipboard read settles', async () => {
+    let resolveRead: (text: string) => void = () => {};
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => new Promise<string>((resolve) => (resolveRead = resolve)) },
+      configurable: true,
+    });
+    const { view, editor } = mount();
+    select(editor(), 0, 0);
+    rightClick(view);
+
+    act(() => {
+      fireEvent.click(rowNamed(view, 'edit.paste'));
+    });
+    // The read waits on the permission prompt; the menu must not wait with it.
+    expect(panel(view)).toBeNull();
+
+    await act(async () => {
+      resolveRead('pasted ');
+    });
+    select(editor(), 0, 18);
+    expect(editor().query({ type: 'selectedText' })).toBe('pasted hello world');
+  });
+
+  test('a refused read disables Paste with the reason on the next open', async () => {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => Promise.reject(new Error('Read permission denied.')) },
+      configurable: true,
+    });
+    const { view } = mount();
+    rightClick(view);
+
+    await act(async () => {
+      fireEvent.click(rowNamed(view, 'edit.paste'));
+    });
+    expect(panel(view)).toBeNull();
+
+    rightClick(view);
+    const row = rowNamed(view, 'edit.paste');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.getAttribute('title')).toBe('Read permission denied.');
+  });
+
   test('a disabled row does nothing when clicked', () => {
     const { view } = mount();
     rightClick(view);
@@ -443,7 +483,6 @@ describe('composition', () => {
       'edit.delete',
       'edit.selectAll',
       'text.link',
-      'review.comments',
     ]);
     expect(rowNamed(view, 'edit.cut').textContent).toContain('igloo.carve');
   });
@@ -631,6 +670,8 @@ describe('table context rows (Task 10)', () => {
     'table.insertRowBelow',
     'table.insertColumnLeft',
     'table.insertColumnRight',
+    'table.mergeCells',
+    'table.splitCell',
     'table.deleteRow',
     'table.deleteColumn',
     'table.deleteTable',
@@ -658,8 +699,6 @@ describe('table context rows (Task 10)', () => {
     const tableStart = slots.indexOf('table.insertRowAbove');
     expect(tableStart).toBeGreaterThan(-1);
     expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
-    expect(slots).not.toContain('table.mergeCells');
-    expect(slots).not.toContain('table.splitCell');
   });
 
   test('destructive table rows carry the destructive treatment before cell alignment', () => {
@@ -729,7 +768,7 @@ describe('table context rows (Task 10)', () => {
     expect(panel(view)).toBeNull();
   });
 
-  test('merged-table column insertion is disabled with the engine reason', () => {
+  test('a span past the column grid disables column insertion with the engine reason', () => {
     const { view, editor } = mountDocument(MERGED_TABLE);
     act(() => {
       const paragraphId = editor().surface!.session.paragraphIds()[0]!;
@@ -741,7 +780,9 @@ describe('table context rows (Task 10)', () => {
     rightClick(view);
     const row = rowNamed(view, 'table.insertColumnRight');
     expect(row.getAttribute('aria-disabled')).toBe('true');
-    expect(row.getAttribute('title')).toBe('this table has merged cells');
+    expect(row.getAttribute('title')).toBe(
+      "This table has a cell that doesn't fit its column grid"
+    );
   });
 
   test('a Fragment-wrapped table row override still replaces its row in place', () => {
@@ -811,7 +852,9 @@ describe('table context rows (Task 10)', () => {
       expect(rowNamed(view, slot).querySelector('svg')).not.toBeNull();
     }
     expect(rowNamed(view, 'toc.refresh').textContent).toContain('toc.refresh');
-    expect(rowNamed(view, 'toc.refreshPageNumbers').textContent).toContain('toc.refreshPageNumbers');
+    expect(rowNamed(view, 'toc.refreshPageNumbers').textContent).toContain(
+      'toc.refreshPageNumbers'
+    );
   });
 
   test('the rows are there on the FIRST open, right after a menu over ordinary text', () => {
@@ -826,10 +869,11 @@ describe('table context rows (Task 10)', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
     rightClickOn(tocRow(view));
-    expect(rows(view).map((row) => row.dataset.slot).slice(-2)).toEqual([
-      'toc.refresh',
-      'toc.refreshPageNumbers',
-    ]);
+    expect(
+      rows(view)
+        .map((row) => row.dataset.slot)
+        .slice(-2)
+    ).toEqual(['toc.refresh', 'toc.refreshPageNumbers']);
   });
 
   test('the rows keep addressing the TOC the open captured, not the caret', () => {
@@ -866,4 +910,54 @@ describe('table context rows (Task 10)', () => {
     ).toBe(true);
     expect(editor().query({ type: 'isInsideToc', pos: 0 })).toBe(false);
   });
+});
+
+test('field context action opens shared options and saves all controls', () => {
+  const { view, editor } = mountDocument(
+    docx(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    )
+  );
+  select(editor(), 0, 0);
+  const field = view.container.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+  act(() => {
+    fireEvent.contextMenu(field, { button: 2, clientX: 30, clientY: 30 });
+  });
+  expect(rowNamed(view, 'field.edit').textContent).toContain('textFormField.edit');
+  act(() => {
+    fireEvent.click(rowNamed(view, 'field.edit'));
+  });
+  const dialog = view.container.querySelector('dialog')!;
+  expect(dialog).not.toBeNull();
+  const [type, format] = dialog.querySelectorAll('select');
+  const [text, max, enabled] = dialog.querySelectorAll('input');
+  act(() => {
+    fireEvent.change(type!, { target: { value: 'number' } });
+    fireEvent.change(text!, { target: { value: '12.5' } });
+    fireEvent.change(max!, { target: { value: '4' } });
+    fireEvent.change(format!, { target: { value: '0.00' } });
+    fireEvent.click(enabled!);
+  });
+  act(() => {
+    fireEvent.click(dialog.querySelectorAll('button')[1]!);
+  });
+  expect(view.container.querySelector('dialog')).toBeNull();
+  expect(view.container.querySelector('[data-field-atom="form"]')?.textContent).toBe('12.50');
+});
+
+test('Shift F10 exposes field options from the keyboard selection', () => {
+  const { view, editor } = mountDocument(
+    docx(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    )
+  );
+  select(editor(), 1, 1);
+  act(() => {
+    fireEvent.keyDown(view.container.querySelector('.docx-pages')!, { key: 'F10', shiftKey: true });
+  });
+  expect(rowNamed(view, 'field.edit')).toBeDefined();
+  act(() => {
+    fireEvent.click(rowNamed(view, 'field.edit'));
+  });
+  expect(view.container.querySelector('dialog')).not.toBeNull();
 });

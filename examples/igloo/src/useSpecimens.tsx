@@ -7,6 +7,7 @@
 // It also mounts `CustomNodeChrome`, which belongs inside `DocxEditor.Root` and drives its
 // `onNodeClick` from the state held here.
 
+import { onAnnounce } from './notice';
 import {
   createContext,
   useCallback,
@@ -105,6 +106,9 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   const say = useCallback((text: string) => {
     setNotice((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
   }, []);
+  // The permit's pop-ups render from the root's `popups` map, beside this provider rather
+  // than under it, so they reach the strip through the bus instead of the context.
+  useEffect(() => onAnnounce(say), [say]);
 
   // The fade animation's `onAnimationEnd` is the primary dismissal; this is the fallback
   // for environments where it never fires (reduced motion, a hidden tab's throttled

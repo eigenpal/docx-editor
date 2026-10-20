@@ -1,3 +1,8 @@
+import {
+  warnDeprecatedSlotProp,
+  warnMissingSlotId,
+  warnMissingSubmenuLabel,
+} from './menu-warnings';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The menu bar's rows.
@@ -8,36 +13,41 @@ import type { ReactNode } from 'react';
 // (icon, label, right-aligned shortcut, submenu caret) and the fact that selecting a row
 // closes the menu.
 //
-// THREE ROWS DO NOT DISPATCH A COMMAND. Open and save move BYTES across the host
-// boundary, and page setup needs a dialog's values; the engine has no command for any of
-// them (`toolbarCommandState` says so in those words). Those rows read their handler from
-// the menu context, which the root resolves once — host override, else the packaged
-// default — so the row itself holds no policy.
+// Host actions read their handlers from the menu context. Editing rows use engine commands.
 
-import { isValidElement, useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
+import { isValidElement, useContext, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
-  chromeSlotIsToggle,
   CHROME_MENUS,
   chromeProbeForSlot,
+  chromeSlotIsToggle,
   commandForSlot,
+  hostDocumentOf,
   type ChromeMenuEntry,
   type ChromeMenuId,
   type ChromeMenuItemEntry,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
-import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
+import {
+  MENU_OVERFLOW_ID,
+  MenuRowTabIndexContext,
+  useMenuContext,
+  useMenuLabel,
+  useMenuOverflow,
+  type MenuId,
+} from './menu-context';
+import { menuOverflowPlacement } from './menu-overflow-state';
+import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
+import { MenuTableGrid } from './menu-flyouts';
+import { MenuWatermark } from './menu-watermark';
+import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
 
-/** Word's insert-table grid is 6 columns by 6 rows. */
-const TABLE_GRID_COLUMNS = 6;
-const TABLE_GRID_ROWS = 6;
+export { MenuTableGrid, type MenuTableGridProps } from './menu-flyouts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The generic row
@@ -106,6 +116,7 @@ export function MenuRow(props: MenuRowProps) {
   const value = props['data-value'];
   const shortcutText = usePlatformShortcut();
   const reasonId = useId();
+  const tabIndex = useContext(MenuRowTabIndexContext);
   // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
   // order and stops firing pointer events, so its `title` never renders and a screen
   // reader walking the menu skips the row entirely — which is the whole "present and
@@ -124,10 +135,8 @@ export function MenuRow(props: MenuRowProps) {
       type="button"
       role={role}
       className={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-      // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
-      // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
-      // tab stops).
-      tabIndex={-1}
+      // Popup rows use arrow keys. Direct menubar actions remain reachable by Tab.
+      tabIndex={tabIndex}
       {...(slot ? { 'data-slot': slot } : {})}
       {...(value !== undefined ? { 'data-value': value } : {})}
       {...(active ? { 'data-active': '' } : {})}
@@ -212,17 +221,47 @@ export function MenuGroup({
 // Slot-driven row
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export interface MenuItemProps {
+/**
+ * Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. Set `slotId`. A row with
+ * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+ * An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuItemProps extends MenuItemBaseProps {
   /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slot: ChromeSlotId;
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
+}
+
+/** The props every `Menu.Item` takes besides the slot it names. @public */
+export interface MenuItemBaseProps {
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
   shortcutKey?: string;
   className?: string;
-  /** Render nothing — inside a packaged menu this removes the row. */
+  /**
+   * Render nothing: inside a packaged menu this removes the row in place. A named row part
+   * with `hidden`, such as `<ContextMenu.Cut hidden />`, is shorthand for this override
+   * with that row's `slotId`.
+   */
   hidden?: boolean;
+}
+
+/** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
+export function menuItemSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) {
+    warnDeprecatedSlotProp(props.slot);
+    return props.slot;
+  }
+  warnMissingSlotId();
+  return undefined;
 }
 
 /**
@@ -232,11 +271,13 @@ export interface MenuItemProps {
  *
  * @public
  */
-export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: MenuItemProps) {
+export function MenuItem(props: MenuItemProps) {
+  const { labelKey, shortcutKey, className, hidden } = props;
+  const slot = menuItemSlotId(props) ?? ('' as ChromeSlotId);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const label = useMenuLabel();
-  if (hidden) return null;
+  if (hidden || !slot) return null;
   const control = chromeControlForSlot(slot);
   const text = label(labelKey ?? control?.labelKey ?? slot);
   // Checked-ness only where it is meaningful — the ENGINE's rule, the same one
@@ -244,7 +285,9 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
   // does not, and the format painter does even though no single command describes its press.
   const isToggle = chromeSlotIsToggle(slot);
   // The four alignments are one-of-four, not four independent toggles.
-  const isRadio = commandForSlot(slot)?.type === 'setAlignment';
+  const isRadio = ['setAlignment', 'setParagraphDirection', 'setReviewDisplayMode'].includes(
+    commandForSlot(slot)?.type ?? ''
+  );
   return (
     <MenuRow
       slot={slot}
@@ -290,12 +333,14 @@ function defineActionRow(
   slot: ChromeSlotId,
   labelKey: string | undefined,
   shortcutKey: string | undefined,
-  pick: (context: ReturnType<typeof useMenuContext>) => (() => void) | undefined
+  pick: (context: ReturnType<typeof useMenuContext>) => (() => void) | undefined,
+  showShortcut: (context: ReturnType<typeof useMenuContext>) => boolean = () => true
 ) {
   const Part = ({ className, hidden }: MenuActionProps) => {
     const context = useMenuContext();
     const label = useMenuLabel();
     const handler = pick(context);
+    const shortcut = shortcutKey && showShortcut(context) ? shortcutKey : undefined;
     if (hidden) return null;
     const control = chromeControlForSlot(slot);
     const text = label(labelKey ?? control?.labelKey ?? slot);
@@ -303,7 +348,7 @@ function defineActionRow(
       <MenuRow
         slot={slot}
         icon={chromeIcon(control?.paths)}
-        {...(shortcutKey ? { shortcut: label(shortcutKey) } : {})}
+        {...(shortcut ? { shortcut: label(shortcut) } : {})}
         disabled={!handler}
         onSelect={() => {
           handler?.();
@@ -331,19 +376,37 @@ export const MenuSave = defineActionRow(
   (context) => context.onSave
 );
 
+/** Exports continuous Markdown through the menu handler. @public */
+export const MenuExportMarkdown = defineActionRow(
+  'file.exportMarkdown',
+  undefined,
+  undefined,
+  (context) => (context.onExport ? () => context.onExport?.('markdown') : undefined)
+);
+/** Exports PDF through the menu handler. @public */
+export const MenuExportPdf = defineActionRow('file.exportPdf', undefined, undefined, (context) =>
+  context.onExport ? () => context.onExport?.('pdf') : undefined
+);
+/** Prints through the menu's PDF handler. @public */
+export const MenuPrint = defineActionRow(
+  'file.print',
+  undefined,
+  'toolbar.printShortcut',
+  (context) => context.onPrint,
+  (context) => context.printShortcut === true
+);
+
 /**
  * Page setup. Unlike open and save, the ENGINE has an opinion here — `setPageSetup` is a
  * real command, it just needs the dialog's values — so the row asks through the slot's
  * probe and is disabled with the engine's own words on a document it cannot rewrite.
  */
 function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
-  const editor = useDocxEditor();
+  const { isEnabled: engineOk, disabledReason: engineReason } = useEditorCommand(
+    chromeProbeForSlot('file.pageSetup')!
+  );
   const context = useMenuContext();
   const label = useMenuLabel();
-  const probe = chromeProbeForSlot('file.pageSetup');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const engineOk = allowed?.ok === true;
-  const engineReason = allowed && !allowed.ok ? allowed.reason : null;
   if (hidden) return null;
   const control = chromeControlForSlot('file.pageSetup');
   const text = label(control?.labelKey ?? 'file.pageSetup');
@@ -377,13 +440,11 @@ function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
  * slot's probe and is disabled with the engine's own words on a document it cannot rewrite.
  */
 function MenuParagraphDialogImpl({ className, hidden }: MenuActionProps) {
-  const editor = useDocxEditor();
+  const { isEnabled: engineOk, disabledReason: engineReason } = useEditorCommand(
+    chromeProbeForSlot('paragraph.dialog')!
+  );
   const context = useMenuContext();
   const label = useMenuLabel();
-  const probe = chromeProbeForSlot('paragraph.dialog');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const engineOk = allowed?.ok === true;
-  const engineReason = allowed && !allowed.ok ? allowed.reason : null;
   if (hidden) return null;
   const control = chromeControlForSlot('paragraph.dialog');
   const text = label(control?.labelKey ?? 'lineSpacing.options');
@@ -450,13 +511,24 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 // Submenu
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Submenu`. @public */
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
 
-export interface MenuSubmenuProps {
+/**
+ * Props for `DocxEditor.Menu.Submenu`. Set `labelKey` or `label`. A submenu with neither has
+ * no name, with a development warning. An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
   /** i18n key of the parent row's label. */
-  labelKey: string;
+  labelKey?: string;
+  /** Literal parent row label, already resolved. Wins over `labelKey`. */
+  label?: string;
+}
+
+/** The props every `Menu.Submenu` takes besides its label. @public */
+export interface MenuSubmenuBaseProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -473,13 +545,20 @@ export interface MenuSubmenuProps {
  *
  * @public
  */
-export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmenuProps) {
+export function MenuSubmenu({
+  labelKey,
+  label: literal,
+  paths,
+  className,
+  children,
+}: MenuSubmenuProps) {
   const label = useMenuLabel();
   const [open, setOpen] = useState(false);
   const parentRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
-  const text = label(labelKey);
+  if (literal === undefined && labelKey === undefined) warnMissingSubmenuLabel();
+  const text = literal ?? label(labelKey ?? '');
 
   // Placed in client space, not with `left: 100%`. The context menu is a scroller
   // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
@@ -520,7 +599,10 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
         // The APG's submenu keys, and the reason the panel is reachable at all without a
         // pointer: Right opens and steps in, Left and Escape close and come back to the
         // parent row. Escape is stopped so it closes THIS panel rather than the whole bar.
-        if (event.key === 'ArrowRight' && document.activeElement === parentRef.current) {
+        if (
+          event.key === 'ArrowRight' &&
+          hostDocumentOf(parentRef.current).activeElement === parentRef.current
+        ) {
           event.preventDefault();
           setOpen(true);
           queueMicrotask(() => {
@@ -587,15 +669,15 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               event.stopPropagation();
-              focusBy(items, document.activeElement, 1);
+              focusBy(items, hostDocumentOf(panel).activeElement, 1);
             } else if (event.key === 'ArrowUp') {
               event.preventDefault();
               event.stopPropagation();
-              focusBy(items, document.activeElement, -1);
+              focusBy(items, hostDocumentOf(panel).activeElement, -1);
             }
           }}
         >
-          {children}
+          <MenuRowTabIndexContext.Provider value={-1}>{children}</MenuRowTabIndexContext.Provider>
         </div>
       ) : null}
     </div>
@@ -605,145 +687,6 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
 // ─────────────────────────────────────────────────────────────────────────────
 // The insert-table grid
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Props for `DocxEditor.Menu.TableGrid`. @public */
-export interface MenuTableGridProps {
-  /** The slot the picked size dispatches through. Defaults to `table.insert`. */
-  slot?: ChromeSlotId;
-  className?: string;
-}
-
-/**
- * Word's insert-table size picker: a 6×6 grid that highlights as the pointer sweeps it
- * and reads back the size underneath.
- *
- * Rendered only when the engine will honour an insert (see `MenuTablePicker`). A panel
- * that opens onto a grid nothing can be picked from is worse than no panel: the row
- * cannot act, so it should not disclose — it should look disabled, like every other row
- * the engine refuses.
- *
- * @public
- */
-export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGridProps) {
-  const editor = useDocxEditor();
-  const { isEnabled } = useEditorCommand(slot);
-  const { setOpenMenu } = useMenuContext();
-  const label = useMenuLabel();
-  const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
-  // The cell that holds the grid's single tab stop. A 6x6 of tabbable buttons is 36 tab
-  // stops for a keyboard user; a grid is ONE, with arrows moving inside it.
-  const [cursor, setCursor] = useState({ rows: 1, cols: 1 });
-  const gridRef = useRef<HTMLDivElement | null>(null);
-
-  const insert = useCallback(
-    (rows: number, cols: number) => {
-      if (!editor || !isEnabled) return;
-      // can-before-exec even here: the panel opened because the slot was enabled, and the
-      // selection can move under it.
-      const command = { type: 'insertTable' as const, rows, cols };
-      if (!editor.can(command).ok) return;
-      editor.exec(command);
-      setOpenMenu(null);
-      // The engine left the caret in the first cell; DOM focus is still on the grid cell
-      // that was clicked, and the panel is about to unmount. Without this the user has to
-      // click into a table they just asked for before they can type in it.
-      editor.focus();
-    },
-    [editor, isEnabled, setOpenMenu]
-  );
-
-  /**
-   * Move the cursor within the grid and follow it with focus.
-   *
-   * Takes a STEP from the current cell rather than an absolute target, applied through the
-   * functional updater: two key presses in one React batch would both read the same
-   * captured `cursor` and the second would go nowhere, so a fast Right-Right lands one
-   * cell over instead of two.
-   */
-  const move = useCallback((step: { rows?: number; cols?: number; toCol?: number }) => {
-    setCursor((current) => {
-      const next = {
-        rows: Math.min(TABLE_GRID_ROWS, Math.max(1, current.rows + (step.rows ?? 0))),
-        cols: Math.min(
-          TABLE_GRID_COLUMNS,
-          Math.max(1, step.toCol ?? current.cols + (step.cols ?? 0))
-        ),
-      };
-      setHover(next);
-      // Focus follows in a microtask so the cell it targets has been committed with its
-      // new tabIndex.
-      queueMicrotask(() =>
-        gridRef.current
-          ?.querySelector<HTMLElement>(`[data-cell="${next.rows}x${next.cols}"]`)
-          ?.focus()
-      );
-      return next;
-    });
-  }, []);
-
-  const cellRows: ReactNode[] = [];
-  for (let row = 1; row <= TABLE_GRID_ROWS; row += 1) {
-    const cells: ReactNode[] = [];
-    for (let col = 1; col <= TABLE_GRID_COLUMNS; col += 1) {
-      const filled = !!hover && row <= hover.rows && col <= hover.cols;
-      cells.push(
-        <button
-          key={col}
-          type="button"
-          role="gridcell"
-          data-cell={`${row}x${col}`}
-          className="docx-menubar__grid-cell"
-          // Roving tabindex across the whole grid.
-          tabIndex={cursor.rows === row && cursor.cols === col ? 0 : -1}
-          {...(filled ? { 'data-filled': '' } : {})}
-          aria-label={`${col} × ${row}`}
-          onMouseDown={guardToolbarMousedown}
-          onMouseEnter={() => setHover({ rows: row, cols: col })}
-          onFocus={() => setHover({ rows: row, cols: col })}
-          onClick={() => insert(row, col)}
-        />
-      );
-    }
-    cellRows.push(
-      <div key={row} role="row" className="docx-menubar__grid-row">
-        {cells}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={gridRef}
-      // A 2-D size picker is a GRID, not a list of menu items: `menuitem` on 36 cells
-      // announces them without any positional context, and the roles a menu permits do not
-      // include one for "cell in a 6x6".
-      role="grid"
-      aria-label={label('toolbar.insertTable')}
-      className={`docx-menubar__grid${className ? ` ${className}` : ''}`}
-      onMouseLeave={() => setHover(null)}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowRight') move({ cols: 1 });
-        else if (event.key === 'ArrowLeft') move({ cols: -1 });
-        else if (event.key === 'ArrowDown') move({ rows: 1 });
-        else if (event.key === 'ArrowUp') move({ rows: -1 });
-        else if (event.key === 'Home') move({ toCol: 1 });
-        else if (event.key === 'End') move({ toCol: TABLE_GRID_COLUMNS });
-        else return;
-        // Stopped so the grid's arrows do not ALSO walk the menu rows behind it.
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-    >
-      <div className="docx-menubar__grid-cells">{cellRows}</div>
-      {/* Not a live region: `role="status"` here announced on every one of the 36 cells a
-          pointer sweep crosses. The size is already on each cell's accessible name, which
-          is what a screen-reader user actually hears as they move. */}
-      <div className="docx-menubar__grid-caption" aria-hidden="true">
-        {hover ? `${hover.cols} × ${hover.rows}` : ''}
-      </div>
-    </div>
-  );
-}
 
 /**
  * The Insert › Table row: the grid behind a disclosure when the engine can insert one, a
@@ -760,7 +703,9 @@ function MenuTablePicker({ entry }: { entry: ChromeMenuItemEntry }) {
   const { isEnabled } = useEditorCommand(entry.slot);
   const control = chromeControlForSlot(entry.slot);
   if (!isEnabled) {
-    return <MenuItem slot={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />;
+    return (
+      <MenuItem slotId={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />
+    );
   }
   return (
     <MenuSubmenu
@@ -794,30 +739,32 @@ export function MenuSeparator({ className }: MenuSeparatorProps) {
 /**
  * One registry entry as its row.
  *
- * The three host-boundary slots route to their pinned parts rather than to the generic
- * `MenuItem`, because a command-driven row would render them permanently disabled — the
- * engine reports, correctly, that neither open nor save is a command.
+ * Host actions use their pinned parts because they are not editing commands.
  */
-export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
+export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; children?: ReactNode }) {
   if (entry.kind === 'separator') return <MenuSeparator />;
   if (entry.kind === 'submenu') {
     return (
       <MenuSubmenu labelKey={entry.labelKey} paths={entry.paths}>
-        {entry.items.map((item, index) => (
-          <MenuEntry key={index} entry={item} />
-        ))}
+        {children ?? entry.items.map((item, index) => <MenuEntry key={index} entry={item} />)}
       </MenuSubmenu>
     );
   }
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
+  if (entry.slot === 'file.exportMarkdown') return <MenuExportMarkdown />;
+  if (entry.slot === 'file.exportPdf') return <MenuExportPdf />;
+  if (entry.slot === 'file.print') return <MenuPrint />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
   if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
+  if (entry.slot === 'insert.watermark') return <MenuWatermark />;
+  if (entry.slot === 'insert.bookmark') return <MenuBookmark />;
+  if (entry.slot === 'insert.goToBookmark') return <MenuGoToBookmarkRow />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
     <MenuItem
-      slot={entry.slot}
+      slotId={entry.slot}
       {...(entry.labelKey ? { labelKey: entry.labelKey } : {})}
       {...(entry.shortcutKey ? { shortcutKey: entry.shortcutKey } : {})}
     />
@@ -840,10 +787,7 @@ function rowKeyOfChild(child: ReactNode): string | null {
   const type = child.type as { docxSlot?: unknown; docxMenuRow?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
-  if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
-  }
+  if (type.docxMenuRow === true) return menuItemSlotId(child.props as MenuItemProps) ?? null;
   return null;
 }
 
@@ -877,7 +821,8 @@ function mergePanel(
     preset,
     keyOfEntry: rowKeyOfEntry,
     keyOfChild: rowKeyOfChild,
-    renderEntry: (entry) => <MenuEntry entry={entry} />,
+    childrenOfEntry: (entry) => (entry.kind === 'submenu' ? entry.items : undefined),
+    renderEntry: (entry, _index, nested) => <MenuEntry entry={entry}>{nested}</MenuEntry>,
   });
 }
 
@@ -939,7 +884,8 @@ export function Menu({
   preset = true,
   children,
 }: MenuProps) {
-  const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
+  const { openMenu, setOpenMenu, activeMenu, opening } = useMenuContext();
+  const menuOverflow = useMenuOverflow();
   const label = useMenuLabel();
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -956,9 +902,23 @@ export function Menu({
   const switchedByHover = useRef(false);
   const registry = CHROME_MENUS.find((menu) => menu.id === id);
   const open = openMenu === id;
+  // The "⋯" menu's panel is clamped to the viewport like the toolbar's.
+  const panelStyle = useMenuPanelPlacement(open && id === MENU_OVERFLOW_ID, triggerRef, panelRef);
   if (hidden) return null;
   const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
+  // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu row
+  // with the same panel. Inside that menu, every menu that still fits renders nothing.
+  const placement = menuOverflowPlacement(menuOverflow, id, activeMenu);
+  if (placement.skip) return null;
+  if (placement.asSubmenu) {
+    return (
+      <MenuSubmenu labelKey={labelKey ?? registry?.labelKey ?? id} label={text}>
+        {mergePanel(registry?.entries, children, preset)}
+      </MenuSubmenu>
+    );
+  }
   const rows = mergePanel(registry?.entries, children, preset);
+  const iconOnly = placement.iconOnly;
   // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
   // this the element holding focus disappears and focus falls to <body> — the user is
   // dumped at the top of the page with no announcement and has to tab back through the
@@ -975,6 +935,8 @@ export function Menu({
       role="none"
       className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`}
       data-menu={id}
+      // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
+      {...placement.rootAttributes}
     >
       <button
         ref={triggerRef}
@@ -984,11 +946,15 @@ export function Menu({
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className="docx-menubar__trigger"
+        disabled={opening === true}
         // Roving tabindex: the bar is ONE tab stop, and arrows move within it. Without
         // this every trigger is a stop and a keyboard user tabs through four of them to
         // get past the editor's chrome.
-        tabIndex={activeMenu === id ? 0 : -1}
+        // When the active menu moved into "⋯", the "⋯" trigger holds the stop instead.
+        tabIndex={placement.tabStop ? 0 : -1}
         {...(open ? { 'data-open': '' } : {})}
+        // The "⋯" trigger shows only its icon, so its name goes on the element.
+        {...(iconOnly ? { 'aria-label': text, title: text } : {})}
         onMouseDown={guardToolbarMousedown}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -1029,7 +995,7 @@ export function Menu({
             {icon}
           </span>
         ) : null}
-        {text}
+        {iconOnly ? null : text}
       </button>
       {open ? (
         <div
@@ -1046,12 +1012,13 @@ export function Menu({
           id={panelId}
           role="menu"
           aria-label={text}
+          style={panelStyle}
           className="docx-toolbar__menu docx-menubar__menu"
           onKeyDown={(event) => {
             const panel = panelRef.current;
             if (!panel) return;
             const items = panelItems(panel);
-            const focused = document.activeElement;
+            const focused = hostDocumentOf(panel).activeElement;
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               focusBy(items, focused, 1);
@@ -1076,7 +1043,7 @@ export function Menu({
             }
           }}
         >
-          {rows}
+          <MenuRowTabIndexContext.Provider value={-1}>{rows}</MenuRowTabIndexContext.Provider>
         </div>
       ) : null}
     </div>
@@ -1097,89 +1064,3 @@ function defineMenu(id: ChromeMenuId): MenuPartComponent {
 export const MenuFile = defineMenu('file');
 export const MenuFormat = defineMenu('format');
 export const MenuInsert = defineMenu('insert');
-
-/** Props for `DocxEditor.Menu.ReportIssue`. @public */
-export interface MenuReportIssueProps {
-  className?: string;
-  /** Render nothing — inside the packaged Help menu this removes the row. */
-  hidden?: boolean;
-  /** Replaces the packaged handler. Falls back to the menu's `onReportIssue`, then to
-   *  this project's own tracker. */
-  onSelect?: () => void;
-}
-
-/**
- * Help › Report issue.
- *
- * A NAMED part rather than anonymous markup inside the Help menu, because it is the one
- * packaged row that reaches OUTSIDE the host's product: it opens this project's issue
- * tracker with the current page URL and user agent prefilled. A host embedding the editor
- * in its own app has every reason to point that somewhere else or drop it, and it should
- * not have to rebuild the menu to do either — `reportIssue={false}` removes it,
- * `onReportIssue` redirects it, and this part composes it back by name.
- *
- * @public
- */
-function MenuReportIssueImpl({ className, hidden, onSelect }: MenuReportIssueProps) {
-  const { setOpenMenu, onReportIssue, reportIssue } = useMenuContext();
-  const label = useMenuLabel();
-  if (hidden || reportIssue === false) return null;
-  const run = onSelect ?? onReportIssue ?? openReportIssue;
-  return (
-    <MenuRow
-      slot="help.reportIssue"
-      onSelect={() => {
-        run();
-        setOpenMenu(null);
-      }}
-      {...(className ? { className } : {})}
-    >
-      {label('toolbar.reportIssue')}
-    </MenuRow>
-  );
-}
-
-/**
- * The report-issue row, with its row-identity marker.
- *
- * The key is NOT a `ChromeSlotId` — the row is React's, not the shared registry's — but the
- * merge only needs a stable string, and using one here is what lets a host write
- * `<Menu.ReportIssue hidden/>` and have it REPLACE the packaged row rather than render a
- * second, invisible one beside it.
- *
- * @public
- */
-export const MenuReportIssue = Object.assign(MenuReportIssueImpl, {
-  docxSlot: 'help.reportIssue',
-});
-
-/**
- * Help.
- *
- * The registry leaves this menu EMPTY on purpose — a product's documentation and support
- * channel are the host's, not the library's. The one row the library can honestly own is
- * a report for this project's own tracker, so the packaged Help menu supplies it here
- * rather than in the shared registry, where a Vue or vanilla host would inherit a link it
- * never asked for. Replace the whole menu by name to say something else.
- *
- * With no children and `reportIssue` unset the menu carries that one row; with
- * `reportIssue={false}` it carries nothing, and Help is dropped rather than left as a
- * trigger that opens an empty panel.
- */
-function MenuHelpImpl({ children, ...rest }: Omit<MenuProps, 'id'>) {
-  const { reportIssue } = useMenuContext();
-  if (children === undefined && reportIssue === false) return null;
-  // The packaged row is passed as a CHILD rather than as a fallback, so the ordinary merge
-  // rules reach it: a host adds rows beside it, and `<Menu.ReportIssue hidden/>` removes
-  // just that row without taking the menu with it.
-  return (
-    <Menu id="help" {...rest}>
-      <MenuReportIssue />
-      {children}
-    </Menu>
-  );
-}
-
-export const MenuHelp: MenuPartComponent = Object.assign(MenuHelpImpl, {
-  docxMenu: 'help' as ChromeMenuId,
-});

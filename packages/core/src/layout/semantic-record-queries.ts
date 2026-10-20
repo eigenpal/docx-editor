@@ -185,12 +185,14 @@ const PAGE_RECORD_FIELD_ROLES = {
   contentBox: 'metadata',
   fragments: 'story',
   columnSeparators: 'metadata',
+  pageBorders: 'metadata',
   anchoredDrawings: 'story',
   header: 'story',
   footer: 'story',
   footnotes: 'story',
   endnotes: 'story',
   noteStream: 'metadata',
+  parityBlank: 'metadata',
   pageFieldSource: 'metadata',
   hasBodyPageFields: 'metadata',
   contentControls: 'metadata',
@@ -220,6 +222,7 @@ const NOTE_AREA_FIELD_ROLES = {
   box: 'metadata',
   separator: 'story',
   notes: 'story',
+  continuationNotice: 'story',
   fallbackReason: 'metadata',
 } as const satisfies Record<keyof NoteAreaRecord, StoryFieldRole>;
 
@@ -232,6 +235,7 @@ type NoteAreaStoryField = {
 const TRAVERSED_NOTE_AREA_STORY_FIELDS = {
   separator: true,
   notes: true,
+  continuationNotice: true,
 } as const satisfies Record<NoteAreaStoryField, true>;
 const NOTE_AREA_STORY_FIELDS = Object.freeze(
   Object.keys(TRAVERSED_NOTE_AREA_STORY_FIELDS) as NoteAreaStoryField[]
@@ -253,12 +257,13 @@ function forEachNoteAreaStory(
   for (const field of NOTE_AREA_STORY_FIELDS) {
     switch (field) {
       case 'separator':
-        if (area.separator) {
+      case 'continuationNotice':
+        if (area[field]) {
           visit({
             page,
             story: 'note-separator',
-            host: area.separator,
-            ...storyGeometry(area.separator.box),
+            host: area[field],
+            ...storyGeometry(area[field].box),
             noteScopeId: null,
             noteAreaKind,
           });
@@ -369,13 +374,16 @@ export function forEachSemanticStory(
 export interface StoryParagraphFragmentContext {
   /** Absolute origin of the immediate story containing this record. */
   readonly storyOrigin: Readonly<{ x: number; y: number }>;
-  /** Zero for the supplied story; increments for every anchored textbox boundary. */
+  /** Zero for the supplied story; increments for every textbox boundary. */
   readonly textboxDepth: number;
   /** Drawing whose textbox directly owns this fragment, or null for the root story. */
-  readonly textboxOwner: AnchoredDrawingRecord | null;
+  readonly textboxOwner: TextboxOwnerRecord | null;
   /** Root-to-leaf owning drawings, empty for the supplied story. */
-  readonly textboxPath: readonly AnchoredDrawingRecord[];
+  readonly textboxPath: readonly TextboxOwnerRecord[];
 }
+
+/** A drawing that owns a text-box story: anchored, or inline on a line. @public */
+export type TextboxOwnerRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
 /** Location of one drawing within a recursively painted story graph. @public */
 export interface StoryDrawingContext extends StoryParagraphFragmentContext {
@@ -398,10 +406,10 @@ const ZERO_STORY_ORIGIN = Object.freeze({ x: 0, y: 0 });
 
 function textboxStoryOrigin(
   origin: Readonly<{ x: number; y: number }>,
-  drawing: AnchoredDrawingRecord,
+  drawing: TextboxOwnerRecord,
+  offset: Readonly<{ x: number; y: number }>,
   placedDrawingOrigin?: Readonly<{ x: number; y: number }>
 ): Readonly<{ x: number; y: number }> {
-  const offset = drawing.textboxStory?.contentOffset ?? ZERO_STORY_ORIGIN;
   const placed = placedDrawingOrigin ?? { x: origin.x + drawing.x, y: origin.y + drawing.y };
   return Object.freeze({
     x: placed.x + offset.x,
@@ -409,11 +417,39 @@ function textboxStoryOrigin(
   });
 }
 
+interface OwnedTextboxStory {
+  readonly story: import('./textbox-story-layout.ts').TextboxStoryLayout;
+  /** Origin of the story's content box inside the drawing extent. */
+  readonly offset: Readonly<{ x: number; y: number }>;
+}
+
+/**
+ * Every text-box story a drawing carries: its own, then each group member's, at the member
+ * box. One list for every walk, so no consumer can see one kind of story and miss the other.
+ */
+export function ownedTextboxStories(drawing: TextboxOwnerRecord): readonly OwnedTextboxStory[] {
+  const stories: OwnedTextboxStory[] = [];
+  if (drawing.textboxStory) {
+    stories.push({
+      story: drawing.textboxStory,
+      offset: drawing.textboxStory.contentOffset ?? ZERO_STORY_ORIGIN,
+    });
+  }
+  for (const member of drawing.groupTextboxStories ?? []) {
+    const contentOffset = member.story.contentOffset ?? ZERO_STORY_ORIGIN;
+    stories.push({
+      story: member.story,
+      offset: { x: member.box.x + contentOffset.x, y: member.box.y + contentOffset.y },
+    });
+  }
+  return stories;
+}
+
 type RootDrawingOrigin = (drawing: AnchoredDrawingRecord) => Readonly<{ x: number; y: number }>;
 
 /**
  * Visit every drawing record one story paints — line drawings, anchored drawings, and the
- * drawings inside each anchored drawing's text-box story, recursively.
+ * drawings inside each text-box story, anchored or inline, recursively.
  *
  * The ONE recursive walk shared by furniture invalidation, export resource settlement,
  * exporter provenance, and paint reconciliation. A drawing missed here can otherwise leave a
@@ -441,15 +477,26 @@ export function forEachStoryDrawing(
     for (const line of block.lines) {
       for (const drawing of line.drawings ?? []) {
         visit(drawing, { ...context, paragraph: block, line });
+        // An inline text box is a story too, placed where the line puts its extent.
+        const stories = ownedTextboxStories(drawing);
+        if (stories.length === 0 || drawing.accessibility.hidden) continue;
+        for (const owned of stories) {
+          visitStory(
+            owned.story,
+            context.textboxDepth + 1,
+            Object.freeze([...context.textboxPath, drawing]),
+            textboxStoryOrigin(context.storyOrigin, drawing, owned.offset)
+          );
+        }
       }
     }
   };
-  const visitStory = (
+  function visitStory(
     inner: StoryDrawingHost,
     depth: number,
-    textboxPath: readonly AnchoredDrawingRecord[],
+    textboxPath: readonly TextboxOwnerRecord[],
     storyOrigin: Readonly<{ x: number; y: number }>
-  ): void => {
+  ): void {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
     const context: StoryParagraphFragmentContext = {
       storyOrigin,
@@ -460,21 +507,22 @@ export function forEachStoryDrawing(
     for (const drawing of inner.anchoredDrawings ?? []) {
       visit(drawing, { ...context, paragraph: null, line: null });
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) {
+      for (const owned of ownedTextboxStories(drawing)) {
         visitStory(
-          drawing.textboxStory,
+          owned.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
           textboxStoryOrigin(
             storyOrigin,
             drawing,
+            owned.offset,
             depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
           )
         );
       }
     }
     for (const fragment of inner.fragments) visitBlock(fragment, context);
-  };
+  }
   visitStory(story, 0, Object.freeze([]), rootOrigin);
 }
 
@@ -590,7 +638,7 @@ export function forEachStoryParagraphFragment(
   const visitStory = (
     inner: StoryDrawingHost,
     depth: number,
-    textboxPath: readonly AnchoredDrawingRecord[],
+    textboxPath: readonly TextboxOwnerRecord[],
     storyOrigin: Readonly<{ x: number; y: number }>
   ): void => {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
@@ -601,17 +649,32 @@ export function forEachStoryParagraphFragment(
         textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
         textboxPath,
       });
+      for (const line of fragment.lines) {
+        for (const drawing of line.drawings ?? []) {
+          const stories = ownedTextboxStories(drawing);
+          if (stories.length === 0 || drawing.accessibility.hidden) continue;
+          for (const owned of stories) {
+            visitStory(
+              owned.story,
+              depth + 1,
+              Object.freeze([...textboxPath, drawing]),
+              textboxStoryOrigin(storyOrigin, drawing, owned.offset)
+            );
+          }
+        }
+      }
     }
     for (const drawing of inner.anchoredDrawings ?? []) {
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) {
+      for (const owned of ownedTextboxStories(drawing)) {
         visitStory(
-          drawing.textboxStory,
+          owned.story,
           depth + 1,
           Object.freeze([...textboxPath, drawing]),
           textboxStoryOrigin(
             storyOrigin,
             drawing,
+            owned.offset,
             depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
           )
         );

@@ -298,7 +298,8 @@ function paragraphsOfNote(note: OoxmlNode): OoxmlParagraphNode[] {
   return paragraphs;
 }
 
-function firstEditableNoteOffset(paragraph: OoxmlParagraphNode): number {
+/** The offset after a note paragraph's leading reference mark, or 0 without one. */
+export function firstEditableNoteOffset(paragraph: OoxmlParagraphNode): number {
   const first = segmentsOf(paragraph)[0];
   return first && isNoteRefNode(first.node) ? first.end : 0;
 }

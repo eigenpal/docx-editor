@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { writeZip, strToU8 } from '../../store/package/zip.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/package/ooxml-shared.ts';
 import { interopHtmlFromFragment } from '../clipboard-html-write.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -29,6 +30,10 @@ interface FragmentInput {
   /** Media entries by zip name, e.g. `word/media/image1.png`. */
   readonly media?: Readonly<Record<string, Uint8Array>>;
 }
+
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 function fragment(input: FragmentInput): Uint8Array {
   const entries = new Map<string, Uint8Array>();
@@ -120,6 +125,18 @@ describe('interopHtmlFromFragment', () => {
     expect(interopHtmlFromFragment(new Uint8Array([1, 2, 3, 4]))).toBe('');
   });
 
+  test('omitted defaults copy as the application defaults; no styles part copies none', () => {
+    const body = '<w:p><w:r><w:t>plain</w:t></w:r></w:p>';
+    const styled = interopHtmlFromFragment(
+      fragment({ body, styles: '<w:style w:type="paragraph" w:styleId="Body"/>' })
+    );
+    expect(styled).toContain('font-size:12pt');
+    expect(styled).toContain('margin-bottom:8pt');
+    const bare = interopHtmlFromFragment(fragment({ body }));
+    expect(bare).not.toContain('font-size');
+    expect(bare).not.toContain('margin-bottom');
+  });
+
   test('a formatted run carries its resolved inline CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -144,6 +161,43 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<p dir="rtl"');
     expect(html).toContain('lang="ar-SA" dir="rtl"');
     expect(html).toContain('>styled<');
+  });
+
+  test('an RTL paragraph copies its physical alignment and margins', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:pPr><w:bidi/><w:ind w:left="720" w:right="360"/><w:jc w:val="left"/></w:pPr>' +
+          '<w:r><w:rPr><w:rtl/></w:rPr><w:t>rtl</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:ind w:left="720"/><w:jc w:val="left"/></w:pPr>' +
+          '<w:r><w:t>ltr</w:t></w:r></w:p>',
+      })
+    );
+    const [rtl, ltr] = html.split('</p>');
+    // `w:jc="left"` in a bidi paragraph sits at the RIGHT margin, and `w:ind w:left` is its
+    // leading (right) side.
+    expect(rtl).toContain('text-align:right');
+    expect(rtl).toContain('margin-right:36pt');
+    expect(rtl).toContain('margin-left:18pt');
+    expect(ltr).toContain('text-align:left');
+    expect(ltr).toContain('margin-left:36pt');
+  });
+
+  test('inline run wrappers contribute their text in reading order', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:t>before </w:t></w:r>' +
+          '<w:smartTag><w:r><w:t>smart</w:t></w:r></w:smartTag>' +
+          '<w:customXml><w:r><w:t>custom</w:t></w:r></w:customXml>' +
+          '<w:sdt><w:sdtContent><w:r><w:t>demoted</w:t></w:r></w:sdtContent><w:sdtPr/></w:sdt>' +
+          '<w:dir><w:r><w:t>dir</w:t></w:r></w:dir>' +
+          '<w:bdo><w:r><w:t>bdo</w:t></w:r></w:bdo>' +
+          '<w:r><w:t> after</w:t></w:r></w:p>',
+      })
+    );
+
+    expect(html).toContain('before smartcustomdemoteddirbdo after');
   });
 
   test('an RTL run exports its complex-script font', () => {
@@ -230,6 +284,7 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         styles:
+          FORMAT_DOC_DEFAULTS +
           '<w:style w:type="paragraph" w:styleId="ListParagraph">' +
           '<w:name w:val="List Paragraph"/></w:style>',
         numbering:
@@ -314,7 +369,7 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     expect(html).toContain(
-      '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto;'
+      '<table dir="ltr" align="center" style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto;'
     );
     expect(html).toContain('<tr style="height:18pt;mso-height-rule:exactly">');
     expect(html).toContain('colspan="63"');
@@ -328,6 +383,24 @@ describe('interopHtmlFromFragment', () => {
     // The continuation cell is spanned, not emitted: 1 + 2 + 1 cells.
     expect(count(html, '<td')).toBe(4);
     expect(count(html, 'merged')).toBe(1);
+  });
+
+  test('a continuation below an unmerged cell starts its own merge and keeps its text', () => {
+    const cell = (props: string, text: string): string =>
+      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:tbl>' +
+          `<w:tr>${cell('', 'Party')}${cell('', 'Amount')}</w:tr>` +
+          `<w:tr>${cell('<w:vMerge/>', 'Orphan')}${cell('', 'USD 300')}</w:tr>` +
+          `<w:tr>${cell('<w:vMerge/>', '')}${cell('', 'USD 400')}</w:tr>` +
+          '</w:tbl>',
+      })
+    );
+    expect(html).toContain('Orphan');
+    expect(html).toContain('rowspan="2"');
+    expect(count(html, '<td')).toBe(5);
   });
 
   test('table borders resolve from tblBorders onto every cell', () => {
@@ -485,6 +558,63 @@ describe('interopHtmlFromFragment', () => {
     expect(interopHtmlFromFragment(input)).toContain('<img');
   });
 
+  test('nested simple fields retain their cached results and formatting', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
+          '<w:fldSimple w:instr=" IF 1 = 1 &quot;yes&quot; &quot;no&quot; ">' +
+          '<w:fldSimple w:instr=" REF bookmark ">' +
+          '<w:r><w:rPr><w:b/></w:rPr><w:t>yes</w:t></w:r>' +
+          '</w:fldSimple></w:fldSimple>' +
+          '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>',
+      })
+    );
+
+    expect(html).toContain('before ');
+    expect(html).toContain('font-weight:bold');
+    expect(html).toContain('>yes</span>');
+    expect(html).toContain(' after');
+    expect(html).not.toContain('REF bookmark');
+    expect(html).not.toContain('IF 1');
+  });
+
+  test('nested simple fields still omit hidden, deleted, and unsupported content', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:fldSimple w:instr=" REF outer ">' +
+          '<w:fldSimple w:instr=" REF inner ">' +
+          '<w:r><w:t>visible</w:t></w:r>' +
+          '<w:r><w:rPr><w:vanish/></w:rPr><w:t>hidden</w:t></w:r>' +
+          '<w:del w:id="1" w:author="a"><w:r><w:delText>deleted</w:delText></w:r></w:del>' +
+          '<w:moveFrom w:id="2" w:author="a"><w:r><w:t>moved</w:t></w:r></w:moveFrom>' +
+          '<w:unknown><w:r><w:t>unsupported</w:t></w:r></w:unknown>' +
+          '<x:fldSimple xmlns:x="urn:other"><w:r><w:t>foreign</w:t></w:r></x:fldSimple>' +
+          '</w:fldSimple></w:fldSimple></w:p>',
+      })
+    );
+
+    expect(html).toBe('<p>visible</p>');
+  });
+
+  test.each([MAX_INLINE_CONTAINER_DEPTH - 1, MAX_INLINE_CONTAINER_DEPTH])(
+    'nested simple fields respect the inline depth limit at %i levels',
+    (levels) => {
+      let field = '<w:r><w:t>cached</w:t></w:r>';
+      for (let depth = 0; depth < levels; depth += 1) {
+        field = `<w:fldSimple w:instr=" REF bookmark ">${field}</w:fldSimple>`;
+      }
+      const html = interopHtmlFromFragment(
+        fragment({ body: `<w:p>${field}<w:r><w:t>after</w:t></w:r></w:p>` })
+      );
+
+      expect(html).toBe(
+        levels < MAX_INLINE_CONTAINER_DEPTH ? '<p>cachedafter</p>' : '<p>after</p>'
+      );
+    }
+  );
+
   test('hidden runs, deletions, and field machinery never reach the HTML', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -507,6 +637,29 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('7');
     expect(html).toContain('2026');
     expect(html).not.toContain('DATE');
+  });
+
+  test.each(['sdt', 'fldSimple'])('the deleted-field probe charges nested %s depth', (wrapper) => {
+    let deletedSeparate = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+    for (let depth = 1; depth < MAX_INLINE_CONTAINER_DEPTH; depth += 1) {
+      deletedSeparate =
+        wrapper === 'sdt'
+          ? `<w:sdt><w:sdtContent>${deletedSeparate}</w:sdtContent></w:sdt>`
+          : `<w:fldSimple w:instr=" REF bookmark ">${deletedSeparate}</w:fldSimple>`;
+    }
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+          `<w:del w:id="1" w:author="a">${deletedSeparate}</w:del>` +
+          '<w:r><w:t>INSTRUCTION</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="separate"/><w:t>RESULT</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+      })
+    );
+
+    expect(html).not.toContain('INSTRUCTION');
+    expect(html).toContain('RESULT');
   });
 
   test('paragraph flow controls, tabs, shading, and borders become Word-compatible CSS', () => {

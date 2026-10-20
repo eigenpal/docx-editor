@@ -1,8 +1,19 @@
-import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import {
+  collectNoteReferences,
+  collectProjectedNoteReferences,
+} from '../store/package/note-references.ts';
+import type { NoteKind } from '../store/package/note-nodes.ts';
 import {
   MAX_REVISION_DEPTH,
   isRevisionWrapper,
   revisionAttributionOf,
+  revisionFilterSelects,
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
@@ -65,4 +76,34 @@ export function noteReferenceRevisionContextKey(ancestors: readonly OoxmlNode[])
     if (revision) context.push([revision.kind, revision.nodeId, revision.author]);
   }
   return JSON.stringify(context);
+}
+
+/** The body's note references the view shows, in document order. */
+export function collectBodyNoteReferences(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly {
+  readonly noteKind: NoteKind;
+  readonly noteId: number;
+  readonly paragraphId: string;
+  readonly atomOffset: number;
+  readonly customMarkFollows: boolean;
+}[] {
+  const unfiltered = displayMode === 'all-markup' && !revisionFilterSelects(authorFilter);
+  const hits = unfiltered
+    ? collectNoteReferences(part)
+    : collectProjectedNoteReferences(part, {
+        includeReference: (_node, ancestors) =>
+          noteReferenceVisible(ancestors, displayMode, authorFilter),
+        projectionKey: `${displayMode};${authorFilter?.cacheKey ?? ''}`,
+        ancestryKey: noteReferenceRevisionContextKey,
+      });
+  return hits.map((hit) => ({
+    noteKind: hit.noteKind,
+    noteId: hit.noteId,
+    paragraphId: hit.paragraphId,
+    atomOffset: hit.atomOffset,
+    customMarkFollows: hit.customMarkFollows,
+  }));
 }

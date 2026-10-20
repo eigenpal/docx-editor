@@ -32,8 +32,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // therefore repaired by `planCustomXmlStores`, which pairs data roots to props roots by
 // namespace and hands each store its own nodes.
 
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { attributeValue } from './materialize-freeze.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { ElementRecord } from './schema.ts';
+import { idOf, type LogicalId } from './identity.ts';
 
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 
@@ -47,10 +49,11 @@ export interface PartMemberSpec {
    * reproduces the order its author wrote.
    */
   readonly sortKey: (node: OoxmlElement) => string;
-}
-
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  /**
+   * Keep listed members in their order and put adopted ones after them. A part whose members
+   * are read by id, as notes are, sorts every member instead.
+   */
+  readonly adoptedAfterListed?: boolean;
 }
 
 /**
@@ -97,6 +100,7 @@ export function partMemberSpecFor(root: OoxmlElement): PartMemberSpec | null {
     return {
       isMember: (record) => record.kind === 'comment',
       sortKey: (node) => node.id,
+      adoptedAfterListed: true,
     };
   }
   if (root.localName === 'commentsEx') {
@@ -104,6 +108,7 @@ export function partMemberSpecFor(root: OoxmlElement): PartMemberSpec | null {
       isMember: (record) =>
         record.localName === 'commentEx' && record.namespaceUri === W15_NAMESPACE_URI,
       sortKey: (node) => node.id,
+      adoptedAfterListed: true,
     };
   }
   if (root.localName === 'footnotes' && root.namespaceUri === WML_NAMESPACE_URI) {
@@ -123,6 +128,21 @@ export function partMemberSpecFor(root: OoxmlElement): PartMemberSpec | null {
       isMember: isNumberingMember,
       sortKey: numberingSortKey,
     };
+  }
+  return null;
+}
+
+/**
+ * The children a member part's root shows, in order, or null for a part without members. The
+ * view can adopt members no parent lists, and a local edit counts them.
+ */
+export function shownMemberChildren(
+  parts: Iterable<OoxmlPart>,
+  rootId: LogicalId
+): readonly LogicalId[] | null {
+  for (const part of parts) {
+    if (part.root.id !== rootId) continue;
+    return partMemberSpecFor(part.root) ? part.root.children.map(idOf) : null;
   }
   return null;
 }

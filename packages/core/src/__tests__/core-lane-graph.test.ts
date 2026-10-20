@@ -61,6 +61,28 @@ describe('the lane DAG is well formed (task 10.1)', () => {
     }
   });
 
+  test('type-only edges name real lanes, never the lane itself, and never repeat a value edge', () => {
+    for (const lane of laneNames) {
+      for (const dependency of CORE_LANES[lane].mayImportTypes ?? []) {
+        expect({ lane, dependency, known: laneNames.includes(dependency) }).toEqual({
+          lane,
+          dependency,
+          known: true,
+        });
+        expect(dependency).not.toBe(lane);
+        expect(CORE_LANES[lane].mayImport).not.toContain(dependency);
+      }
+    }
+  });
+
+  test('the cycle walk follows value edges only', () => {
+    // `contracts` names store types and the store names contract types: a type-level loop that
+    // the build erases. The order must still exist, and contracts must still come first.
+    expect(CORE_LANES.contracts.mayImportTypes).toContain('store');
+    const order = laneTopologicalOrder();
+    expect(order.indexOf('contracts')).toBeLessThan(order.indexOf('layout'));
+  });
+
   test('no lane depends on itself', () => {
     for (const lane of laneNames) {
       expect(CORE_LANES[lane].mayImport).not.toContain(lane);
@@ -332,7 +354,15 @@ describe('the automation lane is a neutral host port (Office-compatible automati
   test('it may reach only neutral document capabilities', () => {
     // The whole point of the lane: one document-operation implementation that a server can
     // run. A dependency on binding, output or editor would put a DOM in the server host.
-    expect([...CORE_LANES.automation.mayImport].sort()).toEqual(['collaboration', 'store']);
+    // PAGE/NUMPAGES calculation uses the neutral document-layout coordinator. Contracts
+    // supplies DOM-free public handle types; the lane-safety test narrows it to those files.
+    expect([...CORE_LANES.automation.mayImport].sort()).toEqual([
+      'collaboration',
+      'contracts',
+      'export',
+      'layout',
+      'store',
+    ]);
     for (const forbidden of ['binding', 'output', 'editor'] as LaneName[]) {
       expect(CORE_LANES.automation.mayImport).not.toContain(forbidden);
     }

@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { FontSource } from '../../contracts/editor.ts';
-import { WORD_DEFAULT_FONT, composeFontConfiguration } from '../font-composition.ts';
+import { DEFAULT_FONT, WORD_DEFAULT_FONT, composeFontConfiguration } from '../font-composition.ts';
 import { HARD_MAX_FONT_BYTES } from '../../layout/index.ts';
 
 const face = (
@@ -110,9 +110,13 @@ describe('composeFontConfiguration', () => {
     const composed = composeFontConfiguration({});
     expect(composed.epoch).toBe(0);
     expect(composed.maxFontBytes).toBe(HARD_MAX_FONT_BYTES);
-    expect(composed.defaultFont).toEqual(WORD_DEFAULT_FONT);
+    expect(composed.defaultFont).toEqual(DEFAULT_FONT);
     expect(composed.language).toBeUndefined();
     expect(composed.substitutions).toBeUndefined();
+  });
+
+  test('the deprecated WORD_DEFAULT_FONT name is the same default', () => {
+    expect(WORD_DEFAULT_FONT).toBe(DEFAULT_FONT);
   });
 
   test('base fields pass through when supplied', () => {

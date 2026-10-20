@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Later columns in a continuous region retain paragraph spacing before when the region starts below the top of the sheet.",
+  "after": "A fresh later column suppresses paragraph spacing before at the column region origin; occupied columns and the first continued column keep their existing rules.",
+  "reason": "Layout-only paragraph spacing correction at later column starts; canonical state and operations do not change.",
+  "tests": ["packages/core/src/layout/__tests__/column-region-space-before.test.ts"],
+  "changeset": "column-region-space-before",
+  "migration": null
+}

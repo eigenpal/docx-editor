@@ -4,8 +4,7 @@
 
 ```ts
 
-import { createFontSource } from '@docx-editor.dev/core/editor';
-import { defineFontResolver } from '@docx-editor.dev/core/editor';
+/// <reference lib="dom" />
 
 // @public
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
@@ -26,12 +25,11 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly kind: 'anchoredDrawing';
     // (undocumented)
     readonly layoutFallback?: AnchoredDrawingLayoutFallback;
-    // (undocumented)
     readonly layoutInCell: boolean;
     // (undocumented)
     readonly relativeHeight: number;
     readonly sourceOrder?: number;
-    readonly textboxStory?: TextboxStoryLayout;
+    readonly textArt?: DrawingTextArtRecord;
     // (undocumented)
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
@@ -40,9 +38,23 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
 }
 
-export { createFontSource }
+// @public
+export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
+    readonly faceIndex?: number;
+}, options?: {
+    readonly id?: string;
+    readonly maxFontBytes?: number;
+}): {
+    readonly source: FontSource;
+} | {
+    readonly failure: FontLoadFailure;
+};
 
-export { defineFontResolver }
+// @public
+export function createMarkdownZip(result: MarkdownExportResult): Promise<Uint8Array>;
+
+// @public
+export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
 export class DocumentOpenError extends Error {
@@ -57,7 +69,6 @@ export class DocumentOpenError extends Error {
 export interface DrawingAccessibility {
     // (undocumented)
     readonly decorative: boolean;
-    // (undocumented)
     readonly hidden: boolean;
     // (undocumented)
     readonly label: string | null;
@@ -75,10 +86,16 @@ export interface DrawingGeometry {
     readonly effectInsets: DrawingInsets;
     // (undocumented)
     readonly hitBounds: LayoutBox;
+    readonly imageTransformCorners?: readonly DrawingPoint[];
     // (undocumented)
     readonly paintBounds: LayoutBox;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
+}
+
+// @public
+export interface DrawingGroupPictureRecord {
+    readonly alternateContent: boolean;
 }
 
 // @public (undocumented)
@@ -106,14 +123,68 @@ export interface DrawingTransform {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
+export interface ExportContentWarning {
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit' | 'unsupported-style-separator';
+    readonly partName: string;
+}
+
+// @public
+export interface ExportDestinationAnchor {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ExportDestinationGeometry {
+    // (undocumented)
+    readonly anchor: ExportDestinationAnchor;
+    readonly pageContent: Readonly<{
+        readonly height: number;
+        readonly x: number;
+        readonly y: number;
+    }>;
+    // (undocumented)
+    readonly pageIndex: number;
+    readonly pageStack: Readonly<{
+        readonly x: number;
+        readonly y: number;
+    }>;
+}
+
+// @public
+export type ExportDocumentMetadata = Readonly<DocumentProperties>;
+
+// @public
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
+
+// @public
+export interface ExportDroppedEmbeddedFont {
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly reason: 'overLimit' | 'malformed';
+    // (undocumented)
+    readonly request: FontRequest;
+}
 
 // @public
 export interface ExportFontFaceResolution {
     // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly hash?: string;
+    // (undocumented)
+    readonly id?: string;
+    readonly identity?: string;
+    // (undocumented)
     readonly sourceFamily: string;
     // (undocumented)
     readonly style: 'normal' | 'italic';
+    readonly substitution?: FontSubstitution | null;
     // (undocumented)
     readonly via: 'direct' | 'substitution';
     // (undocumented)
@@ -134,6 +205,7 @@ export interface ExportFontFamilyResolution {
 export interface ExportFontResolutionReport {
     // (undocumented)
     readonly defaultFamily: string;
+    readonly droppedEmbeddedFonts?: readonly ExportDroppedEmbeddedFont[];
     // (undocumented)
     readonly families: readonly ExportFontFamilyResolution[];
     // (undocumented)
@@ -146,7 +218,7 @@ export interface ExportFontResolutionReport {
 export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownExportOptions): Promise<MarkdownExportResult>;
 
 // @public
-export function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult>;
+export function exportMarkdownFrom(session: ExportSession, options?: MarkdownProjectionOptions): Promise<MarkdownExportResult>;
 
 // @public
 export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
@@ -160,16 +232,25 @@ export class ExportResourceError extends Error {
 
 // @public
 export interface ExportSemanticLayout extends SemanticLayout {
+    readonly contentWarnings?: readonly ExportContentWarning[];
+    // (undocumented)
+    readonly destinations?: readonly ExportDestinationGeometry[];
+    // (undocumented)
+    readonly documentMetadata?: ExportDocumentMetadata;
+    readonly facingPages?: boolean;
     // (undocumented)
     readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+    readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
 }
 
 // @public
 export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
-    layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
-    validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+    layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
+    validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
 // @public
@@ -181,7 +262,43 @@ export interface FontOriginFailure {
 }
 
 // @public
+export interface FontRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
+}
+
+// @public
+export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly requested: FontRequest;
+    // (undocumented)
+    readonly resolved: FontRequest;
+}
+
+// @public
 export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
+
+// @public
+export interface GroupTextboxStoryRecord {
+    readonly box: LayoutBox;
+    readonly memberNodeId: string;
+    readonly rotationDegrees: number;
+    readonly story: TextboxStoryLayout;
+}
 
 // @public
 export const HARD_MAX_AGGREGATE_FONT_BYTES: number;
@@ -277,6 +394,7 @@ export interface InlineDrawingRecord {
     readonly advanceStart: number;
     // (undocumented)
     readonly baselineOffset: number;
+    readonly bidiLevel?: number;
     // (undocumented)
     readonly crop: SourceCrop;
     // (undocumented)
@@ -290,13 +408,11 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: Readonly<{
-        readonly brightness: number;
-        readonly contrast: number;
-        readonly grayscale: boolean;
-    }>;
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupPicture?: DrawingGroupPictureRecord;
+    readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
     readonly height: number;
     // (undocumented)
@@ -316,6 +432,7 @@ export interface InlineDrawingRecord {
     readonly revisions?: readonly RevisionAttribution[];
     // (undocumented)
     readonly start: number;
+    readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly transform: DrawingTransform;
     readonly vectorShape: VectorShapeProjection | null;
@@ -339,20 +456,36 @@ export interface LayoutBox {
 }
 
 // @public
+export class MarkdownBundleError extends Error {
+    constructor(code: 'invalid-media-path' | 'duplicate-output-path' | 'non-portable-image-url' | 'output-not-empty' | 'write-failed' | 'archive-failed', message: string, details?: {
+        readonly cause?: unknown;
+        readonly path?: string;
+    });
+    // (undocumented)
+    readonly code: 'invalid-media-path' | 'duplicate-output-path' | 'non-portable-image-url' | 'output-not-empty' | 'write-failed' | 'archive-failed';
+    // (undocumented)
+    readonly name = "MarkdownBundleError";
+    // (undocumented)
+    readonly path?: string;
+}
+
+// @public
 export type MarkdownComment = SemanticCommentArtifactRecord;
 
 // @public
-export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {
+export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions, MarkdownProjectionOptions {
 }
 
 // @public
 export interface MarkdownExportResult {
     readonly fontResolution: ExportFontResolutionReport | null;
     readonly markdown: string;
+    readonly media: readonly MarkdownImageAsset[];
     readonly pages: readonly MarkdownPage[];
     readonly pagination: MarkdownPaginationInfo;
     readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
     readonly reviewBindings: readonly MarkdownReviewBinding[];
+    readonly warnings: readonly MarkdownWarning[];
 }
 
 // @public
@@ -365,6 +498,94 @@ export type MarkdownFontOrigin = FontOrigin;
 
 // @public
 export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrigin[];
+
+// @public
+export interface MarkdownImageAsset extends MarkdownImageData {
+    readonly url: string;
+}
+
+// @public
+export interface MarkdownImageData {
+    // (undocumented)
+    readonly byteLength: number;
+    readonly bytes: Uint8Array;
+    readonly id: string;
+    // (undocumented)
+    readonly mimeType: string;
+    // (undocumented)
+    readonly occurrences: readonly MarkdownImageOccurrence[];
+    readonly path: string;
+    readonly pixelHeight: number;
+    readonly pixelWidth: number;
+}
+
+// @public
+export interface MarkdownImageOccurrence {
+    // (undocumented)
+    readonly alt: string;
+    // (undocumented)
+    readonly decorative: boolean;
+    readonly displayHeightPx: number;
+    readonly displayWidthPx: number;
+    // (undocumented)
+    readonly drawingNodeId: string;
+    readonly kind: 'inline' | 'anchored';
+    // (undocumented)
+    readonly pageNumber: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly rootStory: SemanticDrawingVisit['rootStory'];
+    readonly start: number;
+    // (undocumented)
+    readonly story: SemanticDrawingVisit['story'];
+}
+
+// @public
+export interface MarkdownImageOptions {
+    readonly maxTotalBytes?: number;
+    readonly resolveUrl?: (image: MarkdownImageData, context: {
+        readonly signal?: AbortSignal;
+    }) => string | Promise<string>;
+    readonly syntax?: 'markdown' | 'html';
+}
+
+// @public
+export type MarkdownJSONImage = Omit<MarkdownImageAsset, 'bytes'>;
+
+// @public
+export type MarkdownJSONResult = Omit<MarkdownExportResult, 'media' | 'fontResolution'> & {
+    readonly fontResolution: (Omit<NonNullable<MarkdownExportResult['fontResolution']>, 'originFailures'> & {
+        readonly originFailures: readonly {
+            readonly cause: string;
+            readonly originIndex: number;
+            readonly originName?: string;
+        }[];
+    }) | null;
+    readonly media: readonly MarkdownJSONImage[];
+};
+
+// @public
+export class MarkdownMediaError extends Error {
+    constructor(code: 'media-limit' | 'url-resolution-failed' | 'invalid-image-url' | 'image-bytes-unavailable', message: string, details?: {
+        readonly actualBytes?: number;
+        readonly assetId?: string;
+        readonly cause?: unknown;
+        readonly limitBytes?: number;
+    });
+    // (undocumented)
+    readonly actualBytes?: number;
+    // (undocumented)
+    readonly assetId?: string;
+    // (undocumented)
+    readonly code: 'media-limit' | 'url-resolution-failed' | 'invalid-image-url' | 'image-bytes-unavailable';
+    // (undocumented)
+    readonly limitBytes?: number;
+    // (undocumented)
+    readonly name = "MarkdownMediaError";
+}
 
 // @public
 export interface MarkdownPage {
@@ -383,6 +604,12 @@ export interface MarkdownPaginationInfo {
     readonly layoutRevision: number;
     readonly scope: 'export-snapshot';
     readonly source: 'layout-engine';
+}
+
+// @public
+export interface MarkdownProjectionOptions {
+    readonly images?: boolean | MarkdownImageOptions;
+    readonly signal?: AbortSignal;
 }
 
 // @public
@@ -433,17 +660,27 @@ export type MarkdownReviewUnmappedReason = 'not-represented-in-markdown' | 'non-
 export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
 
 // @public
+export interface MarkdownWarning {
+    readonly code: 'omitted-drawing' | 'omitted-textbox' | 'font-origin-failed' | 'incomplete-font' | 'content-scan-limit' | 'image-placement-fallback';
+    readonly message: string;
+    readonly pageNumber?: number;
+    readonly partName?: string;
+}
+
+// @public
 export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenMarkdownDocumentForExportResult>;
 
 // @public
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
-    readonly displayMode?: RevisionDisplayMode;
+    readonly displayMode?: ReviewDisplayMode;
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;
     readonly resourceTimeoutMs?: number;
     readonly reuseAcrossRevisions?: boolean;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: RevisionMarkupOptions;
     readonly signal?: AbortSignal;
 }
 
@@ -461,6 +698,7 @@ export type OpenDocumentForExportResult = {
 export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExportOptions {
     readonly fallbackFonts?: MarkdownFontsSource;
     readonly fontPolicy?: 'best-effort' | 'strict';
+    readonly fontShaping?: FontShapingOptions;
     readonly fonts?: MarkdownFontsSource;
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
     readonly reuseAcrossRevisions?: boolean;
@@ -482,6 +720,39 @@ signal?: AbortSignal) => Promise<Readonly<{
 }> | null>;
 
 // @public
+export interface ResolvedRevisionMarkup {
+    // (undocumented)
+    readonly cells: {
+        readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    };
+    // (undocumented)
+    readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
+    // (undocumented)
+    readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly formatting: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly insertions: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly movedTo: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly trackFormatting: boolean;
+    // (undocumented)
+    readonly trackMoves: boolean;
+}
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
+
+// @public
 export interface RevisionAttribution {
     // (undocumented)
     readonly author: string;
@@ -494,8 +765,41 @@ export interface RevisionAttribution {
     readonly nodeId: string;
 }
 
+// @public (undocumented)
+export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | 'outsideBorder';
+
+// @public (undocumented)
+export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
 // @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public (undocumented)
+export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
+
+// @public (undocumented)
+export type RevisionMarkupMark = 'none' | 'colorOnly' | 'bold' | 'italic' | 'underline' | 'doubleUnderline' | 'strikethrough' | 'doubleStrikethrough';
+
+// @public (undocumented)
+export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
+
+// @public
+export type RevisionMarkupOptions = {
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
+};
+
+// @public (undocumented)
+export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
+    // (undocumented)
+    readonly color: RevisionMarkupColor;
+    // (undocumented)
+    readonly mark: Mark;
+}
+
+// @public
+export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
+    readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+}
 
 // @public
 export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
@@ -558,10 +862,12 @@ export interface SemanticLayout {
     readonly pages: readonly PageRecord[];
     readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
     readonly revision: number;
+    readonly sectionBreaks?: readonly SectionBreakMarkRecord[];
 }
 
 // @public
 export interface SemanticReviewArtifactOccurrence {
+    readonly geometry?: SemanticReviewArtifactOccurrenceGeometry;
     // (undocumented)
     readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
     // (undocumented)
@@ -578,6 +884,14 @@ export interface SemanticReviewArtifactOccurrence {
     // (undocumented)
     readonly story: SemanticArtifactStoryKind;
     readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrenceGeometry {
+    // (undocumented)
+    readonly pageContent: readonly LayoutBox[];
+    // (undocumented)
+    readonly pageStack: readonly LayoutBox[];
 }
 
 // @public
@@ -627,6 +941,7 @@ export interface SemanticTrackedChangeArtifactRecord {
     readonly replacedText: string;
     // (undocumented)
     readonly replyIds: readonly string[];
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     // (undocumented)
     readonly text: string;
 }
@@ -652,6 +967,7 @@ export interface TextboxStoryLayout {
         y: number;
     }>;
     readonly contentWidth: number;
+    readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;
@@ -662,12 +978,23 @@ export interface TextboxStoryLayout {
 
 // @public
 export interface TextMeasurer {
-    lineMetrics(style: ResolvedRunStyle): {
+    caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+    hasResolvedFont?(style: ResolvedRunStyle): boolean;
+    inkBounds?(text: string, style: ResolvedRunStyle): {
+        left: number;
+        right: number;
+    } | undefined;
+    lineMetrics(style: ResolvedRunStyle, text?: string): {
         baseline: number;
         height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
+    strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
+
+// @public
+export function toMarkdownJSON(result: MarkdownExportResult): MarkdownJSONResult;
 
 // @public
 export interface VectorShapeProjection {
@@ -688,7 +1015,5 @@ export interface VectorShapeProjection {
         y: number;
     }>[])[];
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

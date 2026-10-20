@@ -16,10 +16,17 @@ import {
   type ReactNode,
 } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { ACCEPT_ICON, REOPEN_ICON, icon, resolvedCommentIcon } from './review-icons.tsx';
-import type { ReviewActionProps } from './DocxEditorReview.tsx';
+import {
+  ACCEPT_ICON,
+  REOPEN_ICON,
+  icon,
+  resolvedCommentIcon,
+  reviewBadge,
+} from './review-icons.tsx';
+import type { ReviewActionProps } from './review-types.ts';
 import type { ReviewItemView, UseReviewReturn } from './useReview.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 interface ResolutionPartDeps {
   readonly useReview: () => UseReviewReturn;
@@ -81,6 +88,8 @@ interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
   readonly label: string;
   readonly statusLabel: string;
   readonly entryKey: string;
+  /** Draw the toggle as the quiet check badge that `commentMarkers: 'initials'` uses. */
+  readonly badge?: boolean;
   readonly onActivate: () => void;
   readonly onDeactivate: () => void;
 }
@@ -90,6 +99,7 @@ export function ResolvedCommentCard({
   label,
   statusLabel,
   entryKey,
+  badge = false,
   onActivate,
   onDeactivate,
   children,
@@ -100,13 +110,14 @@ export function ResolvedCommentCard({
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const details = detailsRef.current;
-      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+      if (details?.open && isDomNode(event.target) && !details.contains(event.target)) {
         disclosure.close();
         onDeactivate();
       }
     };
-    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+    const doc = hostDocumentOf(detailsRef.current);
+    doc.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    return () => doc.removeEventListener('pointerdown', closeOnOutsidePointer, true);
   }, [disclosure, onDeactivate]);
 
   return (
@@ -126,7 +137,7 @@ export function ResolvedCommentCard({
     >
       <summary className="docx-review__resolved-toggle" aria-label={label}>
         <span className="docx-review__resolved-status">{statusLabel}</span>
-        {resolvedCommentIcon()}
+        {badge ? reviewBadge('', 0, true) : resolvedCommentIcon()}
       </summary>
       {children}
     </details>

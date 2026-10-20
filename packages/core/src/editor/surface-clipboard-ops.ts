@@ -1,3 +1,6 @@
+import { equationPlainText } from './surface-equations.ts';
+import { selectionContainsClipboardObject } from './clipboard-object-selection.ts';
+import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -20,14 +23,21 @@ import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   cellSelectionText,
+  paragraphsInCells,
   type CellSelection,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-import { buildCopyFlavours } from './clipboard-copy-payload.ts';
+import { buildCopyFlavours, type CopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
 import { insertableText } from './clipboard-plain-text.ts';
+import {
+  paragraphTextMarkingOptionalHyphens,
+  withoutOptionalHyphens,
+} from '../layout/optional-hyphen-copy-text.ts';
+import { fieldResultSpeller } from '../layout/field-copy-text.ts';
+import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
   fragmentCoverageOf,
@@ -40,8 +50,19 @@ import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 type HistoryMark = { paragraphId: string; start: number; end: number };
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
+
+/**
+ * The plain-text clipboard flavour: an optional hyphen element is a hint for line breaking,
+ * not a character of the text, so plain text leaves it out. A literal U+00AD in run text is
+ * text and stays. The HTML flavour keeps both.
+ */
+const plainCopyText = withoutOptionalHyphens;
+
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
+  textFormFieldId?(): string | null;
+  richPasteAllowed?(): boolean;
+  paragraphIds?(): readonly string[];
   layout(): SemanticLayout;
   cellSelection(): CellSelection | null;
   editingMode(): SurfaceEditingMode;
@@ -89,7 +110,7 @@ export interface SurfaceClipboardOps {
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   insertPlainText(text: string): void;
   /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
-  copyFlavoursNow(): { text: string; html: string | null };
+  copyFlavoursNow(): CopyFlavours;
   /** The paste router entry — fidelity order with continuous degrade to plain. */
   pasteRichNow(text: string, html: string | null): boolean;
   /** Arm Cmd+Shift+V: the next paste inside the deadline routes plain. */
@@ -113,7 +134,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // Normalized first: a Windows clipboard carries CRLF, a page break arrives as a form
     // feed, and either one left in run text is a control character the store refuses —
     // which vetoes the whole transaction and makes the paste do nothing at all.
-    const lines = insertableText(text).split('\n');
+    const normalized = insertableText(text);
+    const range = deps.orderedRange();
+    const lines = clampTextFormPaste(
+      session,
+      range.from,
+      range.to,
+      normalized,
+      deps.textFormFieldId?.() ?? null
+    ).split('\n');
 
     // ONE COMMIT, TWO OPS, whatever the clipboard holds.
     //
@@ -161,7 +190,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     }
     if (ops.length === 0) return;
 
-    const before = new Set(session.paragraphIdsIn(deps.storyScope()));
+    const before = new Set(deps.paragraphIds?.() ?? session.paragraphIdsIn(deps.storyScope()));
     const lastLine = lines[lines.length - 1]!;
     // A paste that stays in ONE paragraph knows exactly where it ends, so redo can put the
     // caret there. A multi-line paste mints its paragraphs inside the transaction, so the
@@ -187,7 +216,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         // The caret lands at the end of the pasted text: in the LAST minted paragraph, right
         // after the final line. Scoped story ids are in document order, so the last unfamiliar
         // id is the tail that carries the final line and whatever followed the caret.
-        const minted = session.paragraphIdsIn(deps.storyScope()).filter((id) => !before.has(id));
+        const minted = (deps.paragraphIds?.() ?? session.paragraphIdsIn(deps.storyScope())).filter(
+          (id) => !before.has(id)
+        );
         const landing = minted[minted.length - 1];
         return landing ? collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
       }
@@ -195,24 +226,71 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   }
 
   /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
-  function copyFlavoursNow(): { text: string; html: string | null } {
+  function copyFlavoursNow(): CopyFlavours {
     deps.flushPendingInputAndLayout();
     const rectangle = deps.cellSelection();
+    const range = deps.orderedRange();
+    const order = deps.paragraphOrder();
+    const selected = rectangle
+      ? paragraphsInCells(deps.layout(), rectangle.cellIds)
+      : order.slice(order.indexOf(range.from.paragraphId), order.indexOf(range.to.paragraphId) + 1);
+    const ranges = new Map(
+      selected.map((id) => [
+        id,
+        {
+          start: !rectangle && id === range.from.paragraphId ? range.from.offset : 0,
+          end: !rectangle && id === range.to.paragraphId ? range.to.offset : Infinity,
+        },
+      ])
+    );
+    const copyScope = deps.storyScope();
+    // Clipboard preflight reads the selected part without retaining a story-store slot.
+    const copyPart =
+      copyScope.kind === 'body'
+        ? session.part()
+        : partOfNodeId(session, selected[0] ?? range.from.paragraphId);
+    if (copyPart && selectionContainsClipboardObject(copyPart, ranges)) {
+      deps.commit(
+        () =>
+          ({
+            committed: false,
+            rejected: true,
+            opCount: 0,
+            reason: 'unsupported-content',
+          }) as TreeApplyResult
+      );
+      return { text: '', html: null, reason: 'unsupported-content' };
+    }
+    // Plain text spells each computed field with its painted result, not its one model unit.
+    const fields = fieldResultSpeller(deps.layout(), paragraphTextMarkingOptionalHyphens);
     if (rectangle) {
       return buildCopyFlavours({
-        text: cellSelectionText(deps.layout(), rectangle),
+        text: plainCopyText(cellSelectionText(deps.layout(), rectangle, fields.spelledText)),
         cellRectangle: true,
         coverage: null,
         pkg: null,
       });
     }
     const { from, to } = deps.orderedRange();
-    const text = selectedTextIn(deps.layout(), from, to, deps.paragraphOrder());
+    const textPart = session.part();
+    // Plain text spells each equation in its linear form instead of U+FFFC.
+    const text = plainCopyText(
+      selectedTextIn(
+        deps.layout(),
+        from,
+        to,
+        deps.paragraphOrder(),
+        (id, offset) =>
+          fields.resultAt(id, offset) ??
+          (textPart ? equationPlainText(textPart, id, offset) : null),
+        fields.markedText
+      )
+    );
     const scope = deps.storyScope();
     const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;
     if (collapsed || scope.kind !== 'body') return { text, html: null };
     // A copy is a pure READ: `session.part()` is the body part, and the body-only guard
-    // above is what keeps this off `partFor`, which would retain a story-store slot.
+    // above keeps body extraction on the package reader. Non-body preflight uses its active story.
     const part = session.part();
     const coverage = fragmentCoverageOf(deps.layout(), part, from, to, deps.paragraphOrder());
     return buildCopyFlavours({
@@ -226,9 +304,12 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   /**
    * Land a fragment package at the selection, ONE commit: the selection-clearing ops plus
    * the resource merge plus `insertFragment`, promoted to a package undo unit in the
-   * session. False on any refusal — the paste router degrades to the next flavour.
+   * session. Unsupported content stops routing; other refusals permit the next flavour.
    */
-  function pasteFragmentBytes(bytes: Uint8Array, lastMarkCovered: boolean): boolean {
+  function pasteFragmentBytes(
+    bytes: Uint8Array,
+    lastMarkCovered: boolean
+  ): boolean | 'unsupported-content' {
     if (deps.editingMode() !== 'edit') return false;
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
@@ -236,6 +317,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const plan = deps.deleteSelectionPlan();
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
+    let unsupported = false;
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -264,6 +346,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           }
         );
         landed = result.ok;
+        unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
           committed: result.ok,
           rejected: !result.ok,
@@ -273,7 +356,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       },
       () => collapsedAt(target)
     );
-    return landed;
+    return unsupported ? 'unsupported-content' : landed;
   }
 
   /** The paste router entry — fidelity order with continuous degrade to plain. */
@@ -285,6 +368,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const lane = routePaste(
       {
         richLaneOpen:
+          (deps.richPasteAllowed?.() ?? true) &&
           deps.editingMode() === 'edit' &&
           deps.storyScope().kind === 'body' &&
           deps.cellSelection() === null,
@@ -294,6 +378,18 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       },
       { html, text, forcePlain }
     );
+    if (lane === 'unsupported-content') {
+      deps.commit(
+        () =>
+          ({
+            committed: false,
+            rejected: true,
+            opCount: 0,
+            reason: 'unsupported-content',
+          }) as TreeApplyResult
+      );
+      return false;
+    }
     return lane !== 'none';
   }
 

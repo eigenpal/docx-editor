@@ -16,13 +16,15 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 
 import { useMemo, useCallback } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
-import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
+import { hostWindowOf, tableChromeIconPaths } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import { MenuRow } from '../menu/parts';
+import { useDialogHost } from '../dialog-host';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
+import { useNavigationViewportElement } from '../navigation/navigation-layout';
 import {
   COPY_PATHS,
   CUT_PATHS,
@@ -149,6 +151,7 @@ export function ContextMenuPaste({
 }: ContextMenuCommandProps) {
   const editor = useDocxEditor();
   const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
+  const viewport = useNavigationViewportElement();
   const label = useMenuLabel();
   // A single space probes the SHAPE and the mode — is a paste admissible here at all —
   // without claiming to know what the clipboard holds. NOT the empty string: `paste` with
@@ -167,9 +170,12 @@ export function ContextMenuPaste({
         ? { title: clipboardRefusal ?? disabledReason ?? '' }
         : {})}
       onSelect={() => {
+        // Close first: the read can wait on a browser permission prompt, and a menu
+        // left open over it looks stuck. The read still starts inside this click.
+        close(true);
         void (async () => {
           try {
-            const { text, html } = await readClipboardPayload();
+            const { text, html } = await readClipboardPayload(viewport);
             // An empty clipboard is not a refusal — there is simply nothing to insert.
             if (text || html) {
               editor?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
@@ -178,8 +184,6 @@ export function ContextMenuPaste({
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'
             );
-          } finally {
-            close(true);
           }
         })();
       }}
@@ -199,9 +203,13 @@ ContextMenuPaste.docxRow = 'edit.paste' as const;
  * fragment — the engine's paste router degrades to the remaining flavours, so the read
  * never has to guess what survived.
  */
-async function readClipboardPayload(): Promise<{ text: string; html: string | null }> {
-  const clipboard = navigator.clipboard;
-  if (typeof clipboard.read === 'function' && typeof ClipboardItem !== 'undefined') {
+async function readClipboardPayload(
+  owner: Node | null
+): Promise<{ text: string; html: string | null }> {
+  // The editor's window: an unfocused opener's clipboard refuses the read.
+  const win = hostWindowOf(owner);
+  const clipboard = win.navigator.clipboard;
+  if (typeof clipboard.read === 'function' && typeof win.ClipboardItem !== 'undefined') {
     try {
       const items = await clipboard.read();
       let text = '';
@@ -239,6 +247,7 @@ export function ContextMenuPasteWithoutFormatting({
 }: ContextMenuCommandProps) {
   const editor = useDocxEditor();
   const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
+  const viewport = useNavigationViewportElement();
   const label = useMenuLabel();
   const probe = useMemo((): EditorCommand => ({ type: 'pasteWithoutFormatting', text: ' ' }), []);
   const { isEnabled, disabledReason } = useEditorCommand(probe);
@@ -254,16 +263,17 @@ export function ContextMenuPasteWithoutFormatting({
         ? { title: clipboardRefusal ?? disabledReason ?? '' }
         : {})}
       onSelect={() => {
+        // Close first: the read can wait on a browser permission prompt, and a menu
+        // left open over it looks stuck. The read still starts inside this click.
+        close(true);
         void (async () => {
           try {
-            const text = await navigator.clipboard.readText();
+            const text = await hostWindowOf(viewport).navigator.clipboard.readText();
             if (text) editor?.exec({ type: 'pasteWithoutFormatting', text });
           } catch (error) {
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'
             );
-          } finally {
-            close(true);
           }
         })();
       }}
@@ -385,6 +395,43 @@ export const ContextMenuInsertColumnRight = defineTableCommandRow(
   'table.insertColumnRight',
   { type: 'insertColumn', where: 'right' },
   { labelKey: 'table.insertColumnRight', paths: tableChromeIconPaths('view_column') }
+);
+
+/** Merge the selected cells into one cell. @public */
+export const ContextMenuMergeCells = defineTableCommandRow(
+  'table.mergeCells',
+  { type: 'mergeCells' },
+  { labelKey: 'table.mergeCells', paths: tableChromeIconPaths('call_merge') }
+);
+
+/** Open the Split cells dialog for the cell at the selection. @public */
+export const ContextMenuSplitCell = Object.assign(
+  ({ icon, labelKey, className, hidden }: ContextMenuCommandProps) => {
+    const { close } = useContextMenuContext();
+    const label = useMenuLabel();
+    const tableVisible = useTableContextMenuVisible();
+    const dialogs = useDialogHost();
+    // The slot's probe answers whether the cell splits; the dialog picks the counts.
+    const { isEnabled, disabledReason } = useEditorCommand('table.splitCell');
+    if (hidden || !tableVisible || !dialogs) return null;
+    return (
+      <MenuRow
+        slot="table.splitCell"
+        icon={icon ?? chromeIcon(tableChromeIconPaths('call_split'))}
+        disabled={!isEnabled}
+        {...(disabledReason ? { title: disabledReason } : {})}
+        {...(className ? { className } : {})}
+        onSelect={() => {
+          // Focus goes back to the document first, so closing the dialog returns it there.
+          close(true);
+          dialogs.open('splitCell');
+        }}
+      >
+        {label(labelKey ?? 'table.splitCell')}
+      </MenuRow>
+    );
+  },
+  { docxRow: 'table.splitCell' }
 );
 
 /** Delete the current table row. @public */

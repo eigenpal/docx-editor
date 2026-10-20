@@ -18,6 +18,7 @@ import {
   writeOoxmlPackage,
   resolveContentTypeOf,
 } from '../package/index.ts';
+import { buildTolerantContentTypeIndex } from '../package/content-types.ts';
 
 const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -123,6 +124,83 @@ describe('content-type index', () => {
     expect(isValidMime('application/xml')).toBe(true);
     expect(isValidMime('not-a-mime')).toBe(false);
     expect(buildContentTypeIndex(records([['xml', 'bogus']])).ok).toBe(false);
+  });
+
+  test('type and subtype are tokens: every visible ASCII character except separators', () => {
+    const separators = '()<>@,;:\\"/[]?={} \t';
+    for (let code = 0; code < 128; code++) {
+      const character = String.fromCharCode(code);
+      const token = code > 32 && code < 127 && !separators.includes(character);
+      expect(isValidMime(`${character}type/subtype`)).toBe(token);
+      expect(isValidMime(`type/${character}subtype`)).toBe(token);
+    }
+    expect(isValidMime('image/.jpg')).toBe(true);
+    expect(isValidMime('image/.jpg; q=1')).toBe(true);
+    for (const value of ['/subtype', 'type/', 'type/sub/type', 'type/subätype']) {
+      expect(isValidMime(value)).toBe(false);
+    }
+  });
+
+  test('extension-style types yield to a conflicting record; conventional ones fail closed', () => {
+    const tolerant = (defaults: [string, string][], overrides: [string, string][] = []) =>
+      buildTolerantContentTypeIndex({
+        defaults: defaults.map(([extension, contentType], order) => ({
+          extension,
+          contentType,
+          order,
+        })),
+        overrides: overrides.map(([partName, contentType], order) => ({
+          partName,
+          contentType,
+          order,
+        })),
+      });
+
+    const alone = tolerant([['JPG', 'image/.jpg']]);
+    expect(alone.ok && alone.index.defaults.get('jpg')).toBe('image/.jpg');
+
+    const yielded = tolerant([
+      ['JPG', 'image/.jpg'],
+      ['jpg', 'image/jpeg'],
+    ]);
+    expect(yielded.ok && yielded.index.defaults.get('jpg')).toBe('image/jpeg');
+    expect(yielded.ok && [...yielded.ignored.extensions]).toEqual(['jpg']);
+
+    const bothYield = tolerant([
+      ['JPG', 'image/.jpg'],
+      ['jpg', 'image/.jpeg'],
+    ]);
+    expect(bothYield.ok && bothYield.index.defaults.has('jpg')).toBe(false);
+
+    const identical = tolerant([
+      ['JPG', 'image/.jpg'],
+      ['jpg', 'image/.jpg'],
+    ]);
+    expect(identical.ok && identical.index.defaults.get('jpg')).toBe('image/.jpg');
+
+    expect(
+      tolerant(
+        [],
+        [
+          ['/a.png', 'image/.png'],
+          ['/A.png', 'image/png'],
+        ]
+      )
+    ).toMatchObject({ ok: true, ignored: { overrideKeys: new Set(['/a.png']) } });
+
+    expect(tolerant([], [['/a/../b.png', 'image/.png']]).ok).toBe(true);
+    expect(tolerant([], [['/a/../b.png', 'image/png']])).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-override-name' },
+    });
+
+    expect(
+      tolerant([
+        ['jpg', 'image/jpeg'],
+        ['JPG', 'image/png'],
+        ['jpg', 'image/.jpg'],
+      ])
+    ).toMatchObject({ ok: false, error: { code: 'conflicting-default', extension: 'jpg' } });
   });
 
   test('parameters are accepted, and an empty parameter is not', () => {

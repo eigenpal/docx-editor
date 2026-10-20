@@ -6,7 +6,7 @@
 
 import type { DrawingTransform, SourceCrop } from '../store/package/drawing-projection.ts';
 import { DEFAULT_IMAGE_RESOURCE_LIMITS } from '../store/runtime/limits.ts';
-import { EMU_PER_POINT, emuToPointsSafe } from './drawing-layout.ts';
+import { clipBoxToRegion, EMU_PER_POINT, emuToPointsSafe } from './drawing-layout.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
 export const ROTATION_UNITS_PER_DEGREE = 60_000;
@@ -39,6 +39,8 @@ export interface DrawingGeometry {
   readonly paintBounds: LayoutBox;
   readonly hitBounds: LayoutBox;
   readonly transformedCorners: readonly DrawingPoint[];
+  /** Unclipped image corners for affine encoding; clipping must not stretch the image. */
+  readonly imageTransformCorners?: readonly DrawingPoint[];
   readonly clipPolygon: readonly DrawingPoint[] | null;
   readonly clipFallback: DrawingClipFallback;
   readonly effectInsets: DrawingInsets;
@@ -61,7 +63,7 @@ const ROUND_RECT_RATIO = 0.1;
 
 const SUPPORTED_PRESET_GEometries = new Set(['rect', 'ellipse', 'roundRect']);
 
-function finite(value: number): number {
+export function finite(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
@@ -189,7 +191,10 @@ function visibleCropRect(
   const top = height * clamp(crop.top, 0, 1);
   const right = width * (1 - clamp(crop.right, 0, 1));
   const bottom = height * (1 - clamp(crop.bottom, 0, 1));
-  if (right <= left || bottom <= top) {
+  // A side with no size of its own (a straight line's frame) is not cropped away.
+  const emptyX = width > 0 ? right <= left : right < left;
+  const emptyY = height > 0 ? bottom <= top : bottom < top;
+  if (emptyX || emptyY) {
     const cx = width / 2;
     const cy = height / 2;
     return Object.freeze({ left: cx, top: cy, right: cx, bottom: cy });
@@ -443,7 +448,9 @@ export function transformLocalPoints(
 }
 
 function rectRing(x: number, y: number, width: number, height: number): readonly DrawingPoint[] {
-  if (width <= 0 || height <= 0) {
+  // A straight line's frame has one zero side and keeps its length on the other; only a frame
+  // with no size at all (or a negative side) collapses to its corner.
+  if (width < 0 || height < 0 || (width <= 0 && height <= 0)) {
     const corner = Object.freeze({ x, y });
     return Object.freeze([corner, corner, corner, corner]);
   }
@@ -644,17 +651,6 @@ export function clipGeometryToRegion(
   });
 }
 
-function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
-  const x = Math.max(box.x, region.x);
-  const y = Math.max(box.y, region.y);
-  const right = Math.min(box.x + box.width, region.x + region.width);
-  const bottom = Math.min(box.y + box.height, region.y + region.height);
-  if (right <= x || bottom <= y) {
-    return Object.freeze({ x, y, width: 0, height: 0 });
-  }
-  return Object.freeze({ x, y, width: right - x, height: bottom - y });
-}
-
 export function computeDrawingGeometry(input: DrawingGeometryInput): DrawingGeometry {
   const layoutWidth = Math.max(0, finite(input.extentWidth));
   const layoutHeight = Math.max(0, finite(input.extentHeight));
@@ -718,6 +714,7 @@ export function computeDrawingGeometry(input: DrawingGeometryInput): DrawingGeom
     paintBounds,
     hitBounds,
     transformedCorners,
+    imageTransformCorners: transformedCorners,
     clipPolygon: clipPolygon.length >= 3 ? clipPolygon : transformedCorners,
     clipFallback,
     effectInsets,
@@ -739,6 +736,36 @@ export function drawingGeometryFromProjection(options: {
     offsetEmu: Object.freeze({ x: 0, y: 0 }),
     extentEmu: Object.freeze({ cx: 0, cy: 0 }),
   });
+  const groupPicture = options.projection.groupPicture;
+  if (groupPicture) {
+    // The drawing's own frame stays the extent box: the group's vector members, the clip,
+    // the hit area, and wrap all use it. Only the image corners move to the member's frame.
+    const frame = computeDrawingGeometry({
+      extentWidth: options.extentWidth,
+      extentHeight: options.extentHeight,
+      anchorX: options.anchorX,
+      anchorY: options.anchorY,
+      effectExtentEmu: options.projection.effectExtentEmu,
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      transform: defaultTransform,
+      presetGeometry: null,
+    });
+    const extent = options.projection.extentEmu;
+    const scaleX = extent.cx > 0 ? options.extentWidth / extent.cx : 0;
+    const scaleY = extent.cy > 0 ? options.extentHeight / extent.cy : 0;
+    const member = groupPicture.frameEmu;
+    const image = computeDrawingGeometry({
+      extentWidth: member.cx * scaleX,
+      extentHeight: member.cy * scaleY,
+      anchorX: options.anchorX + member.x * scaleX,
+      anchorY: options.anchorY + member.y * scaleY,
+      effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+      crop: groupPicture.crop,
+      transform: defaultTransform,
+      presetGeometry: null,
+    });
+    return Object.freeze({ ...frame, imageTransformCorners: image.transformedCorners });
+  }
   return computeDrawingGeometry({
     extentWidth: options.extentWidth,
     extentHeight: options.extentHeight,

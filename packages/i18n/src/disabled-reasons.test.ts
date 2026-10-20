@@ -55,3 +55,21 @@ test('the empty reviewer roster refusal is translatable', () => {
   const reason = 'the document has no review authors';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
+
+test('the picture-selected insert refusal is translatable', () => {
+  const reason = 'a picture is selected; place the caret in text to insert a picture';
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});
+
+test.each([
+  'compact linear editing cannot preserve this equation source formatting',
+  'equation replacement is not supported in suggesting mode',
+  'in suggesting mode, remove the whole equation block rather than one equation',
+])('the equation popover refusal %s is translatable', (reason) => {
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});
+
+test('the content-lock formatting refusal is translatable', () => {
+  const reason = 'this content is locked';
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});

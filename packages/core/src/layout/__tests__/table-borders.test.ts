@@ -85,18 +85,33 @@ describe('border conflict (zero cell spacing)', () => {
     expect(resolveBorderConflict(none, none)).toEqual(none);
   });
 
-  test('the wider rule wins; style only ranks a tie', () => {
-    // Weight is the authored width in eighths, never a width × style-rank product: a 12pt
-    // dotted rule is heavy, and a 0.375pt double is not heavier than a 0.5pt single.
-    expect(borderWeight(edge('dotted', '339933', 12))).toBe(96);
-    expect(borderWeight(edge('double', '2E75B6', 0.375))).toBe(3);
+  test('Word weights stroke styles and treats dotted/dashed as weight one', () => {
+    expect(borderWeight(edge('dotted', '339933', 12))).toBe(1);
+    expect(borderWeight(edge('dashed', '339933', 12))).toBe(1);
+    expect(borderWeight(edge('double', '2E75B6', 0.375))).toBe(9);
     const winner = resolveBorderConflict(
       edge('double', '2E75B6', 0.375),
       edge('single', null, 0.5)
     );
-    expect(winner).toMatchObject({ style: 'single', widthPt: 0.5 });
-    const tie = resolveBorderConflict(edge('double', '2E75B6', 0.5), edge('single', null, 0.5));
+    expect(winner).toMatchObject({ style: 'double', widthPt: 0.375 });
+    const tie = resolveBorderConflict(edge('double', '2E75B6', 0.5), edge('single', null, 1.5));
     expect(tie).toMatchObject({ style: 'double' });
+    expect(
+      resolveBorderConflict(edge('dotted', null, 12), edge('single', null, 0.5))
+    ).toMatchObject({ style: 'single' });
+  });
+
+  test('equal styles use all three Word brightness comparisons before reading order', () => {
+    const winner = (a: string, b: string) =>
+      resolveBorderConflict(edge('single', a, 1), edge('single', b, 1));
+    // Green counts twice: simple R+G+B would choose green incorrectly.
+    expect(winner('008000', 'C00000')).toMatchObject({ color: 'C00000' });
+    // Equal R+B+2G: compare B+2G, then G.
+    expect(winner('0000FF', 'FF0000')).toMatchObject({ color: 'FF0000' });
+    expect(winner('000100', '000002')).toMatchObject({ color: '000002' });
+    expect(
+      resolveBorderConflict(edge('single', 'FFFFFF', 1), edge('single', null, 1))
+    ).toMatchObject({ color: null });
   });
 
   test('effective cascade: cell edge wins over table; explicit none suppresses table', () => {
@@ -176,26 +191,32 @@ describe('readBorderSide from element', () => {
 });
 
 describe('compound border metrics (layout points)', () => {
-  test('thin doubles inflate to the configured 1pt stroke/gap minimum', () => {
-    expect(COMPOUND_BORDER_MIN_STROKE_PT).toBe(1);
-    expect(COMPOUND_BORDER_MIN_GAP_PT).toBe(1);
+  test('thin doubles preserve each authored stroke and gap', () => {
+    expect(COMPOUND_BORDER_MIN_STROKE_PT).toBe(0.25);
+    expect(COMPOUND_BORDER_MIN_GAP_PT).toBe(0.25);
     const thin = computeDoubleBorderMetricsPt(0.375);
-    expect(thin).toEqual({ strokePt: 1, gapPt: 1, extentPt: 3, insetPt: -1 });
+    expect(thin).toEqual({ strokePt: 0.375, gapPt: 0.375, extentPt: 1.125, insetPt: -0.375 });
+    expect(computeDoubleBorderMetricsPt(0.125)).toEqual({
+      strokePt: 0.25,
+      gapPt: 0.25,
+      extentPt: 0.75,
+      insetPt: -0.3125,
+    });
   });
 
-  test('thick doubles split the authored band into equal thirds', () => {
+  test('thick doubles preserve the authored width of each stroke', () => {
     expect(computeDoubleBorderMetricsPt(3)).toEqual({
-      strokePt: 1,
-      gapPt: 1,
-      extentPt: 3,
-      insetPt: 0,
+      strokePt: 3,
+      gapPt: 3,
+      extentPt: 9,
+      insetPt: -3,
     });
   });
 
   test('metrics are scale-independent (paint only multiplies)', () => {
     // Same point records regardless of any paint scale — no px heuristics here.
     expect(computeDoubleBorderMetricsPt(0.375)).toEqual(computeDoubleBorderMetricsPt(0.375));
-    expect(computeDoubleBorderMetricsPt(6).strokePt).toBe(2);
+    expect(computeDoubleBorderMetricsPt(6).strokePt).toBe(6);
   });
 });
 
@@ -288,9 +309,9 @@ describe('per-grid-interval conflict + stroke geometry', () => {
     const topOuter = strokes.find((s) => s.side === 'top' && s.role === 'outer')!;
     const leftOuter = strokes.find((s) => s.side === 'left' && s.role === 'outer')!;
     // Concentric L: horizontal owns the corner square.
-    expect(topOuter.x).toBe(-1);
-    expect(topOuter.y).toBe(-1);
-    expect(leftOuter.x).toBe(-1);
+    expect(topOuter.x).toBe(-0.375);
+    expect(topOuter.y).toBe(-0.375);
+    expect(leftOuter.x).toBe(-0.375);
     expect(leftOuter.y).toBe(0);
     expect(topOuter.width).toBeGreaterThan(0);
     expect(leftOuter.height).toBeGreaterThan(0);
@@ -319,7 +340,24 @@ describe('per-grid-interval conflict + stroke geometry', () => {
     expect(strokes[2]!.y).toBe(30 - 15 + 12);
   });
 
-  test('mixed double+dashed publishes double strokes and CSS convenience for dashed', () => {
+  test('thin triples use equal authored strokes and gaps without a 1pt paint floor', () => {
+    const borders = box({ bottom: edge('triple', '9933CC', 0.375) });
+    const grid = resolveTableCellBorderGrid(
+      [[{ gridColumn: 0, gridSpan: 1, vMergeContinue: false, borders, mergeRowSpan: 1 }]],
+      emptyTable,
+      1,
+      {
+        columnWidthsPt: [50],
+        rowBands: [{ y: 0, height: 30 }],
+        cellBoxes: [[{ width: 50, height: 30 }]],
+      }
+    );
+    const strokes = grid[0]![0]!.strokes ?? [];
+    expect(strokes.map((stroke) => stroke.height)).toEqual([0.375, 0.375, 0.375]);
+    expect(strokes.map((stroke) => stroke.y)).toEqual([28.125, 28.875, 29.625]);
+  });
+
+  test('mixed double+dashed publishes double strokes and a dashed vertical rule', () => {
     const borders = box({
       top: edge('double', '2E75B6', 0.375),
       right: edge('dashed', 'CC3333', 0.125),
@@ -337,7 +375,15 @@ describe('per-grid-interval conflict + stroke geometry', () => {
     );
     const cell = grid[0]![0]!;
     expect(cell.right).toEqual({ style: 'dashed', color: 'CC3333', widthPt: 0.125 });
-    expect(cell.strokes?.every((s) => s.side === 'top')).toBe(true);
+    // A vertical rule starts at its grid line and runs right. CSS border-box draws a right
+    // border INSIDE its element, so the rule publishes stroke geometry and keeps its style.
+    const right = cell.strokes!.find((stroke) => stroke.side === 'right')!;
+    expect({ x: right.x, width: right.width, cssStyle: right.cssStyle }).toEqual({
+      x: 80,
+      width: 0.125,
+      cssStyle: 'dashed',
+    });
+    expect(cell.strokes?.every((s) => s.side === 'top' || s.side === 'right')).toBe(true);
     const topOuter = cell.strokes!.find((s) => s.role === 'outer')!;
     // No left/right double neighbor → flush to cell width.
     expect(topOuter.x).toBe(0);

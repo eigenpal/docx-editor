@@ -310,12 +310,12 @@ describe('useEditorEvent', () => {
 });
 
 describe('facade listeners', () => {
-  test('Root registers three facade listeners while mounted', async () => {
+  test('Root registers four facade listeners while mounted', async () => {
     const { container, app } = mountEditor(() => [h(DocxEditorContent)]);
     try {
       app.mount(container);
       await flush();
-      expect(docxEditorFacadeListenerCount()).toBe(3);
+      expect(docxEditorFacadeListenerCount()).toBe(4);
     } finally {
       app.unmount();
       expect(docxEditorFacadeListenerCount()).toBe(0);

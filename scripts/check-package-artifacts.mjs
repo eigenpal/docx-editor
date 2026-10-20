@@ -3,16 +3,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-// Nuxt remains private and has no publishable dist artifact.
-const packageDirs = [
-  'core',
-  'react',
-  'vue',
-  'editor-api',
-  'i18n',
-  'pro',
-  'fonts',
-];
+// Discover publishable packages so new packages cannot bypass artifact checks.
+const packageDirs = readdirSync(path.join(root, 'packages')).filter((directory) => {
+  const manifest = path.join(root, 'packages', directory, 'package.json');
+  return existsSync(manifest) && JSON.parse(readFileSync(manifest, 'utf8')).private !== true;
+});
 const errors = [];
 
 // What a published artifact may name when it reaches for the engine: exactly the
@@ -48,19 +43,41 @@ for (const packageDir of packageDirs) {
 
   for (const [subpath, declaration] of Object.entries(packageJson.exports ?? {})) {
     for (const target of exportTargets(declaration)) {
-      if (!target.startsWith('./dist/')) continue;
+      if (!target.startsWith('./')) continue;
       if (!existsSync(path.resolve(packageRoot, target))) {
         errors.push(`${packageJson.name} ${subpath} points to missing ${target}`);
       }
     }
   }
 
-  for (const artifact of filesBelow(path.join(packageRoot, 'dist'))) {
-    if (!/\.(?:[cm]?js|d\.ts)$/.test(artifact)) continue;
+  const artifacts = ['dist', 'types'].flatMap((directory) =>
+    filesBelow(path.join(packageRoot, directory))
+  );
+  for (const artifact of artifacts) {
+    if (!/\.(?:[cm]?js|d\.[cm]?ts)$/.test(artifact)) continue;
     const content = readFileSync(artifact, 'utf8');
-    const isDeclaration = artifact.endsWith('.d.ts');
-    if (isDeclaration && (/(?:\.\.\/)+core\/src\//.test(content) || /\/packages\/[^/]+\/src\//.test(content))) {
+    const isDeclaration = /\.d\.[cm]?ts$/.test(artifact);
+    if (
+      isDeclaration &&
+      (/(?:\.\.\/)+core\/src\//.test(content) || /\/packages\/[^/]+\/src\//.test(content))
+    ) {
       errors.push(`${path.relative(root, artifact)} exposes a workspace-only source path`);
+    }
+    if (isDeclaration) {
+      for (const [, request] of content.matchAll(
+        /\b(?:from\s*|import\s*\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g
+      )) {
+        const target = path.resolve(path.dirname(artifact), request);
+        const candidates = [
+          target,
+          target.replace(/\.([cm]?)js$/, '.d.$1ts'),
+          `${target}.d.ts`,
+          path.join(target, 'index.d.ts'),
+        ];
+        if (!candidates.some(existsSync)) {
+          errors.push(`${path.relative(root, artifact)} references missing declaration ${request}`);
+        }
+      }
     }
 
     // A subpath core does not export resolves to nothing on a consumer's disk, so the
@@ -76,7 +93,7 @@ for (const packageDir of packageDirs) {
     }
 
     if (!isDeclaration && artifact.endsWith('.js')) {
-      for (const match of content.matchAll(/\brequire\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+      for (const match of content.matchAll(/\brequire\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
         const request = match[1];
         const target = path.resolve(path.dirname(artifact), request);
         const candidates = [target, `${target}.js`, path.join(target, 'index.js')];

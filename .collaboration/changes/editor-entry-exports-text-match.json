@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The TextMatch type that Editor.findMatches returns was exported from the core package root and from the contracts entry, but not from the editor entry.",
+  "after": "The editor entry also exports the TextMatch type.",
+  "reason": "This is a type-only export. It changes no runtime code, stored field, operation, or collaboration state.",
+  "tests": ["packages/core/src/editor/__tests__/docx-editor-find.test.ts"],
+  "changeset": "editor-entry-text-match",
+  "migration": null
+}

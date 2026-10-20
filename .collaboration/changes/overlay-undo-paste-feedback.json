@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The text surface matched undo and redo keys in its own keydown handler. The picture overlay did not forward them, and the context menu stayed open during a clipboard read.",
+  "after": "The text surface and the picture overlay share one key matcher, and both call the existing local undo and redo. The context menu closes before the clipboard read starts.",
+  "reason": "Only local key routing and menu timing change. Undo and redo use the existing per-participant history, and paste uses the existing paste command. Shared nodes, operations, and serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/history-shortcut.test.ts",
+    "packages/react/test/image-overlay-history.test.tsx",
+    "packages/vue/test/image-overlay-history.test.ts"
+  ],
+  "changeset": "overlay-undo-paste-feedback",
+  "migration": null
+}

@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Optional hyphens do not provide line breaks or consistent clipboard and selection text.",
+  "after": "Optional hyphens provide line breaks and preserve authored text through clipboard and selection operations.",
+  "reason": "The change uses existing canonical inline characters and collaboration operations. Shared fields and operation formats stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-hyphens.test.ts",
+    "packages/core/src/layout/__tests__/optional-hyphen-break.test.ts",
+    "packages/pro/src/collaboration/__tests__/text-collaboration-hyphens.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-inline-characters.test.ts"
+  ],
+  "changeset": "optional-hyphen-line-break",
+  "migration": null
+}

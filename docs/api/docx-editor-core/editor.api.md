@@ -5,11 +5,35 @@
 ```ts
 
 // @public
+export function alignmentAfterDirectionChange(alignment: ParagraphDialogFields['alignment']): ParagraphDialogFields['alignment'];
+
+// @public
 export interface AnchorFrameOrigin {
     // (undocumented)
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface AnchorHighlightAnimation {
+    readonly durationMs?: number;
+    readonly easing?: string;
+    readonly exitDurationMs?: number;
+}
+
+// @public
+export interface AnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+    readonly borderColor?: string;
+    readonly borderRadius?: number;
+    readonly borderStyle?: 'solid' | 'dashed' | 'dotted';
+    readonly borderWidth?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly opacity?: number;
+    readonly padding?: number;
+    readonly timeoutMs?: number | null;
 }
 
 // @public
@@ -21,14 +45,154 @@ export function applyThemeShade(hex: string, keep: number): string;
 // @public
 export function applyThemeTint(hex: string, keep: number): string;
 
+// @internal
+export function arrangeToolbarGroups(builtIn: readonly string[], hosts: readonly ToolbarHostGroupPlacement[]): readonly string[];
+
+// @public
+export interface AttachOptions {
+    readonly focus?: boolean;
+}
+
 // @public
 export const AUTO_ZOOM_MODE: ZoomMode;
+
+// @internal
+export interface BarRoomInput {
+    readonly chrome: number;
+    readonly margins: number;
+    readonly maxWidth: number | null;
+    readonly own: number;
+    readonly parentContent: number;
+    readonly siblings: number;
+}
+
+// @internal
+export function barRoomWidth(input: BarRoomInput): number;
+
+// @internal
+export function beginEditorPreview(editor: DocxEditorInstance): {
+    readonly fork: EditorPreviewFork;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: EditorPreviewRefusal;
+};
+
+// @public
+export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
 
 // @public
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
+export interface BookmarkChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
+export function bookmarkDialogInitialName(bookmarks: readonly BookmarkSummary[]): string;
+
+// @public
+export interface BookmarkDialogNameState {
+    readonly canAdd: boolean;
+    readonly canDelete: boolean;
+    // (undocumented)
+    readonly canGoTo: boolean;
+    readonly existing: BookmarkSummary | null;
+    readonly problem: BookmarkNameProblem | null;
+}
+
+// @public
+export function bookmarkDialogNameState(bookmarks: readonly BookmarkSummary[], name: string, writable: boolean): BookmarkDialogNameState;
+
+// @public
+export function bookmarkDialogRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export interface BookmarkMarkInfo {
+    readonly edge: 'start' | 'end' | 'point';
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export interface BookmarkMarkOptions {
+    readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+    readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+    readonly print?: boolean;
+}
+
+// @public
+export interface BookmarkMarkOptionsSource {
+    // (undocumented)
+    readonly current: () => BookmarkMarkOptions;
+    readonly onChange: (repaint: (() => void) | null) => void;
+    readonly reportError: (error: unknown) => void;
+}
+
+// @public
+export type BookmarkSortOrder = 'name' | 'location';
+
+// @public
 export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
+
+// @public
+export interface BrowserAutomationHost extends AutomationHost {
+    // @internal
+    beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+}
+
+// @public
+export function calendarDateForKey(iso: string, key: string, locale?: string, shift?: boolean): string | null;
+
+// @public
+export function calendarDateFromText(text: string, locale?: string): string | null;
+
+// @public
+export function calendarDateText(iso: string, locale?: string): string;
+
+// @public
+export interface CalendarDay {
+    readonly day: number;
+    readonly iso: string;
+    readonly label: string;
+    readonly otherMonth: boolean;
+    readonly selected: boolean;
+    readonly today: boolean;
+}
+
+// @public
+export interface CalendarMonth {
+    readonly days: readonly CalendarDay[];
+    readonly month: number;
+    readonly title: string;
+    readonly weekdays: readonly string[];
+    // (undocumented)
+    readonly year: number;
+}
+
+// @public
+export function calendarMonth(year: number, month: number, options?: CalendarMonthOptions): CalendarMonth;
+
+// @public
+export function calendarMonthNames(locale?: string): readonly string[];
+
+// @public
+export interface CalendarMonthOptions {
+    readonly locale?: string;
+    readonly selected?: string | null;
+    readonly today?: Date;
+}
+
+// @public
+export function calendarMonthTitle(year: number, month: number, locale?: string): string;
+
+// @public
+export function calendarWeekdays(locale?: string): readonly string[];
 
 // @public
 export function canExecuteImageCommand(command: Extract<EditorCommand, {
@@ -39,506 +203,713 @@ export function canExecuteImageCommand(command: Extract<EditorCommand, {
 export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>): ImageMutationPreconditions | null;
 
 // @public
+export function changedFields(seed: ParagraphDialogFields, current: ParagraphDialogFields,
+seedMixed?: ParagraphDialogMixed,
+currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
+
+// @internal
+export function chordLetter(event: KeyboardEvent): string;
+
+// @public
 export const CHROME_GROUPS: readonly [{
     readonly controls: readonly [{
-        readonly id: "undo";
-        readonly labelKey: "formattingBar.undoShortcut";
+        readonly id: 'undo';
+        readonly labelKey: 'formattingBar.undoShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "redo";
-        readonly labelKey: "formattingBar.redoShortcut";
+        readonly id: 'redo';
+        readonly labelKey: 'formattingBar.redoShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "history";
-    readonly labelKey: "formattingBar.groups.history";
+    readonly id: 'history';
+    readonly labelKey: 'formattingBar.groups.history';
 }, {
     readonly controls: readonly [{
-        readonly id: "level";
-        readonly labelKey: "formattingBar.groups.zoom";
+        readonly id: 'level';
+        readonly labelKey: 'formattingBar.groups.zoom';
         readonly paths: null;
-        readonly shape: "stepper";
+        readonly shape: 'stepper';
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
-        readonly valueKey: "zoom.zoomLevel";
-        readonly valueText: "100%";
+        readonly valueKey: 'zoom.zoomLevel';
+        readonly valueText: '100%';
     }];
-    readonly id: "zoom";
-    readonly labelKey: "formattingBar.groups.zoom";
+    readonly id: 'zoom';
+    readonly labelKey: 'formattingBar.groups.zoom';
 }, {
     readonly controls: readonly [{
-        readonly id: "style";
-        readonly labelKey: "styles.selectAriaLabel";
+        readonly id: 'style';
+        readonly labelKey: 'styles.selectAriaLabel';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "styles.normalText";
+        readonly valueKey: 'styles.normalText';
     }];
-    readonly id: "styles";
-    readonly labelKey: "formattingBar.groups.styles";
+    readonly id: 'styles';
+    readonly labelKey: 'formattingBar.groups.styles';
 }, {
     readonly controls: readonly [{
-        readonly id: "family";
-        readonly labelKey: "font.selectAriaLabel";
+        readonly id: 'family';
+        readonly labelKey: 'font.selectAriaLabel';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "font.sansSerif";
+        readonly valueKey: 'font.sansSerif';
     }, {
-        readonly id: "size";
-        readonly labelKey: "fontSize.listLabel";
+        readonly id: 'size';
+        readonly labelKey: 'fontSize.listLabel';
         readonly paths: null;
-        readonly shape: "stepper";
+        readonly shape: 'stepper';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "fontSize.label";
-        readonly valueText: "11";
+        readonly valueKey: 'fontSize.label';
+        readonly valueText: '11';
     }];
-    readonly id: "font";
-    readonly labelKey: "formattingBar.groups.font";
+    readonly id: 'font';
+    readonly labelKey: 'formattingBar.groups.font';
 }, {
     readonly controls: readonly [{
-        readonly id: "bold";
-        readonly labelKey: "formattingBar.boldShortcut";
+        readonly id: 'bold';
+        readonly labelKey: 'formattingBar.boldShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "italic";
-        readonly labelKey: "formattingBar.italicShortcut";
+        readonly id: 'italic';
+        readonly labelKey: 'formattingBar.italicShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "underline";
-        readonly labelKey: "formattingBar.underlineShortcut";
+        readonly id: 'underline';
+        readonly labelKey: 'formattingBar.underlineShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "strike";
-        readonly labelKey: "formattingBar.strikethrough";
+        readonly id: 'strike';
+        readonly labelKey: 'formattingBar.strikethrough';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "color";
-        readonly labelKey: "formattingBar.fontColor";
+        readonly id: 'color';
+        readonly labelKey: 'formattingBar.fontColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ff0000";
+        readonly swatch: '#ff0000';
     }, {
-        readonly id: "highlight";
-        readonly labelKey: "formattingBar.highlightColor";
+        readonly id: 'highlight';
+        readonly labelKey: 'formattingBar.highlightColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ffff00";
+        readonly swatch: '#ffff00';
     }, {
-        readonly id: "link";
-        readonly labelKey: "formattingBar.insertLinkShortcut";
+        readonly id: 'link';
+        readonly labelKey: 'formattingBar.insertLinkShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "text";
-    readonly labelKey: "formattingBar.groups.textFormatting";
+    readonly id: 'text';
+    readonly labelKey: 'formattingBar.groups.textFormatting';
 }, {
     readonly controls: readonly [{
-        readonly id: "super";
-        readonly labelKey: "formattingBar.superscript";
+        readonly id: 'super';
+        readonly labelKey: 'formattingBar.superscript';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sub";
-        readonly labelKey: "formattingBar.subscript";
+        readonly id: 'sub';
+        readonly labelKey: 'formattingBar.subscript';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "script";
-    readonly labelKey: "formattingBar.groups.script";
+    readonly id: 'script';
+    readonly labelKey: 'formattingBar.groups.script';
 }, {
     readonly controls: readonly [{
-        readonly id: "left";
-        readonly labelKey: "alignment.alignLeft";
+        readonly id: 'left';
+        readonly labelKey: 'alignment.alignLeft';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "center";
-        readonly labelKey: "alignment.center";
+        readonly id: 'center';
+        readonly labelKey: 'alignment.center';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "right";
-        readonly labelKey: "alignment.alignRight";
+        readonly id: 'right';
+        readonly labelKey: 'alignment.alignRight';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "justify";
-        readonly labelKey: "alignment.justify";
+        readonly id: 'justify';
+        readonly labelKey: 'alignment.justify';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "alignment";
-    readonly labelKey: "formattingBar.groups.alignment";
+    readonly id: 'alignment';
+    readonly labelKey: 'formattingBar.groups.alignment';
 }, {
+    readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "bullet";
-        readonly labelKey: "lists.bulletList";
+        readonly id: 'ltr';
+        readonly labelKey: 'toolbar.leftToRight';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "numbered";
-        readonly labelKey: "lists.numberedList";
+        readonly id: 'rtl';
+        readonly labelKey: 'toolbar.rightToLeft';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "outdent";
-        readonly labelKey: "lists.decreaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "indent";
-        readonly labelKey: "lists.increaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "lineSpacing";
-        readonly labelKey: "lineSpacing.label";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "list";
-    readonly labelKey: "formattingBar.groups.listFormatting";
+    readonly id: 'direction';
+    readonly labelKey: 'formattingBar.groups.direction';
 }, {
     readonly controls: readonly [{
-        readonly id: "painter";
-        readonly labelKey: "formattingBar.formatPainterShortcut";
+        readonly id: 'bullet';
+        readonly labelKey: 'lists.bulletList';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "clear";
-        readonly labelKey: "formattingBar.clearFormatting";
+        readonly id: 'numbered';
+        readonly labelKey: 'lists.numberedList';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'outdent';
+        readonly labelKey: 'lists.decreaseIndent';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'indent';
+        readonly labelKey: 'lists.increaseIndent';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'lineSpacing';
+        readonly labelKey: 'lineSpacing.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
         };
     }];
-    readonly id: "format";
-    readonly labelKey: "formattingBar.groups.format";
+    readonly id: 'list';
+    readonly labelKey: 'formattingBar.groups.listFormatting';
 }, {
     readonly controls: readonly [{
-        readonly id: "comments";
-        readonly labelKey: "formattingBar.commentsAndChanges";
+        readonly id: 'painter';
+        readonly labelKey: 'formattingBar.formatPainterShortcut';
         readonly paths: readonly string[];
-        readonly shape: "icon";
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'clear';
+        readonly labelKey: 'formattingBar.clearFormatting';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }];
+    readonly id: 'format';
+    readonly labelKey: 'formattingBar.groups.format';
+}, {
+    readonly controls: readonly [{
+        readonly defaultToolbar: false;
+        readonly id: 'revisionMarkup';
+        readonly labelKey: 'revisionMarkup.title';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
         };
     }, {
         readonly defaultToolbar: false;
-        readonly id: "authors";
-        readonly labelKey: "reviewers.label";
+        readonly id: 'simpleMarkup';
+        readonly labelKey: 'review.simpleMarkup';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'icon';
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "editingMode";
-        readonly labelKey: "editingMode.label";
+        readonly defaultToolbar: false;
+        readonly id: 'allMarkup';
+        readonly labelKey: 'review.allMarkup';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'icon';
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
-        readonly valueKey: "editingMode.editing";
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'noMarkup';
+        readonly labelKey: 'review.noMarkup';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'original';
+        readonly labelKey: 'review.original';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'previousChange';
+        readonly labelKey: 'review.previousChange';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'nextChange';
+        readonly labelKey: 'review.nextChange';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'acceptAllChanges';
+        readonly labelKey: 'review.acceptAllChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'rejectAllChanges';
+        readonly labelKey: 'review.rejectAllChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'paragraphMarks';
+        readonly labelKey: 'formattingBar.paragraphMarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'bookmarks';
+        readonly labelKey: 'formattingBar.showBookmarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'protectDocument';
+        readonly labelKey: 'review.protectDocument';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'comments';
+        readonly labelKey: 'formattingBar.commentsAndChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'addComment';
+        readonly labelKey: 'formattingBar.addComment';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'authors';
+        readonly labelKey: 'reviewers.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'editingMode';
+        readonly labelKey: 'editingMode.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
+        };
+        readonly valueKey: 'editingMode.editing';
     }];
-    readonly id: "review";
-    readonly labelKey: "formattingBar.commentsAndChanges";
+    readonly id: 'review';
+    readonly labelKey: 'formattingBar.commentsAndChanges';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "showAll";
-        readonly labelKey: "contentControl.showAll";
+        readonly id: 'showAll';
+        readonly labelKey: 'contentControl.showAll';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "formFill";
-        readonly labelKey: "contentControl.formFill";
+        readonly id: 'formFill';
+        readonly labelKey: 'contentControl.formFill';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "inspector";
-        readonly labelKey: "contentControl.inspector";
+        readonly id: 'inspector';
+        readonly labelKey: 'contentControl.inspector';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "remove";
-        readonly labelKey: "contentControl.remove";
+        readonly id: 'remove';
+        readonly labelKey: 'contentControl.remove';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "contentControl";
-    readonly labelKey: "contentControl.group";
+    readonly id: 'contentControl';
+    readonly labelKey: 'contentControl.group';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.image";
+        readonly id: 'insert';
+        readonly labelKey: 'toolbar.image';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "properties";
-        readonly labelKey: "formattingBar.imagePropertiesShortcut";
+        readonly id: 'properties';
+        readonly labelKey: 'formattingBar.imagePropertiesShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "wrap";
-        readonly labelKey: "formattingBar.imageWrap";
+        readonly id: 'wrap';
+        readonly labelKey: 'formattingBar.imageWrap';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "imageWrap.inline";
+        readonly valueKey: 'imageWrap.inline';
     }, {
-        readonly id: "altText";
-        readonly labelKey: "formattingBar.altText";
+        readonly id: 'altText';
+        readonly labelKey: 'formattingBar.altText';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "imageProperties.altText";
+        readonly valueKey: 'imageProperties.altText';
     }];
-    readonly id: "image";
-    readonly labelKey: "formattingBar.groups.image";
+    readonly id: 'image';
+    readonly labelKey: 'formattingBar.groups.image';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.table";
+        readonly id: 'insert';
+        readonly labelKey: 'toolbar.table';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "borderTarget";
-        readonly labelKey: "table.borders.tooltip";
+        readonly id: 'borderTarget';
+        readonly labelKey: 'table.borders.tooltip';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
     }, {
-        readonly id: "borderColor";
-        readonly labelKey: "table.borderColor";
+        readonly id: 'borderColor';
+        readonly labelKey: 'table.borderColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#000000";
+        readonly swatch: '#000000';
     }, {
-        readonly id: "borderStyle";
-        readonly labelKey: "table.borders.styleAriaLabel";
+        readonly id: 'borderStyle';
+        readonly labelKey: 'table.borders.styleAriaLabel';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "borderWidth";
-        readonly labelKey: "table.borderWidth";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
     }, {
-        readonly id: "cellFill";
-        readonly labelKey: "table.cellFillColor";
+        readonly id: 'borderWidth';
+        readonly labelKey: 'table.borderWidth';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ffffff";
+    }, {
+        readonly id: 'cellFill';
+        readonly labelKey: 'table.cellFillColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#ffffff';
+    }, {
+        readonly id: 'mergeCells';
+        readonly labelKey: 'table.mergeCells';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'splitCell';
+        readonly labelKey: 'table.splitCell';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
     }];
-    readonly id: "table";
-    readonly labelKey: "formattingBar.groups.table";
+    readonly id: 'table';
+    readonly labelKey: 'formattingBar.groups.table';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "dialog";
-        readonly labelKey: "lineSpacing.options";
+        readonly id: 'dialog';
+        readonly labelKey: 'lineSpacing.options';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "paragraph";
-    readonly labelKey: "dialogs.paragraph.title";
+    readonly id: 'paragraph';
+    readonly labelKey: 'dialogs.paragraph.title';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "open";
-        readonly labelKey: "toolbar.open";
+        readonly id: 'open';
+        readonly labelKey: 'toolbar.open';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "load";
+            readonly kind: 'load';
         };
     }, {
-        readonly id: "save";
-        readonly labelKey: "toolbar.saveShortcut";
+        readonly id: 'save';
+        readonly labelKey: 'toolbar.saveShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "save";
+            readonly kind: 'save';
         };
     }, {
-        readonly id: "pageSetup";
-        readonly labelKey: "toolbar.pageSetup";
+        readonly id: 'exportMarkdown';
+        readonly labelKey: 'toolbar.exportMarkdown';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'export';
+        };
+    }, {
+        readonly id: 'exportPdf';
+        readonly labelKey: 'toolbar.exportPdf';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'export';
+        };
+    }, {
+        readonly id: 'print';
+        readonly labelKey: 'toolbar.print';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'export';
+        };
+    }, {
+        readonly id: 'pageSetup';
+        readonly labelKey: 'toolbar.pageSetup';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
         };
     }];
-    readonly id: "file";
-    readonly labelKey: "toolbar.file";
+    readonly id: 'file';
+    readonly labelKey: 'toolbar.file';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "footnote";
-        readonly labelKey: "toolbar.insertFootnote";
+        readonly id: 'textBox';
+        readonly labelKey: 'toolbar.insertTextBox';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "endnote";
-        readonly labelKey: "toolbar.insertEndnote";
+        readonly id: 'footnote';
+        readonly labelKey: 'toolbar.insertFootnote';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageNumber";
-        readonly labelKey: "headerFooter.insertPageNumber";
+        readonly id: 'endnote';
+        readonly labelKey: 'toolbar.insertEndnote';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "totalPages";
-        readonly labelKey: "headerFooter.insertTotalPages";
+        readonly id: 'pageNumber';
+        readonly labelKey: 'headerFooter.insertPageNumber';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionPages";
-        readonly labelKey: "headerFooter.insertSectionPages";
+        readonly id: 'totalPages';
+        readonly labelKey: 'headerFooter.insertTotalPages';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageXofY";
-        readonly labelKey: "headerFooter.insertPageXofY";
+        readonly id: 'sectionPages';
+        readonly labelKey: 'headerFooter.insertSectionPages';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageBreak";
-        readonly labelKey: "toolbar.pageBreak";
+        readonly id: 'pageXofY';
+        readonly labelKey: 'headerFooter.insertPageXofY';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionBreakNextPage";
-        readonly labelKey: "toolbar.sectionBreakNextPage";
+        readonly id: 'pageBreak';
+        readonly labelKey: 'toolbar.pageBreak';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionBreakContinuous";
-        readonly labelKey: "toolbar.sectionBreakContinuous";
+        readonly id: 'sectionBreakNextPage';
+        readonly labelKey: 'toolbar.sectionBreakNextPage';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "toc";
-        readonly labelKey: "toolbar.tableOfContents";
+        readonly id: 'sectionBreakContinuous';
+        readonly labelKey: 'toolbar.sectionBreakContinuous';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'toc';
+        readonly labelKey: 'toolbar.tableOfContents';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'bookmark';
+        readonly labelKey: 'toolbar.bookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'goToBookmark';
+        readonly labelKey: 'toolbar.goToBookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'watermark';
+        readonly labelKey: 'toolbar.watermark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
         };
     }];
-    readonly id: "insert";
-    readonly labelKey: "toolbar.insert";
+    readonly id: 'insert';
+    readonly labelKey: 'toolbar.insert';
 }];
 
 // @public
@@ -608,7 +979,52 @@ export type ChromeControlState =
 */
 | {
     readonly kind: 'load';
+}
+/** Host conversion through `runChromeExport` or `runChromePrint`; not an editing command. */
+| {
+    readonly kind: 'export';
 };
+
+// @public
+export class ChromeExportError extends Error {
+    constructor(format: ChromeExportFormat);
+    // (undocumented)
+    readonly code = "missing-exporter";
+    // (undocumented)
+    readonly format: ChromeExportFormat;
+}
+
+// @public
+export type ChromeExportFormat = 'markdown' | 'pdf';
+
+// @public
+export interface ChromeExportHandlers {
+    readonly markdown?: (source: Uint8Array) => Promise<{
+        readonly markdown: string;
+    }>;
+    readonly pdf?: (source: Uint8Array, view?: ChromeExportView) => Promise<{
+        readonly bytes: Uint8Array;
+    }>;
+}
+
+// @public
+export interface ChromeExportResult {
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly extension: 'md' | 'pdf';
+    // (undocumented)
+    readonly mimeType: string;
+}
+
+// @public
+export interface ChromeExportView {
+    // (undocumented)
+    readonly displayMode: ReviewDisplayMode;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    // (undocumented)
+    readonly revisionMarkup: ResolvedRevisionMarkup;
+}
 
 // @public
 export interface ChromeGroup<Id extends string = string, ControlId extends string = string> {
@@ -621,7 +1037,7 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
 }
 
 // @public
-export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
+export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'direction' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
 
 // @public
 export interface ChromeMenu {
@@ -672,10 +1088,31 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
+export class ChromePrintError extends Error {
+    constructor(code: ChromePrintErrorCode);
+    readonly code: ChromePrintErrorCode;
+}
+
+// @public
+export type ChromePrintErrorCode = 'pdf-viewer-unavailable' | 'pdf-load-failed' | 'print-refused' | 'print-ended';
+
+// @public
+export interface ChromePrintJob {
+    dispose(): void;
+    print(options?: ChromePrintOptions): Promise<void>;
+    readonly url: string;
+}
+
+// @public
+export interface ChromePrintOptions {
+    readonly beforePrint?: () => void | Promise<void>;
+}
+
+// @public
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -686,6 +1123,14 @@ export function chromeSlotId(group: {
 
 // @public
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
+
+// @public
+export interface ClearAnchorHighlightOptions {
+    readonly animation?: boolean | AnchorHighlightAnimation;
+}
+
+// @public
+export type ClearRefreshHighlightsOptions = ClearAnchorHighlightOptions;
 
 // @internal
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
@@ -698,6 +1143,12 @@ export interface CollaborationModuleContribution {
     readonly session: EditorCollaborationSession;
 }
 
+// @internal
+export function collapseOrder(groups: readonly string[], order?: readonly string[], priorities?: ReadonlyMap<string, number>): readonly string[];
+
+// @internal
+export function collapsibleGroupCost(groupWidth: number, separatorLeading: number): number;
+
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
@@ -708,6 +1159,9 @@ export type ColorLowerResult = {
 } | ColorLowerRefusal;
 
 // @public
+export function commandExecOptions(value: unknown): EditorExecOptions | undefined;
+
+// @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
@@ -715,6 +1169,14 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
 
 // @public
 export function commandForTableChromeSlotValue(slotId: TableChromeSlotId, value: unknown, draft: TableChromeDraft): EditorCommand | null;
+
+// @public
+export interface CommentDraftChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
@@ -757,7 +1219,76 @@ export function computeResizedImageExtentEmu(startWidthEmu: number, startHeightE
 };
 
 // @public
-export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
+export const CONTENT_CONTROL_PICTURE_ACCEPT = "image/png,image/jpeg,image/gif,image/bmp,image/webp";
+
+// @public
+export interface ContentControlListNavigation {
+    keyDown(event: KeyboardEvent, root: HTMLElement): void;
+    reset(): void;
+}
+
+// @public
+export function contentControlPopupKeyDown(panel: HTMLElement, event: KeyboardEvent, cancel: () => void): void;
+
+// @public
+export function contentControlPopupOpener(anchor: HTMLElement | null): HTMLElement | null;
+
+// @public
+export interface ContentControlWidgetChromeHandlers {
+    readonly kinds?: readonly ContentControlWidgetSession['kind'][];
+    // (undocumented)
+    readonly onRequest?: (session: ContentControlWidgetSession) => void;
+}
+
+// @public
+export interface ContentControlWidgetSession {
+    // (undocumented)
+    readonly anchor: HTMLElement | null;
+    // (undocumented)
+    apply(value: string): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    // (undocumented)
+    cancel(): void;
+    // (undocumented)
+    readonly controlId: string;
+    // (undocumented)
+    readonly items: readonly {
+        readonly displayText: string;
+        readonly value: string;
+    }[];
+    // (undocumented)
+    readonly kind: 'dropdown' | 'comboBox' | 'date' | 'checkbox' | 'picture' | 'buildingBlockGallery';
+    readonly locale: string;
+    replaceImage?(bytes: Uint8Array): Promise<boolean>;
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly value: string;
+}
+
+// @public
+export interface ContentLockPolicy {
+    readonly allowFormattingInLockedContent?: boolean;
+}
+
+// @internal
+export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean | null;
+
+// @public
+export function copyEditorStyles(from: Document, to: Document): () => void;
+
+// @public
+export function createBrowserAutomationHost(editor: DocxEditorInstance): BrowserAutomationHost;
+
+// @public
+export function createContentControlListNavigation(locale?: string): ContentControlListNavigation;
+
+// @public
+export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefresh;
+
+// @public
+export function createDocumentSearch(editor: Editor): DocumentSearch;
 
 // @public
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance;
@@ -780,7 +1311,7 @@ export function createImageOverlayScrollPort(scroller: HTMLElement, paintScale: 
 };
 
 // @public (undocumented)
-export function createLayoutShaping(configuration: FontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
+export function createLayoutShaping(configuration: FontConfiguration, instrumentation?: LayoutShapingInstrumentation, execution?: FontShapingOptions): Promise<LayoutShapingOptions>;
 
 // @public
 export function cropPercentFromCropPermille(crop: ImageCropPermille): ImageCropPercent;
@@ -801,10 +1332,33 @@ export function cropPermilleFromPercent(percent: number): number;
 export function cssPixelsToLayoutPoints(pixels: number, paintScale: number): number;
 
 // @public
+export function customFonts(options: CustomFontsOptions): CustomFontsResolver;
+
+// @public
+export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
+    readonly onFailure?: (failure: FontLoadFailure) => void;
+}
+
+// @public
+export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
+
+// @public
+export const DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits;
 
 // @public
+export const DEFAULT_REVIEW_PANE: ResolvedReviewPane;
+
+// @public
+export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
+
+// @public
 export const DEFAULT_TABLE_CHROME_DRAFT: TableChromeDraft;
+
+// @public
+export const DEFAULT_WATERMARK_FONT = "Calibri";
 
 // @public
 export function defaultChromeGroups(): readonly ChromeGroup[];
@@ -819,19 +1373,112 @@ export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFo
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 
 // @public
+export interface DocumentRefresh {
+    applyUpdate(update: RefreshUpdate): Promise<RefreshResult>;
+    cancel(): void;
+    capture(): Promise<RefreshSubmission>;
+    clearHighlights(options?: ClearRefreshHighlightsOptions): void;
+    finish(submission: RefreshSubmission): void;
+    highlightChanges(options?: RefreshHighlightOptions): number;
+    navigateToChange(id: string, options?: NavigateToChangeOptions): boolean;
+    onResult(listener: (result: RefreshResult) => void): () => void;
+    recover(): Promise<boolean>;
+    recoveryBytes(): ArrayBuffer | null;
+    snapshot(): DocumentRefreshState;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public
+export class DocumentRefreshError extends Error {
+    constructor(code: RefreshFailureCode, cause?: unknown);
+    readonly code: RefreshFailureCode;
+}
+
+// @public
+export interface DocumentRefreshState {
+    // (undocumented)
+    readonly changes: readonly RefreshChange[];
+    readonly highlightsVisible: boolean;
+    // (undocumented)
+    readonly phase: 'idle' | 'capturing' | 'processing' | 'refreshing' | 'recovering' | 'complete' | 'failed';
+    readonly recoveryAvailable: boolean;
+    // (undocumented)
+    readonly result: RefreshResult | null;
+}
+
+// @public
+export interface DocumentSearch {
+    clear(): void;
+    find(query: string, options?: DocumentSearchFindOptions): readonly TextMatch[];
+    getState(): DocumentSearchState;
+    goTo(index: number, options?: DocumentSearchNavigateOptions): boolean;
+    next(options?: DocumentSearchNavigateOptions): boolean;
+    // (undocumented)
+    previous(options?: DocumentSearchNavigateOptions): boolean;
+    // (undocumented)
+    setMatchCase(value: boolean): void;
+    setQuery(query: string): void;
+    // (undocumented)
+    setWholeWord(value: boolean): void;
+    showHighlights(mode: DocumentSearchHighlight): () => void;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public
+export interface DocumentSearchFindOptions extends DocumentSearchOptions {
+    readonly highlight?: DocumentSearchHighlight;
+    readonly selectFirst?: boolean;
+}
+
+// @public
+export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+
+// @public
+export interface DocumentSearchNavigateOptions {
+    readonly focus?: boolean;
+}
+
+// @public
+export interface DocumentSearchOptions {
+    // (undocumented)
+    readonly matchCase?: boolean;
+    // (undocumented)
+    readonly wholeWord?: boolean;
+}
+
+// @public
+export interface DocumentSearchState {
+    readonly activeIndex: number;
+    readonly activeMatch: TextMatch | null;
+    readonly isPending: boolean;
+    // (undocumented)
+    readonly matchCase: boolean;
+    readonly matches: readonly TextMatch[];
+    readonly query: string;
+    readonly truncated: boolean;
+    // (undocumented)
+    readonly wholeWord: boolean;
+}
+
+// @public
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
     container?: HTMLElement;
+    contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
+    lockedControlNavigation?: LockedControlNavigation;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
@@ -842,7 +1489,7 @@ export interface DocxEditorConfig {
 
 // @public
 export interface DocxEditorInstance extends Editor {
-    attach(el: HTMLElement): void;
+    attach(el: HTMLElement, options?: AttachOptions): void;
     collaborationSession(): EditorCollaborationSession | null;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
@@ -855,11 +1502,27 @@ export interface DocxEditorInstance extends Editor {
     readonly mountGeneration: number;
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
+    setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+    setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
+    setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
+    setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setFonts(fonts: DocxEditorConfig['fonts']): Promise<void>;
+    setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
+    setLocale(locale: string | undefined): void;
+    setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
+    setOpeningIndicatorHost(host: OpeningIndicatorHost | null): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
+    setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
+    setRevisionMarkup(options: RevisionMarkupOptions): void;
+    setRevisionMarkupChrome(handlers: RevisionMarkupChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
+    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
+    setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
@@ -898,8 +1561,28 @@ export type DrawingSelectionIntent = {
     readonly kind: 'programmatic';
 };
 
+// @public
+export interface EditorCommandExecute {
+    // (undocumented)
+    (): boolean;
+    // (undocumented)
+    (options: EditorExecOptions): boolean;
+}
+
 // @internal
 export function editorCommandKey(command: EditorCommand): string;
+
+// @public
+export function editorHostDocument(editor: Editor): Document;
+
+// @public
+export function editorHostElement(editor: Editor): Element | null;
+
+// @public
+export function editorHostWindow(editor: Editor): HostWindow;
+
+// @internal
+export function editorInstanceScope(from: Element | null): Element | null;
 
 // @public
 export interface EditorModule {
@@ -908,7 +1591,9 @@ export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+    readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
+    readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 // @public
@@ -919,8 +1604,36 @@ export interface EditorModuleRegistry {
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
     readonly customNodes: readonly unknown[];
+    readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
     // (undocumented)
     readonly review: ReviewModuleContribution | null;
+    readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
+}
+
+// @internal
+export function editorPreviewActive(editor: object): boolean;
+
+// @internal
+export interface EditorPreviewFork {
+    deferEvents<T>(run: () => T): T;
+    end(): void;
+    readonly ended: boolean;
+    readonly host: AutomationHost;
+    onEnd(listener: () => void): () => void;
+    reveal(): boolean;
+    show(): boolean;
+    readonly shown: boolean;
+}
+
+// @internal
+export type EditorPreviewRefusal = 'no-document' | 'viewing' | 'blocked' | 'composing' | 'preview-active';
+
+// @public
+export interface EditorWindow {
+    close(): void;
+    readonly element: HTMLElement;
+    onClose(listener: () => void): () => void;
+    readonly window: Window;
 }
 
 // @public
@@ -972,6 +1685,9 @@ export function executeImageCommand(editor: DocxEditorInstance, command: Extract
 }>): Promise<ExecResult>;
 
 // @public
+export type FieldResultsMode = 'atomic' | 'editable';
+
+// @public
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
@@ -989,7 +1705,11 @@ export function finalizeImageOverlayInteraction(options: {
     readonly deltaYPt: number;
     readonly session: ImageInteractionSession;
     readonly shiftKey: boolean;
+    readonly textbox?: boolean;
 }): FinalizedImageOverlayInteraction;
+
+// @public
+export function firstDayOfWeek(locale?: string): number;
 
 // @public
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
@@ -1014,6 +1734,7 @@ export interface FontConfigurationFragment {
     readonly sources?: readonly FontSource[];
     // (undocumented)
     readonly substitutions?: readonly FontSourceSubstitution[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public
@@ -1075,6 +1796,11 @@ export interface FontResolverMark {
 }
 
 // @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
+}
+
+// @public
 export interface FontUrlSource {
     // (undocumented)
     readonly faceIndex?: number;
@@ -1090,13 +1816,194 @@ export interface FontUrlSource {
 }
 
 // @public
+export const formatInches: (twips: number) => string;
+
+// @public
 export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[];
 
 // @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
 
 // @public
+export interface GoToBookmarkGroup {
+    readonly place: BookmarkPlace;
+    readonly rows: readonly {
+        readonly index: number;
+        readonly row: BookmarkSummary;
+    }[];
+}
+
+// @public
+export function goToBookmarkGroups(rows: readonly BookmarkSummary[]): readonly GoToBookmarkGroup[];
+
+// @public
+export function goToBookmarkMatch(name: string, query: string): {
+    readonly end: number;
+    readonly start: number;
+} | null;
+
+// @public
+export function goToBookmarkRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly query: string;
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export function goToBookmarkTarget(bookmarks: readonly BookmarkSummary[], query: string, offered: readonly BookmarkSummary[]): BookmarkSummary | null;
+
+// @public
+export interface GoToChromeHandlers {
+    readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
+}
+
+// @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
+
+// @internal
+export function hasOpenNestedPopup(panel: Element | null): boolean;
+
+// @public
+export const HIGHLIGHT_REFRESH_MS = 150;
+
+// @public
+export interface HighlightHit<R extends HighlightRange = HighlightRange> {
+    readonly active: boolean;
+    readonly index: number;
+    readonly length: number;
+    readonly name: string;
+    readonly range: R;
+    readonly rect: HighlightRect;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightOptions {
+    readonly activeColor?: string;
+    readonly activeIndex?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly priority?: number;
+}
+
+// @public
+export interface HighlightRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightRect {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface HighlightResult {
+    readonly applied: number;
+    readonly unavailable: number;
+}
+
+// @public
+export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
+
+// @public
+export interface HighlightWatch {
+    refresh(): void;
+    readonly result: HighlightResult;
+    stop(): void;
+    update(source: HighlightSource, options?: HighlightOptions): void;
+}
+
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
+    readonly state: 'open' | 'closed';
+}
+
+// @public
+export interface HistoryGroupBinding {
+    dispose(): void;
+    options(): EditorExecOptions;
+}
+
+// @public
+export interface HistoryGroupBindingOptions {
+    // (undocumented)
+    readonly kind: 'native-color' | 'range' | 'repeat' | 'keyboard';
+}
+
+// @public
+export interface HistoryGroupOptions {
+    readonly historyGroup?: HistoryGroup;
+}
+
+// @internal
+export interface HistoryGroupRun {
+    execute(request: AutomationBatchRequest): AutomationBatchResponse | null;
+    finish(): void;
+}
+
+// @public
+export interface HistoryShortcutKeys {
+    // (undocumented)
+    readonly ctrlKey: boolean;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly metaKey: boolean;
+    // (undocumented)
+    readonly shiftKey: boolean;
+}
+
+// @public
+export function historyShortcutOf(event: HistoryShortcutKeys): 'undo' | 'redo' | null;
+
+// @public
+export function hostDocumentOf(node: Node | null | undefined): Document;
+
+// @public
+export interface HostTimers {
+    // (undocumented)
+    cancelAnimationFrame(handle: number | null | undefined): void;
+    // (undocumented)
+    clearTimeout(handle: number | null | undefined): void;
+    migrate(): void;
+    // (undocumented)
+    requestAnimationFrame(run: (time: number) => void): number;
+    // (undocumented)
+    setTimeout(run: () => void, delay?: number): number;
+}
+
+// @public
+export function hostTimers(node: () => Node | null | undefined): HostTimers;
+
+// @public
+export type HostWindow = Window & typeof globalThis;
+
+// @public
+export function hostWindowOf(node: Node | null | undefined): HostWindow;
 
 // @public
 export interface HyperlinkActivation {
@@ -1266,8 +2173,65 @@ export interface ImageResourceLimits {
 // @public
 export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
 
+// @public (undocumented)
+export const inchesToTwips: (inches: number) => number;
+
+// @public
+export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (command: Extract<EditorCommand, {
+    type: 'splitCell';
+}>) => CanResult): {
+    readonly columns: string;
+    readonly rows: string;
+};
+
+// @public
+export interface InvalidTextFormFieldChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: InvalidTextFormFieldSession) => void;
+}
+
+// @public
+export interface InvalidTextFormFieldSession {
+    acknowledge(): void;
+    cancel(): void;
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly type: 'number' | 'date';
+}
+
+// @public
+export function isChromePrintShortcut(event: KeyboardEvent): boolean;
+
+// @public
+export function isDomNode(value: unknown): value is Node;
+
+// @public
+export function isElementNode(value: unknown): value is Element;
+
 // @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
+
+// @public
+export function isGoToChord(event: KeyboardEvent, apple?: boolean): boolean;
+
+// @public
+export function isHTMLElementNode(value: unknown): value is HTMLElement;
+
+// @public
+export function isInputEvent(event: Event): event is InputEvent;
+
+// @public
+export function isKeyboardEvent(event: Event): event is KeyboardEvent;
+
+// @public
+export function isMouseEvent(event: Event): event is MouseEvent;
+
+// @public
+export function isoDateOf(date: Date): string;
+
+// @public
+export function isPointerEvent(event: Event): event is PointerEvent;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
@@ -1276,7 +2240,40 @@ export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, '
 export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId;
 
 // @public
+export function isTextNode(value: unknown): value is Text;
+
+// @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
+
+// @public
+export const LINE_SPACING_PRESETS: readonly number[];
+
+// @public
+export interface LineSpacingMenuRow {
+    readonly command: Extract<EditorCommand, {
+        type: 'setLineSpacing';
+    }> | null;
+    readonly labelKey: 'lineSpacing.exactlyPoints' | 'lineSpacing.atLeastPoints' | null;
+    readonly preset: boolean;
+    readonly selected: boolean;
+    readonly spacing: LineSpacingMenuValue;
+    readonly text: string;
+}
+
+// @public
+export function lineSpacingMenuRowLabel(row: LineSpacingMenuRow, label: (key: string) => string, locale?: string): string;
+
+// @public
+export function lineSpacingMenuRows(current: SurfaceFormatting['lineSpacing']): readonly LineSpacingMenuRow[];
+
+// @public
+export type LineSpacingMenuValue = NonNullable<SurfaceFormatting['lineSpacing']>;
+
+// @internal
+export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
+
+// @internal
+export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
@@ -1286,6 +2283,7 @@ export interface LoadFontsRequest {
     readonly cacheName?: string;
     readonly fetcher?: typeof fetch;
     readonly maxFontBytes?: number;
+    readonly signal?: AbortSignal;
     // (undocumented)
     readonly sources: readonly FontUrlSource[];
 }
@@ -1302,6 +2300,9 @@ export interface LoadFontsResult extends FontConfigurationFragment {
 export const LOADING_SNAPSHOT: EditorSnapshot;
 
 // @public
+export type LockedControlNavigation = 'characters' | 'atomic';
+
+// @public
 export function lowerColorValueForBorder(color: ColorValue, themeColors: readonly DocumentThemeColorEntry[]): ColorLowerResult;
 
 // @public
@@ -1314,10 +2315,42 @@ export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & Font
 export const MAX_RESOLVER_FAMILIES = 64;
 
 // @public
+export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed;
+
+// @public
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
 
 // @public
+export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
+    readonly block?: ScrollPlacement;
+    readonly focus?: boolean;
+}
+
+// @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
+
+// @public (undocumented)
+export const NO_MIXED_FIELDS: ParagraphDialogMixed;
+
+// @public
+export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
+
+// @public
+export function openEditorWindow(options?: OpenEditorWindowOptions): Promise<EditorWindow | null>;
+
+// @public
+export interface OpenEditorWindowOptions {
+    readonly features?: string;
+    readonly name?: string;
+    readonly styles?: boolean | ((from: Document, to: Document) => () => void);
+    readonly title?: string;
+    readonly url?: string;
+}
+
+// @public
+export interface OpeningIndicatorHost {
+    publish(element: HTMLElement | null): void;
+}
 
 // @public
 export type OpenPaginatedResult = {
@@ -1325,6 +2358,7 @@ export type OpenPaginatedResult = {
     readonly surface: PaginatedSurface;
 } | {
     readonly detail?: string;
+    readonly limit?: string;
     readonly ok: false;
     readonly reason: string;
 };
@@ -1360,22 +2394,27 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 // @public
 export interface PaginatedSurface {
     activatedReviewKey(): string | null;
-    activateReview(key: string, selection?: SemanticSelection): void;
+    activateReview(key: string, selection?: SemanticSelection, options?: {
+        readonly allowExcluded?: boolean;
+        readonly preventScroll?: boolean;
+    }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
     adjustIndent(direction: 'increase' | 'decrease'): boolean;
-    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope): TreeApplyResult;
+    applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope, packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[], requiresReview?: boolean): TreeApplyResult;
     // (undocumented)
     applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
     applyHeaderFooterLifecycle(op: {
+        readonly enforce?: boolean;
         readonly evenAndOddHeaders?: boolean;
         readonly footerDistanceTwips?: number;
         readonly headerDistanceTwips?: number;
         readonly kind?: 'header' | 'footer';
-        readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions';
+        readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions' | 'setDocumentProtection' | 'setWatermark';
         readonly sectionIndex?: number;
         readonly titlePage?: boolean;
         readonly variant?: 'default' | 'first' | 'even';
+        readonly watermark?: PackageWatermarkWrite | null;
     }): {
         readonly ok: true;
     } | {
@@ -1386,17 +2425,20 @@ export interface PaginatedSurface {
     applyImageProperties(input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
     armForcePlainPaste(): void;
+    author(): string | undefined;
+    readonly bookmarkEditing: SurfaceBookmarks;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
+    canEditTextFormField(): boolean;
     canInsertTable(rows: number, cols: number): boolean;
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
-    commitReviewOps(run: () => {
+    commitReviewOps(run: (historyToken: symbol | undefined) => {
         readonly committed: boolean;
         readonly reason?: unknown;
-    }, intent?: ReviewWriteIntent): void;
+    }, intent?: ReviewWriteIntent): string | null;
     readonly contentControls: ContentControlOps;
     // (undocumented)
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
@@ -1404,6 +2446,7 @@ export interface PaginatedSurface {
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
     copyFlavours(): {
         readonly html: string | null;
+        readonly reason?: 'unsupported-content';
         readonly text: string;
     };
     currentPage(mode?: 'viewport' | 'caret'): number;
@@ -1422,6 +2465,8 @@ export interface PaginatedSurface {
     dismissActiveReview(): void;
     drawingSelectionIntent(): DrawingSelectionIntent;
     editingMode(): SurfaceEditingMode;
+    // (undocumented)
+    editTextFormField(): boolean;
     enqueueType(text: string): void;
     enterHeaderFooter(args: {
         readonly kind?: 'header' | 'footer';
@@ -1460,9 +2505,11 @@ export interface PaginatedSurface {
         readonly variant?: 'default' | 'first' | 'even';
     } | null;
     hiddenRevisionAuthors(): ReadonlySet<string>;
+    hostElement(): HTMLElement;
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
+    indentWithTab(direction: 'increase' | 'decrease'): boolean;
     // (undocumented)
     insertImage(input: SurfaceInsertImageInput): Promise<ImageIntentResult>;
     insertLineBreak(): void;
@@ -1486,12 +2533,17 @@ export interface PaginatedSurface {
             readonly total: number;
         };
     };
+    moveTo(container: HTMLElement, options?: {
+        readonly focus?: boolean;
+    }): void;
     // (undocumented)
     navigate(command: NavigationCommand, extend?: boolean): void;
     readonly navigation: SurfaceNavigation;
     notePreviewText(scopeId: string): string | null;
     notePropertiesState(): NotePropertiesStateSnapshot | null;
     overlayCoordinates(): SurfaceOverlayCoordinates;
+    park(): void;
+    parked(): boolean;
     pasteRich(text: string, html: string | null): boolean;
     proposeTextChange(kind: 'insertion' | 'deletion' | 'replacement', text: string, author?: string): boolean;
     publishedLayout(): SemanticLayout;
@@ -1499,14 +2551,18 @@ export interface PaginatedSurface {
     redo(): void;
     refreshRefFieldResults(): boolean;
     refreshTableInteractionLabels(): void;
+    // (undocumented)
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
         readonly commitGuard?: () => boolean;
         readonly expectedPackageRevision: number;
     }): Promise<ImageIntentResult>;
+    replacementLanding(paragraphId: string, start: number, end: number): number | null;
+    replaceTextInPlace(paragraphId: string, start: number, end: number, text: string): boolean;
     retainedSelection(): SemanticSelection | null;
     retainSelection(): SelectionPin;
     revealPage(pageIndex: number, options?: RevealOptions): boolean;
@@ -1514,7 +2570,9 @@ export interface PaginatedSurface {
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     revisionAuthors(): ReadonlyMap<string, number>;
-    revisionDisplayMode(): RevisionDisplayMode;
+    revisionDisplayMode(): ReviewDisplayMode;
+    save(): Uint8Array;
+    saveSteps(): Generator<void, Uint8Array>;
     sectionAnchorParagraphAt(paragraphId: string): SectionAnchor;
     sectionAtPage(pageIndex: number): {
         sectionIndex: number;
@@ -1524,20 +2582,25 @@ export interface PaginatedSurface {
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
+    selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;
     setActiveScope(scope: ViewScope): boolean;
     setAllRevisionAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
     setCellSelection(next: CellSelection | null): void;
+    setDrawingStrings(strings: DrawingPaintStrings): void;
     setEditable(editable: boolean): void;
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
+    setHighlightPainter(painter: SurfaceOverlayPainter | null): void;
     setIndent(update: {
         readonly firstLine?: number | null;
         readonly left?: number | null;
         readonly right?: number | null;
     }): boolean;
+    setLocale(locale: string | undefined): void;
     // (undocumented)
     setNoteProperties(args: {
         readonly endnote?: {
@@ -1557,14 +2620,17 @@ export interface PaginatedSurface {
     }): boolean;
     setParagraphFormat(update: SurfaceParagraphFormat): boolean;
     setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
-    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
-        readonly mergeAttributes?: boolean;
-    }): void;
+    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: Pick<ParagraphPropertyEdit, 'mergeAttributes' | 'physicalAlignment' | 'paragraphDirection'>): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
+        readonly formattingKinds?: readonly string[];
+    }): void;
     setRevisionAuthorVisible(author: string, visible: boolean): void;
+    setRevisionDisplayMode(mode: ReviewDisplayMode): void;
+    setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
+    // (undocumented)
     setRevisionStyles(colors: RevisionStyles | undefined): void;
-    setRunProperty(localName: string, attributes?: Record<string, string>): void;
+    setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     setSectionProperties(update: {
         readonly anchorParagraphId?: string;
         readonly marginBottomTwips?: number;
@@ -1576,8 +2642,11 @@ export interface PaginatedSurface {
         readonly pageWidthTwips?: number;
     }): boolean;
     setSelection(next: SemanticSelection): void;
+    setShowParagraphMarks(show: boolean): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
+    setTranslate(translate: PaginatedSurfaceOptions['translate']): void;
     // (undocumented)
     setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
     showAllRevisionAuthors(): void;
@@ -1587,8 +2656,9 @@ export interface PaginatedSurface {
     state(): PaginatedSurfaceState;
     // (undocumented)
     storyScope(): StoryScope;
+    textMeasurer?(): TextMeasurer;
     toggleList(kind: 'bullet' | 'ordered'): boolean;
-    toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+    toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     // (undocumented)
     type(text: string): void;
     undo(): void;
@@ -1597,32 +2667,57 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
+    readonly bookmarkMarks?: BookmarkMarkOptionsSource;
     readonly collaborationModel?: CollaborationModuleContribution;
+    readonly contentLockPolicy?: ContentLockPolicy;
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
+    readonly fieldResults?: FieldResultsMode;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
+    readonly locale?: string;
+    readonly lockedControlNavigation?: LockedControlNavigation;
     // (undocumented)
     readonly measurer?: TextMeasurer;
     // (undocumented)
     readonly onChange?: (state: PaginatedSurfaceState) => void;
+    readonly onEdit?: (typing: boolean) => void;
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
+    readonly onHostMoved?: (document: Document) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+    readonly onRejection?: (reason: string) => void;
+    readonly onRequestBookmark?: () => boolean;
+    // (undocumented)
+    readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
+    readonly onRequestGoTo?: () => boolean;
     readonly onRequestHyperlink?: () => void;
+    // (undocumented)
+    readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
+    readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;
+    readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
+    // (undocumented)
+    readonly onToggleParagraphMarks?: () => void;
+    // @internal
+    readonly pairsReplacements?: () => boolean;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
-    readonly revisionDisplayMode?: RevisionDisplayMode;
+    readonly revisionDisplayMode?: ReviewDisplayMode;
+    // (undocumented)
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
+    readonly showBookmarks?: boolean;
+    readonly showParagraphMarks?: boolean;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     readonly tocLabels?: {
         readonly title: string;
     };
+    readonly translate?: (key: string, params?: Record<string, string | number>) => string;
     // (undocumented)
     readonly unsupportedElementRules?: readonly UnsupportedElementRule[];
 }
@@ -1653,6 +2748,77 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export interface ParagraphDialogFields {
+    // (undocumented)
+    alignment: 'left' | 'center' | 'right' | 'justify';
+    clearedAllTabStops: boolean;
+    // (undocumented)
+    contextualSpacing: boolean;
+    // (undocumented)
+    direction: 'ltr' | 'rtl';
+    // (undocumented)
+    indentLeft: number;
+    // (undocumented)
+    indentRight: number;
+    // (undocumented)
+    keepLines: boolean;
+    // (undocumented)
+    keepNext: boolean;
+    // (undocumented)
+    lineRule: 'multiple' | 'exact' | 'atLeast';
+    // (undocumented)
+    lineValue: number;
+    // (undocumented)
+    pageBreakBefore: boolean;
+    // (undocumented)
+    spaceAfter: number;
+    // (undocumented)
+    spaceBefore: number;
+    // (undocumented)
+    special: SpecialIndent;
+    // (undocumented)
+    specialBy: number;
+    // (undocumented)
+    tabStops: readonly ParagraphTabStop[];
+    // (undocumented)
+    widowControl: boolean;
+}
+
+// @public
+export interface ParagraphDialogMixed {
+    // (undocumented)
+    readonly alignment: boolean;
+    // (undocumented)
+    readonly contextualSpacing: boolean;
+    // (undocumented)
+    readonly direction: boolean;
+    // (undocumented)
+    readonly indentLeft: boolean;
+    // (undocumented)
+    readonly indentRight: boolean;
+    // (undocumented)
+    readonly keepLines: boolean;
+    // (undocumented)
+    readonly keepNext: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly pageBreakBefore: boolean;
+    // (undocumented)
+    readonly spaceAfter: boolean;
+    // (undocumented)
+    readonly spaceBefore: boolean;
+    // (undocumented)
+    readonly special: boolean;
+    readonly tabStops: boolean;
+    // (undocumented)
+    readonly widowControl: boolean;
+}
+
+// @public
+export type ParagraphFlagKey = 'contextualSpacing' | 'keepNext' | 'keepLines' | 'widowControl' | 'pageBreakBefore';
+
+// @public
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
@@ -1667,11 +2833,93 @@ export interface ParagraphFlags {
 }
 
 // @public
+export type ParagraphFlagState = boolean | null;
+
+// @public
+export interface ParagraphFormatRead {
+    readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
+    // (undocumented)
+    readonly contextualSpacing: ParagraphFlagState;
+    readonly direction: 'ltr' | 'rtl' | null;
+    readonly disagrees: {
+        readonly alignment: boolean;
+        readonly direction: boolean;
+        readonly indentFirstLine: boolean;
+        readonly indentLeft: boolean;
+        readonly indentRight: boolean;
+        readonly lineSpacing: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly tabStops: boolean;
+    };
+    readonly indentFirstLineTwips: number | null;
+    // (undocumented)
+    readonly indentLeftTwips: number | null;
+    // (undocumented)
+    readonly indentRightTwips: number | null;
+    readonly indentUnknown: boolean;
+    // (undocumented)
+    readonly keepLines: ParagraphFlagState;
+    // (undocumented)
+    readonly keepNext: ParagraphFlagState;
+    // (undocumented)
+    readonly lineSpacing: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore: ParagraphFlagState;
+    // (undocumented)
+    readonly spaceAfterPt: number | null;
+    // (undocumented)
+    readonly spaceBeforePt: number | null;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
+    // (undocumented)
+    readonly widowControl: ParagraphFlagState;
+}
+
+// @public
+export interface ParagraphFormatUpdate {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    readonly direction?: 'ltr' | 'rtl';
+    // (undocumented)
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
+
+// @public
 export interface ParagraphPropertyEdit {
     readonly attributes?: Record<string, string | null>;
     // (undocumented)
     readonly localName: string;
     readonly mergeAttributes?: boolean;
+    readonly paragraphDirection?: 'ltr' | 'rtl';
+    readonly physicalAlignment?: boolean;
+    readonly remove?: boolean;
 }
 
 // @public
@@ -1685,10 +2933,38 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export function parseIsoDate(value: string): Date | null;
+
+// @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
 
 // @public
 export function pointsToEmu(points: number): number;
+
+// @public
+export interface PopupChromeRegistrationOptions {
+    readonly fallback?: boolean;
+}
+
+// @internal
+export interface PopupEscapeOptions {
+    readonly chromeRoot?: () => Element | null | undefined;
+    readonly close: (fromInside: boolean) => void;
+    readonly contains: (node: Node) => boolean;
+    readonly editorElements?: () => readonly (Element | null | undefined)[];
+    readonly popup: HTMLElement;
+    readonly skip?: (event: KeyboardEvent) => boolean;
+}
+
+// @internal
+export interface PopupFocusLeaveOptions {
+    readonly close: () => void;
+    readonly contains: (node: Node) => boolean;
+    readonly popup: HTMLElement;
+}
+
+// @public
+export function positionContentControlPopup(panel: HTMLElement, anchor: HTMLElement): void;
 
 // @public
 export function positionInputFromPropertiesCommand(command: {
@@ -1717,6 +2993,104 @@ export const PX_PER_CM: number;
 // @public
 export const PX_PER_INCH = 96;
 
+// @internal
+export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number;
+
+// @internal
+export function readColumnGap(style: CSSStyleDeclaration): number;
+
+// @internal
+export function readInlineMargins(style: CSSStyleDeclaration): {
+    readonly end: number;
+    readonly start: number;
+};
+
+// @public
+export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
+
+// @public
+export interface RefreshChange {
+    readonly description?: string;
+    readonly diagnostic?: {
+        readonly code: 'missing-location' | 'deleted' | 'invalid-selector' | 'invalid-paragraph-id' | 'paragraph-not-found' | 'ambiguous-paragraph-id' | 'invalid-offsets' | 'text-mismatch' | 'not-rendered' | 'unsupported-story' | 'multiple-paragraphs';
+        readonly location?: RefreshLocation;
+    };
+    // (undocumented)
+    readonly id: string;
+    readonly isNew: boolean;
+    // (undocumented)
+    readonly location?: RefreshLocation;
+    readonly resultId: string;
+    // (undocumented)
+    readonly status: 'available' | 'deleted' | 'unavailable' | 'invalid' | 'unsupported-story';
+}
+
+// @public
+export interface RefreshChangeInput {
+    readonly description?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly location?: RefreshLocation;
+    readonly unavailableReason?: 'deleted' | 'unavailable';
+}
+
+// @public
+export type RefreshFailureCode = 'unavailable' | 'collaboration' | 'busy' | 'cancelled' | 'superseded' | 'document-changed' | 'local-edits' | 'out-of-order' | 'invalid-result' | 'invalid-document' | 'input-failed' | 'load-failed' | 'recovery-failed';
+
+// @public
+export type RefreshHighlightAnimation = AnchorHighlightAnimation;
+
+// @public
+export interface RefreshHighlightOptions extends AnchorHighlightOptions {
+    readonly changeIds?: readonly string[];
+    readonly includePrevious?: boolean;
+}
+
+// @public
+export interface RefreshLocation {
+    // (undocumented)
+    readonly end: number;
+    readonly paragraphId?: string;
+    readonly paragraphIndex?: number;
+    readonly start: number;
+    readonly text: string;
+}
+
+// @public
+export type RefreshResult = {
+    readonly changeInformation: 'available' | 'unavailable';
+    readonly changes: readonly RefreshChange[];
+    readonly failures: readonly string[];
+    readonly ok: true;
+    readonly resultId: string;
+} | {
+    readonly code: RefreshFailureCode;
+    readonly ok: false;
+    readonly recovered?: boolean;
+    readonly resultId: string;
+};
+
+// @public
+export interface RefreshSubmission {
+    // (undocumented)
+    readonly bytes: ArrayBuffer;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export interface RefreshUpdate {
+    // (undocumented)
+    readonly bytes: ArrayBuffer | Uint8Array;
+    readonly changes?: readonly RefreshChangeInput[];
+    readonly failures?: readonly string[];
+    // (undocumented)
+    readonly sequence: number;
+    // (undocumented)
+    readonly submission: RefreshSubmission;
+}
+
 // @public
 export interface RemoteCaretLabelAnchor {
     // (undocumented)
@@ -1734,16 +3108,63 @@ export interface RemoteCaretLabelHost {
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
-export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean): boolean;
+export function reportAutomationException(editor: object, error: unknown, tracked: boolean): void;
+
+// @public
+export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode, tracked: boolean, cause?: string): void;
+
+// @public
+export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;
 
 // @public
 export function resolveColorValueToCss(color: ColorValue | undefined | null, themeColors: readonly DocumentThemeColorEntry[], defaultHex?: string): string;
+
+// @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkerStyle;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionDisplay;
+}
+
+// @public
+export interface ResolvedRevisionMarkup {
+    // (undocumented)
+    readonly cells: {
+        readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    };
+    // (undocumented)
+    readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
+    // (undocumented)
+    readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly formatting: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly insertions: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly movedTo: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly trackFormatting: boolean;
+    // (undocumented)
+    readonly trackMoves: boolean;
+}
 
 // @public
 export function resolveEditorModules(modules: readonly EditorModule[] | undefined): EditorModuleRegistry;
 
 // @public
 export function resolveImageResourceLimits(overrides?: Partial<ImageResourceLimits>): ImageResourceLimits;
+
+// @public
+export function resolveReviewPane(options: ReviewPaneOptions | undefined, base?: ResolvedReviewPane): ResolvedReviewPane;
+
+// @public
+export function resolveRevisionMarkup(input?: RevisionMarkupOptions, previous?: ResolvedRevisionMarkup): ResolvedRevisionMarkup;
 
 // @public
 export function resolveSvgIntrinsicSize(bytes: Uint8Array, limits: ImageResourceLimits): ValidatedRasterHeader | null;
@@ -1762,12 +3183,24 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 // @public
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
 
+// @internal
+export const REVIEW_MARKERS_GUTTER_PX = 44;
+
 // @public
 export interface ReviewAuthorInfo {
     readonly author: string;
     readonly color: string;
     readonly slot: number;
     readonly style?: RevisionAuthorStyle;
+}
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
+export interface ReviewItemHit {
+    readonly placement: ReviewItemPlacement;
+    readonly rect: HighlightRect;
 }
 
 // @public
@@ -1783,17 +3216,49 @@ export interface ReviewModelInput {
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
     readonly reportCustomNodeDiagnostic?: ((diagnostic: unknown) => void) | undefined;
     readonly storyPart: OoxmlPart;
+    readonly stylesPart?: OoxmlPart | undefined;
 }
 
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
-    readonly displayModes: readonly RevisionDisplayMode[];
+    readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
+    readonly displayModes: readonly ReviewDisplayMode[];
+    readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 
+// @internal
+export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number, overflow?: ReviewPaneOverflow): number | null;
+
 // @public
-export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
+export interface ReviewPaneItemFields {
+    readonly kind: 'revision' | 'comment' | 'custom';
+    readonly parentRevisionId?: string;
+}
+
+// @public
+export function reviewPaneListsItem(revisionsIn: RevisionDisplay, item: ReviewPaneItemFields): boolean;
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkerStyle;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionDisplay;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
+
+// @public
+export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
+
+// @public
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
 
 // @public
 export interface RevisionAuthorAssignments {
@@ -1804,10 +3269,82 @@ export interface RevisionAuthorAssignments {
 
 // @public
 export interface RevisionAuthorStyle {
+    activeBackground?: string;
     avatarUrl?: string;
     background?: string;
     color?: string;
     spanClassName?: string;
+}
+
+// @public (undocumented)
+export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | 'outsideBorder';
+
+// @public (undocumented)
+export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
+
+// @public
+export interface RevisionMarkupChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
+
+// @public
+export interface RevisionMarkupDialog {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    open(): void;
+}
+
+// @public
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
+    // (undocumented)
+    readonly container: HTMLElement;
+    // (undocumented)
+    readonly translate?: (key: string) => string | undefined;
+}
+
+// @public
+export interface RevisionMarkupDialogSession {
+    apply(): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    cancel(): void;
+    get(): ResolvedRevisionMarkup;
+    reset(): void;
+    set(options: RevisionMarkupOptions): void;
+    readonly signal: AbortSignal;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupMark = 'none' | 'colorOnly' | 'bold' | 'italic' | 'underline' | 'doubleUnderline' | 'strikethrough' | 'doubleStrikethrough';
+
+// @public (undocumented)
+export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
+
+// @public
+export type RevisionMarkupOptions = {
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
+};
+
+// @public (undocumented)
+export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
+    // (undocumented)
+    readonly color: RevisionMarkupColor;
+    // (undocumented)
+    readonly mark: Mark;
+}
+
+// @public
+export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
+    readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
 }
 
 // @public
@@ -1827,6 +3364,7 @@ export interface RulerIndent {
     readonly left: number;
     // (undocumented)
     readonly right: number;
+    readonly rtl?: boolean;
 }
 
 // @public
@@ -1866,6 +3404,12 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
+
+// @public
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
+
+// @public
 export function runSave(editor: Editor | null): Promise<ArrayBuffer>;
 
 // @public
@@ -1880,14 +3424,53 @@ export interface RunTableChromeCommandResult {
 }
 
 // @public
-export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult;
+export function runTableCommand(editor: Editor | null, command: EditorCommand, options?: EditorExecOptions): ExecResult;
 
 // @public
-export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
-value?: unknown): ExecResult;
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: Exclude<ChromeSlotId, ToolbarValueSlot>, options: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand<K extends keyof ToolbarValueMap>(editor: Editor | null, id: K, value: ToolbarValueMap[NoInfer<K>], options?: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, value: unknown, options?: EditorExecOptions): ExecResult;
+
+// @public (undocumented)
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
+
+// @internal
+export const sameOverflow: typeof sameIds;
+
+// @public
+export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
 
 // @public
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
+export interface ScrollToAnchorOptions {
+    readonly behavior?: 'instant' | 'smooth';
+    readonly block?: ScrollPlacement;
+    readonly offsetPx?: number;
+}
+
+// @public
+export const SEARCH_DEBOUNCE_MS = 150;
+
+// @public
+export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+
+// @public
+export const SEARCH_HIGHLIGHT_SET = "search";
+
+// @public
+export const SEARCH_MATCH_LIMIT = 2000;
 
 // @public
 export type SectionAnchor =
@@ -1920,10 +3503,12 @@ export interface SectionProperties {
     readonly breakType: SectionBreakType;
     // (undocumented)
     readonly columns: SectionColumns;
+    readonly gridLinePitchTwips?: number;
     // (undocumented)
     readonly landscape: boolean;
     // (undocumented)
     readonly margins: SectionMargins;
+    readonly pageBorders?: SectionPageBorders;
     readonly pageNumbering?: SectionPageNumbering;
     // (undocumented)
     readonly pageSize: {
@@ -1933,6 +3518,9 @@ export interface SectionProperties {
     // (undocumented)
     readonly titlePage: boolean;
 }
+
+// @public
+export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields;
 
 // @public
 export interface SelectedDrawingOverlayTarget {
@@ -1958,6 +3546,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly pageIndex: number;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
+    readonly textbox?: boolean;
     // (undocumented)
     readonly transform: DrawingTransform;
     // (undocumented)
@@ -2040,6 +3629,18 @@ export interface SemanticSelection {
     readonly head: SemanticPosition;
 }
 
+// @internal
+export function separatorLeadingCost(separatorWidth: number, marginInlineStart: number, marginInlineEnd: number, gap: number): number;
+
+// @public
+export function shiftMonth(year: number, month: number, delta: 1 | -1): {
+    readonly month: number;
+    readonly year: number;
+};
+
+// @public
+export const signedFirstLineOf: (kind: SpecialIndent, magnitudeTwips: number) => number;
+
 // @public
 export const SNAP_TWIPS_CM: number;
 
@@ -2054,6 +3655,42 @@ export function sniffImageMime(bytes: Uint8Array): RenderableImageMime | Preserv
 
 // @public
 export function sourceCropFromCropPercent(crop: ImageCropPercent): SourceCrop;
+
+// @public
+export type SpecialIndent = 'none' | 'firstLine' | 'hanging';
+
+// @public (undocumented)
+export const specialOf: (signedTwips: number | null) => SpecialIndent;
+
+// @public
+export const SPLIT_CELL_FALLBACK_MAX = 63;
+
+// @public
+export type SplitCellCountProblem = {
+    readonly field: 'columns' | 'rows';
+    readonly kind: 'range';
+    readonly max: number;
+} | {
+    readonly kind: 'oneCell';
+};
+
+// @public
+export interface SplitCellCounts {
+    readonly counts: {
+        readonly cols: number;
+        readonly rows: number;
+    } | null;
+    // (undocumented)
+    readonly problem: SplitCellCountProblem | null;
+}
+
+// @public
+export interface SplitCellLimits {
+    // (undocumented)
+    readonly maxCols: number;
+    // (undocumented)
+    readonly maxRows: number;
+}
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
@@ -2096,6 +3733,7 @@ export interface SurfaceFormatting {
     readonly bold: boolean;
     // (undocumented)
     readonly color: string | null;
+    readonly direction: 'ltr' | 'rtl' | null;
     readonly disagrees: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily: string | null;
@@ -2157,7 +3795,10 @@ export interface SurfaceNavigation {
     goToPosition(position: {
         offset: number;
         paragraphId: string;
-    }): boolean;
+    }, options?: {
+        readonly center?: boolean;
+        readonly orShow?: boolean;
+    }): boolean | 'shown';
     openExternal(href: string | null): boolean;
 }
 
@@ -2178,6 +3819,7 @@ export interface SurfaceParagraphFormat {
     readonly alignment?: 'left' | 'center' | 'right' | 'both';
     // (undocumented)
     readonly contextualSpacing?: boolean;
+    readonly direction?: 'ltr' | 'rtl';
     readonly indentFirstLineTwips?: number | null;
     // (undocumented)
     readonly indentLeftTwips?: number | null;
@@ -2204,6 +3846,18 @@ export interface SurfaceParagraphFormat {
 }
 
 // @public
+export const TAB_ALIGNMENT_LABELS: {
+    readonly bar: 'dialogs.paragraph.tabAlignBar';
+    readonly center: 'dialogs.paragraph.tabAlignCenter';
+    readonly decimal: 'dialogs.paragraph.tabAlignDecimal';
+    readonly left: 'dialogs.paragraph.tabAlignLeft';
+    readonly right: 'dialogs.paragraph.tabAlignRight';
+};
+
+// @public (undocumented)
+export type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
+
+// @public
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[];
 
 // @public
@@ -2214,6 +3868,9 @@ export const TABLE_BORDER_WIDTH_OPTIONS: readonly TableBorderWidthOption[];
 
 // @public
 export const TABLE_CHROME_SLOT_IDS: readonly TableChromeSlotId[];
+
+// @public (undocumented)
+export type TabLeaderName = 'none' | 'dot' | 'hyphen' | 'underscore';
 
 // @public
 export interface TableBorderStyleOption {
@@ -2288,16 +3945,78 @@ export function tableCommandToolbarState(surface: PaginatedSurface | null, comma
 export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight';
 
 // @public
+export const TEXT_FORM_FORMATS: {
+    readonly date: readonly ['', 'M/d/yyyy', 'MM/dd/yyyy', 'd/M/yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd', 'd MMMM yyyy', 'MMMM d, yyyy'];
+    readonly number: readonly ['', '0', '0.00', '#,##0', '#,##0.00', '0%', '0.00%'];
+    readonly regular: readonly ['', 'Uppercase', 'Lowercase', 'First capital', 'Title case'];
+};
+
+// @public
+export interface TextFormFieldChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: TextFormFieldDialogSession) => void;
+}
+
+// @public
+export interface TextFormFieldDialogSession {
+    apply(text: string, options: TextFormFieldOptions): boolean;
+    canApply(): boolean;
+    cancel(): void;
+    // (undocumented)
+    readonly field: TextFormFieldRange;
+    // (undocumented)
+    readonly signal: AbortSignal;
+}
+
+// @public
+export interface TextMatch {
+    // (undocumented)
+    readonly blockId: string;
+    // (undocumented)
+    readonly contextAfter?: string;
+    readonly contextBefore?: string;
+    // (undocumented)
+    readonly length: number;
+    readonly paragraphIndex: number;
+    readonly runIndex: number;
+    // (undocumented)
+    readonly runOffset: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+    readonly text: string;
+}
+
+// @public
 export interface TextMeasurer {
-    lineMetrics(style: ResolvedRunStyle): {
+    caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
+    hasResolvedFont?(style: ResolvedRunStyle): boolean;
+    inkBounds?(text: string, style: ResolvedRunStyle): {
+        left: number;
+        right: number;
+    } | undefined;
+    lineMetrics(style: ResolvedRunStyle, text?: string): {
         baseline: number;
         height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
+    strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
 
 // @public (undocumented)
 export function toEditorFontError(error: unknown): EditorFontError;
+
+// @internal
+export const TOOLBAR_COLLAPSE_ORDER: readonly string[];
+
+// @internal
+export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
+
+// @internal
+export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
+
+// @internal
+export const TOOLBAR_PINNED_GROUPS: ReadonlySet<string>;
 
 // @public
 export interface ToolbarCommandState {
@@ -2316,11 +4035,95 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 // @public
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
 
+// @internal
+export interface ToolbarFitInput {
+    readonly available: number;
+    readonly fixed: number;
+    readonly groups: readonly string[];
+    // (undocumented)
+    readonly hysteresis?: number;
+    readonly more: number;
+    readonly order: readonly string[];
+    readonly previous?: ReadonlySet<string> | undefined;
+    readonly widths: ReadonlyMap<string, number>;
+}
+
+// @internal
+export function toolbarGroupPriority(id: string, order?: readonly string[]): number | undefined;
+
+// @internal
+export interface ToolbarHostGroupPlacement {
+    readonly after?: string | undefined;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @internal
+export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<string>;
+
+// @internal
+export interface ToolbarPanelPlacement {
+    readonly anchor: 'start' | 'end' | 'clamped';
+    readonly left: number;
+    readonly maxWidth: number;
+}
+
+// @internal
+export function toolbarPanelPlacement(input: {
+    readonly margin?: number;
+    readonly panelWidth: number;
+    readonly triggerLeft: number;
+    readonly triggerRight: number;
+    readonly viewportWidth: number;
+}): ToolbarPanelPlacement;
+
+// @internal
+export function toolbarPopupLeft(input: {
+    readonly anchorLeft: number;
+    readonly margin?: number;
+    readonly popupWidth: number;
+    readonly viewportWidth: number;
+}): number;
+
+// @public (undocumented)
+export type ToolbarSlotValue<K extends ToolbarValueSlot> = K extends keyof ToolbarValueMap ? ToolbarValueMap[K] : unknown;
+
+// @public
+export interface ToolbarValueMap {
+    // (undocumented)
+    'font.family': string;
+    // (undocumented)
+    'font.size': number;
+    // (undocumented)
+    'image.altText': string;
+    // (undocumented)
+    'image.wrap': ImageWrapTarget;
+    // (undocumented)
+    'list.lineSpacing': number;
+    // (undocumented)
+    'review.editingMode': 'editing' | 'suggesting' | 'viewing';
+    // (undocumented)
+    'styles.style': string;
+    // (undocumented)
+    'text.color': string;
+    // (undocumented)
+    'text.highlight': string;
+}
+
+// @public (undocumented)
+export type ToolbarValueSlot = keyof ToolbarValueMap | TableChromeSlotId;
+
 // @public
 export type TrackedChangeFilterMode = 'accept' | 'reject';
 
 // @public
 export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
+
+// @internal
+export function trailingGapCost(width: number, gap: number): number;
+
+// @public
+export function trapTabWithin(panel: HTMLElement, event: KeyboardEvent): boolean;
 
 // @public
 export interface TreeApplyResult {
@@ -2352,11 +4155,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
-    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;
         readonly parentCommentId?: string;
-    }[], scope?: StoryScope, noteId?: number): boolean;
+    }[], scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
@@ -2374,12 +4177,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     ensureListDefinition(kind: ListKind): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
-    findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+    findText(query: string, options?: DocumentSearchOptions_2): DocumentSearchResult;
+    findText(queries: readonly string[], options?: DocumentSearchOptions_2): readonly DocumentSearchResult[];
     hasReviewContent(): boolean;
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
-    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope, options?: PackageWriteOptions): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     nodeIdOf(paraId: string): string | null;
     numberingRoot(): OoxmlElement | null;
@@ -2407,12 +4211,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
         start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope,
-    actorId?: string): string | null;
+    actorId?: string, options?: PackageWriteOptions): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
-    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    saveSteps(): Generator<void, Uint8Array>;
+    setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;
@@ -2420,6 +4225,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
     sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
+    symbolFontFamilies(): readonly string[];
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }
@@ -2429,6 +4235,9 @@ export const TWIPS_PER_CM = 567;
 
 // @public
 export const TWIPS_PER_INCH = 1440;
+
+// @public (undocumented)
+export const twipsToInches: (twips: number) => number;
 
 // @public
 export function validateDrawingPositionInput(position: DrawingPositionInput): boolean;
@@ -2454,6 +4263,28 @@ export function validateThemeModifier(value: unknown): value is number;
 export type VectorImageMime = 'image/svg+xml';
 
 // @public
+export function watchHighlights(editor: Editor, name: string, source: HighlightSource, options?: WatchHighlightsOptions): HighlightWatch;
+
+// @public
+export interface WatchHighlightsOptions extends HighlightOptions {
+    readonly onResult?: (result: HighlightResult) => void;
+}
+
+// @public
+export function watermarkShapeBox(watermark: Watermark, area: WatermarkSize, measurer?: TextMeasurer): WatermarkSize | null;
+
+// @public
+export interface WatermarkSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphTabStop): readonly ParagraphTabStop[];
+
+// @public @deprecated (undocumented)
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
 
 // @public
@@ -2461,7 +4292,5 @@ export const ZOOM_MAX = 5;
 
 // @public
 export const ZOOM_MIN = 0.1;
-
-// (No @packageDocumentation comment for this package)
 
 ```

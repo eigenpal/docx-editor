@@ -9,9 +9,10 @@
 //
 // VALUE imports must obey the DAG, no exceptions. TYPE-ONLY imports (`import type` /
 // `export type ... from`) are erased at compile time and cannot move code between
-// environments, but they are still coupling — so a cross-lane type edge outside the DAG is
-// permitted only when pinned in GRANDFATHERED_TYPE_EDGES below, and the pin RATCHETS: an
-// entry that stops matching fails, so the list can only shrink or be consciously edited.
+// environments, but they are still coupling — so a cross-lane type edge is permitted when the
+// importing lane declares the target in `mayImportTypes`, and otherwise only when pinned in
+// GRANDFATHERED_TYPE_EDGES below. The pin RATCHETS: an entry that stops matching fails, so the
+// list can only shrink or be consciously edited.
 
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -34,22 +35,10 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   // The neutral export composition root shares the existing public FontOrigin type. This is
   // erased and does not make the browser editor depend on the Node-oriented export lane.
   { file: 'export/index.ts', to: 'editor' },
-  { file: 'contracts/editor.ts', to: 'layout' },
-  { file: 'contracts/editor.ts', to: 'store' },
-  { file: 'contracts/editor.ts', to: 'collaboration' },
-  // Split out of `contracts/editor.ts` above, and it inherits that file's coupling with it:
-  // the selected-image read model names drawing, crop and image-resource types the store
-  // lane owns. Compile-time only, and one fewer line in a file at its cap.
-  { file: 'contracts/editor-image-state.ts', to: 'store' },
-  { file: 'contracts/modules.ts', to: 'layout' },
-  { file: 'contracts/modules.ts', to: 'store' },
-  { file: 'contracts/modules.ts', to: 'collaboration' },
-  { file: 'layout/table-interaction-targets.ts', to: 'contracts' },
   { file: 'store/store/tree-op-types.ts', to: 'contracts' },
-  // Font composition moved into the layout lane for the headless export root; the public
-  // FontConfiguration/FontSource shapes it composes stay described in contracts. Erased.
-  { file: 'layout/font-composition.ts', to: 'contracts' },
-  { file: 'layout/font-resolver.ts', to: 'contracts' },
+  // The public diagnostic codes live in the neutral automation lane, so a headless runtime can
+  // name a refusal; the contract re-exports them beside the editor's event types. Erased.
+  { file: 'contracts/diagnostics.ts', to: 'automation' },
 ];
 
 /**
@@ -150,10 +139,13 @@ function staticImportsOf(
 }
 
 function edgesOf(file: string): ImportEdge[] {
-  const relativePath = relative(SRC, file).split(sep).join('/');
+  return edgesOfSource(relative(SRC, file).split(sep).join('/'), readFileSync(file, 'utf8'));
+}
+
+/** The cross-lane edges of one source text, as if it lived at `relativePath` under src/. */
+function edgesOfSource(relativePath: string, source: string): ImportEdge[] {
   const ownLane = laneOfFile(relativePath);
   if (!ownLane) return [];
-  const source = readFileSync(file, 'utf8');
   const edges: ImportEdge[] = [];
   const record = (specifier: string, typeOnly: boolean) => {
     const target = laneOfSpecifier(specifier, relativePath);
@@ -165,6 +157,22 @@ function edgesOf(file: string): ImportEdge[] {
   for (const match of source.matchAll(BARE_IMPORT)) record(match[1]!, false);
   for (const match of source.matchAll(DYNAMIC_IMPORT)) record(match[1]!, false);
   return edges;
+}
+
+/** Value edges the DAG forbids: judged against `mayImport` only, never `mayImportTypes`. */
+function offDagValueEdges(edges: readonly ImportEdge[]): ImportEdge[] {
+  return edges.filter(
+    (edge) => !edge.typeOnly && !CORE_LANES[laneOfFile(edge.file)!].mayImport.includes(edge.to)
+  );
+}
+
+/** Type edges the DAG forbids: neither `mayImport` nor `mayImportTypes` names the target. */
+function offDagTypeEdges(edges: readonly ImportEdge[]): ImportEdge[] {
+  return edges.filter((edge) => {
+    if (!edge.typeOnly) return false;
+    const lane = CORE_LANES[laneOfFile(edge.file)!];
+    return !lane.mayImport.includes(edge.to) && !(lane.mayImportTypes ?? []).includes(edge.to);
+  });
 }
 
 const allEdges: ImportEdge[] = [];
@@ -180,22 +188,14 @@ describe('every lane import obeys the DAG (core-lane-graph.ts)', () => {
   });
 
   test('no VALUE import crosses an edge the DAG forbids, beyond the pinned debt', () => {
-    const offDag = allEdges.filter((edge) => {
-      if (edge.typeOnly) return false;
-      const from = laneOfFile(edge.file)!;
-      return !CORE_LANES[from].mayImport.includes(edge.to);
-    });
+    const offDag = offDagValueEdges(allEdges);
     const actual = [...new Set(offDag.map((edge) => `${edge.file} → ${edge.to}`))].sort();
     const pinned = GRANDFATHERED_VALUE_EDGES.map((edge) => `${edge.file} → ${edge.to}`).sort();
     expect(actual).toEqual(pinned);
   });
 
   test('every off-DAG TYPE edge is pinned, and every pin is still real', () => {
-    const offDag = allEdges.filter((edge) => {
-      if (!edge.typeOnly) return false;
-      const from = laneOfFile(edge.file)!;
-      return !CORE_LANES[from].mayImport.includes(edge.to);
-    });
+    const offDag = offDagTypeEdges(allEdges);
     const actual = [...new Set(offDag.map((edge) => `${edge.file} → ${edge.to}`))].sort();
     const pinned = GRANDFATHERED_TYPE_EDGES.map((edge) => `${edge.file} → ${edge.to}`).sort();
     // Exact equality, both directions: a NEW off-DAG type edge fails until pinned with a
@@ -230,6 +230,22 @@ describe('the scanner itself, against the statement shapes that broke it', () =>
     const names = Array.from({ length: 120 }, (_, index) => `  someLongExportedName${index},`);
     const source = `import {\n${names.join('\n')}\n} from '../layout/index.ts';`;
     expect(staticImportsOf(source)).toEqual([{ specifier: '../layout/index.ts', typeOnly: false }]);
+  });
+
+  test('mayImportTypes admits a contracts TYPE import from store, never a VALUE import', () => {
+    const value = edgesOfSource(
+      'contracts/example.ts',
+      "import { applyOps } from '../store/store/tree-ops.ts';"
+    );
+    expect(offDagValueEdges(value).map((edge) => `${edge.file} → ${edge.to}`)).toEqual([
+      'contracts/example.ts → store',
+    ]);
+    const typeOnly = edgesOfSource(
+      'contracts/example.ts',
+      "import type { ReviewItem } from '../store/store/review-items.ts';"
+    );
+    expect(offDagTypeEdges(typeOnly)).toEqual([]);
+    expect(offDagValueEdges(typeOnly)).toEqual([]);
   });
 
   test('import type classifies the whole statement as type-only', () => {

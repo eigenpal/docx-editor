@@ -73,12 +73,167 @@ function firstHyperlink(part: OoxmlPart): string {
   return firstOfKind(part, 'hyperlink');
 }
 
+function firstNamed(part: OoxmlPart, localName: string): OoxmlNode {
+  const walk = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.localName === localName) return node;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = walk(part.root);
+  if (!found) throw new Error(`no ${localName}`);
+  return found;
+}
+
+function textUnder(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.value;
+  return node.children.map(textUnder).join('');
+}
+
+function allNamed(node: OoxmlNode, localName: string): OoxmlNode[] {
+  if (node.kind === 'textValue') return [];
+  const found = node.localName === localName ? [node] : [];
+  return found.concat(node.children.flatMap((child) => allNamed(child, localName)));
+}
+
 const PARAGRAPH = '/word/document.xml#0.0.0';
 
 const TABLE_WITH = (inner: string) =>
   `<w:tbl><w:tr><w:tc><w:p>${inner}</w:p><w:p/></w:tc></w:tr></w:tbl>`;
 
 describe('ST_Lock content edits', () => {
+  const insertInlineControl = (paragraphId: string): TreeDocOp => ({
+    op: 'insertInlineContentControl',
+    paragraphId,
+    offset: 2,
+    tag: 'new',
+    text: 'X',
+  });
+
+  const inlineControlAtOffset = (properties: string): OoxmlPart =>
+    load(
+      '<w:p><w:r><w:t>A</w:t></w:r><w:sdt><w:sdtPr>' +
+        properties +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>BC</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>D</w:t></w:r></w:p>'
+    );
+
+  test('inserting an inline control cannot split a content-locked control', () => {
+    const part = inlineControlAtOffset('<w:lock w:val="sdtContentLocked"/>');
+    expect(reject(part, insertInlineControl(firstOfKind(part, 'paragraph')))).toBe('locked');
+  });
+
+  test('inserting an inline control cannot split a data-bound control', () => {
+    const part = inlineControlAtOffset(
+      '<w:dataBinding w:xpath="/a" w:storeItemID="{G}" w:prefixMappings=""/>'
+    );
+    expect(reject(part, insertInlineControl(firstOfKind(part, 'paragraph')))).toBe('bound');
+  });
+
+  test('inserting an inline control splits an ordinary enclosing control', () => {
+    const part = inlineControlAtOffset('<w:tag w:val="old"/>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, insertInlineControl(paragraphId));
+    expect(paragraphTextOf(next, paragraphId)).toBe('ABXCD');
+    expect(allNamed(next.root, 'sdt').map(textUnder)).toEqual(['B', 'X', 'C']);
+  });
+
+  test('inserting an inline control outside existing controls is unchanged', () => {
+    const part = load('<w:p><w:r><w:t>ABCD</w:t></w:r></w:p>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, insertInlineControl(paragraphId));
+    expect(paragraphTextOf(next, paragraphId)).toBe('ABXCD');
+    expect(allNamed(next.root, 'sdt').map(textUnder)).toEqual(['X']);
+  });
+
+  const wrapperUnderControl = (properties: string): OoxmlPart =>
+    load(
+      `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent><w:p>` +
+        '<w:smartTag><w:r><w:t>word</w:t></w:r></w:smartTag>' +
+        '</w:p></w:sdtContent></w:sdt>'
+    );
+
+  const wrapperOps = (part: OoxmlPart): readonly TreeDocOp[] => {
+    const paragraphId = firstOfKind(part, 'paragraph');
+    return [
+      {
+        op: 'insertText',
+        paragraphId,
+        offset: 2,
+        text: 'X',
+      },
+      { op: 'deleteText', paragraphId, start: 1, end: 3 },
+      {
+        op: 'setRunProperties',
+        paragraphId,
+        start: 1,
+        end: 3,
+        properties: [{ localName: 'b' }],
+      },
+    ];
+  };
+
+  test('an inline wrapper edit inherits its enclosing content lock', () => {
+    const part = wrapperUnderControl('<w:lock w:val="sdtContentLocked"/>');
+    expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['locked', 'locked', 'locked']);
+  });
+
+  test('an inline wrapper edit inherits its enclosing data binding', () => {
+    const part = wrapperUnderControl('<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>');
+    expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['bound', 'bound', 'bound']);
+  });
+
+  test('the same wrapper edits succeed under an unlocked control', () => {
+    const part = wrapperUnderControl('');
+    for (const op of wrapperOps(part)) expect(applyTreeOp(part, op).ok).toBe(true);
+  });
+
+  const trailingWrapperControl = (properties: string): OoxmlPart =>
+    load(
+      '<w:p><w:sdt><w:sdtPr>' +
+        properties +
+        '</w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>word</w:t></w:r></w:smartTag>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+
+  test('an unscoped trailing wrapper insertion lands beside its locked control', () => {
+    const part = trailingWrapperControl('<w:lock w:val="sdtContentLocked"/>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+    expect(textUnder(firstSdt(next))).toBe('word');
+    expect(reject(part, { op: 'insertText', paragraphId, offset: 2, text: 'X' })).toBe('locked');
+  });
+
+  test('the same unlocked insertion exits the wrapper but stays in the control', () => {
+    const part = trailingWrapperControl('');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
+    expect(textUnder(firstNamed(next, 'smartTag'))).toBe('word');
+    expect(textUnder(firstSdt(next))).toBe('wordX');
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+  });
+
+  test('a tracked trailing insertion uses the same control landing site', () => {
+    const part = trailingWrapperControl('');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId,
+      offset: 4,
+      text: 'X',
+      revision: { author: 'Ada' },
+    });
+    const wrapper = firstNamed(next, 'smartTag');
+    expect(textUnder(wrapper)).toBe('word');
+    expect(textUnder(firstSdt(next))).toBe('wordX');
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+  });
+
   test('contentLocked refuses insert/delete inside the control', () => {
     const part = load(
       '<w:p><w:r><w:t>aa</w:t></w:r>' +
@@ -116,10 +271,10 @@ describe('ST_Lock content edits', () => {
   test('sdtContentLocked refuses both content edits and removal', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     const control = firstSdt(part);
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'locked'
     );
     expect(reject(part, { op: 'removeContentControl', controlId: control.id })).toBe('locked');
@@ -171,7 +326,7 @@ describe('ST_Lock content edits', () => {
         '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>in</w:t></w:r></w:sdtContent></w:sdt>' +
         '</w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'x' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'x' })).toBe(
       'locked'
     );
   });
@@ -194,9 +349,9 @@ describe('ST_Lock content edits', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr>' +
         '<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>' +
-        '</w:sdtPr><w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '</w:sdtPr><w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'bound'
     );
   });
@@ -328,25 +483,25 @@ describe('ST_Lock content edits', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:temporary/>' +
         '<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>' +
-        '</w:sdtPr><w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '</w:sdtPr><w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'bound'
     );
   });
 });
 
 describe('deleteBlock refuses protected descendant content controls', () => {
-  test('table with nested contentLocked inline SDT refuses deleteBlock', () => {
+  test('table with nested contentLocked inline SDT may be deleted', () => {
     const part = load(
       TABLE_WITH(
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
           '<w:sdtContent><w:r><w:t>L</w:t></w:r></w:sdtContent></w:sdt>'
       ) + '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    const tableId = firstOfKind(part, 'table');
-    expect(reject(part, { op: 'deleteBlock', blockId: tableId })).toBe('locked');
-    expect(firstOfKind(part, 'table')).toBe(tableId);
+    // `contentLocked` protects what the control holds and lets the whole control go.
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
   test('table with nested sdtLocked inline SDT refuses deleteBlock (wrapper removal)', () => {
@@ -390,7 +545,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     expect(paragraphTextOf(next, firstOfKind(next, 'paragraph'))).toBe('keep');
   });
 
-  test('block-level SDT nested inside a table cell refuses when contentLocked', () => {
+  test('block-level contentLocked SDT nested inside a table cell may be deleted', () => {
     const part = load(
       '<w:tbl><w:tr><w:tc>' +
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
@@ -398,10 +553,11 @@ describe('deleteBlock refuses protected descendant content controls', () => {
         '<w:p/></w:tc></w:tr></w:tbl>' +
         '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    expect(reject(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
-  test('deeply nested locked SDT under unlocked outer inside a table refuses', () => {
+  test('deeply nested contentLocked SDT under unlocked outer inside a table may be deleted', () => {
     const part = load(
       TABLE_WITH(
         '<w:sdt><w:sdtPr/><w:sdtContent>' +
@@ -410,18 +566,19 @@ describe('deleteBlock refuses protected descendant content controls', () => {
           '</w:sdtContent></w:sdt>'
       ) + '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    expect(reject(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
-  test('paragraph with inline contentLocked SDT refuses deleteBlock', () => {
+  test('paragraph with inline contentLocked SDT may be deleted', () => {
     const part = load(
       '<w:p><w:r><w:t>a</w:t></w:r>' +
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
         '<w:sdtContent><w:r><w:t>L</w:t></w:r></w:sdtContent></w:sdt></w:p>' +
         '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    const paragraphId = firstOfKind(part, 'paragraph');
-    expect(reject(part, { op: 'deleteBlock', blockId: paragraphId })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'paragraph') });
+    expect(paragraphTextOf(next, firstOfKind(next, 'paragraph'))).toBe('keep');
   });
 
   test('paragraph with inline sdtLocked SDT refuses deleteBlock', () => {
@@ -446,7 +603,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     );
   });
 
-  test('table row containing locked SDT refuses deleteBlock', () => {
+  test('table row containing a contentLocked SDT may be deleted', () => {
     const part = load(
       '<w:tbl>' +
         '<w:tr><w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
@@ -472,9 +629,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     })();
     const rows = table.children.filter((child) => child.kind === 'tableRow');
     expect(rows.length).toBe(2);
-    expect(reject(part, { op: 'deleteBlock', blockId: rows[1]!.id })).toBe('locked');
-    // First row without a protected control may still be removed.
-    const after = apply(part, { op: 'deleteBlock', blockId: rows[0]!.id });
+    const after = apply(part, { op: 'deleteBlock', blockId: rows[1]!.id });
     expect(firstOfKind(after, 'table')).toBeTruthy();
   });
 
@@ -552,23 +707,23 @@ describe('hyperlink and page-field ops respect content-control restrictions', ()
   test('contentLocked refuses insertPageField at the caret', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     expect(
-      reject(part, { op: 'insertPageField', paragraphId: PARAGRAPH, offset: 0, field: 'PAGE' })
+      reject(part, { op: 'insertPageField', paragraphId: PARAGRAPH, offset: 1, field: 'PAGE' })
     ).toBe('locked');
   });
 
   test('bound refuses insertPageField at the caret', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:dataBinding w:xpath="/a" w:storeItemID="{G}"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     expect(
       reject(part, {
         op: 'insertPageField',
         paragraphId: PARAGRAPH,
-        offset: 0,
+        offset: 1,
         field: 'NUMPAGES',
       })
     ).toBe('bound');
