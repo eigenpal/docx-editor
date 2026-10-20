@@ -1,3 +1,4 @@
+import { isUnsupportedLayoutParagraph, unsupportedBlockParagraph } from './unsupported-content.ts';
 // Story roots over the canonical tree (phase 2 of the legacy-lane retirement).
 //
 // A STORY is a flowable sequence of blocks: the body of the main document, the whole
@@ -129,7 +130,7 @@ function withMergedParagraphs(
     // without being siblings in the tree. The store rebuilds one children array at a time and
     // never merges out of `w:sdtContent`; matching that keeps the two answers the same.
     if (pendingMembers.length > 0 && parentKey !== pendingParent) endRun();
-    if (block.kind !== 'paragraph') {
+    if (block.kind !== 'paragraph' || isUnsupportedLayoutParagraph(block)) {
       // A table between two mark-removed paragraphs is a container boundary too.
       endRun();
       out.push(block);
@@ -251,6 +252,11 @@ function flowBlocksWithParent(children: readonly OoxmlNode[]): readonly Parented
   const collect = (nodes: readonly OoxmlNode[], nest: number, parentKey: string): void => {
     for (const child of nodes) {
       if (child.kind === 'textValue') continue;
+      const opaque = unsupportedBlockParagraph(child);
+      if (opaque) {
+        blocks.push({ block: opaque, parentKey });
+        continue;
+      }
       if (child.kind === 'paragraph' || child.kind === 'table') {
         blocks.push({ block: child, parentKey });
         continue;

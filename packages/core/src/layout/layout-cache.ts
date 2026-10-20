@@ -1,3 +1,4 @@
+import { unsupportedContentOf } from './unsupported-content.ts';
 // Reusing measured and broken lines across revisions (task 9.2).
 //
 // Breaking a paragraph into lines is the expensive half of layout: every piece is measured,
@@ -328,6 +329,16 @@ function computeNodeToken(
   if (nodeTokenTestObserver) nodeTokenTestObserver.nodeVisits += 1;
   if (node.kind === 'textValue') return framedTokenJoin(['text', node.value]);
   const attributes: string[] = [];
+  const unsupported = unsupportedContentOf(node);
+  if (unsupported)
+    attributes.push(
+      framedTokenJoin([
+        'unsupported',
+        unsupported.display,
+        String(unsupported.width),
+        String(unsupported.height),
+      ])
+    );
   // Attribute order is not semantic, but every tuple and sequence boundary must be. File
   // values may contain any printable delimiter, so length-prefix each component. Append in
   // a loop as OOXML is untrusted: spreading an attacker-sized attribute list can exceed the

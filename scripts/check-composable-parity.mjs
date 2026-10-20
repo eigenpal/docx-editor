@@ -80,23 +80,25 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
     issues.push(`INTERFACE '${name}' missing from Vue snapshot`);
     return;
   }
-  // Content is a component, so its Vue renderer is a typed scoped slot rather than
-  // a prop. Check the complete published slot signature before reconciling the member.
-  const contentRenderer =
-    name === 'DocxEditorContentProps' &&
-    extractInterfaceMemberTypes(reactSnap, name)?.get('renderUnsupportedElement');
-  const contentDeclaration =
-    vueSnap.match(/export const DocxEditorContent:[\s\S]*?(?=\n\/\/ @|\nexport |$)/)?.[0] ?? '';
-  const nativeContentSlot =
-    contentRenderer &&
-    normalizeType(contentRenderer) ===
-      normalizeType('(element: UnsupportedElement) => DocxEditorChildren | null') &&
-    /SlotsType<\{\s*unsupportedElement\?: \(props: \{\s*element: UnsupportedElement;\s*\}\) => VNodeChild;\s*\}>/.test(
-      contentDeclaration
+  // React render children and Vue default scoped slots expose the same occurrence.
+  const renderer =
+    name === 'DocxEditorUnsupportedElementProps' &&
+    extractInterfaceMemberTypes(reactSnap, name)?.get('children');
+  const declaration =
+    vueSnap.match(
+      /export const DocxEditorUnsupportedElement:[\s\S]*?(?=\n\/\/ @|\nexport |$)/
+    )?.[0] ?? '';
+  const nativeRendererSlot =
+    renderer &&
+    /export interface DocxEditorUnsupportedElementProps[^\{]*\{\s*(?:\/\/[^\n]*\n\s*)*children: \(props: \{\s*element: UnsupportedElement;\s*\}\) => (?:ReactNode|DocxEditorChildren);/.test(
+      reactSnap
+    ) &&
+    /SlotsType<\{\s*default: \(props: \{\s*element: UnsupportedElement;\s*\}\) => VNodeChild;\s*\}>/.test(
+      declaration
     );
   const comparedVueFields = new Set(vueFields);
-  if (nativeContentSlot) {
-    comparedVueFields.add('renderUnsupportedElement');
+  if (nativeRendererSlot) {
+    comparedVueFields.add('children');
     stats.memberTypeChecks += 1;
   }
   if (reactFields.has('className')) comparedVueFields.delete('class');
@@ -113,7 +115,7 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
   const vueTypes = extractInterfaceMemberTypes(vueSnap, name);
   if (!reactTypes || !vueTypes) return;
   for (const k of reactFields) {
-    if (nativeContentSlot && k === 'renderUnsupportedElement') continue;
+    if (nativeRendererSlot && k === 'children') continue;
     if (!reactTypes.has(k)) {
       issues.push(`INTERFACE '${name}.${k}': React member type was not parsed`);
       continue;
@@ -493,27 +495,29 @@ export interface SampleResult { readonly value: SharedAlias; }
     process.exit(1);
   }
 
-  const contentReact = `
-export interface DocxEditorContentProps {
-    renderUnsupportedElement?: (element: UnsupportedElement) => DocxEditorChildren | null;
+  const rendererReact = `
+export interface DocxEditorUnsupportedElementProps {
+    children: (props: { element: UnsupportedElement; }) => ReactNode;
 }
 `;
-  const contentVue = `
-export const DocxEditorContent: DefineComponent<{}, SlotsType<{
-    unsupportedElement?: (props: {
+  const rendererVue = `
+export const DocxEditorUnsupportedElement: DefineComponent<{}, SlotsType<{
+    default: (props: {
         element: UnsupportedElement;
     }) => VNodeChild;
 }>>;
-export interface DocxEditorContentProps {}
+export interface DocxEditorUnsupportedElementProps {}
 `;
   for (const [fixture, expectedIssues] of [
-    [contentVue, false],
-    [contentVue.replace('unsupportedElement?', 'wrongSlot?'), true],
-    [contentVue.replace('element: UnsupportedElement', 'element: string'), true],
+    [rendererVue, false],
+    [rendererVue.replace('default:', 'wrongSlot:'), true],
+    [rendererVue.replace('element: UnsupportedElement', 'element: string'), true],
   ]) {
-    const result = runComposableParityCheck({ reactSnap: contentReact, vueSnap: fixture });
+    const result = runComposableParityCheck({ reactSnap: rendererReact, vueSnap: fixture });
     if (result.issues.length > 0 !== expectedIssues) {
-      console.error('Self-test FAIL: Content render prop must match the typed Vue scoped slot');
+      console.error(
+        'Self-test FAIL: UnsupportedElement children must match the typed Vue default scoped slot'
+      );
       process.exit(1);
     }
   }

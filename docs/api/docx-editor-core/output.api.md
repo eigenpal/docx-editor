@@ -57,6 +57,10 @@ export interface PaintOptions {
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly shadeFormFields?: boolean;
+    // (undocumented)
+    readonly unsupportedOwnerPartName?: (nodeId: string) => string;
+    // (undocumented)
+    readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
 }
 
 // @public
@@ -99,17 +103,26 @@ export interface SelectionOverlayOptions {
 }
 
 // @public
-export type UnsupportedElement = {
-    readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
-    readonly kind: 'drawing';
+export interface UnsupportedElement {
+    readonly bounds?: LayoutBox;
+    // (undocumented)
+    readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+    // (undocumented)
+    readonly equation?: EquationSpanRecord;
+    // (undocumented)
     readonly label: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string | null;
+    // (undocumented)
     readonly nodeId: string;
-} | {
-    readonly equation: EquationSpanRecord;
-    readonly kind: 'equation';
-    readonly label: string;
-    readonly nodeId: string;
-};
+    // (undocumented)
+    readonly ownerPartName: string;
+    // (undocumented)
+    readonly placement: 'inline' | 'block';
+    readonly source: OoxmlElement | null;
+}
 
 // @public
 export interface UnsupportedElementHost {
@@ -123,6 +136,22 @@ export interface UnsupportedElementHost {
     readonly slot: HTMLElement;
     // (undocumented)
     readonly unsupported: UnsupportedElement;
+}
+
+// @public
+export interface UnsupportedElementLayout {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export interface UnsupportedElementRule {
+    // (undocumented)
+    readonly layout?: UnsupportedElementLayout;
+    // (undocumented)
+    readonly match?: (element: UnsupportedElement) => boolean;
 }
 
 // (No @packageDocumentation comment for this package)

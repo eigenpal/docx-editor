@@ -1,15 +1,13 @@
-import type { UnsupportedElement } from '@docx-editor.dev/core/output';
-import { UnsupportedElements } from './UnsupportedElements';
+import { UnsupportedElementRegistryContext } from './unsupported-element-registry';
 import {
   defineComponent,
+  inject,
   h,
   onActivated,
   onDeactivated,
   onUnmounted,
   shallowRef,
   watch,
-  type SlotsType,
-  type VNodeChild,
 } from 'vue';
 import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
@@ -33,19 +31,18 @@ export interface DocxEditorContentProps {
 export const DocxEditorContent = defineComponent({
   name: 'DocxEditorContent',
   inheritAttrs: false,
-  slots: Object as SlotsType<{
-    /** Replace a placeholder. Empty content keeps the built-in fallback. */
-    unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
-  }>,
   props: {
     class: { type: String, default: undefined },
     className: { type: String, default: undefined },
   },
-  setup(props, { slots }) {
+  setup(props) {
     const editorRef = useDocxEditor();
+    const registry = inject(UnsupportedElementRegistryContext, null);
     const imageInsert = useImageInsertOptional();
     const elementRef = shallowRef<HTMLDivElement | null>(null);
     const portalRef = shallowRef<HTMLDivElement | null>(null);
+    watch(elementRef, (element) => registry?.setContainer(element), { flush: 'post' });
+    onUnmounted(() => registry?.setContainer(null));
 
     const attach = () => {
       const editor = editorRef.value;
@@ -126,12 +123,6 @@ export const DocxEditorContent = defineComponent({
             onDragover: onDragOver,
             onDrop,
           }),
-          elementRef.value && slots.unsupportedElement
-            ? h(UnsupportedElements, {
-                container: elementRef.value,
-                render: (element: UnsupportedElement) => slots.unsupportedElement?.({ element }),
-              })
-            : null,
           editorRef.value
             ? h(ImageSelectionOverlay, {
                 containerRef: elementRef,

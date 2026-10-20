@@ -1,3 +1,5 @@
+import { unsupportedContentOf } from './unsupported-content.ts';
+import { fieldAtomPlan } from './field-atom-plan.ts';
 // Safe PAGE / NUMPAGES / SECTIONPAGES field projection for read-only page furniture.
 //
 // Field instructions are attacker-controlled and MUST NEVER execute. Recognition of
@@ -27,7 +29,6 @@ import {
   projectOmmlEquation,
   type DocumentProperties,
   type OoxmlNode,
-  type OoxmlParagraphNode,
   type OoxmlProperty,
   type HardBreakKind,
 } from '@docx-editor.dev/core/store';
@@ -44,7 +45,6 @@ import {
   isInsideFieldResult,
   isInstrText,
   MAX_FIELD_INSTRUCTION_CHARS,
-  MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   MAX_STORY_FIELD_SCAN_NODES,
   normalizeFieldInstruction,
@@ -92,7 +92,7 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
-import { legacyFormFieldDataOf, parsedFieldSpansOf } from '../store/package/field-nodes.ts';
+import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import {
   emptyNamespaceScope,
   namespaceScopeForNode,
@@ -198,23 +198,7 @@ export function piecesOfParagraph(
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 
-  const fields = parsedFieldSpansOf(paragraph as OoxmlParagraphNode, {
-    maxNesting: MAX_FIELD_NESTING,
-    maxInstructionChars: MAX_FIELD_INSTRUCTION_CHARS,
-  });
-  const atoms = fields.filter((span) => span.addressing === 'atomic');
-  const atomBeginIds = new Set(
-    atoms.filter((span) => span.kind === 'complex').map((span) => span.node.id)
-  );
-  const editableResultBeginIds = new Set(
-    fields
-      .filter((span) => span.kind === 'complex' && span.addressing === 'editable-result')
-      .map((span) => span.node.id)
-  );
-  const coveredIds = new Set<string>();
-  for (const span of atoms) {
-    for (const id of span.removeNodeIds) coveredIds.add(id);
-  }
+  const { atomBeginIds, editableResultBeginIds, coveredIds } = fieldAtomPlan(paragraph);
 
   const field = createFieldParseState();
   const budget = createScanBudget();
@@ -247,6 +231,7 @@ export function piecesOfParagraph(
       readonly inlineDrawing?: InlineDrawingLayoutInput;
       readonly anchoredAtom?: true;
       readonly equation?: FieldAwarePiece['equation'];
+      readonly unsupported?: FieldAwarePiece['unsupported'];
       /**
        * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
        * walk has left the wrapper that owns it — a buffered field result is the only such
@@ -281,6 +266,7 @@ export function piecesOfParagraph(
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
         ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
         ...(extras?.equation ? { equation: extras.equation } : {}),
+        ...(extras?.unsupported ? { unsupported: extras.unsupported } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
         ...attribution,
@@ -490,6 +476,12 @@ export function piecesOfParagraph(
       if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
       const sym = symbolRunStyle(props, glyph, themeFonts);
       push(glyph.text, sym.props, sym.style, true, offset, offset);
+      return;
+    }
+    const unsupported = unsupportedContentOf(grand);
+    if (unsupported) {
+      if (!style.hidden && revisionsVisible(revisions, displayMode, authorFilter))
+        push('\uFFFC', props, style, true, offset, offset, { unsupported });
       return;
     }
     const text = modelTextOfRunChild(grand);
@@ -940,6 +932,13 @@ export function piecesOfParagraph(
     namespaceScope: ReadonlyMap<string, string>,
     sdtDepth: number
   ): void => {
+    const unsupported = unsupportedContentOf(child);
+    if (unsupported) {
+      const style = resolveRunStyle(inheritedRunProperties, themeFonts);
+      if (!style.hidden && revisionsVisible(revisions, displayMode, authorFilter))
+        push('\uFFFC', inheritedRunProperties, style, true, offset, offset, { unsupported });
+      return;
+    }
     const equation = projectOmmlEquation(child);
     if (equation) {
       const start = offset++;

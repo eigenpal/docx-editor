@@ -1,3 +1,4 @@
+import { createUnsupportedElementState } from './unsupported-element-state.ts';
 // The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
@@ -11,18 +12,7 @@
 //   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
 //   `selectedText` and `selectionFormatting`, and the document catalogs
 //   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
-// THE GEOMETRY/INTERACTION CLUSTER IS GONE, not stubbed. `getInteractionFrame`, `hitTest`,
-// `dispatchInteraction`, `resolvePointer`, the caret and selection rect readers and the
-// accessibility observation were all placeholders here, and none of them had a caller. They
-// were removed from the contract rather than filled in, because the honest-empty rule does
-// NOT extend to them: `getComments()` returning `[]` is a true statement about a document,
-// while `hitTest` returning `null` is indistinguishable from "you clicked the page margin",
-// so a caller could not tell an unimplemented member from a real answer. `getPageGeometry`
-// is the one survivor and is now REAL — it had the cluster's only consumer, and returning
-// `[]` had silently made both Vue rulers render nothing.
-//
-// Filling any of these in later lights up whichever control reads it, with no change to
-// callers — which is the point of wiring the full contract now.
+// Page geometry comes from the painted layout and also drives both framework rulers.
 //
 // STATE TICK + CACHED SNAPSHOT (the external-store contract).
 //
@@ -326,6 +316,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
 
   let surface: PaginatedSurface | null = null;
+  const unsupportedState = createUnsupportedElementState(
+    config.unsupportedElementRules,
+    () => surface
+  );
   // The facade's copy of the host's remote-caret label host: registered before attach,
   // re-applied to every rebuilt surface (reload, font remount, re-attach).
   let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
@@ -494,6 +488,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     teardownSurface();
     let publishedReviewFilterState = reviewAuthorVisibility.stateKey;
     const result = mountPaginatedSurface(container, bytes, {
+      unsupportedElementRules: unsupportedState.current(),
       scale: scaleOf(),
       // What a run with no authored font is REPORTED as, matching what it is measured
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
@@ -2244,6 +2239,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Tolerated detached: the host waits here and applies on the next mount.
       surface?.setRemoteCaretLabelHost(host);
     },
+    setUnsupportedElementRules: unsupportedState.set,
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);

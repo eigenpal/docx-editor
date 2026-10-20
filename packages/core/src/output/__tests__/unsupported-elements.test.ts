@@ -4,7 +4,11 @@ import {
   WML_NAMESPACE_URI,
   OFFICE_MATH_NAMESPACE_URI,
 } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
+import {
+  createFixedMeasurer,
+  createUnsupportedContentProjector,
+  layoutSemanticDocument,
+} from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
   observeUnsupportedElements,
@@ -85,4 +89,35 @@ test('a focused custom input keeps its focus and text selection across repaint',
   expect(input.selectionDirection).toBe('backward');
   stop();
   container.remove();
+});
+
+test('generic opaque source reserves its box and exposes source metadata safely', () => {
+  const source = readOoxmlPart(
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:x="urn:consumer"><w:body><x:chart/><w:p><w:r><w:t>A</w:t><x:chip/></w:r></w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!source.ok) throw new Error(source.reason);
+  const projector = createUnsupportedContentProjector(() => ({ width: 80, height: 36 }));
+  const container = document.createElement('div');
+  paintSemanticLayout(
+    container,
+    layoutSemanticDocument(projector.part(source.part), 1, { measurer: createFixedMeasurer(6, 14) })
+  );
+  let hosts: readonly UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (value) => {
+    hosts = value;
+  });
+  expect(hosts.map((host) => host.unsupported.localName)).toEqual(['chart', 'chip']);
+  expect(hosts.map((host) => host.unsupported.placement)).toEqual(['block', 'inline']);
+  for (const host of hosts) {
+    expect(host.unsupported.namespaceUri).toBe('urn:consumer');
+    expect(host.unsupported.source?.localName).toBe(host.unsupported.localName);
+    expect(host.unsupported.ownerPartName).toBe('/word/document.xml');
+    expect(host.unsupported.bounds?.width).toBe(80);
+    expect(host.element.getAttribute('contenteditable')).toBe('false');
+    host.slot.textContent = 'Custom component';
+    host.setCustomized(true);
+    expect(host.fallback.hidden).toBe(true);
+  }
+  stop();
 });

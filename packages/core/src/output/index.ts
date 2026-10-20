@@ -40,4 +40,6 @@ export {
   observeUnsupportedElements,
   type UnsupportedElement,
   type UnsupportedElementHost,
+  type UnsupportedElementLayout,
+  type UnsupportedElementRule,
 } from './unsupported-elements.ts';

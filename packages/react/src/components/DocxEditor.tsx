@@ -1,3 +1,4 @@
+import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -298,7 +299,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       >
         {chrome ? <DocxEditorHeaderFooterChrome /> : null}
         {chrome ? <DocxEditorNotesChrome /> : null}
-        <DocxEditorContent renderUnsupportedElement={props.renderUnsupportedElement} />
+        <DocxEditorContent />
         <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
         <DocxEditorEquation />
         {contextMenu === false ? null : (
@@ -477,6 +478,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+  readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
@@ -531,6 +533,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
   ColorByChangeType: DocxEditorColorByChangeType,
+  UnsupportedElement: DocxEditorUnsupportedElement,
   AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,

@@ -716,3 +716,10 @@ export {
   type TableBorderStrokeRecord,
   type TableBorderStyle,
 } from './table-borders.ts';
+
+export type {
+  UnsupportedElement,
+  UnsupportedElementLayout,
+  UnsupportedElementRule,
+} from './unsupported-content-types.ts';
+export { createUnsupportedContentProjector } from './unsupported-content.ts';

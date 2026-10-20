@@ -424,4 +424,13 @@ export type {
 } from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 
-export type { UnsupportedElement } from '@docx-editor.dev/core/output';
+export type {
+  UnsupportedElement,
+  UnsupportedElementLayout,
+  UnsupportedElementRule,
+} from '@docx-editor.dev/core/output';
+
+export {
+  DocxEditorUnsupportedElement,
+  type DocxEditorUnsupportedElementProps,
+} from './editor/DocxEditorUnsupportedElement';

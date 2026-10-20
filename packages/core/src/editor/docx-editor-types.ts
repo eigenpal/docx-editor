@@ -1,3 +1,4 @@
+import type { UnsupportedElementRule } from '../layout/unsupported-content-types.ts';
 /**
  * Instance-level types for `createDocxEditor` — kept out of the composition root so
  * `docx-editor.ts` stays under the max-lines gate. Re-exported from `docx-editor.ts`
@@ -110,6 +111,8 @@ export interface DocxEditorConfig {
    * the proposed view still marks surviving insertions.
    */
   revisionStyles?: RevisionStyles;
+  /** Ordered custom-content registrations. The first matching rule reserves its layout box. */
+  unsupportedElementRules?: readonly UnsupportedElementRule[];
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**
@@ -302,6 +305,8 @@ export interface DocxEditorInstance extends Editor {
    * of calling it. Call it directly from headless and non-React hosts.
    */
   setRevisionStyles(styles: RevisionStyles): void;
+  /** Replace unsupported-content registrations without replacing the document or undo history. */
+  setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

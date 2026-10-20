@@ -16,7 +16,19 @@ function placeholder(container: HTMLElement, label: string) {
   fallback.textContent = label;
   element.append(fallback);
   markUnsupportedElement(element, fallback, {
-    kind: 'equation',
+    ownerPartName: 'word/document.xml',
+    namespaceUri: 'urn:test',
+    localName: 'equation',
+    placement: 'inline',
+    source: {
+      id: label,
+      kind: 'generic',
+      namespaceUri: 'urn:test',
+      localName: 'equation',
+      namespaceBindings: [],
+      attributes: [],
+      children: [],
+    },
     nodeId: label,
     label,
     equation: {} as EquationSpanRecord,
@@ -95,12 +107,15 @@ test('the sample canvas uses the public editor override and saves its original c
       onReady={(value) => {
         editor = value as typeof editor;
       }}
-      renderUnsupportedElement={(element) =>
-        element.kind === 'drawing' ? (
-          <button data-testid="canvas-custom">{element.drawing.placeholderGraphicKind}</button>
-        ) : null
-      }
-    />
+    >
+      <DocxEditor.UnsupportedElement>
+        {({ element }) =>
+          element.drawing ? (
+            <button data-testid="canvas-custom">{element.drawing?.placeholderGraphicKind}</button>
+          ) : null
+        }
+      </DocxEditor.UnsupportedElement>
+    </DocxEditor>
   );
   await waitFor(() => {
     expect(view.container.querySelector('[data-testid="canvas-custom"]')).not.toBeNull();
@@ -163,7 +178,11 @@ test('public custom components retain local state across edits and restore the f
       editor = value as typeof editor;
     },
   };
-  const view = render(<DocxEditor {...props} renderUnsupportedElement={() => <Custom />} />);
+  const view = render(
+    <DocxEditor {...props}>
+      <DocxEditor.UnsupportedElement>{() => <Custom />}</DocxEditor.UnsupportedElement>
+    </DocxEditor>
+  );
   await waitFor(() => expect(view.queryByRole('button', { name: 'Preview 0' })).not.toBeNull());
   const button = view.getByRole('button', { name: 'Preview 0' });
   fireEvent.click(button);
@@ -177,16 +196,28 @@ test('public custom components retain local state across edits and restore the f
   expect(unmounts).toBe(0);
 
   view.rerender(
-    <DocxEditor {...props} renderUnsupportedElement={() => <strong>Replacement</strong>} />
+    <DocxEditor {...props}>
+      <DocxEditor.UnsupportedElement>
+        {() => <strong>Replacement</strong>}
+      </DocxEditor.UnsupportedElement>
+    </DocxEditor>
   );
   expect(view.getByText('Replacement')).toBeTruthy();
   expect(unmounts).toBe(1);
   const label = view.container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!;
   expect(label.hidden).toBe(true);
-  view.rerender(<DocxEditor {...props} renderUnsupportedElement={() => null} />);
+  view.rerender(
+    <DocxEditor {...props}>
+      <DocxEditor.UnsupportedElement>{() => null}</DocxEditor.UnsupportedElement>
+    </DocxEditor>
+  );
   expect(label.hidden).toBe(false);
   expect(view.queryByText('Replacement')).toBeNull();
-  view.rerender(<DocxEditor {...props} renderUnsupportedElement={() => <Custom />} />);
+  view.rerender(
+    <DocxEditor {...props}>
+      <DocxEditor.UnsupportedElement>{() => <Custom />}</DocxEditor.UnsupportedElement>
+    </DocxEditor>
+  );
   expect(label.hidden).toBe(true);
   view.rerender(<DocxEditor {...props} />);
   expect(label.hidden).toBe(false);
@@ -213,19 +244,22 @@ test('custom inputs keep native menus and own keyboard, input, and drop events',
       onReady={(value) => {
         editor = value as typeof editor;
       }}
-      renderUnsupportedElement={() => (
-        <input
-          aria-label="Preview name"
-          defaultValue="Custom text"
-          onKeyDown={() => keydowns++}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            drops++;
-          }}
-        />
-      )}
-    />
+    >
+      <DocxEditor.UnsupportedElement>
+        {() => (
+          <input
+            aria-label="Preview name"
+            defaultValue="Custom text"
+            onKeyDown={() => keydowns++}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              drops++;
+            }}
+          />
+        )}
+      </DocxEditor.UnsupportedElement>
+    </DocxEditor>
   );
   await waitFor(() =>
     expect(view.container.querySelector('.docx-unsupported-slot input')).not.toBeNull()
@@ -265,4 +299,46 @@ test('custom inputs keep native menus and own keyboard, input, and drop events',
   expect(editor!.getDocumentHandle()!.revision).toBe(revision);
   expect(editor!.surface!.session.bodyText()).toBe(before);
   expect(view.container.querySelector('[data-docx-equation-popup]')).toBeNull();
+});
+
+test('compound declarations select the first match, retain priority on updates, and preserve local context', async () => {
+  const { DocxEditorUnsupportedElement } =
+    await import('../src/editor/DocxEditorUnsupportedElement');
+  const { createUnsupportedElementRegistry, UnsupportedElementRegistryContext } =
+    await import('../src/editor/unsupported-element-registry');
+  const registry = createUnsupportedElementRegistry();
+  const container = document.createElement('div');
+  const { fallback } = placeholder(container, 'target');
+  registry.setContainer(container);
+  const rejects = () => false;
+  const accepts = () => true;
+  function Custom() {
+    return <button>{useContext(Context)}</button>;
+  }
+  const declarations = (match: () => boolean, first = true, empty = false) => (
+    <UnsupportedElementRegistryContext.Provider value={registry}>
+      <Context.Provider value="local declaration context">
+        {first ? (
+          <DocxEditorUnsupportedElement match={match}>
+            {() => (empty ? null : <Custom />)}
+          </DocxEditorUnsupportedElement>
+        ) : null}
+      </Context.Provider>
+      <DocxEditorUnsupportedElement>{() => <b>catch-all</b>}</DocxEditorUnsupportedElement>
+    </UnsupportedElementRegistryContext.Provider>
+  );
+  const view = render(declarations(rejects));
+  expect(container.querySelector('b')?.textContent).toBe('catch-all');
+  view.rerender(declarations(accepts));
+  expect(container.querySelector('button')?.textContent).toBe('local declaration context');
+  expect(container.querySelector('b')).toBeNull();
+  expect(fallback.hidden).toBe(true);
+  view.rerender(declarations(accepts, true, true));
+  expect(fallback.hidden).toBe(false);
+  expect(container.querySelector('b')).toBeNull();
+  view.rerender(declarations(accepts, false));
+  expect(container.querySelector('b')?.textContent).toBe('catch-all');
+  view.unmount();
+  expect(fallback.hidden).toBe(false);
+  registry.setContainer(null);
 });

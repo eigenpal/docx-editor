@@ -624,6 +624,12 @@ export const createShapedRun: (input: ShapedRun, environmentInput: ShapingEnviro
 // @public
 export const createShapingEnvironment: (input: ShapingEnvironmentInput) => ShapingEnvironment;
 
+// @internal
+export function createUnsupportedContentProjector(resolve: UnsupportedContentResolver): {
+    part(part: OoxmlPart): OoxmlPart;
+    view(view: HeadlessDocumentView): HeadlessDocumentView;
+};
+
 // @public
 export interface DeclaredFontSubstitution {
     // (undocumented)
@@ -3955,6 +3961,7 @@ export interface StyleSpanRecord {
     readonly tabLeaderAdvancePt?: number;
     // (undocumented)
     readonly text: string;
+    readonly unsupported?: UnsupportedContentRecord;
     readonly wrapAdvanceBefore?: number;
 }
 
@@ -4210,6 +4217,44 @@ export function tryCreateCanvasMeasurer(options?: CanvasMeasurerOptions): TextMe
 
 // @public
 export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null;
+
+// @public
+export interface UnsupportedElement {
+    readonly bounds?: LayoutBox;
+    // (undocumented)
+    readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+    // (undocumented)
+    readonly equation?: EquationSpanRecord;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string | null;
+    // (undocumented)
+    readonly nodeId: string;
+    // (undocumented)
+    readonly ownerPartName: string;
+    // (undocumented)
+    readonly placement: 'inline' | 'block';
+    readonly source: OoxmlElement | null;
+}
+
+// @public
+export interface UnsupportedElementLayout {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export interface UnsupportedElementRule {
+    // (undocumented)
+    readonly layout?: UnsupportedElementLayout;
+    // (undocumented)
+    readonly match?: (element: UnsupportedElement) => boolean;
+}
 
 // @public
 export class UnsupportedScriptError extends Error {

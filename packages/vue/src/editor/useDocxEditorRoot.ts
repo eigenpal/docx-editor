@@ -1,4 +1,8 @@
 import {
+  UnsupportedElementRegistryContext,
+  createUnsupportedElementRegistry,
+} from './unsupported-element-registry';
+import {
   computed,
   inject,
   onMounted,
@@ -106,6 +110,8 @@ export function useDocxEditorRootOwner(
   provide(editorStateTickKey, tick);
   provide(navigationLayoutKey, createNavigationLayoutStore());
   provide(docxEditorRootOwnerKey, true);
+  const unsupportedRegistry = createUnsupportedElementRegistry();
+  provide(UnsupportedElementRegistryContext, unsupportedRegistry);
   const revisionStyleRegistry = createRevisionStyleRegistry();
   provide(RevisionStyleRegistryContext, revisionStyleRegistry);
 
@@ -168,6 +174,7 @@ export function useDocxEditorRootOwner(
     const instance = editorRef.value;
     if (instance) {
       revisionStyleRegistry.connect(null);
+      unsupportedRegistry.connect(null);
       instance.destroy();
       editorRef.value = null;
     }
@@ -193,6 +200,7 @@ export function useDocxEditorRootOwner(
     destroyEditor();
     const p = toValue(props);
     const instance = createDocxEditor({
+      unsupportedElementRules: unsupportedRegistry.current(),
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
@@ -222,6 +230,7 @@ export function useDocxEditorRootOwner(
     cleanups.push(instance.on('selectionChange', notify));
     cleanups.push(instance.on('error', notify));
     revisionStyleRegistry.connect(instance);
+    unsupportedRegistry.connect(instance);
     editorRef.value = instance;
   };
 

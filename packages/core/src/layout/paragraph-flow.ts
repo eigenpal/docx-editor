@@ -1,5 +1,5 @@
+import { placeableContentSuffixes } from './paragraph-placeable-content.ts';
 // Paragraph measuring and breaking, shared between the body flow and table cells.
-//
 // Extracted from `semantic-layout.ts` unchanged so a cell paragraph breaks exactly like a
 // body paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
 // position-independent — span x offsets are relative to the paragraph origin — which is
@@ -236,6 +236,7 @@ interface Piece {
   readonly inlineDrawing?: import('./drawing-layout.ts').InlineDrawingLayoutInput;
   /** Bounded OMML equation occupying one UTF-16 model unit. */
   readonly equation?: FieldAwarePiece['equation'];
+  readonly unsupported?: FieldAwarePiece['unsupported'];
   /**
    * The `w:rFonts` slot this piece's text resolves its face through, from
    * `applyEastAsiaFontSlots`. `style` stays the run's real resolution; every measurement
@@ -288,43 +289,6 @@ function wordBoundaries(text: string): number[] {
   return boundaries;
 }
 
-/**
- * Measure text following a tab until the next tab or hard break, across mixed-style pieces.
- * Also reports the advance to the first decimal point for decimal-aligned stops.
- */
-/**
- * Whether anything that occupies space still follows this tab on its own line.
- *
- * A TRAILING tab does not wrap in Word — same rule as a trailing space. Header lines are
- * routinely authored as `LEFT<tab><tab><tab>RIGHT<tab><tab>`, and treating the last tabs
- * as wrappable opened a new line per tab: the header grew by several lines, and because a
- * header's flow height sets the body's effective top margin, the body was pushed down the
- * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
- * spaces, which are themselves trimmed at the line end.
- */
-function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array[] {
-  const suffixes = new Array<Uint8Array>(pieces.length);
-  let follows = false;
-  for (let pieceIndex = pieces.length - 1; pieceIndex >= 0; pieceIndex -= 1) {
-    const piece = pieces[pieceIndex]!;
-    const suffix = new Uint8Array(piece.text.length + 1);
-    suffix[piece.text.length] = follows ? 1 : 0;
-    if (piece.inlineDrawing) {
-      suffix.fill(1);
-    } else {
-      for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
-        const ch = piece.text[cursor]!;
-        if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
-        else if (ch !== '\t' && !isCollapsibleLineEndWhitespace(ch)) suffix[cursor] = 1;
-        else suffix[cursor] = suffix[cursor + 1]!;
-      }
-    }
-    suffixes[pieceIndex] = suffix;
-    follows = suffix[0] === 1;
-  }
-  return suffixes;
-}
-
 function measureFollowingTabSegment(
   pieces: readonly Piece[],
   pieceIndex: number,
@@ -337,6 +301,11 @@ function measureFollowingTabSegment(
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     const style = styleForFontSlot(piece.style, piece.fontSlot);
+    if (piece.unsupported) {
+      width += piece.unsupported.width;
+      if (!sawDecimal) decimalOffset = width;
+      continue;
+    }
     const from = index === pieceIndex ? offsetInPiece : 0;
     for (let cursor = from; cursor < piece.text.length; ) {
       const ch = piece.text[cursor]!;
@@ -657,7 +626,7 @@ export function breakParagraph(
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
-    if (piece.end <= startOffset) return [];
+    if (piece.end <= startOffset && !(piece.unsupported && piece.end === startOffset)) return [];
     if (piece.start >= startOffset) return [piece];
     const trim = startOffset - piece.start;
     return [
@@ -773,6 +742,12 @@ export function breakParagraph(
       probeLineIndex += 1;
     };
     for (const piece of pieces) {
+      if (piece.unsupported) {
+        const width = piece.unsupported.width;
+        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
+        probeWidth += width;
+        continue;
+      }
       const equation = equationLayoutOf(piece);
       if (equation) {
         const width = equation.geometry.box.width;
@@ -1211,7 +1186,8 @@ export function breakParagraph(
     // `auto` scales the TEXT band, not a tall inline drawing or equation. The atom remains
     // a floor, while a larger text multiple can still win (ECMA-376 17.3.1.33).
     const hasUnscaledInlineExtent =
-      line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
+      line.drawings.length > 0 ||
+      line.spans.some((span) => span.equation !== undefined || span.unsupported !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
     const spacingBase = scalesTextBandOnly ? textBandHeight(metrics.height) : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
@@ -1285,6 +1261,33 @@ export function breakParagraph(
       // after the break. Suppressing that remainder put "After Column Break" flush with
       // the prior column's first line.
       trailingLineBreak = true;
+      continue;
+    }
+    if (piece.unsupported) {
+      const unsupported = piece.unsupported;
+      const atomWidth = Math.min(unsupported.width, lineAvailable());
+      if (unsupported.display === 'block' && (line.spans.length || line.drawings.length))
+        closeLine();
+      if (line.width > 0 && line.width + atomWidth > lineAvailable()) closeLine();
+      if (!ensurePlacementWidth(atomWidth)) continue;
+      const descent = Math.max(0, line.height - line.baseline);
+      line.baseline = Math.max(line.baseline, unsupported.height);
+      line.height = line.baseline + descent;
+      line.spans.push({
+        range: { paragraphId, start: piece.start, end: piece.end },
+        text: '\uFFFC',
+        props: piece.props,
+        style: piece.style,
+        projected: true,
+        unsupported,
+        box: { x: lineOrigin() + line.width, y: 0, width: atomWidth, height: unsupported.height },
+        ...revisionsOf(piece),
+      });
+      line.width += atomWidth;
+      line.end = piece.end;
+      wordStartSpan = -1;
+      lastEmitted = '';
+      if (unsupported.display === 'block') closeLine();
       continue;
     }
     if (piece.equation) {

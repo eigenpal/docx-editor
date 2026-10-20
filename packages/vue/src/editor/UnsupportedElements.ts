@@ -35,7 +35,11 @@ function hasContent(content: VNodeChild): boolean {
   return typeof content !== 'string' || content.trim().length > 0;
 }
 
-const Placeholder = defineComponent({
+// A winning declaration can mount before the previous winner finishes unmounting.
+// Only the current owner can restore this host.
+const owners = new WeakMap<UnsupportedElementHost, symbol>();
+
+export const UnsupportedElementPlaceholder = defineComponent({
   props: {
     host: { type: Object as PropType<UnsupportedElementHost>, required: true },
     render: {
@@ -45,10 +49,16 @@ const Placeholder = defineComponent({
   },
   setup(props) {
     let custom = false;
-    const updateFallback = () => props.host.setCustomized(custom);
+    const owner = Symbol('unsupported-host-owner');
+    const updateFallback = () => {
+      owners.set(props.host, owner);
+      props.host.setCustomized(custom);
+    };
     onMounted(updateFallback);
     onUpdated(updateFallback);
     onUnmounted(() => {
+      if (owners.get(props.host) !== owner) return;
+      owners.delete(props.host);
       props.host.setCustomized(false);
     });
     return () => {
@@ -84,6 +94,8 @@ export const UnsupportedElements = defineComponent({
       { immediate: true }
     );
     return () =>
-      hosts.value.map((host) => h(Placeholder, { key: host.key, host, render: props.render }));
+      hosts.value.map((host) =>
+        h(UnsupportedElementPlaceholder, { key: host.key, host, render: props.render })
+      );
   },
 });

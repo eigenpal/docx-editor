@@ -28,6 +28,7 @@ import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
+import * as _docx_editor_dev_core_layout from '@docx-editor.dev/core/layout';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -101,6 +102,8 @@ import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { UnsupportedElement } from '@docx-editor.dev/core/output';
+import { UnsupportedElementLayout } from '@docx-editor.dev/core/output';
+import { UnsupportedElementRule } from '@docx-editor.dev/core/output';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
 import { VNodeChild } from 'vue';
@@ -2130,11 +2133,7 @@ export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     class: string;
     className: string;
-}, SlotsType<{
-    unsupportedElement?: (props: {
-        element: UnsupportedElement;
-    }) => VNodeChild;
-}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocxEditorContentControl: DocxEditorContentControlNamespace;
@@ -2640,9 +2639,6 @@ export interface DocxEditorNamespace {
             default?: () => VNodeChild;
             titleBarLeft?: () => VNodeChild;
             titleBarRight?: () => VNodeChild;
-            unsupportedElement?: (props: {
-                element: UnsupportedElement;
-            }) => VNodeChild;
         };
     };
     // (undocumented)
@@ -2683,6 +2679,8 @@ export interface DocxEditorNamespace {
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
     readonly Toolbar: typeof DocxEditorToolbar;
+    // (undocumented)
+    readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
     // (undocumented)
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
@@ -3038,7 +3036,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
-    mode: "suggesting" | "edit" | "view";
+    mode: "edit" | "view" | "suggesting";
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
@@ -3220,6 +3218,40 @@ export interface DocxEditorToolbarProps {
     preset?: boolean;
     // (undocumented)
     t?: ToolbarTranslate;
+}
+
+// @public
+export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTypes<{
+    layout: {
+        default: undefined;
+        type: PropType<UnsupportedElementRule["layout"]>;
+    };
+    match: {
+        default: undefined;
+        type: PropType<UnsupportedElementRule["match"]>;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    layout: {
+        default: undefined;
+        type: PropType<UnsupportedElementRule["layout"]>;
+    };
+    match: {
+        default: undefined;
+        type: PropType<UnsupportedElementRule["match"]>;
+    };
+}>> & Readonly<{}>, {
+    layout: _docx_editor_dev_core_layout.UnsupportedElementLayout | undefined;
+    match: ((element: UnsupportedElement) => boolean) | undefined;
+}, SlotsType<{
+    default: (props: {
+        element: UnsupportedElement;
+    }) => VNodeChild;
+}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
 }
 
 // @public (undocumented)
@@ -5347,6 +5379,10 @@ export type ToolbarTranslate = (key: string) => string;
 export { TranslationKey }
 
 export { UnsupportedElement }
+
+export { UnsupportedElementLayout }
+
+export { UnsupportedElementRule }
 
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;

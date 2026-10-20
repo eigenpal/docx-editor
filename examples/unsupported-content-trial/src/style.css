@@ -50,3 +50,15 @@ label {
 .graphic-card small {
   overflow-wrap: anywhere;
 }
+
+.reference-chip {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  width: 100%;
+  justify-content: center;
+  background: #e5f6ec;
+  border: 1px solid #84b297;
+  border-radius: 4px;
+  font: 12px system-ui;
+}

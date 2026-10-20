@@ -1,3 +1,4 @@
+import type { UnsupportedElementRule } from '../layout/unsupported-content-types.ts';
 // The paginated surface's public contract owns the types a host programs against.
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
@@ -130,6 +131,7 @@ export interface PaginatedSurfaceOptions {
    * revision markup paints, whatever the {@link revisionDisplayMode} leaves visible.
    */
   readonly revisionStyles?: RevisionStyles;
+  readonly unsupportedElementRules?: readonly UnsupportedElementRule[];
   /**
    * The review module's derivation hooks for this surface's session. Absent,
    * `session.reviewItems()` is the typed empty queue and every review affordance
@@ -790,6 +792,7 @@ export interface PaginatedSurface {
    * remeasuring a line, and the caret, selection and undo history stay where they are.
    */
   setRevisionStyles(colors: RevisionStyles | undefined): void;
+  setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
   /**
    * Hand remote-caret label content to the host, or take it back with `null`.
    *

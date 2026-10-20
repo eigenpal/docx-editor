@@ -99,6 +99,8 @@ import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { UnsupportedElement } from '@docx-editor.dev/core/output';
+import { UnsupportedElementLayout } from '@docx-editor.dev/core/output';
+import { UnsupportedElementRule } from '@docx-editor.dev/core/output';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
@@ -396,7 +398,6 @@ export interface DocxEditorContentProps {
     // (undocumented)
     children?: DocxEditorChildren;
     className?: string;
-    renderUnsupportedElement?: (element: UnsupportedElement) => DocxEditorChildren | null;
 }
 
 // @public
@@ -642,6 +643,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
     readonly Toolbar: typeof DocxEditorToolbar;
+    // (undocumented)
+    readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
@@ -752,7 +755,6 @@ export interface DocxEditorProps {
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
     readonly renderTitleBarRight?: () => DocxEditorChildren;
-    renderUnsupportedElement?: DocxEditorContentProps['renderUnsupportedElement'];
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
@@ -963,6 +965,16 @@ export interface DocxEditorToolbarProps {
     overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
+}
+
+// @public
+export function DocxEditorUnsupportedElement(input: DocxEditorUnsupportedElementProps): react.JSX.Element[];
+
+// @public
+export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
+    children: (props: {
+        element: UnsupportedElement;
+    }) => ReactNode;
 }
 
 // @public
@@ -2122,6 +2134,10 @@ export type ToolbarTranslate = (key: string) => string;
 export { TranslationKey }
 
 export { UnsupportedElement }
+
+export { UnsupportedElementLayout }
+
+export { UnsupportedElementRule }
 
 // @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;

@@ -7,9 +7,8 @@
 //
 // Paste and drop of supported raster formats route through the shared image-insert path.
 
-import type { UnsupportedElement } from '@docx-editor.dev/core/output';
-import { UnsupportedElements } from './UnsupportedElements';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { UnsupportedElementRegistryContext } from './unsupported-element-registry';
+import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
 import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -26,9 +25,6 @@ export interface DocxEditorContentProps {
   /** Appended after the load-bearing `docx-paginated-surface` class. */
   className?: string;
   children?: DocxEditorChildren;
-  /** Replace any drawing or equation fallback. Return null to keep its default.
-   * The component occupies the existing layout box and never changes saved XML. */
-  renderUnsupportedElement?: (element: UnsupportedElement) => DocxEditorChildren | null;
 }
 
 /**
@@ -44,15 +40,18 @@ export interface DocxEditorContentProps {
  *
  * @public
  */
-export function DocxEditorContent({ className, renderUnsupportedElement }: DocxEditorContentProps) {
+export function DocxEditorContent({ className }: DocxEditorContentProps) {
   const editor = useDocxEditor();
   const imageInsert = useImageInsertOptional();
   const elementRef = useRef<HTMLDivElement | null>(null);
-  const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const contentRef = useCallback((element: HTMLDivElement | null) => {
-    elementRef.current = element;
-    setContainer(element);
-  }, []);
+  const registry = useContext(UnsupportedElementRegistryContext);
+  const contentRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      elementRef.current = element;
+      registry?.setContainer(element);
+    },
+    [registry]
+  );
   const portalRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -130,9 +129,6 @@ export function DocxEditorContent({ className, renderUnsupportedElement }: DocxE
         onDragOver={onDragOver}
         onDrop={onDrop}
       />
-      {container && renderUnsupportedElement ? (
-        <UnsupportedElements container={container} render={renderUnsupportedElement} />
-      ) : null}
       {editor ? <ImageSelectionOverlay containerRef={elementRef} portalRef={portalRef} /> : null}
     </div>
   );

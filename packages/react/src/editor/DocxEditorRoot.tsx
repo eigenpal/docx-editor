@@ -1,3 +1,8 @@
+import {
+  UnsupportedElementRegistryContext,
+  createUnsupportedElementRegistry,
+  type UnsupportedElementRegistry,
+} from './unsupported-element-registry';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
@@ -233,6 +238,9 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const registryRef = useRef<RevisionStyleRegistry | null>(null);
   registryRef.current ??= createRevisionStyleRegistry();
   const revisionStyleRegistry = registryRef.current;
+  const unsupportedRegistryRef = useRef<UnsupportedElementRegistry | null>(null);
+  unsupportedRegistryRef.current ??= createUnsupportedElementRegistry();
+  const unsupportedRegistry = unsupportedRegistryRef.current;
 
   // One instance per document/fonts identity, and per effect run: `destroy()` is
   // terminal, so a StrictMode re-run must build anew rather than resurrect.
@@ -244,6 +252,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     // FIRST paint is already styled — no kind-coloured frame.
     const declaredStyles = revisionStyleRegistry.current();
     const instance = createDocxEditor({
+      unsupportedElementRules: unsupportedRegistry.current(),
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
@@ -266,7 +275,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
+  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry, unsupportedRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -380,23 +389,30 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     return () => revisionStyleRegistry.connect(null);
   }, [revisionStyleRegistry, editor]);
 
+  useEffect(() => {
+    unsupportedRegistry.connect(editor);
+    return () => unsupportedRegistry.connect(null);
+  }, [unsupportedRegistry, editor]);
+
   return (
-    <ReviewRailContext.Provider value={railRegistry}>
-      <DocxEditorContext.Provider value={editor}>
-        <NavigationLayoutContext.Provider value={navigationLayout}>
-          <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
-            {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+    <UnsupportedElementRegistryContext.Provider value={unsupportedRegistry}>
+      <ReviewRailContext.Provider value={railRegistry}>
+        <DocxEditorContext.Provider value={editor}>
+          <NavigationLayoutContext.Provider value={navigationLayout}>
+            <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
+              {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
                 popover panel — which are siblings, not ancestor and descendant — see the same
                 open/closed state and only one of them registers with the engine's gestures. */}
-            <HyperlinkPopupProvider>
-              <ContentControlProvider>
-                <ImageInsertProvider>{children}</ImageInsertProvider>
-              </ContentControlProvider>
-            </HyperlinkPopupProvider>
-          </RevisionStyleRegistryContext.Provider>
-        </NavigationLayoutContext.Provider>
-      </DocxEditorContext.Provider>
-    </ReviewRailContext.Provider>
+              <HyperlinkPopupProvider>
+                <ContentControlProvider>
+                  <ImageInsertProvider>{children}</ImageInsertProvider>
+                </ContentControlProvider>
+              </HyperlinkPopupProvider>
+            </RevisionStyleRegistryContext.Provider>
+          </NavigationLayoutContext.Provider>
+        </DocxEditorContext.Provider>
+      </ReviewRailContext.Provider>
+    </UnsupportedElementRegistryContext.Provider>
   );
 }
 

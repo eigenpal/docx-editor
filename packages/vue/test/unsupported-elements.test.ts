@@ -11,10 +11,12 @@ import {
   nextTick,
   onUnmounted,
   provide,
+  reactive,
   ref,
   shallowRef,
 } from 'vue';
 import { markUnsupportedElement } from '../../core/src/output/unsupported-elements.ts';
+import { DocxEditorUnsupportedElement } from '../src/editor/DocxEditorUnsupportedElement';
 import { UnsupportedElements } from '../src/editor/UnsupportedElements';
 import type { UnsupportedElement } from '@docx-editor.dev/core/output';
 import type { EquationSpanRecord } from '@docx-editor.dev/core/layout';
@@ -25,7 +27,19 @@ function placeholder(container: HTMLElement, label: string) {
   fallback.textContent = label;
   element.append(fallback);
   markUnsupportedElement(element, fallback, {
-    kind: 'equation',
+    ownerPartName: 'word/document.xml',
+    namespaceUri: 'urn:test',
+    localName: 'equation',
+    placement: 'inline',
+    source: {
+      id: label,
+      kind: 'generic',
+      namespaceUri: 'urn:test',
+      localName: 'equation',
+      namespaceBindings: [],
+      attributes: [],
+      children: [],
+    },
     nodeId: label,
     label,
     equation: {} as EquationSpanRecord,
@@ -113,14 +127,17 @@ test('the public Vue editor customizes the sample canvas', async () => {
           chrome: false,
         },
         {
-          unsupportedElement: ({ element }: { element: UnsupportedElement }) =>
-            element.kind === 'drawing'
-              ? h(
-                  'button',
-                  { 'data-testid': 'canvas-custom' },
-                  element.drawing.placeholderGraphicKind ?? 'graphic'
-                )
-              : null,
+          default: () =>
+            h(DocxEditorUnsupportedElement, null, {
+              default: ({ element }: { element: UnsupportedElement }) =>
+                element.drawing
+                  ? h(
+                      'button',
+                      { 'data-testid': 'canvas-custom' },
+                      element.drawing?.placeholderGraphicKind ?? 'graphic'
+                    )
+                  : null,
+            }),
         }
       ),
   });
@@ -149,9 +166,13 @@ test('the Vue sugar host updates and removes the scoped slot without remounting'
         DocxEditor,
         { chrome: false },
         {
-          unsupportedElement: render.value
-            ? ({ element }: { element: UnsupportedElement }) => render.value?.(element)
-            : undefined,
+          default: () =>
+            render.value
+              ? h(DocxEditorUnsupportedElement, null, {
+                  default: ({ element }: { element: UnsupportedElement }) =>
+                    render.value?.(element),
+                })
+              : null,
         }
       ),
   });
@@ -206,13 +227,18 @@ test('Vue sugar scoped slots retain context and restore fallback for empty conte
             chrome: false,
           },
           {
-            unsupportedElement: ({ element }: { element: UnsupportedElement }) => [
-              h(
-                Fragment,
-                null,
-                visible.value ? [h(Custom, { label: element.label })] : [createCommentVNode('v-if')]
-              ),
-            ],
+            default: () =>
+              h(DocxEditorUnsupportedElement, null, {
+                default: ({ element }: { element: UnsupportedElement }) => [
+                  h(
+                    Fragment,
+                    null,
+                    visible.value
+                      ? [h(Custom, { label: element.label })]
+                      : [createCommentVNode('v-if')]
+                  ),
+                ],
+              }),
           }
         );
     },
@@ -236,7 +262,7 @@ test('Vue sugar scoped slots retain context and restore fallback for empty conte
   container.remove();
 });
 
-test('DocxEditor.Content accepts a scoped slot and restores comment-only fallback content', async () => {
+test('Root declarations restore comment-only fallback content', async () => {
   const { DocxEditorRoot } = await import('../src/editor/DocxEditorRoot');
   const { DocxEditorContent } = await import('../src/editor/DocxEditorContent');
   const { flush } = await import('./helpers/mount');
@@ -246,13 +272,15 @@ test('DocxEditor.Content accepts a scoped slot and restores comment-only fallbac
   const app = createApp({
     render: () =>
       h(DocxEditorRoot, null, {
-        default: () =>
-          h(DocxEditorContent, null, {
-            unsupportedElement: ({ element }: { element: UnsupportedElement }) =>
+        default: () => [
+          h(DocxEditorContent),
+          h(DocxEditorUnsupportedElement, null, {
+            default: ({ element }: { element: UnsupportedElement }) =>
               visible.value
                 ? h('button', { 'data-testid': 'content-custom' }, element.label)
                 : h(Comment),
           }),
+        ],
       }),
   });
   app.mount(container);
@@ -272,4 +300,82 @@ test('DocxEditor.Content accepts a scoped slot and restores comment-only fallbac
   expect(container.querySelector('[data-testid="content-custom"]')).toBeNull();
   app.unmount();
   container.remove();
+});
+
+test('Vue compound declarations select the first match and retain priority on updates', async () => {
+  const { createUnsupportedElementRegistry, UnsupportedElementRegistryContext } =
+    await import('../src/editor/unsupported-element-registry');
+  const registry = createUnsupportedElementRegistry();
+  const container = document.createElement('div');
+  const { fallback } = placeholder(container, 'target');
+  registry.setContainer(container);
+  const matches = ref(false);
+  const mounted = ref(true);
+  const Local = defineComponent({
+    setup() {
+      provide('declaration-context', 'local');
+      return () =>
+        h(
+          DocxEditorUnsupportedElement,
+          { match: matches.value ? () => true : () => false },
+          { default: () => h(Custom) }
+        );
+    },
+  });
+  const Custom = defineComponent({
+    setup() {
+      const value = inject('declaration-context');
+      return () => h('button', String(value));
+    },
+  });
+  const app = createApp({
+    setup() {
+      provide(UnsupportedElementRegistryContext, registry);
+      return () => [
+        mounted.value ? h(Local) : null,
+        h(DocxEditorUnsupportedElement, null, { default: () => h('b', 'catch-all') }),
+      ];
+    },
+  });
+  const mount = document.createElement('div');
+  app.mount(mount);
+  await nextTick();
+  expect(container.querySelector('b')?.textContent).toBe('catch-all');
+  matches.value = true;
+  await nextTick();
+  expect(container.querySelector('button')?.textContent).toBe('local');
+  expect(container.querySelector('b')).toBeNull();
+  expect(fallback.hidden).toBe(true);
+  mounted.value = false;
+  await nextTick();
+  expect(container.querySelector('b')?.textContent).toBe('catch-all');
+  expect(fallback.hidden).toBe(true);
+  app.unmount();
+  expect(fallback.hidden).toBe(false);
+  registry.setContainer(null);
+});
+
+test('Vue declarations track dimensions mutated inside a reactive layout object', async () => {
+  const { createUnsupportedElementRegistry, UnsupportedElementRegistryContext } =
+    await import('../src/editor/unsupported-element-registry');
+  const registry = createUnsupportedElementRegistry();
+  const layout = reactive({ width: 50, height: 20 });
+  const app = createApp({
+    setup() {
+      provide(UnsupportedElementRegistryContext, registry);
+      return () => h(DocxEditorUnsupportedElement, { layout }, { default: () => null });
+    },
+  });
+  const mount = document.createElement('div');
+  app.mount(mount);
+  try {
+    expect(registry.current()[0]?.layout).toEqual({ width: 50, height: 20 });
+    layout.width = 80;
+    layout.height = 40;
+    await nextTick();
+    expect(registry.current()[0]?.layout).toEqual({ width: 80, height: 40 });
+  } finally {
+    app.unmount();
+  }
+  expect(registry.current()).toEqual([]);
 });

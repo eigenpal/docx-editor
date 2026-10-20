@@ -1,3 +1,7 @@
+import {
+  createUnsupportedElementProjection,
+  validateUnsupportedElementRules,
+} from './unsupported-element-state.ts';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
 
@@ -315,6 +319,9 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
+  let unsupportedProjection = createUnsupportedElementProjection(
+    validateUnsupportedElementRules(options.unsupportedElementRules ?? [])
+  );
   const collaborationSession = options.collaborationModel?.session;
   let scale = options.scale ?? 96 / 72;
   const tableLabelState = {
@@ -873,7 +880,7 @@ export function mountPaginatedSurface(
     authorFilter?: RevisionAuthorFilter
   ): ReturnType<typeof createFurnitureSource> =>
     createFurnitureSource({
-      session,
+      session: unsupportedProjection.view(session),
       measurer,
       producer,
       cache: layoutCache,
@@ -1226,7 +1233,7 @@ export function mountPaginatedSurface(
     if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);
     drawingBundle.sync(session);
     return layoutDocumentView({
-      view: session,
+      view: unsupportedProjection.view(session),
       revision,
       measurer,
       cache: layoutCache,
@@ -2776,6 +2783,15 @@ export function mountPaginatedSurface(
         materialize: materializedSet,
         ariaHidden: false,
         drawingStrings,
+        unsupportedOwnerPartName: (nodeId) =>
+          partOfNodeId(session, nodeId)?.name ?? session.part().name,
+        unsupportedSource: (nodeId, ownerPartName) => {
+          const part = ownerPartName
+            ? session.currentPackage().parts.get(ownerPartName)
+            : partOfNodeId(session, nodeId);
+          const node = part ? findNode(part, nodeId) : null;
+          return node && node.kind !== 'textValue' ? node : null;
+        },
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         shadeFormFields: shadeFormFields(),
@@ -5404,6 +5420,26 @@ export function mountPaginatedSurface(
     },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
+    setUnsupportedElementRules: (rules) => {
+      const projection = createUnsupportedElementProjection(validateUnsupportedElementRules(rules));
+      // Resolve before changing live state, so a failing matcher cannot partially apply.
+      projection.view(session).currentPackage();
+      unsupportedProjection.view(session).currentPackage();
+      const geometryUnchanged = projection.geometryKey() === unsupportedProjection.geometryKey();
+      if (geometryUnchanged) {
+        // Inline predicates often change identity during a framework render.
+        // Keep their latest behavior for future content without reflowing equal geometry.
+        unsupportedProjection = projection;
+        furnitureSource = createCurrentFurnitureSource(revisionFilter());
+        return;
+      }
+      flushPendingInputAndLayout();
+      unsupportedProjection = projection;
+      furnitureSource = createCurrentFurnitureSource(revisionFilter());
+      scheduler.invalidateAll(session.packageRevision(), 'unsupported-content');
+      scheduler.flush();
+      options.onChange?.(currentState());
+    },
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;
       revisionStyles = colors;

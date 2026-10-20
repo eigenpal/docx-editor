@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add custom framework components for unsupported drawing and equation placeholders through React render props and Vue scoped slots.
+Add compound UnsupportedElement renderers in React and Vue for generic unsupported OOXML content and existing drawing/equation fallbacks. Match source metadata, reserve layout dimensions, and preserve custom component state across repaints without changing saved content.

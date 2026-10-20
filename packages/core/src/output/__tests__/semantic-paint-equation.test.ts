@@ -91,7 +91,7 @@ describe('semantic equation paint', () => {
       hosts = next;
     });
     expect(hosts).toHaveLength(1);
-    expect(hosts[0]!.unsupported.kind).toBe('equation');
+    expect(hosts[0]!.unsupported.localName).toBe('oMath');
     expect(hosts[0]!.unsupported.nodeId).toBe(equation.dataset.docxEquation);
     expect(hosts[0]!.unsupported.label).toBe('<img src=x onerror=alert(1)>');
     stop();

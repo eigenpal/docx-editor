@@ -6,7 +6,13 @@ import {
   type UnsupportedElementHost,
 } from '@docx-editor.dev/core/output';
 
-function Placeholder({ host, children }: { host: UnsupportedElementHost; children: ReactNode }) {
+export function UnsupportedElementPlaceholder({
+  host,
+  children,
+}: {
+  host: UnsupportedElementHost;
+  children: ReactNode;
+}) {
   const custom = children != null && typeof children !== 'boolean';
   useLayoutEffect(() => {
     host.setCustomized(custom);
@@ -39,8 +45,8 @@ export function UnsupportedElements({
     };
   }, [container]);
   return hosts.map((host) => (
-    <Placeholder key={host.key} host={host}>
+    <UnsupportedElementPlaceholder key={host.key} host={host}>
       {render(host.unsupported)}
-    </Placeholder>
+    </UnsupportedElementPlaceholder>
   ));
 }

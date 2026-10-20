@@ -1,3 +1,4 @@
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // Paint equation geometry without parsing OMML or measuring DOM.
 
 import { markUnsupportedElement } from './unsupported-elements.ts';
@@ -49,7 +50,10 @@ function paintNode(
   document: Document,
   host: DocumentFragment,
   node: EquationGeometry,
-  equation: EquationSpanRecord,
+  equation: EquationSpanRecord & {
+    unsupportedSource?: OoxmlElement | null;
+    ownerPartName?: string;
+  },
   scale: number,
   parentX = 0,
   parentY = 0,
@@ -82,7 +86,14 @@ function paintNode(
           element,
           fallback,
           {
-            kind: 'equation',
+            ownerPartName: equation.ownerPartName ?? '',
+            namespaceUri:
+              equation.unsupportedSource?.namespaceUri ??
+              'http://schemas.openxmlformats.org/officeDocument/2006/math',
+            localName: equation.unsupportedSource?.localName ?? 'oMath',
+            source: equation.unsupportedSource ?? null,
+            placement: 'inline',
+            bounds: { x, y, width: node.box.width, height: node.box.height },
             nodeId: equation.sourceNodeId,
             label: node.text,
             equation,
@@ -206,8 +217,13 @@ function paintNode(
 export function mountEquationGeometry(
   document: Document,
   host: HTMLElement,
-  equation: EquationSpanRecord,
-  scale: number
+  equation: EquationSpanRecord & {
+    unsupportedSource?: OoxmlElement | null;
+    ownerPartName?: string;
+  },
+  scale: number,
+  source?: OoxmlElement | null,
+  ownerPartName?: string
 ): void {
   const geometry = equation.geometry;
   host.className = 'layout-run docx-equation';
@@ -226,6 +242,33 @@ export function mountEquationGeometry(
   // published descent so the equation's internal baseline meets the surrounding text.
   host.style.verticalAlign = `${-(geometry.box.height - geometry.baseline) * scale}px`;
   const fragment = document.createDocumentFragment();
-  paintNode(document, fragment, geometry, equation, scale);
+  paintNode(
+    document,
+    fragment,
+    geometry,
+    { ...equation, unsupportedSource: source ?? null, ...(ownerPartName ? { ownerPartName } : {}) },
+    scale
+  );
   host.append(fragment);
+}
+
+/** Resolve canonical metadata at the painter boundary, keeping layout records DOM-free. */
+export function mountEquationForSpan(
+  document: Document,
+  host: HTMLElement,
+  equation: EquationSpanRecord,
+  context: {
+    readonly scale: number;
+    readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
+    readonly unsupportedOwnerPartName?: (nodeId: string) => string;
+  }
+): void {
+  mountEquationGeometry(
+    document,
+    host,
+    equation,
+    context.scale,
+    context.unsupportedSource?.(equation.sourceNodeId),
+    context.unsupportedOwnerPartName?.(equation.sourceNodeId)
+  );
 }

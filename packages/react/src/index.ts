@@ -437,4 +437,13 @@ export {
 } from './rulerTicks';
 export { useEditorSnapshot } from './useEditorSnapshot';
 
-export type { UnsupportedElement } from '@docx-editor.dev/core/output';
+export type {
+  UnsupportedElement,
+  UnsupportedElementLayout,
+  UnsupportedElementRule,
+} from '@docx-editor.dev/core/output';
+
+export {
+  DocxEditorUnsupportedElement,
+  type DocxEditorUnsupportedElementProps,
+} from './editor/DocxEditorUnsupportedElement';

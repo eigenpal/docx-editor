@@ -139,24 +139,49 @@ engine. Read `isEnabled` and show `disabledReason`.
 
 Apache-2.0
 
-### Custom unsupported-content placeholders
+### Custom unsupported content
 
-Use `renderUnsupportedElement` on `DocxEditor` or `DocxEditor.Content` to replace a
-built-in drawing or equation fallback with your own component:
+Register components under `DocxEditor` or `DocxEditor.Root`. Each declaration
+handles matching unsupported content, including opaque inline and block elements.
 
 ```tsx
-<DocxEditor
-  document={bytes}
-  renderUnsupportedElement={(element) => (
-    <MyPlaceholder kind={element.kind} label={element.label} />
-  )}
-/>
+<DocxEditor document={bytes}>
+  <DocxEditor.UnsupportedElement
+    match={(element) => element.namespaceUri === 'urn:my-widgets'}
+    layout={{ width: 180, height: 48 }}
+  >
+    {({ element }) => <MyWidget element={element} />}
+  </DocxEditor.UnsupportedElement>
+  <DocxEditor.UnsupportedElement>
+    {({ element }) => <MyPlaceholder label={element.label} />}
+  </DocxEditor.UnsupportedElement>
+</DocxEditor>
 ```
 
-The callback receives an `UnsupportedElement` with `kind`, `nodeId`, `label`, and
-the drawing or equation layout record. For drawings, inspect
-`element.drawing.resource` and `element.drawing.placeholderGraphicKind` to choose
-a component for a specific failure or graphic type. Return `null` to retain the
-default placeholder. Components keep React context and local state across same-page repaints. They
-unmount when their element, page, document, or override disappears. The existing layout box and saved DOCX remain unchanged.
-This hook covers rendered fallbacks; it does not expose invisible unknown XML.
+The first mounted matching declaration wins. Prop updates retain its priority.
+Removing and mounting a declaration again gives it a later priority. To disable a
+specific renderer temporarily, keep it mounted and change `match`, or use
+matchers that do not overlap.
+Omit `match` for a catch-all. Use source metadata in predicates; geometry is not
+available before pagination. Return `null` to keep the default placeholder.
+An empty result does not select the next declaration.
+
+`UnsupportedElement` exposes `nodeId`, `ownerPartName`, `namespaceUri`,
+`localName`, `source`, `placement`, and `label`. `bounds` describes the reserved
+box after layout. Optional `drawing` and `equation` records provide specialized
+metadata. Treat source content as read-only and untrusted.
+
+`layout` reserves width and height in document points for opaque elements.
+Source placement determines inline or block flow. Without `layout`, opaque
+inline elements reserve 120 × 24 points; blocks reserve 240 × 96 points.
+Dimensions must be positive, finite, and at most 100,000 points.
+Drawing and equation fallbacks retain their existing geometry.
+Unmatched opaque content retains its existing invisible behavior.
+Properties, metadata, and nested payloads inside unsupported elements are not
+independent content occurrences.
+
+Components retain framework context and local state across same-page repaints.
+They can remount when pagination, virtualization, or document changes remove an
+occurrence. Keep durable application data outside the component.
+Prop updates and declaration removal preserve document edits and undo history.
+Custom rendering does not change saved DOCX content.

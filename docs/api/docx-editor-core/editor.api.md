@@ -835,6 +835,7 @@ export interface DocxEditorConfig {
     revisionStyles?: RevisionStyles;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
+    unsupportedElementRules?: readonly UnsupportedElementRule[];
     zoom?: number;
     zoomMode?: ZoomMode | 'auto';
 }
@@ -859,6 +860,7 @@ export interface DocxEditorInstance extends Editor {
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
+    setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
@@ -1576,6 +1578,8 @@ export interface PaginatedSurface {
     setSelection(next: SemanticSelection): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
+    // (undocumented)
+    setUnsupportedElementRules(rules: readonly UnsupportedElementRule[]): void;
     showAllRevisionAuthors(): void;
     // (undocumented)
     splitParagraph(): void;
@@ -1619,6 +1623,8 @@ export interface PaginatedSurfaceOptions {
     readonly tocLabels?: {
         readonly title: string;
     };
+    // (undocumented)
+    readonly unsupportedElementRules?: readonly UnsupportedElementRule[];
 }
 
 // @public

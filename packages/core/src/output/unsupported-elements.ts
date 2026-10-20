@@ -1,24 +1,10 @@
-import type {
-  AnchoredDrawingRecord,
-  EquationSpanRecord,
-  InlineDrawingRecord,
+import type { LayoutBox, StyleSpanRecord } from '@docx-editor.dev/core/layout';
+import type { UnsupportedElement } from '@docx-editor.dev/core/layout';
+export type {
+  UnsupportedElement,
+  UnsupportedElementLayout,
+  UnsupportedElementRule,
 } from '@docx-editor.dev/core/layout';
-
-/** Presentation data for a placeholder. The source document remains unchanged. @public */
-export type UnsupportedElement =
-  | {
-      readonly kind: 'drawing';
-      readonly nodeId: string;
-      readonly label: string;
-      readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
-    }
-  | {
-      readonly kind: 'equation';
-      readonly nodeId: string;
-      readonly label: string;
-      readonly equation: EquationSpanRecord;
-    };
-
 /** A component mount point and its built-in fallback. @public */
 export interface UnsupportedElementHost {
   /** Stable identity for one painted occurrence. */
@@ -115,7 +101,7 @@ export function markUnsupportedElement(
   accessibilityElement?: HTMLElement,
   occurrence = ''
 ): void {
-  element.dataset.docxUnsupported = unsupported.kind;
+  element.dataset.docxUnsupported = unsupported.localName;
   if (occurrence) element.dataset.docxUnsupportedOccurrence = occurrence;
   element.setAttribute('contenteditable', 'false');
   const slot = element.ownerDocument.createElement('span');
@@ -196,7 +182,9 @@ export function observeUnsupportedElements(
       const scope = element.closest('.docx-pages') ?? container;
       const page = element.closest('[data-page-index]')?.getAttribute('data-page-index') ?? '';
       const identity = JSON.stringify([
-        host.unsupported.kind,
+        host.unsupported.ownerPartName,
+        host.unsupported.namespaceUri,
+        host.unsupported.localName,
         host.unsupported.nodeId,
         page,
         element.getAttribute('data-docx-unsupported-occurrence') ?? '',
@@ -249,4 +237,27 @@ export function observeUnsupportedElements(
 /** Keep capture-phase object selection away from host-owned controls. */
 export function isUnsupportedComponentTarget(target: EventTarget | null): boolean {
   return !!(target as Element | null)?.closest?.('.docx-unsupported-slot');
+}
+
+/** Paint an opaque content box using geometry reserved by the layout projection. */
+export function paintUnsupportedContent(
+  document: Document,
+  content: NonNullable<StyleSpanRecord['unsupported']>,
+  bounds: LayoutBox,
+  scale: number
+): HTMLElement {
+  const element = document.createElement('span');
+  element.className = 'layout-run docx-unsupported-content';
+  element.setAttribute('contenteditable', 'false');
+  element.style.display = 'inline-block';
+  element.style.position = 'relative';
+  element.style.width = `${content.width * scale}px`;
+  element.style.height = `${content.height * scale}px`;
+  element.style.verticalAlign = 'bottom';
+  element.style.pointerEvents = 'auto';
+  const fallback = document.createElement('span');
+  fallback.textContent = content.element.label;
+  element.append(fallback);
+  markUnsupportedElement(element, fallback, { ...content.element, bounds });
+  return element;
 }

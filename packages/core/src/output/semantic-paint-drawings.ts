@@ -1,3 +1,4 @@
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // Drawing paint dispatch (typed-drawings-and-images task 10).
 //
 // Trust boundary: every string is file-derived or host-supplied through i18n callbacks.
@@ -47,6 +48,7 @@ export interface DrawingPaintStrings {
 }
 
 export interface DrawingPaintContext {
+  readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
   readonly strings: DrawingPaintStrings;
   readonly imageUrlPort?: PaintImageUrlPort;
@@ -395,11 +397,18 @@ function paintPlaceholderCard(
   label.className = 'docx-drawing-placeholder-label';
   label.textContent = refusalLabel(drawing, ctx.strings);
   card.append(label);
+  const source = ctx.unsupportedSource?.(drawing.drawingNodeId, drawing.ownerPartName) ?? null;
   markUnsupportedElement(
     card,
     label,
     {
-      kind: 'drawing',
+      ownerPartName: drawing.ownerPartName,
+      namespaceUri:
+        source?.namespaceUri ?? 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+      localName: source?.localName ?? 'drawing',
+      source,
+      placement: 'inline',
+      bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,
       label: label.textContent,
       drawing,

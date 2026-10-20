@@ -1,3 +1,4 @@
+import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
 import {
   computed,
   defineComponent,
@@ -20,7 +21,6 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
-import type { UnsupportedElement } from '@docx-editor.dev/core/output';
 import { DocxEditorLoading } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
@@ -151,7 +151,6 @@ const docxEditorSlots = Object as SlotsType<{
   default?: () => VNodeChild;
   titleBarLeft?: () => VNodeChild;
   titleBarRight?: () => VNodeChild;
-  unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
 }>;
 
 /** @public */
@@ -163,7 +162,6 @@ export interface DocxEditorNamespace {
       default?: () => VNodeChild;
       titleBarLeft?: () => VNodeChild;
       titleBarRight?: () => VNodeChild;
-      unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
     };
   };
   readonly Root: typeof DocxEditorRoot;
@@ -188,6 +186,7 @@ export interface DocxEditorNamespace {
   readonly HyperLink: typeof DocxEditorHyperLink;
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
+  readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
@@ -345,7 +344,7 @@ const DocxEditorFrame = defineComponent({
           default: () => [
             chrome.value ? h(DocxEditorHeaderFooterChrome) : null,
             chrome.value ? h(DocxEditorNotesChrome) : null,
-            h(DocxEditorContent, null, { unsupportedElement: slots.unsupportedElement }),
+            h(DocxEditorContent),
             h(DocxEditorHyperLink, { hidden: hyperlinkPopup.value === false }),
             h(DocxEditorEquation),
             contextMenu.value === false
@@ -533,7 +532,6 @@ const DocxEditorImpl = defineComponent({
               default: slots.default,
               titleBarLeft: slots.titleBarLeft,
               titleBarRight: slots.titleBarRight,
-              unsupportedElement: slots.unsupportedElement,
             }
           ),
       });
@@ -563,6 +561,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,
+  UnsupportedElement: DocxEditorUnsupportedElement,
   AuthorStyle: DocxEditorAuthorStyle,
   ColorByChangeType: DocxEditorColorByChangeType,
 }) as unknown as DocxEditorNamespace;

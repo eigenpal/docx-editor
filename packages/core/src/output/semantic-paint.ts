@@ -1,3 +1,5 @@
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { paintUnsupportedContent } from './unsupported-elements.ts';
 // Paint semantic layout records to DOM (task 7.5).
 //
 // A NON-AUTHORITATIVE CONSUMER. It positions every element from the numbers layout already
@@ -73,7 +75,7 @@ import {
   captureUnsupportedElementFocus,
   notifyUnsupportedElementsPaint,
 } from './unsupported-elements.ts';
-import { mountEquationGeometry } from './semantic-paint-equation.ts';
+import { mountEquationForSpan } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
 
 /**
@@ -94,6 +96,8 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
  * name entering the page-global CSS font namespace.
  */
 export interface PaintContext {
+  readonly unsupportedOwnerPartName?: (nodeId: string) => string;
+  readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
   /** Generated paragraphs that paint as non-editable navigation surfaces. */
   readonly readOnlyParagraphIds?: ReadonlySet<string>;
@@ -174,6 +178,8 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
  * set through these options is ever serialised back into the document.
  */
 export interface PaintOptions {
+  readonly unsupportedOwnerPartName?: (nodeId: string) => string;
+  readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
   /** Generated paragraphs that paint as non-editable navigation surfaces. */
@@ -309,6 +315,7 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
   const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true };
   return Object.freeze({
     scale: ctx.scale,
+    ...(ctx.unsupportedSource ? { unsupportedSource: ctx.unsupportedSource } : {}),
     strings: ctx.drawingStrings,
     ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
@@ -1118,12 +1125,14 @@ function paintSpan(
   // Ink resolves the face through the span's font slot; `span.style` itself stays the
   // run's full resolution for every consumer that reads formatting rather than glyphs.
   const faceStyle = styleForFontSlot(span.style, span.fontSlot);
+  if (span.unsupported)
+    return paintUnsupportedContent(document, span.unsupported, span.box, ctx.scale);
   if (span.equation) {
     element.dataset.paragraphId = span.range.paragraphId;
     element.dataset.start = String(span.range.start);
     element.dataset.end = String(span.range.end);
     applyRunFaceStyle(element, faceStyle, ctx);
-    mountEquationGeometry(document, element, span.equation, ctx.scale);
+    mountEquationForSpan(document, element, span.equation, ctx);
     applyRevisionPresentation(element, span, ctx);
     return element;
   }
@@ -2889,6 +2898,10 @@ export function paintSemanticLayoutWithAuthorSlots(
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     drawingStrings,
+    ...(options.unsupportedOwnerPartName
+      ? { unsupportedOwnerPartName: options.unsupportedOwnerPartName }
+      : {}),
+    ...(options.unsupportedSource ? { unsupportedSource: options.unsupportedSource } : {}),
     urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
     ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),

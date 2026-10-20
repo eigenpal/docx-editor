@@ -1,4 +1,3 @@
-import type { DocxEditorContentProps } from './editor/DocxEditorContent';
 import type { DocxEditorChildren } from './docx-editor-children';
 import type {
   DocumentChange,
@@ -45,8 +44,6 @@ export type {
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
-  /** Render a custom component inside unsupported drawing and equation placeholders. */
-  renderUnsupportedElement?: DocxEditorContentProps['renderUnsupportedElement'];
   /**
    * Immutable byte-backed font sources sampled at mount. Remount to replace this
    * configuration atomically.

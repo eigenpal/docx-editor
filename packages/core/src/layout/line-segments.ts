@@ -54,6 +54,16 @@ const lineSegmentsCache = new WeakMap<LineRecord, readonly LineSegment[]>();
 export function lineSegments(line: LineRecord): readonly LineSegment[] {
   const cached = lineSegmentsCache.get(line);
   if (cached) return cached;
+  // Opaque block paragraphs reserve geometry but have no editable model position.
+  if (
+    line.spans.length > 0 &&
+    line.spans.every(
+      (span) =>
+        span.unsupported?.element.placement === 'block' &&
+        span.unsupported.element.nodeId === line.range.paragraphId
+    )
+  )
+    return [];
   const whole: LineSegment = {
     paragraphId: line.range.paragraphId,
     start: line.range.start,
