@@ -628,6 +628,7 @@ export class Field extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal (undocumented)
     static promised(context: RequestContext, label: string, nullable: boolean): Field;
+    get result(): Range_2;
     updateResult(): void;
 }
 
@@ -1232,9 +1233,12 @@ class Range_2 extends ModelObject implements PromisedItem {
     insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldType, text?: string, removeFormatting?: boolean): Field;
     insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldTypeLiteral, text?: string, removeFormatting?: boolean): Field;
     insertInlinePictureFromBase64(base64EncodedImage: string, insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'): InlinePicture;
+    insertOoxml(ooxml: string, insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     insertParagraph(paragraphText: string, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): Paragraph;
     insertTable(rowCount: number, columnCount: number, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', values?: string[][]): Table;
     insertText(text: string, insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
+    // @internal
+    static ofFieldResult(context: RequestContext, label: string, field: ObjectPath): Range_2;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
