@@ -29,7 +29,7 @@ function paint(body: string, markup: boolean): HTMLElement {
 }
 
 for (const markup of [false, true]) {
-  test(`a deleted equation draws a strike bar and an inserted one an underline (markup ${markup})`, () => {
+  test(`a deleted equation strikes its glyphs and an inserted one is underlined (markup ${markup})`, () => {
     const deleted = paint(wrapped('del'), markup).querySelector('.docx-equation');
     expect(deleted?.querySelector('.docx-equation-revision-strike')).not.toBeNull();
     expect(deleted?.querySelector('.docx-equation-revision-underline')).toBeNull();
@@ -64,4 +64,19 @@ test('a host revision markup with no line mark draws no equation bar', () => {
   paintSemanticLayout(root, layout, { scale: 1, revisionMarkup });
   expect(root.querySelectorAll('.docx-equation')).toHaveLength(2);
   expect(root.querySelector('[class^="docx-equation-revision"]')).toBeNull();
+});
+
+test('a deleted fraction strikes its numerator and denominator, not the fraction bar', () => {
+  const fraction =
+    '<m:oMath><m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f></m:oMath>';
+  const root = paint(
+    `<w:p><w:r><w:t>a</w:t></w:r><w:del w:id="1" w:author="Reviewer">${fraction}</w:del></w:p>`,
+    false
+  );
+  const glyphs = [...root.querySelectorAll<HTMLElement>('.docx-equation .docx-equation-text')];
+  expect(glyphs).toHaveLength(2);
+  for (const glyph of glyphs) {
+    expect(glyph.classList.contains('docx-equation-revision-strike')).toBe(true);
+    expect(glyph.style.textDecorationLine).toBe('line-through');
+  }
 });

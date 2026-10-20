@@ -199,19 +199,33 @@ export function applyEquationRevision(
       : 'underline';
   const strike = mark === 'strikethrough' || mark === 'doubleStrikethrough';
   if (!strike && mark !== 'underline' && mark !== 'doubleUnderline') return;
-  const thickness = 0.75;
   const doubled = mark === 'doubleStrikethrough' || mark === 'doubleUnderline';
-  const ys = strike
-    ? doubled
-      ? [box.height / 2 - 2 * thickness, box.height / 2 + thickness]
-      : [box.height / 2 - thickness / 2]
-    : doubled
-      ? [box.height - 3 * thickness, box.height - thickness]
-      : [box.height - thickness];
-  const className = strike ? 'docx-equation-revision-strike' : 'docx-equation-revision-underline';
+  if (strike) {
+    // Each glyph run is struck on its own, as struck text is. One bar across the box sat on
+    // the math axis, where a fraction bar already is, so a deleted fraction looked merely
+    // recoloured; striking the runs crosses the numerator and the denominator instead.
+    for (const glyph of host.querySelectorAll<HTMLElement>(
+      '.docx-equation-text, .docx-equation-fallback'
+    )) {
+      glyph.classList.add('docx-equation-revision-strike');
+      glyph.style.textDecorationLine = 'line-through';
+      glyph.style.textDecorationStyle = doubled ? 'double' : 'solid';
+      glyph.style.textDecorationColor = 'currentColor';
+    }
+    return;
+  }
+  const thickness = 0.75;
+  const ys = doubled
+    ? [box.height - 3 * thickness, box.height - thickness]
+    : [box.height - thickness];
   for (const y of ys) {
     host.append(
-      rule(document, className, { x: 0, y, width: box.width, height: thickness }, ctx.scale)
+      rule(
+        document,
+        'docx-equation-revision-underline',
+        { x: 0, y, width: box.width, height: thickness },
+        ctx.scale
+      )
     );
   }
 }
