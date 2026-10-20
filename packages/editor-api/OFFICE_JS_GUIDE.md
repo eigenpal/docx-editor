@@ -447,7 +447,7 @@ A field, an equation, a picture, or a note reference reads as one unit that neve
 
 A tracked deletion or replacement that covers an equation strikes the whole equation. Accept removes it, and reject restores it.
 
-The words of an inline content control join the ranges around it. `paragraph.contentControls` and `range.contentControls` list the controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load them with `cannotEdit`, `tag`, and `text`, for each word range in one sync, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException`, and `error.debugInfo.innerError.code` is `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
+The words of an inline content control join the ranges around it. `paragraph.contentControls` and `range.contentControls` list the controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load them with `cannotEdit`, `tag`, and `text`, for each word range in one sync, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails, and `error.debugInfo.innerError.code` is `edit.protected-content`. The outer code is `GeneralException` with `TrackMineOnly` and `InvalidArgument` without it, so branch on the inner code. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
 
 Map each difference between the old and the new words to one call. The last range of a paragraph has no space after it:
 

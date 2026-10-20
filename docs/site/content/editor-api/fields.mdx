@@ -32,7 +32,7 @@ This example inserts a cross-reference to a bookmark after a search hit:
 
 ```ts
 await runtime.run(async (context) => {
-  const hit = context.document.body.search('see section').getFirst();
+  const hit = context.document.body.search('see section ').getFirst();
   const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
   await context.sync();
   field.load('code');

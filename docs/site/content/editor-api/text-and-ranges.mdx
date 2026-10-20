@@ -243,7 +243,7 @@ Some document elements behave differently inside a word range:
 | Equation, picture, or note reference | Reads as one unit that never splits, shown as U+FFFC. It joins the word that it touches. A tracked deletion or replacement that covers an equation strikes the whole equation; accept removes it, and reject restores it. |
 | Tab | Ends a range only if you list `'\t'` as a mark. `trimSpacing` removes it from range edges. |
 | Inline content control | Adds no boundary. Its words join the ranges around it. |
-| Content-locked control | A replacement or deletion of part of it fails with `GeneralException`, and `error.debugInfo.innerError.code` is `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion. |
+| Content-locked control | A replacement or deletion of part of it fails, and `error.debugInfo.innerError.code` is `edit.protected-content`. The outer code is `GeneralException` with `TrackMineOnly` and `InvalidArgument` without it, so branch on the inner code. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion. |
 | Tracked deletion | Shows in the ranges, like in `text`, unless the runtime's `revisionTextView` is `original`. |
 | Text that `revisionTextView` hides | Holds no ending mark. A range starts and ends at shown characters. Hidden text between two shown characters stays inside the range, so an edit through the range also changes it. |
 

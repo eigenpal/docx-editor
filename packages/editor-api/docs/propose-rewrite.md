@@ -191,6 +191,8 @@ A rewrite stays inside one paragraph and keeps its fields and equations. To prop
 - Either every change lands and the paragraph reads as the model text, or the paragraph stays as it was.
 - A failed write rejects only the changes that this rewrite made, also in a collaboration session. The helper records each change it makes by its type, author, date, and text. Changes by other participants stay, including changes by a worker or a person who uses the same author name.
 - `draft.apply()` checks the model text before it writes anything. Text that breaks a placeholder rule writes nothing.
+- You do not need to set `document.changeTrackingMode` first. If you do, an assignment of `TrackMineOnly` or `Off` that is not synced yet goes with the helper's first sync and does not count as a queued edit. Other queued commands fail with `context-used`.
+- In a browser, each writing sync is one undo step, so one rewrite can take several. To undo it as one step, call `runtime.run({ historyGroup: editor.beginHistoryGroup() }, callback)`.
 - If tracking is off, `draft.apply()` turns on `TrackMineOnly` for its writes and turns it off again. It never turns tracking off. If turning it off again fails, the proposal stands and `document.changeTrackingMode` reads `TrackMineOnly`.
 
 ## Handle errors
