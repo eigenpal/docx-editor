@@ -129,3 +129,50 @@ export function restrictedControlsWithEdgeAt(
   paragraph.children.forEach(walk);
   return found;
 }
+
+/** A run and the paragraph offsets its content covers. */
+export interface RunOffsetSpan {
+  readonly runId: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * The run whose formatting typed text takes at the OUTER edge of a control that typing cannot
+ * enter.
+ *
+ * Text typed there lands beside the control ({@link besideRestrictedControl}), so it must not
+ * look like the control. The ordinary rule takes the run to the left, which at a control's
+ * trailing edge is the control's own run: a citation styled bold and colored at the end of a
+ * paragraph passed that style to every word typed after it, and at the start of a paragraph
+ * typed text lost the formatting of the words beside it. The source is the run that starts
+ * right after the offset, else the nearest run before it, else the nearest run after it, each
+ * outside the control.
+ *
+ * `undefined` when the ordinary rule applies: no such control has an edge at `offset`, or the
+ * run to the left is outside it. `null` when only the control holds text, so the paragraph
+ * mark's formatting applies. Shared by the store's insertion and the caret formatting the
+ * toolbar reports, so the two agree.
+ */
+export function formattingRunBesideRestrictedControl(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  offsets: ParagraphOffsetIndex,
+  runs: readonly RunOffsetSpan[]
+): string | null | undefined {
+  const controls = restrictedControlsWithEdgeAt(paragraph, offset, offsets);
+  if (controls.length === 0) return undefined;
+  const outside = (run: RunOffsetSpan) =>
+    run.start < run.end && controls.every((control) => findWithin(control, run.runId) === null);
+  let left: RunOffsetSpan | undefined;
+  for (const run of runs) if (run.start < run.end && run.end === offset) left = run;
+  const right = runs.find((run) => run.start < run.end && run.start === offset);
+  if (left ? outside(left) : !right || outside(right)) return undefined;
+  let before: RunOffsetSpan | undefined;
+  for (const run of runs) if (run.end <= offset && outside(run)) before = run;
+  const source =
+    (right && outside(right) ? right : undefined) ??
+    before ??
+    runs.find((run) => run.start >= offset && outside(run));
+  return source ? source.runId : null;
+}

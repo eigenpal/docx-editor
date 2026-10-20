@@ -30,6 +30,8 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { formattableRanges } from '@docx-editor.dev/core/store';
+import { findNode } from '../store/package/ooxml-edit.ts';
+import { formattingRangeBesideRestrictedControl } from '../store/store/direct-properties.ts';
 import type {
   FormattingDisplayMode,
   FormattingRevisionAuthorFilter,
@@ -129,6 +131,20 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const displayMode = (): FormattingDisplayMode => deps.displayMode();
   const authorFilter = (): FormattingRevisionAuthorFilter | undefined => deps.authorFilter();
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
+  // A caret beside a control that typing cannot enter reads the run that typing will copy,
+  // outside the control, rather than the control's own run.
+  const formattingSelection = (selection: SemanticSelection): SemanticSelection => {
+    const { anchor, head } = selection;
+    if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return selection;
+    const paragraph = findNode(storyPart(), head.paragraphId);
+    const run = paragraph && formattingRangeBesideRestrictedControl(paragraph, head.offset);
+    if (!run) return selection;
+    const start = run.end <= head.offset ? run.end - 1 : run.start;
+    return {
+      anchor: { paragraphId: head.paragraphId, offset: start },
+      head: { paragraphId: head.paragraphId, offset: start + 1 },
+    };
+  };
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
@@ -448,7 +464,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       withPendingFormatting(
         formattingAt(
           currentLayout.value,
-          selectionNow.value,
+          formattingSelection(selectionNow.value),
           (paragraphId: string, runProperties) => {
             const resolved = session.effectiveRunDefaults(paragraphId, runProperties);
             // A run whose chain authored NOTHING is still measured in the surface's

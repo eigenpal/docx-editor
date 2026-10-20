@@ -151,11 +151,13 @@ import {
 import {
   insertionDestination,
   fieldInsertionEndAt,
+  paragraphOffsetIndex,
   runsUnder,
   segmentAncestryNodeId,
   segmentsOf,
   type Segment,
 } from './tree-op-segments.ts';
+import { formattingRunBesideRestrictedControl } from './tree-op-restricted-edge.ts';
 import {
   applyInsertToc,
   applyReplaceTocResult,
@@ -822,8 +824,22 @@ function applyInsertContent(
     // The left run still wins its formatting. A minted run at a wrapper's leading edge sits
     // right after the preceding run, so typing there inherits that run's properties exactly
     // as it does at an ordinary boundary; a bare run came out unformatted instead.
+    // Beside a control that typing cannot enter, the run outside it wins instead.
+    const besideControl = formattingRunBesideRestrictedControl(
+      paragraph,
+      offset,
+      paragraphOffsetIndex(paragraph),
+      segments
+    );
     const leftSegment = findLast(segments, (segment) => segment.end === offset);
-    const leftRun = leftSegment ? findNode(part, leftSegment.runId) : null;
+    const leftRun =
+      besideControl === undefined
+        ? leftSegment
+          ? findNode(part, leftSegment.runId)
+          : null
+        : besideControl === null
+          ? null
+          : findNode(part, besideControl);
     const inheritedProperties =
       leftRun && leftRun.kind === 'run'
         ? fieldInsertionEndAt(paragraph, offset)

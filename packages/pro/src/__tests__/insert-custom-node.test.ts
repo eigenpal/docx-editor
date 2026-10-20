@@ -440,4 +440,25 @@ describe('insertCustomNode', () => {
     expect(xml).not.toContain('<w:ins');
     expect(editor.getReviewItems().filter((item) => item.kind === 'revision')).toHaveLength(0);
   });
+
+  test('typing after a node at the end of a paragraph takes the text formatting', async () => {
+    // The node keeps its own style, bold, which text typed after it must not copy.
+    const node =
+      '<w:sdt><w:sdtPr><w:tag w:val="acme:citation"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
+      '<w:sdtContent><w:r><w:rPr><w:b/></w:rPr><w:t>[1]</w:t></w:r></w:sdtContent></w:sdt>';
+    for (const suggesting of [false, true]) {
+      const editor = mount(
+        `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>see</w:t></w:r>${node}</w:p>`,
+        true
+      );
+      if (suggesting) expect(editor.setEditingMode('suggesting').ok).toBe(true);
+      const end = { paragraphId: firstParagraphId(editor), offset: 6 };
+      editor.surface!.setSelection({ anchor: end, head: end });
+      expect(editor.snapshot().formatting).toMatchObject({ bold: false, italic: true });
+      editor.surface!.type('X');
+      const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+      expect(xml).toMatch(/<\/w:sdt>(?:<w:ins [^>]*>)?<w:r><w:rPr><w:i\/><\/w:rPr><w:t>X<\/w:t>/);
+      expect(xml.includes('<w:ins ')).toBe(suggesting);
+    }
+  });
 });

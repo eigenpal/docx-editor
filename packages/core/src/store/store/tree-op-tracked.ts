@@ -61,6 +61,7 @@ import {
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 import { emptyParagraphRunProperties } from './mark-character-style-run.ts';
+import { formattingRunBesideRestrictedControl } from './tree-op-restricted-edge.ts';
 import { liftedOutOfForeignInsertions } from './tree-op-tracked-foreign-split.ts';
 
 export { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
@@ -404,6 +405,11 @@ function applyTrackedInsertion(
     : undefined;
   const fieldLeftRun = fieldLeftRunId ? findNode(part, fieldLeftRunId) : null;
   const fieldProperties = () => (fieldLeftRun ? insertedRunProperties(mint, fieldLeftRun) : []);
+  // Beside a control that typing cannot enter, the words take the text's formatting outside it.
+  const besideControl = replacesThisEdit
+    ? undefined
+    : formattingRunBesideRestrictedControl(paragraph, offset, offsets, offsets.segments);
+  const besideRun = besideControl ? findNode(part, besideControl) : null;
   const rightBiasedDestination =
     bias === 'right' ? insertionDestination(paragraph, offset, null, bias) : null;
   // Minted LAZILY, on the first wrapper actually built: `nextRevisionId` walks the whole
@@ -487,7 +493,12 @@ function applyTrackedInsertion(
             runOf(mint, [
               ...(replacementRun
                 ? insertedRunProperties(mint, replacementRun)
-                : (markStyled() ?? properties)),
+                : (markStyled() ??
+                  (besideControl === undefined
+                    ? properties
+                    : besideRun
+                      ? insertedRunProperties(mint, besideRun)
+                      : []))),
               ...payload.nodes(mint),
             ]),
           ]
