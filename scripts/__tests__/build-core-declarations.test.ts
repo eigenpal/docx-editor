@@ -72,6 +72,7 @@ test('declaration builds drop sibling source paths and keep local aliases', () =
     jsx: 'preserve',
     paths: {
       '@docx-editor.dev/editor-api': ['../editor-api/src/index.ts'],
+      '@docx-editor.dev/editor-api/agent': ['../editor-api/src/agent.ts'],
       '@docx-editor.dev/editor-api/browser': ['../editor-api/src/browser.ts'],
     },
     pathsBase: fileURLToPath(new URL('../../packages/pro', import.meta.url)),
