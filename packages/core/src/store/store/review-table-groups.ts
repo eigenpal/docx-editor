@@ -16,6 +16,7 @@ import type { RevisionSite } from './tree-op-revisions.ts';
 import { textUnder } from './review-text.ts';
 import { groupTableFormatting } from './review-table-format-groups.ts';
 import { groupAdjacentRunFormatting } from './review-run-format-groups.ts';
+import { joinRowCellRecords } from './review-row-cell-records.ts';
 import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { ancestorIdsOf } from './node-ancestors.ts';
 
@@ -370,8 +371,9 @@ export function groupTableRevisions(
   locations: ReadonlyMap<string, SiteLocation>,
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
+  const rows = joinRowCellRecords(part, items, sites);
   const grouped = groupAdjacentRunFormatting(
-    groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
+    groupTableFormatting(part, groupRowRevisions(part, rows, sites, locations), sites),
     sites
   );
   // Row markers start in property XML but nested decisions belong at row ends.

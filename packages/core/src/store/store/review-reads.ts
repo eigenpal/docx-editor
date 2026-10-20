@@ -12,6 +12,7 @@ import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
 import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
 import { mergeConsecutiveParagraphPropertyChanges } from './review-paragraph-property-groups.ts';
+import { mergeContiguousRunFormatting } from './review-run-format-groups.ts';
 import {
   changedLanguages,
   changedFormatting,
@@ -401,7 +402,12 @@ function computeRevisionItemsOf(
     order,
     previewByNode
   );
-  return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
+  return mergeContiguousRunFormatting(
+    mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order),
+    part,
+    sites,
+    order
+  );
 }
 
 /**

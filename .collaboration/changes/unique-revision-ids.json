@@ -1,11 +1,12 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "A saved package could hold two revision annotations with one w:id: the split pieces of a revision someone typed inside, concurrent ids from two peers that met, or a header revision that took a body id.",
-  "after": "Saving renumbers later duplicates and out-of-range ids in the export snapshot only, so every saved revision annotation has its own w:id across all parts.",
-  "reason": "The pass runs on the package handed to the serializer and builds new nodes for the export only. The live tree, shared state, operations, journals, and actor id stripes do not change, and saving writes no update to the room. A peer that joins opens bootstrap bytes with export ids and converges with the room's ids when it attaches.",
+  "before": "A saved package could hold two revision annotations with one w:id: the split pieces of a revision someone typed inside, concurrent ids from two peers that met, or a header revision that took a body id. Review cards joined a tracked row with its cell records, and run formatting across runs and paragraph marks, only through a shared id.",
+  "after": "Saving renumbers later duplicates and out-of-range ids in the export snapshot only, so every saved revision annotation has its own w:id across all parts. Review cards join a tracked row with its cell records, and contiguous run formatting, by author, date and position, so a reopened file lists the same decisions.",
+  "reason": "The pass runs on the package handed to the serializer and builds new nodes for the export only. The live tree, shared state, operations, journals, and actor id stripes do not change, and saving writes no update to the room. Review grouping is a local read over each replica's tree, and every replica reads the same tree. A peer that joins opens bootstrap bytes with export ids and converges with the room's ids when it attaches.",
   "tests": [
     "packages/core/src/store/__tests__/revision-id-export.test.ts",
+    "packages/editor-api/src/model/__tests__/model-revision-reopen.test.ts",
     "packages/pro/src/collaboration/__tests__/document-revision-id-save.test.ts"
   ],
   "changeset": "unique-revision-ids",
