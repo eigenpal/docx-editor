@@ -8,6 +8,10 @@ import {
   readOoxmlPart,
 } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '@docx-editor.dev/core/layout';
+import {
+  observeUnsupportedElements,
+  type UnsupportedElementHost,
+} from '../unsupported-elements.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 function layoutAndPaint(body: string) {
@@ -82,5 +86,14 @@ describe('semantic equation paint', () => {
     expect(equation.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(equation.querySelector('img')).toBeNull();
     expect(equation.querySelector('script')).toBeNull();
+    let hosts: readonly UnsupportedElementHost[] = [];
+    const stop = observeUnsupportedElements(container, (next) => {
+      hosts = next;
+    });
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]!.unsupported.kind).toBe('equation');
+    expect(hosts[0]!.unsupported.nodeId).toBe(equation.dataset.docxEquation);
+    expect(hosts[0]!.unsupported.label).toBe('<img src=x onerror=alert(1)>');
+    stop();
   });
 });

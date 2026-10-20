@@ -78,3 +78,24 @@ should follow the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/n
 ## License
 
 Apache-2.0
+
+### Custom unsupported-content placeholders
+
+Use the `unsupportedElement` scoped slot on `DocxEditor` or `DocxEditor.Content`:
+
+```vue
+<DocxEditor :document="bytes">
+  <template #unsupportedElement="{ element }">
+    <MyPlaceholder :kind="element.kind" :label="element.label" />
+  </template>
+</DocxEditor>
+```
+
+The slot receives an `UnsupportedElement` with `kind`, `nodeId`, `label`, and
+its drawing or equation layout record. Drawing records include `resource` and
+`placeholderGraphicKind` for selecting a component by failure or graphic type.
+An empty slot, including a false `v-if` branch, keeps the default placeholder.
+Slot content updates with your reactive state. Components retain Vue context and
+local state across same-page repaints. They unmount when their element, page,
+document, or slot disappears. The existing layout box and saved DOCX remain
+unchanged. Invisible unknown XML is outside this hook.

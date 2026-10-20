@@ -609,7 +609,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The extent is reserved with a labelled placeholder. The chart payload is preserved generically, not edited.',
+      'The extent is reserved with a labelled placeholder. React renderUnsupportedElement and the Vue unsupportedElement scoped slot replace the fallback with an application component. The original chart payload and layout remain preserved.',
   },
   {
     id: 'images.smartart',
@@ -620,7 +620,8 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
-    notes: 'Same placeholder policy as charts. The payload is preserved inertly.',
+    notes:
+      'Same customizable placeholder policy as charts. Application components can replace the visible fallback without changing the preserved payload or layout.',
   },
   {
     id: 'images.ink',

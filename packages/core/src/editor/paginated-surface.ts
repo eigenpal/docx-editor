@@ -3,6 +3,7 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
+import { isUnsupportedComponentTarget } from '../output/unsupported-elements.ts';
 import {
   openTreeSession,
   type TreeApplyResult,
@@ -5949,6 +5950,7 @@ export function mountPaginatedSurface(
     'ContextMenu',
   ]);
   const onDrawingPointerGesture = (event: Event): void => {
+    if (isUnsupportedComponentTarget(event.target)) return;
     if (event instanceof PointerEvent && event.button !== 0) return;
     const element = event.target instanceof Element ? event.target : null;
     const drawingId = element
@@ -5960,6 +5962,7 @@ export function mountPaginatedSurface(
     );
   };
   const onDrawingKeyGesture = (event: Event): void => {
+    if (isUnsupportedComponentTarget(event.target)) return;
     if (event instanceof KeyboardEvent && NON_DESELECTING_KEYS.has(event.key)) return;
     // Delete/Backspace ON a selected drawing deletes THE DRAWING — Word's object gesture.
     // Without this the key fell through to the text keymap at a collapsed caret, where a

@@ -35,6 +35,8 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   // Title-bar render props; Vue uses named slots with the same names.
   'renderTitleBarLeft',
   'renderTitleBarRight',
+  // Unsupported-content render prop; Vue supplies a typed scoped slot.
+  'renderUnsupportedElement',
 ]);
 
 function extractInterfaceBody(source, name) {

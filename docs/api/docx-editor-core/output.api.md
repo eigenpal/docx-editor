@@ -11,6 +11,9 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
+export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
+
+// @public
 export interface OverlayRect {
     readonly className?: string;
     // (undocumented)
@@ -93,6 +96,33 @@ export interface SelectionOverlayOptions {
     readonly className?: string;
     readonly pageOffsetX?: ReadonlyMap<number, number>;
     readonly scale: number;
+}
+
+// @public
+export type UnsupportedElement = {
+    readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
+    readonly kind: 'drawing';
+    readonly label: string;
+    readonly nodeId: string;
+} | {
+    readonly equation: EquationSpanRecord;
+    readonly kind: 'equation';
+    readonly label: string;
+    readonly nodeId: string;
+};
+
+// @public
+export interface UnsupportedElementHost {
+    // (undocumented)
+    readonly element: HTMLElement;
+    // (undocumented)
+    readonly fallback: HTMLElement;
+    readonly key: string;
+    setCustomized(custom: boolean): void;
+    // (undocumented)
+    readonly slot: HTMLElement;
+    // (undocumented)
+    readonly unsupported: UnsupportedElement;
 }
 
 // (No @packageDocumentation comment for this package)

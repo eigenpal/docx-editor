@@ -1,3 +1,5 @@
+import type { UnsupportedElement } from '@docx-editor.dev/core/output';
+import { UnsupportedElements } from './UnsupportedElements';
 import {
   defineComponent,
   h,
@@ -6,6 +8,8 @@ import {
   onUnmounted,
   shallowRef,
   watch,
+  type SlotsType,
+  type VNodeChild,
 } from 'vue';
 import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
@@ -29,11 +33,15 @@ export interface DocxEditorContentProps {
 export const DocxEditorContent = defineComponent({
   name: 'DocxEditorContent',
   inheritAttrs: false,
+  slots: Object as SlotsType<{
+    /** Replace a placeholder. Empty content keeps the built-in fallback. */
+    unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
+  }>,
   props: {
     class: { type: String, default: undefined },
     className: { type: String, default: undefined },
   },
-  setup(props) {
+  setup(props, { slots }) {
     const editorRef = useDocxEditor();
     const imageInsert = useImageInsertOptional();
     const elementRef = shallowRef<HTMLDivElement | null>(null);
@@ -118,6 +126,12 @@ export const DocxEditorContent = defineComponent({
             onDragover: onDragOver,
             onDrop,
           }),
+          elementRef.value && slots.unsupportedElement
+            ? h(UnsupportedElements, {
+                container: elementRef.value,
+                render: (element: UnsupportedElement) => slots.unsupportedElement?.({ element }),
+              })
+            : null,
           editorRef.value
             ? h(ImageSelectionOverlay, {
                 containerRef: elementRef,

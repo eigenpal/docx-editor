@@ -1,5 +1,6 @@
 // Paint equation geometry without parsing OMML or measuring DOM.
 
+import { markUnsupportedElement } from './unsupported-elements.ts';
 import type { EquationGeometry, EquationSpanRecord } from '@docx-editor.dev/core/layout';
 
 function place(
@@ -48,10 +49,12 @@ function paintNode(
   document: Document,
   host: DocumentFragment,
   node: EquationGeometry,
+  equation: EquationSpanRecord,
   scale: number,
   parentX = 0,
   parentY = 0,
-  ancestors: readonly string[] = []
+  ancestors: readonly string[] = [],
+  path = '0'
 ): void {
   const x = parentX + node.box.x;
   const y = parentY + node.box.y;
@@ -70,14 +73,43 @@ function paintNode(
       element.style.fontSize = `${node.fontSizePt * scale}px`;
       element.style.lineHeight = `${node.box.height * scale}px`;
       element.style.whiteSpace = 'pre';
+      if (node.kind === 'fallback') {
+        const fallback = document.createElement('span');
+        fallback.textContent = node.text;
+        element.textContent = '';
+        element.append(fallback);
+        markUnsupportedElement(
+          element,
+          fallback,
+          {
+            kind: 'equation',
+            nodeId: equation.sourceNodeId,
+            label: node.text,
+            equation,
+          },
+          undefined,
+          path
+        );
+      }
       host.append(element);
       break;
     }
     case 'row':
-      for (const child of node.items) paintNode(document, host, child, scale, x, y, classes);
+      for (const [index, child] of node.items.entries())
+        paintNode(document, host, child, equation, scale, x, y, classes, `${path}.${index}`);
       break;
     case 'fraction':
-      paintNode(document, host, node.numerator, scale, x, y, classes);
+      paintNode(
+        document,
+        host,
+        node.numerator,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.numerator`
+      );
       host.append(
         rule(
           document,
@@ -86,11 +118,22 @@ function paintNode(
           scale
         )
       );
-      paintNode(document, host, node.denominator, scale, x, y, classes);
+      paintNode(
+        document,
+        host,
+        node.denominator,
+        equation,
+        scale,
+        x,
+        y,
+        classes,
+        `${path}.denominator`
+      );
       break;
     case 'radical':
-      paintNode(document, host, node.sign, scale, x, y, classes);
-      if (node.degree) paintNode(document, host, node.degree, scale, x, y, classes);
+      paintNode(document, host, node.sign, equation, scale, x, y, classes, `${path}.sign`);
+      if (node.degree)
+        paintNode(document, host, node.degree, equation, scale, x, y, classes, `${path}.degree`);
       host.append(
         rule(
           document,
@@ -99,18 +142,62 @@ function paintNode(
           scale
         )
       );
-      paintNode(document, host, node.radicand, scale, x, y, classes);
+      paintNode(document, host, node.radicand, equation, scale, x, y, classes, `${path}.radicand`);
       break;
     case 'script':
-      paintNode(document, host, node.base, scale, x, y, classes);
-      if (node.subscript) paintNode(document, host, node.subscript, scale, x, y, classes);
-      if (node.superscript) paintNode(document, host, node.superscript, scale, x, y, classes);
+      paintNode(document, host, node.base, equation, scale, x, y, classes, `${path}.base`);
+      if (node.subscript)
+        paintNode(
+          document,
+          host,
+          node.subscript,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.subscript`
+        );
+      if (node.superscript)
+        paintNode(
+          document,
+          host,
+          node.superscript,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.superscript`
+        );
       break;
     case 'nary':
-      paintNode(document, host, node.operator, scale, x, y, classes);
-      if (node.lowerLimit) paintNode(document, host, node.lowerLimit, scale, x, y, classes);
-      if (node.upperLimit) paintNode(document, host, node.upperLimit, scale, x, y, classes);
-      paintNode(document, host, node.body, scale, x, y, classes);
+      paintNode(document, host, node.operator, equation, scale, x, y, classes, `${path}.operator`);
+      if (node.lowerLimit)
+        paintNode(
+          document,
+          host,
+          node.lowerLimit,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.lowerLimit`
+        );
+      if (node.upperLimit)
+        paintNode(
+          document,
+          host,
+          node.upperLimit,
+          equation,
+          scale,
+          x,
+          y,
+          classes,
+          `${path}.upperLimit`
+        );
+      paintNode(document, host, node.body, equation, scale, x, y, classes, `${path}.body`);
       break;
   }
 }
@@ -139,6 +226,6 @@ export function mountEquationGeometry(
   // published descent so the equation's internal baseline meets the surrounding text.
   host.style.verticalAlign = `${-(geometry.box.height - geometry.baseline) * scale}px`;
   const fragment = document.createDocumentFragment();
-  paintNode(document, fragment, geometry, scale);
+  paintNode(document, fragment, geometry, equation, scale);
   host.append(fragment);
 }

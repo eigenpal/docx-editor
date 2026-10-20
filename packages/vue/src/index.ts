@@ -423,3 +423,5 @@ export type {
   RevisionStyles,
 } from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
+
+export type { UnsupportedElement } from '@docx-editor.dev/core/output';

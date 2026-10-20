@@ -10,6 +10,8 @@ import {
   watch,
   type CSSProperties,
   type PropType,
+  type SlotsType,
+  type VNodeChild,
   type VNode,
 } from 'vue';
 import type { TranslationKey } from '../i18n';
@@ -18,6 +20,7 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
+import type { UnsupportedElement } from '@docx-editor.dev/core/output';
 import { DocxEditorLoading } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
@@ -144,9 +147,25 @@ const ScopedChrome = defineComponent({
   },
 });
 
+const docxEditorSlots = Object as SlotsType<{
+  default?: () => VNodeChild;
+  titleBarLeft?: () => VNodeChild;
+  titleBarRight?: () => VNodeChild;
+  unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
+}>;
+
 /** @public */
 export interface DocxEditorNamespace {
   (props: DocxEditorProps): VNode;
+  new (): {
+    $props: DocxEditorProps;
+    $slots: {
+      default?: () => VNodeChild;
+      titleBarLeft?: () => VNodeChild;
+      titleBarRight?: () => VNodeChild;
+      unsupportedElement?: (props: { element: UnsupportedElement }) => VNodeChild;
+    };
+  };
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
@@ -222,6 +241,7 @@ const docxEditorSugarProps = {
 
 const DocxEditorFrame = defineComponent({
   name: 'DocxEditorFrame',
+  slots: docxEditorSlots,
   inheritAttrs: false,
   props: docxEditorFrameProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
@@ -325,7 +345,7 @@ const DocxEditorFrame = defineComponent({
           default: () => [
             chrome.value ? h(DocxEditorHeaderFooterChrome) : null,
             chrome.value ? h(DocxEditorNotesChrome) : null,
-            h(DocxEditorContent),
+            h(DocxEditorContent, null, { unsupportedElement: slots.unsupportedElement }),
             h(DocxEditorHyperLink, { hidden: hyperlinkPopup.value === false }),
             h(DocxEditorEquation),
             contextMenu.value === false
@@ -436,6 +456,7 @@ const DocxEditorFrame = defineComponent({
 
 const DocxEditorImpl = defineComponent({
   name: 'DocxEditor',
+  slots: docxEditorSlots,
   inheritAttrs: false,
   props: docxEditorSugarProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
@@ -469,9 +490,9 @@ const DocxEditorImpl = defineComponent({
         api.value?.snapshot(options) ?? createDocxEditorRefApi(() => null).snapshot(options),
     } satisfies DocxEditorRef);
 
-    const { i18n, ...frameProps } = props;
-    return () =>
-      h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
+    return () => {
+      const { i18n, ...frameProps } = props;
+      return h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
         default: () =>
           h(
             DocxEditorFrame,
@@ -512,9 +533,11 @@ const DocxEditorImpl = defineComponent({
               default: slots.default,
               titleBarLeft: slots.titleBarLeft,
               titleBarRight: slots.titleBarRight,
+              unsupportedElement: slots.unsupportedElement,
             }
           ),
       });
+    };
   },
 });
 

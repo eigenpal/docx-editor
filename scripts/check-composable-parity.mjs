@@ -80,7 +80,25 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
     issues.push(`INTERFACE '${name}' missing from Vue snapshot`);
     return;
   }
+  // Content is a component, so its Vue renderer is a typed scoped slot rather than
+  // a prop. Check the complete published slot signature before reconciling the member.
+  const contentRenderer =
+    name === 'DocxEditorContentProps' &&
+    extractInterfaceMemberTypes(reactSnap, name)?.get('renderUnsupportedElement');
+  const contentDeclaration =
+    vueSnap.match(/export const DocxEditorContent:[\s\S]*?(?=\n\/\/ @|\nexport |$)/)?.[0] ?? '';
+  const nativeContentSlot =
+    contentRenderer &&
+    normalizeType(contentRenderer) ===
+      normalizeType('(element: UnsupportedElement) => DocxEditorChildren | null') &&
+    /SlotsType<\{\s*unsupportedElement\?: \(props: \{\s*element: UnsupportedElement;\s*\}\) => VNodeChild;\s*\}>/.test(
+      contentDeclaration
+    );
   const comparedVueFields = new Set(vueFields);
+  if (nativeContentSlot) {
+    comparedVueFields.add('renderUnsupportedElement');
+    stats.memberTypeChecks += 1;
+  }
   if (reactFields.has('className')) comparedVueFields.delete('class');
   for (const k of reactFields) {
     if (!comparedVueFields.has(k)) {
@@ -95,6 +113,7 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
   const vueTypes = extractInterfaceMemberTypes(vueSnap, name);
   if (!reactTypes || !vueTypes) return;
   for (const k of reactFields) {
+    if (nativeContentSlot && k === 'renderUnsupportedElement') continue;
     if (!reactTypes.has(k)) {
       issues.push(`INTERFACE '${name}.${k}': React member type was not parsed`);
       continue;
@@ -175,9 +194,7 @@ function compareTypeAliases(reactSnap, vueSnap, issues, stats, slotFormAliases) 
 }
 
 export function runComposableParityCheck({ reactSnap, vueSnap, slotFormAliases } = {}) {
-  const reactSnapshot = normalizeSnapshotText(
-    reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8')
-  );
+  const reactSnapshot = normalizeSnapshotText(reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8'));
   const vueSnapshot = normalizeSnapshotText(vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const issues = [];
   const stats = { memberTypeChecks: 0, aliasChecks: 0, slotFormAliasChecks: 0 };
@@ -228,8 +245,15 @@ function main() {
     }
   }
 
-  const { issues, useExportCount, interfaceCount, memberTypeChecks, aliasChecks, slotFormAliasChecks, slotFormAliasNames } =
-    runComposableParityCheck();
+  const {
+    issues,
+    useExportCount,
+    interfaceCount,
+    memberTypeChecks,
+    aliasChecks,
+    slotFormAliasChecks,
+    slotFormAliasNames,
+  } = runComposableParityCheck();
   console.log('Composable parity: docs/api/docx-editor-{react,vue}/index.api.md');
   console.log(`  use* exports checked: ${useExportCount}`);
   console.log(`  interfaces checked:   ${interfaceCount}`);
@@ -259,7 +283,9 @@ function main() {
   }
 
   if (issues.length > 0) {
-    console.error(`\nComposable parity drift: ${issues.length} issue${issues.length === 1 ? '' : 's'}`);
+    console.error(
+      `\nComposable parity drift: ${issues.length} issue${issues.length === 1 ? '' : 's'}`
+    );
     for (const issue of issues) issues.length <= 50 ? console.error(`  - ${issue}`) : null;
     if (issues.length > 50) {
       for (const issue of issues.slice(0, 50)) console.error(`  - ${issue}`);
@@ -465,6 +491,31 @@ export interface SampleResult { readonly value: SharedAlias; }
   if (!issues.some((i) => i.includes("TYPE ALIAS 'SharedAlias'"))) {
     console.error('Self-test FAIL: expected type alias body mismatch');
     process.exit(1);
+  }
+
+  const contentReact = `
+export interface DocxEditorContentProps {
+    renderUnsupportedElement?: (element: UnsupportedElement) => DocxEditorChildren | null;
+}
+`;
+  const contentVue = `
+export const DocxEditorContent: DefineComponent<{}, SlotsType<{
+    unsupportedElement?: (props: {
+        element: UnsupportedElement;
+    }) => VNodeChild;
+}>>;
+export interface DocxEditorContentProps {}
+`;
+  for (const [fixture, expectedIssues] of [
+    [contentVue, false],
+    [contentVue.replace('unsupportedElement?', 'wrongSlot?'), true],
+    [contentVue.replace('element: UnsupportedElement', 'element: string'), true],
+  ]) {
+    const result = runComposableParityCheck({ reactSnap: contentReact, vueSnap: fixture });
+    if (result.issues.length > 0 !== expectedIssues) {
+      console.error('Self-test FAIL: Content render prop must match the typed Vue scoped slot');
+      process.exit(1);
+    }
   }
 
   const slotFormAliases = {

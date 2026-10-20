@@ -69,6 +69,10 @@ import {
   type DrawingPaintStrings,
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
+import {
+  captureUnsupportedElementFocus,
+  notifyUnsupportedElementsPaint,
+} from './unsupported-elements.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
 
@@ -2848,6 +2852,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   options: PaintOptions,
   authorSlots?: ReadonlyMap<string, number>
 ): void {
+  captureUnsupportedElementFocus(container);
   const chrome = options.contentControlChrome;
   // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
   // entering a TOC rebuild every page, which detached the node the gesture started on.
@@ -3000,4 +3005,5 @@ export function paintSemanticLayoutWithAuthorSlots(
     container.insertBefore(entry.element, cursor);
   }
   applyHeaderFooterPaintChrome(pages, resolved);
+  notifyUnsupportedElementsPaint(container);
 }

@@ -87,6 +87,7 @@ import { RulerUnit } from '@docx-editor.dev/core/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
+import { SlotsType } from 'vue';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
@@ -99,8 +100,10 @@ import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
+import { UnsupportedElement } from '@docx-editor.dev/core/output';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
+import { VNodeChild } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
@@ -2127,7 +2130,11 @@ export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     class: string;
     className: string;
-}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+}, SlotsType<{
+    unsupportedElement?: (props: {
+        element: UnsupportedElement;
+    }) => VNodeChild;
+}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocxEditorContentControl: DocxEditorContentControlNamespace;
@@ -2626,6 +2633,18 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace {
     // (undocumented)
     (props: DocxEditorProps): VNode;
+    // (undocumented)
+    new (): {
+        $props: DocxEditorProps;
+        $slots: {
+            default?: () => VNodeChild;
+            titleBarLeft?: () => VNodeChild;
+            titleBarRight?: () => VNodeChild;
+            unsupportedElement?: (props: {
+                element: UnsupportedElement;
+            }) => VNodeChild;
+        };
+    };
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     // (undocumented)
@@ -5326,6 +5345,8 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 export { TranslationKey }
+
+export { UnsupportedElement }
 
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;

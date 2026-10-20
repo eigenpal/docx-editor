@@ -1,0 +1,46 @@
+import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  observeUnsupportedElements,
+  type UnsupportedElement,
+  type UnsupportedElementHost,
+} from '@docx-editor.dev/core/output';
+
+function Placeholder({ host, children }: { host: UnsupportedElementHost; children: ReactNode }) {
+  const custom = children != null && typeof children !== 'boolean';
+  useLayoutEffect(() => {
+    host.setCustomized(custom);
+    return () => {
+      host.setCustomized(false);
+    };
+  }, [host, custom]);
+  return custom ? createPortal(children, host.slot) : null;
+}
+
+export function UnsupportedElements({
+  container,
+  render,
+}: {
+  container: HTMLElement;
+  render: (element: UnsupportedElement) => ReactNode;
+}) {
+  const [hosts, setHosts] = useState<readonly UnsupportedElementHost[]>([]);
+  useLayoutEffect(() => {
+    let latest: readonly UnsupportedElementHost[] = [];
+    const stop = observeUnsupportedElements(container, (next) => {
+      latest = next;
+      setHosts(next);
+    });
+    return () => {
+      stop();
+      // A paint can publish a new host before React commits its scheduled render.
+      // Restore that host too if the override disappears in the same interval.
+      for (const host of latest) host.setCustomized(false);
+    };
+  }, [container]);
+  return hosts.map((host) => (
+    <Placeholder key={host.key} host={host}>
+      {render(host.unsupported)}
+    </Placeholder>
+  ));
+}

@@ -35,3 +35,9 @@ export {
   type OverlayRect,
   type SelectionOverlayOptions,
 } from './semantic-selection-overlay.ts';
+
+export {
+  observeUnsupportedElements,
+  type UnsupportedElement,
+  type UnsupportedElementHost,
+} from './unsupported-elements.ts';

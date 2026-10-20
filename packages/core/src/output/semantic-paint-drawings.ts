@@ -4,6 +4,7 @@
 // DOM is built with createElement/setAttribute/textContent only; styles use validated numbers
 // or fixed tokens — never raw authored markup or unescaped file-derived CSS.
 
+import { markUnsupportedElement } from './unsupported-elements.ts';
 import type {
   RenderableImageMime,
   ValidatedImageBytesHandle,
@@ -394,6 +395,17 @@ function paintPlaceholderCard(
   label.className = 'docx-drawing-placeholder-label';
   label.textContent = refusalLabel(drawing, ctx.strings);
   card.append(label);
+  markUnsupportedElement(
+    card,
+    label,
+    {
+      kind: 'drawing',
+      nodeId: drawing.drawingNodeId,
+      label: label.textContent,
+      drawing,
+    },
+    outer
+  );
   outer.append(card);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {

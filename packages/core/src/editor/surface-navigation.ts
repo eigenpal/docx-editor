@@ -17,6 +17,7 @@
 // `window.open` is called from ONE place in the whole engine — `openExternal` below — and
 // only ever with the sanitized projection, never with an authored target.
 
+import { isUnsupportedComponentTarget } from '../output/unsupported-elements.ts';
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
 import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core/store';
@@ -179,6 +180,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
   }
 
   const onPointerDown = (event: PointerEvent): void => {
+    if (isUnsupportedComponentTarget(event.target)) return;
     pressed = null;
     const target = event.target as Element | null;
     const resolved = linkTargetFrom(target as HTMLElement | null);
@@ -195,6 +197,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
   };
 
   const onClick = (event: MouseEvent): void => {
+    if (isUnsupportedComponentTarget(event.target)) return;
     const target = event.target as Element | null;
     const live = linkTargetFrom(target as HTMLElement | null);
     if (!live) {

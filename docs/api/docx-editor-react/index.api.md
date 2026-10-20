@@ -98,6 +98,7 @@ import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
+import { UnsupportedElement } from '@docx-editor.dev/core/output';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
@@ -395,6 +396,7 @@ export interface DocxEditorContentProps {
     // (undocumented)
     children?: DocxEditorChildren;
     className?: string;
+    renderUnsupportedElement?: (element: UnsupportedElement) => DocxEditorChildren | null;
 }
 
 // @public
@@ -750,6 +752,7 @@ export interface DocxEditorProps {
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
     readonly renderTitleBarRight?: () => DocxEditorChildren;
+    renderUnsupportedElement?: DocxEditorContentProps['renderUnsupportedElement'];
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
@@ -2117,6 +2120,8 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 export { TranslationKey }
+
+export { UnsupportedElement }
 
 // @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;

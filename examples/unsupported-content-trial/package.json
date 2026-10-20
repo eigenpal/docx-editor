@@ -1,0 +1,9 @@
+{
+  "name": "unsupported-content-trial",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5199",
+    "build": "vite build"
+  }
+}

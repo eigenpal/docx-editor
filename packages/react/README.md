@@ -138,3 +138,25 @@ engine. Read `isEnabled` and show `disabledReason`.
 ## License
 
 Apache-2.0
+
+### Custom unsupported-content placeholders
+
+Use `renderUnsupportedElement` on `DocxEditor` or `DocxEditor.Content` to replace a
+built-in drawing or equation fallback with your own component:
+
+```tsx
+<DocxEditor
+  document={bytes}
+  renderUnsupportedElement={(element) => (
+    <MyPlaceholder kind={element.kind} label={element.label} />
+  )}
+/>
+```
+
+The callback receives an `UnsupportedElement` with `kind`, `nodeId`, `label`, and
+the drawing or equation layout record. For drawings, inspect
+`element.drawing.resource` and `element.drawing.placeholderGraphicKind` to choose
+a component for a specific failure or graphic type. Return `null` to retain the
+default placeholder. Components keep React context and local state across same-page repaints. They
+unmount when their element, page, document, or override disappears. The existing layout box and saved DOCX remain unchanged.
+This hook covers rendered fallbacks; it does not expose invisible unknown XML.

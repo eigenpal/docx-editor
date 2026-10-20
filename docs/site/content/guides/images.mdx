@@ -167,6 +167,59 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 - Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
 - Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
 
+## Custom unsupported-content components
+
+Customize any rendered drawing or equation fallback with a framework component.
+The editor keeps the original layout box and source XML.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor
+  document={bytes}
+  renderUnsupportedElement={(element) => <MyUnsupportedContent element={element} />}
+/>
+```
+
+The same render prop works on `DocxEditor.Content` when you compose the editor.
+Return `null` to keep the built-in fallback for a particular element.
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes">
+  <template #unsupportedElement="{ element }">
+    <MyUnsupportedContent :element="element" />
+  </template>
+</DocxEditor>
+```
+
+The same named scoped slot works on `DocxEditor.Content`.
+Use `v-if` to customize selected elements; an empty slot keeps the built-in fallback.
+
+</Framework>
+</FrameworkTabs>
+
+`element` is the exported `UnsupportedElement` union:
+
+- `kind` is `drawing` or `equation`.
+- `nodeId` identifies the preserved source element. Repeated headers can show the same source on several pages.
+- `label` contains the default fallback text.
+- `drawing` or `equation` contains the corresponding layout record.
+
+For a drawing, inspect `element.drawing.resource` for the failure state.
+Inspect `element.drawing.placeholderGraphicKind` to distinguish graphic categories when available.
+Labels can be localized; use the typed record when choosing a component.
+
+Custom components keep framework context and local state across same-page repaints.
+They unmount when their element, page, document, or override disappears.
+Controls inside a custom component own their keyboard, clipboard, context-menu, and drop events.
+The component fits the existing box; its size does not change pagination.
+This extension covers visible fallbacks, including failed images and unsupported equation parts.
+It does not surface invisible unknown XML or implement native chart, SmartArt, or DrawingML rendering.
+
 ## Drawing limits
 
 | Drawing content                                         | Status                                               |

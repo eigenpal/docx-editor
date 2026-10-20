@@ -1195,6 +1195,23 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted, #6b7280);
 }
 
+:where(.docx-unsupported-slot) {
+  font: 11px/1.3 var(--doc-font-ui, system-ui, sans-serif);
+  white-space: normal;
+}
+
+.docx-drawing-placeholder-card[data-docx-customized] {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.docx-drawing-placeholder-card[data-docx-customized] > .docx-unsupported-slot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .docx-drawing-placeholder-label {
   font: 11px/1.3 var(--doc-font-ui, system-ui, sans-serif);
   text-align: center;
@@ -1216,8 +1233,8 @@ a.docx-hyperlink:focus-visible {
   max-height: none;
 }
 
-.docx-editor.dark .docx-drawing-placeholder-card,
-.dark .docx-drawing-placeholder-card {
+.docx-editor.dark .docx-drawing-placeholder-card:not([data-docx-customized]),
+.dark .docx-drawing-placeholder-card:not([data-docx-customized]) {
   background: var(--doc-surface-muted, #2a2a2a);
   border-color: var(--doc-border, #404040);
   color: var(--doc-text-muted, #a3a3a3);

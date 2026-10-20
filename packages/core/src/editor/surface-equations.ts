@@ -1,5 +1,6 @@
 // Atomic Office Math reads and writes for the paginated surface.
 
+import { isUnsupportedComponentTarget } from '../output/unsupported-elements.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
@@ -178,6 +179,7 @@ export function createEquationInteraction(deps: {
   let pressed: { readonly equationId: string; readonly rect: EquationActivation['rect'] } | null =
     null;
   const targetFrom = (value: EventTarget | null): HTMLElement | null => {
+    if (isUnsupportedComponentTarget(value)) return null;
     const view = deps.pagesLayer.ownerDocument.defaultView;
     if (!view || !(value instanceof view.Element)) return null;
     const target = value.closest<HTMLElement>('[data-docx-equation]');

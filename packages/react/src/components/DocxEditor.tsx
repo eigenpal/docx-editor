@@ -298,7 +298,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       >
         {chrome ? <DocxEditorHeaderFooterChrome /> : null}
         {chrome ? <DocxEditorNotesChrome /> : null}
-        <DocxEditorContent />
+        <DocxEditorContent renderUnsupportedElement={props.renderUnsupportedElement} />
         <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
         <DocxEditorEquation />
         {contextMenu === false ? null : (
