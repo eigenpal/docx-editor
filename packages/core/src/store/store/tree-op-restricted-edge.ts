@@ -116,14 +116,19 @@ export function restrictedControlsWithEdgeAt(
   offset: number,
   offsets: ParagraphOffsetIndex
 ): OoxmlElement[] {
+  return restrictedControlsIn(paragraph).filter((node) => {
+    const span = offsets.spanOf(node);
+    return span !== null && (span.start === offset || span.end === offset);
+  });
+}
+
+/** Every control in the paragraph that typing cannot enter, outermost first. */
+function restrictedControlsIn(paragraph: OoxmlParagraphNode): OoxmlElement[] {
   if (!holdsContentControl(paragraph)) return [];
   const found: OoxmlElement[] = [];
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
-    if (isContentControlNode(node) && refusesTypedContent(node)) {
-      const span = offsets.spanOf(node);
-      if (span !== null && (span.start === offset || span.end === offset)) found.push(node);
-    }
+    if (isContentControlNode(node) && refusesTypedContent(node)) found.push(node);
     node.children.forEach(walk);
   };
   paragraph.children.forEach(walk);
@@ -147,7 +152,7 @@ export interface RunOffsetSpan {
  * paragraph passed that style to every word typed after it, and at the start of a paragraph
  * typed text lost the formatting of the words beside it. The source is the run that starts
  * right after the offset, else the nearest run before it, else the nearest run after it, each
- * outside the control.
+ * outside every such control.
  *
  * `undefined` when the ordinary rule applies: no such control has an edge at `offset`, or the
  * run to the left is outside it. `null` when only the control holds text, so the paragraph
@@ -160,14 +165,21 @@ export function formattingRunBesideRestrictedControl(
   offsets: ParagraphOffsetIndex,
   runs: readonly RunOffsetSpan[]
 ): string | null | undefined {
-  const controls = restrictedControlsWithEdgeAt(paragraph, offset, offsets);
-  if (controls.length === 0) return undefined;
-  const outside = (run: RunOffsetSpan) =>
-    run.start < run.end && controls.every((control) => findWithin(control, run.runId) === null);
+  const restricted = restrictedControlsIn(paragraph);
+  const edges = restricted.filter((node) => {
+    const span = offsets.spanOf(node);
+    return span !== null && (span.start === offset || span.end === offset);
+  });
+  if (edges.length === 0) return undefined;
+  const inAny = (run: RunOffsetSpan, controls: readonly OoxmlElement[]) =>
+    controls.some((control) => findWithin(control, run.runId) !== null);
+  // Outside EVERY such control, not only the one at the caret: the run before a control can
+  // belong to another control right beside it.
+  const outside = (run: RunOffsetSpan) => run.start < run.end && !inAny(run, restricted);
   let left: RunOffsetSpan | undefined;
   for (const run of runs) if (run.start < run.end && run.end === offset) left = run;
   const right = runs.find((run) => run.start < run.end && run.start === offset);
-  if (left ? outside(left) : !right || outside(right)) return undefined;
+  if (left ? !inAny(left, edges) : !right || !inAny(right, edges)) return undefined;
   let before: RunOffsetSpan | undefined;
   for (const run of runs) if (run.end <= offset && outside(run)) before = run;
   const source =

@@ -71,6 +71,17 @@ test('typing after a locked control mid-paragraph keeps the text formatting', ()
   expect(run).toEqual({ properties: '<w:i/>', inControl: false });
 });
 
+test('typing beside two adjacent locked controls skips both', () => {
+  for (const tracked of [false, true]) {
+    const end = typedRun(typed(italic('see ') + pill() + pill(), 10, tracked));
+    expect(end).toEqual({ properties: '<w:i/>', inControl: false });
+    const start = typedRun(typed(pill() + pill() + italic(' more'), 0, tracked));
+    expect(start).toEqual({ properties: '<w:i/>', inControl: false });
+  }
+  const between = part(`<w:p>${italic('see ')}${pill()}${pill()}</w:p>`);
+  expect(caretFormatting(between, 10)).toBe('italic');
+});
+
 test('typing beside a locked control that is the only text takes no control formatting', () => {
   const run = typedRun(typed(pill(), 3));
   expect(run).toEqual({ properties: '', inControl: false });
