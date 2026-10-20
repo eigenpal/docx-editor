@@ -23,7 +23,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *   `stale`, `locked`, `write-failed`, `verification-failed`.
  * - The rollback failed too, so the paragraph can hold some of the proposal: `rollback-failed`.
  *
- * @public
+ * @beta
  */
 export type RewriteErrorCode =
   | 'invalid-output'
@@ -72,7 +72,7 @@ const MODEL_OUTPUT_CODES: ReadonlySet<RewriteErrorCode> = new Set([
  * }
  * ```
  *
- * @public
+ * @beta
  */
 export class RewriteError extends Error {
   /** Always `'RewriteError'`. */

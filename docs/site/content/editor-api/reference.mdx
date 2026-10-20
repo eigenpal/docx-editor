@@ -32,6 +32,8 @@ A declaration or enum value does not guarantee runtime support for every documen
 
 The `@docx-editor.dev/editor-api/agent` entry holds helpers next to the object model. They are not Office.js members. They use only the Office.js-shaped calls of the object model on the `context` and `paragraph` that you pass in.
 
+The agent helpers are in beta. Their API can change in a minor release, and the release notes describe each change. The prompt text and the placeholder legend can change in any release. To control the exact prompt, build it from `draft.text` and `draft.placeholders`.
+
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
 | `proposeRewrite`, `proposeRewrites`, `prepareRewrite` | Propose a model's rewrite of a paragraph as the fewest tracked changes; `RewriteOptions`, `ProposeRewriteOptions`, and `ProposeRewritesOptions` take `instruction`, `keepPlaceholders`, `retries`, `signal`, `timeoutMs`, and `concurrency` | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |

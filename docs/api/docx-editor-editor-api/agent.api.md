@@ -4,33 +4,33 @@
 
 ```ts
 
-// @public
+// @beta
 export function prepareRewrite(context: RequestContext, paragraph: Paragraph, options?: RewriteOptions): Promise<RewriteDraft>;
 
-// @public
+// @beta
 export function proposeRewrite(context: RequestContext, paragraph: Paragraph, rewrite: RewriteFunction, options?: ProposeRewriteOptions): Promise<RewriteResult>;
 
-// @public
+// @beta
 export interface ProposeRewriteOptions extends RewriteOptions {
     readonly retries?: number;
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
 }
 
-// @public
+// @beta
 export function proposeRewrites(context: RequestContext, items: readonly RewriteItem[], options?: ProposeRewritesOptions): Promise<RewriteSettledResult[]>;
 
-// @public
+// @beta
 export interface ProposeRewritesOptions extends ProposeRewriteOptions {
     readonly concurrency?: number;
 }
 
-// @public
+// @beta
 export interface RewriteCall {
     readonly signal: AbortSignal;
 }
 
-// @public
+// @beta
 export interface RewriteDraft {
     apply(modelText: string): Promise<RewriteResult>;
     readonly feedback?: RewriteFeedback;
@@ -41,7 +41,7 @@ export interface RewriteDraft {
     readonly text: string;
 }
 
-// @public
+// @beta
 export class RewriteError extends Error {
     constructor(code: RewriteErrorCode, message: string, options?: {
         cause?: unknown;
@@ -52,31 +52,31 @@ export class RewriteError extends Error {
     suppressed?: unknown;
 }
 
-// @public
+// @beta
 export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'placeholder-grouped' | 'model-failed' | 'context-used' | 'aborted' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
 
-// @public
+// @beta
 export interface RewriteFeedback {
     readonly error: RewriteError;
     readonly output: string;
 }
 
-// @public
+// @beta
 export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
 
-// @public
+// @beta
 export interface RewriteItem {
     readonly paragraph: Paragraph;
     readonly rewrite: RewriteFunction;
 }
 
-// @public
+// @beta
 export interface RewriteOptions {
     readonly instruction?: string;
     readonly keepPlaceholders?: boolean;
 }
 
-// @public
+// @beta
 export interface RewritePlaceholder {
     readonly description: string;
     readonly kind: RewritePlaceholderKind;
@@ -84,10 +84,10 @@ export interface RewritePlaceholder {
     readonly text: string;
 }
 
-// @public
+// @beta
 export type RewritePlaceholderKind = 'field' | 'content-control' | 'picture' | 'equation' | 'note-reference' | 'line-break';
 
-// @public
+// @beta
 export interface RewriteResult {
     readonly changes: number;
     readonly original: string;
@@ -95,7 +95,7 @@ export interface RewriteResult {
     readonly proposed: string;
 }
 
-// @public
+// @beta
 export type RewriteSettledResult = {
     readonly status: 'fulfilled';
     readonly value: RewriteResult;

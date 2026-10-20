@@ -97,7 +97,7 @@ const notProposed = () =>
  * const result = await draft.apply(await callModel(draft.prompt));
  * ```
  *
- * @public
+ * @beta
  */
 export async function prepareRewrite(
   context: RequestContext,

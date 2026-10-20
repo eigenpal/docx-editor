@@ -16,6 +16,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * compatibility scope. They use only the Office.js-shaped calls of
  * `@docx-editor.dev/editor-api`, on the `context` and `paragraph` that you pass in.
  *
+ * The helpers are in beta. Their API can change in a minor release, and the release notes
+ * describe each change. The prompt text and the placeholder legend can change in any release;
+ * to control the exact prompt, build it from `draft.text` and `draft.placeholders`.
+ *
  * @example Rewrite the first paragraph on a server
  * ```ts
  * import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -36,7 +40,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * ```
  *
  * @packageDocumentation
- * @public
+ * @beta
  */
 
 export { prepareRewrite } from './agent/rewrite.ts';

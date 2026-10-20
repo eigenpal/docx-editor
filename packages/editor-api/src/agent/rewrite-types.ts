@@ -13,7 +13,7 @@ import type { RewritePlaceholder } from './rewrite-plan.ts';
 /**
  * How to build the prompt and check the model output.
  *
- * @public
+ * @beta
  */
 export interface RewriteOptions {
   /**
@@ -32,7 +32,7 @@ export interface RewriteOptions {
 /**
  * Options of {@link proposeRewrite}.
  *
- * @public
+ * @beta
  */
 export interface ProposeRewriteOptions extends RewriteOptions {
   /**
@@ -59,7 +59,7 @@ export interface ProposeRewriteOptions extends RewriteOptions {
 /**
  * Options of {@link proposeRewrites}.
  *
- * @public
+ * @beta
  */
 export interface ProposeRewritesOptions extends ProposeRewriteOptions {
   /**
@@ -74,7 +74,7 @@ export interface ProposeRewritesOptions extends ProposeRewriteOptions {
 /**
  * A refused model answer, given to the next attempt.
  *
- * @public
+ * @beta
  */
 export interface RewriteFeedback {
   /** The model output that the helper refused. */
@@ -86,7 +86,7 @@ export interface RewriteFeedback {
 /**
  * A paragraph ready to send to a model: plain data, plus `apply()` for the answer.
  *
- * @public
+ * @beta
  */
 export interface RewriteDraft {
   /** The paragraph's `uniqueLocalId`. */
@@ -120,7 +120,7 @@ export interface RewriteDraft {
 /**
  * What a proposed rewrite changed. Plain data.
  *
- * @public
+ * @beta
  */
 export interface RewriteResult {
   /** The paragraph's `uniqueLocalId`. */
@@ -145,14 +145,14 @@ export interface RewriteResult {
  * `context-used`. If it throws or times out, the helper calls it again, up to `retries` times,
  * and then reports `model-failed` with your error as `cause`.
  *
- * @public
+ * @beta
  */
 export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
 
 /**
  * What a model call gets besides the draft.
  *
- * @public
+ * @beta
  */
 export interface RewriteCall {
   /** Aborts when `options.signal` aborts or `options.timeoutMs` passes. Pass it to your model client. */
@@ -162,7 +162,7 @@ export interface RewriteCall {
 /**
  * One paragraph for {@link proposeRewrites}.
  *
- * @public
+ * @beta
  */
 export interface RewriteItem {
   /** The paragraph to rewrite. */
@@ -174,7 +174,7 @@ export interface RewriteItem {
 /**
  * The outcome of one {@link RewriteItem}, shaped like a `Promise.allSettled` result.
  *
- * @public
+ * @beta
  */
 export type RewriteSettledResult =
   | { readonly status: 'fulfilled'; readonly value: RewriteResult }

@@ -215,7 +215,7 @@ async function write(
  * });
  * ```
  *
- * @public
+ * @beta
  */
 export async function proposeRewrite(
   context: RequestContext,
@@ -281,7 +281,7 @@ function asRewriteError(error: unknown): RewriteError {
  * );
  * ```
  *
- * @public
+ * @beta
  */
 export async function proposeRewrites(
   context: RequestContext,

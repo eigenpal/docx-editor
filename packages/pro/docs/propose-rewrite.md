@@ -4,6 +4,8 @@
 
 An agent that rewrites a paragraph should propose the smallest set of tracked changes, not one replacement of the whole paragraph. `proposeRewrite` from `@docx-editor.dev/editor-api/agent` does this in one call. It sends the paragraph to your model, compares the answer with the original words, and writes each difference as a tracked change.
 
+The agent helpers are in beta. Their API can change in a minor release, and the release notes describe each change. The prompt text and the placeholder legend can change in any release. To control the exact prompt, build it from `draft.text` and `draft.placeholders`.
+
 ## Rewrite a paragraph
 
 Pass the request context, the paragraph, and a function that calls your model. The following example rewrites the first paragraph on a server:

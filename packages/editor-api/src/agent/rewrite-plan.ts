@@ -17,7 +17,7 @@ import { RewriteError } from './rewrite-error.ts';
 /**
  * What a placeholder stands for.
  *
- * @public
+ * @beta
  */
 export type RewritePlaceholderKind =
   | 'field'
@@ -30,7 +30,7 @@ export type RewritePlaceholderKind =
 /**
  * One placeholder in the draft text, and what it stands for.
  *
- * @public
+ * @beta
  */
 export interface RewritePlaceholder {
   /** The placeholder as the model sees it, such as `⟦1⟧`. */

@@ -348,7 +348,7 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 ### Rewrite a paragraph word by word
 
-To propose a model's rewrite of a paragraph, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It applies the steps in this section for you, keeps fields, equations, note references, and locked controls whole, and rejects only its own changes if a write fails:
+To propose a model's rewrite of a paragraph, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It applies the steps in this section for you, keeps fields, equations, note references, and locked controls whole, and rejects only its own changes if a write fails. The agent helpers are in beta, so their API can change in a minor release:
 
 ```ts
 import { proposeRewrite } from '@docx-editor.dev/editor-api/agent';
