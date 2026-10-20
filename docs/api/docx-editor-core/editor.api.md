@@ -2336,6 +2336,9 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
 
 // @public
+export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
+
+// @public
 export function openEditorWindow(options?: OpenEditorWindowOptions): Promise<EditorWindow | null>;
 
 // @public
@@ -4238,6 +4241,58 @@ export const TWIPS_PER_INCH = 1440;
 
 // @public (undocumented)
 export const twipsToInches: (twips: number) => number;
+
+// @public
+export interface UnsupportedElement {
+    readonly bounds?: LayoutBox;
+    // (undocumented)
+    readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+    // (undocumented)
+    readonly equation?: EquationSpanRecord;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string | null;
+    // (undocumented)
+    readonly nodeId: string;
+    // (undocumented)
+    readonly ownerPartName: string;
+    // (undocumented)
+    readonly placement: 'inline' | 'block';
+    readonly source: OoxmlElement | null;
+}
+
+// @public
+export interface UnsupportedElementHost {
+    // (undocumented)
+    readonly element: HTMLElement;
+    // (undocumented)
+    readonly fallback: HTMLElement;
+    readonly key: string;
+    setCustomized(custom: boolean): void;
+    // (undocumented)
+    readonly slot: HTMLElement;
+    // (undocumented)
+    readonly unsupported: UnsupportedElement;
+}
+
+// @public
+export interface UnsupportedElementLayout {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export interface UnsupportedElementRule {
+    // (undocumented)
+    readonly layout?: UnsupportedElementLayout;
+    // (undocumented)
+    readonly match?: (element: UnsupportedElement) => boolean;
+}
 
 // @public
 export function validateDrawingPositionInput(position: DrawingPositionInput): boolean;

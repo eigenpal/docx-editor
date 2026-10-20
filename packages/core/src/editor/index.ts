@@ -420,6 +420,14 @@ export type {
   RevisionAuthorStyle,
   RevisionStyles,
 } from '../output/revision-presentation.ts';
+// The adapters render custom components over unsupported content through these.
+export {
+  observeUnsupportedElements,
+  type UnsupportedElement,
+  type UnsupportedElementHost,
+  type UnsupportedElementLayout,
+  type UnsupportedElementRule,
+} from '../output/unsupported-elements.ts';
 
 export type {
   TextFormFieldDialogSession,

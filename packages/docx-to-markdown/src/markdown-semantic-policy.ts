@@ -67,6 +67,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     changeSites: 'explicitly-omitted',
     fieldAtom: 'explicitly-omitted',
     projected: 'layout-only',
+    // Component geometry for opaque content; Markdown has no component to place.
+    unsupported: 'layout-only',
     equation: 'represented',
     noteNav: 'represented',
     noteSeparator: 'layout-only',

@@ -56,7 +56,7 @@ import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
-import * as _docx_editor_dev_core_output from '@docx-editor.dev/core/output';
+import * as _docx_editor_dev_core_editor from '@docx-editor.dev/core/editor';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -178,9 +178,9 @@ import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { ToolbarValueMap } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
-import { UnsupportedElement } from '@docx-editor.dev/core/output';
-import { UnsupportedElementLayout } from '@docx-editor.dev/core/output';
-import { UnsupportedElementRule } from '@docx-editor.dev/core/output';
+import { UnsupportedElement } from '@docx-editor.dev/core/editor';
+import { UnsupportedElementLayout } from '@docx-editor.dev/core/editor';
+import { UnsupportedElementRule } from '@docx-editor.dev/core/editor';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
 import { VNodeChild } from 'vue';
@@ -4969,7 +4969,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
         type: PropType<UnsupportedElementRule['match']>;
     };
 }>> & Readonly<{}>, {
-    layout: _docx_editor_dev_core_output.UnsupportedElementLayout | undefined;
+    layout: _docx_editor_dev_core_editor.UnsupportedElementLayout | undefined;
     match: ((element: UnsupportedElement) => boolean) | undefined;
 }, SlotsType<{
     default: (props: {

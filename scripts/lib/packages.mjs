@@ -121,7 +121,7 @@ export const PACKAGES = [
     forgottenExports: {
       logLevel: 'warning',
       allowlist: {
-        editor: ['UnsupportedElementRule'],
+        editor: ['AnchoredDrawingRecord', 'EquationSpanRecord', 'InlineDrawingRecord', 'LayoutBox'],
         index: ['UnsupportedElementRule'],
         layout: ['UnsupportedContentRecord', 'UnsupportedContentResolver'],
         output: [

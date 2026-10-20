@@ -9,7 +9,7 @@ import {
   type SlotsType,
   type VNodeChild,
 } from 'vue';
-import type { UnsupportedElement, UnsupportedElementRule } from '@docx-editor.dev/core/output';
+import type { UnsupportedElement, UnsupportedElementRule } from '@docx-editor.dev/core/editor';
 import { UnsupportedElementRegistryContext } from './unsupported-element-registry';
 import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 

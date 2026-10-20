@@ -17,7 +17,7 @@ import {
   observeUnsupportedElements,
   type UnsupportedElement,
   type UnsupportedElementHost,
-} from '@docx-editor.dev/core/output';
+} from '@docx-editor.dev/core/editor';
 
 // Vue emits comments for false v-if branches and fragments for template groups.
 // These do not replace the visible built-in fallback.

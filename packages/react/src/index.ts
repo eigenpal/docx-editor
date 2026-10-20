@@ -662,7 +662,7 @@ export type {
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,
-} from '@docx-editor.dev/core/output';
+} from '@docx-editor.dev/core/editor';
 export {
   DocxEditorUnsupportedElement,
   type DocxEditorUnsupportedElementProps,

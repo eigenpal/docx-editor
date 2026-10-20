@@ -5,7 +5,7 @@ import {
   type UnsupportedElement,
   type UnsupportedElementHost,
   type UnsupportedElementRule,
-} from '@docx-editor.dev/core/output';
+} from '@docx-editor.dev/core/editor';
 
 export interface UnsupportedElementRegistry {
   register(id: symbol, rule: UnsupportedElementRule): void;

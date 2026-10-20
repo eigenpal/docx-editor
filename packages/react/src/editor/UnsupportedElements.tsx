@@ -4,7 +4,7 @@ import {
   observeUnsupportedElements,
   type UnsupportedElement,
   type UnsupportedElementHost,
-} from '@docx-editor.dev/core/output';
+} from '@docx-editor.dev/core/editor';
 
 export function UnsupportedElementPlaceholder({
   host,
