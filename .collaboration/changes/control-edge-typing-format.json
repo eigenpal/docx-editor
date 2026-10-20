@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text inserted at the outer edge of a control that typing cannot enter copied the run properties of the run to its left, which could be the control's own run, or none at the start of a paragraph.",
+  "after": "That text copies the run properties of the nearest run outside the control, and the caret formatting reads the same run.",
+  "reason": "The rule runs where the insertion is written, and peers receive the written run. The run shape and every shared field and operation are unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/control-edge-typing-format.test.ts",
+    "packages/pro/src/__tests__/insert-custom-node.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-control-edge-typing.test.ts"
+  ],
+  "changeset": "control-edge-typing-format",
+  "migration": null
+}
