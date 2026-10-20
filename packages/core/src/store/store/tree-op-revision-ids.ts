@@ -21,6 +21,9 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/oo
  * unused value in that actor's stripe. Two peers minting from the same snapshot then
  * cannot share an `@w:id`, which is what made Accept on your edit accept theirs too.
  * No actor keeps the dense sequence byte-identical to a solo Word document.
+ *
+ * The scan covers this part only, and split pieces of one revision keep its id. Saving gives
+ * every annotation its own id across the package (`package/revision-id-export.ts`).
  */
 export function nextRevisionId(part: OoxmlPart, actorId?: string): () => string {
   let highest = -1;

@@ -1083,6 +1083,12 @@ Without the module, the editor renders revisions in their final state. It keeps 
 | Accept or reject in Word | Resolves revisions saved by the editor.                           |
 | Other stories            | Tracks headers, footers, footnotes, and endnotes in their scopes. |
 
+### Revision IDs in saved files
+
+When you save, each revision gets its own `w:id` across the main document, headers, footers, footnotes, endnotes, and comments. Each ID is an integer from 0 to 2147483647. The first revision that uses an ID keeps it. Later revisions with the same ID, and revisions with an ID outside that range, get new IDs. A move range or custom XML range keeps one ID for its start and end markers. Comment and bookmark IDs do not change.
+
+If you edit inside another author's tracked change, the change splits into pieces. The saved file gives each piece its own ID. When you reopen the file, each piece is a separate review item. The open editor and collaboration sessions keep their IDs, so saving does not change the review list.
+
 ## Next steps
 
 - [Review colors and styling](/docs/2.x/pro/review-styling): Style review content.

@@ -53,8 +53,10 @@ for (const action of ['accept', 'reject'] as const) {
           const result = context.document.revisions.resolve(action);
           await context.sync();
           expect(result.value.resolved).toEqual([]);
-          expect(result.value.skipped).toHaveLength(1);
-          expect(result.value.remaining).toBe(1);
+          // The two row records shared an id. Saving gives each its own, so each reads back
+          // as its own record.
+          expect(result.value.skipped).toHaveLength(2);
+          expect(result.value.remaining).toBe(2);
         });
       } finally {
         reopened.dispose();

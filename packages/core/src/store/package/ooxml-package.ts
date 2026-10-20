@@ -55,6 +55,7 @@ import type { OoxmlPart, OoxmlReadRejection } from './ooxml-tree.ts';
 import { serializeOoxmlPartSteps } from './ooxml-serialize-steps.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 import { commentExportPackage } from './comment-export-cleanup.ts';
+import { uniqueRevisionIdExportPackageSteps } from './revision-id-export.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -619,6 +620,9 @@ export function* readOoxmlPackageSteps(
  *
  * `writeZip` re-validates every part name, so a name that became unsafe between load and
  * save cannot be smuggled into the archive.
+ *
+ * Every revision annotation is written with its own valid `@w:id` across all parts (see
+ * `revision-id-export.ts`). The live tree keeps its ids.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
   const steps = writeOoxmlPackageSteps(pkg);
@@ -640,7 +644,10 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
  * @internal
  */
 export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint8Array> {
-  const exported = yield* textboxFallbackExportPackageSteps(commentExportPackage(pkg));
+  const synced = yield* textboxFallbackExportPackageSteps(commentExportPackage(pkg));
+  yield;
+  // After the text box sync, which copies revisions into fallback stories.
+  const exported = yield* uniqueRevisionIdExportPackageSteps(synced);
   yield;
   const entries = new Map<string, Uint8Array>(exported.partBytes);
   for (const [name, part] of exported.parts) {

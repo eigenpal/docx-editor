@@ -221,8 +221,9 @@ test("a tracked replacement nests in another author's insertion in one note only
     expect(xml).toMatch(
       /<w:ins w:author="Human" w:id="1"><w:r>[^<]*<w:t[^>]*>head <\/w:t><\/w:r><w:del w:author="Agent"/
     );
+    // The other note's copy of the insertion saves under its own id.
     expect(xml).toContain(
-      '<w:ins w:author="Human" w:id="1"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
+      '<w:ins w:author="Human" w:id="5"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
     );
     // The author's own deletion and insertion each resolve alone, although the insertion
     // around the deletion shares its identity with the other note.

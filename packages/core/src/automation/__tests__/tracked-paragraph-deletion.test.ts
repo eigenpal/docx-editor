@@ -5,7 +5,12 @@
 // start to the next paragraph's start. Accept removes what was struck; reject restores it.
 
 import { describe, expect, test } from 'bun:test';
-import { canonicalOoxmlFingerprint, readOoxmlPackage, semanticDigest } from '../../store/index.ts';
+import {
+  canonicalOoxmlFingerprint,
+  readOoxmlPackage,
+  revisionItemsOf,
+  semanticDigest,
+} from '../../store/index.ts';
 import {
   docx,
   open,
@@ -406,11 +411,18 @@ test('a tracked deletion over 4000 paragraphs separated by bookmarks stays one d
   const started = performance.now();
   run(host, [deleteBetween(paragraphs, [0, 0], [count - 1, 0])]);
   const elapsed = performance.now() - started;
+  const saved = host.save();
+  if (!saved.ok) throw new Error(saved.error.code);
   const markIds = new Set(
     [...savedMainXml(host).matchAll(/<w:rPr><w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1])
   );
-  // One shared mark id: the marks join across the bookmarks, so the id walk happens once.
-  expect(markIds.size).toBe(1);
+  // The marks share one id in the open document, so the id walk happens once. The saved file
+  // gives each mark its own id, and the marks still read back as one decision.
+  expect(markIds.size).toBe(count - 1);
+  const reopened = readOoxmlPackage(saved.bytes);
+  if (!reopened.ok) throw new Error(reopened.reason);
+  const main = reopened.package.parts.get(reopened.package.mainDocumentPart)!;
+  expect(revisionItemsOf(main)).toHaveLength(1);
   // About 4.5 s here. One id walk per mark took 54 s.
   expect(elapsed).toBeLessThan(30_000);
 }, 120_000);
@@ -493,8 +505,10 @@ test('a file that already uses the highest revision id still gets distinct new i
     { op: 'deleteParagraph', paragraph: paragraphs[2]! },
   ]);
   const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]);
-  // Two text deletions and one shared mark id, none of them a duplicate of another.
-  expect(new Set(ids).size).toBe(3);
+  // Two text deletions and two marks. The marks share an id in the open document; the saved
+  // file gives each its own, and none of them duplicates another.
+  expect(ids).toHaveLength(4);
+  expect(new Set(ids).size).toBe(4);
   expect(ids).not.toContain('2147483647');
 });
 
@@ -539,6 +553,7 @@ test('after the ceiling, a padded file id such as 05 is not minted again as 5', 
     { op: 'deleteParagraph', paragraph: paragraphs[taken.length + 1]! },
   ]);
   const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]!);
-  expect(new Set(ids).size).toBe(3);
+  expect(ids).toHaveLength(4);
+  expect(new Set(ids).size).toBe(4);
   for (const id of ids) expect(['0', '1', '2', '3', '4', '5']).not.toContain(id);
 });
