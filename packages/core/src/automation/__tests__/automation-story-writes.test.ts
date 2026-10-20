@@ -132,17 +132,28 @@ describe('inserting text at a position', () => {
     expect(paragraphTexts(host, body)).toEqual(['1abcd2']);
   });
 
-  test('refuses text carrying a paragraph mark rather than writing a character that lies', () => {
+  test('refuses form feeds and Unicode separators rather than writing a character that lies', () => {
     const host = open(docx(p('alpha')));
     const body = bodyOf(host);
     const [first] = paragraphsOf(host, body) as [AutomationHandle];
-    for (const text of ['a\rb', 'a\nb', 'a\u2029b']) {
+    for (const text of ['a\fb', 'a\nb\u2029c', 'a\u2028b']) {
       const response = host.execute({
         operations: [{ op: 'insertText', at: { paragraph: first, offset: 0 }, text }],
       });
       expect(refusal(response)).toBe('unsupported-content');
     }
     expect(paragraphTexts(host, body)).toEqual(['alpha']);
+  });
+
+  test('splits the paragraph at each line feed, carriage return, or CRLF pair', () => {
+    const host = open(docx(p('alpha')));
+    const body = bodyOf(host);
+    const [first] = paragraphsOf(host, body) as [AutomationHandle];
+    const response = host.execute({
+      operations: [{ op: 'insertText', at: { paragraph: first, offset: 2 }, text: '1\r2\n3\r\n' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['al1', '2', '3', 'pha']);
   });
 
   test('writes into a table cell paragraph, because it is an ordinary paragraph', () => {

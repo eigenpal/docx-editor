@@ -37,6 +37,24 @@ Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range
 
 The runtime's tracking setting does not change the browser editor UI mode. Read `document.changeTrackingMode` only after loading it. The mode persists across runs on that runtime. It does not change peers' tracking settings or save a document-wide tracking policy. Set `Off` explicitly only when your application intends permanent edits.
 
+## Propose a paragraph split
+
+`insertText()` treats `\n`, `\r`, and `\r\n` as paragraph breaks. With `TrackMineOnly`, the inserted text and each new paragraph mark are tracked insertions. **Accept** keeps the new paragraphs. **Reject** joins them again and removes the inserted text.
+
+This example proposes to start a new paragraph before a sentence:
+
+```ts
+await runtime.run(async (context) => {
+  const match = context.document.body.search('The buyer pays', { matchCase: true }).getFirst();
+  await context.sync();
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  match.insertText('\n', 'Before');
+  await context.sync();
+});
+```
+
+With `Replace`, the replaced text becomes a tracked deletion, and the new text and paragraph marks follow it. The same tracked-edit refusals apply as for other text. For the rules on paragraph breaks, see [Split a paragraph](/docs/2.x/editor-api/text-and-ranges#split-a-paragraph).
+
 ## Preview a counter-proposal
 
 In the browser runtime, you can show a tracked replacement in the page before the user accepts it. Build it inside `runtime.preview()` instead of `runtime.run()`. The live document and collaboration peers see nothing until you call `commit()`:
@@ -81,6 +99,7 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Paragraph deletion | `Paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraph formatting | Record property revisions, including paragraph styles |
 | Paragraph insertion | Track text and paragraph marks; reject removes both |
+| Paragraph split | `insertText()` with `\n` tracks the text and each new paragraph mark; reject joins the paragraphs again |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |

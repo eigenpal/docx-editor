@@ -113,7 +113,9 @@ export function planProposal(
   handles: AutomationHandleTable,
   packageReads: AutomationPackageReads,
   claim: (story: AutomationStoryReads, paragraphId: string) => PlannedOperation | null,
-  trackedRangeReplacement = true
+  trackedRangeReplacement = true,
+  /** The write is followed by a paragraph split, so empty text still claims its paragraph. */
+  splitFollows = false
 ): PlannedOperation {
   const refuse = (
     code: AutomationErrorCode,
@@ -232,7 +234,7 @@ export function planProposal(
     const adjacent = ownMarkDeletionRefusal(story.value.part, paragraphId, operation.author);
     if (adjacent) return adjacent;
   }
-  if (tracked && !deletion && start === end && operation.text === '')
+  if (tracked && !deletion && start === end && operation.text === '' && !splitFollows)
     return query({ kind: 'span', span: spanOf({ start: range.start, end: range.start }) });
   const revisionError = proposalRevisionError(
     story.value,

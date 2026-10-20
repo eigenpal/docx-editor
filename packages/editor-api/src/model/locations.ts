@@ -84,10 +84,10 @@ export const selectionMode = (value: unknown, target: string): SelectionMode =>
  * Text a write is allowed to carry.
  *
  * A paragraph mark is refused HERE rather than at the host, because the answer is about the call
- * and not about the document: this API's `insertText` writes text into a paragraph, and Word's
- * habit of splitting paragraphs on an embedded newline is a different operation
- * (`insertParagraph`). Accepting the character and writing it into a run would produce a document
- * whose text reads back with a break that the layout does not honour.
+ * and not about the document: `insertParagraph` and a content control's `insertText` write text
+ * into one paragraph. Accepting the character and writing it into a run would produce a document
+ * whose text reads back with a break that the layout does not honour. `insertText` on a body,
+ * paragraph, or range splits paragraphs instead; see {@link insertableTextWithBreaks}.
  *
  * `\v` is not a paragraph mark: it is a manual line break (`w:br`) inside the paragraph, which
  * the host writes as one. A control that holds one line refuses it at sync.
@@ -95,5 +95,19 @@ export const selectionMode = (value: unknown, target: string): SelectionMode =>
 export function insertableText(value: unknown, target: string): string {
   if (typeof value !== 'string') fail({ code: 'InvalidArgument', target });
   if (/[\r\n\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
+  return value;
+}
+
+/**
+ * Text that `insertText` on a body, paragraph, or range is allowed to carry.
+ *
+ * `\n`, `\r`, and `\r\n` are paragraph breaks there: the text after one starts a new paragraph
+ * with the properties of the paragraph it was written into. The host splits the paragraph, and
+ * a tracked write proposes each new paragraph mark. Form feeds and Unicode line and paragraph
+ * separators still refuse.
+ */
+export function insertableTextWithBreaks(value: unknown, target: string): string {
+  if (typeof value !== 'string') fail({ code: 'InvalidArgument', target });
+  if (/[\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
   return value;
 }

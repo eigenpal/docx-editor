@@ -40,7 +40,12 @@ import { ListCollection } from './lists.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
-import { bodyParagraphLocation, bodyTextLocation, insertableText } from './locations.ts';
+import {
+  bodyParagraphLocation,
+  bodyTextLocation,
+  insertableText,
+  insertableTextWithBreaks,
+} from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
 import { Range } from './range.ts';
@@ -301,7 +306,12 @@ export class Body extends ModelObject {
     }));
   }
 
-  /** Write text over the whole story, or at either edge of it. Answers the text's own range. */
+  /**
+   * Write text over the whole story, or at either edge of it. Answers the text's own range.
+   *
+   * `\n`, `\r`, and `\r\n` in `text` start new paragraphs, tracked with `TrackMineOnly` at
+   * `Start` and `End`. See `Range.insertText` for the rules.
+   */
   insertText(
     text: string,
     insertLocation:
@@ -313,7 +323,7 @@ export class Body extends ModelObject {
       | 'End'
   ): Range {
     const target = `${this.path.label}.insertText`;
-    const written = insertableText(text, target);
+    const written = insertableTextWithBreaks(text, target);
     const where = bodyTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);

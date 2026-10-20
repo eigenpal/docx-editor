@@ -41,7 +41,12 @@ import { RangeCollection, type PromisedItem } from './collections.ts';
 import { List, ListItem } from './lists.ts';
 import { requireStyleName } from './addressing.ts';
 import { Font } from './font.ts';
-import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
+import {
+  besideLocation,
+  insertableText,
+  insertableTextWithBreaks,
+  paragraphTextLocation,
+} from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
 import { searchOptions as readSearchOptions, type SearchOptions } from './search-options.ts';
@@ -480,7 +485,12 @@ export class Paragraph extends ModelObject implements PromisedItem {
     );
   }
 
-  /** Write text over this paragraph or at either edge of it. Answers the written text's range. */
+  /**
+   * Write text over this paragraph or at either edge of it. Answers the written text's range.
+   *
+   * `\n`, `\r`, and `\r\n` in `text` start new paragraphs, tracked with `TrackMineOnly`. See
+   * `Range.insertText` for the rules.
+   */
   insertText(
     text: string,
     insertLocation:
@@ -492,7 +502,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
       | 'End'
   ): Range {
     const target = `${this.path.label}.insertText`;
-    const written = insertableText(text, target);
+    const written = insertableTextWithBreaks(text, target);
     const where = paragraphTextLocation(insertLocation, target);
     const created = Range.promised(this.context, target, false);
     this.commandAnswering(

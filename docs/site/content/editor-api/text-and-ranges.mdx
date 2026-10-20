@@ -38,6 +38,7 @@ Some document elements use a single character in API text, regardless of their d
 | Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
 | Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
 | Manual line break   | `\v`     | One UTF-16 unit | Inserts a manual line break                 |
+| Paragraph mark      | `\r`     | One UTF-16 unit | Starts a new paragraph                      |
 | Column break        | U+000E   | One UTF-16 unit | Refused                                     |
 
 Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
@@ -52,7 +53,7 @@ Automation reads in 2.26.0 report manual line breaks and column breaks as `\n`. 
 
 Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
 
-Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results or make `\n` valid insertion text. Text reads do not preserve arbitrary document structure when you write them back.
+Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results. In `insertText()`, `\n` is a paragraph break, not a manual line break. Text reads do not preserve arbitrary document structure when you write them back.
 
 ## Choose an insertion location
 
@@ -66,7 +67,7 @@ The location types describe the supported call shapes:
 
 The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides matching enum values, such as `InsertLocation.replace`. A method only accepts the locations shown in its signature.
 
-`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph. Text writes refuse paragraph separators such as `\r` and `\n`.
+`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. `insertParagraph()` and `ContentControl.insertText()` refuse paragraph separators such as `\r` and `\n`.
 
 To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
@@ -85,6 +86,32 @@ await runtime.run(async (context) => {
   console.log(range.text);
 });
 ```
+
+## Split a paragraph
+
+`Body.insertText()`, `Paragraph.insertText()`, and `Range.insertText()` treat `\n`, `\r`, and `\r\n` as paragraph breaks. The text after each break starts a new paragraph. The new paragraph keeps the properties of the paragraph that you wrote into, so a list item stays in its list. Two breaks in a row make an empty paragraph. A trailing break moves the rest of the paragraph to a new paragraph.
+
+The returned range starts at the first inserted character and ends after the last inserted segment, in the last new paragraph. Its text reads each break as `\r`.
+
+These rules apply to paragraph breaks in text:
+
+- Text that lands inside an inline content control refuses with `NotSupported` and `edit.indivisible-content`.
+- A text write with a break cannot share a sync with another text edit in the same paragraph. The sync refuses with `ConflictingChanges`.
+- Form feeds, U+2028, and U+2029 refuse with `InvalidArgument`.
+- A break in a hyperlink splits the hyperlink into two links with the same target.
+
+This example splits a paragraph after its first sentence:
+
+```ts
+await runtime.run(async (context) => {
+  const match = context.document.body.search(' The buyer', { matchCase: true }).getFirst();
+  await context.sync();
+  match.insertText('\nThe buyer', 'Replace');
+  await context.sync();
+});
+```
+
+To propose the split as a tracked change, set `TrackMineOnly` first. For an example, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
 
 ## Address existing content
 

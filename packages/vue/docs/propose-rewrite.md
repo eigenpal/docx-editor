@@ -164,6 +164,10 @@ await runtime.run(async (context) => {
 
 Each paragraph gets its own guarantee: all of its changes, or none. A paragraph that fails does not affect the others. To limit how many model calls run at once, wrap `callModel` in your own limiter.
 
+## Split a paragraph
+
+A rewrite stays inside one paragraph. To propose a paragraph split, set `document.changeTrackingMode` to `TrackMineOnly` and call `insertText()` with `\n` in the text. For more information, see [Propose a paragraph split](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+
 ## Guarantees
 
 - Either every change lands and the paragraph reads as the model text, or the paragraph stays as it was.

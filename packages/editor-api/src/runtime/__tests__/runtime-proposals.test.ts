@@ -161,7 +161,7 @@ describe('explicit inline proposals', () => {
     });
   }
 
-  for (const bad of ['two\nparagraphs', 'invalid\u0000xml']) {
+  for (const bad of ['two\fparagraphs', 'invalid\u0000xml']) {
     test(`invalid replacement ${JSON.stringify(bad)} rolls back other writes`, async () => {
       const r = await DocxEditor.createServer(bytes, { author: 'Agent' });
       try {

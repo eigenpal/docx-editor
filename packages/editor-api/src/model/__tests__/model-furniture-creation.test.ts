@@ -51,6 +51,34 @@ test('reading a virtual header does not create parts; its first text write creat
   expect(await mainXmlOf(saved)).toContain('Body sentinel');
 });
 
+test('a first text write with a paragraph break creates the header with both paragraphs', async () => {
+  const runtime = await serverRuntime(fixture);
+  await runtime.run(async (context) => {
+    const section = context.document.sections.getFirst();
+    await context.sync();
+    const header = section.getHeader('Primary');
+    await context.sync();
+    const range = header.insertText('Company\nDepartment', 'Replace');
+    await context.sync();
+    range.load('text');
+    await context.sync();
+    expect(range.text).toBe('Company\rDepartment');
+  });
+  const saved = await reopen(runtime);
+  await saved.run(async (context) => {
+    const section = context.document.sections.getFirst();
+    await context.sync();
+    const header = section.getHeader('Primary');
+    await context.sync();
+    header.paragraphs.load('items/text');
+    await context.sync();
+    expect(header.paragraphs.items.map((paragraph) => paragraph.text)).toEqual([
+      'Company',
+      'Department',
+    ]);
+  });
+});
+
 test('every collection on a virtual footer reads as empty and creates nothing', async () => {
   const runtime = await serverRuntime(fixture);
   const before = await mainXmlOf(runtime);
@@ -111,7 +139,7 @@ test('invalid first content write leaves virtual furniture absent', async () => 
       await context.sync();
       const footer = section.getFooter('Primary');
       await context.sync();
-      footer.insertText('bad\ntext', 'Replace');
+      footer.insertText('bad\ftext', 'Replace');
       await context.sync();
     })
   ).rejects.toBeDefined();

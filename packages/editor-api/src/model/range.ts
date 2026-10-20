@@ -53,6 +53,7 @@ import { Font } from './font.ts';
 import { ContentControl, ContentControlCollection } from './content-controls.ts';
 import {
   insertableText,
+  insertableTextWithBreaks,
   rangeTextLocation,
   selectionMode,
   type SelectionMode,
@@ -515,6 +516,14 @@ export class Range extends ModelObject implements PromisedItem {
    * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
    * Agent tools that intend a replacement should validate non-empty model output first.
    *
+   * `\n`, `\r`, and `\r\n` in `text` are paragraph breaks: the text after one starts a new
+   * paragraph with the properties of the paragraph it was written into. With `TrackMineOnly`,
+   * each new paragraph mark is a tracked insertion, and rejecting it joins the paragraphs again.
+   * The answered range then ends after the last segment, in the last new paragraph. Text that
+   * lands inside an inline content control refuses with `NotSupported`
+   * (`edit.indivisible-content`), and a write with a break cannot share a sync with another
+   * text edit in the same paragraph. `\v` is a manual line break.
+   *
    * `Before`/`Start` and `After`/`End` land at the SAME position here, and the difference Word
    * draws between them — whether the new text becomes part of this range — has no meaning for a
    * snapshot. Both pairs are accepted because source-compatible code uses all four; what a caller
@@ -531,7 +540,7 @@ export class Range extends ModelObject implements PromisedItem {
     insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'
   ): Range {
     const target = `${this.path.label}.insertText`;
-    const written = insertableText(text, target);
+    const written = insertableTextWithBreaks(text, target);
     const where = rangeTextLocation(insertLocation, target);
     this.requireUsablePath();
     const created = Range.promised(this.context, target, false);

@@ -292,6 +292,7 @@ await runtime.run(async (context) => {
 | Paragraph deletion | `paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraphs | Track font, paragraph-format, and paragraph-style edits as property revisions |
 | Paragraph insertion | Track inserted text and paragraph marks |
+| Paragraph split | `insertText()` with `\n` tracks the text and each new paragraph mark; reject joins the paragraphs again |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
@@ -307,6 +308,22 @@ Established list definitions and page setup refuse tracked writes. Comments and 
 When a person adopts an agent's suggestions, attribute them to that person with `revisions.setAuthor(author, revisions)` or `revisions.setAuthor(author, { authors })`. This is a DocxEditor addition; Office.js has no author write. The changes stay pending. Never reject and reinsert suggestions to change their author.
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
+
+### Propose a paragraph split
+
+`insertText()` on a body, paragraph, or range treats `\n`, `\r`, and `\r\n` as paragraph breaks. The text after a break starts a new paragraph with the properties of the paragraph that you wrote into. With `TrackMineOnly`, the inserted text and each new paragraph mark are tracked insertions. The following example proposes to start a new paragraph before a sentence:
+
+```ts
+await runtime.run(async (context) => {
+  const match = context.document.body.search('The buyer pays', { matchCase: true }).getFirst();
+  await context.sync();
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  match.insertText('\n', 'Before');
+  await context.sync();
+});
+```
+
+Reject joins the paragraphs again. The returned range runs from the first inserted character to the end of the last inserted segment. Text that lands inside an inline content control refuses with `NotSupported` and `edit.indivisible-content`. A write with a break cannot share a sync with another text edit in the same paragraph.
 
 ### Edit another author's pending text
 
@@ -533,7 +550,7 @@ await runtime.run(async (context) => {
 
 ## Pictures and page fields
 
-Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E and paragraph separators. Do not flatten these characters before sending read text back to the document.
+Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E. `insertText()` on a body, paragraph, or range writes `\n`, `\r`, and `\r\n` as paragraph breaks. Other paragraph separators refuse. Do not flatten these characters before sending read text back to the document.
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 

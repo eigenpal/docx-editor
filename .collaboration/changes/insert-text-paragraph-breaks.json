@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Body, paragraph, and range insertText refuse \\n and \\r.",
+  "after": "Body, paragraph, and range insertText split the paragraph at each \\n, \\r, or \\r\\n with the splitParagraphMany operation that a multi-line paste uses. With TrackMineOnly, the split carries the inserted text's revision, so each new paragraph mark gets w:rPr/w:ins.",
+  "reason": "Peers already read and replicate the tracked and untracked split shapes that paste and suggesting-mode Enter write. Replicas exchange the resulting tree content, so no shared field, operation shape, or protocol message changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-paragraph-break-automation.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-insert-text-paragraph-breaks.test.ts",
+    "packages/core/src/automation/__tests__/automation-story-writes.test.ts"
+  ],
+  "changeset": "insert-text-paragraph-breaks",
+  "migration": null
+}

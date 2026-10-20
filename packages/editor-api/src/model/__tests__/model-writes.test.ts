@@ -92,11 +92,21 @@ describe('writing text into a story', () => {
     expect(code).toBe('InvalidArgument');
   });
 
-  test('text carrying a paragraph mark is refused rather than written into a run', async () => {
+  test('a line feed in the text starts a new paragraph', async () => {
+    const runtime = await serverRuntime();
+    await runtime.run(async (context) => {
+      context.document.body.insertText('one\ntwo', 'End');
+      await context.sync();
+    });
+    expect(await paragraphTexts(runtime)).toEqual(['alpha', 'betaone', 'two']);
+    expect(await textsAfterReopen(runtime)).toEqual(['alpha', 'betaone', 'two']);
+  });
+
+  test('a form feed is refused rather than written into a run', async () => {
     const runtime = await serverRuntime();
     const code = await codeOf(() =>
       runtime.run(async (context) => {
-        context.document.body.insertText('one\ntwo', 'End');
+        context.document.body.insertText('one\ftwo', 'End');
       })
     );
     expect(code).toBe('InvalidArgument');

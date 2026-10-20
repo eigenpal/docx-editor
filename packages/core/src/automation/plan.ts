@@ -41,6 +41,7 @@ import {
   planRevisionListing,
 } from './review-scope.ts';
 import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
+import { planParagraphBreaks } from './plan-paragraph-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
@@ -301,6 +302,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   let dynamicSolitary = false;
   /** The one story this batch writes into, pinned by its first command. */
   let writeStory: StoryPlan | null = null;
+  /** Set while planning the text of a write that also splits its paragraph. */
+  let paragraphBreakWrite = false;
 
   /** Keep every command within the batch's single atomic write story. */
   const pinWrite = (plan: StoryPlan): PlannedOperation | null => {
@@ -575,15 +578,22 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (lineBreak) return lineBreak;
     const pin = pinWrite(plan);
     if (pin) return pin;
-    const tracked = host.replacementLanding?.(at.paragraphId, at.offset, at.offset) != null;
+    const landing = host.replacementLanding?.(at.paragraphId, at.offset, at.offset);
+    const tracked = landing != null;
     const promptRefusal =
       !tracked && placeholderInsertionRefusal(plan.reads.part, at.paragraphId, at.offset, text);
     if (promptRefusal) return promptRefusal;
-    if (!tracked && isPlainTextTarget(plan.reads.part, at.paragraphId, at.offset))
+    if (
+      !tracked &&
+      !paragraphBreakWrite &&
+      isPlainTextTarget(plan.reads.part, at.paragraphId, at.offset)
+    )
       return planPlainText(plan, { start: at, end: at }, text, prepend);
     const conflict = claim(plan, at.paragraphId);
     if (conflict) return conflict;
     const ops = insertTextOps(at.paragraphId, at.offset, text);
+    // A split follows the text to where suggesting mode lands it.
+    const start = paragraphBreakWrite && tracked ? { ...at, offset: landing } : at;
     return {
       ok: true,
       kind: 'command',
@@ -591,7 +601,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       story: plan.reads.story,
       answer: () => ({
         kind: 'span',
-        span: spanOf({ start: at, end: { ...at, offset: at.offset + text.length } }),
+        span: spanOf({ start, end: { ...start, offset: start.offset + text.length } }),
       }),
     };
   };
@@ -627,6 +637,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (
       ids.length === 1 &&
       landing == null &&
+      !paragraphBreakWrite &&
       isPlainTextTarget(reads.part, first, range.start.offset)
     )
       return planPlainText(plan, range, text);
@@ -1558,6 +1569,27 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       },
     });
     if (table) return table;
+    const breaks = planParagraphBreaks(operation, {
+      handles,
+      reads: packageReads,
+      trackingAuthor,
+      planJoined: (joined) => {
+        paragraphBreakWrite = true;
+        try {
+          return plan(joined, trackingAuthor);
+        } finally {
+          paragraphBreakWrite = false;
+        }
+      },
+      reserve: (paragraphId, count) => {
+        const pinned = writeStory;
+        const anchor = pinned?.slotById.get(paragraphId);
+        if (!pinned || !anchor) return null;
+        const position = positionOf(pinned, anchor) + 1;
+        return Array.from({ length: count }, (_, index) => insertSlot(pinned, position + index));
+      },
+    });
+    if (breaks) return breaks;
     const tracked = trackingAuthor !== undefined;
     if (tracked) {
       const proposal = trackedProposalOf(operation, trackingAuthor, handles, packageReads);
@@ -1782,7 +1814,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const storyPlan = planFor(story);
             return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
           },
-          host.trackedRangeReplacement !== false
+          host.trackedRangeReplacement !== false,
+          paragraphBreakWrite
         );
 
       case 'insertText': {

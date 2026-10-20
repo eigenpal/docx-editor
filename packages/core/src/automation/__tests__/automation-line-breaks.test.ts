@@ -377,11 +377,11 @@ describe('\\v in written text', () => {
     expect(bodyText(host, body)).toBe('Acme Ltd');
   });
 
-  test('paragraph marks stay refused', () => {
+  test('form feeds and Unicode separators stay refused', () => {
     const host = open(docx(p('Acme Ltd')));
     const { body } = roots(host);
     const paragraph = firstParagraph(host, body);
-    for (const text of ['a\nb', 'a\rb', 'a\fb', 'a b']) {
+    for (const text of ['a\fb', 'a\u2028b', 'a\u2029b']) {
       const response = host.execute({
         operations: [{ op: 'insertText', at: { paragraph, at: 'end' }, text }],
       });
