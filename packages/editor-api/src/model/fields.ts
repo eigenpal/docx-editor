@@ -83,11 +83,11 @@ export class Field extends ModelObject implements PromisedItem {
     const pending = { code: value };
     this.#pendingCode = pending;
     this.commandAnswering(
-      this.path.label,
+      `${this.path.label}.code`,
       () => {
         return { op: 'setFieldCode', field: this.#handle(), code: pending.code };
       },
-      (value) => hydratedApplied(value, this.path.label),
+      (value) => hydratedApplied(value, `${this.path.label}.code`),
       () => {
         if (this.#pendingCode === pending) this.#pendingCode = undefined;
       }

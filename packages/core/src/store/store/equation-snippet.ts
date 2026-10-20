@@ -31,6 +31,8 @@ import { paragraphLength } from './tree-op-segments.ts';
 export const MAX_EQUATION_SNIPPET_BYTES = 256 * 1024;
 /** The most elements one snippet may hold, package wrappers included. */
 export const MAX_EQUATION_SNIPPET_ELEMENTS = 8_192;
+/** Text values one `w:t` or `m:t` may hold in a hand-built op; the reader yields one. */
+const MAX_TEXT_VALUES_PER_ELEMENT = 16;
 /** The deepest element nesting one snippet may hold, package wrappers included. */
 export const MAX_EQUATION_SNIPPET_DEPTH = 64;
 /** The longest attribute value or text the snippet may carry. */
@@ -300,18 +302,45 @@ const WRAPPER_DEPTH = 6;
 /**
  * Whether the markup nests deeper than a snippet may, counted before the parser runs: the
  * parser reports very deep input as a parse error, and it is a size limit, not malformed XML.
- * A tag count, bounded by the input length, so it never recurses.
+ * One pass over the characters, never a regex: the input is untrusted, and a tag pattern
+ * that can rescan from every `<` is quadratic on input with no `>`.
  */
 function nestsTooDeep(ooxml: string): boolean {
+  const limit = WRAPPER_DEPTH + MAX_EQUATION_SNIPPET_DEPTH + 1;
   let depth = 0;
-  for (const match of ooxml.matchAll(/<(\/?)[^\s>/!?][^>]*?(\/?)>/g)) {
-    if (match[1]) depth -= 1;
-    else if (!match[2]) {
-      depth += 1;
-      if (depth > WRAPPER_DEPTH + MAX_EQUATION_SNIPPET_DEPTH + 1) return true;
+  let tagStart = -1;
+  for (let index = 0; index < ooxml.length; index += 1) {
+    const char = ooxml.charCodeAt(index);
+    if (char === LESS_THAN) {
+      tagStart = index;
+    } else if (char === GREATER_THAN && tagStart !== -1) {
+      const first = ooxml.charCodeAt(tagStart + 1);
+      if (first === SLASH) depth -= 1;
+      else if (opensElement(first) && ooxml.charCodeAt(index - 1) !== SLASH) {
+        depth += 1;
+        if (depth > limit) return true;
+      }
+      tagStart = -1;
     }
   }
   return false;
+}
+
+const LESS_THAN = 0x3c;
+const GREATER_THAN = 0x3e;
+const SLASH = 0x2f;
+
+/** Whether `<` followed by this character opens an element (not `<!`, `<?`, or `< `). */
+function opensElement(char: number): boolean {
+  return (
+    char !== GREATER_THAN &&
+    char !== 0x21 &&
+    char !== 0x3f &&
+    char !== 0x20 &&
+    char !== 0x09 &&
+    char !== 0x0a &&
+    char !== 0x0d
+  );
 }
 
 /** The checked inline content of the package's one document paragraph. */
@@ -423,15 +452,18 @@ function isElementNode(node: unknown): node is Exclude<OoxmlNode, { kind: 'textV
 const hasName = (node: OoxmlNode, namespace: string, local: string): boolean =>
   node.kind !== 'textValue' && node.namespaceUri === namespace && node.localName === local;
 
-/** Text values only, as `w:t` and `m:t` hold. */
+/**
+ * Text values only, as `w:t` and `m:t` hold. They do not spend the element budget, because the
+ * reader counts elements only: a snippet the reader admits must pass here too. Their number per
+ * element is capped instead, so a hand-built op cannot grow without bound.
+ */
 function holdsOnlyText(
   node: Exclude<OoxmlNode, { kind: 'textValue' }>,
-  budget: ShapeBudget
+  _budget: ShapeBudget
 ): boolean {
+  if (node.children.length > MAX_TEXT_VALUES_PER_ELEMENT) return false;
   return node.children.every((child) => {
-    budget.nodes -= 1;
     return (
-      budget.nodes > 0 &&
       !!child &&
       child.kind === 'textValue' &&
       typeof child.value === 'string' &&

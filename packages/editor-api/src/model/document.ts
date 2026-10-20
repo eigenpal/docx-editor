@@ -97,11 +97,18 @@ export class Document extends ModelObject {
     if (!['Off', 'TrackAll', 'TrackMineOnly'].includes(mode))
       fail({ code: 'InvalidArgument', target: 'document.changeTrackingMode' });
     const author = this.internals.author;
-    this.commandAnswering(
-      'document.changeTrackingMode',
-      () => ({ op: 'setChangeTrackingMode', mode, ...(author === undefined ? {} : { author }) }),
-      () => this.setLoadedProperty('changeTrackingMode', mode)
-    );
+    this.enqueue({
+      sort: 'write',
+      label: 'document.changeTrackingMode',
+      plan: () => ({
+        op: 'setChangeTrackingMode',
+        mode,
+        ...(author === undefined ? {} : { author }),
+      }),
+      settle: () => this.setLoadedProperty('changeTrackingMode', mode),
+      // TrackAll refuses at sync, so it must not ride along in a helper's sync unnoticed.
+      ...(mode === 'TrackAll' ? {} : { runtimeSetting: true as const }),
+    });
   }
 
   /**

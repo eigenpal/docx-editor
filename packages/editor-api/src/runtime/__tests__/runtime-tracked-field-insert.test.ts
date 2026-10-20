@@ -350,7 +350,14 @@ describe('field insertion refusals', () => {
             else field.code = 'NUMPAGES';
             await c.sync();
           })
-        ).rejects.toBeDefined();
+        ).rejects.toMatchObject({
+          debugInfo: {
+            errorLocation:
+              write === 'update'
+                ? 'document.body.fields.getFirst().updateResult'
+                : 'document.body.fields.getFirst().code',
+          },
+        });
       }
       expect(await documentXml(runtime)).toBe(before);
     } finally {

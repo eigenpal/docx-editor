@@ -33,6 +33,11 @@ export interface QueuedAction {
   /** The consumer-facing name of what this action is for, for errors. Never a handle. */
   readonly label: string;
   /**
+   * A runtime setting, not a document edit: an agent helper's own first sync may carry it. Set
+   * only for tracking-mode assignments the runtime accepts (`Off`, `TrackMineOnly`).
+   */
+  readonly runtimeSetting?: true;
+  /**
    * The answer queues reads for the same sync: a listing whose items load properties named
    * with `items/`. A sync that writes sends such a listing, and those reads, before its writes.
    */

@@ -93,6 +93,15 @@ describe('the request context stays the helper’s', () => {
     expect(value.mode).toBe('TrackMineOnly');
     expect(await decided(saved, 'rejectAll')).toMatchObject({ text: 'Gamma clause three.' });
   });
+
+  test('a queued TrackAll, which refuses at sync, still counts as queued', async () => {
+    await withRuntime(docx(p('Gamma clause three.')), async (context) => {
+      context.document.changeTrackingMode = 'TrackAll';
+      const paragraph = context.document.body.paragraphs.getFirst();
+      const error = await prepareRewrite(context, paragraph).catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ code: 'context-used' });
+    });
+  });
 });
 
 describe('a host that wraps context.sync', () => {

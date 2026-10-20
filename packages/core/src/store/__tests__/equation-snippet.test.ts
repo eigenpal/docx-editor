@@ -205,6 +205,29 @@ describe('snippet limits and the op shape check', () => {
     expect(readEquationSnippet(equationPackage(nested(20))).ok).toBe(true);
   });
 
+  test('hostile markup without closing brackets is refused in linear time', () => {
+    for (const hostile of ['<a'.repeat(120_000), '<a '.repeat(85_000), '<'.repeat(250_000)]) {
+      const started = performance.now();
+      expect(readEquationSnippet(hostile).ok).toBe(false);
+      expect(performance.now() - started).toBeLessThan(500);
+    }
+  });
+
+  test('an equation the reader admits passes the op shape check', () => {
+    const runs = '<m:r><m:t>x</m:t></m:r>'.repeat(3000);
+    const read = readEquationSnippet(equationPackage(`<m:oMath>${runs}</m:oMath>`));
+    if (!read.ok) throw new Error(read.reason);
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const op = {
+      op: 'insertEquation' as const,
+      paragraphId: firstParagraphId(part),
+      offset: 1,
+      nodes: read.snippet.nodes,
+      length: read.snippet.length,
+    };
+    expect(validateTreeOp(part, op)).toBeNull();
+  });
+
   test('many plain runs are accepted by the reader and the op alike', () => {
     const runs = '<w:r><w:t>a</w:t></w:r>'.repeat(200);
     const read = readEquationSnippet(equationPackage(runs + X_SQUARED));
