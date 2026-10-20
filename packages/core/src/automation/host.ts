@@ -269,6 +269,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
               'insertField',
               'insertOoxml',
               'setFieldResult',
+              'deleteField',
               'setContentControlProperties',
               'startNewList',
               'setListLevelFormat',

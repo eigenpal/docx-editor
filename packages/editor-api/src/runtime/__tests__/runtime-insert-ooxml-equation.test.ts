@@ -401,19 +401,19 @@ const REFUSED: readonly {
     name: 'a DTD',
     ooxml: `<?xml version="1.0"?><!DOCTYPE pkg:package [<!ENTITY a "b">]><pkg:package xmlns:pkg="${PKG}"/>`,
     code: 'InvalidArgument',
-    inner: 'edit.ooxml-unsupported',
+    inner: 'edit.invalid-argument',
   },
   {
     name: 'an entity reference',
     ooxml: equationPackage('<m:oMath><m:r><m:t>&ext;</m:t></m:r></m:oMath>'),
     code: 'InvalidArgument',
-    inner: 'edit.ooxml-unsupported',
+    inner: 'edit.invalid-argument',
   },
   {
     name: 'malformed XML',
     ooxml: equationPackage('<m:oMath><m:r><m:t>x</m:r></m:oMath>'),
     code: 'InvalidArgument',
-    inner: 'edit.ooxml-unsupported',
+    inner: 'edit.invalid-argument',
   },
   {
     name: 'an oversize package',

@@ -52,7 +52,7 @@ export function planFieldResultWrite(
     return refuse(
       'unsupported-capability',
       'this field result holds content other than plain runs',
-      'field-result-range-unsupported'
+      'unsupported'
     );
   if (refusal === 'unsupported-revision')
     return author === undefined

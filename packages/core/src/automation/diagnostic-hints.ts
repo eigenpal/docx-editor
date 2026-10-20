@@ -113,7 +113,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.cross-structure-join':
     'The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately.',
   'edit.indivisible-content':
-    'The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead.',
+    'The edit would split content that must stay whole, such as an equation or a field, or a paragraph break would land inside an inline content control. Select the whole item, or make the edit outside the control.',
   'edit.field-structure':
     'The edit would break the structure of a field. Edit the field result as a whole, or remove the whole field.',
   'edit.field-unsupported':

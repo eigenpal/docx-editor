@@ -70,18 +70,38 @@ export function fieldResultWriteRefusal(
   if (refusal) return refusal;
   const field = locateFieldForResultWrite(paragraph, fieldNodeId);
   if (!field || !(field.resultWritable ?? field.rewritable)) return 'field-result-unsupported';
-  const revisions = inlineContainersOf(paragraph, fieldNodeId).filter(
+  const revisions = revisionsAround(paragraph, fieldNodeId);
+  if (author === undefined) return revisions.length === 0 ? null : 'unsupported-revision';
+  return ownInsertion(revisions, author) ? null : 'unsupported-revision';
+}
+
+function revisionsAround(paragraph: OoxmlNode, nodeId: string): readonly OoxmlNode[] {
+  if (paragraph.kind === 'textValue') return [];
+  return inlineContainersOf(paragraph, nodeId).filter(
     (node) =>
       node.kind === 'revisionInsert' ||
       node.kind === 'revisionDelete' ||
       node.kind === 'revisionMoveFrom' ||
       node.kind === 'revisionMoveTo'
   );
-  if (author === undefined) return revisions.length === 0 ? null : 'unsupported-revision';
-  const own =
-    revisions.length > 0 &&
-    revisions.every((node) => node.kind === 'revisionInsert' && insertionAuthorOf(node) === author);
-  return own ? null : 'unsupported-revision';
+}
+
+const ownInsertion = (revisions: readonly OoxmlNode[], author: string): boolean =>
+  revisions.length > 0 &&
+  revisions.every((node) => node.kind === 'revisionInsert' && insertionAuthorOf(node) === author);
+
+/**
+ * Whether the node sits only inside pending insertions by `author`: the author's own proposal,
+ * which a tracked deletion takes back outright rather than striking.
+ */
+export function insideOwnPendingInsertion(
+  part: OoxmlPart,
+  paragraphId: string,
+  nodeId: string,
+  author: string
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  return !!paragraph && ownInsertion(revisionsAround(paragraph, nodeId), author);
 }
 
 function insertionAuthorOf(node: OoxmlNode): string | undefined {

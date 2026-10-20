@@ -37,7 +37,7 @@ export function planOoxmlInsert(
       ? refuse(
           'unsupported-content',
           'the OOXML is not well-formed or names no namespace',
-          'ooxml-unsupported'
+          'invalidArgs'
         )
       : refuse(
           'unsupported-capability',

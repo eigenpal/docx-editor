@@ -325,7 +325,7 @@ describe('Field.result refusals', () => {
           await c.sync();
         });
       await expect(write(0, 'Two')).rejects.toMatchObject(
-        refused('NotSupported', 'edit.field-result-unsupported')
+        refused('NotSupported', 'edit.unsupported-content')
       );
       await expect(write(1, '5')).rejects.toMatchObject({ code: 'InvalidArgument' });
       await expect(write(2, 'a\u000bb')).rejects.toMatchObject(

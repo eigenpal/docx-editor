@@ -1,6 +1,8 @@
 import { planFieldInsert } from './plan-field-insert.ts';
 import { planFieldResultWrite } from './plan-field-result.ts';
 import { planOoxmlInsert } from './plan-ooxml-insert.ts';
+import { insideOwnPendingInsertion } from '../store/store/tree-op-field-result-write.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { TARGET_REMOVED } from './target-removed.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
@@ -167,7 +169,7 @@ function planFields(
     effectiveContentLockAt(story.part, target.fieldNodeId).content ||
     isBoundAt(story.part, target.fieldNodeId)
   )
-    return refuse('field is protected');
+    return refuse('field is protected', 'unsupported-content', 'locked');
   if (operation.op === 'setFieldResult')
     // A result write changes no model offset (a field is one unit), so it claims no paragraph:
     // several results of one paragraph can change in one sync, as `updateFieldResult` can.
@@ -181,14 +183,27 @@ function planFields(
   const conflict = claim(story, target.paragraphId, operation.op === 'updateFieldResult');
   if (conflict) return conflict;
   const ops: TreeDocOp[] = [];
-  if (operation.op === 'deleteField')
+  const author = trackingAuthor?.trim();
+  if (operation.op === 'deleteField') {
+    // Under TrackMineOnly, only the author's own pending field can go: the tracked deletion takes
+    // that proposal back outright. Striking any other field has no supported form here.
+    if (
+      author !== undefined &&
+      !insideOwnPendingInsertion(story.part, target.paragraphId, target.fieldNodeId, author)
+    )
+      return refuse(
+        'TrackMineOnly deletes only a field that is your own pending insertion; no permanent edit was applied',
+        'unsupported-capability',
+        'change-tracking-operation-unsupported'
+      );
     ops.push({
       op: 'deleteText',
       paragraphId: target.paragraphId,
       start: field.start,
       end: field.end,
+      ...(author === undefined ? {} : { revision: { author, date: revisionDateNow() } }),
     });
-  else if (operation.op === 'setFieldCode') {
+  } else if (operation.op === 'setFieldCode') {
     if (!supportedPageFieldCode(field.code) || !supportedPageFieldCode(operation.code))
       return refuse('only PAGE and NUMPAGES code writes are supported');
     ops.push({

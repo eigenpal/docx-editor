@@ -88,6 +88,12 @@ When you report a problem, include the code, the failure detail, and the `engine
 
 ## Codes
 
+In the editing API, a refusal has two codes. `error.code` says how the call failed, and `error.debugInfo.innerError.code` names the rule from this page. Handle the inner code. The outer code for one rule can differ by when the runtime refused:
+
+- `InvalidArgument`: the runtime refused the call before it wrote anything. For example, it refuses a field type that it doesn't write, or an insertion point in protected content.
+- `GeneralException`: the document refused the write itself. For example, a tracked text write into content-locked content gives `GeneralException` with `edit.protected-content`.
+- `NotSupported` and `NotImplemented`: the input or operation is outside the supported subset. For example, `insertOoxml()` refuses a well-formed package that holds more than one equation with `NotSupported` and `edit.ooxml-unsupported`. A string that is not well-formed XML refuses with `InvalidArgument` and `edit.invalid-argument`.
+
 Codes are stable. New codes can be added, but existing codes are never renamed. To get the hint for a code in your own code, call `explainDiagnostic(code)`. To get the code for the local refusal message in `snapshot().lastRejection`, call `diagnosticCodeOfRefusal(reason)`.
 
 ### Open
@@ -144,7 +150,7 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="edit-tracked-own-pending-change" />`edit.tracked-own-pending-change` | The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Edit outside your pending change, or reject it and edit again. |
 | <a id="edit-picture-selected" />`edit.picture-selected` | A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again. |
 | <a id="edit-cross-structure-join" />`edit.cross-structure-join` | The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately. |
-| <a id="edit-indivisible-content" />`edit.indivisible-content` | The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead. |
+| <a id="edit-indivisible-content" />`edit.indivisible-content` | The edit would split content that must stay whole, such as an equation or a field, or a paragraph break would land inside an inline content control. Select the whole item, or make the edit outside the control. |
 | <a id="edit-field-structure" />`edit.field-structure` | The edit would break the structure of a field. Edit the field result as a whole, or remove the whole field. |
 | <a id="edit-field-unsupported" />`edit.field-unsupported` | The field type or instruction is not one the editing API writes. Fields that fetch, embed, link, run, or prompt always refuse. Use Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time, or TOC with supported arguments. The instruction is written as text and never run. |
 | <a id="edit-field-result-unsupported" />`edit.field-result-unsupported` | The operation is not one a field result supports. A field result reads its text and takes `insertText(text, 'Replace')` with plain text; its other range members refuse. A result write also refuses when the result holds content other than plain runs. Read or write the result with those members only. |
