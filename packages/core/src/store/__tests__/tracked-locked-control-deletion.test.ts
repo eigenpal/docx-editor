@@ -29,7 +29,8 @@ test('a tracked deletion over a whole contentLocked control strikes the control 
   const revision = { id, author: ADA.author, date: ADA.date };
   expect(contentControlsIn(apply(after, { op: 'acceptRevision', revision }).root)).toHaveLength(0);
   const rejected = xml(apply(after, { op: 'rejectRevision', revision }));
-  expect(rejected.replace(/<[^>]+>/g, '')).toBe('abREFcd');
+  const texts = [...rejected.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map((match) => match[1]);
+  expect(texts.join('')).toBe('abREFcd');
   expect(rejected).toContain('<w:lock w:val="contentLocked"/>');
   expect(rejected).not.toContain('<w:del');
 });
