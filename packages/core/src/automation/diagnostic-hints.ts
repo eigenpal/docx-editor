@@ -116,6 +116,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead.',
   'edit.field-structure':
     'The edit would break the structure of a field. Edit the field result as a whole, or remove the whole field.',
+  'edit.field-unsupported':
+    'The field type or instruction is not one the editing API writes. Fields that fetch, embed, link, run, or prompt always refuse. Use Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time, or TOC with supported arguments. The instruction is written as text and never run.',
   'edit.section-mark':
     'The edit would remove a section break that holds page layout settings. Remove the section break on its own.',
   'edit.table-structure-unsupported':

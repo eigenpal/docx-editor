@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editing API inserts page and TOC fields as simple fields and refuses tracked field insertion.",
+  "after": "The editing API also inserts reference, sequence, style reference, date, and time fields. With TrackMineOnly, it writes one complex field whose begin, instruction, separate, and end runs sit in one w:ins by the runtime author. A new insertComplexField tree operation writes that shape, and field reads list fields inside pending insertions.",
+  "reason": "The tracked field uses existing OOXML nodes: w:ins, w:r, w:fldChar, and w:instrText, the same shape that documents with tracked complex fields already hold. The new operation replays through the canonical primitive journal like insertPageField. No shared format fields change. Two peers converge on concurrent text edits beside the field, reject and accept on the other peer, undo and redo, reconnect, and save and reopen.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-tracked-field-insert.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-field-insert.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/store/__tests__/insert-complex-field.test.ts"
+  ],
+  "changeset": "tracked-insert-field",
+  "migration": null
+}

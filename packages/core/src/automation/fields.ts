@@ -53,7 +53,8 @@ function computeFieldsInParagraph(
   paragraphId: string
 ): readonly AutomationFieldRead[] {
   const segments = segmentsOf(paragraph);
-  return locateFieldResults(paragraph).flatMap((field) => {
+  // A field inside a pending insertion is listed too: a proposed field reads back as a field.
+  return locateFieldResults(paragraph, false, true).flatMap((field) => {
     const segment = segments.find((segment) => segment.node.id === field.fieldNodeId);
     const anchor = findNode(part, field.fieldNodeId);
     return segment

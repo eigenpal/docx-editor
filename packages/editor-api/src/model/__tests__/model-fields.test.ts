@@ -169,7 +169,7 @@ test('split complex instruction code writes preserve chrome, cache, and run form
   runtime.dispose();
 });
 
-for (const fieldType of ['Date', 'IncludeText', 'MacroButton'] as const) {
+for (const fieldType of ['Link', 'IncludeText', 'MacroButton'] as const) {
   test(`${fieldType} authoring refuses without touching the document`, async () => {
     const runtime = await serverRuntime(FIXTURE);
     const before = await mainXmlOf(runtime);

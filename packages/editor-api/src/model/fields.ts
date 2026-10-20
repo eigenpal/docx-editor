@@ -19,7 +19,12 @@ import { spanRefOf, type SpanOwner } from './addressing.ts';
 import { ModelObject } from './model-object.ts';
 import { ItemCollection, type PromisedItem } from './item-collection.ts';
 
-/** An inert Word field. Code writes and evaluation support PAGE and NUMPAGES. @public */
+/**
+ * An inert Word field. Code writes and evaluation support PAGE and NUMPAGES. A field inside a
+ * pending tracked insertion reads, but refuses code writes and `updateResult` until accepted.
+ *
+ * @public
+ */
 export class Field extends ModelObject implements PromisedItem {
   #pendingCode: { code: string } | undefined;
   /** @internal */

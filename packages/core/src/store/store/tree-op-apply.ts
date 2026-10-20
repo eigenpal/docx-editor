@@ -139,6 +139,7 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
+import { applyInsertComplexField } from './tree-op-field-insert.ts';
 import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
@@ -482,6 +483,8 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
         options,
         nextId
       );
+    case 'insertComplexField':
+      return applyInsertComplexField(part, paragraph, op, options);
     case 'insertPageField': {
       // ONE builder list per field, shared by the tracked and untracked arms — the same
       // rule the tab/break ops state, so suggesting mode cannot insert a different field

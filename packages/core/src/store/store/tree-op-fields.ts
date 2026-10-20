@@ -1,8 +1,9 @@
 // Page-number field insertion for furniture stories (and any paragraph).
 //
 // Authors allowlisted complex fields only — PAGE / NUMPAGES / SECTIONPAGES and the
-// PAGE_X_OF_Y composition. Nodes are typed `fldChar` / `instrText` with schema-legal
-// attributes; instruction strings are literals, never file-derived templates.
+// PAGE_X_OF_Y composition, plus the inert instructions `inert-field-instruction.ts` admits.
+// Nodes are typed `fldChar` / `instrText` with schema-legal attributes; instructions are
+// written as text, never evaluated.
 
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
@@ -73,14 +74,7 @@ const PAGE_X_OF_Y_SEPARATOR = ' of ';
 export function pageFieldContentBuilders(
   field: PageFieldKind
 ): readonly ((mint: () => string) => OoxmlNode)[] {
-  const complex = (instruction: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES') =>
-    [
-      (mint: () => string) => fldChar(mint, 'begin'),
-      (mint: () => string) => instrText(mint, instruction),
-      (mint: () => string) => fldChar(mint, 'separate'),
-      (mint: () => string) => fldChar(mint, 'end'),
-    ] as const;
-
+  const complex = complexFieldContentBuilders;
   if (field === 'PAGE_X_OF_Y') {
     return [
       ...complex('PAGE'),
@@ -89,6 +83,42 @@ export function pageFieldContentBuilders(
     ];
   }
   return [...complex(field)];
+}
+
+/**
+ * Run-child builders for one complex field with an empty cached result: `begin`, the
+ * instruction, `separate`, `end`. The caller has already checked the instruction (see
+ * `inert-field-instruction.ts`); it is written as text and never evaluated.
+ */
+export function complexFieldContentBuilders(
+  instruction: string
+): readonly ((mint: () => string) => OoxmlNode)[] {
+  return [
+    (mint) => fldChar(mint, 'begin'),
+    (mint) => instrText(mint, instruction),
+    (mint) => fldChar(mint, 'separate'),
+    (mint) => fldChar(mint, 'end'),
+  ];
+}
+
+/**
+ * The same field as four complete runs — `begin`, instruction, `separate`, `end` — the shape
+ * the field readers list, refresh, and delete as one field.
+ */
+export function complexFieldRuns(mint: () => string, instruction: string): OoxmlNode[] {
+  return complexFieldContentBuilders(instruction).map(
+    (build) =>
+      ({
+        id: mint(),
+        kind: 'run',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'r',
+        prefix: 'w',
+        namespaceBindings: [],
+        attributes: [],
+        children: [build(mint)],
+      }) as unknown as OoxmlNode
+  );
 }
 
 /**
