@@ -41,19 +41,71 @@ The runtime's tracking setting does not change the browser editor UI mode. Read 
 
 `insertText()` treats `\n`, `\r`, and `\r\n` as paragraph breaks. With `TrackMineOnly`, the inserted text and each new paragraph mark are tracked insertions. **Accept** keeps the new paragraphs. **Reject** joins them again and removes the inserted text.
 
-This example proposes to start a new paragraph before a sentence:
+To split between two sentences, replace only the gap between them with `'\n'`. The following example finds both sentences and replaces the space after the first one:
 
 ```ts
 await runtime.run(async (context) => {
-  const match = context.document.body.search('The buyer pays', { matchCase: true }).getFirst();
-  await context.sync();
   context.document.changeTrackingMode = 'TrackMineOnly';
-  match.insertText('\n', 'Before');
+  const body = context.document.body;
+  const first = body.search('the goods.').getFirst();
+  const second = body.search('The buyer').getFirst();
+  const gap = first.getRange('End').expandTo(second.getRange('Start'));
+  gap.insertText('\n', 'Replace');
   await context.sync();
 });
 ```
 
-With `Replace`, the replaced text becomes a tracked deletion, and the new text and paragraph marks follow it. The same tracked-edit refusals apply as for other text. For the rules on paragraph breaks, see [Split a paragraph](/docs/2.x/editor-api/text-and-ranges#split-a-paragraph).
+The proposal strikes the one space and adds one paragraph mark. After **Accept**, the paragraphs read `The supplier delivers the goods.` and `The buyer pays on receipt.`, with no trailing space. After **Reject**, the paragraph reads as it did before.
+
+Don't replace a sentence with the same sentence and a break, such as `' The buyer'` with `'\nThe buyer'`. That proposes deleting and inserting the same words. Don't insert `'\n'` before the second sentence either: the space before it stays at the end of the first paragraph.
+
+With `Replace`, the replaced text becomes a tracked deletion, and the new text and paragraph marks follow it. The same tracked-edit refusals apply as for other text. For the rules on paragraph breaks and their refusals, see [Split a paragraph](/docs/2.x/editor-api/text-and-ranges#split-a-paragraph).
+
+## Propose several structural edits in one run
+
+A sync is one transaction. These rules decide which structural edits can share a sync:
+
+- Edits in different paragraphs share a sync. A split, a field, and an equation in three paragraphs commit together or not at all.
+- Two edits in one paragraph can't share a sync. This includes two fields, a field and an equation, or a split and a field. The sync refuses with `ConflictingChanges`, and nothing changes. Sync after the first edit, read the range again, and make the second edit.
+- An object that a write returns, such as a field or a range, has no address until that write syncs. Sync before you use it. Otherwise the call fails with `InvalidObjectPath`.
+- An `insertBreak()` call, other than a line break, runs alone in its sync. Line breaks and `\n` in `insertText()` follow the paragraph rules in this list.
+
+This example proposes three edits in one sync, one in each paragraph. `ooxml` holds the package from [Propose an equation](#propose-an-equation):
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const body = context.document.body;
+  const one = body.search('One.').getFirst();
+  const two = body.search('Two.').getFirst();
+  const gap = one.getRange('End').expandTo(two.getRange('Start'));
+  gap.insertText('\n', 'Replace');
+  body.search('Field here').getFirst().insertField('Before', 'Seq', 'Figure');
+  body.search('Math here').getFirst().insertOoxml(ooxml, 'Before');
+  await context.sync();
+});
+```
+
+When a sync refuses, `error.debugInfo.errorLocation` names the call that refused, as the path of proxies and members that led to it. For example, `document.body.search.getFirst().insertOoxml` names the `insertOoxml()` call on the first search hit. When two calls conflict, it names the later one. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+
+A field and its result take two syncs, because the result needs the field's address. If the second sync fails, take your own pending field back with `field.delete()`. Under `TrackMineOnly`, deleting your own pending field removes it outright, so no proposal is left. A tracked `delete()` of any other field refuses with `NotSupported` and `edit.tracked-operation-unsupported`:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('as shown in ').getFirst();
+  const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+  try {
+    field.result.insertText('Figure 3', 'Replace');
+    await context.sync();
+  } catch (error) {
+    field.delete();
+    await context.sync();
+    throw error;
+  }
+});
+```
 
 ## Preview a counter-proposal
 
@@ -135,12 +187,12 @@ Never turn tracking off automatically to make an unsupported operation succeed. 
 
 ## Propose a field
 
-To propose a cross-reference, a sequence number, or another inert field, enable `TrackMineOnly` and call `Range.insertField()`:
+To propose a cross-reference, a sequence number, or another inert field, enable `TrackMineOnly` and call `Range.insertField()`. Search for the words before the field, including the space after them, and insert after that range:
 
 ```ts
 await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
-  const hit = context.document.body.search('the figure below').getFirst();
+  const hit = context.document.body.search('as shown in ').getFirst();
   hit.insertField('After', 'Ref', '_Ref123456 \\h');
   await context.sync();
 });
@@ -148,30 +200,18 @@ await runtime.run(async (context) => {
 
 The begin, instruction, separator, empty result, and end runs of the field sit in one `w:ins` element by the runtime author. **Accept** keeps the field, and **Reject** removes all of it. A `Replace` location strikes the range and proposes the field after it, so a reviewer sees one replacement. The field runs take the formatting of the text before the insertion point.
 
-The field starts with an empty cached result, because the runtime never evaluates its instruction. To show text in the proposal, sync, then write the result with `field.result.insertText(text, 'Replace')`. The result joins the same insertion, so one **Reject** still removes the whole field:
+The field starts with an empty cached result, because the runtime never evaluates its instruction. To show text in the proposal, sync, then write the result with `field.result.insertText(text, 'Replace')`. The result joins the same insertion, so one **Reject** still removes the whole field. For the two-sync pattern, see [Propose several structural edits in one run](#propose-several-structural-edits-in-one-run).
 
-```ts
-await runtime.run(async (context) => {
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const hit = context.document.body.search('the figure below').getFirst();
-  const field = hit.insertField('After', 'Ref', '_Ref123456 \\h');
-  await context.sync();
-  field.result.insertText('Figure 3', 'Replace');
-  await context.sync();
-});
-```
-
-The saved field carries `w:dirty="true"`, so an application that evaluates fields recomputes the result when it opens the file. With `TrackMineOnly`, a result write to a field that is not your own pending insertion refuses with `NotSupported` and `edit.tracked-operation-unsupported`.
-
-Field types that fetch, embed, link, run, or prompt refuse with `edit.field-unsupported`, tracked or not. Tracked `TOC` creation refuses. For the supported types and their limits, see [Fields and pagination](/docs/2.x/editor-api/fields#propose-a-field-as-a-tracked-change). For the result members, see [Read and write the cached result](/docs/2.x/editor-api/fields#read-and-write-the-cached-result).
+The saved field carries `w:dirty="true"`. An application that evaluates fields then recomputes the result when it opens the file. For the field types, the result members, and their refusals, see [Fields and pagination](/docs/2.x/editor-api/fields).
 
 ## Propose an equation
 
-To propose an equation, enable `TrackMineOnly` and call `Range.insertOoxml()` with a Flat OPC package (`pkg:package`). Its document part holds one paragraph with exactly one inline `m:oMath` element. The following example proposes x² after a search hit:
+To propose an equation, enable `TrackMineOnly` and call `Range.insertOoxml()` with a Flat OPC package (`pkg:package`). Its document part holds one paragraph with exactly one inline `m:oMath` element. The following example proposes x² after the words `the area is `, including their space:
 
 ```ts
 const ooxml =
-  '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">' +
+  '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/' +
+  'xmlPackage">' +
   '<pkg:part pkg:name="/word/document.xml" pkg:contentType="application/' +
   'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">' +
   '<pkg:xmlData><w:document xmlns:w="http://schemas.openxmlformats.org/' +
@@ -183,16 +223,16 @@ const ooxml =
 
 await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
-  const hit = context.document.body.search('the area is').getFirst();
+  const hit = context.document.body.search('the area is ').getFirst();
   const equation = hit.insertOoxml(ooxml, 'After');
   await context.sync();
   equation.load('text');
   await context.sync();
-  console.log(equation.text); // '\uFFFC'
+  console.log(equation.text); // '￼'
 });
 ```
 
-The equation and any plain runs beside it sit in one `w:ins` element by the runtime author, the same shape a tracked deletion uses to strike an equation:
+The equation and any plain runs beside it sit in one `w:ins` element by the runtime author. A tracked deletion strikes an equation with the same shape:
 
 ```xml
 <w:ins w:author="Agent" w:date="2026-10-20T09:00:00Z" w:id="1">
@@ -205,7 +245,7 @@ The equation and any plain runs beside it sit in one `w:ins` element by the runt
 </w:ins>
 ```
 
-**Accept** keeps the equation, and **Reject** removes it whole. The equation reads as U+FFFC in text reads and in `getReviewedText()`, like any other equation, and the editor paints it as math. A `Replace` location strikes the range and proposes the equation after it.
+**Accept** keeps the equation, and **Reject** removes it whole. The equation reads as U+FFFC in text reads and in `getReviewedText()`, like any other equation. The editor paints it as math. A `Replace` location strikes the range and proposes the equation after it.
 
 Every other OOXML shape refuses, and nothing is inserted. For the accepted shape and its refusals, see [Insert an equation](/docs/2.x/editor-api/text-and-ranges#insert-an-equation).
 

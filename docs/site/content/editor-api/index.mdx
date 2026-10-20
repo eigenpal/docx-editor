@@ -25,12 +25,15 @@ Start with [Runtime and setup](/docs/2.x/editor-api/runtime) and [Batching, load
 | Task | Guide |
 | --- | --- |
 | Read, insert, replace, or remove text | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
-| Find matches, split paragraphs, or use bookmarks | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
+| Split a paragraph with `insertText()` and `\n`, also as a tracked change | [Split a paragraph](/docs/2.x/editor-api/text-and-ranges#split-a-paragraph) |
+| Find matches or use bookmarks | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | Set fonts, paragraph properties, styles, or links | [Formatting and styles](/docs/2.x/editor-api/formatting) |
 | Create and configure lists | [Lists and numbering](/docs/2.x/editor-api/lists) |
 | Work with table values, rows, columns, and cells | [Tables and cells](/docs/2.x/editor-api/tables) |
 | Insert and resize images | [Inline pictures](/docs/2.x/editor-api/pictures) |
-| Calculate PAGE and NUMPAGES | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| Insert fields, write their cached results, or calculate PAGE and NUMPAGES | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| Insert an equation from OOXML | [Insert an equation](/docs/2.x/editor-api/text-and-ranges#insert-an-equation) |
+| Propose a split, a field, or an equation as a tracked change | [Tracked changes](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run) |
 | Set page geometry and edit headers, footers, or notes | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | Fill template controls and edit their metadata | [Content controls](/docs/2.x/editor-api/content-controls) |
 | Discuss content and manage threads | [Comments](/docs/2.x/editor-api/comments) |
@@ -83,7 +86,7 @@ try {
 
 Set `context.document.changeTrackingMode = 'TrackMineOnly'` before calling `range.insertText()` or `range.delete()`. Configure an `author` when you create the runtime. The mode applies to that runtime and persists across `run()` calls.
 
-Tracked edits support text within one paragraph, including table cells. Tracked deletions can also remove whole paragraphs with `range.delete()` or `paragraph.delete()`. Text edits that touch pending revisions refuse atomically. Paragraph insertion, list membership, and partial table row changes support native revisions. Other structural edits refuse. Font and paragraph formatting produce property revisions. `TrackAll` is unsupported. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode.
+Tracked edits support text within one paragraph, including table cells. Tracked deletions can also remove whole paragraphs with `range.delete()` or `paragraph.delete()`. Text edits that touch pending revisions refuse atomically. Paragraph insertion, list membership, and partial table row changes support native revisions. Tracked paragraph splits through `insertText()` with `\n`, fields through `insertField()` with results through `Field.result`, and one equation at a time through `insertOoxml()` produce native revisions. Other structural edits refuse. For the rules, see [Tracked changes](/docs/2.x/editor-api/revisions). Font and paragraph formatting produce property revisions. `TrackAll` is unsupported. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode.
 
 A pending row insertion or deletion blocks tracked edits throughout that row, including other cells and nested tables.
 

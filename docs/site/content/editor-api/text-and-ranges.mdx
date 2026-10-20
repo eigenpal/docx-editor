@@ -93,29 +93,60 @@ await runtime.run(async (context) => {
 
 The returned range starts at the first inserted character and ends after the last inserted segment, in the last new paragraph. Its text reads each break as `\r`.
 
-These rules apply to paragraph breaks in text:
+A break in a hyperlink splits the hyperlink into two links with the same target.
 
-- Text that lands inside an inline content control refuses with `NotSupported` and `edit.indivisible-content`.
-- A text write with a break cannot share a sync with another text edit in the same paragraph. The sync refuses with `ConflictingChanges`.
-- Form feeds, U+2028, and U+2029 refuse with `InvalidArgument`.
-- A break in a hyperlink splits the hyperlink into two links with the same target.
-
-This example splits a paragraph after its first sentence:
+To split between two sentences, replace only the gap between them. The following example replaces the space after the first sentence with a paragraph break:
 
 ```ts
 await runtime.run(async (context) => {
-  const match = context.document.body.search(' The buyer', { matchCase: true }).getFirst();
-  await context.sync();
-  match.insertText('\nThe buyer', 'Replace');
+  const body = context.document.body;
+  const first = body.search('the goods.').getFirst();
+  const second = body.search('The buyer').getFirst();
+  const gap = first.getRange('End').expandTo(second.getRange('Start'));
+  gap.insertText('\n', 'Replace');
   await context.sync();
 });
 ```
 
-To propose the split as a tracked change, set `TrackMineOnly` first. For an example, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+The first paragraph then ends with `the goods.` and keeps no trailing space. To propose the split as a tracked change, set `TrackMineOnly` first. For an example, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+
+A write with breaks refuses in these cases, and the document does not change:
+
+| Error | `innerError.code` | Cause | What to do |
+| --- | --- | --- | --- |
+| `NotSupported` | `edit.indivisible-content` | The break would land inside an inline content control. | Split outside the control, or edit the control's text without a break. |
+| `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync after the first edit, then read the range again. For the rules, see [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run). |
+| `InvalidArgument` | None | The text holds a form feed, U+2028, or U+2029. | Use `\n` for a paragraph break and `\v` for a line break. |
+| `InvalidArgument`, or `GeneralException` with `TrackMineOnly` | `edit.protected-content` | The range is in content-locked or data-bound content. | Edit outside the protected content. |
+| `NotImplemented` | `edit.tracked-own-pending-change` | With `TrackMineOnly`, the range covers or borders your own pending change. | Read the text again with `getReviewedText('Current')`, and edit a fresh range. |
+| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the range touches another author's structural change. | Ask the reviewer to decide that change first. |
+| `StaleDocument` | None | The range's text moved after you read it. | Read the range again, and reconsider the edit. |
+
+## Insert next to existing words
+
+An insertion lands exactly at the range end that you name, so you choose the spacing:
+
+- `search()` matches a trailing space. Search for `'see Section '`, with its space, and insert a field or an equation `'After'` that range. The new content then follows the space.
+- If the words have no space after them, insert `' '` first. In a later sync, insert the field or equation after the range that the write returns.
+- With `TrackMineOnly`, content that you insert right after your own pending text joins that insertion. For example, a field after your own pending space becomes part of that proposal. One **Reject** then removes both. Text after a field that ends its paragraph starts a new insertion after the field.
+- A range that a write returns has no address until that write syncs. Sync before you insert next to it. Otherwise the call fails with `InvalidObjectPath`.
+
+This example proposes a field after an existing space:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('see Section ').getFirst();
+  hit.insertField('After', 'Ref', '_Ref123456 \\h');
+  await context.sync();
+});
+```
+
+In an `insertOoxml()` package, a plain run's `w:t` can carry `xml:space="preserve"`, so a run such as `<w:t xml:space="preserve">where </w:t>` keeps its space.
 
 ## Insert an equation
 
-`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation lands where a typed character would, also inside a link, a content control, or your own pending insertion, and it reads as U+FFFC, as other equations do. The editor paints it as math. Content-locked and data-bound content refuses with `InvalidArgument` and `edit.protected-content`.
+`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation lands where a typed character would, also inside a link, a content control, or your own pending insertion. It reads as U+FFFC, as other equations do. The editor paints it as math. Content-locked and data-bound content refuses with `InvalidArgument` and `edit.protected-content`.
 
 The runtime accepts only this OOXML shape:
 
@@ -129,14 +160,17 @@ The runtime ignores `w:rsid*` attributes and paragraph identities. The plain run
 
 The runtime reads the OOXML with a bounded parser and never fetches or evaluates anything in it. Other input refuses, and the document does not change:
 
-| Input | Error | `innerError.code` |
-| --- | --- | --- |
-| Other parts, relationships, external targets, or binary data such as images | `NotSupported` | `edit.ooxml-unsupported` |
-| Two paragraphs, two equations, no equation, a display equation (`m:oMathPara`), paragraph properties, or a section break | `NotSupported` | `edit.ooxml-unsupported` |
-| Fields, pictures, hyperlinks, revisions, or any other element or attribute outside the allowlist | `NotSupported` | `edit.ooxml-unsupported` |
-| A document part without a package, such as a bare `w:document` | `NotSupported` | `edit.ooxml-unsupported` |
-| Malformed XML, a DTD, or an entity declaration or reference | `InvalidArgument` | `edit.ooxml-unsupported` |
-| More than 256 KiB, more than 8,192 elements, a text or attribute value over 4,096 characters, or math nested more than 64 levels deep | `InvalidArgument` | `edit.resource-limit` |
+| Error | `innerError.code` | Cause | What to do |
+| --- | --- | --- | --- |
+| `NotSupported` | `edit.ooxml-unsupported` | The package holds other parts, relationships, external targets, or binary data such as images. | Send a package with only the document part and, optionally, the `/_rels/.rels` part. |
+| `NotSupported` | `edit.ooxml-unsupported` | The body holds two paragraphs, two equations, no equation, a display equation (`m:oMathPara`), paragraph properties, or a section break. | Send one paragraph with one inline `m:oMath`. |
+| `NotSupported` | `edit.ooxml-unsupported` | An element or attribute is outside the allowlist, such as a field, a picture, a hyperlink, or a revision. A bare `w:document` without a package refuses the same way. | Remove it, or insert it with its own member, such as `insertField()`. |
+| `InvalidArgument` | `edit.invalid-argument` | The string is not well-formed XML, or it holds a DTD or an entity. | Send well-formed XML with no DTD and no entities. |
+| `InvalidArgument` | `edit.resource-limit` | The package is over 256 KiB or 8,192 elements, a text or attribute value is over 4,096 characters, or math nests more than 64 levels deep. | Send a smaller equation. |
+| `InvalidArgument` | `edit.protected-content` | The insertion point is in content-locked or data-bound content. | Insert outside the protected content. |
+| `InvalidArgument` | `edit.invalid-argument` | `Replace` spans more than one paragraph. | Replace a range in one paragraph. |
+| `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the equation would land in another author's pending structural change. | Ask the reviewer to decide that change first. |
+| `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync between the two edits. |
 
 ## Address existing content
 
@@ -168,7 +202,7 @@ See [Search and navigation](/docs/2.x/editor-api/search-and-navigation) for sear
 
 ## Split text into word ranges
 
-`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges(endingMarks, trimSpacing?)` split text into ranges. Each range ends after one of the ending marks, such as `' '` for words or `'.'` for sentences. A paragraph end always ends a range, and no range contains a paragraph mark. If `trimSpacing` is `false`, the default, each range keeps the spacing after it, so a deleted word takes its space with it. If `trimSpacing` is `true`, each range loses the spaces, tabs, and column breaks at its start and end, and a range that contains only spacing is left out. Use `true` to read words, and the default to plan edits.
+`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges(endingMarks, trimSpacing?)` split text into ranges. Each range ends after one of the ending marks, such as `' '` for words or `'. '` for sentences. A mark can be several characters long. Prefer `'. '` to `'.'` for sentences. `'.'` also ends a range inside a number such as `4.2` and after an abbreviation. With `'.'`, the next range starts with the space. A paragraph end always ends a range, and no range contains a paragraph mark. If `trimSpacing` is `false`, the default, each range keeps the spacing after it, so a deleted word takes its space with it. If `trimSpacing` is `true`, each range loses the spaces, tabs, and column breaks at its start and end, and a range that contains only spacing is left out. Use `true` to read words, and the default to plan edits.
 
 Each range is an exact span of the document. You can replace, delete, or insert next to it in a later sync, also with change tracking on. To address a run of words, call `first.expandTo(last)`. It returns the span from the earlier start to the later end. Both ranges must be in the same story; otherwise, the sync fails with `InvalidArgument`.
 

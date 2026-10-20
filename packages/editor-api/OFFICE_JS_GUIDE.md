@@ -208,7 +208,7 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
 | `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
-| `GeneralException` | Act on `error.debugInfo.innerError.code` (see [Diagnostics](/docs/2.x/guides/diagnostics#edit-internal-invariant)). For `edit.internal-invariant`, or when `innerError` is absent, report the failure with the engine version and do not retry the write unchanged. |
+| `GeneralException` | Act on `error.debugInfo.innerError.code` (see [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/diagnostics#edit-internal-invariant)). For `edit.internal-invariant`, or when `innerError` is absent, report the failure with the engine version and do not retry the write unchanged. |
 
 ### Read why the engine refused
 
@@ -227,7 +227,7 @@ try {
 }
 ```
 
-For all codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record anonymous refusal events, add a telemetry module to `createServer({ modules })`. For more information, see [Server agents](/docs/2.x/telemetry/agents).
+For all codes, see [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/diagnostics). To record anonymous refusal events, add a telemetry module to `createServer({ modules })`. For more information, see [Server agents](https://www.docx-editor.dev/docs/2.x/telemetry/agents).
 
 ### Recover from a stale range
 
@@ -302,7 +302,29 @@ await runtime.run(async (context) => {
 | Fields | Insert an inert field as one complex field in one tracked insertion, and write the cached result of your own pending field into it; reject removes the whole field |
 | Equations | `insertOoxml()` with one inline `m:oMath` in a Flat OPC package writes one tracked insertion; reject removes the whole equation |
 
-Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that contains a complex field boundary whose matching boundary is in another paragraph, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph has your own pending change or another author's pending paragraph mark, formatting, move, or structural change, and when the start of the next paragraph has any pending change. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after any deleted text, and new text inside their insertion splits it into two halves. The returned range names the new text where it lands, and each author's change stays a separate decision. For more information, see [Edit another author's pending text](#edit-another-authors-pending-text). Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it.
+Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. One refusal refuses the whole sync.
+
+A tracked paragraph deletion fails with `NotSupported` for these paragraphs:
+
+- The last paragraph of a story, table cell, or content control.
+- A paragraph directly before a table or a block content control.
+- A paragraph whose mark ends a section.
+- A paragraph with an inline content control.
+- A paragraph that holds a complex field boundary whose matching boundary is in another paragraph.
+- A paragraph that nests inline content more than 64 levels deep.
+
+A tracked paragraph deletion fails with `NotImplemented` in these cases:
+
+- The paragraph has your own pending change, or another author's pending paragraph mark, formatting, move, or structural change.
+- The start of the next paragraph has a pending change.
+- A later sync deletes beside your own pending deletion. Delete adjacent paragraphs in one sync instead.
+- A tracked deletion or replacement starts a paragraph whose previous paragraph mark you already proposed deleting.
+
+Text that another participant types into struck text joins the proposed deletion. Reject restores it, and accept removes it with no separate revision.
+
+Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after any deleted text, and new text inside their insertion splits it into two halves. The returned range names the new text where it lands, and each author's change stays a separate decision. For more information, see [Edit another author's pending text](#edit-another-authors-pending-text). Continuation can extend the runtime author's text and paragraph proposals.
+
+Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it.
 
 An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
 
@@ -316,19 +338,25 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 
 ### Propose a paragraph split
 
-`insertText()` on a body, paragraph, or range treats `\n`, `\r`, and `\r\n` as paragraph breaks. The text after a break starts a new paragraph with the properties of the paragraph that you wrote into. With `TrackMineOnly`, the inserted text and each new paragraph mark are tracked insertions. The following example proposes to start a new paragraph before a sentence:
+`insertText()` on a body, paragraph, or range treats `\n`, `\r`, and `\r\n` as paragraph breaks. The text after a break starts a new paragraph with the properties of the paragraph that you wrote into. With `TrackMineOnly`, the inserted text and each new paragraph mark are tracked insertions.
+
+To split between two sentences, replace only the gap between them with `'\n'`:
 
 ```ts
 await runtime.run(async (context) => {
-  const match = context.document.body.search('The buyer pays', { matchCase: true }).getFirst();
-  await context.sync();
   context.document.changeTrackingMode = 'TrackMineOnly';
-  match.insertText('\n', 'Before');
+  const body = context.document.body;
+  const first = body.search('the goods.').getFirst();
+  const second = body.search('The buyer').getFirst();
+  const gap = first.getRange('End').expandTo(second.getRange('Start'));
+  gap.insertText('\n', 'Replace');
   await context.sync();
 });
 ```
 
-Reject joins the paragraphs again. The returned range runs from the first inserted character to the end of the last inserted segment. Text that lands inside an inline content control refuses with `NotSupported` and `edit.indivisible-content`. A write with a break cannot share a sync with another text edit in the same paragraph.
+The proposal strikes the one space and adds one paragraph mark. Accept gives two paragraphs with no trailing space. Reject joins the paragraphs again. Don't replace a sentence with the same words and a break: that proposes deleting and inserting those words.
+
+The returned range runs from the first inserted character to the end of the last inserted segment. Text that lands inside an inline content control refuses with `NotSupported` and `edit.indivisible-content`. A write with a break can't share a sync with another edit in the same paragraph. For the batching rules and a refusal table, see [Propose several structural edits in one run](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run).
 
 ### Edit another author's pending text
 
@@ -559,9 +587,15 @@ Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in 
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 
-Insert an inert field with `range.insertField(location, type, text)`. The runtime inserts `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and `TOC`. `text` holds the arguments, such as a bookmark name and switches: `range.insertField('After', 'Ref', '_Ref123456 \\h')`. With `Empty`, `text` holds the whole instruction. The runtime never evaluates an instruction, and a new field has an empty cached result. Untracked `Page`, `NumPages`, and `TOC` fields are simple fields; other fields, and every tracked field, are complex fields whose runs take the formatting of the text before the insertion point. New `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, and `Time` fields carry `w:dirty="true"`, so an application that evaluates fields recomputes them on open. Write the cached result with `field.result.insertText(text, 'Replace')` after a sync, and read it with `field.load('result')`. The result range supports only `text` and that `insertText` call; its other members refuse with `NotImplemented` and `edit.field-result-unsupported`. With `TrackMineOnly`, the write works only on your own pending field and joins its insertion. Field types that fetch, embed, link, run, or prompt, such as `DDE`, `IncludeText`, `IncludePicture`, `Link`, and `MacroButton`, fail with `InvalidArgument` and `edit.field-unsupported`. With `TrackMineOnly`, the field is one complex field inside one tracked insertion. Accept keeps it, and reject removes all of it. Tracked TOC creation refuses.
+Insert an inert field with `range.insertField(location, type, text)`. The runtime inserts `Page`, `NumPages`, `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, `Time`, and `TOC`. `text` holds the arguments, such as a bookmark name and switches: `range.insertField('After', 'Ref', '_Ref123456 \\h')`. With `Empty`, `text` holds the whole instruction. The runtime never evaluates an instruction, and a new field has an empty cached result.
 
-Insert one equation with `range.insertOoxml(ooxml, location)`. `ooxml` is a Flat OPC package (`pkg:package`) whose document part holds one paragraph with exactly one inline `m:oMath` and optional plain runs. The equation reads as U+FFFC. With `TrackMineOnly`, it is one tracked insertion, and reject removes it whole. Every other OOXML shape refuses and inserts nothing: other parts, relationships, images, fields, paragraph properties, display equations, and unknown elements fail with `NotSupported` and `edit.ooxml-unsupported`. Malformed XML, DTDs, and entities fail with `InvalidArgument`.
+Untracked `Page`, `NumPages`, and `TOC` fields are simple fields. Other fields, and every tracked field, are complex fields. Their runs take the formatting of the text before the insertion point. New `Ref`, `PageRef`, `NoteRef`, `Seq`, `StyleRef`, `Date`, and `Time` fields carry `w:dirty="true"`, so an application that evaluates fields recomputes them on open.
+
+Write the cached result with `field.result.insertText(text, 'Replace')` after a sync, and read it with `field.load('result')`. The result range supports only `text` and that `insertText()` call. Its other members refuse with `NotImplemented` and `edit.field-result-unsupported`. With `TrackMineOnly`, the write works only on your own pending field and joins its insertion. If the write fails, `field.delete()` takes your own pending field back outright.
+
+Field types that fetch, embed, link, run, or prompt, such as `DDE`, `IncludeText`, `IncludePicture`, `Link`, and `MacroButton`, fail with `InvalidArgument` and `edit.field-unsupported`. With `TrackMineOnly`, the field is one complex field inside one tracked insertion. Accept keeps it, and reject removes all of it. Tracked TOC creation refuses. For the refusal tables, see [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields).
+
+Insert one equation with `range.insertOoxml(ooxml, location)`. `ooxml` is a Flat OPC package (`pkg:package`) whose document part holds one paragraph with exactly one inline `m:oMath` and optional plain runs. The equation reads as U+FFFC. With `TrackMineOnly`, it is one tracked insertion, and reject removes it whole. Every other OOXML shape refuses and inserts nothing: other parts, relationships, images, fields, paragraph properties, display equations, and unknown elements fail with `NotSupported` and `edit.ooxml-unsupported`. Malformed XML, DTDs, and entities fail with `InvalidArgument` and `edit.invalid-argument`. For the accepted shape and every refusal, see [Insert an equation](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges#insert-an-equation).
 
 Use `range.insertField('Before', 'TOC', '\\o "1-3" \\h')` to insert an inert TOC instruction. This call saves no calculated entries. TOC evaluation and code writes refuse.
 
@@ -571,7 +605,7 @@ Headless field calculation requires an explicit `pagination.measurer` when creat
 
 Character formatting also supports underline, strikethrough, exact Word-palette highlighting, subscript, and superscript. `font.underline = 'None'` removes an underline. Setting one script mode to `true` clears the other mode. The highlight setter keeps Office's pinned `string` type, although Microsoft documents runtime `null` for clearing. The runtime accepts this clearing value. The runtime rejects unsupported highlight colors.
 
-The workflow tests cover both hosts and save/reopen: `model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, `model-picture-field-parity.test.ts`, and `runtime-tracked-field-insert.test.ts`. The final test includes primary footer creation and a saved `NUMPAGES` result.
+The repository's tests run these workflows on both hosts and through save and reopen, including primary footer creation and a saved `NUMPAGES` result.
 
 ## Set document metadata
 

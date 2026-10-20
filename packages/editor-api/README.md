@@ -35,12 +35,16 @@ Start with [Runtime and setup](https://www.docx-editor.dev/docs/2.x/editor-api/r
 | Task | Guide |
 | --- | --- |
 | Read, insert, replace, or remove text | [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges) |
-| Find matches, split paragraphs, or use bookmarks | [Search and navigation](https://www.docx-editor.dev/docs/2.x/editor-api/search-and-navigation) |
+| Split a paragraph with `insertText()` and `\n`, also as a tracked change | [Split a paragraph](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges#split-a-paragraph) |
+| Find matches or use bookmarks | [Search and navigation](https://www.docx-editor.dev/docs/2.x/editor-api/search-and-navigation) |
 | Set fonts, paragraph properties, styles, or links | [Formatting and styles](https://www.docx-editor.dev/docs/2.x/editor-api/formatting) |
 | Create and configure lists | [Lists and numbering](https://www.docx-editor.dev/docs/2.x/editor-api/lists) |
 | Work with table values, rows, columns, and cells | [Tables and cells](https://www.docx-editor.dev/docs/2.x/editor-api/tables) |
 | Insert and resize images | [Inline pictures](https://www.docx-editor.dev/docs/2.x/editor-api/pictures) |
-| Calculate PAGE and NUMPAGES | [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields) |
+| Insert fields, write their cached results, or calculate PAGE and NUMPAGES | [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields) |
+| Insert an equation from OOXML | [Insert an equation](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges#insert-an-equation) |
+| Propose a split, a field, or an equation as a tracked change | [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run) |
+| Propose a model's paragraph rewrite as the fewest tracked changes | [Propose an AI rewrite](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite), with `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
 | Set page geometry and edit headers, footers, or notes | [Page layout and stories](https://www.docx-editor.dev/docs/2.x/editor-api/page-layout-and-stories) |
 | Fill template controls and edit their metadata | [Content controls](https://www.docx-editor.dev/docs/2.x/editor-api/content-controls) |
 | Discuss content and manage threads | [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments) |
@@ -100,7 +104,7 @@ await runtime.run(async (context) => {
 
 Use `range.insertText(text, 'Before' | 'After')` for insertions, and `range.delete()` or `range.clear()` for deletions. `insertText()` returns the inserted range. Mode assignments and edits commit together at `sync()`; failed batches preserve the previous mode and document. Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
 
-This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists across its `run()` calls. It does not change peers' tracking settings or save a document-wide tracking policy. `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode. Tracked text edits support one paragraph, including table-cell text, and adjacent sibling paragraphs outside collaboration. Tracked `Paragraph.delete()` and `Range.delete()` over whole paragraphs record deleted text and deleted paragraph marks, also in collaboration. Font, paragraph-format, paragraph-style, and `readingOrder` changes record property revisions, and paragraph insertion records inserted text and paragraph marks. The runtime rejects targets touching pending revisions, including text inside a row with a pending insertion or deletion. Other structural changes refuse while tracking. For the complete list, see [Revisions](https://docx-editor.dev/docs/2.x/editor-api/revisions). Comments and revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
+This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists across its `run()` calls. It does not change peers' tracking settings or save a document-wide tracking policy. `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode. Tracked text edits support one paragraph, including table-cell text, and adjacent sibling paragraphs outside collaboration. Tracked `Paragraph.delete()` and `Range.delete()` over whole paragraphs record deleted text and deleted paragraph marks, also in collaboration. Font, paragraph-format, paragraph-style, and `readingOrder` changes record property revisions, and paragraph insertion records inserted text and paragraph marks. The runtime rejects targets touching pending revisions, including text inside a row with a pending insertion or deletion. Tracked paragraph splits through `insertText()` with `\n`, fields through `insertField()` with results through `Field.result`, and one equation at a time through `insertOoxml()` produce native revisions. Other structural changes refuse while tracking. For the complete list, see [Revisions](https://docx-editor.dev/docs/2.x/editor-api/revisions). Comments and revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
 
 See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus, stale-read handling, and the review lifecycle.
 

@@ -11,7 +11,7 @@ Your application owns the model side: the prompt, the instruction, the model cli
 
 ## Rewrite a paragraph
 
-Prepare the paragraph, send `draft.text` and `draft.legend` to your model with your instruction, and pass the model text to `draft.apply()`. The following example rewrites the first paragraph on a server:
+Prepare the paragraph, send `draft.text` and `draft.legend` to your model with your instruction, and pass the model text to `draft.apply()`. The following example finds a paragraph by a phrase in it and rewrites that paragraph on a server:
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -20,21 +20,25 @@ import { prepareRewrite } from '@docx-editor.dev/editor-api/agent';
 const runtime = await DocxEditor.createServer(bytes, { author: 'Rewrite agent' });
 try {
   const result = await runtime.run(async (context) => {
-    const paragraph = context.document.body.paragraphs.getFirst();
-    const draft = await prepareRewrite(context, paragraph);
+    const hit = context.document.body.search('The buyer pays').getFirst();
+    const paragraph = hit.paragraphs.getFirst();
+    const options = { keepPlaceholders: true };
+    const draft = await prepareRewrite(context, paragraph, options);
     const prompt = ['Make this clause shorter. Keep its meaning.', draft.legend, draft.text].join(
       '\n\n'
     );
     return draft.apply(await callModel(prompt));
   });
   console.log(`${result.changes} changes: ${result.proposed}`);
-  const saved = await runtime.save();
+  console.log(`Saved ${(await runtime.save()).byteLength} bytes`);
 } finally {
   runtime.dispose();
 }
 ```
 
-The changes use the runtime's `author`. In a page, create the runtime with `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module.
+`keepPlaceholders: true` makes a model answer that leaves out a placeholder refuse with `placeholder-missing`. Without it, a left-out placeholder proposes deleting what it stands for, such as a field or a locked content control. You don't need to sync before you pass `hit.paragraphs.getFirst()`: `prepareRewrite()` reads the paragraph itself. To get the document with the proposal, call `runtime.save()`.
+
+The changes use the runtime's `author`. `prepareRewrite()` takes the `context` of either runtime. In a page, create the runtime with `DocxEditor.createBrowser()` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module. Both entries share one `RequestContext` class.
 
 Call `draft.apply()` in the same `run()` as `prepareRewrite()`. Your model call can run between them, but it must not use `context` or its proxies. Pass it plain data from the draft.
 
@@ -171,7 +175,7 @@ Each paragraph gets its own guarantee: all of its changes, or none. A paragraph 
 
 A rewrite stays inside one paragraph and keeps its fields and equations. To propose a structural edit, set `document.changeTrackingMode` to `TrackMineOnly` and call the Office.js member for it:
 
-- To split a paragraph, call `insertText()` with `\n` in the text. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+- To split a paragraph, replace the gap between two sentences with `'\n'` through `insertText()`. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
 - To add a field, call `insertField()`, and write its result with `field.result.insertText()`. For more information, see [Propose a field](/docs/2.x/editor-api/revisions#propose-a-field).
 - To add an equation, call `insertOoxml()`. For more information, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
 
@@ -185,6 +189,18 @@ A rewrite stays inside one paragraph and keeps its fields and equations. To prop
 ## Handle errors
 
 `prepareRewrite()` and `draft.apply()` throw a `RewriteError`, and `draft.check()` returns one. Every code except `rollback-failed` leaves the paragraph as it was. When `error.isModelError` is `true`, the model text broke a placeholder rule, nothing was written, and you can send `error.message` back to the model.
+
+`check()` tests only the model text. `apply()` can still throw `stale`, `locked`, or `write-failed` after `check()` returns `null`, because the document can change, and the writes can refuse, after the check. Some codes come from a `DocxEditorError` that the helper caught. `error.cause` holds that error:
+
+| `RewriteError` code | Comes from |
+| --- | --- |
+| `stale` | `StaleDocument` from a write |
+| `locked` | Any `DocxEditorError` whose `debugInfo.innerError.code` is `edit.protected-content` |
+| `write-failed` | Any other `DocxEditorError` from a write |
+| `tracking-unavailable` | A refused `changeTrackingMode = 'TrackMineOnly'`, such as `NotSupported` without the review module |
+| `read-failed` | Any error from the read in `prepareRewrite()` |
+
+The following table lists every code:
 
 | `code` | Meaning | What to do |
 | --- | --- | --- |
