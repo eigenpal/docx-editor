@@ -49,7 +49,7 @@ The API does not expose HTML or document-wide `start` and `end` offsets, and it 
 
 ## Upgrade text processing
 
-Automation reads in 2.26.0 report manual line breaks and column breaks as `\n`. This release changes those results to `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
+Automation reads in 2.26.0 and earlier report manual line breaks and column breaks as `\n`. Later versions report them as `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
 
 Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
 
@@ -118,7 +118,7 @@ A write with breaks refuses in these cases, and the document does not change:
 | `ConflictingChanges` | None | Another edit in the same sync changes the same paragraph. | Sync after the first edit, then read the range again. For the rules, see [Propose several structural edits in one run](/docs/2.x/editor-api/revisions#propose-several-structural-edits-in-one-run). |
 | `InvalidArgument` | None | The text holds a form feed, U+2028, or U+2029. | Use `\n` for a paragraph break and `\v` for a line break. |
 | `InvalidArgument`, or `GeneralException` with `TrackMineOnly` | `edit.protected-content` | The range is in content-locked or data-bound content. | Edit outside the protected content. |
-| `NotImplemented` | `edit.tracked-own-pending-change` | With `TrackMineOnly`, the range covers or borders your own pending change. | Read the text again with `getReviewedText('Current')`, and edit a fresh range. |
+| `NotImplemented` | `edit.tracked-own-pending-change` | With `TrackMineOnly`, the range covers or borders your own pending change. | Read the proposed text with `getReviewedText('Current')`, then edit a range outside your pending change. To change your proposal itself, reject it and propose again. |
 | `NotImplemented` | `edit.tracked-foreign-revision-unsupported` | With `TrackMineOnly`, the range touches another author's structural change. | Ask the reviewer to decide that change first. |
 | `StaleDocument` | None | The range's text moved after you read it. | Read the range again, and reconsider the edit. |
 
@@ -142,7 +142,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-In an `insertOoxml()` package, a plain run's `w:t` can carry `xml:space="preserve"`, so a run such as `<w:t xml:space="preserve">where </w:t>` keeps its space.
+For equations, see the spacing tip in [Insert an equation](#insert-an-equation).
 
 ## Insert an equation
 
@@ -155,6 +155,35 @@ The runtime accepts only this OOXML shape:
 - A `/word/document.xml` part whose body holds exactly one paragraph.
 - In that paragraph, exactly one inline `m:oMath` element, and optional plain runs before or after it. A plain run holds only `w:rPr`, `w:t`, and `w:tab`.
 - Inside the equation, OMML structure and property elements. A math run can carry character formatting in `w:rPr`.
+
+A plain run's `w:t` can carry `xml:space="preserve"`, so a run keeps a leading or trailing space. Use such a run for the space between the equation and the words after it. The following example inserts E = mc² after the words `the relation `, followed by a plain run ` holds.` that keeps its space:
+
+```ts
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+const PKG = 'http://schemas.microsoft.com/office/2006/xmlPackage';
+const TYPE =
+  'application/vnd.openxmlformats-officedocument.' + 'wordprocessingml.document.main+xml';
+const equation =
+  '<m:oMath><m:r><m:t>E=m</m:t></m:r><m:sSup><m:e><m:r><m:t>c</m:t></m:r>' +
+  '</m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>';
+const after = '<w:r><w:t xml:space="preserve"> holds.</w:t></w:r>';
+const ooxml =
+  `<pkg:package xmlns:pkg="${PKG}">` +
+  `<pkg:part pkg:name="/word/document.xml" pkg:contentType="${TYPE}">` +
+  `<pkg:xmlData><w:document xmlns:w="${W}" xmlns:m="${M}">` +
+  `<w:body><w:p>${equation}${after}</w:p></w:body></w:document>` +
+  '</pkg:xmlData></pkg:part></pkg:package>';
+
+await runtime.run(async (context) => {
+  const hit = context.document.body.search('the relation ').getFirst();
+  const inserted = hit.insertOoxml(ooxml, 'After');
+  await context.sync();
+  inserted.load('text');
+  await context.sync();
+  console.log(inserted.text); // U+FFFC, then ' holds.'
+});
+```
 
 The runtime ignores `w:rsid*` attributes and paragraph identities. The plain runs keep the formatting the package gives them. With `TrackMineOnly`, the equation and its runs are one tracked insertion. For an example, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
 
@@ -228,7 +257,7 @@ To propose a model's rewrite as the fewest tracked changes, use `prepareRewrite`
 
 A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. Plan the edits by range index, because a paragraph can repeat a word. Then apply them from the last index to the first, and sync after each edit.
 
-Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed result with `getReviewedText('Current')` instead.
+Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed text with `getReviewedText('Current')`, then edit a range outside your pending change. To change your proposal itself, reject it and propose again.
 
 After tracked edits, `Paragraph.text` contains both the deleted and the inserted words. Call `getReviewedText('Current')` to read the text as if every pending change were accepted. Call `getReviewedText('Original')` to read it as if every change were rejected. `Range.getReviewedText()` and `Paragraph.getReviewedText()` default to `Current`. The method does not change the document. `ChangeTrackingVersion` provides matching enum values.
 

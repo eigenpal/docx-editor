@@ -205,8 +205,8 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. `debugInfo.innerError.code` `edit.stale-target` means the document no longer holds the object; read again. |
 | `StaleDocument` | Search again, reconsider the model proposal, then write. |
 | `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits. |
-| `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
-| `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
+| `NotSupported` | The call is outside the supported subset for this host, mode, or content. Don't retry it. Read `debugInfo.innerError.code`, then check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
+| `NotImplemented` | The API does not implement the call for this target, such as a tracked edit beside your own pending change. Don't retry it. Read `debugInfo.innerError.code`, reconsider the target, and do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
 | `GeneralException` | Act on `error.debugInfo.innerError.code` (see [Diagnostics](https://www.docx-editor.dev/docs/2.x/guides/diagnostics#edit-internal-invariant)). For `edit.internal-invariant`, or when `innerError` is absent, report the failure with the engine version and do not retry the write unchanged. |
 
@@ -461,7 +461,7 @@ Map each difference between the old and the new words to one call. The last rang
 
 Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
 
-Do not split the paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. To read the proposed result, call `getReviewedText('Current')`.
+Do not split the paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed text with `getReviewedText('Current')`, then edit a range outside your pending change. To change your proposal itself, reject it and propose again.
 
 Catch a refused word-range edit and read its rule from `debugInfo`:
 

@@ -195,7 +195,7 @@ try {
 | `InvalidArgument` | Correct the input, property name, location, or document target |
 | `ResourceLimitExceeded` | Inspect `limit`; reject the file or deliberately adjust supported input budgets |
 | `ItemNotFound` | Handle absence or choose a null-object accessor |
-| `NotSupported`, `NotImplemented` | Check host, operation, mode, and document-structure limits; choose a supported operation |
+| `NotSupported`, `NotImplemented` | The call is outside the supported subset for this host, mode, content, or target, and nothing changed. Don't retry the same call. Read `debugInfo.innerError.code` for the rule, then choose another call, mode, target, or content. |
 | `ConflictingChanges` | Read again and separate dependent edits into different syncs |
 | `InvalidRequestContext` | Start a new run |
 | `RuntimeDisposed` | Create a new runtime |

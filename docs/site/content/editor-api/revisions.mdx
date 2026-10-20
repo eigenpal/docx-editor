@@ -57,6 +57,22 @@ await runtime.run(async (context) => {
 
 The proposal strikes the one space and adds one paragraph mark. After **Accept**, the paragraphs read `The supplier delivers the goods.` and `The buyer pays on receipt.`, with no trailing space. After **Reject**, the paragraph reads as it did before.
 
+`revisions.items` lists the inserted paragraph mark as a revision with `type` `Insert`, and the struck space as a `Delete`. Each one accepts and rejects on its own. Text with a line feed, such as `insertText('x\ny', 'Before')`, lists only `Insert` revisions.
+
+If you don't know the sentence text, find the gap from the paragraph's sentence ranges. The first trimmed range ends before the space, and the first untrimmed range ends after it. The whole edit takes one sync, because ranges read from the document can be edited in the same sync:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const paragraph = context.document.body.paragraphs.getFirst();
+  const words = paragraph.getTextRanges(['. '], true).getFirst();
+  const sentence = paragraph.getTextRanges(['. ']).getFirst();
+  const gap = words.getRange('End').expandTo(sentence.getRange('End'));
+  gap.insertText('\n', 'Replace');
+  await context.sync();
+});
+```
+
 Don't replace a sentence with the same sentence and a break, such as `' The buyer'` with `'\nThe buyer'`. That proposes deleting and inserting the same words. Don't insert `'\n'` before the second sentence either: the space before it stays at the end of the first paragraph.
 
 With `Replace`, the replaced text becomes a tracked deletion, and the new text and paragraph marks follow it. The same tracked-edit refusals apply as for other text. For the rules on paragraph breaks and their refusals, see [Split a paragraph](/docs/2.x/editor-api/text-and-ranges#split-a-paragraph).
@@ -70,7 +86,7 @@ A sync is one transaction. These rules decide which structural edits can share a
 - An object that a write returns, such as a field or a range, has no address until that write syncs. Sync before you use it. Otherwise the call fails with `InvalidObjectPath`.
 - An `insertBreak()` call, other than a line break, runs alone in its sync. Line breaks and `\n` in `insertText()` follow the paragraph rules in this list.
 
-This example proposes three edits in one sync, one in each paragraph. `ooxml` holds the package from [Propose an equation](#propose-an-equation):
+This example proposes three edits, one in each paragraph, in one sync. It needs no read sync first, because search hits can be edited in the sync that reads them. `ooxml` holds the package from [Propose an equation](#propose-an-equation):
 
 ```ts
 await runtime.run(async (context) => {
@@ -228,7 +244,7 @@ await runtime.run(async (context) => {
   await context.sync();
   equation.load('text');
   await context.sync();
-  console.log(equation.text); // '￼'
+  console.log(equation.text); // U+FFFC, the equation's one character
 });
 ```
 
