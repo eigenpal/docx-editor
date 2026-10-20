@@ -170,8 +170,8 @@ const IMPORT_LINE = /^import \{ ([\w$]+)(?: as ([\w$]+))? \} from '[^']+';$/;
 function withoutUnusedImports(fenceText) {
   const lines = fenceText.split('\n');
   const body = lines.filter((line) => !IMPORT_LINE.test(line)).join('\n');
-  const used = (name) =>
-    new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(body);
+  const tokens = new Set(body.match(/[\w$]+/g));
+  const used = (name) => tokens.has(name);
   const kept = lines.filter((line) => {
     const match = IMPORT_LINE.exec(line);
     return !match || used(match[2] ?? match[1]);
