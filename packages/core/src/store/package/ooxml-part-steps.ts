@@ -8,7 +8,9 @@
 // long table) child by child. Anything unexpected, and every rejection, falls back to the
 // one-shot read, which gives the canonical answer.
 
+import { fastReadXmlSteps } from './xml-fast-read.ts';
 import {
+  checkXmlSize,
   preflightXmlSteps,
   readCheckedXml,
   readXmlFragment,
@@ -68,6 +70,12 @@ export function* readOoxmlPartSteps(
   limits?: XmlLimits
 ): Generator<void, OoxmlReadResult> {
   if (xml.length < steppedPartMinChars) return readOoxmlPart(xml, metadata, limits);
+  // The plain subset reads in one pass, a slice per step (`xml-fast-read.ts`). A part outside
+  // it, and every refusal, takes the bounded steps below.
+  const sized = checkXmlSize(xml, limits);
+  if (!sized.ok) return sized;
+  const fast = yield* fastReadXmlSteps(xml, sized.maxElements, fragmentChars);
+  if (fast !== null) return yield* convertRootSteps(fast[0] as XmlElement, metadata);
   const checked = yield* preflightXmlSteps(xml, limits);
   if (!checked.ok) return checked;
   yield;
@@ -120,6 +128,14 @@ export function* readOoxmlPartSteps(
     ...roots[0]!,
     children: roots[0]!.children.map((node) => (node === bodies[0] ? body : node)),
   };
+  return yield* convertRootSteps(root, metadata);
+}
+
+/** The part tree of `root`, converting a wide element child by child between yields. */
+function* convertRootSteps(
+  root: XmlElement,
+  metadata: OoxmlPartMetadata
+): Generator<void, OoxmlReadResult> {
   try {
     const opened = openElement(
       root,
