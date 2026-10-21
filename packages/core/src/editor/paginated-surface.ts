@@ -1290,6 +1290,7 @@ export function mountPaginatedSurface(
         numId,
         level
       ) !== null,
+    styleCascade,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
   function replacementLanding(paragraphId: string, start: number, end: number): number | null {
