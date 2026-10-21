@@ -501,6 +501,65 @@ describe('undo groups', () => {
     expect(results[1]).toEqual(results[0]!);
   });
 
+  test('a begin refuses when its flush opens another group', async () => {
+    const { alice, bob } = await pair();
+    alice.detach();
+    let onFlush: (() => void) | undefined;
+    alice.room.session.attach({
+      ...alice.port,
+      flushPendingJournals: () => {
+        alice.port.flushPendingJournals();
+        const callback = onFlush;
+        onFlush = undefined;
+        callback?.();
+      },
+    });
+    let nested: ReturnType<typeof alice.room.session.beginUndoGroup> | undefined;
+    onFlush = () => {
+      nested = alice.room.session.beginUndoGroup();
+    };
+    expect(() => alice.room.session.beginUndoGroup()).toThrow(
+      expect.objectContaining({ code: 'undo-group-already-open' })
+    );
+    expect(nested?.state).toBe('open');
+    type(alice, 0, 'A');
+    type(bob, 1, 'B');
+    elapse(1_000);
+    type(alice, 2, 'C');
+    nested!.end();
+    expect(undo(alice)).toBe(true);
+    expect(texts(alice)).toEqual(['Alpha', 'BBravo', 'Charlie']);
+    harness.expectConverged(alice, bob);
+    expect(alice.room.session.redo()).toBe(true);
+    alice.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+  });
+
+  test('a begin refuses when its flush attaches an interactive port', async () => {
+    const { alice, bob } = await pair();
+    alice.detach();
+    let attachOnFlush = false;
+    let detach = () => {};
+    detach = alice.room.session.attach({
+      ...alice.port,
+      flushPendingJournals: () => {
+        alice.port.flushPendingJournals();
+        if (!attachOnFlush) return;
+        attachOnFlush = false;
+        detach();
+        alice.room.session.attach({ ...alice.port, interactive: true });
+      },
+    });
+    attachOnFlush = true;
+    expect(() => alice.room.session.beginUndoGroup()).toThrow(
+      expect.objectContaining({ code: 'editor-attached' })
+    );
+    expect(alice.room.session.undoGroupOpen).toBe(false);
+    type(alice, 0, 'A');
+    expect(undo(alice)).toBe(true);
+    harness.expectConverged(alice, bob);
+  });
+
   test('a begin whose flush destroys the session refuses and leaves no group open', async () => {
     const { alice } = await pair();
     alice.detach();

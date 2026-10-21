@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Unchanged rewrite output can report stale success. Undo groups can bypass admission after host callbacks.",
+  "after": "Rewrites verify unchanged output against current text. Undo groups recheck session admission after host callbacks.",
+  "reason": "These checks affect local admission only. Shared state formats and operation meanings remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-prepare-rewrite.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups.test.ts"
+  ],
+  "changeset": "release-review-safety",
+  "migration": null
+}

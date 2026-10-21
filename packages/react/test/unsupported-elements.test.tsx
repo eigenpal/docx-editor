@@ -1,7 +1,7 @@
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { markUnsupportedElement } from '../../core/src/output/unsupported-elements.ts';
 import { UnsupportedElements } from '../src/editor/UnsupportedElements.tsx';
 import type { EquationSpanRecord } from '@docx-editor.dev/core/layout';
@@ -341,4 +341,19 @@ test('compound declarations select the first match, retain priority on updates, 
   view.unmount();
   expect(fallback.hidden).toBe(false);
   registry.setContainer(null);
+});
+
+test('empty fragments, arrays, and whitespace keep the default placeholder visible', () => {
+  const container = document.createElement('div');
+  const { fallback } = placeholder(container, 'default');
+  const emptyResults: ReactNode[] = [<></>, [], [null, false], ' ', <>{[null, <></>]}</>];
+  const view = render(<UnsupportedElements container={container} render={() => <b>custom</b>} />);
+  for (const result of emptyResults) {
+    view.rerender(<UnsupportedElements container={container} render={() => result} />);
+    expect(fallback.hidden).toBe(false);
+    expect(container.querySelector('b')).toBeNull();
+  }
+  view.rerender(<UnsupportedElements container={container} render={() => <>{0}</>} />);
+  expect(fallback.hidden).toBe(true);
+  expect(container.querySelector('.docx-unsupported-slot')?.textContent).toBe('0');
 });

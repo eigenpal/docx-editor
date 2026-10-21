@@ -210,7 +210,20 @@ async function prepare(
     assertNothingQueued(context);
     assertUnused();
     const { hunks, expected } = plan(modelText);
-    if (hunks.length === 0) return { paragraphId, original, proposed: original, changes: 0 };
+    if (hunks.length === 0) {
+      // Even an unchanged answer must describe the paragraph that still exists now.
+      // A participant can edit it while the caller waits for the model.
+      try {
+        const proposed = paragraph.getReviewedText('Current');
+        const before = paragraph.getReviewedText('Original');
+        await helperSync(context);
+        if (before.value !== original || normal(proposed.value) !== expected)
+          throw concurrentEdit();
+        return { paragraphId, original, proposed: proposed.value, changes: 0 };
+      } catch (error) {
+        throw writeFailure(error);
+      }
+    }
     const restore = await startTracking(context);
     let result: RewriteResult;
     try {

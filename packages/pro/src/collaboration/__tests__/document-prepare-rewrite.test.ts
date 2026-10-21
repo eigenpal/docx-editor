@@ -216,3 +216,73 @@ test('an edit while the model answers makes apply() refuse; a new draft proposes
     r.close();
   }
 });
+
+test('unchanged model output refuses after another participant changes the paragraph', async () => {
+  const r = await room('reviewer first', BODY);
+  try {
+    const [alice, bob] = r.peers;
+    const error = await alice!.runtime.run(async (context) => {
+      const draft = await prepareRewrite(context, context.document.body.paragraphs.getFirst());
+      await bob!.runtime.run(async (peer) => {
+        peer.document.body.paragraphs.getFirst().insertText(' Agreed.', 'End');
+        await peer.sync();
+      });
+      r.sync();
+      return draft.apply(draft.text).then(
+        () => null,
+        (failure: unknown) => failure
+      );
+    });
+    expect(error).toBeInstanceOf(RewriteError);
+    expect(error).toMatchObject({ code: 'stale' });
+    r.sync();
+    await converged(r);
+    for (const peer of r.peers) {
+      expect(await state(peer.runtime)).toMatchObject({
+        first: `${ORIGINAL} Agreed.`,
+        revisions: [],
+        tracking: 'Off',
+      });
+    }
+  } finally {
+    r.close();
+  }
+});
+
+test('unchanged model output refuses after another participant deletes the paragraph', async () => {
+  const r = await room('reviewer first', BODY);
+  try {
+    const [alice, bob] = r.peers;
+    const error = await alice!.runtime.run(async (context) => {
+      const draft = await prepareRewrite(context, context.document.body.paragraphs.getFirst());
+      await bob!.runtime.run(async (peer) => {
+        peer.document.body.paragraphs.getFirst().delete();
+        await peer.sync();
+      });
+      r.sync();
+      return draft.apply(draft.text).then(
+        () => null,
+        (failure: unknown) => failure
+      );
+    });
+    expect(error).toBeInstanceOf(RewriteError);
+    expect(error).toMatchObject({ code: 'write-failed', cause: { code: 'InvalidObjectPath' } });
+    r.sync();
+    await converged(r);
+    for (const peer of r.peers) {
+      const remaining = await peer.runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items/text');
+        context.document.load('changeTrackingMode');
+        await context.sync();
+        return {
+          text: paragraphs.items.map((paragraph) => paragraph.text),
+          tracking: context.document.changeTrackingMode,
+        };
+      });
+      expect(remaining).toEqual({ text: ['Second clause.'], tracking: 'Off' });
+    }
+  } finally {
+    r.close();
+  }
+});

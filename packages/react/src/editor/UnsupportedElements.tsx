@@ -1,10 +1,27 @@
-import { useLayoutEffect, useState, type ReactNode } from 'react';
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   observeUnsupportedElements,
   type UnsupportedElement,
   type UnsupportedElementHost,
 } from '@docx-editor.dev/core/editor';
+
+// Empty render results keep the visible built-in fallback, including nested fragments.
+function hasContent(content: ReactNode): boolean {
+  return Children.toArray(content).some((child) => {
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
+      return hasContent(child.props.children);
+    }
+    return typeof child !== 'string' || child.trim().length > 0;
+  });
+}
 
 export function UnsupportedElementPlaceholder({
   host,
@@ -13,7 +30,7 @@ export function UnsupportedElementPlaceholder({
   host: UnsupportedElementHost;
   children: ReactNode;
 }) {
-  const custom = children != null && typeof children !== 'boolean';
+  const custom = hasContent(children);
   useLayoutEffect(() => {
     host.setCustomized(custom);
     return () => {

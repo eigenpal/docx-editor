@@ -409,8 +409,12 @@ When the caret or a rectangular cell selection is inside a table, the formatting
 - **Resize**: drag a column divider or the table's right edge to set Word-compatible twip widths. Inner dividers preserve total width. The right edge changes total width.
 - **Insert rows/columns**: hover the row or column header band, then click `+`. You can also use the right-click menu.
 - **Borders and fill**: select cells, then choose a border target, style, width, color, and cell fill. Clearing fill removes direct shading.
+- **Merge cells**: select two or more cells that form a rectangle, then choose **Merge cells**.
+- **Split cell**: place the caret in one cell, then choose **Split cell** and enter the row and column counts.
 
-These controls target the innermost table under the pointer or selection. Merge and split operations are unsupported. Tables with merged cells refuse column resizing, insertion, and deletion with an explicit disabled reason.
+These controls target the innermost table under the pointer or selection. Merge and split are unavailable in suggesting mode. Unsupported table structures show an explicit disabled reason. Merged tables support row and column insertion and deletion, but refuse column resizing.
+
+For cell limits and concurrent editing behavior, see [Merge and split cells](/docs/2.x/editor-api/tables#merge-and-split-cells).
 
 The [Igloo demo](https://igloo.docx-editor.dev/) shows a custom toolbar order, custom icons, and two host actions. See the [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo).
 

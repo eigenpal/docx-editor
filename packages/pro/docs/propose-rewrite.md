@@ -49,7 +49,7 @@ A draft gives you two strings for the prompt:
 - `draft.text` is the paragraph text, with a numbered placeholder for each field, picture, equation, note reference, line break, and locked content control.
 - `draft.legend` states the placeholder rules and lists what each placeholder stands for. It is an empty string when the paragraph has no placeholders.
 
-Neither string holds an instruction. Put your own instruction first. Both strings come from the document, and a document can hold text that reads like an instruction. Treat them as data: wrap them in tags that the document text cannot close, and tell the model never to follow instructions inside the tags. A random tag name works because the document cannot predict it. The following function builds such a prompt:
+Neither string holds an instruction. Put your own instruction first. Both strings come from the document, and a document can hold text that reads like an instruction. Treat them as data: wrap them in tags that the document text cannot close, and tell the model never to follow instructions inside the tags. A random tag name reduces delimiter collisions. These prompt instructions do not guarantee that a model ignores instructions inside document text. The following function builds such a prompt:
 
 ```ts
 import type { RewriteDraft } from '@docx-editor.dev/editor-api/agent';
@@ -123,7 +123,7 @@ export async function rewriteParagraph(
 }
 ```
 
-`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
+`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph, `apply()` returns `write-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
 
 ## Rewrite several paragraphs
 
@@ -180,7 +180,7 @@ Each paragraph gets its own guarantee: all of its changes, or none. A paragraph 
 
 ## Propose structural edits
 
-A rewrite stays inside one paragraph and keeps its fields and equations. To propose a structural edit, set `document.changeTrackingMode` to `TrackMineOnly` and call the Office.js member for it:
+A rewrite stays inside one paragraph. Use `keepPlaceholders: true` to require that it keeps fields, equations, and other placeholders. To propose a structural edit, set `document.changeTrackingMode` to `TrackMineOnly` and call the Office.js member for it:
 
 - To split a paragraph, replace the gap between two sentences with `'\n'` through `insertText()`. For more information, see [Propose a paragraph split](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
 - To add a field, call `insertField()`, and write its result with `field.result.insertText()`. For more information, see [Propose a field](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#propose-a-field).
@@ -193,7 +193,7 @@ A rewrite stays inside one paragraph and keeps its fields and equations. To prop
 - `draft.apply()` checks the model text before it writes anything. Text that breaks a placeholder rule writes nothing.
 - You do not need to set `document.changeTrackingMode` first. If you do, an assignment of `TrackMineOnly` or `Off` that is not synced yet goes with the helper's first sync and does not count as a queued edit. Other queued commands fail with `context-used`.
 - In a browser, each writing sync is one undo step, so one rewrite can take several. To undo it as one step, call `runtime.run({ historyGroup: editor.beginHistoryGroup() }, callback)`.
-- If tracking is off, `draft.apply()` turns on `TrackMineOnly` for its writes and turns it off again. It never turns tracking off. If turning it off again fails, the proposal stands and `document.changeTrackingMode` reads `TrackMineOnly`.
+- If tracking is off, `draft.apply()` turns on `TrackMineOnly` for its writes and turns it off again. It keeps tracking on throughout the edits. If restoring the previous mode fails, the proposal stands and `document.changeTrackingMode` reads `TrackMineOnly`.
 
 ## Handle errors
 

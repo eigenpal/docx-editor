@@ -403,7 +403,10 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   beginUndoGroup(): CollaborationUndoGroup {
-    return this.undoGroups.begin(() => this.destroyed, this.port?.interactive === true);
+    return this.undoGroups.begin(
+      () => this.destroyed,
+      () => this.port?.interactive === true
+    );
   }
 
   get undoGroupOpen(): boolean {
