@@ -188,8 +188,9 @@ async function prepare(
       } catch (rollbackError) {
         throw new RewriteError(
           'rollback-failed',
-          `${failure.message} Rejecting the rewrite's changes failed too: ` +
-            `${messageOf(rollbackError)}`,
+          'The rewrite failed, and rejecting its changes failed too, so the document can still ' +
+            'hold part of the proposal. Do not retry automatically. ' +
+            `First error: ${failure.message} Rollback error: ${messageOf(rollbackError)}`,
           { cause: new AggregateError([failure, rollbackError]) }
         );
       }

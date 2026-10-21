@@ -23,7 +23,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *   `stale`, `locked`, `write-failed`, `verification-failed`. After `stale` or
  *   `verification-failed`, another edit moved the paragraph: prepare it again, and ask the model
  *   again with the new draft.
- * - The rollback failed too, so the paragraph can hold some of the proposal: `rollback-failed`.
+ * - The rollback failed too, or could not find the paragraph after another edit joined or
+ *   removed it, so the document can hold some of the proposal: `rollback-failed`. Do not retry
+ *   automatically.
  *
  * @public
  */

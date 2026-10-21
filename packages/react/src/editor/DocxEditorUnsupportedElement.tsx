@@ -5,14 +5,18 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 
 /** Props for a registered unsupported-content renderer. @public */
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
-  /** Render this occurrence. Return null to retain the default placeholder. */
+  /**
+   * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
+   * keep the default placeholder.
+   */
   children: (props: { element: UnsupportedElement }) => ReactNode;
 }
 
 /**
  * Register a renderer under DocxEditor or DocxEditor.Root.
  * The first mounted matching declaration wins. Prop updates retain its priority.
- * Omit match for a catch-all. Returning null retains the default placeholder.
+ * Omit match for a catch-all. Returning `null`, `false`, an empty fragment or array, or
+ * whitespace keeps the default placeholder.
  * Layout uses points and only sizes content without an existing layout box.
  * Components can remount when pagination or virtualization removes an occurrence.
  * @public

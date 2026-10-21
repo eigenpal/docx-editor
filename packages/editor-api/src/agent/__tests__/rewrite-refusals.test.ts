@@ -247,6 +247,7 @@ describe('a failed write rolls back the writes before it', () => {
       });
       expect(value.error).toMatchObject({ code: 'rollback-failed' });
       expect((value.error as RewriteError).message).toContain('could not find the paragraph');
+      expect((value.error as RewriteError).message).toContain('Do not retry automatically.');
       // The change the rollback could not reach is still in the joined paragraph.
       expect(value.after.current).toBe('Before.Alpha beta gamma DELTA.');
       expect(value.after.authors.length).toBeGreaterThan(0);

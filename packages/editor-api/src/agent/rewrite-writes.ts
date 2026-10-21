@@ -257,8 +257,9 @@ export async function rollback(
     // The rollback cannot tell that from a deletion, so it must not report success.
     if (!target) {
       throw new Error(
-        `The rollback could not find the paragraph to reject the ${expected} changes the ` +
-          'rewrite made. Another edit moved or removed it.'
+        `The rollback could not find the paragraph to reject its ${expected} recorded ` +
+          `${expected === 1 ? 'change' : 'changes'}. Another edit joined it into another ` +
+          'paragraph or removed it.'
       );
     }
     const left = new Map(own);

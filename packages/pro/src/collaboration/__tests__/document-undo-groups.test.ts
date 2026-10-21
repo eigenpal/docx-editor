@@ -195,6 +195,10 @@ describe('undo groups', () => {
     }
     expect(thrown).toBeInstanceOf(CollaborationUndoGroupError);
     expect((thrown as CollaborationUndoGroupError).code).toBe('undo-group-already-open');
+    // The message names the code and what to do, so a logged refusal is actionable.
+    expect((thrown as Error).message).toBe(
+      'undo-group-already-open: End the open group, or use another session for this operation.'
+    );
     // The refusal leaves the open group untouched.
     expect(group.state).toBe('open');
     type(alice, 0, 'A');

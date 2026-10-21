@@ -123,7 +123,7 @@ export async function rewriteParagraph(
 }
 ```
 
-`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph before the first write, `apply()` throws `write-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
+`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph while the model answered, `apply()` throws `write-failed`. If another edit deletes the paragraph, or joins it into another paragraph, while `apply()` writes, `apply()` throws `rollback-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
 
 ## Rewrite several paragraphs
 
@@ -197,7 +197,7 @@ A rewrite stays inside one paragraph. Use `keepPlaceholders: true` to require th
 
 ## Handle errors
 
-`prepareRewrite()` and `draft.apply()` throw a `RewriteError`, and `draft.check()` returns one. Every code except `rollback-failed` leaves the paragraph as it was. When `error.isModelError` is `true`, the model text broke a placeholder rule, nothing was written, and you can send `error.message` back to the model.
+`prepareRewrite()` and `draft.apply()` throw a `RewriteError`, and `draft.check()` returns one. Every code except `rollback-failed` leaves the paragraph as it was, unless another edit removed it. When `error.isModelError` is `true`, the model text broke a placeholder rule, nothing was written, and you can send `error.message` back to the model.
 
 `check()` tests only the model text. `apply()` can still throw `stale`, `locked`, or `write-failed` after `check()` returns `null`, because the document can change, and the writes can refuse, after the check. Some codes come from a `DocxEditorError` that the helper caught. `error.cause` holds that error:
 
@@ -229,9 +229,9 @@ The following table lists every code:
 | `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
 | `stale` | The paragraph changed after `prepareRewrite()`, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
 | `locked` | An edit touched protected content. The rewrite was rolled back. | Keep the content whole. |
-| `write-failed` | The document refused an edit, or the paragraph no longer exists. The rewrite was rolled back. `error.cause` holds the reason. | Read `error.cause`. |
+| `write-failed` | The document refused an edit, or the paragraph no longer exists. The rewrite was rolled back. `error.cause` holds the reason. | If `error.cause.code` is `InvalidObjectPath`, the paragraph no longer exists: skip it. Otherwise, read `error.cause`. |
 | `verification-failed` | The paragraph would not read as the model text. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
-| `rollback-failed` | A write failed, and the rollback failed too, could not find the paragraph, or left the paragraph different from before. | Review the paragraph. `error.cause` holds both errors. |
+| `rollback-failed` | A write failed, and the rollback failed too, could not find the paragraph, or left the paragraph different from before. | Do not retry automatically. The changes stay as tracked changes by your `author`, also when another edit moved them into another paragraph. Review them. `error.cause` is an `AggregateError`, and `errors[0]` is the first `RewriteError`. |
 
 A failed model call is your own error, not a `RewriteError`. If a cleanup step fails after an error, such as turning tracking off again, `error.suppressed` holds that second error. It never replaces the first one.
 
