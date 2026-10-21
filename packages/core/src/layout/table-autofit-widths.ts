@@ -283,7 +283,7 @@ export function paragraphContentWidthsPt(
     bidiSourceBoundaries(paragraph),
     true
   );
-  const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs.props, styleCascade?.typography);
+  const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
@@ -410,6 +410,7 @@ export function paragraphContentWidthsPt(
         lead += measure(candidate);
         continue;
       }
+      segment -= cjkBreaks?.shared(piece, to - candidate.length, to, segment > 0) ?? 0;
       if (lineStart && ink.length > 0) {
         segment += lead;
         lineStart = false;

@@ -7,17 +7,22 @@ import {
   resolveCjkTypography,
   type CjkTypographySettings,
 } from './cjk-typography.ts';
+import { compressCjkPieces } from './cjk-spacing.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import type { ResolvedTabStops } from './paragraph-tabs.ts';
+import { measureDisplayText } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 /** CJK minimums use paragraph analysis; other scripts retain ordinary word cuts. */
 export function cjkAutofitBreaks(
   pieces: readonly FieldAwarePiece[],
-  props: readonly OoxmlProperty[],
-  settings?: CjkTypographySettings
+  { props }: { readonly props: readonly OoxmlProperty[] },
+  measurer: TextMeasurer,
+  styleCascade?: { readonly typography?: CjkTypographySettings }
 ) {
-  const policy = resolveCjkTypography(props, settings);
+  const policy = resolveCjkTypography(props, styleCascade?.typography);
   const visible = pieces.filter((piece) => !piece.style.hidden);
   if (
     !policy.characterWrap &&
@@ -27,7 +32,33 @@ export function cjkAutofitBreaks(
   // This qualification selects the East Asian analysis, whose decisions ignore text context.
   // Ordinary cross-run dash cuts remain the caller's paragraphWordCuts, for both min and max.
   const breaks = cjkParagraphBreaks(visible, policy)!;
+  const seams = punctuationSeams(
+    visible,
+    compressCjkPieces(visible, policy, measurer, undefined, Infinity),
+    measurer
+  );
+  // A seam whose mark ends the candidate waits for the next candidate in the same segment.
+  let pending = 0;
   return {
+    /**
+     * The width a candidate gives back to compressed punctuation seams whose two marks both
+     * fall in the open segment, as they share a line there. `continues` says that the
+     * candidate extends a segment that already holds text.
+     */
+    shared(piece: FieldAwarePiece, from: number, to: number, continues: boolean): number {
+      let saved = continues ? pending : 0;
+      pending = 0;
+      if (seams.size === 0) return saved;
+      for (let at = from; at < to; at++) {
+        const seam = seams.get(piece.start + at);
+        if (!seam) continue;
+        if (!seam.right) {
+          if (at > from || continues) saved += seam.amount;
+        } else if (at + seam.length < to) saved += seam.amount;
+        else pending = seam.amount;
+      }
+      return saved;
+    },
     opens: (piece: FieldAwarePiece) => breaks.decision(piece, 0, '', piece.text) === 'opens',
     boundaries: (piece: FieldAwarePiece) =>
       breaks
@@ -38,6 +69,47 @@ export function cjkAutofitBreaks(
             breaks.decision(piece, to, piece.text.slice(0, to), piece.text.slice(to)) === 'opens'
         ),
   };
+}
+
+interface PunctuationSeam {
+  /** The width the mark gives up when its neighbour shares its line. */
+  readonly amount: number;
+  /** The mark gives up its right side to the next mark, not its left side to the previous one. */
+  readonly right: boolean;
+  readonly length: number;
+}
+
+/**
+ * Adjacent full-width punctuation shares one half-em in line layout. Each compressed slice of
+ * `compressed` maps, by source offset, to the width its mark gives up there.
+ */
+function punctuationSeams(
+  visible: readonly FieldAwarePiece[],
+  compressed: readonly FieldAwarePiece[],
+  measurer: TextMeasurer
+): ReadonlyMap<number, PunctuationSeam> {
+  const seams = new Map<number, PunctuationSeam>();
+  if (compressed === visible) return seams;
+  // Compression keeps piece order: an unchanged piece passes through, a changed one is sliced.
+  let index = 0;
+  for (const slice of compressed) {
+    const original = visible[index]!;
+    if (slice === original || slice.end >= original.end) index++;
+    if (slice.style === original.style) continue;
+    const amount =
+      measureDisplayText(
+        slice.text,
+        styleForFontSlot(original.style, original.fontSlot),
+        measurer
+      ) - measureDisplayText(slice.text, styleForFontSlot(slice.style, slice.fontSlot), measurer);
+    if (amount > 0)
+      seams.set(slice.start, {
+        amount,
+        right: slice.glyphOffsetPt === 0,
+        length: slice.text.length,
+      });
+  }
+  return seams;
 }
 
 /** The next unwrapped stop, excluding stops reserved for the numbering marker. */
