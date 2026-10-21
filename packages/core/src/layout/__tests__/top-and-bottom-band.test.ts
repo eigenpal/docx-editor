@@ -59,8 +59,8 @@ function context(part: OoxmlPart): InlineDrawingLayoutContext {
   };
 }
 /**
- * A box 28.8pt below its paragraph's top, behind a title in three runs (the Stetson masthead), then `following`
- * short paragraphs.
+ * A box 28.8pt below its paragraph's top, behind a title in three runs, then `following` short
+ * paragraphs.
  */
 function doc(options: {
   readonly behindDoc: string;
@@ -85,7 +85,7 @@ function doc(options: {
     '<wp:docPr id="1" name="band"/>' +
     `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
     '<pic:spPr><a:xfrm><a:ext cx="914400" cy="542925"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
-    '</wp:anchor></w:drawing></w:r><w:r><w:t>SUMMER</w:t></w:r><w:r><w:t xml:space="preserve"> 2024: </w:t></w:r><w:r><w:t>UNENDING CONVERSATION</w:t></w:r></w:p>' +
+    '</wp:anchor></w:drawing></w:r><w:r><w:t>ALPHAS</w:t></w:r><w:r><w:t xml:space="preserve"> 1234: </w:t></w:r><w:r><w:t>SPECIMEN PLACEHOLDERS</w:t></w:r></w:p>' +
     tail +
     '</w:body></w:document>'
   );
@@ -138,7 +138,7 @@ describe('a topAndBottom band clears the lines of the paragraphs after its ancho
     const anchorParagraph = paragraphFragmentsOf(page)[0]!;
     expect(anchorParagraph.lines).toHaveLength(1);
     expect(anchorParagraph.lines[0]!.spans.map((span) => span.text).join('')).toBe(
-      'SUMMER 2024: UNENDING CONVERSATION'
+      'ALPHAS 1234: SPECIMEN PLACEHOLDERS'
     );
   });
 
@@ -171,8 +171,8 @@ describe('a topAndBottom band clears the lines of the paragraphs after its ancho
           line.box.y < BAND_BOTTOM - 0.001 && line.box.y + line.box.height > BAND_TOP + 0.001;
         expect(crosses).toBe(false);
       }
-      // The anchor's own paragraph wraps its last line below the band, as Word does.
-      expect(lines[2]!.spans.map((span) => span.text).join('')).toBe('UNENDING CONVERSATION');
+      // The anchor's own paragraph wraps its last line below the band.
+      expect(lines[2]!.spans.map((span) => span.text).join('')).toBe('SPECIMEN PLACEHOLDERS');
       expect(lines[2]!.box.y).toBeCloseTo(BAND_BOTTOM, 3);
     }
   });

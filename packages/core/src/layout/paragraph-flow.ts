@@ -1,6 +1,6 @@
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { paragraphContinuationPieces } from './paragraph-continuation-pieces.ts';
-import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
+import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import {
   cellTabReplayScope,
   shouldReplayCellTab,
@@ -90,8 +90,6 @@ import {
   inlineDrawingVerticalLayout,
   measureInlineDrawing,
   repositionInlineDrawingsForBaseline,
-  anchoredDrawingAtomsInParagraph,
-  drawingModelOffsetsInParagraph,
   type InlineDrawingRecord,
 } from './drawing-layout.ts';
 import {
@@ -117,6 +115,7 @@ import type { WordCarryContext } from './word-carry.ts';
 import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
 import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
+import { rebreakForEarlierOwnBands } from './top-and-bottom-earlier-lines.ts';
 
 /**
  * Ignore subpixel rounding from absolute tab positions converted to line-local widths.
@@ -314,53 +313,17 @@ export function breakParagraph(
   };
   const anchorLineTopByModelStart = new Map<number, number>();
 
-  // The break-time wrap synthesis follows the published records: a drawing the display mode
-  // resolves away publishes no record, so it must reserve no line top and carve no hole.
+  // The break-time wrap synthesis follows the published records (`paragraph-own-anchors.ts`).
   const anchorDisplayMode = flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-
-  // A remainder re-broken on a later page (`startOffset`) holds only the anchors in its own
-  // text. A float anchored before it stays with the earlier lines; its band reaches this page
-  // only through the zones the page publishes.
-  const topAndBottomAnchorStarts = (() => {
-    const starts = new Set<number>();
-    if (!flow?.inlineDrawingLayout) return starts;
-    const offsets = drawingModelOffsetsInParagraph(paragraph);
-    for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (
-        !revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter) ||
-        revisionMarkupHidesDrawing(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter)
-      )
-        continue;
-      if (atom.projection.wrap !== 'topAndBottom') continue;
-      const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
-    }
-    return starts;
-  })();
-
-  const wrapAnchorStarts = (() => {
-    const starts = new Set<number>();
-    if (!flow?.inlineDrawingLayout) return starts;
-    const offsets = drawingModelOffsetsInParagraph(paragraph);
-    for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (
-        !revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter) ||
-        revisionMarkupHidesDrawing(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter)
-      )
-        continue;
-      if (
-        atom.projection.wrap === 'topAndBottom' ||
-        atom.projection.wrap === 'inline' ||
-        atom.projection.wrap === 'behind' ||
-        atom.projection.wrap === 'inFront'
-      ) {
-        continue;
-      }
-      const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
-    }
-    return starts;
-  })();
+  const ownAnchors = paragraphOwnAnchorStarts({
+    paragraph,
+    drawingLayout: flow?.inlineDrawingLayout,
+    startOffset,
+    displayMode: anchorDisplayMode,
+    revisionAuthorFilter: flow?.revisionAuthorFilter,
+  });
+  const topAndBottomAnchorStarts = ownAnchors.topAndBottom;
+  const wrapAnchorStarts = ownAnchors.wrap;
 
   const sameParagraphAnchorStarts = [
     ...(flow?.pageExclusionZones ?? [])
@@ -387,8 +350,32 @@ export function breakParagraph(
     const lineStart = anchorLineStartByOffset.get(start);
     if (lineStart !== undefined) anchorLineTopByModelStart.set(start, lineStart);
   }
+  // A paragraph-framed band that crosses lines before its anchor line clears them as well.
+  for (const start of flow?.ownBandsFromFirstLine ?? [])
+    if (topAndBottomAnchorStarts.has(start)) anchorLineTopByModelStart.set(start, 0);
 
   const emptyExclusionZones: readonly ExclusionZone[] = Object.freeze([]);
+  /** The bands of the paragraph's own top-and-bottom anchors whose lines have opened. */
+  const ownTopAndBottomZones = (): readonly ExclusionZone[] =>
+    flow?.inlineDrawingLayout && anchorLineTopByModelStart.size > 0
+      ? synthesizeParagraphTopAndBottomZones({
+          paragraph,
+          paragraphId,
+          drawingLayout: flow.inlineDrawingLayout,
+          contentLeft,
+          contentRight,
+          // `positionV relativeFrom="paragraph"` measures from above the spacing before.
+          paragraphStartY:
+            (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
+            (flow.paragraphSpaceBefore ?? 0),
+          anchorLineTopByModelStart,
+          anchorCellBox: flow.anchorCellBox,
+          cellAnchorScope: flow.cellAnchorScope,
+          ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
+          displayMode: anchorDisplayMode,
+          ...(flow.revisionAuthorFilter ? { revisionAuthorFilter: flow.revisionAuthorFilter } : {}),
+        })
+      : emptyExclusionZones;
   const activeExclusionZones = (): readonly ExclusionZone[] => {
     if (!flow?.pageExclusionZones?.length && anchorLineTopByModelStart.size === 0)
       return emptyExclusionZones;
@@ -427,28 +414,7 @@ export function breakParagraph(
               : {}),
           })
         : Object.freeze([]);
-    const synthesized =
-      anchorsWrap && flow?.inlineDrawingLayout && anchorLineTopByModelStart.size > 0
-        ? synthesizeParagraphTopAndBottomZones({
-            paragraph,
-            paragraphId,
-            drawingLayout: flow.inlineDrawingLayout,
-            contentLeft,
-            contentRight,
-            // `positionV relativeFrom="paragraph"` measures from above the spacing before.
-            paragraphStartY:
-              (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
-              (flow.paragraphSpaceBefore ?? 0),
-            anchorLineTopByModelStart,
-            anchorCellBox: flow.anchorCellBox,
-            cellAnchorScope: flow.cellAnchorScope,
-            ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
-            displayMode: anchorDisplayMode,
-            ...(flow.revisionAuthorFilter
-              ? { revisionAuthorFilter: flow.revisionAuthorFilter }
-              : {}),
-          })
-        : Object.freeze([]);
+    const synthesized = anchorsWrap ? ownTopAndBottomZones() : emptyExclusionZones;
     return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
   };
 
@@ -1684,8 +1650,37 @@ export function breakParagraph(
       flow,
       retry
     );
-  claimTrailingChangeSites(lines);
+  // Only a band that wraps text moves lines: a story that ignores its anchors' wrap has none.
+  const settled =
+    flow?.ownBandsFromFirstLine === undefined &&
+    ownAnchors.paragraphFramedTopAndBottom.size > 0 &&
+    flow?.cellAnchorScope?.anchorsWrapText !== false
+      ? rebreakForEarlierOwnBands({
+          lines,
+          zones: ownTopAndBottomZones(),
+          starts: ownAnchors.paragraphFramedTopAndBottom,
+          flow,
+          rebreak: (rebreakFlow) =>
+            breakParagraph(
+              paragraph,
+              paragraphId,
+              indentLeft,
+              available,
+              measurer,
+              undefined,
+              null,
+              inheritedRunProperties,
+              tabStops,
+              pageContext,
+              cascadeRuns,
+              rebreakFlow,
+              advances
+            ),
+        })
+      : null;
+  if (!settled) claimTrailingChangeSites(lines);
+  const result = settled ?? lines;
   if (cacheKey !== null && cache)
-    cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
-  return lines;
+    cache.set(cacheKey, cache.retainAcrossPasses === false ? result : result.map(frozenLine));
+  return result;
 }

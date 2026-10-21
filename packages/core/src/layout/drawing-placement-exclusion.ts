@@ -139,8 +139,9 @@ export function anchorLineSkipsExclusion(
   context: InlineDrawingLayoutContext | undefined,
   line: PendingLine
 ): boolean {
-  // A break's clearance belongs to the break, not to the paragraph's anchors.
-  if (!context || line.breakClearance) return false;
+  // A break's clearance belongs to the break, and a band that reaches back past its anchor line
+  // clears the line it crosses.
+  if (!context || line.breakClearance || line.ownBandClearance) return false;
   const offsets = drawingModelOffsetsInParagraph(paragraph);
   const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
   const starts = atoms
