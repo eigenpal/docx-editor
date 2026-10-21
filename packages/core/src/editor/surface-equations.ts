@@ -252,7 +252,7 @@ export function createEquationInteraction(deps: {
     const equation = deps.equationById(equationId);
     if (!equation) return;
     // Pages that are not editable (viewing) still show the popover, with its actions disabled,
-    // but a press there selects nothing, so the toolbar keeps its values.
+    // but the press does not select the equation whole, because nothing there can edit it.
     if (deps.pagesLayer.contentEditable !== 'false') {
       deps.setSelection({
         anchor: { paragraphId: equation.paragraphId, offset: equation.start },

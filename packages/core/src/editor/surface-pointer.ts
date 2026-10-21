@@ -830,7 +830,9 @@ export function createPointerController(
     const placeholder = placeholderAtHit(layout, hit);
     if (placeholder && !event.shiftKey) {
       // Select before opening: selection repaints chrome and replaces the popup anchor.
+      // Pages that are not editable (viewing) select the prompt but open no chooser for it.
       const openPromptWidget = () => {
+        if (pagesLayer.contentEditable === 'false') return;
         if (count === 1 && LIST_PROMPT_TYPES.has(placeholder.controlType)) {
           host.onContentControlWidget?.(placeholder.id, placeholder.controlType);
         }

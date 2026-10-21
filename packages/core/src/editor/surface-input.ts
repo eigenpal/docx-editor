@@ -28,11 +28,14 @@ const NAVIGATION: Record<string, NavigationCommand> = {
 };
 
 /**
- * Whether the keymap answers this key by moving the selection: caret motion, page motion
- * or select-all. Past the view chords (Show/Hide), viewing answers only these.
+ * Whether the keymap answers this key on read-only pages: a selection extended with Shift, or
+ * select-all. An unshifted caret key would walk a caret nobody sees, so the browser keeps it
+ * and scrolls the document, as it does on any page that is not editable.
  */
-function keyMovesSelection(event: KeyboardEvent): boolean {
-  if (NAVIGATION[event.key] || event.key === 'PageUp' || event.key === 'PageDown') return true;
+function keySelectsReadOnly(event: KeyboardEvent): boolean {
+  if (NAVIGATION[event.key] || event.key === 'PageUp' || event.key === 'PageDown') {
+    return event.shiftKey;
+  }
   return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a';
 }
 
@@ -126,7 +129,10 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
-    const viewing = surface.editingMode() === 'view';
+    // Viewing, or pages a refresh holds read-only for a moment.
+    const readOnly =
+      surface.editingMode() === 'view' ||
+      (event.currentTarget as HTMLElement | null)?.contentEditable === 'false';
     if (
       event.key === 'F5' &&
       event.shiftKey &&
@@ -170,10 +176,10 @@ export function createKeyDownHandler(
       hooks.onToggleParagraphMarks();
       return;
     }
-    // Past the view chords, viewing answers only the keys that select. Every other key here
-    // would be a refused write, and Tab has to leave the pages, which stay focusable for
+    // Past the view chords, read-only pages answer only the keys that select. Every other key
+    // here would be a refused write, and Tab has to leave the pages, which stay focusable for
     // selection, rather than be swallowed. Ctrl/Cmd+C is the browser's, through `copy`.
-    if (viewing && !keyMovesSelection(event)) return;
+    if (readOnly && !keySelectsReadOnly(event)) return;
     // Escape releases the transient modes, innermost first. The format painter is the
     // innermost of all: it is armed ON TOP of whatever scope is open, so a press that closed
     // a header instead would leave the painter armed with no way left to release it.

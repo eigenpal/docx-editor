@@ -111,6 +111,16 @@ describe('viewing selects text', () => {
     });
   }
 
+  for (const name of ['ArrowDown', 'ArrowLeft', 'Home', 'End', 'PageDown'] as const) {
+    test(`an unshifted ${name} is left to the browser, which scrolls`, async () => {
+      await withViewingSurface((surface, container) => {
+        const before = surface.state().selection;
+        expect(key(container, { key: name }).defaultPrevented).toBe(false);
+        expect(surface.state().selection).toEqual(before);
+      });
+    });
+  }
+
   test('a press places the selection, and a native selection is adopted', async () => {
     await withViewingSurface(async (surface, container) => {
       const ids = surface.session.paragraphIds();
