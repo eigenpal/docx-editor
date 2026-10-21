@@ -57,6 +57,18 @@ describe('accepted subset', () => {
   }
 });
 
+describe('shared attribute records', () => {
+  test('equal attribute text reads to one frozen record; other text to its own', () => {
+    const nodes = agrees('<a><b x="1" y="2"/><c x="1" y="2"/><b x="1"  y="2"/></a>')!;
+    const root = nodes[0] as Extract<XmlNode, { type: 'element' }>;
+    const [first, second, third] = root.children as Extract<XmlNode, { type: 'element' }>[];
+    expect(first!.attributes).toBe(second!.attributes);
+    expect(Object.isFrozen(first!.attributes)).toBe(true);
+    expect(third!.attributes).not.toBe(first!.attributes);
+    expect(Object.entries(third!.attributes)).toEqual(Object.entries(first!.attributes));
+  });
+});
+
 describe('handed back to the bounded reader', () => {
   const declined = [
     '﻿<a/>',
