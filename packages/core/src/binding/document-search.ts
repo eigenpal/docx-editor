@@ -51,6 +51,7 @@ import {
 import { paragraphModelTextOf } from '../store/store/paragraph-model-text.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import {
+  beginStoryParagraphSearch,
   expandSelectableTextboxStories,
   searchStoryParagraphs,
   type SearchStory,
@@ -339,6 +340,7 @@ export function collectTextMatchesForQueries(
   if (open.length === 0) return results;
 
   const searchableSources = options.stories === 'body' ? undefined : sources;
+  beginStoryParagraphSearch();
   for (const story of searchStories(part, searchableSources)) {
     let paragraphIndex = 0;
     for (const paragraph of searchStoryParagraphs(story.root)) {

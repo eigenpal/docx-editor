@@ -21,19 +21,32 @@ export interface TextboxStoryExpansionWork {
 
 /**
  * A story's paragraphs, walked once per story root. A root is frozen and an edit makes a new
- * one for any story it changes, so the list never goes stale; every search walked each story
- * twice, here and to scan it.
+ * one for any story it changes, so a list never goes stale; every search walked each story
+ * twice, here and to scan it, and the walk dominates a search over large tables.
+ *
+ * Only the roots of the last two searches keep their lists. A list per root for as long as
+ * the root lives would stay alive with every revision the undo history keeps.
  */
-const paragraphsByRoot = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
+let previousSearchParagraphs = new Map<OoxmlNode, readonly OoxmlNode[]>();
+let currentSearchParagraphs = new Map<OoxmlNode, readonly OoxmlNode[]>();
 
-/** `storyParagraphs(root)`, remembered for `root`. */
+/** Start a search: lists the previous search did not use are released. */
+export function beginStoryParagraphSearch(): void {
+  previousSearchParagraphs = currentSearchParagraphs;
+  currentSearchParagraphs = new Map();
+}
+
+/** `storyParagraphs(root)`, remembered for `root` across the last two searches. */
 export function searchStoryParagraphs(root: OoxmlNode): readonly OoxmlNode[] {
-  let paragraphs = paragraphsByRoot.get(root);
-  if (!paragraphs) {
-    paragraphs = storyParagraphs(root);
-    paragraphsByRoot.set(root, paragraphs);
-  }
+  let paragraphs = currentSearchParagraphs.get(root) ?? previousSearchParagraphs.get(root);
+  if (!paragraphs) paragraphs = storyParagraphs(root);
+  currentSearchParagraphs.set(root, paragraphs);
   return paragraphs;
+}
+
+/** The number of story roots with a remembered list. For the retention test. */
+export function rememberedStoryParagraphRoots(): number {
+  return new Set([...previousSearchParagraphs.keys(), ...currentSearchParagraphs.keys()]).size;
 }
 
 type FrameIndex = ReadonlyMap<string, readonly TextboxStoryRoot[]>;

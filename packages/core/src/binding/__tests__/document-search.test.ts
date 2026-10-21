@@ -19,6 +19,7 @@ import {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,
 } from '../document-search.ts';
+import { rememberedStoryParagraphRoots } from '../document-search-frames.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -495,6 +496,24 @@ describe('collectTextMatches', () => {
     // Every entry a search ever built: the first revision's, plus one per edited paragraph.
     expect(seen.has(undefined)).toBe(false);
     expect(seen.size).toBe(count + revisions);
+  });
+
+  test('keeps story paragraph lists for the last two searches, not for every revision', () => {
+    const session = open(docx(para(run('alpha applies')) + para(run('beta applies'))));
+    const id = session.paragraphIds()[0]!;
+    session.findText('applies');
+    const stories = rememberedStoryParagraphRoots();
+    expect(stories).toBeGreaterThan(0);
+
+    for (let revision = 0; revision < 30; revision += 1) {
+      const edited = session.applyTreeOps([
+        { op: 'insertText', paragraphId: id, offset: 0, text: 'x' },
+      ]);
+      expect(edited.committed).toBe(true);
+      expect(session.findText('applies').matches).toHaveLength(2);
+    }
+    // Each edit makes a new body root; only this search's and the previous one's remain.
+    expect(rememberedStoryParagraphRoots()).toBeLessThanOrEqual(2 * stories);
   });
 
   test('keeps offsets aligned when case folding would otherwise expand the text', () => {

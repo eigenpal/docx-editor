@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A search remembered each story's paragraph list for as long as the story root lived, so every revision the undo history kept also kept its lists.",
+  "after": "A search remembers the paragraph lists of the story roots used by the last two searches only.",
+  "reason": "Only how long a derived list is remembered changes. The lists come from frozen nodes, so the answers are the same, and nothing enters shared state, operations, snapshots or protocol messages.",
+  "tests": ["packages/core/src/binding/__tests__/document-search.test.ts"],
+  "changeset": "search-paragraph-lists",
+  "migration": null
+}
