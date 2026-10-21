@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Every XML part read through several whole-part scans and a general parser.",
+  "after": "A part in the plain XML subset reads in one pass into the same tree; any other part takes the bounded read as before.",
+  "reason": "The canonical tree, node ids, and saved bytes are unchanged, so shared document state and the wire format do not change.",
+  "tests": [
+    "packages/core/src/store/__tests__/xml-fast-read.test.ts",
+    "packages/core/src/store/__tests__/ooxml-part-steps.test.ts"
+  ],
+  "changeset": "package-read-one-pass",
+  "migration": null
+}
