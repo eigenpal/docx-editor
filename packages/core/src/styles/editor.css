@@ -3372,11 +3372,8 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
-/* Viewing places no caret, so the body shows the arrow too. Links keep their pointer:
- * `a.docx-hyperlink` sets it on itself. Text stays `user-select: text`, because the browser
- * paints the highlight of a selection the host sets (a find match); the surface refuses the
- * reader's own selections in `selectstart` instead. */
-.docx-paginated-surface--viewing .docx-page-content,
+/* Viewing selects body text, so the body keeps the I-beam. Text boxes are not entered in
+ * viewing, so they show the arrow. */
 .docx-paginated-surface--viewing .docx-drawing-textbox {
   cursor: default;
 }

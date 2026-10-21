@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Viewing mode ignored local pointer, browser-selection, and selection-key changes, so presence stayed where it was.",
+  "after": "A viewing participant selects text as in editing mode and publishes that selection as ordinary presence.",
+  "reason": "Only local selection handling changes. Shared state, operations, snapshots, and protocol messages are unchanged; viewing still refuses every write, and remote edits still apply to a viewing participant.",
+  "tests": [
+    "packages/core/src/editor/__tests__/viewing-selection.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-viewing-selection.test.ts"
+  ],
+  "changeset": "viewing-mode-selection",
+  "migration": null
+}

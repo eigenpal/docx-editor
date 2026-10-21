@@ -1,6 +1,6 @@
-// Viewing mode is for reading. A press on the pages places no caret, makes no selection
-// and selects no object, so the toolbar keeps reporting what it reported before the press,
-// and the text column shows the arrow rather than the I-beam. Links stay live.
+// Viewing mode is for reading. The reader selects and copies text with the pointer and the
+// keyboard, but the pages show no caret, select no object, open no note, and refuse every
+// write. Links stay live.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PAINTED_PAGE } from './painted-page.ts';
@@ -75,46 +75,58 @@ test.describe('viewing mode', () => {
     await open(page);
   });
 
-  test('text shows the arrow and a press, drag or multi-click selects nothing', async ({
+  test('a drag, a double click and the keyboard select text, and writes refuse', async ({
     page,
   }) => {
     const body = page.locator('.docx-paragraph-fragment').nth(2);
     const box = (await body.boundingBox())!;
     const x = box.x + 12;
     const y = box.y + box.height / 2;
-    expect(await cursorAt(page, x, y)).toBe('text');
 
     await setMode(page, 'viewing');
     const before = await selection(page);
-    expect(await cursorAt(page, x, y)).toBe('default');
-
-    await page.mouse.click(x, y);
-    await settle(page);
-    expect(await selection(page)).toEqual(before);
-
-    await page.mouse.dblclick(x, y);
-    await settle(page);
-    expect(await selection(page)).toEqual(before);
-    expect(await domSelectionText(page)).toBe('');
-
-    await page.mouse.click(x, y, { clickCount: 3 });
-    await settle(page);
-    expect(await selection(page)).toEqual(before);
-    expect(await domSelectionText(page)).toBe('');
+    expect(await cursorAt(page, x, y)).toBe('text');
 
     await page.mouse.move(x, y);
     await page.mouse.down();
     await page.mouse.move(x + 200, y + 60, { steps: 8 });
     await page.mouse.up();
     await settle(page);
-    expect(await selection(page)).toEqual(before);
-    expect(await domSelectionText(page)).toBe('');
-    // No painted caret either.
-    await expect(page.locator('[data-docx-caret]:visible')).toHaveCount(0);
-  });
+    expect(await selection(page)).not.toEqual(before);
+    expect((await domSelectionText(page)).length).toBeGreaterThan(0);
+    const dragged = await page.evaluate(() =>
+      window.__DOCX_EDITOR_E2E__!.getEditor()!.query({ type: 'selectedText' })
+    );
+    expect(dragged.length).toBeGreaterThan(0);
 
-  // Caret keys are covered by `viewing-selection-lock.test.ts`: Chromium drops focus from
-  // pages that stop being editable, so no real key reaches them here.
+    await page.mouse.dblclick(x + 30, y);
+    await settle(page);
+    const word = await page.evaluate(() =>
+      window.__DOCX_EDITOR_E2E__!.getEditor()!.query({ type: 'selectedText' })
+    );
+    expect(word.trim()).toMatch(/^\S+$/);
+    expect(
+      await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.getEditor()!.getSelectionPlacement())
+    ).not.toBeNull();
+
+    // A press focuses the pages, so the keys that select reach them.
+    await page.mouse.click(x, y);
+    await page.keyboard.press('Shift+End');
+    await settle(page);
+    expect((await domSelectionText(page)).length).toBeGreaterThan(0);
+
+    const text = await body.textContent();
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type('x');
+    await page.keyboard.press('ControlOrMeta+x');
+    await settle(page);
+    await expect(body).toHaveText(text!);
+    expect(
+      await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.getEditor()!.snapshot().canUndo)
+    ).toBe(false);
+    // No painted caret.
+    await expect(page.locator('.docx-editor-one-surface__caret')).toHaveCount(0);
+  });
 
   test('a find match still paints its highlight', async ({ page }) => {
     await setMode(page, 'viewing');
@@ -134,14 +146,12 @@ test.describe('viewing mode', () => {
 
   test('pictures and note references are not selected or entered', async ({ page }) => {
     await setMode(page, 'viewing');
-    const before = await selection(page);
 
     const pictures = await fragment(page, INLINE_PICTURES_TEXT);
     const picture = pictures.locator('.docx-drawing').first();
     await expect(picture).toBeVisible();
     await picture.click();
     await settle(page);
-    expect(await selection(page)).toEqual(before);
     expect(
       await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.getEditor()!.getSelectedImage())
     ).toBeNull();
@@ -149,9 +159,13 @@ test.describe('viewing mode', () => {
     const notes = await fragment(page, FOOTNOTE_TEXT);
     const reference = notes.locator('[data-docx-note-ref]').first();
     await expect(reference).toBeVisible();
+    const before = await selection(page);
     await reference.click();
     await settle(page);
     expect(await selection(page)).toEqual(before);
+    expect(
+      await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.getEditor()!.snapshot().scope.kind)
+    ).toBe('body');
   });
 
   // The popover itself is covered on the full demo in `hyperlinks.interaction.spec.ts`; this
@@ -180,44 +194,37 @@ test.describe('viewing mode', () => {
   });
 });
 
-// The reader-facing symptom, on both adapters' demos: the toolbar follows a click in editing
-// and stays put in viewing.
+// Both adapters' demos: a drag selects text in viewing, and typing over it changes nothing.
 for (const [adapter, url] of [
   ['React', 'http://localhost:5273/'],
   ['Vue', 'http://localhost:5274/'],
 ] as const) {
-  test(`${adapter}: the toolbar does not follow a click or drag in viewing`, async ({ page }) => {
+  test(`${adapter}: a drag selects text in viewing and typing changes nothing`, async ({
+    page,
+  }) => {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector(`${PAINTED_PAGE} .docx-paragraph-fragment`);
-    const size = page.locator('.docx-toolbar__font-size-input').first();
     const pill = page.getByTestId('editing-mode-trigger').first();
-    const choose = async (mode: 'viewing' | 'editing') => {
-      await pill.click();
-      await page.getByTestId(`editing-mode-${mode}`).first().click();
-      await expect(pill).toHaveAttribute('data-mode', mode);
-    };
-    // The title opens the demo; the body text below it is set in a smaller size.
+    await pill.click();
+    await page.getByTestId('editing-mode-viewing').first().click();
+    await expect(pill).toHaveAttribute('data-mode', 'viewing');
     const body = page.locator(`${PAINTED_PAGE} .docx-paragraph-fragment:visible`).nth(2);
     await expect(body).toBeVisible();
     const box = (await body.boundingBox())!;
     const x = box.x + 12;
     const y = box.y + box.height / 2;
+    const text = await body.textContent();
 
-    await choose('viewing');
-    const before = await size.inputValue();
-    expect(await cursorAt(page, x, y)).toBe('default');
-    await page.mouse.click(x, y);
+    expect(await cursorAt(page, x, y)).toBe('text');
     await page.mouse.move(x, y);
     await page.mouse.down();
-    await page.mouse.move(x + 200, y + 60, { steps: 8 });
+    await page.mouse.move(x + 200, y, { steps: 8 });
     await page.mouse.up();
     await settle(page);
-    await expect(size).toHaveValue(before);
-    expect(await domSelectionText(page)).toBe('');
-
-    // Control: the same click in editing does move the toolbar.
-    await choose('editing');
-    await page.mouse.click(x, y);
-    await expect(size).not.toHaveValue(before);
+    expect((await domSelectionText(page)).length).toBeGreaterThan(0);
+    await page.keyboard.type('zz');
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    await expect(body).toHaveText(text!);
   });
 }

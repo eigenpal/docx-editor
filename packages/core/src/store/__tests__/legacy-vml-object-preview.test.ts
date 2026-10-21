@@ -412,6 +412,7 @@ test('object-only and mixed cuts refuse before writing or deleting the source', 
     let prevented = false;
     const handlers = createClipboardHandlers({
       copyFlavours: () => flavours,
+      editingMode: () => 'edit',
       deleteSelection: () => {
         throw new Error('must not delete');
       },

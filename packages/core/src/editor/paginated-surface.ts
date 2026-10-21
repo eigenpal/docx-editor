@@ -272,6 +272,7 @@ import {
   layoutDocumentViewSteps,
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
+import { applyPagesEditableChrome } from './surface-view-mode.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceBookmarks, storyContentBox } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
@@ -527,6 +528,8 @@ export function mountPaginatedSurface(
             ? { scopedHostKind: 'note' as const }
             : {}),
         ...textboxEditing?.caretInput(currentLayout),
+        // Viewing selects text but has nowhere to type: the native highlight, never a caret.
+        suppress: editingMode === 'view',
       };
     }
   );
@@ -1379,9 +1382,7 @@ export function mountPaginatedSurface(
     whenLaidOut: (position, retry) => laterOnOpening(position, retry),
     beginJump: () => beginReveal(),
     enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
-    // Viewing makes no range from a press, so a range left over from editing is no drag.
-    isCollapsedSelection: () =>
-      editingMode === 'view' || selectionsEqual(selection, collapsedAt(selection.head)),
+    isCollapsedSelection: () => selectionsEqual(selection, collapsedAt(selection.head)),
     onScrolled: () => rematerialize(),
     ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
   });
@@ -2423,8 +2424,8 @@ export function mountPaginatedSurface(
 
   function onTocRowClick(event: MouseEvent): void {
     if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
-    // A range ends a drag, except in viewing, where a press makes none (see the link lane).
-    if (editingMode !== 'view' && !selectionsEqual(selection, collapsedAt(selection.head))) return;
+    // A range ends a drag (see the link lane).
+    if (!selectionsEqual(selection, collapsedAt(selection.head))) return;
     const paragraphId = gestureParagraphId(event);
     if (!paragraphId) return;
     const toc = detectBodyTocs(session.part()).find((candidate) =>
@@ -2623,19 +2624,9 @@ export function mountPaginatedSurface(
     },
   };
 
-  /**
-   * The pages layer's `contenteditable` / `aria-readonly`, from the host's wish AND the mode.
-   *
-   * These were two independent writes of one state, reconciled only by the facade calling
-   * both. A host driving `mountPaginatedSurface` itself and switching to viewing kept a
-   * writable pages layer — a blinking caret, an IME that opens on composition, and a screen
-   * reader told the document accepts input, on a document that refuses every write.
-   */
-  function applyEditableChrome(): void {
-    const editable = hostEditable && editingMode !== 'view';
-    pagesLayer.contentEditable = editable ? 'true' : 'false';
-    pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
-  }
+  /** The pages layer's editable chrome, from the host's wish AND the mode. */
+  const applyEditableChrome = (): void =>
+    applyPagesEditableChrome(pagesLayer, hostEditable && editingMode !== 'view');
 
   function currentState(): PaginatedSurfaceState {
     return {
@@ -3456,7 +3447,6 @@ export function mountPaginatedSurface(
       lastSelectionMs = ms;
     },
     isGesturing: () => drawingIntent.kind === 'pointer' || (pointer?.dragging() ?? false),
-    selectionLocked: () => editingMode === 'view',
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
     // `surface` is assigned below; a composition can only end once a caller holds it.
@@ -6154,7 +6144,6 @@ export function mountPaginatedSurface(
       // An armed format painter paints the selection the gesture just produced. Word's
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
-      selectionLocked: () => editingMode === 'view',
       activeHeaderFooter: () => pointerHeaderFooterState(hfScope?.getActive() ?? null),
       activeNote: () => {
         const scope = noteOps?.activeNoteScope();
@@ -6179,6 +6168,7 @@ export function mountPaginatedSurface(
         });
       },
       enterNote: (scopeId, position, pageIndex) => {
+        if (editingMode === 'view') return; // Viewing selects text but opens no story.
         flushPendingInputAndLayout();
         noteOps?.enterNote(scopeId, position, pageIndex);
       },

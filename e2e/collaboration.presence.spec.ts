@@ -73,7 +73,7 @@ test('a caret in a header paints presence on the peer', async ({ browser, page: 
   expect(painted!.y + painted!.height).toBeGreaterThan(remoteHeader!.y);
 });
 
-test('a viewing peer receives edits, and its clicks do not move its presence', async ({
+test('a viewing peer receives edits, and its selection moves its presence', async ({
   browser,
   page: creator,
 }) => {
@@ -92,17 +92,18 @@ test('a viewing peer receives edits, and its clicks do not move its presence', a
   const remote = paragraphById(joiner, source.id);
   await expect(remote).toContainText(`${source.text}${marker}`);
 
-  // Whatever the creator shows for the viewer before the presses, it shows after them too.
+  // The viewer selects text, and the creator shows its presence there; typing writes nothing.
   const bobOnCreator = creator.locator('.docx-remote-caret-label').filter({ hasText: 'Bob' });
   const presence = async () =>
     (await bobOnCreator.count()) === 0 ? null : await bobOnCreator.first().boundingBox();
   const before = await presence();
   const other = paragraphs(joiner).filter({ hasText: /\S/ }).nth(2);
   await expect(other).toBeVisible();
-  await other.click();
   await other.dblclick();
-  await joiner.waitForTimeout(1_500);
-  expect(await presence()).toEqual(before);
+  await expect.poll(presence, { timeout: 5_000 }).not.toEqual(before);
+  await joiner.keyboard.type('zz');
+  await expect(remote).toContainText(`${source.text}${marker}`);
+  await expect(source.locator).not.toContainText('zz');
 
   // Back in editing, the same peer edits and both replicas converge.
   await setEditingMode(joiner, 'editing');

@@ -29,7 +29,7 @@ const NAVIGATION: Record<string, NavigationCommand> = {
 
 /**
  * Whether the keymap answers this key by moving the selection: caret motion, page motion
- * or select-all. Viewing ignores exactly these and keeps the view chords (Show/Hide).
+ * or select-all. Past the view chords (Show/Hide), viewing answers only these.
  */
 function keyMovesSelection(event: KeyboardEvent): boolean {
   if (NAVIGATION[event.key] || event.key === 'PageUp' || event.key === 'PageDown') return true;
@@ -126,10 +126,7 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
-    // Viewing moves no caret from the keyboard, as it places none from the pointer. Chromium
-    // drops focus from the pages once they stop being editable; a browser that keeps it would
-    // walk an invisible caret, and the toolbar would follow it. Writes refuse on their own.
-    if (surface.editingMode() === 'view' && keyMovesSelection(event)) return;
+    const viewing = surface.editingMode() === 'view';
     if (
       event.key === 'F5' &&
       event.shiftKey &&
@@ -173,6 +170,10 @@ export function createKeyDownHandler(
       hooks.onToggleParagraphMarks();
       return;
     }
+    // Past the view chords, viewing answers only the keys that select. Every other key here
+    // would be a refused write, and Tab has to leave the pages, which stay focusable for
+    // selection, rather than be swallowed. Ctrl/Cmd+C is the browser's, through `copy`.
+    if (viewing && !keyMovesSelection(event)) return;
     // Escape releases the transient modes, innermost first. The format painter is the
     // innermost of all: it is armed ON TOP of whatever scope is open, so a press that closed
     // a header instead would leave the painter armed with no way left to release it.
@@ -458,6 +459,11 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
   };
 
   const onCut = (event: ClipboardEvent): void => {
+    // Viewing refuses the delete, so the cut copies nothing either. A cut is never a copy.
+    if (surface.editingMode() === 'view') {
+      event.preventDefault();
+      return;
+    }
     if (!writeFlavours(event)) return;
     surface.deleteSelection();
     event.preventDefault();

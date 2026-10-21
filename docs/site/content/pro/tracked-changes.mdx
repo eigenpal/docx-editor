@@ -71,7 +71,7 @@ Clear **Track formatting** to stop recording future formatting changes. Text edi
 | `'suggesting'`    | `'suggesting'` | Records supported edits as revisions. |
 | `'view'`          | `'viewing'`    | Keeps the document read-only.         |
 
-In viewing mode, clicks, drags, and caret keys do not place a caret, select text, or select pictures. The pointer shows an arrow over text, and the toolbar keeps its current values. Links still work: an external link shows its popover, and an internal link jumps to its target. Your code can still set the selection, for example to highlight a search result.
+In viewing mode, readers can select text with drags, double and triple clicks, Shift with the arrow keys, and Ctrl+A or Cmd+A. Ctrl+C or Cmd+C copies the selection. Read the selection with `snapshot().selection`, the `selectedText` query, and `getSelectionPlacement()`, for example to place a button next to it. All edits stay refused, including Cut. Viewing mode shows no caret, selects no pictures, and opens no headers, footers, or notes. Links still work: an external link shows its popover, and an internal link jumps to its target.
 
 Use the `setEditingMode` command to change the mode after mount. The packaged toolbar exposes the same command in `review.editingMode`.
 

@@ -159,20 +159,22 @@ describe('atomic equation editing', () => {
     });
   });
 
-  test('a painted equation click in viewing requests chrome and selects nothing', () => {
+  // A press in viewing places the reader's selection like any press, but the equation is not
+  // selected whole, because nothing there can edit it.
+  test('a painted equation click in viewing requests chrome and does not select it', () => {
     const { editor, container } = mounted();
     const seen: string[] = [];
     editor.setEquationChrome({
       onPopover: (activation) => seen.push(activation.equation.id),
     });
     expect(editor.exec({ type: 'setEditingMode', mode: 'viewing' }).ok).toBe(true);
-    const before = editor.surface!.state().selection;
     const painted = container.querySelector<HTMLElement>('[data-docx-equation]')!;
     painted.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
     painted.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
     expect(seen).toHaveLength(1);
-    expect(editor.surface!.state().selection).toEqual(before);
+    const { anchor, head } = editor.surface!.state().selection;
+    expect(anchor).toEqual(head);
   });
 
   test('a press survives the selection repaint before click activation', () => {
