@@ -1,5 +1,17 @@
 # @eigenpal/docx-js-editor
 
+## 2.32.0
+
+### Minor Changes
+
+- 244fa30: Let `DocxEditor` hosts supply an image decoder through `imageDecodePort` in both adapters.
+
+### Patch Changes
+
+- dcc2295: Keep unsupported-content placeholders visible when React renderers return empty fragments, arrays, or whitespace.
+- 4804ef6: Changing the `fonts` prop now replaces the fonts without remounting the editor, so edits, selection, and undo history are kept, and the current fonts stay in use until the new ones are ready.
+- Updated dependencies: @docx-editor.dev/core@2.32.0, @docx-editor.dev/i18n@2.32.0
+
 ## 2.31.0
 
 ### Minor Changes

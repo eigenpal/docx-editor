@@ -1,5 +1,43 @@
 # @docx-editor.dev/core
 
+## 2.32.0
+
+### Minor Changes
+
+- b16195d: Packages ship task recipes in `docs/`, `DocxEditorReview.Draft` takes the host's position and can render inside custom cards, and review writes such as accept, reject, and comment no longer scroll the page. Editing API tracked changes save their dates to the second like editor edits, and refusals and toolbar reasons name the API to use instead.
+- bad7784: Add compound UnsupportedElement renderers in React and Vue for generic unsupported OOXML content and existing drawing/equation fallbacks. Match source metadata, reserve layout dimensions, and preserve custom component state across repaints without changing saved content.
+- b27446d: The editing API adds `Range.getTextRanges`, `Paragraph.getTextRanges`, `Range.expandTo`, and `Range.getRange`, so an agent can split a paragraph into word ranges and replace, delete, or insert after a run of words. `Range.getReviewedText` and `Paragraph.getReviewedText` read text as if every pending tracked change were accepted or rejected, and `Range.contentControls` and `Paragraph.contentControls` list the content controls a range or paragraph overlaps.
+- e63b697: Add `setFonts()` to replace host fonts without resetting document edits, selection, or undo history.
+- 9770e78: Merge and split table cells from the context menu, the table toolbar, and the automation object model through `Table.mergeCells` and `TableCell.split`. Column insertion, deletion, and resizing work on tables with merged cells.
+- fb28d79: The `insertInlineContentControl` operation accepts a `revision` to propose the control as a tracked insertion, and `insertCustomNode` proposes the node as a tracked insertion in suggesting mode.
+- 59e913c: Readers can select and copy text in viewing mode, and `snapshot().selection`, the `selectedText` query, and `getSelectionPlacement()` report that selection. Edits stay refused. Fixes #1455
+
+### Patch Changes
+
+- 017aaab: Fix missing embedded pictures in cached complex field results, including nested results.
+- c85001c: Fix table pagination around wrapping pictures, oversized rows, captions, repeated headers, and empty header frames.
+- 6df9b17: Preserve authored paragraph spacing at later column starts in continued regions.
+- b192207: An inline `contentLocked` control can now be removed as a whole: by deleting its paragraph or table, by a selection across paragraphs, by typing over it, or by rejecting the insertion that holds it. In suggesting mode and through tracked editing, deleting the whole control proposes its removal. Joining two paragraphs next to a locked inline control is no longer refused. Fixes #1425, fixes #1427
+- e658e4b: Fix extra or missing blank pages around continuous section restarts and restarted odd-page or even-page breaks.
+- 0b9a319: Text typed right before or after a locked inline control, such as a custom node, now takes the formatting of the text beside the control instead of the control's own, and the toolbar shows that formatting at the caret.
+- a91ff98: Copied pictures with an extension-style content type, such as `image/.png`, now carry the standard image type, so earlier editor versions also paste them.
+- 1b19b22: Fix documents that stay gray and reject clicks after an external file refresh.
+- 8759fed: Preserve empty-paragraph line height and wrapping below full-width floating tables.
+- 7fda473: Restore paragraph spacing in continued columns and empty-paragraph placement below full-width floating tables.
+- 8f541b3: Pictures whose content type carries the file extension, such as `image/.jpg`, now survive copy and paste, and documents that also declare a conflicting standard type still open.
+- 017aaab: Fix extra pages after continuous sections with multiple columns. Keep paragraphs below preceding content when they move between columns.
+- 9d171a6: Correct table border spacing, floating-table wrapping, rotated inline picture dimensions, and header drawing positions and text clearance.
+- 90d101e: Text formatting over a selection that includes a content-locked control is now reported as unavailable by `can()` and the toolbar, and `exec` returns `ok: false` instead of reporting success with no change. Fixes #1426
+- 3464f5e: Long documents take input as soon as their first pages show while the rest lays out in the background, and typing, new paragraphs, and accepting or rejecting all tracked changes are faster in long documents. A cross-reference whose target appears later in the document now updates after edits made right after opening.
+- 7701301: Start continuous sections below all in-flow columns on the final page of a preceding multi-page section.
+- 90370ef: Honor authored footer PAGE frame positions and keep supported exact-height floating frames out of normal footer flow.
+- e14f744: A custom node inserted into a paragraph that held no control now appears in the review list at once. Fixes #1428
+- c85001c: Fix blank pages and header selection after section numbering restarts, and missing borders beside omitted table cells.
+- 73169ac: A tracked deletion or replacement that covers an equation now proposes removing the whole equation. Before, it struck the text around the equation and left the equation in place. Fixes #1424
+- 500a5f0: `@docx-editor.dev/core/editor` exports `observeUnsupportedElements` and the unsupported-element types, which the React and Vue adapters now import from there.
+- b6625f4: Lines now break after zero-width spaces and after a dash that starts a run, and Khmer and Myanmar stacked consonants and Myanmar spacing vowels stay together on one line.
+- Updated dependencies: @docx-editor.dev/i18n@2.32.0
+
 ## 2.31.0
 
 ### Minor Changes

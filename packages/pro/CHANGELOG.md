@@ -1,5 +1,19 @@
 # @docx-editor.dev/pro
 
+## 2.32.0
+
+### Minor Changes
+
+- 81831a7: Add `createCollaborationState`, which seeds a new collaboration room on the server, so no participant uploads the document or receives its own seed back. A seed document whose expanded size is over the limit now reports `baseline-too-large` instead of `invalid-baseline`, an aborted join now rejects with `initialization-aborted`, also when the room is already present or the server still loads it, and a server refusal after a join keeps the server's reason in the failure detail. Fixes #1383
+- 5442d87: Collaboration sessions add `beginUndoGroup()`, so a server agent can make each operation exactly one undo step and undo exactly that operation. An undo of typing that another participant moved by splitting its paragraph now removes only that typing, also without undo groups. Fixes #1385
+- 3bcca6e: In collaboration, accepting or rejecting a tracked change applies to all of that change while another participant types or deletes inside or right after it, and the editing API no longer refuses those edits with `edit.tracked-foreign-revision-unsupported`. Breaking collaboration upgrade: this ships with collaboration format 1.5.2.1; see [Upgrade rooms to format 1.5.2.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1521). Fixes #1363
+
+### Patch Changes
+
+- dcc2295: Fix stale rewrite results, report a failed rollback when another edit moves the rewritten paragraph, and preserve collaboration undo group checks after host callbacks. Undo group refusals now say what to do in their message.
+- 52ee66b: The review list no longer lists property changes that leave the formatting unchanged, lists one change for the same paragraph formatting applied to consecutive paragraphs, and joins insertions and deletions across a tracked paragraph mark whatever their dates. Fixes #1377
+- Updated dependencies: @docx-editor.dev/core@2.32.0, @docx-editor.dev/react@2.32.0, @docx-editor.dev/vue@2.32.0
+
 ## 2.31.0
 
 ### Minor Changes

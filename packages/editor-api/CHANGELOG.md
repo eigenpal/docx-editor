@@ -1,5 +1,16 @@
 # @docx-editor.dev/editor-api
 
+## 2.32.0
+
+### Minor Changes
+
+- 490a4c2: Add the `@docx-editor.dev/editor-api/agent` entry with `prepareRewrite`, which reads a paragraph for a model and proposes the model's new text as the fewest tracked changes, keeping fields, equations, and locked controls whole.
+- 408204e: The editing API proposes paragraph splits, fields, and equations as tracked changes through `insertText` with line feeds, `insertField`, `Field.result`, and `insertOoxml` for one equation. A proposed or struck paragraph mark now lists in `revisions.items` as an `Insert` or `Delete` revision instead of `ParagraphProperty`.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.32.0
+
 ## 2.31.0
 
 ### Minor Changes

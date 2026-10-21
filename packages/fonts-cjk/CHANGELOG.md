@@ -1,5 +1,7 @@
 # @docx-editor.dev/fonts-cjk
 
+## 2.32.0
+
 ## 2.31.0
 
 ### Minor Changes
