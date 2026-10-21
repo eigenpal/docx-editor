@@ -1,5 +1,5 @@
 import { useDocxEditor } from '../context';
-import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import { usePickerKeyboard } from './usePickerKeyboard';
 import {
   computed,
@@ -207,14 +207,14 @@ const ParagraphStyleRoot = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onOutsidePointerDown = (event: PointerEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        open.value = false;
-      };
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-      onCleanup(() => doc.removeEventListener('pointerdown', onOutsidePointerDown, true));
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
     });
 
     const context: ParagraphStyleContextValue = {

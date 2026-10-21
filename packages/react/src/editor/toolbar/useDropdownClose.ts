@@ -1,5 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { listenForPopupEscape, listenForPopupFocusLeave } from '@docx-editor.dev/core/editor';
+import {
+  listenForOutsidePress,
+  listenForPopupEscape,
+  listenForPopupFocusLeave,
+} from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 
 /**
@@ -30,11 +34,7 @@ export function useDropdownClose(
   useEffect(() => {
     const root = rootRef.current;
     if (!open || hidden || !root) return;
-    const doc = root.ownerDocument;
     const contains = (node: Node) => root.contains(node);
-    const onOutsidePointerDown = (event: PointerEvent) => {
-      if (!event.composedPath().includes(root)) setOpen(false);
-    };
     const stopEscape = listenForPopupEscape({
       popup: root,
       contains,
@@ -50,9 +50,9 @@ export function useDropdownClose(
       contains,
       close: () => setOpen(false),
     });
-    doc.addEventListener('pointerdown', onOutsidePointerDown, true);
+    const stopPress = listenForOutsidePress({ popup: root, contains, close: () => setOpen(false) });
     return () => {
-      doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
+      stopPress();
       stopEscape();
       stopFocus();
     };

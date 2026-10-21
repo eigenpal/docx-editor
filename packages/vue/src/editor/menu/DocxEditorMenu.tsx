@@ -3,6 +3,7 @@ import {
   editorInstanceScope,
   hostDocumentOf,
   isDomNode,
+  listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
@@ -234,16 +235,14 @@ const DocxEditorMenuRoot = defineComponent({
 
     watch(openMenu, (current, _, onCleanup) => {
       if (current === null) return;
-      const onPointerDown = (event: MouseEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        openMenu.value = null;
-      };
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('mousedown', onPointerDown);
-      onCleanup(() => {
-        doc.removeEventListener('mousedown', onPointerDown);
-      });
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            openMenu.value = null;
+          },
+        })
+      );
     });
     // Escape from outside the bar, such as the pages, goes through the shared rule, and a
     // host input keeps its own Escape. Keys inside the bar stay with the menus' handlers.

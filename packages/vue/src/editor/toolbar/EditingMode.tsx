@@ -4,8 +4,8 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type DocxEditorInstance,
-  isDomNode,
   hostDocumentOf,
+  listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
@@ -120,16 +120,14 @@ export const ToolbarEditingMode = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onOutsidePointerDown = (event: PointerEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        open.value = false;
-      };
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-      onCleanup(() => {
-        doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
-      });
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
     });
     // Escape through the shared rule: a host input keeps its own Escape.
     usePopupEscape(

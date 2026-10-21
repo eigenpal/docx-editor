@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A press on the painted pages could leave the menu bar, link popup, story options, content control inspector, and dropdown menus open.",
+  "after": "One shared outside-press listener closes these local popups before the surface handles the press.",
+  "reason": "Only local popup event listeners change. The document model, shared operations, schema, and synchronization stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/popup-outside-press.test.ts",
+    "packages/react/test/hyperlink-popup.test.tsx",
+    "packages/react/test/header-footer-chrome.test.tsx",
+    "packages/react/test/menu-composition.test.tsx",
+    "packages/vue/test/header-footer-chrome.test.ts",
+    "packages/vue/test/menu-composition.test.ts"
+  ],
+  "changeset": "outside-press-popups",
+  "migration": null
+}

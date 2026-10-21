@@ -25,7 +25,7 @@ import {
   useState,
 } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -293,14 +293,10 @@ export function FontFamilyRoot({ hidden, asChild, className, children }: FontFam
   // Inside presses stay open so items can handle their click.
   useEffect(() => {
     if (!open) return undefined;
-    const onOutsidePointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-    return () => doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
 
   const context = useMemo<FontFamilyContextValue>(

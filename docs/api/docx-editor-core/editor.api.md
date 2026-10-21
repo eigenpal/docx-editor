@@ -2270,6 +2270,9 @@ export function lineSpacingMenuRows(current: SurfaceFormatting['lineSpacing']): 
 export type LineSpacingMenuValue = NonNullable<SurfaceFormatting['lineSpacing']>;
 
 // @internal
+export function listenForOutsidePress(options: OutsidePressOptions): () => void;
+
+// @internal
 export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 
 // @internal
@@ -2365,6 +2368,13 @@ export type OpenPaginatedResult = {
     readonly ok: false;
     readonly reason: string;
 };
+
+// @internal
+export interface OutsidePressOptions {
+    readonly close: (event: PointerEvent) => void;
+    readonly contains?: (node: Node) => boolean;
+    readonly popup: Node | null | undefined;
+}
 
 // @public
 export interface OverlayFrameRect {

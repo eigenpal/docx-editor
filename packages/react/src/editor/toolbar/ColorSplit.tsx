@@ -21,8 +21,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   commandForSlotValue,
-  hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -426,14 +425,10 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
     // Capture before the surface cancels compatibility mouse events or stops propagation.
     useEffect(() => {
       if (!open) return undefined;
-      const onOutsidePointerDown = (event: PointerEvent) => {
-        const root = rootRef.current;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        setOpen(false);
-      };
-      const doc = hostDocumentOf(rootRef.current);
-      doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-      return () => doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
+      return listenForOutsidePress({
+        popup: rootRef.current,
+        close: () => setOpen(false),
+      });
     }, [open]);
 
     const apply = useCallback(

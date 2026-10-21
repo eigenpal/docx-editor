@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   runToolbarCommand,
   toolbarCommandState,
   type DocxEditorInstance,
@@ -138,17 +138,10 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
 
   useEffect(() => {
     if (!open) return undefined;
-    const onOutsidePointerDown = (event: PointerEvent): void => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    // Capture before the surface cancels compatibility mouse events or stops propagation.
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-    return () => {
-      doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
-    };
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
   // Escape through the shared rule: a host input keeps its own Escape.
   usePopupEscape(open, rootRef, (fromInside) => {

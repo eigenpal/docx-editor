@@ -3,6 +3,7 @@ import { h } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorHeaderFooterChrome } from '../src/editor/DocxEditorHeaderFooter.tsx';
+import { pressCancelledPages } from './helpers/cancelled-press.ts';
 import { flush, mountEditorTree } from './helpers/mount.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -103,6 +104,32 @@ describe('DocxEditorHeaderFooterChrome', () => {
         (button) => button.textContent?.includes('Insert current page number')
       ) as HTMLButtonElement | null;
       expect(menuItem?.disabled).toBe(false);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('a press on the pages closes the options menu, although the pages cancel it', async () => {
+    const mounted = mountChrome(docxWithHeader());
+    try {
+      await flush();
+      mounted.editor().exec({ type: 'editHeaderFooter', position: 'header' });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await flush();
+      const trigger = [...mounted.container.querySelectorAll('button')].find((button) =>
+        button.textContent?.includes('Options')
+      ) as HTMLButtonElement;
+      trigger.click();
+      await flush();
+      const menu = () => mounted.container.querySelector('.docx-hf-chrome__options-menu');
+      expect(menu()).not.toBeNull();
+      menu()!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      await flush();
+      expect(menu()).not.toBeNull();
+      const event = pressCancelledPages(mounted.container);
+      await flush();
+      expect(event.defaultPrevented).toBe(true);
+      expect(menu()).toBeNull();
     } finally {
       mounted.unmount();
     }

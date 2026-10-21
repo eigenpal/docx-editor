@@ -21,8 +21,12 @@
 //
 // FOCUS: a popup also closes when focus moves somewhere outside it and outside the pages,
 // such as the find field or a host input. See `listenForPopupFocusLeave`.
+//
+// OUTSIDE PRESS: the painted pages cancel `pointerdown`, and a cancelled `pointerdown`
+// suppresses the compatibility `mousedown`. A `mousedown` listener therefore never hears a
+// press on the pages. See `listenForOutsidePress`.
 
-import { isDomNode, isElementNode } from './host-realm.ts';
+import { hostDocumentOf, isDomNode, isElementNode } from './host-realm.ts';
 
 /** How {@link listenForPopupEscape} decides and acts. @internal */
 export interface PopupEscapeOptions {
@@ -155,4 +159,41 @@ export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () =>
   };
   owner.addEventListener('focusin', onFocusIn, true);
   return () => owner.removeEventListener('focusin', onFocusIn, true);
+}
+
+/** How {@link listenForOutsidePress} decides. @internal */
+export interface OutsidePressOptions {
+  /** A node of the popup. Its host document receives the listener. */
+  readonly popup: Node | null | undefined;
+  /** Whether a node belongs to the popup. Defaults to the popup's own `contains`. */
+  readonly contains?: (node: Node) => boolean;
+  /** Close the popup. */
+  readonly close: (event: PointerEvent) => void;
+}
+
+/**
+ * Close an open popup when a press lands outside it. Returns the disposer.
+ *
+ * The listener is a capture-phase `pointerdown` on the popup's host document. Capture runs
+ * before the surface cancels the press or stops its propagation, so a press on the painted
+ * pages closes the popup too. A press counts as inside when any node on its composed path
+ * belongs to the popup, so a popup in a shadow root, or one that holds a shadow root,
+ * recognises its own presses.
+ *
+ * Shared adapter glue, not for hosts.
+ *
+ * @internal
+ */
+export function listenForOutsidePress(options: OutsidePressOptions): () => void {
+  const popup = options.popup;
+  const doc = hostDocumentOf(popup);
+  const contains = options.contains ?? ((node: Node) => popup?.contains(node) === true);
+  const onPointerDown = (event: PointerEvent): void => {
+    const path = event.composedPath();
+    const nodes = path.length > 0 ? path : [event.target];
+    if (nodes.some((node) => isDomNode(node) && contains(node))) return;
+    options.close(event);
+  };
+  doc.addEventListener('pointerdown', onPointerDown, true);
+  return () => doc.removeEventListener('pointerdown', onPointerDown, true);
 }

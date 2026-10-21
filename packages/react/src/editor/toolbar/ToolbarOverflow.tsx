@@ -25,8 +25,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   chromeSlotIsToggle,
   hasOpenNestedPopup,
-  hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   listenForPopupEscape,
   listenForPopupFocusLeave,
   type ChromeSlotId,
@@ -170,11 +169,6 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
   // Capture before the surface cancels compatibility mouse events or stops propagation.
   useEffect(() => {
     if (!open) return undefined;
-    const onPointerDown = (event: PointerEvent): void => {
-      const target = event.target;
-      if (isDomNode(target) && rootRef.current?.contains(target)) return;
-      setOpen(false);
-    };
     const root = rootRef.current;
     // Escape in the capture phase, ahead of the surface: a click opens the panel with focus
     // left in the pages, and the surface would spend the key on its own mode first. An open
@@ -195,10 +189,9 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     const stopFocus = root
       ? listenForPopupFocusLeave({ popup: root, contains, close: () => setOpen(false) })
       : undefined;
-    const doc = hostDocumentOf(root);
-    doc.addEventListener('pointerdown', onPointerDown, true);
+    const stopPress = listenForOutsidePress({ popup: root, close: () => setOpen(false) });
     return () => {
-      doc.removeEventListener('pointerdown', onPointerDown, true);
+      stopPress();
       stopEscape?.();
       stopFocus?.();
     };

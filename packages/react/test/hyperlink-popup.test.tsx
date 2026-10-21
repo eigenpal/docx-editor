@@ -18,6 +18,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorHyperLink } from '../src/editor/DocxEditorHyperLink.tsx';
+import { pressCancelledPages } from './cancelled-press.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -190,13 +191,30 @@ describe('DocxEditor.HyperLink', () => {
     expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
   });
 
-  test('a mousedown outside dismisses it', () => {
+  test('an outside press dismisses it', () => {
     const mounted = mount(LINKED);
     caret(mounted, 8);
     clickLink(mounted, 'Example');
     act(() => {
-      fireEvent.mouseDown(document.body);
+      fireEvent.pointerDown(document.body);
     });
+    expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
+  });
+
+  test('a press on the pages dismisses it, although the pages cancel the press', () => {
+    const mounted = mount(LINKED);
+    caret(mounted, 8);
+    clickLink(mounted, 'Example');
+    const popup = mounted.view.getByTestId('hyperlink-popup');
+    act(() => {
+      fireEvent.pointerDown(popup);
+    });
+    expect(mounted.view.queryByTestId('hyperlink-popup')).not.toBeNull();
+    let event: PointerEvent | undefined;
+    act(() => {
+      event = pressCancelledPages(mounted.view.container);
+    });
+    expect(event?.defaultPrevented).toBe(true);
     expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
   });
 
@@ -325,7 +343,7 @@ describe('a HYPERLINK field link', () => {
     expect(mounted.view.queryByTestId('hyperlink-popup-unlink')).toBeNull();
   });
 
-  test('escape and an outside mousedown still dismiss it', () => {
+  test('escape and an outside press still dismiss it', () => {
     const mounted = mount(FIELD_LINKED);
     caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
@@ -336,7 +354,7 @@ describe('a HYPERLINK field link', () => {
     caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
     act(() => {
-      fireEvent.mouseDown(document.body);
+      fireEvent.pointerDown(document.body);
     });
     expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
   });

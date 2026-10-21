@@ -45,7 +45,7 @@ import {
   type UseHyperlinkPopupResult,
 } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
-import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -112,7 +112,7 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const { state, close } = popup;
 
-  // Escape and an outside mousedown both dismiss. Bound only while open, so a closed
+  // Escape and an outside press both dismiss. Bound only while open, so a closed
   // popover costs nothing and cannot swallow a key the editor wants.
   useEffect(() => {
     if (state.mode === 'closed') return undefined;
@@ -121,19 +121,17 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
       event.preventDefault();
       close();
     };
-    const onMouseDown = (event: MouseEvent): void => {
-      const panel = panelRef.current;
-      if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
-      close();
-    };
-    // Capture phase for the mousedown: the surface prevents default on its own pointerdown,
-    // and a bubbling listener would never see a click that lands on the pages.
     const doc = hostDocumentOf(panelRef.current);
     doc.addEventListener('keydown', onKeyDown);
-    doc.addEventListener('mousedown', onMouseDown, true);
+    // Membership reads the ref at press time, like the panel's other handlers.
+    const stopPress = listenForOutsidePress({
+      popup: doc,
+      contains: (node) => panelRef.current?.contains(node) === true,
+      close,
+    });
     return () => {
       doc.removeEventListener('keydown', onKeyDown);
-      doc.removeEventListener('mousedown', onMouseDown, true);
+      stopPress();
     };
   }, [state.mode, close]);
 

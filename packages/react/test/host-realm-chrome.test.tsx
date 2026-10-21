@@ -61,12 +61,12 @@ describe('chrome in another window', () => {
     render(<Dropdown onClose={() => (closed += 1)} />, { container });
 
     act(() => {
-      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     });
     expect(closed).toBe(0);
 
     act(() => {
-      view.document.body.dispatchEvent(new view.MouseEvent('mousedown', { bubbles: true }));
+      view.document.body.dispatchEvent(new view.PointerEvent('pointerdown', { bubbles: true }));
     });
     expect(closed).toBe(1);
   });

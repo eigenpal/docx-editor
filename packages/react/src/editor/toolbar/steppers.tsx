@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -168,15 +168,13 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   // Capture pointer presses before the surface cancels compatibility mouse events.
   useEffect(() => {
     if (!open) return undefined;
-    const onOutsidePointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-      setDraft(null);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-    return () => doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => {
+        setOpen(false);
+        setDraft(null);
+      },
+    });
   }, [open]);
 
   if (hidden) return null;
@@ -323,14 +321,10 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   // Outside pointer presses close the level menu, as in FontFamily.Content.
   useEffect(() => {
     if (!open) return undefined;
-    const onOutsidePointerDown = (event: PointerEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('pointerdown', onOutsidePointerDown, true);
-    return () => doc.removeEventListener('pointerdown', onOutsidePointerDown, true);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
 
   const apply = useCallback(

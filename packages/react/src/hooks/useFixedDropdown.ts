@@ -8,7 +8,12 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties, RefObject } from 'react';
-import { hostDocumentOf, hostWindowOf, isElementNode } from '@docx-editor.dev/core/editor';
+import {
+  hostDocumentOf,
+  hostWindowOf,
+  isElementNode,
+  listenForOutsidePress,
+} from '@docx-editor.dev/core/editor';
 
 export interface UseFixedDropdownOptions {
   isOpen: boolean;
@@ -80,18 +85,6 @@ export function useFixedDropdown({
     // so the menu doesn't immediately close.
     const ignoreScrollUntil = performance.now() + 150;
 
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(target)
-      ) {
-        onClose();
-      }
-    };
-
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -124,12 +117,22 @@ export function useFixedDropdown({
     // script's.
     const doc = hostDocumentOf(containerRef.current);
     const win = hostWindowOf(containerRef.current);
-    doc.addEventListener('mousedown', handleClickOutside);
+    // A press inside the trigger or the menu keeps it open. Without both elements the
+    // menu has nothing to stay open for, so the press closes it.
+    const stopPress = listenForOutsidePress({
+      popup: containerRef.current,
+      contains: (node) =>
+        !containerRef.current ||
+        !dropdownRef.current ||
+        containerRef.current.contains(node) ||
+        dropdownRef.current.contains(node),
+      close: () => onClose(),
+    });
     doc.addEventListener('keydown', handleEscape);
     win.addEventListener('scroll', handleScroll, true);
 
     return () => {
-      doc.removeEventListener('mousedown', handleClickOutside);
+      stopPress();
       doc.removeEventListener('keydown', handleEscape);
       win.removeEventListener('scroll', handleScroll, true);
     };
