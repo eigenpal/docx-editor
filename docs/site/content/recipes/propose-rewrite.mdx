@@ -126,7 +126,7 @@ export async function rewriteParagraph(
 }
 ```
 
-`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph, `apply()` returns `write-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
+`draft.apply()` runs the same checks, so you can skip `check()` and catch the error instead. Even unchanged model text triggers a fresh read before `apply()` returns. If the paragraph text changed, `apply()` refuses with `stale`. If another participant deleted the paragraph before the first write, `apply()` throws `write-failed`. After a `stale` or a `verification-failed` error, another edit changed the paragraph. Prepare it again, and ask the model again with the new draft.
 
 ## Rewrite several paragraphs
 
@@ -208,7 +208,7 @@ A rewrite stays inside one paragraph. Use `keepPlaceholders: true` to require th
 | --- | --- |
 | `stale` | `StaleDocument` from a write |
 | `locked` | Any `DocxEditorError` whose `debugInfo.innerError.code` is `edit.protected-content` |
-| `write-failed` | Any other `DocxEditorError` from a write |
+| `write-failed` | Any other `DocxEditorError` from a write, or from the read of a deleted paragraph |
 | `tracking-unavailable` | A refused `changeTrackingMode = 'TrackMineOnly'`, such as `NotSupported` without the review module |
 | `read-failed` | Any error from the read in `prepareRewrite()` |
 
@@ -232,9 +232,9 @@ The following table lists every code:
 | `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
 | `stale` | The paragraph changed after `prepareRewrite()`, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
 | `locked` | An edit touched protected content. The rewrite was rolled back. | Keep the content whole. |
-| `write-failed` | The document refused an edit. The rewrite was rolled back. `error.cause` holds the reason. | Read `error.cause`. |
+| `write-failed` | The document refused an edit, or the paragraph no longer exists. The rewrite was rolled back. `error.cause` holds the reason. | Read `error.cause`. |
 | `verification-failed` | The paragraph would not read as the model text. The rewrite was rolled back. | Prepare the paragraph again, and ask the model again. |
-| `rollback-failed` | A write failed, and the rollback failed too or left the paragraph different from before. | Review the paragraph. `error.cause` holds both errors. |
+| `rollback-failed` | A write failed, and the rollback failed too, could not find the paragraph, or left the paragraph different from before. | Review the paragraph. `error.cause` holds both errors. |
 
 A failed model call is your own error, not a `RewriteError`. If a cleanup step fails after an error, such as turning tracking off again, `error.suppressed` holds that second error. It never replaces the first one.
 

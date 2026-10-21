@@ -236,9 +236,9 @@ async function reacquire(
  * Reject the revisions whose signatures are in `own`, and only those, then check the result.
  * Each attempt reads the paragraph again first, so it rejects on the current revision.
  *
- * Throws when a recorded change is not found, or when the helper wrote and the paragraph still
- * does not read as `original` although no other edit moved its original text. Either means the
- * paragraph can still hold part of the rewrite.
+ * Throws when the paragraph or a recorded change is not found, or when the helper wrote and the
+ * paragraph still does not read as `original` although no other edit moved its original text.
+ * Each means the paragraph can still hold part of the rewrite.
  */
 export async function rollback(
   context: RequestContext,
@@ -253,7 +253,14 @@ export async function rollback(
   let found = 0;
   for (let attempt = 1; expected > 0; attempt += 1) {
     target = await reacquire(context, paragraph, paragraphId);
-    if (!target) return;
+    // Another participant can join the paragraph into another one, and the changes move with it.
+    // The rollback cannot tell that from a deletion, so it must not report success.
+    if (!target) {
+      throw new Error(
+        `The rollback could not find the paragraph to reject the ${expected} changes the ` +
+          'rewrite made. Another edit moved or removed it.'
+      );
+    }
     const left = new Map(own);
     const mine = (await revisionsOf(context, target)).filter(({ signature }) => {
       const count = left.get(signature) ?? 0;

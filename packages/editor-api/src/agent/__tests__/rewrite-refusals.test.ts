@@ -216,6 +216,45 @@ describe('a failed write rolls back the writes before it', () => {
     expect(value.after.current).toBe('Alpha beta gamma DELTA.');
   });
 
+  test('a paragraph joined away during the rewrite reports rollback-failed', async () => {
+    const original = 'Alpha beta gamma delta.';
+    const runtime = await DocxEditor.createServer(docx(p('Before.') + p(original)), {
+      author: AUTHOR,
+    });
+    try {
+      const value = await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getLast();
+        // The last hunk writes at sync 10. Before the first hunk writes at sync 13, another run
+        // joins the paragraph into the one before it, so its id is gone and the change moved.
+        const paused = pausingSync(context, 13, () =>
+          runtime.run(async (other) => {
+            other.document.changeTrackingMode = 'Off';
+            const paragraphs = other.document.body.paragraphs;
+            paragraphs
+              .getFirst()
+              .getRange('End')
+              .expandTo(paragraphs.getLast().getRange('Start'))
+              .delete();
+            await other.sync();
+          })
+        );
+        const draft = await prepareRewrite(paused, paragraph);
+        const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
+        return {
+          error,
+          after: await readBack(context, context.document.body.paragraphs.getFirst()),
+        };
+      });
+      expect(value.error).toMatchObject({ code: 'rollback-failed' });
+      expect((value.error as RewriteError).message).toContain('could not find the paragraph');
+      // The change the rollback could not reach is still in the joined paragraph.
+      expect(value.after.current).toBe('Before.Alpha beta gamma DELTA.');
+      expect(value.after.authors.length).toBeGreaterThan(0);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('a failure to turn tracking off again never replaces the result or the error', async () => {
     const original = 'Alpha beta gamma delta.';
     // Every sync from the fourteenth fails: the write and the check succeed (9 to 13), and turning
