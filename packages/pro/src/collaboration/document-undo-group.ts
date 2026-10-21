@@ -31,10 +31,6 @@ export type CollaborationUndoGroupErrorCode =
   | 'editor-attached'
   | 'collaboration-session-destroyed';
 
-/**
- * Thrown by `beginUndoGroup` when the session cannot open a group. Branch on `code`.
- * @public
- */
 const UNDO_GROUP_REMEDIES: Readonly<Record<CollaborationUndoGroupErrorCode, string>> = {
   'undo-group-already-open': 'End the open group, or use another session for this operation.',
   'editor-attached':
@@ -42,6 +38,10 @@ const UNDO_GROUP_REMEDIES: Readonly<Record<CollaborationUndoGroupErrorCode, stri
   'collaboration-session-destroyed': 'Join the room with a new session.',
 };
 
+/**
+ * Thrown by `beginUndoGroup` when the session cannot open a group. Branch on `code`.
+ * @public
+ */
 export class CollaborationUndoGroupError extends Error {
   constructor(
     /** Stable refusal code. */
