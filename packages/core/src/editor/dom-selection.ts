@@ -182,7 +182,10 @@ function pageRoot(root: Element, pageIndex: number | undefined): Element | null 
  */
 export function spanSearchRoots(root: Element, preferredPageIndex?: number): readonly Element[] {
   const active = activeHeaderFooterRoot(root);
-  if (active) return [active, root];
+  // A page-anchored header or footer drawing paints on the sheet, outside the band: its sheet
+  // comes before the whole document.
+  const sheet = active?.closest('.docx-page');
+  if (active) return sheet && sheet !== root ? [active, sheet, root] : [active, root];
   const page = pageRoot(root, preferredPageIndex);
   return page && page !== root ? [page, root] : [root];
 }

@@ -81,7 +81,10 @@ import {
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
 import { applyHeaderFooterPaintChrome } from './semantic-paint-hf-chrome.ts';
-import { paintHeaderFooterLayer } from './semantic-paint-hf-layer.ts';
+import {
+  paintHeaderFooterLayer,
+  type HeaderFooterLayerPainter,
+} from './semantic-paint-hf-layer.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { pictureIsRtl } from '../layout/inline-picture-caret.ts';
@@ -1719,7 +1722,8 @@ import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-s
 import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
 import { markTrackedRow } from './table-row-revision-paint.ts';
-import { sameDataWithin } from './semantic-paint-record-equality.ts';
+import { changedPageParts } from './semantic-paint-page-diff.ts';
+import { replaceHeaderFooterLayer } from './semantic-paint-hf-adopt.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
 function paintTableCell(
@@ -1852,6 +1856,43 @@ function paintTableFragment(
   return element;
 }
 
+/** The header and footer layer painter of one page, bound to its paint context. */
+function furniturePainter(
+  document: Document,
+  options: ResolvedPaintContext & {
+    readonly activeHeaderFooterRId?: string;
+    readonly activeHeaderFooterPageIndex?: number;
+  }
+): HeaderFooterLayerPainter {
+  // One furniture context per tab-leader origin: a story's fragments all share one.
+  const furnitureCtxs = new Map<number, ResolvedPaintContext>();
+  return {
+    chrome: options,
+    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
+    paintFragment: (fragment, tabLeaderOriginXPt) => {
+      let furnitureCtx = furnitureCtxs.get(tabLeaderOriginXPt);
+      if (!furnitureCtx) {
+        furnitureCtx = { ...options, inertLinks: true, tabLeaderOriginXPt };
+        furnitureCtxs.set(tabLeaderOriginXPt, furnitureCtx);
+      }
+      return fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, furnitureCtx)
+        : paintFragment(document, fragment, furnitureCtx);
+    },
+    appendDrawings: (parent, drawings, origin, layer, interactive, hfFrontKind) =>
+      appendAnchoredDrawingsForRecords(
+        document,
+        parent,
+        drawings,
+        options,
+        origin,
+        layer,
+        interactive,
+        hfFrontKind
+      ),
+  };
+}
+
 function paintPage(
   document: Document,
   page: PageRecord,
@@ -1912,33 +1953,12 @@ function paintPage(
     : null;
   if (borderLayer && page.pageBorders) borderLayer.dataset.docxZOrder = page.pageBorders.zOrder;
   if (borderLayer && page.pageBorders?.zOrder === 'back') element.append(borderLayer);
-  // One furniture context per tab-leader origin: a story's fragments all share one.
-  const furnitureCtxs = new Map<number, ResolvedPaintContext>();
-  const hfHints = paintHeaderFooterLayer(document, element, page, {
-    chrome: options,
-    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
-    paintFragment: (fragment, tabLeaderOriginXPt) => {
-      let furnitureCtx = furnitureCtxs.get(tabLeaderOriginXPt);
-      if (!furnitureCtx) {
-        furnitureCtx = { ...options, inertLinks: true, tabLeaderOriginXPt };
-        furnitureCtxs.set(tabLeaderOriginXPt, furnitureCtx);
-      }
-      return fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, furnitureCtx)
-        : paintFragment(document, fragment, furnitureCtx);
-    },
-    appendDrawings: (parent, drawings, origin, layer, interactive, hfFrontKind) =>
-      appendAnchoredDrawingsForRecords(
-        document,
-        parent,
-        drawings,
-        options,
-        origin,
-        layer,
-        interactive,
-        hfFrontKind
-      ),
-  });
+  const hfHints = paintHeaderFooterLayer(
+    document,
+    element,
+    page,
+    furniturePainter(document, options)
+  );
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
 
   const content = document.createElement('div');
@@ -2102,72 +2122,7 @@ function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
   );
 }
 
-/** Every own key equal by identity, with no nested object on either side. */
-function samePlainValues(left: object, right: object): boolean {
-  const keys = Object.keys(left);
-  if (keys.length !== Object.keys(right).length) return false;
-  for (const key of keys) {
-    const a = (left as Record<string, unknown>)[key];
-    const b = (right as Record<string, unknown>)[key];
-    if (a !== b) return false;
-    // A nested object that happens to be the SAME object is fine; a different one is not
-    // comparable here, and `a !== b` has already refused it.
-  }
-  return true;
-}
-
-function sameItems(left: readonly unknown[], right: readonly unknown[]): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
-}
-
-/**
- * True when two page records differ ONLY in their body blocks.
- *
- * The test is written against the record's own keys rather than a hand-listed set, so a
- * field added to `PageRecord` later disables adoption — a slower repaint — instead of
- * silently painting the page without it. Everything else must be the same object, the same
- * flat values (a box, the page-field source), or the same array members: layout hands
- * untouched sub-records back by identity, so anything that really changed fails this and
- * takes the full path.
- */
-function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
-  if (previous === next) return false;
-  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
-  for (const key of keys) {
-    // Paint never reads the page-field source: the header, footer and body field records that
-    // show a page number carry its effect, and they are compared like everything else.
-    if (key === 'fragments' || key === 'pageFieldSource') continue;
-    const a = (previous as unknown as Record<string, unknown>)[key];
-    const b = (next as unknown as Record<string, unknown>)[key];
-    if (a === b) continue;
-    if (Array.isArray(a) && Array.isArray(b) && sameItems(a, b)) continue;
-    if (
-      typeof a === 'object' &&
-      typeof b === 'object' &&
-      a !== null &&
-      b !== null &&
-      !Array.isArray(a) &&
-      !Array.isArray(b) &&
-      samePlainValues(a, b)
-    ) {
-      continue;
-    }
-    // A record layout rebuilt with the same data paints the same: a footer re-projected for an
-    // unchanged page number, after a table edit replaced the page. Bounded, so a large or
-    // changed story refuses and repaints.
-    if (sameDataWithin(a, b, PAGE_RECORD_COMPARE_BUDGET)) continue;
-    return false;
-  }
-  return true;
-}
-
 const COLUMN_SEPARATOR_CLASS = 'docx-column-separator';
-/** Objects one page-field comparison may visit before adoption gives up on it. */
-const PAGE_RECORD_COMPARE_BUDGET = 20_000;
 
 /**
  * Repaint one page's changed blocks IN PLACE, keeping the sheet and every block that did
@@ -2426,16 +2381,29 @@ export function paintSemanticLayoutWithAuthorSlots(
     ) {
       return { record: page, materialized: false, element: prior.element };
     }
-    // Same sheet, different text: keep the page and repaint only the blocks that moved.
-    // Only ever from an unchanged parameter set, so an adopted block is one this pass
-    // would have built identically.
-    if (
-      parametersUnchanged &&
-      materialized &&
-      prior?.materialized &&
-      onlyBlocksChanged(prior.record, page)
-    ) {
-      const adopted = adoptPageBlocks(document, prior, page, resolved);
+    // Same sheet, different text: keep the page and repaint only the blocks, or the header and
+    // footer layer, that moved. Only ever from an unchanged parameter set, so an adopted part
+    // is one this pass would have built identically.
+    const moved =
+      parametersUnchanged && materialized && prior?.materialized
+        ? changedPageParts(prior.record, page)
+        : null;
+    if (moved && prior) {
+      // The same context `paintPage` hands the layer.
+      const furniture = {
+        ...resolved,
+        paintInstance: `p${page.index}`,
+        tabLeaderOriginXPt: page.contentBox.x - page.box.x,
+      };
+      const kept =
+        !moved.furniture ||
+        replaceHeaderFooterLayer(
+          document,
+          prior.element,
+          page,
+          furniturePainter(document, furniture)
+        );
+      const adopted = kept ? adoptPageBlocks(document, prior, page, resolved) : null;
       if (adopted) return adopted;
     }
     const painted: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> } = {};

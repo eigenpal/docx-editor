@@ -643,9 +643,14 @@ export function createPointerController(
     const storyHit = yieldsToBody ? null : bandHit;
     const noteHit = findNoteAtSheetPoint(layout, sheet, host.pageOffsetX);
     // The painted story can sit in front of the body text, so its element is the target too.
-    const furnitureDom = yieldsToBody
-      ? null
-      : (event.target as Element | null)?.closest('[data-docx-hf]');
+    // A press in the text box being edited is a press in that box, even inside a header.
+    const inEditedBox = (event.target as Element | null)?.closest(
+      '.docx-drawing-textbox[data-docx-textbox-active="true"]'
+    );
+    const furnitureDom =
+      yieldsToBody || inEditedBox
+        ? null
+        : (event.target as Element | null)?.closest('[data-docx-hf]');
     const onFurniture = Boolean(furnitureDom || storyHit);
     const target = event.target as Element | null;
     const noteRefEl = target?.closest<HTMLElement>('[data-docx-note-ref]');

@@ -148,7 +148,7 @@ describe('adopting pages whose furniture layout rebuilt', () => {
     expect(cells(container).every((cell, i) => cell === painted[i])).toBe(true);
   });
 
-  test('a footer whose text changed rebuilds its sheet', () => {
+  test('a footer whose text changed rebuilds only its footer layer', () => {
     const { before, after } = footerEdit();
     const footer = after.pages[0]!.footer as HeaderFooterStoryRecord;
     const paragraph = footer.fragments[0] as ParagraphFragmentRecord;
@@ -170,9 +170,14 @@ describe('adopting pages whose furniture layout rebuilt', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, before, { scale: 1 });
     const sheets = Array.from(container.children);
+    const body = sheets[0]!.querySelector('.docx-page-content');
+    const footerBand = sheets[0]!.querySelector('[data-docx-hf="footer"]');
     paintSemanticLayout(container, edited, { scale: 1 });
     expect(container.innerHTML).toBe(coldPaint(edited, { scale: 1 }));
-    expect(container.children[0]).not.toBe(sheets[0]);
+    // The sheet and its body stay; the footer band is painted again.
+    expect(container.children[0]).toBe(sheets[0]);
+    expect(container.children[0]!.querySelector('.docx-page-content')).toBe(body);
+    expect(container.children[0]!.querySelector('[data-docx-hf="footer"]')).not.toBe(footerBand);
     expect(container.children[1]).toBe(sheets[1]);
     expect(container.querySelector('[data-docx-hf="footer"]')!.textContent).toContain('Sheet');
   });

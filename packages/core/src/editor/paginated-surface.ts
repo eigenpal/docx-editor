@@ -20,6 +20,7 @@ import {
 } from './surface-revision-markup.ts';
 import { createDrawingGestures } from './surface-drawing-gestures.ts';
 import { createTextboxEditing } from './surface-textbox-editing.ts';
+import { textboxOwnerDeps } from './surface-textbox-owner.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
@@ -886,8 +887,13 @@ export function mountPaginatedSurface(
     return next?.kind === 'paragraph' ? next.id : null;
   };
 
+  // A box being edited orders its own paragraphs, even inside an open header or footer.
   const paragraphOrder = () =>
-    scopedDocumentOrder(editingLayout(), hfScope?.getActive() ?? null, noteScopeId());
+    scopedDocumentOrder(
+      editingLayout(),
+      textboxEditing?.active() ? null : (hfScope?.getActive() ?? null),
+      noteScopeId()
+    );
   const remoteCaret = createRemoteCaret({
     textOf: (id) => textOf(id),
     order: paragraphOrder,
@@ -6099,10 +6105,12 @@ export function mountPaginatedSurface(
     selection: () => selection,
     setSelection: (next) => setSelection(next, false, 'none'),
     flush: flushPendingInputAndLayout,
-    leaveOtherStories: () => {
-      noteOps?.exitNote();
-      hfScope?.exitHeaderFooter();
-    },
+    ...textboxOwnerDeps({
+      session,
+      headerFooter: () => hfScope,
+      sectionAtPage,
+      exitNote: () => noteOps?.exitNote(),
+    }),
     writable: () => hostEditable && editingMode === 'edit' && session.editable,
   });
   pointer = createPointerController(
@@ -6152,7 +6160,8 @@ export function mountPaginatedSurface(
       // An armed format painter paints the selection the gesture just produced. Word's
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
-      activeHeaderFooter: () => pointerHeaderFooterState(hfScope?.getActive() ?? null),
+      activeHeaderFooter: () =>
+        pointerHeaderFooterState(textboxEditing?.active() ? null : (hfScope?.getActive() ?? null)),
       activeNote: () => {
         const scope = noteOps?.activeNoteScope();
         return scope

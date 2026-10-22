@@ -84,3 +84,34 @@ describe('header entry keeps painted pages', () => {
     surface.destroy();
   });
 });
+
+describe('header typing keeps painted bodies', () => {
+  test('a header edit repaints the header on every page and keeps each body block', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const mounted = mountPaginatedSurface(container, headeredPages(4), { scale: 1 });
+    if (!mounted.ok) throw new Error(`${mounted.reason}: ${mounted.detail ?? ''}`);
+    const { surface } = mounted;
+    const sheets = [...container.querySelectorAll<HTMLElement>('.docx-page')];
+    const blocks = sheets.map((sheet) => [
+      ...sheet.querySelectorAll<HTMLElement>('.docx-page-content > *'),
+    ]);
+    expect(surface.enterHeaderFooter({ rId: 'rId10', pageIndex: 1 })).toBe(true);
+    surface.type('X');
+    const after = [...container.querySelectorAll<HTMLElement>('.docx-page')];
+    for (const [index, sheet] of sheets.entries()) {
+      expect(after[index]).toBe(sheet);
+      const bands = sheet.querySelectorAll('.docx-hf[data-docx-hf="header"]');
+      expect(bands).toHaveLength(1);
+      expect(bands[0]!.textContent).toContain('XHEADER');
+      // The body blocks are the same elements: only the header layer was rebuilt.
+      expect([...sheet.querySelectorAll<HTMLElement>('.docx-page-content > *')]).toEqual(
+        blocks[index]!
+      );
+      expect(sheet.querySelectorAll('[data-docx-hf-hint="header"]').length).toBeLessThanOrEqual(1);
+    }
+    expect(after[1]!.querySelector('[data-docx-hf-active]')).not.toBeNull();
+    expect(after[0]!.querySelector('[data-docx-hf-active]')).toBeNull();
+    surface.destroy();
+  });
+});

@@ -153,7 +153,7 @@ test('textbox geometry survives save and undo without changing body text', async
   }
 });
 
-test('header textbox refuses editing and body selection leaves a textbox', () => {
+test('header and body textboxes edit, and body selection leaves a textbox', () => {
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: textboxDocx(true, true),
@@ -162,7 +162,7 @@ test('header textbox refuses editing and body selection leaves a textbox', () =>
     const matches = editor.findMatches('boxed needle');
     const bodyFrame = matches.find((m) => m.scope?.kind === 'frame' && !m.scope.owner)!;
     const headerFrame = matches.find((m) => m.scope?.kind === 'frame' && m.scope.owner)!;
-    expect(editor.surface!.setActiveScope(headerFrame.scope!)).toBe(false);
+    expect(editor.surface!.setActiveScope(headerFrame.scope!)).toBe(true);
     expect(editor.surface!.setActiveScope(bodyFrame.scope!)).toBe(true);
     editor.selectMatch(editor.findMatches('body')[0]!);
     expect(editor.surface!.activeScope().kind).toBe('body');

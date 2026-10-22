@@ -1,0 +1,441 @@
+// Text boxes in headers and footers edit inside their story: entering one opens the header or
+// footer on the page it is entered from, writes land in that part, and leaving the box returns
+// to the open header or footer.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { createDocxEditor } from '../docx-editor.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const V = 'urn:schemas-microsoft-com:vml';
+
+/** A page-anchored DrawingML text box with one paragraph. */
+function drawingBox(text: string, id: number, topEmu: number): string {
+  return (
+    `<w:r><w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+    'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+    `<wp:positionV relativeFrom="page"><wp:posOffset>${topEmu}</wp:posOffset></wp:positionV>` +
+    '<wp:extent cx="1828800" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    `<wp:wrapNone/><wp:docPr id="${id}" name="Box ${id}"/>` +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    `<wps:txbx><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>' +
+    '</wp:anchor></w:drawing></w:r>'
+  );
+}
+
+/** A page-relative VML text box, upright or with vertical text. */
+function vmlBox(text: string, vertical = false): string {
+  return (
+    `<w:r><w:pict xmlns:v="${V}"><v:rect style="position:absolute;margin-left:72pt;` +
+    'margin-top:20pt;width:200pt;height:40pt;z-index:1;mso-position-horizontal-relative:page;' +
+    'mso-position-vertical-relative:page" filled="f">' +
+    `<v:textbox${vertical ? ' style="layout-flow:vertical"' : ''}><w:txbxContent><w:p><w:r>` +
+    `<w:t>${text}</w:t></w:r></w:p></w:txbxContent></v:textbox></v:rect></w:pict></w:r>`
+  );
+}
+
+function docx(options: {
+  header?: string;
+  footer?: string;
+  first?: string;
+  pages?: number;
+}): Uint8Array {
+  const pages = options.pages ?? 1;
+  const body = Array.from(
+    { length: pages },
+    (_, index) =>
+      `<w:p>${index ? '<w:r><w:br w:type="page"/></w:r>' : ''}<w:r><w:t>body ${index}</w:t></w:r></w:p>`
+  ).join('');
+  const references =
+    (options.header ? '<w:headerReference w:type="default" r:id="rHeader"/>' : '') +
+    (options.footer ? '<w:footerReference w:type="default" r:id="rFooter"/>' : '') +
+    (options.first ? '<w:headerReference w:type="first" r:id="rFirst"/>' : '');
+  const overrides =
+    (options.header
+      ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+      : '') +
+    (options.footer
+      ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+      : '') +
+    (options.first
+      ? '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+      : '');
+  const rels =
+    (options.header ? `<Relationship Id="rHeader" Type="${R}/header" Target="header1.xml"/>` : '') +
+    (options.footer ? `<Relationship Id="rFooter" Type="${R}/footer" Target="footer1.xml"/>` : '') +
+    (options.first ? `<Relationship Id="rFirst" Type="${R}/header" Target="header2.xml"/>` : '');
+  const files: Record<string, Uint8Array> = {
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        `${overrides}</Types>`
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">${rels}</Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr>${references}` +
+        (options.first ? '<w:titlePg/>' : '') +
+        '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" ' +
+        'w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>'
+    ),
+  };
+  if (options.header)
+    files['word/header1.xml'] = strToU8(
+      `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>header line</w:t></w:r>${options.header}</w:p></w:hdr>`
+    );
+  if (options.first)
+    files['word/header2.xml'] = strToU8(
+      `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>first line</w:t></w:r>${options.first}</w:p></w:hdr>`
+    );
+  if (options.footer)
+    files['word/footer1.xml'] = strToU8(
+      `<w:ftr xmlns:w="${W}"><w:p><w:r><w:t>footer line</w:t></w:r>${options.footer}</w:p></w:ftr>`
+    );
+  return zipSync(files);
+}
+
+function open(document: Uint8Array) {
+  const container = globalThis.document.createElement('div');
+  globalThis.document.body.append(container);
+  const editor = createDocxEditor({ container, document });
+  return {
+    editor,
+    container,
+    destroy() {
+      editor.destroy();
+      container.remove();
+    },
+  };
+}
+
+const frameMatch = (editor: ReturnType<typeof createDocxEditor>, text: string) => {
+  const match = editor.findMatches(text).find((m) => m.scope?.kind === 'frame');
+  expect(match?.scope?.kind).toBe('frame');
+  return match!;
+};
+
+async function partText(editor: ReturnType<typeof createDocxEditor>, name: string) {
+  const files = unzipSync(new Uint8Array(await editor.save()));
+  return strFromU8(files[name]!);
+}
+
+test('a header text box edits inside its header and leaves to it', async () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const surface = editor.surface!;
+    const match = frameMatch(editor, 'header box');
+    expect(match.scope?.kind === 'frame' && match.scope.owner?.kind).toBe('headerFooter');
+    expect(surface.setActiveScope(match.scope!)).toBe(true);
+    const active = surface.activeScope();
+    expect(active.kind === 'frame' && active.owner).toEqual({
+      kind: 'headerFooter',
+      rId: 'rHeader',
+    });
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    surface.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(await partText(editor, 'word/header1.xml')).toContain('header box typed');
+    expect(await partText(editor, 'word/document.xml')).not.toContain('typed');
+    // Leaving the box returns to the header it was edited in.
+    editor.surface!.setActiveScope({ kind: 'headerFooter', rId: 'rHeader' });
+    expect(surface.activeScope().kind).toBe('headerFooter');
+  } finally {
+    destroy();
+  }
+});
+
+test('typing in a header box undoes and redoes as one story edit', async () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const match = frameMatch(editor, 'header box');
+    editor.surface!.setActiveScope(match.scope!);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: ' once' }).ok).toBe(true);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(await partText(editor, 'word/header1.xml')).not.toContain('once');
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    expect(await partText(editor, 'word/header1.xml')).toContain('header box once');
+  } finally {
+    destroy();
+  }
+});
+
+test('a header box edit survives save and reopen', async () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const match = frameMatch(editor, 'header box');
+    editor.surface!.setActiveScope(match.scope!);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    editor.exec({ type: 'insertText', text: ' kept' });
+    const reopened = open(new Uint8Array(await editor.save()));
+    try {
+      expect(frameMatch(reopened.editor, 'header box kept').scope?.kind).toBe('frame');
+    } finally {
+      reopened.destroy();
+    }
+  } finally {
+    destroy();
+  }
+});
+
+test('a footer text box edits inside its footer', async () => {
+  const { editor, destroy } = open(docx({ footer: drawingBox('footer box', 8, 9144000) }));
+  try {
+    const match = frameMatch(editor, 'footer box');
+    expect(editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(await partText(editor, 'word/footer1.xml')).toContain('footer box typed');
+  } finally {
+    destroy();
+  }
+});
+
+test('a legacy header text box with upright text edits; vertical text stays read-only', async () => {
+  const upright = open(docx({ header: vmlBox('legacy box') }));
+  try {
+    const match = frameMatch(upright.editor, 'legacy box');
+    expect(upright.editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    upright.editor.surface!.setSelection({ anchor: end, head: end });
+    expect(upright.editor.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(await partText(upright.editor, 'word/header1.xml')).toContain('legacy box typed');
+  } finally {
+    upright.destroy();
+  }
+  const vertical = open(docx({ header: vmlBox('vertical box', true) }));
+  try {
+    const match = frameMatch(vertical.editor, 'vertical box');
+    expect(vertical.editor.surface!.setActiveScope(match.scope!)).toBe(false);
+  } finally {
+    vertical.destroy();
+  }
+});
+
+test('a header box shared by several pages edits on one of them', () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('shared box', 7, 457200), pages: 3 })
+  );
+  try {
+    expect(editor.surface!.layout().pages.length).toBe(3);
+    const match = frameMatch(editor, 'shared box');
+    expect(editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const editing = container.querySelectorAll(
+      '.docx-drawing-textbox[data-docx-textbox-active="true"]'
+    );
+    // Only the copy on the page it is edited on binds; the others stay pictures.
+    expect([...editing].map(pageOf)).toEqual(['0']);
+    const bound = container.querySelectorAll(`[data-paragraph-id="${match.blockId}"]`);
+    expect([...new Set([...bound].map(pageOf))]).toEqual(['0']);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: '!' }).ok).toBe(true);
+    // The typed text shows on every page the header repeats on.
+    const copies = [...container.querySelectorAll('.docx-drawing-textbox')];
+    expect(copies.map((box) => box.textContent?.includes('shared box!'))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  } finally {
+    destroy();
+  }
+});
+
+const pageOf = (element: Element) =>
+  element.closest('[data-page-index]')?.getAttribute('data-page-index');
+
+function press(target: Element): void {
+  const init = { bubbles: true, cancelable: true, button: 0, clientX: 5, clientY: 5 };
+  target.dispatchEvent(new PointerEvent('pointerdown', init));
+  target.dispatchEvent(new PointerEvent('pointerup', init));
+}
+
+const boxText = (box: Element) =>
+  box.querySelector('.docx-drawing-textbox-content span') ??
+  box.querySelector('.docx-drawing-textbox-content')!;
+
+test('closing the header from inside a header box returns the caret to the body', async () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const surface = editor.surface!;
+    const body = editor.findMatches('body 0')[0]!;
+    const start = { paragraphId: body.blockId, offset: 0 };
+    surface.setSelection({ anchor: start, head: start });
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    expect(editor.exec({ type: 'exitHeaderFooter' }).ok).toBe(true);
+    expect(surface.activeScope().kind).toBe('body');
+    expect(surface.state().selection.head.paragraphId).toBe(body.blockId);
+    expect(editor.exec({ type: 'insertText', text: 'Back ' }).ok).toBe(true);
+    expect(await partText(editor, 'word/document.xml')).toContain('Back body 0');
+  } finally {
+    destroy();
+  }
+});
+
+test('entering the header at a position from inside its box leaves the box', () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const surface = editor.surface!;
+    const line = editor.findMatches('header line')[0]!;
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    const at = { paragraphId: line.blockId, offset: 2 };
+    expect(surface.enterHeaderFooter!({ rId: 'rHeader', position: at })).toBe(true);
+    expect(surface.activeScope().kind).toBe('headerFooter');
+    expect(editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    expect(editor.findMatches('heQader line')).toHaveLength(1);
+  } finally {
+    destroy();
+  }
+});
+
+test('pressing a header box copy on another page moves the open header there', () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('header box', 7, 457200), pages: 3 })
+  );
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope({ kind: 'headerFooter', rId: 'rHeader' })).toBe(true);
+    const copy = [...container.querySelectorAll('.docx-drawing-textbox')].find(
+      (box) => pageOf(box) === '2'
+    )!;
+    press(boxText(copy));
+    expect(surface.activeScope().kind).toBe('frame');
+    expect([...container.querySelectorAll('[data-docx-hf-active]')].map(pageOf)).toEqual(['2']);
+    expect(
+      [...container.querySelectorAll('.docx-drawing-textbox[data-docx-textbox-active="true"]')].map(
+        pageOf
+      )
+    ).toEqual(['2']);
+  } finally {
+    destroy();
+  }
+});
+
+test('a double press in an inline header box selects a word in the box', () => {
+  const inline =
+    `<w:r><w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+    '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="1828800" cy="457200"/>' +
+    '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="11" name="Inline 11"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    '<wps:txbx><w:txbxContent><w:p><w:r><w:t>inline box</w:t></w:r></w:p>' +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>' +
+    '</wp:inline></w:drawing></w:r>';
+  const { editor, container, destroy } = open(docx({ header: inline }));
+  try {
+    const surface = editor.surface!;
+    const box = container.querySelector('.docx-drawing-textbox')!;
+    expect(box.closest('[data-docx-hf]')).not.toBeNull();
+    press(boxText(box));
+    expect(surface.activeScope().kind).toBe('frame');
+    press(boxText(box));
+    const { anchor, head } = surface.state().selection;
+    expect(surface.activeScope().kind).toBe('frame');
+    expect(anchor.paragraphId).toBe(head.paragraphId);
+    expect(anchor.offset).not.toBe(head.offset);
+  } finally {
+    destroy();
+  }
+});
+
+test('a first-page header box edits in the first-page header only', async () => {
+  const { editor, container, destroy } = open(
+    docx({
+      header: drawingBox('default box', 7, 457200),
+      first: drawingBox('first box', 9, 457200),
+      pages: 2,
+    })
+  );
+  try {
+    const match = frameMatch(editor, 'first box');
+    expect(match.scope?.kind === 'frame' && match.scope.owner).toEqual({
+      kind: 'headerFooter',
+      rId: 'rFirst',
+    });
+    expect(editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const active = container.querySelector('[data-docx-textbox-active="true"]');
+    expect(active?.closest('[data-page-index]')?.getAttribute('data-page-index')).toBe('0');
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(await partText(editor, 'word/header2.xml')).toContain('first box typed');
+    expect(await partText(editor, 'word/header1.xml')).not.toContain('typed');
+  } finally {
+    destroy();
+  }
+});
+
+test('a header box with a page number field keeps the field while its text is edited', async () => {
+  const field =
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const box = drawingBox('Page ', 7, 457200).replace(
+    '</w:t></w:r></w:p>',
+    `</w:t></w:r>${field}</w:p>`
+  );
+  const { editor, container, destroy } = open(
+    docx({ header: box.replace('<w:t>Page ', '<w:t xml:space="preserve">Page '), pages: 2 })
+  );
+  try {
+    const match = frameMatch(editor, 'Page');
+    expect(editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const start = { paragraphId: match.blockId, offset: match.start };
+    editor.surface!.setSelection({ anchor: start, head: start });
+    expect(editor.exec({ type: 'insertText', text: 'The ' }).ok).toBe(true);
+    const header = await partText(editor, 'word/header1.xml');
+    expect(header).toContain('The Page');
+    expect(header).toContain('PAGE');
+    // Each page still shows its own number in the box.
+    const painted = [...container.querySelectorAll('.docx-drawing-textbox')].map((box) =>
+      box.textContent?.replace(/\s+/g, ' ').trim()
+    );
+    expect(painted).toEqual(['The Page 1', 'The Page 2']);
+  } finally {
+    destroy();
+  }
+});
+
+test('a header box takes text formatting and plain-text paste in its header', async () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const surface = editor.surface!;
+    const match = frameMatch(editor, 'header box');
+    expect(surface.setActiveScope(match.scope!)).toBe(true);
+    surface.setSelection({
+      anchor: { paragraphId: match.blockId, offset: match.start },
+      head: { paragraphId: match.blockId, offset: match.start + 6 },
+    });
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toEqual({ ok: true, changed: true });
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    surface.setSelection({ anchor: end, head: end });
+    expect(surface.pasteRich(' pasted', '<table><tr><td>pasted</td></tr></table>')).toBe(true);
+    const header = await partText(editor, 'word/header1.xml');
+    expect(header).toMatch(/<w:b\/>.*header/);
+    expect(header).toContain(' pasted');
+    expect(header).not.toContain('<w:tbl');
+    expect(await partText(editor, 'word/document.xml')).not.toContain('<w:b/>');
+  } finally {
+    destroy();
+  }
+});

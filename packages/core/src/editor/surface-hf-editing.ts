@@ -160,9 +160,10 @@ export function createHeaderFooterScopeController(deps: {
     if (!args.rId || deps.session.partFor({ kind: 'headerFooter', rId: args.rId }) === null) {
       return false;
     }
-    // Before anything is resolved against it: leaving a note re-scopes the layout this entry
-    // reads, so doing it afterwards would resolve the header against the note's order.
-    if (activeHf?.scope.rId !== args.rId) deps.leaveOtherStories?.();
+    // Before anything is resolved against it: leaving a note or a text box re-scopes the layout
+    // this entry reads, so doing it afterwards would resolve the header against their order. A
+    // box in this same story closes too: the entry moves the caret out of it.
+    deps.leaveOtherStories?.();
     const layout = deps.layout();
     const found = findStoryForRId(layout, args.rId);
     const prior = activeHf;
@@ -265,6 +266,9 @@ export function createHeaderFooterScopeController(deps: {
 
   const exitHeaderFooter = (): void => {
     if (!activeHf) return;
+    // A box open in the story closes first, so the body caret is restored against the
+    // document's order rather than the box's.
+    deps.leaveOtherStories?.();
     const restore = activeHf.savedBodySelection;
     activeHf = null;
     deps.setScopeSelection(clampSelectionToScope(deps.layout(), restore, null));

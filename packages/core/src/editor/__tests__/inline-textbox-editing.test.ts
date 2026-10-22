@@ -228,7 +228,7 @@ test('an inline box in a table cell is editable like an anchored one', () => {
   }
 });
 
-test('an inline box in a header is found but stays read-only', () => {
+test('an inline box in a header is found and edits inside the header', () => {
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: inlineTextboxDocx({ inHeader: true }),
@@ -237,7 +237,11 @@ test('an inline box in a header is found but stays read-only', () => {
     const match = editor.findMatches('header needle')[0]!;
     expect(match.scope?.kind).toBe('frame');
     expect(match.scope?.kind === 'frame' && match.scope.owner).toBeTruthy();
-    expect(editor.surface!.setActiveScope(match.scope!)).toBe(false);
+    expect(editor.surface!.setActiveScope(match.scope!)).toBe(true);
+    const end = { paragraphId: match.blockId, offset: match.start + match.length };
+    editor.surface!.setSelection({ anchor: end, head: end });
+    expect(editor.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(editor.findMatches('header needle typed')[0]?.scope?.kind).toBe('frame');
   } finally {
     editor.destroy();
   }

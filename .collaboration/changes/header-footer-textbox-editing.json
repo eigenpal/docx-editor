@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text boxes in headers and footers render and replicate edits made through automation, but the editor refuses to enter them.",
+  "after": "The editor enters a header or footer text box, opens its story, and writes text edits as ordinary operations on that header or footer part.",
+  "reason": "Edits use the existing paragraph and run operations on an existing part. Shared nodes, text offsets, operation shapes, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/header-footer-textbox-editing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-header-textboxes.test.ts"
+  ],
+  "changeset": "header-footer-textbox-editing",
+  "migration": null
+}
