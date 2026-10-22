@@ -654,7 +654,9 @@
       "sw": "Größe ändern (untere linke Ecke)",
       "w": "Größe ändern (linke Kante)"
     },
-    "selection": "Ausgewähltes Bild"
+    "selection": "Ausgewähltes Bild",
+    "locked": "Dieses Textfeld kann nicht verschoben oder in der Größe geändert werden",
+    "textLocked": "Der Text in diesem Textfeld kann nicht bearbeitet werden"
   },
   "revisions": {
     "paragraphMarkInserted": "Absatzmarke eingefügt",

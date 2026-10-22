@@ -654,7 +654,9 @@
       "sw": "调整左下角大小",
       "w": "调整左边缘大小"
     },
-    "selection": "选定的图像"
+    "selection": "选定的图像",
+    "locked": "此框无法移动或调整大小",
+    "textLocked": "此框中的文本无法编辑"
   },
   "revisions": {
     "paragraphMarkInserted": "已插入段落标记",

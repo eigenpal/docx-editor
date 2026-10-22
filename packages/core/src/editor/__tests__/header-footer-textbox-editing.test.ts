@@ -393,6 +393,41 @@ for (const [name, top] of [
   });
 }
 
+test('with the header open, a press on its text over a box behind the text stays in the text', () => {
+  const behind = drawingBox('behind box', 7, 457200).replace('behindDoc="0"', 'behindDoc="1"');
+  const { editor, container, destroy } = open(docx({ header: behind }));
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope({ kind: 'headerFooter', rId: 'rHeader' })).toBe(true);
+    const line = container.querySelector('[data-docx-hf-active] [data-start]')!;
+    withBoxGeometry(() => pressAt(line, 50, 50));
+    expect(surface.activeScope().kind).toBe('headerFooter');
+  } finally {
+    destroy();
+  }
+});
+
+test('a double press over a paragraph enters the closed header box under it', async () => {
+  for (const [name, top, select] of [
+    ['header', 457200, '[data-docx-hf] .docx-paragraph-fragment'],
+    ['body', 1828800, '.docx-page-content .docx-paragraph-fragment'],
+  ] as const) {
+    const { editor, container, destroy } = open(docx({ header: drawingBox('header box', 7, top) }));
+    try {
+      // The box paints inert while its header is closed, so the paragraph takes the press.
+      const fragment = container.querySelector(select)!;
+      expect(fragment, name).not.toBeNull();
+      withBoxGeometry(() => {
+        pressAt(fragment, 50, 50);
+        pressAt(fragment, 50, 50);
+      });
+      expect(editor.surface!.activeScope().kind, name).toBe('frame');
+    } finally {
+      destroy();
+    }
+  }
+});
+
 test('a single press on a closed header box leaves the body caret', () => {
   const { editor, container, destroy } = open(
     docx({ header: drawingBox('header box', 7, 457200) })
@@ -582,3 +617,106 @@ for (const [name, box, text] of [
     }
   });
 }
+
+test('a header box on story-relative axes reports its offset from its own frame origin', () => {
+  // 10 pt below its paragraph and 20 pt right of the column: the overlay frame minus the anchor
+  // frame origin must give those offsets back, or a move or resize makes the box jump.
+  const box = drawingBox('header box', 7, 127000)
+    .replace('<wp:positionV relativeFrom="page">', '<wp:positionV relativeFrom="paragraph">')
+    .replace(
+      '<wp:positionH relativeFrom="page"><wp:posOffset>914400',
+      '<wp:positionH relativeFrom="column"><wp:posOffset>254000'
+    );
+  const { editor, destroy } = open(docx({ header: box }));
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    const target = selectedDrawingOverlayTargetOf(surface)!;
+    expect(target.position).toMatchObject({ relativeToH: 'column', relativeToV: 'paragraph' });
+    expect(target.x - target.anchorFrameOrigin!.x).toBeCloseTo(20, 6);
+    expect(target.y - target.anchorFrameOrigin!.y).toBeCloseTo(10, 6);
+  } finally {
+    destroy();
+  }
+});
+
+function key(container: HTMLElement, name: string): void {
+  container
+    .querySelector('.docx-page')!
+    .dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+}
+
+test('Escape leaves a header box with the box selected; Enter goes back into its text', async () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('header box', 7, 457200) })
+  );
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    key(container, 'Escape');
+    // The header stays open around the selected box, which Delete now acts on.
+    expect(surface.activeScope().kind).toBe('headerFooter');
+    const selected = selectedDrawingOverlayTargetOf(surface);
+    expect(selected?.textbox).toBe(true);
+    expect(selected?.textEditable).toBe(true);
+    expect(selected?.canMove).toBe(true);
+    key(container, 'Enter');
+    expect(surface.activeScope().kind).toBe('frame');
+    expect(editor.exec({ type: 'insertText', text: 'again ' }).ok).toBe(true);
+    expect(await partText(editor, 'word/header1.xml')).toContain('again header box');
+    key(container, 'Escape');
+    key(container, 'Delete');
+    expect(await partText(editor, 'word/header1.xml')).not.toContain('header box');
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    // From a selected box, Escape leaves the header or footer.
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    key(container, 'Escape');
+    expect(surface.activeScope().kind).toBe('headerFooter');
+    key(container, 'Escape');
+    expect(surface.activeScope().kind).toBe('body');
+  } finally {
+    destroy();
+  }
+});
+
+test('a double press on a header box whose text takes no caret selects the box', () => {
+  const { editor, container, destroy } = open(docx({ header: vmlBox('vertical box', true) }));
+  try {
+    const surface = editor.surface!;
+    const sheet = container.querySelector('.docx-page')!;
+    withBoxGeometry(() => {
+      pressAt(sheet, 50, 50);
+      pressAt(sheet, 50, 50);
+    });
+    // The header opened around it, with the box selected rather than a caret elsewhere.
+    expect(surface.activeScope().kind).toBe('headerFooter');
+    const selected = selectedDrawingOverlayTargetOf(surface);
+    expect(selected?.textbox).toBe(true);
+    // The frame can say why typing does not reach the box.
+    expect(selected?.textEditable).toBe(false);
+    expect(container.querySelector('[data-docx-hf-active]')).not.toBeNull();
+  } finally {
+    destroy();
+  }
+});
+
+test('an entry from code opens a shared header box on the page in view', () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('shared box', 7, 457200), pages: 3 })
+  );
+  const prototype = HTMLElement.prototype;
+  const original = prototype.getBoundingClientRect;
+  // Only page 2 is in the window.
+  prototype.getBoundingClientRect = function (this: HTMLElement) {
+    if (!this.classList.contains('docx-page')) return original.call(this);
+    const inView = this.dataset.pageIndex === '2';
+    return { top: inView ? 0 : -2000, bottom: inView ? 500 : -1000 } as DOMRect;
+  };
+  try {
+    expect(editor.surface!.setActiveScope(frameMatch(editor, 'shared box').scope!)).toBe(true);
+    expect([...container.querySelectorAll('[data-docx-hf-active]')].map(pageOf)).toEqual(['2']);
+  } finally {
+    prototype.getBoundingClientRect = original;
+    destroy();
+  }
+});

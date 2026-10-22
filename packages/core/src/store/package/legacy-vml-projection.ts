@@ -617,7 +617,10 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         ? Object.freeze({
             select: false,
             move: !floating,
-            resize: style.has('mso-width-percent') || style.has('mso-height-percent'),
+            // `0` is the writer's "no percentage", so the absolute size is the one kept.
+            resize: ['mso-width-percent', 'mso-height-percent'].some(
+              (key) => (style.get(key) ?? '0') !== '0'
+            ),
             changeAspect: false,
           })
         : Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),

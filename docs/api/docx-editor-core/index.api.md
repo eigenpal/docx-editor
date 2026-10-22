@@ -1754,7 +1754,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
     getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
-    // (undocumented)
     getActiveScope(): ViewScope;
     getAvailableFonts(): readonly string[];
     getComments(): readonly {
@@ -1875,7 +1874,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
-    // (undocumented)
     setActiveScope(scope: ViewScope): void;
     setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
@@ -3923,13 +3921,9 @@ export interface SectionProperties {
 
 // @public
 export interface SelectedImageState {
-    // (undocumented)
     readonly canChangeWrap: boolean;
-    // (undocumented)
     readonly canCrop: boolean;
-    // (undocumented)
     readonly canMove: boolean;
-    // (undocumented)
     readonly canResize: boolean;
     readonly crop: ImageCropPercent;
     // (undocumented)

@@ -90,6 +90,8 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 
 The wrap element controls text flow. The `@behindDoc` attribute controls paint order. A picture with `@behindDoc="1"` paints behind text. If its wrap element differs from `wrapNone`, text still wraps around it. `SelectedImageState.wrap` reports that wrap mode.
 
+Check `canResize` and `canMove` before you offer a resize or a move. They are false for a locked or hidden drawing, a rotated legacy VML text box, and in viewing mode. `canMove` is also false for an inline drawing, which flows with its line. An inline text box still resizes. `canChangeWrap` and `canCrop` apply to pictures only.
+
 Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
@@ -298,9 +300,31 @@ Picture commands, such as resize and replace, do not apply to a picture in a gro
 
 Choose **Insert → Text Box** from a body paragraph to add an empty rectangular box and start typing. The new box has a white fill, a black border, and a fixed starting size. Drag its border to move it, or drag its handles to resize it. Clicking its text shows the frame and places the caret. Insertion in tables, headers, and footers is unavailable.
 
+## Edit text boxes
+
+Click inside an unrotated text box in the body to edit its paragraphs. A frame outlines the box being edited. Drag the frame's border to move an anchored box, or drag its handles to resize the box. An inline text box resizes but moves only with its line.
+
+To edit a text box in a header or footer, follow these steps:
+
+1. Double-click the box. Its header or footer opens with the caret in the box.
+2. Type, format, or paste. Pasting into a text box inserts plain text.
+3. Press **Escape** to leave the box. The box stays selected, so you can press **Delete** to delete it, drag it, or press **Enter** to go back into its text.
+4. Press **Escape** again to close the header or footer.
+
+While a header or footer is open, a single click enters any of its boxes. **Undo** reverses each step, and the edits synchronize during collaboration.
+
+These text boxes keep their geometry or their text as authored:
+
+- A box whose text is rotated or vertical, or a box that holds a table, takes no caret. Clicking it selects the box instead, and its frame says why the text cannot be edited.
+- A rotated legacy VML text box, and one sized as a percentage of the page or margin, cannot be moved or resized. Its frame has no handles.
+- To edit a box that sits behind the text of a header or footer, open the header or footer first, and then click the box.
+- Table insertion is unavailable inside a text box.
+
+Legacy VML text boxes take the same controls as modern ones. Moving or resizing one rewrites only its position and size.
+
 ## Find text in text boxes
 
-**Find** searches anchored and inline text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated text box in the body, a header, or a footer to edit its paragraphs. To edit a box in a header or footer, double-click it: its header or footer opens with the caret in the box. While that header or footer is open, a single click enters a box. Leaving the box returns to the header or footer. Use the border of an anchored text box to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. A frame outlines the box being edited. A box in a header or footer drags, resizes, and deletes from its frame too. An inline text box resizes from its frame but moves only with its line. Legacy VML text boxes take the same controls unless they are turned. Text boxes with tables remain read-only. Text boxes in footnotes or endnotes are not searched.
+**Find** searches anchored and inline text boxes in the body, headers, and footers. Selecting a match selects its text box. Text boxes in footnotes or endnotes are not searched.
 
 Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
 
@@ -310,9 +334,9 @@ Standalone `w:pict` can render unrotated embedded photos and bounded groups of p
 
 Floating `v:shape` paths with two explicit points can have one zero extent. They paint as native vector lines. A zero coordinate axis requires both corresponding coordinates to match its origin. Curves, multiple subpaths, and invalid coordinate axes remain opaque.
 
-A text box (`v:textbox`) on a rectangle, rounded rectangle, or text box shape lays out its story inside the shape with the `inset` margins, floating or inline, in the body, headers, and footers. It paints the solid fill and outline of the shape. **Find** reaches its text, and a body box takes the same text editing as other text boxes. Rounded corners, shadows, and dash patterns of a text box are not painted. Vertical text flow keeps the shape opaque.
+A text box (`v:textbox`) on a rectangle, rounded rectangle, or text box shape lays out its story inside the shape with the `inset` margins, floating or inline, in the body, headers, and footers. It paints the solid fill and outline of the shape. **Find** reaches its text, and a box in the body, a header, or a footer takes the same editing as other text boxes. For more information, see [Edit text boxes](#edit-text-boxes).
 
-Previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
+Other previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
 
 The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
 

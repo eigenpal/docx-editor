@@ -26,7 +26,7 @@ import { verticalMarginInsets } from '../layout/page-body-margins.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
-import { editedTextboxOverlayFrame } from './textbox-overlay-frame.ts';
+import { editedTextboxOverlayFrame, textboxTextEditable } from './textbox-overlay-frame.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type {
   DrawingPositionInput,
@@ -1166,6 +1166,11 @@ export interface ImageOverlayScrollPort {
 export interface SelectedDrawingOverlayTarget {
   /** Keep the text area available for pointer editing through the frame. */
   readonly textbox?: boolean;
+  /**
+   * False for a text box whose text takes no caret: rotated or vertical text, or a story
+   * holding a table. Absent for a drawing that is not a text box.
+   */
+  readonly textEditable?: boolean;
   readonly id: string;
   readonly pageIndex: number;
   readonly x: number;
@@ -1244,16 +1249,20 @@ export function selectedDrawingOverlayTargetOf(
   // image is still selectable, copyable and describable in a document open for viewing.
   const writable = surface.editingMode() === 'edit' && surface.session.editable;
   const gated = writable ? caps : { ...caps, canResize: false, canMove: false };
+  // The frame origins are in the record's own coordinates, which for a header or footer
+  // drawing on a story-relative axis are the story's. The overlay frame is in page-content
+  // coordinates, so the origin moves by the same shift: none for a body or page-relative axis.
   const anchorFrameOrigin =
     record.kind === 'anchoredDrawing'
       ? Object.freeze({
-          x: record.horizontalFrameOrigin,
-          y: record.verticalFrameOrigin,
+          x: record.horizontalFrameOrigin + frame.x - record.paintBounds.x,
+          y: record.verticalFrameOrigin + frame.y - record.paintBounds.y,
         })
       : null;
   return Object.freeze({
     id: record.drawingNodeId,
     textbox: 'textboxStory' in record && !!record.textboxStory,
+    ...textboxTextEditable(record),
     pageIndex: frame.pageIndex,
     x: frame.x,
     y: frame.y,

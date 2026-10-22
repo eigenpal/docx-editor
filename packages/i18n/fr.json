@@ -630,7 +630,9 @@
       "sw": "Redimensionner le coin inférieur gauche",
       "w": "Redimensionner le bord gauche"
     },
-    "selection": "Image sélectionnée"
+    "selection": "Image sélectionnée",
+    "locked": "Ce cadre ne peut être ni déplacé ni redimensionné",
+    "textLocked": "Le texte de ce cadre ne peut pas être modifié"
   },
   "ruler": {
     "horizontal": "Règle horizontale",

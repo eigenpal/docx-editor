@@ -79,10 +79,14 @@ function furnitureContentAt(
   if (!press.double && openRId === undefined) return null;
   const sheet = element?.closest('[data-page-index]');
   if (!sheet) return null;
+  // Text of the open story keeps a press over a box behind it: the text is in front.
+  const onOpenText =
+    openRId !== undefined && !!element?.closest('[data-docx-hf-active] [data-start]');
   const contents = [...sheet.querySelectorAll('.docx-drawing-textbox-content')].reverse();
   for (const content of contents) {
     const layer = content.closest('[data-docx-hf], [data-docx-hf-front], [data-docx-hf-behind]');
-    if (!layer || (openRId === undefined && layer.hasAttribute('data-docx-hf-behind'))) continue;
+    const behind = !!layer?.hasAttribute('data-docx-hf-behind');
+    if (!layer || (behind && (openRId === undefined || onOpenText))) continue;
     const rect = content.getBoundingClientRect();
     if (
       press.clientX >= rect.left &&
@@ -93,6 +97,23 @@ function furnitureContentAt(
       return content;
   }
   return null;
+}
+
+/**
+ * The first sheet in view, or undefined when none is (or nothing is laid out). In view means
+ * inside the editor's scroll viewport, or the window's when the editor has none.
+ */
+function visiblePageIndex(pagesLayer: HTMLElement): number | undefined {
+  const scroller = pagesLayer.closest('.docx-editor__scroll-container');
+  const view = scroller?.getBoundingClientRect() ?? {
+    top: 0,
+    bottom: pagesLayer.ownerDocument.defaultView?.innerHeight ?? 0,
+  };
+  for (const sheet of pagesLayer.querySelectorAll<HTMLElement>('.docx-page[data-page-index]')) {
+    const rect = sheet.getBoundingClientRect();
+    if (rect.bottom > view.top && rect.top < view.bottom) return Number(sheet.dataset.pageIndex);
+  }
+  return undefined;
 }
 
 /**
@@ -225,7 +246,15 @@ export function createTextboxEditing(deps: {
       return false;
     const open = deps.headerFooter.active();
     const owner = scope.owner as FurnitureOwner | undefined;
-    const preferred = pageIndex ?? (owner && open?.rId === owner.rId ? open.pageIndex : undefined);
+    // A box in the open story edits on its page; otherwise on the page in view, so an entry
+    // from code opens the copy the reader looks at rather than the first one.
+    const preferred =
+      pageIndex ??
+      (owner
+        ? open?.rId === owner.rId
+          ? open.pageIndex
+          : visiblePageIndex(deps.pagesLayer)
+        : undefined);
     const placed = placementOf(deps.layout(), scope, preferred);
     const drawing = placed?.drawing;
     if (
@@ -261,6 +290,58 @@ export function createTextboxEditing(deps: {
   };
   const placement = (base: SemanticLayout) =>
     active ? placementOf(base, active, activePage) : null;
+  let refused: { readonly drawingNodeId: string; readonly hostParagraphId: string } | null = null;
+  /**
+   * The frame scope of the text box drawing `drawingNodeId`: a body box, or a header or footer
+   * box on `pageIndex` (or the first page that shows it), with the story it belongs to.
+   */
+  const scopeOfDrawing = (
+    drawingNodeId: string,
+    pageIndex?: number
+  ): {
+    readonly scope: FrameScope;
+    readonly pageIndex?: number;
+    readonly kind?: 'header' | 'footer';
+  } | null => {
+    const body = textboxStoriesInPart(deps.session.part()).find(
+      (candidate) => candidate.drawingNodeId === drawingNodeId
+    );
+    if (body)
+      return {
+        scope: {
+          kind: 'frame',
+          id: body.root.id,
+          drawingNodeId,
+          hostParagraphId: body.hostParagraphId,
+        },
+      };
+    const part = deps.partOf(drawingNodeId);
+    const owned =
+      part &&
+      textboxStoriesInPart(part).find((candidate) => candidate.drawingNodeId === drawingNodeId);
+    if (!owned) return null;
+    const layout = deps.layout();
+    const at = pageIndex === undefined ? undefined : layout.pages[pageIndex];
+    const pages = at && at.index === pageIndex ? [at, ...layout.pages] : layout.pages;
+    for (const page of pages) {
+      const record = furnitureTextboxDrawingsOnPage(page).find(
+        (found) => found.drawing.drawingNodeId === drawingNodeId
+      );
+      if (!record?.rId) continue;
+      return {
+        scope: {
+          kind: 'frame',
+          id: owned.root.id,
+          drawingNodeId,
+          hostParagraphId: owned.hostParagraphId,
+          owner: { kind: 'headerFooter', rId: record.rId },
+        },
+        pageIndex: page.index,
+        kind: record.kind,
+      };
+    }
+    return null;
+  };
   return {
     active: () => active,
     replacementFormatOps(paragraphId: string, offset: number, length: number): TreeDocOp[] {
@@ -355,6 +436,25 @@ export function createTextboxEditing(deps: {
       cached = { base, id: active.id, layout };
       return layout;
     },
+    /** Enter the text box of a selected drawing, as Enter on a selected box does. */
+    enterDrawing(drawingNodeId: string): boolean {
+      const open = deps.headerFooter.active();
+      const target = scopeOfDrawing(drawingNodeId, open?.pageIndex);
+      return !!target && enter(target.scope, target.pageIndex);
+    },
+    /**
+     * A header or footer box that a press reached but whose text cannot take a caret (turned
+     * text, vertical text, a table). The press selects it as an object instead, so the reader
+     * sees which box it is; taking it clears it.
+     */
+    takeRefusedPress(): {
+      readonly drawingNodeId: string;
+      readonly hostParagraphId: string;
+    } | null {
+      const taken = refused;
+      refused = null;
+      return taken;
+    },
     /**
      * Enter the box a press lands in. A header or footer box paints inert while its story is
      * closed, so the press reaches the body under it; `press` finds it by geometry instead: a
@@ -365,55 +465,37 @@ export function createTextboxEditing(deps: {
       element: Element | null,
       press?: { readonly clientX: number; readonly clientY: number; readonly double: boolean }
     ): boolean {
+      refused = null;
       const content =
         element?.closest('.docx-drawing-textbox-content') ??
         (press ? furnitureContentAt(element, press, deps.headerFooter.active()?.rId) : null);
       const id = content?.closest<HTMLElement>('[data-drawing-node-id]')?.dataset.drawingNodeId;
-      const body =
-        id &&
-        textboxStoriesInPart(deps.session.part()).find(
-          (candidate) => candidate.drawingNodeId === id
-        );
-      if (
-        body &&
-        enter({
-          kind: 'frame',
-          id: body.root.id,
-          drawingNodeId: body.drawingNodeId,
-          hostParagraphId: body.hostParagraphId,
-        })
-      )
-        return true;
-      // A header or footer box: its story owns it, and the press names the page.
       const pageIndex = Number(
         content?.closest<HTMLElement>('[data-page-index]')?.dataset.pageIndex
       );
-      const page = Number.isInteger(pageIndex)
-        ? deps.layout().pages.find((candidate) => candidate.index === pageIndex)
-        : undefined;
-      const record =
-        id && page
-          ? furnitureTextboxDrawingsOnPage(page).find((found) => found.drawing.drawingNodeId === id)
-          : undefined;
-      const part = record?.rId && id ? deps.partOf(id) : null;
-      const owned =
-        part && textboxStoriesInPart(part).find((candidate) => candidate.drawingNodeId === id);
-      if (
-        record?.rId &&
-        owned &&
-        enter(
-          {
-            kind: 'frame',
-            id: owned.root.id,
-            drawingNodeId: owned.drawingNodeId,
-            hostParagraphId: owned.hostParagraphId,
-            owner: { kind: 'headerFooter', rId: record.rId },
-          },
-          pageIndex
-        )
-      )
-        return true;
+      const target = id
+        ? scopeOfDrawing(id, Number.isInteger(pageIndex) ? pageIndex : undefined)
+        : null;
+      if (target && enter(target.scope, target.pageIndex)) return true;
       exit(false);
+      const owner = target?.scope.owner;
+      if (
+        target &&
+        owner?.kind === 'headerFooter' &&
+        target.kind &&
+        target.pageIndex !== undefined
+      ) {
+        // Open the story the box belongs to, so the box can be selected inside it.
+        const open = deps.headerFooter.active();
+        const opened =
+          (open?.rId === owner.rId && open.pageIndex === target.pageIndex) ||
+          deps.headerFooter.enter(owner.rId, target.pageIndex, target.kind);
+        if (opened)
+          refused = {
+            drawingNodeId: target.scope.drawingNodeId,
+            hostParagraphId: target.scope.hostParagraphId,
+          };
+      }
       return false;
     },
   };

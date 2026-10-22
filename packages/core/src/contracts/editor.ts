@@ -759,7 +759,17 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     author?: string,
     options?: HistoryGroupOptions
   ): ExecResult;
+  /**
+   * Move editing into `scope`: the body, a header or footer, a note, or a text box (`frame`).
+   *
+   * A frame whose `owner` is a header or footer opens that story first and edits the box
+   * inside it. The box is edited on the page of the open story when that story is already
+   * open, otherwise on the page in view, otherwise on the first page that shows it. A frame
+   * owned by a note, a box with rotated or vertical text, and a box holding a table are refused:
+   * the scope stays where it was. Read {@link getActiveScope} to confirm the entry.
+   */
   setActiveScope(scope: ViewScope): void;
+  /** The scope editing is in, as {@link setActiveScope} last set it or a press moved it. */
   getActiveScope(): ViewScope;
 
   query<K extends keyof EditorQueries>(

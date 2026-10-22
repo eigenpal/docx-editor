@@ -44,9 +44,21 @@ export interface SelectedImageState {
     readonly dpiX: number;
     readonly dpiY: number;
   }> | null;
+  /**
+   * Whether `setImageProperties` can change the size. False for a hidden drawing, a drawing
+   * whose size is locked, a rotated legacy VML text box or one sized as a percentage of a
+   * frame, and in viewing mode. An inline text box resizes.
+   */
   readonly canResize: boolean;
+  /**
+   * Whether `setImagePosition` can move the drawing. False for an inline drawing, which flows
+   * with its line, for a locked or hidden drawing, a rotated legacy VML text box, and in
+   * viewing mode.
+   */
   readonly canMove: boolean;
+  /** Whether `setImageWrapType` applies: pictures only, never text boxes. */
   readonly canChangeWrap: boolean;
+  /** Whether `setImageProperties` can crop: pictures only, never text boxes. */
   readonly canCrop: boolean;
 }
 

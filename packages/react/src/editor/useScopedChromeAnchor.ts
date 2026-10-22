@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
 import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { absolutePointInScroller } from './scroller-geometry.ts';
-import { hostWindowOf } from '@docx-editor.dev/core/editor';
+import { hostWindowOf, storyLabelTop } from '@docx-editor.dev/core/editor';
 
 /** Where a scoped chrome anchor sits relative to its story: before it, after it, or on its label. */
 export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
@@ -61,17 +61,18 @@ export function useScopedChromeAnchor(
       const clearance = placement === 'story-label' ? 6 : 4;
       const attachedInsideViewport = containingViewport === viewport;
       // Header/footer AND footnote/endnote chrome both use this hook (`story-label`).
-      // A story label with no room above its story on the sheet, such as a header that starts
-      // at the paper edge, goes below the story instead of over the gap between sheets.
-      const sheetTop = anchor.closest('.docx-page')?.getBoundingClientRect().top;
-      const above = anchorRect.top - chromeHeight - clearance;
-      const labelBelow = placement === 'story-label' && sheetTop !== undefined && above < sheetTop;
+      // A story label goes above its story, or below it when the sheet has no room above.
       const anchorTop =
         placement === 'after'
           ? anchorRect.bottom + 6
-          : labelBelow
-            ? anchorRect.bottom + clearance
-            : above;
+          : placement === 'story-label'
+            ? storyLabelTop(
+                anchorRect,
+                anchor.closest('.docx-page')?.getBoundingClientRect().top,
+                chromeHeight,
+                clearance
+              )
+            : anchorRect.top - chromeHeight - clearance;
       const documentPoint = attachedInsideViewport
         ? absolutePointInScroller(viewport, anchorRect.left, anchorTop)
         : { left: anchorRect.left, top: anchorTop };

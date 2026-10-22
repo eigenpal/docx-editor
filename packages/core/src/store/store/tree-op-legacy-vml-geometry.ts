@@ -1,25 +1,32 @@
-// Move, resize and delete a legacy VML text box.
+// Move, resize, describe and delete a legacy VML text box.
 //
 // A VML shape keeps its geometry in its `style` attribute: `width` and `height` for the extent,
 // `margin-left` and `margin-top` for the offset from the frames that
 // `mso-position-horizontal-relative` and `mso-position-vertical-relative` name. A resize or a
-// move rewrites exactly those entries in points and leaves every other entry, attribute and
-// child as it was. Only the text box shapes the projection reads as movable take these ops;
-// any other legacy drawing keeps refusing them.
+// move rewrites exactly those entries in points, alt text rewrites the shape's `title` and
+// `alt` attributes, and every other entry, attribute and child stays as it was. Only the text
+// box shapes the projection reads as movable take these ops; any other legacy drawing keeps
+// refusing them, and an edit whose result the projection would not read back is refused.
 
 import { findNode, removeNode, replaceNode, type EditOptions } from '../package/ooxml-edit.ts';
 import { isLegacyVmlAtom, projectLegacyVml } from '../package/legacy-vml-projection.ts';
 import { attribute, children, named, VML } from '../package/legacy-vml-values.ts';
 import type { DrawingProjection } from '../package/drawing-projection.ts';
 import { validateDrawingPositionInput } from '../package/drawing-position-input.ts';
-import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlPart } from '../package/ooxml-tree.ts';
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlAttribute,
+  type OoxmlElement,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { fromEdit } from './tree-op-nodes.ts';
-import { drawingEffect } from './tree-op-drawing-kinds.ts';
+import { drawingEffect, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
 import type { DrawingTreeDocOp, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
-type LegacyGeometryOp = Extract<
+/** The drawing ops a legacy VML text box takes. */
+export type LegacyVmlDrawingOp = Extract<
   DrawingTreeDocOp,
-  { readonly op: 'resizeDrawing' | 'positionDrawing' | 'deleteDrawing' }
+  { readonly op: 'resizeDrawing' | 'positionDrawing' | 'deleteDrawing' | 'setDrawingMetadata' }
 >;
 
 /** The VML value of each reference frame a moved legacy shape can keep. */
@@ -44,6 +51,8 @@ const SHAPES = new Set(['shape', 'rect', 'roundrect', 'oval']);
 /** The largest extent and offset the projection reads, 10 000 pt and 100 000 pt. */
 const MAX_EXTENT_EMU = 10_000 * 12700;
 const MAX_OFFSET_EMU = 100_000 * 12700;
+/** The smallest extent written: a hundredth of a point, the precision `style` is written in. */
+const MIN_EXTENT_EMU = 127;
 
 interface LegacyTextbox {
   readonly pict: OoxmlElement;
@@ -65,50 +74,72 @@ function legacyTextbox(part: OoxmlPart, drawingNodeId: string): LegacyTextbox | 
 }
 
 /**
- * Whether `op` targets a legacy VML drawing; such an op takes this module's path whatever
- * the outcome.
+ * `op` when it targets a legacy VML drawing, which takes this module's path whatever the
+ * outcome; null for every other op.
  */
-export function isLegacyVmlDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): boolean {
-  if (op.op !== 'resizeDrawing' && op.op !== 'positionDrawing' && op.op !== 'deleteDrawing')
-    return false;
+export function legacyVmlDrawingOp(
+  part: OoxmlPart,
+  op: DrawingTreeDocOp
+): LegacyVmlDrawingOp | null {
+  if (
+    op.op !== 'resizeDrawing' &&
+    op.op !== 'positionDrawing' &&
+    op.op !== 'deleteDrawing' &&
+    op.op !== 'setDrawingMetadata'
+  )
+    return null;
   const node = findNode(part, op.drawingNodeId);
-  return !!node && node.kind !== 'textValue' && named(node, WML_NAMESPACE_URI, 'pict');
+  return node && node.kind !== 'textValue' && named(node, WML_NAMESPACE_URI, 'pict') ? op : null;
+}
+
+/** Why the op's values are out of bounds, before the target is looked at. */
+function valueRejection(op: LegacyVmlDrawingOp): TreeOpRejection | null {
+  switch (op.op) {
+    case 'deleteDrawing':
+      return op.revision ? 'trackedDrawingDeletionUnsupported' : null;
+    case 'resizeDrawing':
+      // The bounds the projection reads back, at the precision `style` is written in.
+      return [op.extentEmu.cx, op.extentEmu.cy].every(
+        (emu) => Number.isFinite(emu) && emu >= MIN_EXTENT_EMU && emu <= MAX_EXTENT_EMU
+      )
+        ? null
+        : 'invalid-drawing-value';
+    case 'positionDrawing':
+      return validateDrawingPositionInput(op.position) &&
+        (op.position.mode ?? 'frame') === 'frame' &&
+        [op.position.horizontalEmu, op.position.verticalEmu].every(
+          (emu) => emu === undefined || Math.abs(emu) <= MAX_OFFSET_EMU
+        ) &&
+        (op.position.relativeToH === undefined || op.position.relativeToH in HORIZONTAL_FRAMES) &&
+        (op.position.relativeToV === undefined || op.position.relativeToV in VERTICAL_FRAMES)
+        ? null
+        : 'invalid-drawing-value';
+    case 'setDrawingMetadata':
+      if (!isValidXmlMetadata(op.title) || !isValidXmlMetadata(op.description))
+        return 'invalid-drawing-value';
+      // A legacy shape has no link of its own to keep or add.
+      return op.hyperlink !== undefined && op.hyperlink !== null
+        ? 'packageTransactionRequired'
+        : null;
+  }
 }
 
 /** Why a legacy op is refused, or null when it applies exactly. */
 export function legacyVmlGeometryRejection(
   part: OoxmlPart,
-  op: LegacyGeometryOp
+  op: LegacyVmlDrawingOp
 ): TreeOpRejection | null {
-  if (op.op === 'deleteDrawing' && op.revision) return 'trackedDrawingDeletionUnsupported';
-  // The bounds the projection reads back, so a written shape always projects again.
-  if (
-    op.op === 'resizeDrawing' &&
-    ![op.extentEmu.cx, op.extentEmu.cy].every(
-      (emu) => Number.isFinite(emu) && emu > 0 && emu <= MAX_EXTENT_EMU
-    )
-  )
-    return 'invalid-drawing-value';
-  if (
-    op.op === 'positionDrawing' &&
-    (!validateDrawingPositionInput(op.position) ||
-      [op.position.horizontalEmu, op.position.verticalEmu].some(
-        (emu) => emu !== undefined && Math.abs(emu) > MAX_OFFSET_EMU
-      ))
-  )
-    return 'invalid-drawing-value';
+  const value = valueRejection(op);
+  if (value) return value;
   const target = legacyTextbox(part, op.drawingNodeId);
-  if (!target) return 'not-a-picture-drawing';
+  // Every other legacy drawing is read-only.
+  if (!target) return 'drawing-locked';
   const { locks, kind } = target.projection;
   if (op.op === 'deleteDrawing') return locks.select ? 'drawing-locked' : null;
+  if (op.op === 'setDrawingMetadata') return null;
   if (op.op === 'resizeDrawing') return locks.resize ? 'drawing-locked' : null;
   if (locks.move) return 'drawing-locked';
-  if (kind !== 'anchored' || op.position.mode !== 'frame') return 'invalid-drawing-value';
-  if (op.position.relativeToH !== undefined && !(op.position.relativeToH in HORIZONTAL_FRAMES))
-    return 'invalid-drawing-value';
-  if (op.position.relativeToV !== undefined && !(op.position.relativeToV in VERTICAL_FRAMES))
-    return 'invalid-drawing-value';
-  return null;
+  return kind === 'anchored' ? null : 'invalid-drawing-value';
 }
 
 /** Points written for EMU, to the hundredth. */
@@ -135,25 +166,41 @@ function restyled(
   return entries.join(';');
 }
 
-/** Apply a legacy op that {@link legacyVmlGeometryRejection} accepted. */
-export function applyLegacyVmlGeometryOp(
-  part: OoxmlPart,
-  op: LegacyGeometryOp,
-  options?: EditOptions
-): TreeOpResult {
-  const rejection = legacyVmlGeometryRejection(part, op);
-  if (rejection) return { ok: false, reason: rejection };
-  const { pict, shape } = legacyTextbox(part, op.drawingNodeId)!;
-  if (op.op === 'deleteDrawing') {
-    const effect = drawingEffect(part, pict.id, op);
-    return fromEdit(removeNode(part, pict.id, options), { ...effect, deleted: [pict.id] });
+/** `attributes` with the unqualified `values` written, an empty value removing its attribute. */
+function withAttributes(
+  attributes: readonly OoxmlAttribute[],
+  values: ReadonlyMap<string, string>
+): OoxmlAttribute[] {
+  const plain = (a: OoxmlAttribute) => !a.namespaceUri && values.has(a.localName);
+  const kept = attributes.filter((a) => !plain(a) || values.get(a.localName) !== '');
+  // Only unqualified attributes are rewritten, and those are the generic kind.
+  const next = kept.map(
+    (a): OoxmlAttribute =>
+      plain(a) ? ({ ...a, value: values.get(a.localName)! } as OoxmlAttribute) : a
+  );
+  for (const [localName, value] of values) {
+    if (value === '' || next.some((a) => !a.namespaceUri && a.localName === localName)) continue;
+    next.push({ kind: 'genericExtension', namespaceUri: '', localName, value });
   }
+  return next;
+}
+
+/** The shape attributes `op` writes. */
+function shapeAttributes(shape: OoxmlElement, op: LegacyVmlDrawingOp): OoxmlAttribute[] {
+  if (op.op === 'setDrawingMetadata')
+    return withAttributes(
+      shape.attributes,
+      new Map([
+        ['title', op.title],
+        ['alt', op.description],
+      ])
+    );
   const set = new Map<string, string>();
   const drop = new Set<string>();
   if (op.op === 'resizeDrawing') {
     set.set('width', pointsOf(op.extentEmu.cx));
     set.set('height', pointsOf(op.extentEmu.cy));
-  } else {
+  } else if (op.op === 'positionDrawing') {
     const { horizontalEmu, verticalEmu, relativeToH, relativeToV } = op.position;
     // An offset replaces an alignment, as a modern drawing's `wp:posOffset` replaces `wp:align`.
     if (horizontalEmu !== undefined) {
@@ -170,15 +217,33 @@ export function applyLegacyVmlGeometryOp(
       set.set('mso-position-vertical-relative', VERTICAL_FRAMES[relativeToV]!);
   }
   // A shape the projection reads has a `style`: its extent comes from it.
-  const style = restyled(attribute(shape, 'style')!, set, drop);
-  const attributes = shape.attributes.map((a) =>
-    !a.namespaceUri && a.localName === 'style' ? { ...a, value: style } : a
+  return withAttributes(
+    shape.attributes,
+    new Map([['style', restyled(attribute(shape, 'style')!, set, drop)]])
   );
-  const updatedShape = { ...shape, attributes } as OoxmlElement;
+}
+
+/** Apply a legacy op that {@link legacyVmlGeometryRejection} accepted. */
+export function applyLegacyVmlGeometryOp(
+  part: OoxmlPart,
+  op: LegacyVmlDrawingOp,
+  options?: EditOptions
+): TreeOpResult {
+  const rejection = legacyVmlGeometryRejection(part, op);
+  if (rejection) return { ok: false, reason: rejection };
+  const { pict, shape } = legacyTextbox(part, op.drawingNodeId)!;
+  if (op.op === 'deleteDrawing') {
+    const effect = drawingEffect(part, pict.id, op);
+    return fromEdit(removeNode(part, pict.id, options), { ...effect, deleted: [pict.id] });
+  }
+  const updatedShape = { ...shape, attributes: shapeAttributes(shape, op) } as OoxmlElement;
   const updatedPict = {
     ...pict,
     children: pict.children.map((child) => (child.id === shape.id ? updatedShape : child)),
   } as OoxmlElement;
+  // Refuse rather than write a shape the projection would no longer read: it would vanish.
+  if (!projectLegacyVml(updatedPict, part.name)?.textboxStory)
+    return { ok: false, reason: 'invalid-drawing-value' };
   return fromEdit(
     replaceNode(part, pict.id, updatedPict, options),
     drawingEffect(part, pict.id, op)

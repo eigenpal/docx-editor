@@ -468,7 +468,7 @@ describe('VML text box editing', () => {
     serializeOoxmlPart(part).match(/<v:shape [^>]*style="([^"]*)"/)?.[1] ??
     serializeOoxmlPart(part).match(/<v:rect [^>]*style="([^"]*)"/)?.[1];
 
-  test('story paragraphs take text edits, and the shape refuses metadata it cannot write', () => {
+  test('story paragraphs take text edits, and the shape takes alt text but no link', () => {
     const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside' })));
     const [boxStory] = textboxStoriesInPart(store.part);
     const storyParagraph = boxStory!.root.children.find((node) => node.kind === 'paragraph')!;
@@ -479,12 +479,78 @@ describe('VML text box editing', () => {
     expect(paragraphTextOf(store.part, storyParagraph.id)).toBe('Inside edited');
     expect(serializeOoxmlPart(store.part)).toContain('<v:textbox><w:txbxContent>');
     const atom = boxStory!.drawingNodeId;
-    const before = serializeOoxmlPart(store.part);
-    const result = store.transact((tx) =>
-      tx.apply({ op: 'setDrawingMetadata', drawingNodeId: atom, title: 't', description: 'd' })
+    const described = store.transact((tx) =>
+      tx.apply({
+        op: 'setDrawingMetadata',
+        drawingNodeId: atom,
+        title: 'T & "q"',
+        description: 'd',
+      })
     );
-    expect(result).toMatchObject({ ok: false, reason: 'not-a-drawing' });
+    expect(described.ok).toBe(true);
+    expect(only(store.part)).toMatchObject({ title: 'T & "q"', description: 'd' });
+    expect(serializeOoxmlPart(store.part)).toContain('title="T &amp; &quot;q&quot;"');
+    const before = serializeOoxmlPart(store.part);
+    const linked = store.transact((tx) =>
+      tx.apply({
+        op: 'setDrawingMetadata',
+        drawingNodeId: atom,
+        title: 't',
+        description: 'd',
+        hyperlink: 'https://example.com',
+      })
+    );
+    expect(linked).toMatchObject({ ok: false, reason: 'packageTransactionRequired' });
+    // An empty description removes the attribute instead of writing an empty one.
+    expect(
+      store.transact((tx) =>
+        tx.apply({ op: 'setDrawingMetadata', drawingNodeId: atom, title: 't', description: '' })
+      ).ok
+    ).toBe(true);
+    expect(serializeOoxmlPart(store.part)).not.toContain(' alt=');
+    expect(before).toContain(' alt="d"');
+  });
+
+  test('a size below the written precision, and an offset without a mode, take the exact path', () => {
+    const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside' })));
+    const atom = textboxStoriesInPart(store.part)[0]!.drawingNodeId;
+    const before = serializeOoxmlPart(store.part);
+    expect(
+      store.transact((tx) =>
+        tx.apply({ op: 'resizeDrawing', drawingNodeId: atom, extentEmu: { cx: 60, cy: 12700 } })
+      )
+    ).toMatchObject({ ok: false, reason: 'invalid-drawing-value' });
     expect(serializeOoxmlPart(store.part)).toBe(before);
+    expect(
+      store.transact((tx) =>
+        tx.apply({
+          op: 'positionDrawing',
+          drawingNodeId: atom,
+          position: { horizontalEmu: 254000 } as never,
+        })
+      ).ok
+    ).toBe(true);
+    expect(only(store.part).position?.horizontal.offsetEmu).toBe(254000);
+  });
+
+  test('a zero percentage keeps a box resizable; a real one keeps its authored size', () => {
+    const base =
+      'position:absolute;margin-left:90pt;margin-top:0;width:144pt;height:36pt;z-index:1;';
+    const zero = new TreeDocumentStore(
+      parse(
+        floatingBox({ text: 'Inside', style: base + 'mso-width-percent:0;mso-height-percent:0' })
+      )
+    );
+    expect(only(zero.part).locks.resize).toBe(false);
+    const real = new TreeDocumentStore(
+      parse(
+        floatingBox({
+          text: 'Inside',
+          style: base + 'mso-width-percent:400;mso-width-relative:margin',
+        })
+      )
+    );
+    expect(only(real.part).locks.resize).toBe(true);
   });
 
   test('a resize and a move rewrite only the geometry entries of the style', () => {

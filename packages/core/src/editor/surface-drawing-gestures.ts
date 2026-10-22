@@ -4,6 +4,7 @@ import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 import { isElementNode, isInputEvent, isKeyboardEvent, isPointerEvent } from './host-realm.ts';
+import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 
 const NON_DESELECTING_KEYS = new Set([
   'Shift',
@@ -27,10 +28,6 @@ export function pressTakenByTextbox(event: Event): boolean {
   return textboxPresses.has(event);
 }
 
-/** Two presses this close in time and place are a double press. */
-const DOUBLE_PRESS_MS = 500;
-const DOUBLE_PRESS_SLOP_PX = 4;
-
 /** Capture object selection before the text keymap receives the same gesture. */
 export function createDrawingGestures(deps: {
   surface: PaginatedSurface;
@@ -49,11 +46,17 @@ export function createDrawingGestures(deps: {
     const double =
       lastPress !== null &&
       since >= 0 &&
-      since <= DOUBLE_PRESS_MS &&
-      Math.abs(x - lastPress.x) <= DOUBLE_PRESS_SLOP_PX &&
-      Math.abs(y - lastPress.y) <= DOUBLE_PRESS_SLOP_PX;
+      since <= MULTI_CLICK_MS &&
+      Math.abs(x - lastPress.x) <= MULTI_CLICK_SLOP_PX &&
+      Math.abs(y - lastPress.y) <= MULTI_CLICK_SLOP_PX;
     lastPress = double ? null : { time, x, y };
     return { clientX: x, clientY: y, double };
+  };
+  /** Select a drawing as an object, as a press on its border does. */
+  const selectObject = (drawingNodeId: string, paragraphId: string): boolean => {
+    if (!deps.surface.selectDrawing(drawingNodeId, paragraphId)) return false;
+    deps.setIntent({ kind: 'pointer', drawingNodeId });
+    return true;
   };
   return {
     onDrawingPointerGesture(event: Event): void {
@@ -63,6 +66,15 @@ export function createDrawingGestures(deps: {
       const element = isElementNode(event.target) ? event.target : null;
       const editingTextbox = deps.textbox()?.preparePointer(element, pressOf(event));
       if (editingTextbox) textboxPresses.add(event);
+      // A header or footer box whose text takes no caret is selected as an object instead, so
+      // the press shows which box it reached rather than opening its story somewhere else.
+      const refused = editingTextbox ? null : deps.textbox()?.takeRefusedPress();
+      if (refused && selectObject(refused.drawingNodeId, refused.hostParagraphId)) {
+        textboxPresses.add(event);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const drawingId =
         !editingTextbox &&
         element
@@ -77,7 +89,7 @@ export function createDrawingGestures(deps: {
         }
         // A textbox can extend outside the body column. Its border selects its anchor,
         // even when ordinary text hit testing would land on a nearby body paragraph.
-        if (drawing && deps.surface.selectDrawing(drawingId, drawing.paragraphId)) {
+        if (drawing && selectObject(drawingId, drawing.paragraphId)) {
           event.preventDefault();
           event.stopImmediatePropagation();
           return;
@@ -87,8 +99,33 @@ export function createDrawingGestures(deps: {
     },
     onDrawingKeyGesture(event: Event): void {
       if (isKeyboardEvent(event) && NON_DESELECTING_KEYS.has(event.key)) return;
-      if (isKeyboardEvent(event) && event.key === 'Escape' && deps.textbox()?.active()) {
-        deps.textbox()!.exit();
+      const textbox = deps.textbox();
+      const editing = textbox?.active();
+      // Escape leaves the box with the box selected as an object, so Delete or a drag acts on
+      // it next; a second Escape then leaves the header or footer the box is in.
+      if (isKeyboardEvent(event) && event.key === 'Escape' && editing) {
+        textbox!.exit();
+        selectObject(editing.drawingNodeId, editing.hostParagraphId);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      // Enter on a selected text box enters its text, the keyboard way into a box.
+      const plainEnter =
+        isKeyboardEvent(event) &&
+        event.key === 'Enter' &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey;
+      const selected = deps.intent();
+      if (
+        plainEnter &&
+        !editing &&
+        selected.kind === 'pointer' &&
+        textbox?.enterDrawing(selected.drawingNodeId)
+      ) {
+        deps.setIntent({ kind: 'none' });
         event.preventDefault();
         event.stopImmediatePropagation();
         return;

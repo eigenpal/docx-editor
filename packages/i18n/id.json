@@ -683,7 +683,9 @@
       "sw": "Ubah ukuran sudut kiri bawah",
       "w": "Ubah ukuran tepi kiri"
     },
-    "selection": "Gambar yang dipilih"
+    "selection": "Gambar yang dipilih",
+    "locked": "Kotak ini tidak dapat dipindahkan atau diubah ukurannya",
+    "textLocked": "Teks dalam kotak ini tidak dapat diedit"
   },
   "ruler": {
     "horizontal": "Penggaris Horizontal",

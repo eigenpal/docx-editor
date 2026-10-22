@@ -67,7 +67,11 @@ export type EditorScope =
       drawingNodeId: string;
       /** The paragraph that anchors that drawing. */
       hostParagraphId: string;
-      /** Furniture or note story that owns this frame. Absence means the body story. */
+      /**
+       * Furniture or note story that owns this frame. Absence means the body story. Entering a
+       * frame owned by a header or footer opens that story around it; a note-owned frame cannot
+       * be entered.
+       */
       owner?: { kind: 'headerFooter'; rId: string } | { kind: 'note'; id: string };
     }
   /** Read-only aggregate across every view. Valid for queries, not for writes. */

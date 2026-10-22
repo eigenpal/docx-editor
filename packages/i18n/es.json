@@ -883,6 +883,8 @@
   },
   "imageOverlay": {
     "selection": "Imagen seleccionada",
+    "locked": "Este cuadro no se puede mover ni cambiar de tamaño",
+    "textLocked": "El texto de este cuadro no se puede editar",
     "handle": {
       "n": "Cambiar tamaño del borde superior",
       "ne": "Cambiar tamaño de la esquina superior derecha",

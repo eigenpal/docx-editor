@@ -54,6 +54,7 @@ export {
   type EditorWindow,
   type OpenEditorWindowOptions,
 } from './editor-window.ts';
+export { storyLabelTop } from './story-label-placement.ts';
 export {
   editorHostDocument,
   editorHostElement,

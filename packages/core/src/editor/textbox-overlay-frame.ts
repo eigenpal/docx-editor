@@ -11,6 +11,7 @@ import {
   type DrawingOverlayFrame,
 } from '../layout/semantic-hit-test.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 
 /** The overlay frame of the text box `scope` edits, with the caret on page `caretPage`. */
 export function editedTextboxOverlayFrame(
@@ -39,4 +40,21 @@ export function editedTextboxOverlayFrame(
     });
   }
   return null;
+}
+
+/**
+ * `{ textEditable }` for a text box drawing: false when its text takes no caret (rotated or
+ * vertical text, or a story holding a table). Nothing for any other drawing.
+ */
+export function textboxTextEditable(record: InlineDrawingRecord | AnchoredDrawingRecord): {
+  readonly textEditable?: boolean;
+} {
+  const story = record.textboxStory;
+  if (!story) return {};
+  return {
+    textEditable:
+      record.transform.rotationDegrees === 0 &&
+      story.contentRotation === undefined &&
+      story.fragments.every((fragment) => fragment.kind === 'paragraph'),
+  };
 }

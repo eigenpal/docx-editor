@@ -654,7 +654,9 @@
       "sw": "Redimensionar canto inferior esquerdo",
       "w": "Redimensionar borda esquerda"
     },
-    "selection": "Imagem selecionada"
+    "selection": "Imagem selecionada",
+    "locked": "Esta caixa não pode ser movida nem redimensionada",
+    "textLocked": "O texto desta caixa não pode ser editado"
   },
   "revisions": {
     "paragraphMarkInserted": "Marca de parágrafo inserida",

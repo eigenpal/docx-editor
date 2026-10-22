@@ -17,6 +17,7 @@
 
 import { cellSelectionBetween, type CellSelection } from '../layout/semantic-cell-selection.ts';
 import { pressTakenByTextbox } from './surface-drawing-gestures.ts';
+import { MULTI_CLICK_MS, MULTI_CLICK_SLOP_PX } from './surface-multi-click.ts';
 import {
   contentControlAtPoint,
   hitTestFragments,
@@ -190,10 +191,6 @@ export interface PointerController {
   destroy(): void;
 }
 
-/** How long after a click a second one still counts as a double. */
-const MULTI_CLICK_MS = 500;
-/** How far it may move and still count — a click, not a tiny drag. */
-const MULTI_CLICK_SLOP_PX = 4;
 /** How close to the scroller's edge a drag must reach before the view starts following it. */
 const AUTO_SCROLL_EDGE_PX = 40;
 /** Fastest the view follows, per frame. */

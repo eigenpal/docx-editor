@@ -1,5 +1,5 @@
 import { ref, watch, type CSSProperties, type ShallowRef } from 'vue';
-import { hostWindowOf } from '@docx-editor.dev/core/editor';
+import { hostWindowOf, storyLabelTop } from '@docx-editor.dev/core/editor';
 import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { formatPx } from '../lib/units';
 import { scopeDispose } from './scope-dispose';
@@ -74,18 +74,18 @@ export function useScopedChromeAnchor(
             : currentChrome.offsetHeight;
         const clearance = placement === 'story-label' ? 6 : 4;
         const attachedInsideViewport = containingViewport === viewport;
-        // A story label with no room above its story on the sheet, such as a header that starts
-        // at the paper edge, goes below the story instead of over the gap between sheets.
-        const sheetTop = anchor.closest('.docx-page')?.getBoundingClientRect().top;
-        const above = anchorRect.top - chromeHeight - clearance;
-        const labelBelow =
-          placement === 'story-label' && sheetTop !== undefined && above < sheetTop;
+        // A story label goes above its story, or below it when the sheet has no room above.
         const anchorTop =
           placement === 'after'
             ? anchorRect.bottom + 6
-            : labelBelow
-              ? anchorRect.bottom + clearance
-              : above;
+            : placement === 'story-label'
+              ? storyLabelTop(
+                  anchorRect,
+                  anchor.closest('.docx-page')?.getBoundingClientRect().top,
+                  chromeHeight,
+                  clearance
+                )
+              : anchorRect.top - chromeHeight - clearance;
         const documentPoint = attachedInsideViewport
           ? absolutePointInScroller(viewport, anchorRect.left, anchorTop)
           : { left: anchorRect.left, top: anchorTop };

@@ -59,3 +59,21 @@ export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp {
     op.op === 'transformDrawing'
   );
 }
+
+/** Whether a title or description is short XML text with no control characters. */
+export function isValidXmlMetadata(value: string): boolean {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      code === 0 ||
+      (code >= 0x1 && code <= 0x8) ||
+      code === 0xb ||
+      code === 0xc ||
+      (code >= 0xe && code <= 0x1f)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}

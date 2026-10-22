@@ -654,7 +654,9 @@
       "sw": "Sol alt köşeyi yeniden boyutlandır",
       "w": "Sol kenarı yeniden boyutlandır"
     },
-    "selection": "Seçili görüntü"
+    "selection": "Seçili görüntü",
+    "locked": "Bu kutu taşınamaz veya yeniden boyutlandırılamaz",
+    "textLocked": "Bu kutudaki metin düzenlenemez"
   },
   "revisions": {
     "paragraphMarkInserted": "Paragraf işareti eklendi",

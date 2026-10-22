@@ -41,14 +41,13 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
-import { drawingEffect, drawingOpImpact } from './tree-op-drawing-kinds.ts';
+import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
 import {
   applyLegacyVmlGeometryOp,
-  isLegacyVmlDrawingOp,
+  legacyVmlDrawingOp,
   legacyVmlGeometryRejection,
 } from './tree-op-legacy-vml-geometry.ts';
 
-type LegacyOp = Parameters<typeof applyLegacyVmlGeometryOp>[1];
 import { applyInsertTrackedRun, build as buildTrackedNode } from './tree-op-tracked.ts';
 import { invalidRevisionAttribution } from './tree-op-types.ts';
 import { insertRunPayloadAtOffset, offsetInsideAtomicSegment } from './tree-op-insert-offset.ts';
@@ -347,7 +346,8 @@ function validateRelationshipId(value: string): boolean {
 
 /** Validate a drawing op's extents, crops and positions before it reaches the store. */
 export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOpRejection | null {
-  if (isLegacyVmlDrawingOp(part, op)) return legacyVmlGeometryRejection(part, op as LegacyOp);
+  const legacy = legacyVmlDrawingOp(part, op);
+  if (legacy) return legacyVmlGeometryRejection(part, legacy);
   switch (op.op) {
     case 'insertDrawing': {
       const paragraph = findNode(part, op.paragraphId);
@@ -466,23 +466,6 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       return 'unknown-op';
     }
   }
-}
-
-function isValidXmlMetadata(value: string): boolean {
-  if (typeof value !== 'string' || value.length > 2048) return false;
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (
-      code === 0 ||
-      (code >= 0x1 && code <= 0x8) ||
-      code === 0xb ||
-      code === 0xc ||
-      (code >= 0xe && code <= 0x1f)
-    ) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function updateExtent(anchor: OoxmlElement, cx: number, cy: number): OoxmlElement {
@@ -1480,8 +1463,8 @@ export function applyDrawingOp(
   op: DrawingTreeDocOp,
   options?: EditOptions
 ): TreeOpResult {
-  if (isLegacyVmlDrawingOp(part, op))
-    return applyLegacyVmlGeometryOp(part, op as LegacyOp, options);
+  const legacy = legacyVmlDrawingOp(part, op);
+  if (legacy) return applyLegacyVmlGeometryOp(part, legacy, options);
   const rejection = validateDrawingOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
 
