@@ -1,5 +1,6 @@
 // Legacy VML text boxes: Find reaches their story, a match or a press enters it, and edits
-// use the same frame scope as a DrawingML text box. The VML shape itself stays read-only.
+// use the same frame scope as a DrawingML text box. An upright box moves and resizes through
+// its frame; the shape takes no wrap or crop changes.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -109,7 +110,7 @@ test('a press on the VML box text enters its story and paints the text', () => {
   }
 });
 
-test('the VML shape frame offers no move, resize, or wrap controls', () => {
+test('the VML text box frame moves and resizes, with no wrap or crop controls', async () => {
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: vmlDocx(floatingBox('boxed needle')),
@@ -117,8 +118,38 @@ test('the VML shape frame offers no move, resize, or wrap controls', () => {
   try {
     const match = editor.findMatches('boxed needle')[0]!;
     expect(editor.selectMatch(match).ok).toBe(true);
-    // The legacy shape is a read-only graphic: only its story text is editable.
+    expect(selectedImageStateOf(editor.surface!)).toMatchObject({
+      canMove: true,
+      canResize: true,
+      canChangeWrap: false,
+      canCrop: false,
+    });
+    expect(editor.exec({ type: 'setImagePosition', horizontalEmu: 3175000 }).ok).toBe(true);
+    expect(
+      editor.exec({ type: 'setImageProperties', widthEmu: 2540000, heightEmu: 762000 }).ok
+    ).toBe(true);
+    const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+    // Only the geometry entries change, in place; the rest of the style stays as authored.
+    expect(xml).toContain(
+      'style="position:absolute;margin-left:250pt;margin-top:0;width:200pt;height:60pt;z-index:1;' +
+        'mso-position-horizontal-relative:page"'
+    );
+    expect(editor.findMatches('boxed needle')[0]?.scope?.kind).toBe('frame');
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('a turned VML text box keeps its geometry as authored', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: vmlDocx(floatingBox('boxed needle').replace('z-index:1;', 'z-index:1;rotation:30;')),
+  });
+  try {
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(editor.selectMatch(match).ok).toBe(true);
     expect(selectedImageStateOf(editor.surface!)).toBeNull();
+    expect(editor.exec({ type: 'setImagePosition', horizontalEmu: 3175000 }).ok).toBe(false);
   } finally {
     editor.destroy();
   }

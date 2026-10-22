@@ -312,4 +312,43 @@ describe('header text box', () => {
       expect(inBox(editor, 'Shared typed')).toHaveLength(1);
     }
   });
+
+  test('moving and resizing a legacy box replicate while a peer types in it', async () => {
+    const V = 'urn:schemas-microsoft-com:vml';
+    const legacy =
+      `<w:r><w:pict xmlns:v="${V}"><v:shape type="#_x0000_t202" style="width:144pt;height:48pt;` +
+      'margin-top:20pt;margin-left:288pt;mso-position-horizontal-relative:page;' +
+      'mso-position-vertical-relative:page;position:absolute;z-index:1" filled="f" stroked="f">' +
+      '<v:textbox><w:txbxContent><w:p><w:r><w:t>Shared</w:t></w:r></w:p></w:txbxContent>' +
+      '</v:textbox></v:shape></w:pict></w:r>';
+    const { alice, bob, sync, converged, pause, resume } = await pair(legacy);
+    enterBox(bob, 'Shared');
+    enterBox(alice, 'Shared');
+    const scope = alice.surface!.activeScope();
+    if (scope.kind !== 'frame') throw new Error('not in the box');
+    expect(alice.surface!.selectDrawing(scope.drawingNodeId, scope.hostParagraphId)).toBe(true);
+    pause();
+    expect(bob.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(alice.exec({ type: 'setImagePosition', horizontalEmu: 254000 * 12 }).ok).toBe(true);
+    expect(
+      alice.exec({ type: 'setImageProperties', widthEmu: 2286000, heightEmu: 762000 }).ok
+    ).toBe(true);
+    sync();
+    resume();
+    converged();
+    for (const editor of [alice, bob]) {
+      const header = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/header1.xml']!);
+      expect(header).toContain(
+        'style="width:180pt;height:60pt;margin-top:20pt;margin-left:240pt;' +
+          'mso-position-horizontal-relative:page;mso-position-vertical-relative:page;' +
+          'position:absolute;z-index:1"'
+      );
+      expect(inBox(editor, 'Shared typed')).toHaveLength(1);
+    }
+    // Undo takes the resize back for everyone.
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    const header = strFromU8(unzipSync(new Uint8Array(await bob.save()))['word/header1.xml']!);
+    expect(header).toContain('width:144pt;height:48pt');
+  });
 });

@@ -236,10 +236,10 @@ function capabilityFlags(
   projection: DrawingProjection
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
   const locks = projection.locks;
-  // An inline text box flows with its line: it is neither dragged nor resized in place.
+  // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
-    canResize: !fixed && !locks.resize && !projection.hidden,
+    canResize: !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
     canChangeWrap: projection.picture !== null && !locks.move && !projection.hidden,
     canCrop:

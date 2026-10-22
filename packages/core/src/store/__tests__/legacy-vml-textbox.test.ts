@@ -464,7 +464,11 @@ describe('VML text box round trip', () => {
 });
 
 describe('VML text box editing', () => {
-  test('story paragraphs take text edits and the shape refuses frame operations', () => {
+  const styleOfShape = (part: OoxmlPart) =>
+    serializeOoxmlPart(part).match(/<v:shape [^>]*style="([^"]*)"/)?.[1] ??
+    serializeOoxmlPart(part).match(/<v:rect [^>]*style="([^"]*)"/)?.[1];
+
+  test('story paragraphs take text edits, and the shape refuses metadata it cannot write', () => {
     const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside' })));
     const [boxStory] = textboxStoriesInPart(store.part);
     const storyParagraph = boxStory!.root.children.find((node) => node.kind === 'paragraph')!;
@@ -475,15 +479,139 @@ describe('VML text box editing', () => {
     expect(paragraphTextOf(store.part, storyParagraph.id)).toBe('Inside edited');
     expect(serializeOoxmlPart(store.part)).toContain('<v:textbox><w:txbxContent>');
     const atom = boxStory!.drawingNodeId;
-    for (const op of [
-      { op: 'resizeDrawing', drawingNodeId: atom, extentEmu: { cx: 12700, cy: 12700 } },
-      { op: 'setDrawingMetadata', drawingNodeId: atom, title: 't', description: 'd' },
-      { op: 'deleteDrawing', drawingNodeId: atom },
+    const before = serializeOoxmlPart(store.part);
+    const result = store.transact((tx) =>
+      tx.apply({ op: 'setDrawingMetadata', drawingNodeId: atom, title: 't', description: 'd' })
+    );
+    expect(result).toMatchObject({ ok: false, reason: 'not-a-drawing' });
+    expect(serializeOoxmlPart(store.part)).toBe(before);
+  });
+
+  test('a resize and a move rewrite only the geometry entries of the style', () => {
+    const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside' })));
+    const atom = textboxStoriesInPart(store.part)[0]!.drawingNodeId;
+    expect(
+      store.transact((tx) =>
+        tx.apply({
+          op: 'resizeDrawing',
+          drawingNodeId: atom,
+          extentEmu: { cx: 2540000, cy: 635000 },
+        })
+      ).ok
+    ).toBe(true);
+    expect(
+      store.transact((tx) =>
+        tx.apply({
+          op: 'positionDrawing',
+          drawingNodeId: atom,
+          position: {
+            mode: 'frame',
+            horizontalEmu: 127000,
+            verticalEmu: 1905000,
+            relativeToV: 'margin',
+          },
+        })
+      ).ok
+    ).toBe(true);
+    // `left:0` gives way to the written offset, which is the one the shape reads.
+    expect(styleOfShape(store.part)).toBe(
+      'position:absolute;text-align:left;margin-left:10pt;margin-top:150pt;width:200pt;height:50pt;' +
+        'z-index:251659264;visibility:visible;mso-position-horizontal-relative:page;' +
+        'mso-position-vertical-relative:margin'
+    );
+    const projection = only(store.part);
+    expect(projection.extentEmu).toEqual({ cx: 2540000, cy: 635000 });
+    expect(projection.position?.horizontal.offsetEmu).toBe(127000);
+    expect(projection.position?.vertical).toMatchObject({
+      relativeFrom: 'margin',
+      offsetEmu: 1905000,
+    });
+  });
+
+  test('a move replaces an aligned position with an offset', () => {
+    const style =
+      'position:absolute;margin-left:0;margin-top:0;width:144pt;height:36pt;z-index:1;' +
+      'mso-position-horizontal:center;mso-position-horizontal-relative:page';
+    const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside', style })));
+    const atom = textboxStoriesInPart(store.part)[0]!.drawingNodeId;
+    expect(only(store.part).position?.horizontal.align).toBe('center');
+    const moved = store.transact((tx) =>
+      tx.apply({
+        op: 'positionDrawing',
+        drawingNodeId: atom,
+        position: { mode: 'frame', horizontalEmu: 254000 },
+      })
+    );
+    expect(moved.ok).toBe(true);
+    expect(only(store.part).position?.horizontal).toMatchObject({ align: null, offsetEmu: 254000 });
+  });
+
+  test('a delete removes the shape, and refusals leave the tree as it was', () => {
+    for (const [style, op, reason] of [
+      [
+        undefined,
+        { op: 'positionDrawing', position: { mode: 'simple', horizontalEmu: 0, verticalEmu: 0 } },
+        'invalid-drawing-value',
+      ],
+      [
+        undefined,
+        { op: 'resizeDrawing', extentEmu: { cx: 0, cy: 12700 } },
+        'invalid-drawing-value',
+      ],
+      [
+        undefined,
+        { op: 'positionDrawing', position: { mode: 'frame', relativeToH: 'insideMargin' } },
+        'invalid-drawing-value',
+      ],
+      [
+        'position:absolute;margin-left:90pt;margin-top:0;width:144pt;height:36pt;z-index:1;rotation:30',
+        { op: 'resizeDrawing', extentEmu: { cx: 12700, cy: 12700 } },
+        'drawing-locked',
+      ],
+      [
+        'position:absolute;margin-left:90pt;margin-top:0;width:144pt;height:36pt;z-index:1;' +
+          'mso-width-percent:500;mso-width-relative:page',
+        { op: 'resizeDrawing', extentEmu: { cx: 12700, cy: 12700 } },
+        'drawing-locked',
+      ],
     ] as const) {
+      const store = new TreeDocumentStore(
+        parse(floatingBox({ text: 'Inside', ...(style ? { style } : {}) }))
+      );
+      const atom = textboxStoriesInPart(store.part)[0]!.drawingNodeId;
       const before = serializeOoxmlPart(store.part);
-      const result = store.transact((tx) => tx.apply(op));
-      expect(result).toMatchObject({ ok: false, reason: 'not-a-drawing' });
+      const result = store.transact((tx) =>
+        tx.apply({ ...op, drawingNodeId: atom } as Parameters<typeof tx.apply>[0])
+      );
+      expect(result).toMatchObject({ ok: false, reason });
       expect(serializeOoxmlPart(store.part)).toBe(before);
     }
+    const inline = new TreeDocumentStore(parse(inlineBox()));
+    const inlineAtom = textboxStoriesInPart(inline.part)[0]!.drawingNodeId;
+    expect(
+      inline.transact((tx) =>
+        tx.apply({
+          op: 'positionDrawing',
+          drawingNodeId: inlineAtom,
+          position: { mode: 'frame', horizontalEmu: 0 },
+        })
+      )
+    ).toMatchObject({ ok: false, reason: 'drawing-locked' });
+    expect(
+      inline.transact((tx) =>
+        tx.apply({
+          op: 'resizeDrawing',
+          drawingNodeId: inlineAtom,
+          extentEmu: { cx: 1270000, cy: 635000 },
+        })
+      ).ok
+    ).toBe(true);
+    const store = new TreeDocumentStore(parse(floatingBox({ text: 'Inside' })));
+    const atom = textboxStoriesInPart(store.part)[0]!.drawingNodeId;
+    expect(store.transact((tx) => tx.apply({ op: 'deleteDrawing', drawingNodeId: atom })).ok).toBe(
+      true
+    );
+    expect(serializeOoxmlPart(store.part)).not.toContain('v:textbox');
+    expect(serializeOoxmlPart(store.part)).toContain('<w:t>A</w:t>');
   });
 });

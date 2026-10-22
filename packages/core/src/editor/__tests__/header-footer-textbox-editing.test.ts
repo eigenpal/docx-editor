@@ -531,13 +531,13 @@ test('a header box being edited shows its frame where it paints, with handles', 
   }
 });
 
-test('a legacy header box being edited shows its frame without handles', () => {
+test('a legacy header box being edited shows its frame with handles', () => {
   const { editor, destroy } = open(docx({ header: vmlBox('legacy box') }));
   try {
     const surface = editor.surface!;
     expect(surface.setActiveScope(frameMatch(editor, 'legacy box').scope!)).toBe(true);
     const target = selectedDrawingOverlayTargetOf(surface)!;
-    expect(target).toMatchObject({ textbox: true, pageIndex: 0, canMove: false, canResize: false });
+    expect(target).toMatchObject({ textbox: true, pageIndex: 0, canMove: true, canResize: true });
     // The default 0.75pt outline is centred on the edge, so the frame reaches half of it out.
     expect([target.x, target.y]).toEqual([-0.375, 20 - 72 - 0.375]);
   } finally {
@@ -559,3 +559,26 @@ test('a page-relative header drawing frames at its painted place', () => {
     destroy();
   }
 });
+
+for (const [name, box, text] of [
+  ['a header box', drawingBox('header box', 7, 457200), 'header box'],
+  ['a legacy header box', vmlBox('legacy box'), 'legacy box'],
+] as const) {
+  test(`${name} selected from its frame deletes from its header, and undo restores it`, async () => {
+    const { editor, destroy } = open(docx({ header: box }));
+    try {
+      const surface = editor.surface!;
+      expect(surface.setActiveScope(frameMatch(editor, text).scope!)).toBe(true);
+      const scope = surface.activeScope();
+      if (scope.kind !== 'frame') throw new Error('not in the box');
+      expect(surface.selectDrawing(scope.drawingNodeId, scope.hostParagraphId)).toBe(true);
+      expect(editor.exec({ type: 'deleteImage' }).ok).toBe(true);
+      expect(await partText(editor, 'word/header1.xml')).not.toContain(text);
+      expect(await partText(editor, 'word/header1.xml')).toContain('header line');
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(await partText(editor, 'word/header1.xml')).toContain(text);
+    } finally {
+      destroy();
+    }
+  });
+}
