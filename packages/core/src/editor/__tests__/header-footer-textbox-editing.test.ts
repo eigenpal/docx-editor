@@ -332,6 +332,78 @@ test('pressing a header box copy on another page moves the open header there', (
   }
 });
 
+/** Lay every text box's text area over the sheet's top-left 200px, as a browser would. */
+function withBoxGeometry<T>(run: () => T): T {
+  const prototype = HTMLElement.prototype;
+  const original = prototype.getBoundingClientRect;
+  prototype.getBoundingClientRect = function (this: HTMLElement) {
+    if (!this.classList.contains('docx-drawing-textbox-content')) return original.call(this);
+    return {
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 200,
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+    } as DOMRect;
+  };
+  try {
+    return run();
+  } finally {
+    prototype.getBoundingClientRect = original;
+  }
+}
+
+function pressAt(target: Element, clientX: number, clientY: number): void {
+  const init = { bubbles: true, cancelable: true, button: 0, clientX, clientY };
+  target.dispatchEvent(new PointerEvent('pointerdown', init));
+  target.dispatchEvent(new PointerEvent('pointerup', init));
+}
+
+for (const [name, top] of [
+  ['in the header band', 457200],
+  ['over the body', 4572000],
+] as const) {
+  test(`a double press on a closed header's box ${name} enters the box`, async () => {
+    const { editor, container, destroy } = open(docx({ header: drawingBox('header box', 7, top) }));
+    try {
+      const surface = editor.surface!;
+      const sheet = container.querySelector('.docx-page')!;
+      withBoxGeometry(() => {
+        // The box paints inert while its header is closed: the press lands on the sheet.
+        pressAt(sheet, 50, 50);
+        expect(surface.activeScope().kind).toBe('body');
+        pressAt(sheet, 50, 50);
+      });
+      const active = surface.activeScope();
+      expect(active.kind === 'frame' && active.owner?.kind).toBe('headerFooter');
+      expect(editor.exec({ type: 'insertText', text: 'typed ' }).ok).toBe(true);
+      expect(await partText(editor, 'word/header1.xml')).toContain('typed');
+      // The press opened the existing header; it did not create a blank one.
+      expect(Object.keys(unzipSync(new Uint8Array(await editor.save())))).not.toContain(
+        'word/header2.xml'
+      );
+    } finally {
+      destroy();
+    }
+  });
+}
+
+test('a single press on a closed header box leaves the body caret', () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('header box', 7, 457200) })
+  );
+  try {
+    const sheet = container.querySelector('.docx-page')!;
+    withBoxGeometry(() => pressAt(sheet, 50, 50));
+    expect(editor.surface!.activeScope().kind).toBe('body');
+  } finally {
+    destroy();
+  }
+});
+
 test('a double press in an inline header box selects a word in the box', () => {
   const inline =
     `<w:r><w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +

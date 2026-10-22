@@ -16,6 +16,7 @@
 // clamp comes from `semantic-hit-test.ts`.
 
 import { cellSelectionBetween, type CellSelection } from '../layout/semantic-cell-selection.ts';
+import { pressTakenByTextbox } from './surface-drawing-gestures.ts';
 import {
   contentControlAtPoint,
   hitTestFragments,
@@ -640,13 +641,15 @@ export function createPointerController(
         active !== null && storyMatchesBinding(bandHit.story, scopeBinding(active)),
         host.measurer()
       );
-    const storyHit = yieldsToBody ? null : bandHit;
+    // A press in the text box being edited is a press in that box, even inside a header band.
+    const inEditedBox =
+      pressTakenByTextbox(event) ||
+      (event.target as Element | null)?.closest(
+        '.docx-drawing-textbox[data-docx-textbox-active="true"]'
+      );
+    const storyHit = yieldsToBody || inEditedBox ? null : bandHit;
     const noteHit = findNoteAtSheetPoint(layout, sheet, host.pageOffsetX);
     // The painted story can sit in front of the body text, so its element is the target too.
-    // A press in the text box being edited is a press in that box, even inside a header.
-    const inEditedBox = (event.target as Element | null)?.closest(
-      '.docx-drawing-textbox[data-docx-textbox-active="true"]'
-    );
     const furnitureDom =
       yieldsToBody || inEditedBox
         ? null
@@ -780,7 +783,7 @@ export function createPointerController(
         }
       }
       return;
-    } else if (clicks() >= 2) {
+    } else if (clicks() >= 2 && !inEditedBox) {
       // No painted furniture under the press: a double click in the blank header/footer
       // margin band creates that story and opens it, matching Word. Single presses keep
       // falling through to body hit-testing — a click in the top margin still just places

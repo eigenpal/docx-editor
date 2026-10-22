@@ -67,6 +67,35 @@ function placementOf(
 }
 
 /**
+ * The text area of the header or footer box under a press on the pressed sheet, topmost
+ * first. With the stories closed, only a double press counts, and a box behind the text
+ * never does: the body text over it keeps the press.
+ */
+function furnitureContentAt(
+  element: Element | null,
+  press: { readonly clientX: number; readonly clientY: number; readonly double: boolean },
+  openRId: string | undefined
+): Element | null {
+  if (!press.double && openRId === undefined) return null;
+  const sheet = element?.closest('[data-page-index]');
+  if (!sheet) return null;
+  const contents = [...sheet.querySelectorAll('.docx-drawing-textbox-content')].reverse();
+  for (const content of contents) {
+    const layer = content.closest('[data-docx-hf], [data-docx-hf-front], [data-docx-hf-behind]');
+    if (!layer || (openRId === undefined && layer.hasAttribute('data-docx-hf-behind'))) continue;
+    const rect = content.getBoundingClientRect();
+    if (
+      press.clientX >= rect.left &&
+      press.clientX <= rect.right &&
+      press.clientY >= rect.top &&
+      press.clientY <= rect.bottom
+    )
+      return content;
+  }
+  return null;
+}
+
+/**
  * Reuse the surface's text input and history with a textbox's own paragraph geometry.
  *
  * A box in a header or footer is edited inside that story: entering it opens the story first,
@@ -326,8 +355,19 @@ export function createTextboxEditing(deps: {
       cached = { base, id: active.id, layout };
       return layout;
     },
-    preparePointer(element: Element | null): boolean {
-      const content = element?.closest('.docx-drawing-textbox-content');
+    /**
+     * Enter the box a press lands in. A header or footer box paints inert while its story is
+     * closed, so the press reaches the body under it; `press` finds it by geometry instead: a
+     * double press enters it, as it opens a header, and a single press does once the story
+     * is open.
+     */
+    preparePointer(
+      element: Element | null,
+      press?: { readonly clientX: number; readonly clientY: number; readonly double: boolean }
+    ): boolean {
+      const content =
+        element?.closest('.docx-drawing-textbox-content') ??
+        (press ? furnitureContentAt(element, press, deps.headerFooter.active()?.rId) : null);
       const id = content?.closest<HTMLElement>('[data-drawing-node-id]')?.dataset.drawingNodeId;
       const body =
         id &&

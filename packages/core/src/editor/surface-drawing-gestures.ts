@@ -16,6 +16,21 @@ const NON_DESELECTING_KEYS = new Set([
   'ContextMenu',
 ]);
 
+/**
+ * Presses a text box took: the pointer must not read them as presses on the header or footer
+ * under the box, because the box is found by geometry when its story paints inert.
+ */
+const textboxPresses = new WeakSet<Event>();
+
+/** Whether the text box gesture already took this press. */
+export function pressTakenByTextbox(event: Event): boolean {
+  return textboxPresses.has(event);
+}
+
+/** Two presses this close in time and place are a double press. */
+const DOUBLE_PRESS_MS = 500;
+const DOUBLE_PRESS_SLOP_PX = 4;
+
 /** Capture object selection before the text keymap receives the same gesture. */
 export function createDrawingGestures(deps: {
   surface: PaginatedSurface;
@@ -23,13 +38,31 @@ export function createDrawingGestures(deps: {
   intent(): DrawingSelectionIntent;
   setIntent(intent: DrawingSelectionIntent): void;
 }) {
+  /** The last press, for telling a double press: a pointer press carries no click count. */
+  let lastPress: { time: number; x: number; y: number } | null = null;
+  const pressOf = (event: Event) => {
+    if (!isPointerEvent(event)) return undefined;
+    const { clientX: x, clientY: y } = event;
+    // Wall-clock time, as the pointer counts clicks: event time stamps are not one clock.
+    const time = Date.now();
+    const since = lastPress === null ? -1 : time - lastPress.time;
+    const double =
+      lastPress !== null &&
+      since >= 0 &&
+      since <= DOUBLE_PRESS_MS &&
+      Math.abs(x - lastPress.x) <= DOUBLE_PRESS_SLOP_PX &&
+      Math.abs(y - lastPress.y) <= DOUBLE_PRESS_SLOP_PX;
+    lastPress = double ? null : { time, x, y };
+    return { clientX: x, clientY: y, double };
+  };
   return {
     onDrawingPointerGesture(event: Event): void {
       if (isPointerEvent(event) && event.button !== 0) return;
       // Viewing selects no object, exactly as it places no caret.
       if (deps.surface.editingMode() === 'view') return;
       const element = isElementNode(event.target) ? event.target : null;
-      const editingTextbox = deps.textbox()?.preparePointer(element);
+      const editingTextbox = deps.textbox()?.preparePointer(element, pressOf(event));
+      if (editingTextbox) textboxPresses.add(event);
       const drawingId =
         !editingTextbox &&
         element
