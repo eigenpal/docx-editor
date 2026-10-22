@@ -97,3 +97,29 @@ test('reject: a table grid change keeps the row exception before the row propert
   expect(row.indexOf('<w:tblPrEx>')).toBe(0);
   expect(row.indexOf('<w:tblPrEx>')).toBeLessThan(row.indexOf('<w:trPr>'));
 });
+
+// A row exception records no row geometry: rejecting it restores the row as an empty row
+// snapshot does, with minimum-width cells that end before the unchanged rows' grid.
+test('reject: a row exception change alone restores the row with the implicit grid', () => {
+  const columns = (row: string) =>
+    `<w:tr>${row}${cell('x').replace('3000', '2000')}${cell('y').replace('3000', '2000')}</w:tr>`;
+  const body =
+    '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblInd w:w="740" w:type="dxa"/>' +
+    '<w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+    columns('') +
+    columns(exception('<w:tblInd w:w="900" w:type="dxa"/>', '')) +
+    '</w:tbl><w:p/>';
+  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'application/xml',
+  });
+  if (!read.ok) throw Error(read.reason);
+  const xml = decide(read.part, 'reject');
+  expect(xml.match(/<w:gridCol w:w="(\d+)"\/>/g)).toEqual(
+    [360, 360, 1280, 2000].map((w) => `<w:gridCol w:w="${w}"/>`)
+  );
+  const restored = secondRow(xml);
+  expect(restored).toContain('<w:gridAfter w:val="2"/>');
+  expect(restored.match(/<w:tcW w:type="dxa" w:w="360"\/>/g)).toHaveLength(2);
+});

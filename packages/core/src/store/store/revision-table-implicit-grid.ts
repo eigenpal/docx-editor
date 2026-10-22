@@ -19,17 +19,20 @@ export function implicitGridRows(table: OoxmlElement, restored: ReadonlySet<stri
   const grid = child(table, 'tblGrid');
   if (!grid || child(grid, 'tblGridChange')) return result;
   const rows = tableChildren(table, 'tableRow');
-  if (!rows.some((row) => !child(child(row, 'trPr'), 'trPrChange'))) return result;
+  // A row exception records no row geometry, so rejecting one restores the row as an empty
+  // row snapshot does.
+  const exception = (row: OoxmlElement) => {
+    const record = child(child(row, 'tblPrEx'), 'tblPrExChange');
+    return record && restored.has(record.id) ? record : undefined;
+  };
+  if (!rows.some((row) => !child(child(row, 'trPr'), 'trPrChange') && !exception(row)))
+    return result;
   for (const row of rows) {
     const record = child(child(row, 'trPr'), 'trPrChange');
     const cells = tableChildren(row, 'tableCell');
-    if (
-      !record ||
-      !restored.has(record.id) ||
-      recordedProperties(record)?.length !== 0 ||
-      !cells.length
-    )
-      continue;
+    const emptySnapshot =
+      record && restored.has(record.id) && recordedProperties(record)?.length === 0;
+    if (!(emptySnapshot || (!record && exception(row))) || !cells.length) continue;
     if (
       cells.some((cell) => {
         const pr = child(cell, 'tcPr');
