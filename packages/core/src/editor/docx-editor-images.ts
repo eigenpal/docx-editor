@@ -27,6 +27,7 @@ import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
 import { editedTextboxOverlayFrame, textboxTextEditable } from './textbox-overlay-frame.ts';
+import { partOfNodeId } from './surface-scope.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type {
   DrawingPositionInput,
@@ -1264,7 +1265,7 @@ export function selectedDrawingOverlayTargetOf(
     textbox: 'textboxStory' in record && !!record.textboxStory,
     ...textboxTextEditable(
       record,
-      surface.session.partFor(surface.storyScope()) ?? surface.session.part()
+      partOfNodeId(surface.session, record.drawingNodeId) ?? surface.session.part()
     ),
     pageIndex: frame.pageIndex,
     x: frame.x,
