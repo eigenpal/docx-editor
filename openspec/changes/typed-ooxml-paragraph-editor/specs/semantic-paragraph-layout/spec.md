@@ -357,9 +357,9 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 
 #### Scenario: Custom metric refuses a boundary
 
-- **WHEN** the automatic-spacing hook returns an unavailable or invalid metric
+- **WHEN** the automatic-spacing hook returns an invalid metric, or an unavailable one for a family without a recorded value
 - **THEN** the boundary receives no invented gap
-- **AND** measurers without the hook add no reverse advance
+- **AND** a measurer without the hook adds a reverse advance only from a recorded authored-family value
 
 #### Scenario: Directional spacing uses the authored font
 
@@ -367,9 +367,15 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 - **THEN** the boundary advance equals one quarter of the East Asian run's authored font size
 - **AND** a substitute font's average width cannot change that advance
 
+#### Scenario: Reverse spacing uses a recorded family metric
+
+- **WHEN** Latin letters or ASCII digits precede East Asian text and a substitute font draws a common default family
+- **THEN** the boundary advance equals half the authored family's recorded average character width at the run size
+- **AND** the substitute font's own average width does not apply
+
 #### Scenario: Reverse spacing has no authored metric
 
-- **WHEN** Latin letters or ASCII digits precede East Asian text and the authored font metric is unavailable
+- **WHEN** Latin letters or ASCII digits precede East Asian text, the authored font metric is unavailable, and no recorded value exists for the authored family
 - **THEN** the boundary adds no reverse advance
 - **AND** layout does not use a substitute font's average width or change source text
 

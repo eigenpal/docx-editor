@@ -84,7 +84,7 @@ Control properties hold default formatting when their run properties contain onl
 
 Paragraphs use automatic spacing between East Asian text and Latin letters or ASCII digits by default. `w:autoSpaceDE` and `w:autoSpaceDN` control the two boundary types through the paragraph style cascade. An authored false disables the corresponding spacing. Source text and UTF-16 offsets remain unchanged. Line fitting, table widths, caret positions, and paint use the same advance across source run boundaries.
 
-East Asian text adds one quarter of its authored font size before Latin letters or ASCII digits. The reverse boundary uses the authored Latin font's average-width metric. A substitute font cannot supply that metric. An unavailable authored metric adds no reverse gap. Explicit character spacing, scaled or shifted text, equations, projected fields, and right-to-left runs keep their existing advances. Vertical Japanese layout and all legacy Word compatibility rules remain outside this subset.
+East Asian text adds one quarter of its authored font size before Latin letters or ASCII digits. The reverse boundary adds half the average character width of the authored Latin font. Aptos, Arial, Calibri, Calibri Light, Cambria, Century, Century Gothic, Courier New, and Times New Roman keep their own value when a substitute font draws them. Other fonts need their own font file, or the reverse boundary adds no gap. Explicit character spacing, scaled or shifted text, equations, projected fields, and right-to-left runs keep their existing advances. Vertical Japanese layout and all legacy Word compatibility rules remain outside this subset.
 
 #### Tabs and paragraph keeps
 

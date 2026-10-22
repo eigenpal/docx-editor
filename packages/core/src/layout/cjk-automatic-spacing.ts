@@ -1,4 +1,5 @@
 import { authoredCjkGapMetric } from './cjk-auto-spacing-metric-port.ts';
+import { knownFamilyReverseGap } from './authored-average-widths.ts';
 import type { TextMeasurer } from './text-measurer.ts';
 // OOXML inter-script advances. Source text and UTF-16 model offsets never change.
 // autoSpaceDN/DE inherit through the ordinary paragraph cascade and default to true.
@@ -117,9 +118,9 @@ export function automaticTextGap(
     const size = before.style.fontSizePt;
     return Number.isFinite(size) && size > 0 ? size / 4 : 0;
   }
-  // Only the authored Latin/digit face owns the reverse boundary metric.
-  // An absent authored face cannot borrow a substitute file's average width.
-  const gap = authoredCjkGapMetric(measurer, before.style);
+  // Only the authored Latin/digit face owns the reverse boundary metric. An absent authored
+  // face cannot borrow a substitute file's average width; a known family uses its recorded one.
+  const gap = authoredCjkGapMetric(measurer, before.style) ?? knownFamilyReverseGap(before.style);
   return gap !== undefined && Number.isFinite(gap) && gap >= 0 && gap <= before.style.fontSizePt
     ? gap
     : 0;

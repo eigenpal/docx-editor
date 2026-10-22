@@ -274,8 +274,77 @@ test('a substitute average cannot enlarge the forward quarter-em boundary', () =
   expect(automaticTextGap(boundary('A', 10), boundary('乙', 20), policy, metricMeasurer)).toBe(2.5);
 });
 
-test('ordinary custom measurers have no implicit reverse font metric', () => {
+test('ordinary custom measurers add no reverse gap for an unrecorded family', () => {
   expect(automaticTextGap(boundary('A', 10), boundary('乙', 20), policy, widthMeasurer)).toBe(0);
   expect(automaticTextGap(boundary('1', 20), boundary('乙', 10), policy, widthMeasurer)).toBe(0);
   expect(automaticTextGap(boundary('甲', 20), boundary('1', 10), policy, widthMeasurer)).toBe(5);
+});
+
+const authored = (fontFamily: string, fontSizePt: number, bold = false, italic = false) => ({
+  text: 'A',
+  style: { ...style(fontSizePt), fontFamily, bold, italic },
+});
+
+test('a known authored family keeps its recorded reverse gap without its font file', () => {
+  const after = boundary('乙', 20);
+  expect(automaticTextGap(authored('Times New Roman', 10), after, policy)).toBeCloseTo(2.0044, 4);
+  expect(automaticTextGap(authored(' calibri ', 11), after, policy)).toBeCloseTo(2.8655, 4);
+  expect(automaticTextGap(authored('Arial', 10, true, true), after, policy)).toBeCloseTo(2.3926, 4);
+  // Cambria has four distinct faces, so these pin the bold and italic order.
+  for (const [bold, italic, average] of [
+    [false, false, 1260],
+    [true, false, 1228],
+    [false, true, 1111],
+    [true, true, 1198],
+  ] as const)
+    expect(automaticTextGap(authored('Cambria', 10, bold, italic), after, policy)).toBeCloseTo(
+      (10 * average) / 4096,
+      6
+    );
+  expect(automaticTextGap(authored('Calibri Light', 10), after, policy)).toBeCloseTo(
+    (10 * 1065) / 4096,
+    6
+  );
+  expect(automaticTextGap(authored('Calibri Light', 10, false, true), after, policy)).toBeCloseTo(
+    (10 * 1067) / 4096,
+    6
+  );
+  expect(automaticTextGap(authored('Century', 10, true), after, policy)).toBeCloseTo(
+    (10 * 951) / 4096,
+    6
+  );
+  expect(automaticTextGap(authored('Unknown face', 10), after, policy)).toBe(0);
+  const spaced = authored('Arial', 10);
+  expect(
+    automaticTextGap(
+      { ...spaced, style: { ...spaced.style, characterSpacingPt: 1 } },
+      after,
+      policy
+    )
+  ).toBe(0);
+});
+
+test('a substituted face uses the authored family value, not the substitute average', () => {
+  const bytes = autoSpacingSfntFixture();
+  const request = { family: 'Times New Roman', weight: 400, style: 'normal' as const };
+  const fonts = createFontResourceSnapshot({
+    epoch: 1,
+    maxFontBytes: 1024,
+    resources: [{ request, id: 'fixture-face', bytes, hash: sha256FontBytes(bytes), faceIndex: 0 }],
+    validateFont: () => ({ valid: true }),
+  });
+  const font = fonts.resolve(request);
+  if (font instanceof FontResolutionError) throw font;
+  const substituted = { ...font, substitution: { requested: request } } as unknown as typeof font;
+  const metric = createResolvedCjkAutoSpacingGapMetric(() => substituted)!;
+  const measurer = withAuthoredCjkGapMetric({ ...widthMeasurer }, metric);
+  const before = authored('Times New Roman', 10);
+  expect(metric(before.style)).toBeUndefined();
+  expect(automaticTextGap(before, boundary('乙', 20), policy, measurer)).toBeCloseTo(2.0044, 4);
+});
+
+test('table AutoFit counts a recorded family reverse gap when no font metric is available', () => {
+  const { widths } = intrinsicProbe(intrinsicRun('A乙', 14, 'Calibri'), '', () => undefined);
+  // A at half the size, the ideograph at the full size, then the recorded Calibri gap.
+  expect(widths.max).toBeCloseTo(7 + 14 + (14 * 1067) / 4096, 6);
 });

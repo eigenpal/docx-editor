@@ -1,5 +1,6 @@
 import type { ResolvedFont } from './font-resource.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import { reverseGapStyleEligible } from './authored-average-widths.ts';
 const MAX_TABLE_RECORDS = 4096;
 export interface CjkAutoSpacingFontMetrics {
   readonly faceIndex: number;
@@ -86,16 +87,7 @@ export function createResolvedCjkAutoSpacingGapMetric(
   if (typeof resolveFont !== 'function' || typeof readMetrics !== 'function') return;
   const cache = new WeakMap<ResolvedFont, CjkAutoSpacingFontMetrics | null>();
   return (style: ResolvedRunStyle) => {
-    if (
-      !style ||
-      !Number.isFinite(style.fontSizePt) ||
-      style.fontSizePt <= 0 ||
-      (style.characterSpacingPt ?? 0) !== 0 ||
-      style.shaping?.direction === 'rtl' ||
-      (style.verticalAlign && style.verticalAlign !== 'baseline') ||
-      (style.horizontalScalePercent !== undefined && style.horizontalScalePercent !== 100)
-    )
-      return;
+    if (!reverseGapStyleEligible(style)) return;
     let resolved: ResolvedFont | null;
     try {
       resolved = resolveFont(style);

@@ -47,6 +47,8 @@ export const planLineBox = (plan: FamilyPlan, weight: number): LineBox | undefin
       ? (plan.lineMetrics[700] ?? plan.lineMetrics[400])
       : plan.lineMetrics[400];
 
+// A family added here also needs its authored average width in core's
+// `layout/authored-average-widths.ts`, or East Asian text after it loses its automatic gap.
 export const FAMILY_PLANS: ReadonlyMap<DefaultFontFamily, FamilyPlan> = new Map([
   ['Calibri', { substitute: 'Carlito', filePrefix: 'Carlito' }],
   ['Cambria', { substitute: 'Caladea', filePrefix: 'Caladea' }],
