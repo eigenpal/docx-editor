@@ -59,7 +59,9 @@ export function mergeParagraphBreakEdits(
   order: ReadonlyMap<string, number>,
   previewByNode: ReadonlyMap<string, { readonly range: ReviewRange; readonly text: string }>,
   /** The container an item sits in; a join across a mark stays inside one. */
-  containerOf: (item: ReviewRevisionItem) => string = () => ''
+  containerOf: (item: ReviewRevisionItem) => string = () => '',
+  /** Move destinations with no source, which join as insertions, mark and text alike. */
+  sourceless: ReadonlySet<string> = new Set()
 ): readonly ReviewRevisionItem[] {
   if (!items.some((item) => item.revisionKind === 'paragraphMark')) return items;
   // Only sibling paragraphs share a break.
@@ -75,15 +77,27 @@ export function mergeParagraphBreakEdits(
   const starts = new Map<string, number[]>();
   const ends = new Map<string, number[]>();
   // NUL-separated: XML text cannot carry U+0000, so a file's author name cannot forge a boundary.
+  const moved = (item: ReviewRevisionItem): boolean =>
+    sourceless.size > 0 && revisionSiteNodeIdsOf(item).every((id) => sourceless.has(id));
+  const direction = (item: ReviewRevisionItem) =>
+    moved(item)
+      ? 'insert'
+      : item.revisionKind === 'paragraphMark'
+        ? item.markDirection
+        : item.revisionKind;
   const key = (item: ReviewRevisionItem, paragraph: string, offset: number): string =>
-    `${item.revisionKind === 'paragraphMark' ? item.markDirection : item.revisionKind}\u0000${item.author}\u0000${item.nesting}\u0000${paragraph}\u0000${offset}\u0000${containerOf(item)}`;
+    `${direction(item)}\u0000${item.author}\u0000${item.nesting}\u0000${paragraph}\u0000${offset}\u0000${containerOf(item)}`;
   const add = (map: Map<string, number[]>, at: string, index: number): void => {
     const bucket = map.get(at);
     if (bucket) bucket.push(index);
     else map.set(at, [index]);
   };
   items.forEach((item, index) => {
-    if (item.readOnly || !['insert', 'delete', 'paragraphMark'].includes(item.revisionKind)) return;
+    if (
+      item.readOnly ||
+      (!['insert', 'delete', 'paragraphMark'].includes(item.revisionKind) && !moved(item))
+    )
+      return;
     for (const range of item.ranges) {
       add(starts, key(item, range.start.paragraphId, range.start.offset), index);
       add(ends, key(item, range.end.paragraphId, range.end.offset), index);
@@ -99,7 +113,7 @@ export function mergeParagraphBreakEdits(
     if (
       item.readOnly ||
       item.revisionKind !== 'paragraphMark' ||
-      !['insert', 'delete'].includes(item.markDirection ?? '')
+      !['insert', 'delete'].includes(direction(item) ?? '')
     )
       return;
     for (const range of item.ranges) {

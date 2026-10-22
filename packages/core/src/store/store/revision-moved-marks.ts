@@ -55,31 +55,6 @@ function paragraphMoves(root: OoxmlNode): ParagraphMoves[] {
 }
 
 /**
- * The moved-to paragraph marks of paragraphs that hold one of `wrappers`, each with its author
- * and date, when a wrapper in its paragraph has the same ones. A destination paragraph's mark
- * carries its own `w:id`, so only the author and date tie it to the destination.
- */
-export function movedMarksBeside(
-  root: OoxmlNode,
-  wrappers: ReadonlySet<string>
-): Map<string, string> {
-  const marks = new Map<string, string>();
-  for (const paragraph of paragraphMoves(root)) {
-    if (paragraph.marks.length === 0) continue;
-    const stamps = new Set<string>();
-    for (const node of paragraph.inline) {
-      const value = wrappers.has(node.id) ? stampOf(node) : undefined;
-      if (value) stamps.add(value);
-    }
-    for (const mark of paragraph.marks) {
-      const value = stampOf(mark);
-      if (value && stamps.has(value)) marks.set(mark.id, value);
-    }
-  }
-  return marks;
-}
-
-/**
  * Each orphan destination mark with the orphan wrappers of its paragraph that share its author
  * and date, as one group: one decision on a destination with no source resolves its text and its
  * paragraph mark together. Wrappers of another author or date in the paragraph stay apart.

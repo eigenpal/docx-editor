@@ -442,7 +442,7 @@ A decision can contain several XML markers, such as split deletion fragments. A 
 | --- | --- |
 | `unsupported-revision` | The change has a structure this API cannot resolve. Keep it, or replace the content with a direct edit while tracking is off. Independent supported changes can still resolve. With the `locked-content` detail, a content lock keeps the change: remove the lock to decide it. With the `bound-content` detail, a data binding keeps it: keep it, or update the bound data and remove the binding outside the editor. |
 | `incomplete-group` | The change resolves only together with a change the decision leaves out. Under an author or tracked-changes filter, the other change is hidden: clear the filter to review it first. Without a filter, the other change is often the deleted row that holds this change, as with a merge continuation in a deleted row. Decide that change first, or decide both in one `resolve()` call. |
-| `retained-structure` | A row remains to preserve nested table content. Other selected text changes may have applied; inspect the remaining decision. |
+| `retained-structure` | A row remains to preserve nested table content that the decision does not remove. Other selected text changes may have applied; inspect the remaining decision. |
 | `unknown-revision` | Reload the collection; the target no longer exists. |
 
 Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form groups. A single `Revision.accept()` or `Revision.reject()` call follows these rules:
@@ -458,16 +458,21 @@ Nested changes, move pairs, tracked rows, and paragraph marks with property chan
 - An alignment-only table change applies to the rows that hold a row or cell formatting change. Rejecting it restores the old alignment in those rows and keeps the current alignment in the others. The table states the alignment of its first row, and each other row states its own alignment in `w:tblPrEx`. The editor lays out every row at the alignment of the table.
 - A decision on a cell that removes the last formatting change of its row keeps an unchanged row formatting change (`w:trPrChange`) in that row, so the alignment change stays pending for the row.
 - A moved paragraph's marks are separate decisions, so a moved paragraph takes up to three calls.
+- Inserted or deleted cells in one column of adjacent rows, by one author, are one change. Cells side by side in one row stay separate changes.
+- The same paragraph formatting change on adjacent paragraphs is one change. It continues into the next cell of the same row and into the first cell of a table that follows the paragraph, but not into the next row.
+- When a move has no source, its moved paragraph mark is one change with the moved text in the same paragraph if no move range covers the mark. Rejecting that change removes the mark and keeps the text.
 - A change ends at the edge of a content control, hyperlink, simple field, or `w:dir` wrapper. Text inserted on both sides of the edge is two revisions. A field character that the change does not hold also ends it, so a field instruction and its result are separate revisions. The mark of the last paragraph in a block content control is a revision of its own, unless the control ends a table cell. Bookmarks and comment ranges do not end a change.
 - A tracked row inside a row-level content control, such as a repeating section item, is one revision.
 - A change inside an equation is part of the text change around it, so a deleted paragraph that holds an equation is one revision.
 - A field reads as one character, so the range of a change inside a field result, and a range that finds it, is the whole field.
 - Inside a content-locked control (`contentLocked` or `sdtContentLocked`), a decision applies only when it keeps the content as it reads: accepting an insertion or a formatting change, or rejecting a deletion. Rejecting an insertion, accepting a deletion, and rejecting a formatting change leave the change pending. Accept All and Reject All skip those changes with the `locked-content` detail. A single decision on one of them, and `acceptAll()` or `rejectAll()` over one, fail with `GeneralException` and `debugInfo.innerError.code` set to `review.locked-content`. To decide the change, set `ContentControl.cannotEdit` to `false` first.
 - A decision that removes a control locked against removal (`sdtLocked`) keeps the control, empty.
+- Inside a content-locked control, a change nested in another change resolves on its own when the lock allows its decision and keeps the enclosing one. For example, **Reject All** restores a deletion inside a locked insertion and leaves the insertion pending.
 - A change inside a data-bound control (`w:dataBinding`) stays pending, because the engine cannot keep the bound data part in step. Accept All and Reject All skip it with the `bound-content` detail. A single decision on it, and `acceptAll()` or `rejectAll()` over it, fail with `GeneralException` and `debugInfo.innerError.code` set to `review.bound-content`.
 - A decision that empties an inline content control gives it a placeholder of five spaces under `w:showingPlcHdr`. A block content control that a decision empties moves inline to the start of the next paragraph, with the same placeholder.
 - A paragraph that a decision empties, and whose mark it removes, goes when a block content control follows it, or when it is the last paragraph of a text box. A table cell, a block content control, and a comment keep their last paragraph.
 - Two tables with the same properties and grid that a decision leaves side by side become one table.
+- A custom XML block whose paragraphs the decision empties and whose paragraph marks it removes goes whole when another block stays beside it.
 - A decision that empties an equation removes it.
 - Changes inside comment text are review items in the editor, and every editor decision resolves them. `document.revisions` covers the main body.
 - A legacy `w:numberingChange` record is not a revision. **Accept All** and **Reject All** remove it and keep the list.

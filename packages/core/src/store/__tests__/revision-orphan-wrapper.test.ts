@@ -155,6 +155,8 @@ test("a decision on one author's orphan destination leaves another author's in t
   }
 });
 
+// The range closes inside the hyperlink, before the paragraph ends, so the moved mark is not
+// part of the move: it is its own card, and rejecting it removes the mark as an inserted one.
 test('an orphan destination inside a hyperlink resolves with its paragraph mark', () => {
   const stamp = (id: number) => `w:id="${id}" w:author="Ada" w:date="2026-07-07T20:18:00Z"`;
   let part = load(
@@ -163,13 +165,13 @@ test('an orphan destination inside a hyperlink resolves with its paragraph mark'
       `<w:moveTo ${stamp(12)}><w:r><w:t>Moved</w:t></w:r></w:moveTo>` +
       `<w:moveToRangeEnd w:id="11"/></w:hyperlink></w:p><w:p><w:r><w:t>Next</w:t></w:r></w:p>`
   );
-  // The range markers inside the hyperlink are a read-only card of their own; the text is not.
-  const card = revisionItemsOf(part).find(
-    (item) => item.revisionKind === 'moveTo' && !item.readOnly
-  )!;
-  const plan = planRevisionBatch(part, 'reject', [reviewItemKey(card)], undefined, {
-    explicit: true,
-  });
+  // The range markers inside the hyperlink are a read-only card of their own; the text and the
+  // mark are not.
+  const keys = revisionItemsOf(part)
+    .filter((item) => !item.readOnly)
+    .map(reviewItemKey);
+  expect(keys).toHaveLength(2);
+  const plan = planRevisionBatch(part, 'reject', keys, undefined, { explicit: true });
   expect(plan.result.skipped).toEqual([]);
   for (const op of plan.ops) {
     const r = applyTreeOp(part, op);
@@ -177,5 +179,6 @@ test('an orphan destination inside a hyperlink resolves with its paragraph mark'
     part = r.part;
   }
   expect(revisionItemsOf(part).every((item) => item.readOnly)).toBe(true);
-  expect(serializeOoxmlPart(part)).toMatch(/>Moved<.*<\/w:p><w:p[ >].*>Next</);
+  expect(serializeOoxmlPart(part)).toMatch(/>Moved<.*>Next</);
+  expect(serializeOoxmlPart(part)).not.toMatch(/>Moved<.*<\/w:p><w:p[ >].*>Next</);
 });

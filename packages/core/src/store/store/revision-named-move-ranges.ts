@@ -74,3 +74,74 @@ export function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
   visit(root);
   return byName;
 }
+
+/** Where a moved paragraph mark stands: the ranges open there, and its paragraph's moves. */
+export interface MovedMarkPlace {
+  readonly ranges: readonly string[];
+  /** The move destination wrappers in the mark's paragraph. */
+  readonly wrappers: readonly string[];
+}
+
+/**
+ * The named move ranges open where each moved paragraph mark (`w:pPr/w:rPr/w:moveTo`) stands.
+ *
+ * A mark is the end of its paragraph although it is written first, in `w:pPr`, so a range covers
+ * the mark when it is still open after the paragraph's last child. Every paragraph is visited:
+ * a paragraph that holds only its mark still sits inside a range.
+ */
+export function rangesOverMovedMarks(root: OoxmlNode): Map<string, MovedMarkPlace> {
+  const covering = new Map<string, MovedMarkPlace>();
+  const wrappersIn = (node: OoxmlNode): string[] =>
+    node.kind === 'textValue'
+      ? []
+      : node.kind === 'revisionMoveTo'
+        ? [node.id]
+        : node.children.flatMap(wrappersIn);
+  const open: { name: string; id: string | undefined }[] = [];
+  const marksOf = (paragraph: OoxmlElement): OoxmlElement[] => {
+    const marks: OoxmlElement[] = [];
+    for (const properties of paragraph.children) {
+      if (properties.kind === 'textValue' || properties.localName !== 'pPr') continue;
+      for (const run of properties.children) {
+        if (run.kind === 'textValue' || run.localName !== 'rPr') continue;
+        for (const mark of run.children)
+          if (mark.kind !== 'textValue' && mark.localName === 'moveTo') marks.push(mark);
+      }
+    }
+    return marks;
+  };
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    for (const child of node.children) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'moveFromRangeStart' || child.kind === 'moveToRangeStart') {
+        const name = wmlAttribute(child, 'name');
+        if (name !== undefined) open.push({ name, id: wmlAttribute(child, 'id') });
+        continue;
+      }
+      if (child.kind === 'moveFromRangeEnd' || child.kind === 'moveToRangeEnd') {
+        const id = wmlAttribute(child, 'id');
+        let index = -1;
+        for (let at = open.length - 1; at >= 0; at -= 1)
+          if (open[at]!.id === id) {
+            index = at;
+            break;
+          }
+        if (index >= 0) open.splice(index, 1);
+        continue;
+      }
+      if (child.kind === 'paragraph') {
+        if (holdsMoveNode(child)) visit(child);
+        const marks = marksOf(child);
+        if (marks.length) {
+          const place = { ranges: open.map((range) => range.name), wrappers: wrappersIn(child) };
+          for (const mark of marks) covering.set(mark.id, place);
+        }
+        continue;
+      }
+      visit(child);
+    }
+  };
+  visit(root);
+  return covering;
+}

@@ -48,13 +48,52 @@ function state(node: OoxmlNode, action: 'accept' | 'reject'): NestedState {
   cache.set(node, result);
   return result;
 }
-/** Word retains a row end around a surviving nested table when no nested row is
- * being removed in this direction. Its independent tracked text can still resolve. */
+/** Run content that stays in the document when nothing removes it. */
+const CONTENT: ReadonlySet<string> = new Set([
+  'drawing',
+  'pict',
+  'object',
+  'sym',
+  'ptab',
+  'footnoteReference',
+  'endnoteReference',
+  'fldChar',
+  'fldSimple',
+]);
+
+/**
+ * Whether content under `node` stays after the decision: content outside what it removes.
+ * Rejecting removes inserted content and keeps deleted text; moved text counts as kept, so a
+ * row the rule cannot be sure about stays rather than going.
+ */
+function keepsText(node: OoxmlNode, action: 'accept' | 'reject', removed = false): boolean {
+  if (node.kind === 'textValue') return false;
+  const own = node.namespaceUri === WML_NAMESPACE_URI ? node.localName : '';
+  if (/Change$/.test(own)) return false;
+  const inside = removed || (action === 'reject' && own === 'ins');
+  if (!inside && CONTENT.has(own)) return true;
+  const text = own === 't' || (own === '' && node.localName === 't');
+  if ((text || (own === 'delText' && action === 'reject')) && !inside)
+    return node.children.some((child) => child.kind === 'textValue' && child.value !== '');
+  return node.children.some((child) => keepsText(child, action, inside));
+}
+
+/** A row end stays around a surviving nested table when no nested row is being removed in
+ * this direction. Its independent tracked text can still resolve. A nested table whose content
+ * the decision removes does not survive, and the row goes. */
 export function retainsNestedTable(row: OoxmlElement, action: 'accept' | 'reject'): boolean {
   if (row.kind !== 'tableRow') return false;
   const content = tableChildren(row, 'tableCell');
+  const nestedTables = (node: OoxmlNode): OoxmlNode[] =>
+    node.kind === 'textValue'
+      ? []
+      : node.kind === 'table'
+        ? [node]
+        : node.children.flatMap(nestedTables);
   return (
-    content.some((n) => state(n, action).table) && !content.some((n) => state(n, action).removedRow)
+    content.some((n) => state(n, action).table) &&
+    !content.some((n) => state(n, action).removedRow) &&
+    content.flatMap(nestedTables).some((table) => keepsText(table, action))
   );
 }
 export function retainedNestedRowSites(

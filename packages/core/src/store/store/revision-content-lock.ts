@@ -38,10 +38,17 @@ export function revisionDecisionKeepsContent(node: OoxmlNode, action: RevisionOp
  * meet the guard. Most documents hold none, and the planner then asks nothing.
  */
 export function holdsGuardedControls(part: OoxmlPart): boolean {
-  return contentControlsIn(part.root).some(({ node }) => {
+  return guardedControlIds(part).size > 0;
+}
+
+/** The content controls a lock or a data binding guards, by node id. */
+export function guardedControlIds(part: OoxmlPart): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const { node } of contentControlsIn(part.root)) {
     const lock = declaredLockOf(node);
-    return lock.wrapper || lock.content || isBoundContentControl(node);
-  });
+    if (lock.wrapper || lock.content || isBoundContentControl(node)) ids.add(node.id);
+  }
+  return ids;
 }
 
 /**

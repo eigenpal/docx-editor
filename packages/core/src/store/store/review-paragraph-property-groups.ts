@@ -13,7 +13,7 @@ import {
   revisionSiteNodeIdsOf,
   type ReviewRevisionItem,
 } from './review-items.ts';
-import { followingSiblingParagraphs } from './review-paragraph-breaks.ts';
+import { followingFormattingParagraphs } from './review-paragraph-mark-formatting.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
 
 /** Paragraph-property children that are not paragraph properties of the change itself. */
@@ -81,7 +81,8 @@ export function mergeConsecutiveParagraphPropertyChanges(
     else byParagraph.set(paragraphId, { index, key });
   });
 
-  const following = followingSiblingParagraphs(part);
+  // Where a paragraph property change continues: as a paragraph mark formatting change does.
+  const following = followingFormattingParagraphs(part);
   const parent = items.map((_, index) => index);
   const find = (index: number): number => {
     while (parent[index] !== index) {

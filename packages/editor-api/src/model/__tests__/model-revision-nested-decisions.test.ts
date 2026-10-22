@@ -160,7 +160,8 @@ test('a strict decision refuses a row that must stay to keep a nested table', as
     `<w:p><w:pPr><w:rPr><w:ins ${stamp(id)}/></w:rPr></w:pPr><w:ins ${stamp(id + 1)}><w:r><w:t>${text}</w:t></w:r></w:ins></w:p>`;
   const nested =
     '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="1500"/></w:tblGrid>' +
-    `<w:tr>${cell(inserted(40, 'inner'))}</w:tr></w:tbl>`;
+    // Untracked text keeps the nested table: a table whose text the decision removes goes.
+    `<w:tr>${cell(para('inner'))}</w:tr></w:tbl>`;
   const bytes = docx(
     table(
       `<w:tr>${cell(para('a'))}${cell(para('b'))}</w:tr>`,

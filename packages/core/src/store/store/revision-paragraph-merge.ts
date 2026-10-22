@@ -76,7 +76,9 @@ export function mergeRevisionParagraphs(
   /** The element that holds `children`, such as `body` or `txbxContent`. */
   container = ''
 ): OoxmlNode[] {
-  if (!children.some((n) => marks.has(n.id))) {
+  if (
+    !children.some((n) => marks.has(n.id) || (isNamed(n, 'customXml') && emptiedBlock(n, marks)))
+  ) {
     return children.some((n) => n.kind === 'contentControl')
       ? inlinedEmptiedControls(children, marks, mint)
       : children;
@@ -98,7 +100,11 @@ export function mergeRevisionParagraphs(
         container !== 'tc' &&
         blocks.length > 1 &&
         node.children.every((child) => properties(child) || emptyRun(child)) &&
-        (DROPS_LAST_PARAGRAPH.has(container) ||
+        ((DROPS_LAST_PARAGRAPH.has(container) &&
+          // A custom XML block every paragraph of which goes keeps its last one here, so the
+          // block around it goes whole rather than staying hollow.
+          (container !== 'customXml' ||
+            children.some((n) => n.kind === 'paragraph' && !marks.has(n.id)))) ||
           children.slice(index + 1).some((n) => n.kind === 'paragraph' || isContentControl(n)))
       )
         continue;
@@ -120,6 +126,14 @@ export function mergeRevisionParagraphs(
       // node there: a collaborating replica records removing the body-level one and inserting
       // this one, rather than moving one node from between blocks into a paragraph.
       carried.push({ ...node, id: mint() } as OoxmlNode);
+    } else if (
+      isNamed(node, 'customXml') &&
+      emptiedBlock(node, marks) &&
+      endsWithKeptParagraph(children, node, marks)
+    ) {
+      // A custom XML block the decision empties of every paragraph and mark goes whole, when
+      // its container still ends with a paragraph that stays.
+      continue;
     } else out.push(node);
   }
   const joined = inlinedEmptiedControls(joinedTables(children, out), marks, mint);
@@ -254,6 +268,44 @@ function sameTableFrame(a: OoxmlNode, b: OoxmlNode): boolean {
     if (!left || !right || !ooxmlTreesEqual(left, right)) return false;
   }
   return true;
+}
+
+/** Whether every block of a custom XML block is a paragraph the decision emptied of its mark. */
+function emptiedBlock(node: OoxmlNode, marks: ReadonlySet<string>): boolean {
+  if (node.kind === 'textValue') return false;
+  // A bookmark or comment range in the block is an anchor something else names: it stays.
+  if (node.children.some((child) => child.kind !== 'textValue' && isInertMarker(child)))
+    return false;
+  const blocks = node.children.filter(
+    (child) => child.kind !== 'textValue' && !isNamed(child, 'customXmlPr')
+  );
+  return (
+    blocks.length > 0 &&
+    blocks.every(
+      (block) =>
+        block.kind === 'paragraph' &&
+        marks.has(block.id) &&
+        block.children.every((child) => properties(child) || emptyRun(child))
+    )
+  );
+}
+
+/** Whether, without `dropped`, the container's last block is a paragraph the decision keeps. */
+function endsWithKeptParagraph(
+  children: readonly OoxmlNode[],
+  dropped: OoxmlNode,
+  marks: ReadonlySet<string>
+): boolean {
+  const blocks = children.filter(
+    (child) =>
+      child !== dropped &&
+      (child.kind === 'paragraph' ||
+        child.kind === 'table' ||
+        isContentControl(child) ||
+        isNamed(child, 'customXml'))
+  );
+  const last = blocks.at(-1);
+  return last?.kind === 'paragraph' && !marks.has(last.id);
 }
 
 /** Containers whose emptied last paragraph goes with its content. */

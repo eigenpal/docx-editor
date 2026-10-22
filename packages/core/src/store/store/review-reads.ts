@@ -20,6 +20,7 @@ import {
   type ReviewFormattingChange,
 } from './review-formatting.ts';
 import { collectRevisionSites } from './tree-op-revisions.ts';
+import { sourcelessMoveSites } from './review-sourceless-moves.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import {
   commentAnchorsOfStory,
@@ -183,6 +184,7 @@ function computeRevisionItemsOf(
   if (sites.length === 0) return [];
   const located = dependencies.locations(part);
   const moveRanges = new Map(ordinaryMoveRanges(part.root).map((range) => [range.start.id, range]));
+  const sourceless = sourcelessMoveSites(part.root, sites);
   const moveInsertions = ordinaryMoveInsertionSites(part.root);
   const hasParagraphMarks = sites.some((site) => site.paragraphMark);
   const previewByNode = new Map<string, { range: ReviewRange; text: string }>();
@@ -434,7 +436,8 @@ function computeRevisionItemsOf(
     (item) =>
       item.revisionKind === 'paragraphMark'
         ? segments.markSegmentOf(firstSite(item))
-        : segments.containerOf(firstSite(item))
+        : segments.containerOf(firstSite(item)),
+    sourceless
   );
   return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
 }

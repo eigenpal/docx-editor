@@ -11,7 +11,6 @@ import { trimDecidedExceptions } from './revision-row-exceptions.ts';
 import { restoreDecisionEmptiedControls } from './content-control-prompt-restore.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
-import { movedMarksBeside } from './revision-moved-marks.ts';
 import {
   applyCellMerge,
   restoredCellRows,
@@ -67,7 +66,11 @@ import {
   type Resolution,
   lockedControlShells,
 } from './revision-rebuild-helpers.ts';
-import { namedMoveRanges } from './revision-named-move-ranges.ts';
+import {
+  namedMoveRanges,
+  rangesOverMovedMarks,
+  type MovedMarkPlace,
+} from './revision-named-move-ranges.ts';
 import {
   REVISION_PROPERTY_CONTAINERS,
   preservedRevisionProperty,
@@ -357,8 +360,10 @@ export function orphanMoveDestinationSites(
   const addresses = new Set<string>();
   if (!sites.some((site) => site.node.localName === 'moveTo')) return new Set();
   const ids = new Set<string>();
-  for (const range of namedMoveRanges(root).values()) {
+  const sourceless = new Set<string>();
+  for (const [name, range] of namedMoveRanges(root)) {
     if (range.wrappers.some((node) => node.kind === 'revisionMoveFrom')) continue;
+    sourceless.add(name);
     for (const node of range.wrappers) {
       if (node.kind !== 'revisionMoveTo') continue;
       ids.add(node.id);
@@ -366,15 +371,17 @@ export function orphanMoveDestinationSites(
       if (address) addresses.add(revisionGroupKey(address, 'moveTo'));
     }
   }
-  // A destination paragraph's mark carries its own `w:id`: it joins by author and date.
-  const marks = ids.size > 0 ? movedMarksBeside(root, ids) : new Map<string, string>();
+  // A destination paragraph's mark carries its own `w:id`: it belongs to the move when the
+  // range is still open where the mark stands, at the paragraph's end.
+  const covering =
+    sourceless.size > 0 ? rangesOverMovedMarks(root) : new Map<string, MovedMarkPlace>();
   for (const site of sites) {
     if (!site.paragraphMark || site.node.localName !== 'moveTo') continue;
     const address = addressOf(site.node);
     if (!address) continue;
     if (
       addresses.has(revisionGroupKey(address, 'moveTo')) ||
-      marks.get(site.node.id) === `${address.author}\u0000${address.date ?? ''}`
+      (covering.get(site.node.id)?.ranges ?? []).some((name) => sourceless.has(name))
     )
       ids.add(site.node.id);
   }

@@ -13,9 +13,11 @@ import {
 } from './review-items.ts';
 import type { SiteLocation } from './review-site-locations.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
+import { sourcelessMoveSites } from './review-sourceless-moves.ts';
 import { textUnder } from './review-text.ts';
 import { groupTableFormatting } from './review-table-format-groups.ts';
 import { groupAdjacentRunFormatting } from './review-run-format-groups.ts';
+import { groupCellColumns } from './review-cell-column-groups.ts';
 import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { ancestorIdsOf } from './node-ancestors.ts';
 
@@ -124,6 +126,8 @@ function groupRowRevisions(
   );
   if (rowSites.size === 0) return [...items];
   const sitesById = new Map(sites.map((site) => [site.node.id, site]));
+  // A move destination with no source is an insertion of the row it sits in.
+  const sourceless = sourcelessMoveSites(part.root, sites);
   // Built on first use: only a nested row marker reads it, and it walks every site location.
   let paragraphLengths: Map<string, number> | undefined;
   const paragraphLength = (id: string): number => {
@@ -146,11 +150,14 @@ function groupRowRevisions(
     if (
       site &&
       !site.propertyChange &&
-      node.localName === group.direction &&
+      (sourceless.has(node.id) ? 'ins' : node.localName) === group.direction &&
       !site.refused &&
       (rowMarker
         ? attribute(node, 'author') === group.author
-        : site.paragraphMark || node.kind === 'revisionInsert' || node.kind === 'revisionDelete')
+        : site.paragraphMark ||
+          node.kind === 'revisionInsert' ||
+          node.kind === 'revisionDelete' ||
+          sourceless.has(node.id))
     ) {
       ownerBySite.set(node.id, group);
       if (rowMarker) group.markerIds.add(node.id);
@@ -386,7 +393,11 @@ export function groupTableRevisions(
   segmentOf: (item: ReviewRevisionItem) => string = () => ''
 ): ReviewRevisionItem[] {
   const grouped = groupAdjacentRunFormatting(
-    groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
+    groupTableFormatting(
+      part,
+      groupCellColumns(part, groupRowRevisions(part, items, sites, locations), sites),
+      sites
+    ),
     sites,
     segmentOf
   );

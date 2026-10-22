@@ -35,7 +35,7 @@ function firstParagraphOf(cell: OoxmlNode | undefined): string | undefined {
  * first cell of a table that follows the paragraph; and from a cell's last paragraph, the next
  * cell of the same row. A row's last cell and a table's last row end the change.
  */
-function followingFormattingParagraphs(part: OoxmlPart): ReadonlyMap<string, string> {
+export function followingFormattingParagraphs(part: OoxmlPart): ReadonlyMap<string, string> {
   const known = followingByRoot.get(part.root);
   if (known) return known;
   const following = new Map(followingSiblingParagraphs(part));

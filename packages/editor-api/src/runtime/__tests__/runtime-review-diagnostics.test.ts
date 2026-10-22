@@ -23,10 +23,10 @@ const cell = (content: string) =>
 const para = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const inserted = (id: number, text: string) =>
   `<w:p><w:pPr><w:rPr><w:ins ${stamp(id)}/></w:rPr></w:pPr><w:ins ${stamp(id + 1)}><w:r><w:t>${text}</w:t></w:r></w:ins></w:p>`;
-// An inserted row that holds a nested table with an untracked row: rejecting it keeps the row.
+// An inserted row that holds a nested table with untracked text: rejecting it keeps the row.
 const nested =
   '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="1500"/></w:tblGrid>' +
-  `<w:tr>${cell(inserted(40, 'inner'))}</w:tr></w:tbl>`;
+  `<w:tr>${cell(para('inner'))}</w:tr></w:tbl>`;
 const kept = docx(
   '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
     `<w:tr>${cell(para('a'))}${cell(para('b'))}</w:tr>` +

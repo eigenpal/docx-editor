@@ -1,5 +1,9 @@
 import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
-import { guardKeepsRevisions, holdsGuardedControls } from './revision-content-lock.ts';
+import {
+  guardedControlIds,
+  guardKeepsRevisions,
+  holdsGuardedControls,
+} from './revision-content-lock.ts';
 import {
   boundTableAlignments,
   bundledTableHistories,
@@ -381,6 +385,35 @@ function planRevisionBatchOnce(
       }
     }
   }
+  // A lock that keeps the enclosing change's own decision but allows the nested one's leaves
+  // them apart, so the decision the lock allows still applies. Only changes inside a guarded
+  // control ask the guard.
+  const guardedControls = guardedControlIds(part);
+  const insideGuarded = (index: number): boolean => {
+    for (
+      let node = parentNodeOf(part, sites[index]!.node.id);
+      node;
+      node = parentNodeOf(part, node.id)
+    )
+      if (guardedControls.has(node.id)) return true;
+    return false;
+  };
+  const lockedAlone = new Map<number, boolean>();
+  const keptAlone = (index: number): boolean => {
+    let kept = lockedAlone.get(index);
+    if (kept === undefined) {
+      kept = guardKeepsRevisions(part, [sites[index]!.node.id], action) !== null;
+      lockedAlone.set(index, kept);
+    }
+    return kept;
+  };
+  const lockSeparates = (ancestor: number, own: number): boolean =>
+    guardedControls.size > 0 &&
+    ['revisionInsert', 'revisionDelete'].includes(sites[own]!.node.kind) &&
+    ['revisionInsert', 'revisionDelete'].includes(sites[ancestor]!.node.kind) &&
+    insideGuarded(own) &&
+    keptAlone(ancestor) &&
+    !keptAlone(own);
   // A subtree holding no site and no owner joins nothing, so the walk keeps to their ancestors.
   const reached = ancestorIdsOf(scopedPart, [...indices.keys(), ...owners.keys()]);
   const visit = (node: OoxmlNode, ancestor?: number): void => {
@@ -393,10 +426,11 @@ function planRevisionBatchOnce(
     // empty the wrapper around them, and the wrapper's decision takes the record with its text.
     // Either resolves alone in an explicit decision; a filtered selection keeps them together.
     const independent =
-      options?.explicit === true &&
-      own !== undefined &&
-      (site === undefined || owner === undefined || owner === site) &&
-      sites[own]!.node.localName === 'rPrChange';
+      (options?.explicit === true &&
+        own !== undefined &&
+        (site === undefined || owner === undefined || owner === site) &&
+        sites[own]!.node.localName === 'rPrChange') ||
+      (own !== undefined && ancestor !== undefined && lockSeparates(ancestor, own));
     if (own !== undefined && ancestor !== undefined && !independent) join(ancestor, own);
     const next = own ?? ancestor;
     if (node.kind !== 'textValue') for (const child of node.children) visit(child, next);
