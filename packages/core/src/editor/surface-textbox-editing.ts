@@ -108,6 +108,8 @@ export function createTextboxEditing(deps: {
       !story ||
       !drawing?.textboxStory ||
       drawing.transform.rotationDegrees !== 0 ||
+      // Turned text has no upright caret geometry; upright text in a turned box keeps it.
+      drawing.textboxStory.contentRotation !== undefined ||
       drawing.textboxStory.fragments.some((fragment) => fragment.kind !== 'paragraph')
     )
       return false;

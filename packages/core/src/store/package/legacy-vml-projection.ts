@@ -121,7 +121,11 @@ const knownValues: Readonly<Record<string, readonly string[]>> = {
   visibility: ['visible', 'hidden'],
 };
 
-function supportedStyle(node: OoxmlElement, root: boolean): ReadonlyMap<string, string> | null {
+function supportedStyle(
+  node: OoxmlElement,
+  root: boolean,
+  textbox = false
+): ReadonlyMap<string, string> | null {
   const styles = styleOf(node);
   if (!styles || a(node, 'opacity') || a(node, 'href') || a(node, 'src')) return null;
   for (const key of styles.keys()) if (!commonStyles.has(key)) return null;
@@ -146,7 +150,13 @@ function supportedStyle(node: OoxmlElement, root: boolean): ReadonlyMap<string, 
       Array.from(styles.keys()).some((k) => k.startsWith('mso-')))
   )
     return null;
-  if (styles.has('flip') && node.localName !== 'line' && a(node, 'type') !== '#_x0000_t32')
+  // A text box reads its flip with its geometry; its text stays unmirrored.
+  if (
+    styles.has('flip') &&
+    !textbox &&
+    node.localName !== 'line' &&
+    a(node, 'type') !== '#_x0000_t32'
+  )
     return null;
   return styles;
 }
@@ -333,18 +343,20 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const textbox = readOnly ? undefined : legacyTextbox(root);
   if (textbox === null) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
-  // templates may redefine geometry and are outside this bounded subset.
+  // templates may redefine geometry and are outside this bounded subset. A text box reads the
+  // template it names with its geometry, which refuses what it cannot trace.
   if (
+    !textbox &&
     children(node).some((child) => named(child, VML, 'shapetype') && !isStandardVmlTemplate(child))
   )
     return null;
-  const style = supportedStyle(root, true);
+  const style = supportedStyle(root, true, !!textbox);
   if (!style) return null;
   const floating = style.get('position') === 'absolute';
   // A floating text path projects its text for layout to fit; every other shape keeps the
-  // preview subset, which has no rotation.
+  // preview subset, which has no rotation. A text box story carries its own turn.
   const textArt = !readOnly && floating ? legacyTextArt(root) : null;
-  if (style.has('rotation') && !textArt) return null;
+  if (style.has('rotation') && !textArt && !textbox) return null;
   // A line spans its `from` and `to` points.
   const line =
     root.localName === 'line'
@@ -375,7 +387,9 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const fragments: LegacyGraphicFragment[] = [];
   const box = { x: 0, y: 0, width, height };
   // The story paints the shape's fill and outline itself, so a text box has no graphic.
-  const textboxStory = textbox ? legacyTextboxStory(root, textbox, style) : null;
+  const textboxStory = textbox
+    ? legacyTextboxStory(root, textbox, style, node, width, height)
+    : null;
   if (textbox && !textboxStory) return null;
   if (!textboxStory && root.localName === 'group') {
     if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
@@ -462,8 +476,11 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
       polygon.push(Object.freeze({ x: coords[i]!, y: coords[i + 1]! }));
   }
   const distances: Record<'top' | 'right' | 'bottom' | 'left', number> = { ...emptyEdges };
+  // A text box keeps 9 pt beside wrapped text unless it names its distances.
+  const sideDefault = textboxStory ? '9pt' : '0';
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-    const value = wrapDistancePoints(style.get('mso-wrap-distance-' + side) ?? '0');
+    const fallback = side === 'left' || side === 'right' ? sideDefault : '0';
+    const value = wrapDistancePoints(style.get('mso-wrap-distance-' + side) ?? fallback);
     if (!Number.isFinite(value) || value > 1000) return null;
     distances[side] = Math.round(value * 12700);
   }

@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Cell diagonal border XML is preserved but is not painted.",
+  "after": "Layout records carry clipped diagonal strokes to editor and PDF paint. Conditional diagonals follow table condition order.",
+  "reason": "Only local rendering changes. The canonical tree, saved XML, and replication operations stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cell-diagonal-borders.test.ts",
+    "packages/core/src/layout/__tests__/cell-diagonal-condition-order.test.ts",
+    "packages/core/src/output/__tests__/cell-diagonal-borders.test.ts",
+    "packages/docx-to-pdf/test/cell-diagonal-borders.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-cell-diagonal-borders.test.ts"
+  ],
+  "changeset": "render-cell-diagonal-borders",
+  "migration": null
+}

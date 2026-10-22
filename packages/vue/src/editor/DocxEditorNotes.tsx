@@ -1,8 +1,8 @@
 import { renderPopup } from './popup-renderer';
 import {
-  hostDocumentOf,
   hostWindowOf,
   isHTMLElementNode,
+  listenForOutsidePress,
   type HostWindow,
 } from '@docx-editor.dev/core/editor';
 import { usePopupConfig } from './popup-config';
@@ -80,13 +80,14 @@ const NoteStoryOptions = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
-        if (menuRef.value?.contains(event.target as Node)) return;
-        open.value = false;
-      };
-      const doc = hostDocumentOf(menuRef.value);
-      doc.addEventListener('mousedown', onDocumentMouseDown);
-      onCleanup(() => doc.removeEventListener('mousedown', onDocumentMouseDown));
+      onCleanup(
+        listenForOutsidePress({
+          popup: menuRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
     });
 
     return () => (

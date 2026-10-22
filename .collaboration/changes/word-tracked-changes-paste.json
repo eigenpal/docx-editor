@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Pasted word processor HTML lost its tracked changes, suggesting mode pasted plain text only, and a suggested deletion of a simple field without a saved result changed nothing.",
+  "after": "Pasted HTML lands its insertions, deletions, mark, formatting, and row revisions; a suggesting-mode rich paste lands as one tracked insertion through the fragment paste; and a suggested simple-field deletion writes the complex field inside one w:del.",
+  "reason": "All three write existing WordprocessingML revision shapes through the existing fragment paste and tracked-delete operations. Shared nodes, text offsets, operations, and package serialization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-revisions.test.ts",
+    "packages/core/src/editor/__tests__/suggesting-rich-paste.test.ts",
+    "packages/core/src/editor/__tests__/suggesting-simple-field-deletion.test.ts",
+    "packages/core/src/store/__tests__/tracked-simple-field-strike.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-paste-and-field-delete.test.ts"
+  ],
+  "changeset": "word-tracked-changes-paste",
+  "migration": null
+}

@@ -25,7 +25,7 @@ import {
   useState,
 } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -289,18 +289,14 @@ export function FontFamilyRoot({ hidden, asChild, className, children }: FontFam
   const rootRef = useRef<HTMLDivElement | null>(null);
   usePickerKeyboard(rootRef, open, () => setOpen(false));
 
-  // Outside mousedown closes the popup. Mousedown, not click, so the popup is gone
-  // before any click lands — and an INSIDE mousedown stays open (Items handle it).
+  // Outside pointer presses close the popup before the surface handles the press.
+  // Inside presses stay open so items can handle their click.
   useEffect(() => {
     if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('mousedown', onMouseDown);
-    return () => doc.removeEventListener('mousedown', onMouseDown);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
 
   const context = useMemo<FontFamilyContextValue>(

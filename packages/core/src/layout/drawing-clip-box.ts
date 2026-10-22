@@ -18,6 +18,13 @@ export function clipBoxHorizontally(
   });
 }
 
+/** A drawing's hit box: its paint box, or a separate copy when the paint box is empty. */
+export function hitBoundsOf(paintBounds: LayoutBox): LayoutBox {
+  return paintBounds.width > 0 && paintBounds.height > 0
+    ? paintBounds
+    : Object.freeze({ ...paintBounds });
+}
+
 /** Clip `box` to a rectangular region on both axes. */
 export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
   const x = Math.max(box.x, region.x);

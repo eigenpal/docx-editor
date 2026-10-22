@@ -5,8 +5,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   commandForSlotValue,
   type ChromeSlotId,
-  isDomNode,
-  hostDocumentOf,
+  listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -402,14 +401,14 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
 
       watch(open, (isOpen, _, onCleanup) => {
         if (!isOpen) return;
-        const onMouseDown = (event: MouseEvent) => {
-          const root = rootRef.value;
-          if (root && isDomNode(event.target) && root.contains(event.target)) return;
-          open.value = false;
-        };
-        const doc = hostDocumentOf(rootRef.value);
-        doc.addEventListener('mousedown', onMouseDown);
-        onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
+        onCleanup(
+          listenForOutsidePress({
+            popup: rootRef.value,
+            close: () => {
+              open.value = false;
+            },
+          })
+        );
       });
 
       const apply = (value: string) => {

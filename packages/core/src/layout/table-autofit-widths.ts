@@ -30,6 +30,11 @@ import {
   ZERO_WIDTH_SPACE,
 } from './cjk-line-break.ts';
 import { paragraphWordCuts } from './paragraph-word-cuts.ts';
+import {
+  cjkAutofitBreaks,
+  measureUnwrappedAutofitText,
+  nextAutofitTabStop,
+} from './autofit-unwrapped-text.ts';
 import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
@@ -278,18 +283,14 @@ export function paragraphContentWidthsPt(
     bidiSourceBoundaries(paragraph),
     true
   );
+  const cjkBreaks = cjkAutofitBreaks(pieces, layoutInputs, measurer, styleCascade);
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
   // The line breaker clamps a negative leading indent at the content edge.
   const leading = Math.max(0, paragraphIsRtl(layoutInputs.props) ? right : left);
   // Where a tab at `at` lands: the next stop the paragraph states, else the default grid.
-  const nextTabStop = (at: number): number => {
-    for (const stop of tabs.stops)
-      if (!stop.numberingOnly && stop.positionPt > at + 1e-6) return stop.positionPt;
-    const interval = tabs.defaultIntervalPt;
-    return (Math.floor(at / interval + 1e-6) + 1) * interval;
-  };
+  const nextTabStop = (at: number): number => nextAutofitTabStop(tabs, at);
   // Where each line starts: the first one shifted by its first-line indent or hanging. A list
   // item's hanging slot belongs to its marker; its text starts back at the left indent.
   const listItem = context.listItems?.get(paragraph.id);
@@ -376,15 +377,26 @@ export function paragraphContentWidthsPt(
       lead = 0;
       continue;
     }
+    const unwrapped = measureUnwrappedAutofitText(
+      piece.text,
+      wordCuts?.boundaries(piece),
+      measure,
+      line + leading + (onFirstLine ? firstShift : 0),
+      nextTabStop
+    );
+    advance(unwrapped.width, unwrapped.trailing);
+    if (cjkBreaks?.opens(piece)) close();
+    const boundaries =
+      cjkBreaks?.boundaries(piece) ??
+      wordCuts?.boundaries(piece) ??
+      wordBoundaries(piece.text, false);
     let from = 0;
-    for (const to of wordCuts?.boundaries(piece) ?? wordBoundaries(piece.text, false)) {
+    for (const to of boundaries) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;
       if (candidate === '\t') {
         // A tab uses up the first-line indent, and spaces after it no longer open the line.
-        const at = line + leading + (onFirstLine ? firstShift : 0);
-        advance(Math.max(0, nextTabStop(at) - at));
         close();
         first = false;
         lineStart = false;
@@ -394,12 +406,11 @@ export function paragraphContentWidthsPt(
       // Measured as line breaking measures it, so the advance comes from the same cache;
       // the trailing spaces it hangs are priced on their own.
       const ink = withoutLineEndWhitespace(candidate);
-      const full = measure(candidate);
-      advance(full, ink.length === candidate.length ? 0 : full - (ink ? measure(ink) : 0));
       if (lineStart && ink.length === 0) {
         lead += measure(candidate);
         continue;
       }
+      segment -= cjkBreaks?.shared(piece, to - candidate.length, to, segment > 0) ?? 0;
       if (lineStart && ink.length > 0) {
         segment += lead;
         lineStart = false;

@@ -10,6 +10,8 @@ Set `preset={false}` to choose the complete arrangement. Use `useEditorCommand(s
 
 Keep the caret when a toolbar button receives a mouse press. Call `preventDefault()` for buttons, but skip inputs, selects, and text areas. Hiding a button does not remove its API operation.
 
+Toolbar popups close on outside pointer presses, including presses on the document surface. Inside presses keep the popup available for selection.
+
 <CustomizationDemo topic="toolbar" />
 
 ## Toolbar configuration reference

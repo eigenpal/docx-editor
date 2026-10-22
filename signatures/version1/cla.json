@@ -287,6 +287,12 @@
       "id": 168236155,
       "signed_at": "2026-10-16T20:36:09Z",
       "pull_request_no": 1400
+    },
+    {
+      "name": "ssong",
+      "id": 20317665,
+      "signed_at": "2026-10-21T12:45:29Z",
+      "pull_request_no": 1463
     }
   ]
 }

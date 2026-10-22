@@ -463,7 +463,7 @@ export class TreePackageStore {
               return next;
             }),
           apply: (op) => {
-            if (op.op === 'setListNumbering' && op.numId !== null) turnsListOn = true;
+            if (op.op === 'setListNumbering' && Number(op.numId) > 0) turnsListOn = true;
             if (op.op === 'setParagraphProperties') {
               listStyleId ??= op.properties.find((property) => property.localName === 'pStyle')
                 ?.attributes?.val;

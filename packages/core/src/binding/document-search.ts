@@ -26,7 +26,6 @@ import {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,
   isSearchableQuery,
-  paragraphTextOf,
 } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import {
@@ -41,12 +40,22 @@ import {
   type NoteKind,
 } from '../store/package/note-nodes.ts';
 import { isFldSimple } from '../store/package/field-nodes.ts';
-import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
+import { bodyStoryRoot, storyRootsOf } from '../store/package/story-blocks.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { projectVisibleParagraphText } from '../store/store/text-projection.ts';
+import {
+  projectVisibleParagraphText,
+  type ProjectedParagraphText,
+} from '../store/store/text-projection.ts';
+import { paragraphModelTextOf } from '../store/store/paragraph-model-text.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
-import { expandSelectableTextboxStories, type SearchStory } from './document-search-frames.ts';
+import {
+  beginStoryParagraphSearch,
+  expandSelectableTextboxStories,
+  searchStoryParagraphs,
+  type SearchStory,
+} from './document-search-frames.ts';
 
 export { SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX };
 
@@ -249,6 +258,37 @@ function resultRunAddressAt(
   return index < 0 ? null : { index, offset };
 }
 
+/**
+ * Each paragraph's searchable text, keyed by the paragraph node. Nodes are frozen and an edit
+ * replaces only the nodes it changes, so a paragraph the edit did not touch keeps its entry
+ * across revisions, and no revision retains a text of its own: an entry lives exactly as long
+ * as its node. The text depends on the node and on the field-results mode of the call, and
+ * the memo keeps one entry per mode. Building this text was nearly all of a search's cost: a
+ * caller asking many queries of one revision paid the whole document again for each.
+ */
+const searchableText = new FieldResultsModeMemo<OoxmlParagraphNode, ProjectedParagraphText>();
+
+/** `paragraph`'s text as a search reads it, built once per node and field-results mode. */
+function searchableTextOf(paragraph: OoxmlParagraphNode): ProjectedParagraphText {
+  let projected = searchableText.get(paragraph);
+  if (!projected) {
+    projected = projectVisibleParagraphText(paragraph, paragraphModelTextOf(paragraph));
+    searchableText.set(paragraph, projected);
+  }
+  return projected;
+}
+
+/**
+ * The searchable text already built for `paragraph` in the current field-results mode, or
+ * undefined. A read only: the tests observe with it that an edit keeps the entries of the
+ * paragraphs it did not touch. @internal
+ */
+export function searchableTextEntry(
+  paragraph: OoxmlParagraphNode
+): ProjectedParagraphText | undefined {
+  return searchableText.get(paragraph);
+}
+
 /** Bound and flatten one file-derived string on its way out of this module. */
 function bounded(raw: string, max: number): string {
   return withDisplayedHyphens(raw).replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
@@ -300,14 +340,14 @@ export function collectTextMatchesForQueries(
   if (open.length === 0) return results;
 
   const searchableSources = options.stories === 'body' ? undefined : sources;
+  beginStoryParagraphSearch();
   for (const story of searchStories(part, searchableSources)) {
     let paragraphIndex = 0;
-    for (const paragraph of storyParagraphs(story.root)) {
+    for (const paragraph of searchStoryParagraphs(story.root)) {
       if (paragraph.kind !== 'paragraph') continue;
       const index = paragraphIndex;
       paragraphIndex += 1;
-      const rawText = paragraphTextOf(story.part, paragraph.id) ?? '';
-      const projected = projectVisibleParagraphText(paragraph, rawText);
+      const projected = searchableTextOf(paragraph);
       if (projected.text.length === 0) continue;
       // Run starts are derived once per paragraph that has a hit, not per occurrence.
       let starts: RunStart[] | null = null;

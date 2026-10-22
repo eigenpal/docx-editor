@@ -210,3 +210,38 @@ test('Escape closes a picker before the header scope or the format painter', asy
   await escape();
   expect(editor().surface!.formatPainter.state().mode).toBe('off');
 });
+
+for (const slot of [
+  'font.family',
+  'styles.style',
+  'zoom.level',
+  'font.size',
+  'text.color',
+  'text.highlight',
+]) {
+  test(`${slot}: canceled surface presses dismiss the popup, and inside presses keep it open`, async () => {
+    const view = await mount();
+    unmount = view.unmount;
+    const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
+    const trigger = root.querySelector<HTMLElement>('[aria-haspopup]')!;
+    await update(() => {
+      trigger.focus();
+      if (slot !== 'font.size') trigger.click();
+    });
+    const popup = () => root.querySelector<HTMLElement>('[role="listbox"], [role="dialog"]');
+    expect(popup() !== null).toBe(true);
+    const item = popup()!.querySelector<HTMLElement>('button, [role="option"]')!;
+    await update(() => item.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    expect(popup() !== null).toBe(true);
+    const target = document.createElement('span');
+    view.container.querySelector('.docx-pages')!.append(target);
+    target.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
+    await update(() => target.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(popup() === null).toBe(true);
+  });
+}

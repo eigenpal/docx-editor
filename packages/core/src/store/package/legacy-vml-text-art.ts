@@ -62,9 +62,9 @@ export function legacyRotationDegrees(raw: string | undefined): number {
   if (raw === undefined) return 0;
   const value = raw.trim();
   // `fd` is sixty-five-thousandths of a degree, so whole turns exceed the plain number bound.
-  const degrees = /^-?\d{1,10}fd$/.test(value)
-    ? Number(value.slice(0, -2)) / 65536
-    : numeric(value);
+  // A bare `f` suffix is read the same way.
+  const fixed = /^(-?\d{1,10})fd?$/.exec(value);
+  const degrees = fixed ? Number(fixed[1]) / 65536 : numeric(value);
   if (!Number.isFinite(degrees) || Math.abs(degrees) > 100_000) return NaN;
   return ((degrees % 360) + 360) % 360;
 }

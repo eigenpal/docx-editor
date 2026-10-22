@@ -1,5 +1,5 @@
 import { computed, defineComponent, h, ref, watch, type CSSProperties, type PropType } from 'vue';
-import { hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import { isHTMLElementNode, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -62,13 +62,14 @@ const OptionsMenu = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onDocMouseDown = (event: globalThis.MouseEvent) => {
-        if (menuRef.value?.contains(event.target as Node)) return;
-        open.value = false;
-      };
-      const doc = hostDocumentOf(menuRef.value);
-      doc.addEventListener('mousedown', onDocMouseDown);
-      onCleanup(() => doc.removeEventListener('mousedown', onDocMouseDown));
+      onCleanup(
+        listenForOutsidePress({
+          popup: menuRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
     });
 
     watch(

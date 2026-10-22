@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The band synthesized for a wrapTopAndBottom drawing's own paragraph added a paragraph-relative vertical offset to the anchor line's top, so an anchor on a later line put the band below the drawing.",
+  "after": "A paragraph-relative offset is measured from the paragraph's top and a line-relative one from the anchor line's, as the drawing itself is placed.",
+  "reason": "Only local layout changes. Nothing about layout enters shared state, operations, snapshots or protocol messages.",
+  "tests": ["packages/core/src/layout/__tests__/top-and-bottom-band.test.ts"],
+  "changeset": "top-and-bottom-behind-text",
+  "migration": null
+}

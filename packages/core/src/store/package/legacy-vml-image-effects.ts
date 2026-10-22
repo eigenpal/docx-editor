@@ -1,6 +1,6 @@
 import type { OoxmlElement } from './ooxml-tree.ts';
 import type { DrawingImageEffects } from './drawing-image-effects.ts';
-import { attribute as a, numeric, off } from './legacy-vml-values.ts';
+import { attribute as a, off, vmlFraction } from './legacy-vml-values.ts';
 
 /** The `v:imagedata` colour attributes this subset reads into picture effects. */
 export const LEGACY_IMAGE_EFFECT_ATTRIBUTES: ReadonlySet<string> = new Set([
@@ -16,13 +16,7 @@ const NO_EFFECTS: DrawingImageEffects = Object.freeze({
   contrast: 0,
 });
 
-/** A VML fraction: `19661f` is 19661/65536, a plain number is the value itself. */
-function fraction(raw: string | undefined): number | undefined {
-  if (raw === undefined) return undefined;
-  const trimmed = raw.trim();
-  if (!/^-?\d{1,7}(\.\d{1,6})?f?$/.test(trimmed)) return NaN;
-  return trimmed.endsWith('f') ? numeric(trimmed.slice(0, -1)) / 65536 : numeric(trimmed);
-}
+const fraction = vmlFraction;
 
 const flag = (raw: string | undefined) => raw !== undefined && !off(raw);
 

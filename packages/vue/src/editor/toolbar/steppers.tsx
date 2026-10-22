@@ -6,8 +6,7 @@ import {
   FIT_WIDTH_ZOOM_MODE,
   commandForSlotValue,
   sameZoomMode,
-  isDomNode,
-  hostDocumentOf,
+  listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -134,15 +133,15 @@ export const ToolbarFontSize = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onMouseDown = (event: MouseEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        open.value = false;
-        draft.value = null;
-      };
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            open.value = false;
+            draft.value = null;
+          },
+        })
+      );
     });
 
     return () => {
@@ -290,14 +289,14 @@ export const ToolbarZoom = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onMouseDown = (event: MouseEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        open.value = false;
-      };
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
     });
 
     return () => {

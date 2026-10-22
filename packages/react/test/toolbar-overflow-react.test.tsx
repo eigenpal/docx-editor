@@ -401,7 +401,7 @@ describe('toolbar overflow integration', () => {
       trigger.click();
     });
     await act(async () => {
-      fireEvent.mouseDown(document.body, { bubbles: true });
+      fireEvent.pointerDown(document.body, { bubbles: true });
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
 
@@ -454,7 +454,7 @@ describe('toolbar overflow integration', () => {
     );
     expect(dropdown).not.toBeNull();
     await act(async () => {
-      dropdown!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      dropdown!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
       dropdown!.click();
     });
     expect(dropdown!.getAttribute('aria-expanded')).toBe('true');

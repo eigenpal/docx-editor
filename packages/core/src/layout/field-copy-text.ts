@@ -6,11 +6,57 @@
 // atom speller replaces the mark with the result after the text is sliced by model offsets.
 
 import { lineSegmentFor } from './line-segments.ts';
-import { paragraphLinesFor } from './paragraph-lines.ts';
+import { paragraphDeletedRanges, paragraphLinesFor } from './paragraph-lines.ts';
 import { paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
+type ParagraphText = (layout: SemanticLayout, paragraphId: string) => string;
+
 const ATOM = '\uFFFC';
+
+/**
+ * A model unit the copy leaves out. It keeps the text one unit per offset, so slicing by model
+ * offsets still lines up, and the caller strips it from the finished text.
+ */
+export const REMOVED_COPY_UNIT = '\u0000';
+
+/**
+ * `base` with each model unit the copy leaves out replaced by {@link REMOVED_COPY_UNIT}:
+ * units the view does not draw (a hidden insertion in the Original view, a hidden deletion
+ * in the final views, hidden text) and, when `keepDeleted` is false, deleted units the markup
+ * shows struck. Plain text is what the reader is proposing, not the markup around it.
+ */
+export function copiedText(base: ParagraphText, keepDeleted: boolean): ParagraphText {
+  return (layout, paragraphId) => {
+    const text = base(layout, paragraphId);
+    const drawn = new Uint8Array(text.length);
+    for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
+      const segment = lineSegmentFor(line, paragraphId);
+      if (!segment) continue;
+      for (const span of segment.spans) {
+        drawn.fill(
+          1,
+          Math.min(span.range.start, text.length),
+          Math.min(span.range.end, text.length)
+        );
+      }
+      for (const drawing of segment.drawings) {
+        if (drawing.start < text.length) drawn[drawing.start] = 1;
+      }
+    }
+    if (!keepDeleted) {
+      for (const range of paragraphDeletedRanges(layout, paragraphId)) {
+        drawn.fill(0, Math.min(range.start, text.length), Math.min(range.end, text.length));
+      }
+    }
+    if (!drawn.includes(0)) return text;
+    let out = '';
+    for (let offset = 0; offset < text.length; offset += 1) {
+      out += drawn[offset] ? text[offset] : REMOVED_COPY_UNIT;
+    }
+    return out;
+  };
+}
 
 /**
  * The painted result of each one-unit field in a paragraph, keyed by its model offset.
@@ -53,8 +99,6 @@ export function fieldResultTexts(
   return results;
 }
 
-type ParagraphText = (layout: SemanticLayout, paragraphId: string) => string;
-
 /** The readers one copy of `layout` needs to spell its field results. */
 export interface FieldResultSpeller {
   /** The base text, with each spelled field unit marked as U+FFFC, to slice by model offsets. */
@@ -78,7 +122,7 @@ export function fieldResultSpeller(
   const marked = (paragraphId: string): string[] => {
     const units = base(layout, paragraphId).split('');
     for (const offset of resultsOf(paragraphId).keys())
-      if (offset < units.length) units[offset] = ATOM;
+      if (offset < units.length && units[offset] !== REMOVED_COPY_UNIT) units[offset] = ATOM;
     return units;
   };
   return {

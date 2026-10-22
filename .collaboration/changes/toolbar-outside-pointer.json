@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A canceled surface pointer press could leave toolbar popups open.",
+  "after": "Outside pointer presses close local toolbar popups before the surface handles them.",
+  "reason": "Only local popup event listeners change. The document model, shared operations, schema, and synchronization stay unchanged.",
+  "tests": [
+    "packages/react/test/toolbar-dropdown-escape.test.tsx",
+    "packages/vue/test/toolbar-dropdown-escape.test.ts",
+    "packages/react/test/toolbar-picker-accessibility-react.test.tsx",
+    "packages/vue/test/toolbar-picker-accessibility.test.ts"
+  ],
+  "changeset": "toolbar-outside-pointer",
+  "migration": null
+}

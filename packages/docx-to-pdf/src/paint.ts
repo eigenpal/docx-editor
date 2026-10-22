@@ -38,6 +38,7 @@ import {
   Commands,
   rect,
 } from './context.ts';
+import { cellDiagonalCommands } from './table-cell-diagonals.ts';
 import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
@@ -161,6 +162,7 @@ function decorations(
       for (const row of block.rows)
         for (const cell of row.cells) {
           if (cell.paintInert || cell.vMergeContinue) continue;
+          out.push(...cellDiagonalCommands(cell, x, y, pageHeight(page)));
           for (const stroke of cell.borders?.strokes ?? [])
             out.push(
               rule(

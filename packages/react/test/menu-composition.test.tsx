@@ -32,6 +32,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorMenu } from '../src/editor/menu/index.ts';
+import { pressCancelledPages } from './cancelled-press.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -402,6 +403,18 @@ describe('chrome contracts', () => {
     expect(without.queryByTestId('docx-menubar')).toBeNull();
     // The toolbar is untouched by the menu toggle.
     expect(without.queryByTestId('docx-toolbar')).not.toBeNull();
+  });
+
+  test('a press on the pages closes the open menu, although the pages cancel it', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.file');
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+    let event: PointerEvent | undefined;
+    act(() => {
+      event = pressCancelledPages(view.container);
+    });
+    expect(event?.defaultPrevented).toBe(true);
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
   test('hovering to a different trigger then clicking it KEEPS that menu open', () => {

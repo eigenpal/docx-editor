@@ -53,7 +53,7 @@ async function mountInOtherWindow() {
 }
 
 async function pressOn(target: EventTarget) {
-  target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
   await flush();
 }
 

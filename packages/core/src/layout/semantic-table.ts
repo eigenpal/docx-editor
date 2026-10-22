@@ -1,5 +1,6 @@
 import { cachedTableStructure } from './table-structure-cache.ts';
 import { tableHasHidableRevisions } from './table-revision-markup.ts';
+import { readConditionalCellBorders } from './conditional-cell-borders.ts';
 import {
   revisionCellMetadata,
   wmlRevisionChild,
@@ -59,7 +60,11 @@ import {
   type StyleCascadeTable,
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
-import { mergeCellBorders, mergeTableBorders } from './table-border-cascade.ts';
+import {
+  mergeCellBorders,
+  mergeCellDiagonalBorders,
+  mergeTableBorders,
+} from './table-border-cascade.ts';
 import {
   EMPTY_CELL_BORDER_BOX,
   EMPTY_TABLE_BORDER_BOX,
@@ -726,12 +731,22 @@ function readTableStructureUncached(
       cellIndex += 1;
       let conditionalShading: string | undefined;
       let conditionalBorders = EMPTY_CELL_BORDER_BOX;
+      // Whole-table tcPr and basedOn layers contribute diagonals before conditions.
+      for (const node of tableStyle.tableCellPropertyNodes ?? []) {
+        conditionalBorders = mergeCellDiagonalBorders(conditionalBorders, readCellBorders(node));
+      }
       for (const conditionType of conditions) {
         const format = tableStyle.conditional.get(conditionType);
         if (!format) continue;
         const conditionTcPr = childNamed(format, 'tcPr');
         conditionalShading = readShading(conditionTcPr) ?? conditionalShading;
-        conditionalBorders = mergeCellBorders(conditionalBorders, readCellBorders(conditionTcPr));
+        conditionalBorders = mergeCellBorders(
+          conditionalBorders,
+          readConditionalCellBorders(
+            conditionTcPr,
+            tableStyle.conditionalStyleLayers?.get(conditionType)
+          )
+        );
       }
       const shading = readShading(cellProperties) ?? conditionalShading;
       const cellMargins = mergeMargins(

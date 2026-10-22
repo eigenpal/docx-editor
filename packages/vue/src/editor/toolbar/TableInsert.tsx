@@ -5,7 +5,12 @@
 // menu bar, and the enabled state still comes from the engine through the slot.
 
 import { defineComponent, h, nextTick, ref, watch, type PropType, type VNode } from 'vue';
-import { toolbarPopupLeft, type ChromeSlotId, isDomNode } from '@docx-editor.dev/core/editor';
+import {
+  isDomNode,
+  listenForOutsidePress,
+  toolbarPopupLeft,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { mergeHostClass } from '../../lib/mergeHostClass';
@@ -45,15 +50,15 @@ export const ToolbarTableInsert = defineComponent({
     // default on its own pointer handling. The editor's own document, which is not the
     // global one when the editor renders into an iframe or a popup window.
     watch(open, (isOpen, _, onCleanup) => {
-      const doc = rootRef.value?.ownerDocument;
-      if (!isOpen || !doc) return;
-      const onMouseDown = (event: MouseEvent) => {
-        const root = rootRef.value;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        open.value = false;
-      };
-      doc.addEventListener('mousedown', onMouseDown, true);
-      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown, true));
+      if (!isOpen || !rootRef.value) return;
+      onCleanup(
+        listenForOutsidePress({
+          popup: rootRef.value,
+          close: () => {
+            open.value = false;
+          },
+        })
+      );
       void nextTick(() => {
         placePopup();
         // Every open, by pointer or key, moves focus into the grid's tab stop, so the grid's

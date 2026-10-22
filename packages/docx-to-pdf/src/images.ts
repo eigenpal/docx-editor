@@ -13,6 +13,7 @@ import type {
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
 import { paintTextArt } from './text-art.ts';
+import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 
 /**
@@ -102,14 +103,40 @@ export class ImageWriter {
     return `q ${n(box.width)} 0 0 ${n(box.height)} ${n(x)} ${n(y)} cm /${key} Do Q`;
   }
 
+  /** Shadow opacity resources: one object per opacity in the document, named once per page. */
+  private readonly alphaStates = new Map<
+    number,
+    { readonly name: string; readonly ref: ReturnType<PDFDocument['context']['register']> }
+  >();
+  private readonly pageAlphaStates = new WeakMap<PDFPage, Set<string>>();
+
+  /** An `ExtGState` resource on `page` with fill and stroke opacity `alpha`. */
+  private alphaState(page: PDFPage, alpha: number): string {
+    let state = this.alphaStates.get(alpha);
+    if (!state) {
+      const ref = this.doc.context.register(
+        this.doc.context.obj({ Type: 'ExtGState', ca: alpha, CA: alpha })
+      );
+      state = { name: `TextboxShadow${ref.objectNumber}`, ref };
+      this.alphaStates.set(alpha, state);
+    }
+    const named = this.pageAlphaStates.get(page) ?? new Set<string>();
+    if (!named.has(state.name)) {
+      page.node.setExtGState(PDFName.of(state.name), state.ref);
+      named.add(state.name);
+      this.pageAlphaStates.set(page, named);
+    }
+    return state.name;
+  }
+
   /**
-   * A textbox: its fill and outline at the extent, then `body` (the story's decorations and
-   * the text its owner collected) clipped to the content box, all clipped to the published
-   * paint bounds — the same three boxes the screen painter draws, in the same order.
+   * A textbox: its shadow, its fill and outline at the extent, then `body` (the story's
+   * decorations and the text its owner collected) clipped to the content box, all clipped to
+   * the published paint bounds — the same boxes the screen painter draws, in the same order.
    *
-   * The outline is stroked inside the extent, as a CSS border inside a `border-box` is, so a
-   * bordered textbox is exactly as wide as Word laid it out. Word clips overflowing content
-   * to the box as well, so a height clip is information: the page shows what Word shows.
+   * The outline is stroked inside the extent, as a CSS border inside a `border-box` is, unless
+   * the story centres it on the edge (`strokeCentered`), as a legacy shape does. Overflowing
+   * content clips to the box, so a height clip is information.
    */
   paintTextbox(visit: SemanticDrawingVisit, page: PDFPage, body: readonly string[]): string {
     const d = visit.drawing;
@@ -138,25 +165,114 @@ export class ImageWriter {
     const extent = { x, y, width: d.width, height: d.height };
     const out = new Commands(this.work);
     out.push(`q ${rect(bounds, -visit.page.box.x, -visit.page.box.y, height)} W n`);
-    if (story.fillHex !== null)
-      out.push(`${color(story.fillHex)} rg ${rect(extent, 0, 0, height)} f`);
-    if (story.strokeHex !== null) {
-      const width = Math.max(0.5, story.strokeWidthPt);
-      const inner = {
-        x: x + width / 2,
-        y: y + width / 2,
-        width: Math.max(0, d.width - width),
-        height: Math.max(0, d.height - width),
-      };
-      out.push(`${color(story.strokeHex)} RG ${n(width)} w ${rect(inner, 0, 0, height)} S`);
-    }
     const content = {
       x: x + story.contentOffset.x,
       y: y + story.contentOffset.y,
       width: story.contentWidth,
       height: Math.max(0, story.contentHeight),
     };
-    out.push(`q ${rect(content, 0, 0, height)} W n`, ...body, 'Q', 'Q');
+    // Turned text lays out upright and turns about its frame's pivot when painted.
+    const turn = story.contentRotation;
+    const contentTurn = turn
+      ? [turnAbout(x + turn.pivot.x, y + turn.pivot.y, turn.degrees, height)]
+      : [];
+    const chrome = (fill: string | null, stroke: string | null): string[] => {
+      const commands: string[] = [];
+      // A turned shape turns its fill and outline about the box centre.
+      const chromeTurn = story.chromeRotationDegrees;
+      if (chromeTurn)
+        commands.push('q', turnAbout(x + d.width / 2, y + d.height / 2, chromeTurn, height));
+      const outline = story.outline;
+      if (fill !== null)
+        commands.push(
+          `${color(fill)} rg ${outline ? outlinePath(outline, extent, 0, height) : rect(extent, 0, 0, height)} f`
+        );
+      if (stroke !== null) {
+        const width = Math.max(0.5, story.strokeWidthPt);
+        // A centred outline runs on the edge itself; otherwise it stays inside the box.
+        const inset = story.strokeCentered ? 0 : width / 2;
+        const inner = {
+          x: x + inset,
+          y: y + inset,
+          width: Math.max(0, d.width - 2 * inset),
+          height: Math.max(0, d.height - 2 * inset),
+        };
+        // A dashed rectangle runs from its top-left corner, where its pattern starts.
+        const square = { kind: 'roundRect' as const, arc: 0 };
+        const path = outline
+          ? outlinePath(outline, extent, inset, height)
+          : story.strokeDashPt
+            ? outlinePath(square, extent, inset, height)
+            : rect(inner, 0, 0, height);
+        const dash = story.strokeDashPt ? `[${story.strokeDashPt.map(n).join(' ')}] 0 d ` : '';
+        const cap =
+          story.strokeCap === 'round' ? '1 J ' : story.strokeCap === 'square' ? '2 J ' : '';
+        commands.push(`q ${dash}${cap}${color(stroke)} RG ${n(width)} w ${path} S Q`);
+      }
+      if (chromeTurn) commands.push('Q');
+      return commands;
+    };
+    const shadow = story.shadow;
+    if (shadow) {
+      // The shape again, under itself in the shadow colour, at its page offset. A plain shadow
+      // copies the outline, and the text of an unfilled shape; an obscured one is the solid
+      // silhouette, cut out where the shape itself stands.
+      out.push('q');
+      if (shadow.alpha < 1) out.push(`/${this.alphaState(page, shadow.alpha)} gs`);
+      const offset = `1 0 0 1 ${n(shadow.dx)} ${n(-shadow.dy)} cm`;
+      if (shadow.obscured) {
+        const edge = outlinePath(
+          story.outline ?? { kind: 'roundRect', arc: 0 },
+          extent,
+          0,
+          height,
+          story.chromeRotationDegrees ?? 0
+        );
+        out.push(
+          'q',
+          `${rect(bounds, -visit.page.box.x, -visit.page.box.y, height)} ${edge} W* n`,
+          offset,
+          ...chrome(shadow.hex, story.strokeHex !== null ? shadow.hex : null),
+          'Q'
+        );
+      } else {
+        out.push(
+          'q',
+          offset,
+          ...chrome(
+            story.fillHex !== null ? shadow.hex : null,
+            story.strokeHex !== null ? shadow.hex : null
+          ),
+          'Q'
+        );
+      }
+      out.push(offset);
+      if (!shadow.obscured && story.fillHex === null) {
+        // The shadow is ink, not text: the copy sits in an empty actual-text span, so the story
+        // extracts once, right-to-left lines included. Pictures cast no tinted copy.
+        const tinted = body.map((line) =>
+          line
+            .replace(
+              /-?[\d.]+ -?[\d.]+ -?[\d.]+ (rg|RG)\b/g,
+              (_, op: string) => `${color(shadow.hex)} ${op}`
+            )
+            .replace(/\/ActualText <FEFF[0-9A-Fa-f]*>/g, '/ActualText <FEFF>')
+            .replace(/\/[\w.-]+ Do\b/g, '')
+        );
+        out.push(
+          'q',
+          ...contentTurn,
+          `${rect(content, 0, 0, height)} W n`,
+          '/Span << /ActualText <FEFF> >> BDC',
+          ...tinted,
+          'EMC',
+          'Q'
+        );
+      }
+      out.push('Q');
+    }
+    out.push(...chrome(story.fillHex, story.strokeHex));
+    out.push('q', ...contentTurn, `${rect(content, 0, 0, height)} W n`, ...body, 'Q', 'Q');
     return out.join('\n');
   }
 

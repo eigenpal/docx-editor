@@ -1290,6 +1290,7 @@ export function mountPaginatedSurface(
         numId,
         level
       ) !== null,
+    styleCascade,
   });
   /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
   function replacementLanding(paragraphId: string, start: number, end: number): number | null {
@@ -3069,10 +3070,10 @@ export function mountPaginatedSurface(
   }
 
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
-  function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
+  function trackedOps(ops: readonly TreeDocOp[], date = revisionDateNow()): TreeDocOp[] {
     const author = trackedAuthorOrNone();
     if (author === undefined) return [...ops];
-    return attributeTrackedOps(ops, { author, date: revisionDateNow() }, formattingTracked());
+    return attributeTrackedOps(ops, { author, date }, formattingTracked());
   }
 
   /**
@@ -4381,6 +4382,13 @@ export function mountPaginatedSurface(
       consumePendingFormatOps,
       withoutPendingOnRejection,
       caretMark,
+      suggestion: () => {
+        const writer = trackedAuthorOrNone();
+        return writer === undefined ? undefined : { author: writer, date: revisionDateNow() };
+      },
+      trackedOps,
+      trackedChangeLanded: () => runtimeOptions.onTrackedChange?.(),
+      revisionDisplayMode,
       commit,
     });
 

@@ -45,6 +45,7 @@ import {
   markOpenBalloonSites,
   balloonServesRevisionKind,
   findPaintedRevisionElement,
+  revisionElementAtPress,
   matchBalloonReviewItem,
   type BalloonAnchor,
 } from './review-balloon-anchor.ts';
@@ -403,7 +404,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
       if (host.contains(target)) return;
       // A press keeps the focus where the reader put it.
       focusPendingRef.current = false;
-      const element = target.closest('[data-revision-id]');
+      const element = revisionElementAtPress(target, event);
       if (isHTMLElementNode(element) && scroller.contains(element)) {
         const structuralSite = element.classList.contains('docx-table-row--revision');
         if (

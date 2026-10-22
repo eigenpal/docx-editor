@@ -959,19 +959,55 @@ export interface SourceCrop {
 }
 
 // @public
+export type TextboxOutlineProjection = {
+    readonly kind: 'ellipse';
+}
+/** The corner radius is `arc` times the box's shorter side. */
+| {
+    readonly arc: number;
+    readonly kind: 'roundRect';
+} | {
+    readonly kind: 'polygon';
+    readonly subpaths: readonly (readonly {
+        readonly x: number;
+        readonly y: number;
+    }[])[];
+};
+
+// @public
 export interface TextboxStoryLayout {
+    readonly chromeRotationDegrees?: number;
     readonly clippedResourceToken?: string;
     readonly contentHeight: number;
     readonly contentOffset: Readonly<{
         x: number;
         y: number;
     }>;
+    readonly contentRotation?: Readonly<{
+        degrees: number;
+        pivot: Readonly<{
+            x: number;
+            y: number;
+        }>;
+    }>;
     readonly contentWidth: number;
+    readonly extentHeight?: number;
     readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;
     readonly fragments: readonly BlockFragmentRecord[];
+    readonly outline?: TextboxOutlineProjection;
+    readonly shadow?: Readonly<{
+        alpha: number;
+        dx: number;
+        dy: number;
+        hex: string;
+        obscured: boolean;
+    }>;
+    readonly strokeCap?: 'round' | 'square';
+    readonly strokeCentered?: true;
+    readonly strokeDashPt?: readonly number[];
     readonly strokeHex: string | null;
     readonly strokeWidthPt: number;
 }

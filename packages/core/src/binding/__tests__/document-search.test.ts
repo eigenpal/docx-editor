@@ -12,7 +12,14 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { bodyStoryRoot, storyParagraphs } from '../../store/package/story-blocks.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
-import { collectTextMatches, SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX } from '../document-search.ts';
+import type { OoxmlNode, OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
+import {
+  collectTextMatches,
+  searchableTextEntry,
+  SEARCH_MATCH_LIMIT,
+  SEARCH_QUERY_MAX,
+} from '../document-search.ts';
+import { rememberedStoryParagraphRoots } from '../document-search-frames.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -44,6 +51,15 @@ function open(bytes: Uint8Array): TreeDocxSession {
   const result = openTreeSession(bytes);
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
   return result.session;
+}
+
+/** The body story's paragraph nodes of the session's current part, in order. */
+function bodyParagraphs(session: TreeDocxSession): OoxmlParagraphNode[] {
+  const root = bodyStoryRoot(session.part());
+  if (!root) throw new Error('body missing');
+  return storyParagraphs(root).filter(
+    (node: OoxmlNode): node is OoxmlParagraphNode => node.kind === 'paragraph'
+  );
 }
 
 const para = (...runs: string[]) => `<w:p>${runs.join('')}</w:p>`;
@@ -399,6 +415,105 @@ describe('collectTextMatches', () => {
 
     expect(search(body, '.*').matches.map((m) => m.start)).toEqual([10]);
     expect(search(para(run('a'.repeat(64))), '(a+)+$').matches).toEqual([]);
+  });
+
+  test('answers from the text as it stands after an edit, not as it was searched before', () => {
+    const session = open(docx(para(run('Exhibit A')) + para(run('Exhibit B'))));
+    const [firstId, secondId] = session.paragraphIds();
+    expect(session.findText('Exhibit A!', { matchCase: true }).matches).toEqual([]);
+    expect(session.findText('Exhibit', { matchCase: true }).matches).toHaveLength(2);
+
+    const edited = session.applyTreeOps([
+      { op: 'insertText', paragraphId: firstId!, offset: 9, text: '!' },
+    ]);
+    expect(edited.committed).toBe(true);
+
+    const after = session.findText('Exhibit A!', { matchCase: true }).matches;
+    expect(after.map((match) => [match.blockId, match.start, match.length])).toEqual([
+      [firstId, 0, 10],
+    ]);
+    // The paragraph the edit did not touch is still found where it was.
+    expect(
+      session.findText('Exhibit B', { matchCase: true }).matches.map((m) => m.blockId)
+    ).toEqual([secondId]);
+  });
+
+  test('keeps the searchable text of the paragraphs an edit did not touch', () => {
+    const session = open(
+      docx(para(run('Exhibit A')) + para(run('Exhibit B')) + para(run('Exhibit C')))
+    );
+    const [firstId] = session.paragraphIds();
+    expect(session.findText('Exhibit').matches).toHaveLength(3);
+    const before = bodyParagraphs(session);
+    const entries = before.map((paragraph) => searchableTextEntry(paragraph));
+    expect(entries.every((entry) => entry !== undefined)).toBe(true);
+
+    const edited = session.applyTreeOps([
+      { op: 'insertText', paragraphId: firstId!, offset: 9, text: '!' },
+    ]);
+    expect(edited.committed).toBe(true);
+
+    // The edit made a new node for the paragraph it changed and kept the other two.
+    const after = bodyParagraphs(session);
+    expect(after[0]).not.toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(after[2]).toBe(before[2]);
+    // Before any search, the untouched paragraphs keep their entries; the edited one has none.
+    expect(searchableTextEntry(after[0]!)).toBeUndefined();
+    expect(searchableTextEntry(after[1]!)).toBe(entries[1]);
+    expect(searchableTextEntry(after[2]!)).toBe(entries[2]);
+
+    // The search after the edit builds the edited paragraph's text and reuses the rest.
+    expect(session.findText('Exhibit').matches).toHaveLength(3);
+    expect(searchableTextEntry(after[0]!)?.text).toBe('Exhibit A!');
+    expect(searchableTextEntry(after[1]!)).toBe(entries[1]);
+    expect(searchableTextEntry(after[2]!)).toBe(entries[2]);
+  });
+
+  test('builds one entry per edit across revisions, not one document per revision', () => {
+    const count = 40;
+    const revisions = 30;
+    const session = open(
+      docx(
+        Array.from({ length: count }, (_, index) => para(run(`Clause ${index} applies`))).join('')
+      )
+    );
+    const ids = session.paragraphIds();
+    expect(session.findText('applies').matches).toHaveLength(count);
+    const seen = new Set(
+      bodyParagraphs(session).map((paragraph) => searchableTextEntry(paragraph))
+    );
+    expect(seen.size).toBe(count);
+
+    for (let revision = 0; revision < revisions; revision += 1) {
+      const edited = session.applyTreeOps([
+        { op: 'insertText', paragraphId: ids[revision % count]!, offset: 0, text: 'x' },
+      ]);
+      expect(edited.committed).toBe(true);
+      expect(session.findText('applies').matches).toHaveLength(count);
+      for (const paragraph of bodyParagraphs(session)) seen.add(searchableTextEntry(paragraph));
+    }
+    // Every entry a search ever built: the first revision's, plus one per edited paragraph.
+    expect(seen.has(undefined)).toBe(false);
+    expect(seen.size).toBe(count + revisions);
+  });
+
+  test('keeps story paragraph lists for the last two searches, not for every revision', () => {
+    const session = open(docx(para(run('alpha applies')) + para(run('beta applies'))));
+    const id = session.paragraphIds()[0]!;
+    session.findText('applies');
+    const stories = rememberedStoryParagraphRoots();
+    expect(stories).toBeGreaterThan(0);
+
+    for (let revision = 0; revision < 30; revision += 1) {
+      const edited = session.applyTreeOps([
+        { op: 'insertText', paragraphId: id, offset: 0, text: 'x' },
+      ]);
+      expect(edited.committed).toBe(true);
+      expect(session.findText('applies').matches).toHaveLength(2);
+    }
+    // Each edit makes a new body root; only this search's and the previous one's remain.
+    expect(rememberedStoryParagraphRoots()).toBeLessThanOrEqual(2 * stories);
   });
 
   test('keeps offsets aligned when case folding would otherwise expand the text', () => {

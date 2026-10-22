@@ -17,6 +17,8 @@ import {
 } from './border-metrics.ts';
 import { MAX_BORDER_WIDTH_PT } from './paragraph-style.ts';
 import { resolveStrictHexFill } from './ooxml-shading.ts';
+import { cellDiagonalRecords, type TableCellDiagonalRecord } from './table-cell-diagonals.ts';
+export type { TableCellDiagonalRecord } from './table-cell-diagonals.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
 import { tableRowBorderExtents } from './table-row-border-extents.ts';
 import {
@@ -73,6 +75,8 @@ export interface TableBorderBox {
 
 /** The four resolved edges of one cell, after conflict resolution against its neighbours. */
 export interface CellBorderBox {
+  readonly tl2br?: TableBorderSide;
+  readonly tr2bl?: TableBorderSide;
   readonly top: TableBorderSide;
   readonly left: TableBorderSide;
   readonly bottom: TableBorderSide;
@@ -127,6 +131,7 @@ export interface TableBorderStrokeRecord {
  * only on `edgeSegments`. Compound geometry is always on `strokes`.
  */
 export interface ResolvedCellBorders {
+  readonly diagonals?: readonly TableCellDiagonalRecord[];
   readonly top?: ResolvedTableBorderEdge;
   readonly left?: ResolvedTableBorderEdge;
   readonly bottom?: ResolvedTableBorderEdge;
@@ -228,7 +233,7 @@ export function readBorderSide(node: OoxmlElement | undefined): TableBorderSide 
 
 function readBox(
   container: OoxmlElement | undefined,
-  sides: readonly (keyof CellBorderBox)[]
+  sides: readonly TableBorderSideName[]
 ): CellBorderBox {
   if (!container) return EMPTY_CELL_BORDERS;
   const result: {
@@ -299,7 +304,14 @@ export function rowExceptionBorders(
 
 /** Read one cell's `w:tcBorders`, under the same bounds {@link readTableBorders} applies. */
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
-  return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
+  const container = tcPr && childNamed(tcPr, 'tcBorders');
+  const box = readBox(container, ['top', 'left', 'bottom', 'right']);
+  if (!container) return box;
+  return {
+    ...box,
+    tl2br: readBorderSide(childNamed(container, 'tl2br')),
+    tr2bl: readBorderSide(childNamed(container, 'tr2bl')),
+  };
 }
 
 /** Word's weighted border selection (MS-OI29500 §2.1.169, tcBorders).
@@ -359,7 +371,7 @@ function asResolved(side: TableBorderSide): ResolvedTableBorderEdge | undefined 
 
 function tableFallback(
   table: TableBorderBox,
-  side: keyof CellBorderBox,
+  side: TableBorderSideName,
   interior: boolean
 ): TableBorderSide {
   if (!interior) return table[side];
@@ -678,7 +690,8 @@ function publishFromIntervals(
   rowIndex: number,
   centered = false,
   outerBottom = false,
-  centeredSides = false
+  centeredSides = false,
+  publishAllSides = false
 ): ResolvedCellBorders {
   const toSegments = (
     side: TableBorderSideName,
@@ -756,6 +769,7 @@ function publishFromIntervals(
       } else if (edge.style === 'triple') {
         expandTripleInterval(strokes, side, edge, startPt, endPt, cellW, cellH);
       } else if (
+        publishAllSides ||
         !fullSide ||
         (centered && (side === 'top' || side === 'bottom')) ||
         side === 'right' ||
@@ -837,7 +851,7 @@ export function resolveTableCellBorderGrid(
 
   const effective = (
     cell: BorderGridCell,
-    side: keyof CellBorderBox,
+    side: TableBorderSideName,
     interior: boolean
   ): TableBorderSide =>
     effectiveBorderSide(
@@ -988,7 +1002,11 @@ export function resolveTableCellBorderGrid(
         rowOffsets[rowOffsets.length - 1] = cellBox.height;
       }
 
-      result[rowIndex]![cellIndex] = publishFromIntervals(
+      // A diagonal's viewport must start at the physical outer cell corner. Publishing
+      // every side here keeps CSS border widths at zero; otherwise an absolute SVG's
+      // containing block starts inside a CSS top/left border, including pixel rounding.
+      const diagonals = cellDiagonalRecords(cell.borders, cellBox.width, cellBox.height);
+      const physical = publishFromIntervals(
         top,
         left,
         bottom,
@@ -1001,8 +1019,10 @@ export function resolveTableCellBorderGrid(
         rowIndex,
         geometry.collapsedHorizontal,
         isBottom && cellBox.outerBottomInsetReserved !== false,
-        cellBox.centeredSidePaint ?? cellBox.centeredSideRules
+        cellBox.centeredSidePaint ?? cellBox.centeredSideRules,
+        diagonals.length > 0
       );
+      result[rowIndex]![cellIndex] = diagonals.length ? { ...physical, diagonals } : physical;
     }
   }
 

@@ -242,6 +242,31 @@ test('source diagnostics skip inactive legacy fallbacks and report scan limits',
   expect(Object.isFrozen(warnings)).toBe(true);
 });
 
+test('source diagnostics accept a text box whose path flags are inert', () => {
+  const box = (path: string) =>
+    '<w:p><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">' +
+    '<v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe">' +
+    '<v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>' +
+    '<v:shape type="#_x0000_t202" style="width:540pt;height:80pt;margin-top:60pt;margin-left:36pt;' +
+    'mso-position-horizontal-relative:page;mso-position-vertical-relative:page;position:absolute;' +
+    `z-index:251661312" filled="f" stroked="f">${path}<v:textbox><w:txbxContent>` +
+    '<w:p><w:r><w:t>Banner title</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape>' +
+    '</w:pict></w:r></w:p>';
+  for (const [path, warnings] of [
+    ['<v:path strokeok="f" textboxrect="0,0,21600,21600"/>', []],
+    // The text box template keeps its whole box whatever text area the shape writes.
+    ['<v:path textboxrect="0,0,10800,21600"/>', []],
+    [
+      '<v:path textboxrect="0,0,21600,21600"><v:f eqn="val 1"/></v:path>',
+      [{ code: 'legacy-textbox', partName: '/word/document.xml' }],
+    ],
+  ] as const) {
+    const opened = openHeadlessDocument(docxBytes(box(path), false));
+    if (!opened.ok) throw new Error(opened.reason);
+    expect(collectExportContentWarnings(opened.view)).toEqual(warnings);
+  }
+});
+
 test('source diagnostics report a framed object whose preview cannot be placed', () => {
   const body =
     '<w:p><w:pPr><w:framePr w:y="-854" w:vAnchor="text"/></w:pPr><w:r><w:t>Before</w:t>' +

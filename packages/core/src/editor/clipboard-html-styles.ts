@@ -1,4 +1,5 @@
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
+import { isOriginalValue } from './clipboard-html-revisions.ts';
 import {
   WORD_CLASS_PARAGRAPH_STYLES,
   WORD_UNDERLINE_VALUES,
@@ -340,6 +341,8 @@ export interface HtmlRunProps {
   langEastAsia?: string;
   langBidi?: string;
   rtl?: boolean;
+  /** A tracked formatting change: the run's `w:rPrChange`, ready to write. */
+  changeXml?: string;
 }
 
 export type HtmlTabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
@@ -380,6 +383,10 @@ export interface HtmlParaProps {
   borders?: Readonly<Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>>>;
   numPr?: { readonly numId: string; readonly ilvl: number };
   bidi?: boolean;
+  /** Tracked paragraph mark revisions (`w:ins`, `w:del`) for the mark's `w:rPr`. */
+  markRevisionXml?: string;
+  /** A tracked paragraph formatting change: the `w:pPrChange`, ready to write. */
+  changeXml?: string;
 }
 
 const NAMED_COLORS = new Map(
@@ -449,7 +456,8 @@ export function parseInlineStyle(element: Element): ReadonlyMap<string, string> 
     // CSS is last-declaration-wins; delete-then-set keeps the MAP's iteration
     // order equal to final declaration order, which cross-property resolution
     // (`background` vs `background-color`) relies on.
-    if (name.length > 0 && value.length > 0) {
+    // A `!msorm` value is the one a tracked formatting change replaced, never the current one.
+    if (name.length > 0 && value.length > 0 && !isOriginalValue(value)) {
       out.delete(name);
       out.set(name, value);
     }

@@ -2570,6 +2570,7 @@ function* layoutBlocksPass(
           !keptBreakLine &&
           (pending.length > 0 ||
             pageFragments.length > 0 ||
+            columnRegionTop > 0 ||
             ((pages.length > 0 || (furnitureHasWrap && skipBefore > 0)) &&
               ownBandSkip(entry, index, lines, lineIndex, fragmentParagraphStartY, fragmentBefore) +
                 Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
@@ -2634,8 +2635,8 @@ function* layoutBlocksPass(
         }
         fragmentFirstLine = breakAt;
         fragmentParagraphStartY = cursorY;
-        if (retreated) {
-          retreats += 1;
+        if (retreated || (columnRegionTop > 0 && cursorY + lineExtent > contentHeight())) {
+          if (retreated) retreats += 1;
           lineIndex = breakAt - 1;
           continue;
         }

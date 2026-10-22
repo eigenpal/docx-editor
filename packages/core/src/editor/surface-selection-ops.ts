@@ -146,7 +146,9 @@ export function selectedTextIn(
   to: SemanticPosition,
   order?: readonly string[],
   atomText?: (paragraphId: string, offset: number) => string | null,
-  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout
+  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout,
+  /** Whether a paragraph's mark is left out, joining it to the next one (a deleted mark). */
+  markLeftOut?: (paragraphId: string) => boolean
 ): string {
   // An atom paints as U+FFFC in the model text; a caller can spell it for plain text.
   const spell = (paragraphId: string, text: string, start: number): string =>
@@ -179,9 +181,11 @@ export function selectedTextIn(
     // A break the reader cannot SEE is not one to copy. A resolved display mode draws a run
     // of paragraphs as one, so a newline here pasted two paragraphs out of a line that was
     // drawn as one — and the file the reader is looking at says the break is gone.
-    const separator = mergedPredecessorsOf(layout, paragraphId).includes(ids[index - 1]!)
-      ? ''
-      : '\n';
+    const separator =
+      mergedPredecessorsOf(layout, paragraphId).includes(ids[index - 1]!) ||
+      markLeftOut?.(ids[index - 1]!)
+        ? ''
+        : '\n';
     text +=
       separator +
       spell(paragraphId, index === ids.length - 1 ? whole.slice(0, to.offset) : whole, 0);

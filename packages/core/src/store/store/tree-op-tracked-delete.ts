@@ -18,6 +18,7 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { isFldSimple } from '../package/field-nodes.ts';
+import { complexFieldNodes } from './field-simple-to-complex.ts';
 import { isOmmlEquationAtom } from '../package/omml-display.ts';
 import {
   contentControlPropertiesOf,
@@ -104,14 +105,15 @@ export function applyDeleteTracked(
     if (segment.start < start || segment.end > end) continue;
     for (const id of segment.removeNodeIds) {
       const node = findNode(part, id);
-      // Simple fields are struck through their direct result runs. Nested fields and
+      // Simple fields are struck in their complex form, around their direct result runs
+      // (and `w:fldData`, which moves to the begin marker). Nested fields and
       // wrappers need their own deletion semantics; leaving them intact would turn a
       // replacement into an insertion. Refuse before rebuilding any selected content.
       if (
         node &&
         isFldSimple(node) &&
         node.kind !== 'textValue' &&
-        node.children.some((child) => child.kind !== 'run')
+        node.children.some((child) => child.kind !== 'run' && !isWmlNamed(child, 'fldData'))
       ) {
         return { ok: false, reason: 'unsupported', detail: 'tracked-simple-field-result' };
       }
@@ -159,21 +161,20 @@ export function applyDeleteTracked(
       const to = from + length;
 
       // A `w:fldSimple` cannot go inside a `w:del`: `CT_RunTrackChange` takes
-      // `EG_ContentRunContent`, which has no `fldSimple` in it. Word strikes one by putting
-      // the deletion INSIDE the field, around its runs, and so does this.
+      // `EG_ContentRunContent`, which has no `fldSimple` in it. So the field is rewritten in
+      // its complex form and that whole form is struck: begin, instruction, separate, result
+      // and end in one `w:del`. Striking only the result runs from inside the field did
+      // nothing for a field with no saved result, and accepting it left the field standing.
       if (struck.has(node.id) && node.kind !== 'textValue' && isWmlNamed(node, 'fldSimple')) {
         cursor.offset = to;
-        out.push({
-          ...node,
-          children: mergedRevisions(
-            mint,
-            node.children.map((child) =>
-              child.kind === 'run' && !insideDeletion(stack)
-                ? strike([toDeleted(mint, child)], nextInlineContainerDepth(node, containerDepth))
-                : child
-            )
-          ),
-        } as OoxmlNode);
+        if (insideDeletion(stack)) {
+          out.push(node);
+          continue;
+        }
+        // Inside the author's own pending insertion it goes outright, like their own words do.
+        if (insertionAuthor(stack) === revision.author) continue;
+        const complex = complexFieldNodes(node, mint).map((run) => toDeleted(mint, run));
+        out.push(strike(complex, containerDepth));
         continue;
       }
 

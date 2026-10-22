@@ -139,6 +139,26 @@ test('dropdown dismissal stays local on two collaborating editor instances', asy
 });
 
 for (const slot of DROPDOWN_SLOTS) {
+  test(`${slot}: a canceled surface pointer press closes the popup before propagation stops`, async () => {
+    const view = await mount();
+    const before = await xml(view.editor());
+    await clickOpen(view, slot);
+    const inside = view.popup(slot)!.querySelector('button')!;
+    await update(() => inside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    expect(view.popup(slot) !== null).toBe(true);
+    const target = document.createElement('span');
+    view.pages().append(target);
+    target.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true });
+    await update(() => target.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.popup(slot) === null).toBe(true);
+    expect(await xml(view.editor())).toBe(before);
+  });
+
   test(`${slot}: Escape from the document closes the menu without moving focus or changing the document`, async () => {
     const view = await mount();
     expect(view.trigger(slot).disabled).toBe(false);
@@ -151,13 +171,15 @@ for (const slot of DROPDOWN_SLOTS) {
       pages.focus();
       event = pressEscape(pages);
     });
-    expect(view.popup(slot)).toBeNull();
+    expect(view.popup(slot) === null).toBe(true);
     expect(event!.defaultPrevented).toBe(true);
     expect(document.activeElement === pages).toBe(true);
     expect(await xml(view.editor())).toBe(before);
     await clickOpen(view, slot);
-    await update(() => document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
-    expect(view.popup(slot)).toBeNull();
+    await update(() =>
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    );
+    expect(view.popup(slot) === null).toBe(true);
   });
 
   test(`${slot}: Escape after a mouse open closes the menu from wherever focus is`, async () => {
@@ -168,7 +190,7 @@ for (const slot of DROPDOWN_SLOTS) {
     const focused = document.activeElement as HTMLElement;
     expect(focused === pages || view.slot(slot)!.contains(focused)).toBe(true);
     await update(() => pressEscape(focused));
-    expect(view.popup(slot)).toBeNull();
+    expect(view.popup(slot) === null).toBe(true);
     const after = document.activeElement;
     expect(after === pages || after === view.trigger(slot)).toBe(true);
   });
@@ -183,7 +205,7 @@ for (const slot of DROPDOWN_SLOTS) {
     });
     expect(view.popup(slot)).not.toBeNull();
     await update(() => pressEscape(option));
-    expect(view.popup(slot)).toBeNull();
+    expect(view.popup(slot) === null).toBe(true);
     expect(document.activeElement === view.trigger(slot)).toBe(true);
   });
 }

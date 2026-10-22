@@ -16,8 +16,7 @@ import {
   listenForPopupEscape,
   listenForPopupFocusLeave,
   type ChromeSlotId,
-  isDomNode,
-  hostDocumentOf,
+  listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 import { useEditorCommand } from '../useEditorCommand';
@@ -189,11 +188,6 @@ export const ToolbarOverflow = defineComponent({
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
-      const onPointerDown = (event: MouseEvent) => {
-        const target = event.target;
-        if (isDomNode(target) && rootRef.value?.contains(target)) return;
-        open.value = false;
-      };
       const root = rootRef.value;
       // Escape in the capture phase, ahead of the surface: a click opens the panel with focus
       // left in the pages, and the surface would spend the key on its own mode first. An open
@@ -220,10 +214,14 @@ export const ToolbarOverflow = defineComponent({
             },
           })
         : undefined;
-      const doc = hostDocumentOf(rootRef.value);
-      doc.addEventListener('mousedown', onPointerDown, true);
+      const stopPress = listenForOutsidePress({
+        popup: root,
+        close: () => {
+          open.value = false;
+        },
+      });
       onCleanup(() => {
-        doc.removeEventListener('mousedown', onPointerDown, true);
+        stopPress();
         stopEscape?.();
         stopFocus?.();
       });

@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Each document search walked every story and rebuilt every paragraph's searchable text.",
+  "after": "A search reuses each story's paragraph list and each paragraph's searchable text, kept per frozen node: a paragraph an edit did not touch keeps its text across revisions.",
+  "reason": "Only how often the same derivation is computed changes. Nodes are frozen and an edit replaces the ones it changes, so the answers are the same, and nothing enters shared state, operations, snapshots or protocol messages.",
+  "tests": ["packages/core/src/binding/__tests__/document-search.test.ts"],
+  "changeset": "search-text-once",
+  "migration": null
+}

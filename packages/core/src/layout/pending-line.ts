@@ -56,6 +56,11 @@ export interface PendingLine {
    * Placement keeps its skip even on a line before the paragraph's first anchor.
    */
   breakClearance?: true;
+  /**
+   * The skip clears a paragraph-framed band of an anchor on a later line of the same paragraph
+   * (`top-and-bottom-earlier-lines.ts`). Placement keeps it, as it keeps {@link breakClearance}.
+   */
+  ownBandClearance?: true;
   /** Clearance inherited by an empty anchor paragraph from other drawing bands. */
   anchorClearanceBefore?: number;
   /**
@@ -443,6 +448,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
     ...(line.breakClearance ? { breakClearance: true } : {}),
+    ...(line.ownBandClearance ? { ownBandClearance: true } : {}),
     ...(line.anchorClearanceBefore !== undefined
       ? { anchorClearanceBefore: line.anchorClearanceBefore }
       : {}),

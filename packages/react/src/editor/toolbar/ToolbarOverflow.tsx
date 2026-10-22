@@ -25,8 +25,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   chromeSlotIsToggle,
   hasOpenNestedPopup,
-  hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   listenForPopupEscape,
   listenForPopupFocusLeave,
   type ChromeSlotId,
@@ -167,16 +166,9 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
 
   const panelContext = useMemo<OverflowPanelContextValue>(() => ({ close }), [close]);
 
-  // Outside press closes. Capture, for the same reason the review rail listens in capture:
-  // the painted surface calls `preventDefault` on its own pointer handling and a bubbling
-  // listener never sees a press that landed on the pages.
+  // Capture before the surface cancels compatibility mouse events or stops propagation.
   useEffect(() => {
     if (!open) return undefined;
-    const onPointerDown = (event: MouseEvent): void => {
-      const target = event.target;
-      if (isDomNode(target) && rootRef.current?.contains(target)) return;
-      setOpen(false);
-    };
     const root = rootRef.current;
     // Escape in the capture phase, ahead of the surface: a click opens the panel with focus
     // left in the pages, and the surface would spend the key on its own mode first. An open
@@ -197,10 +189,9 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     const stopFocus = root
       ? listenForPopupFocusLeave({ popup: root, contains, close: () => setOpen(false) })
       : undefined;
-    const doc = hostDocumentOf(root);
-    doc.addEventListener('mousedown', onPointerDown, true);
+    const stopPress = listenForOutsidePress({ popup: root, close: () => setOpen(false) });
     return () => {
-      doc.removeEventListener('mousedown', onPointerDown, true);
+      stopPress();
       stopEscape?.();
       stopFocus?.();
     };

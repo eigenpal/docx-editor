@@ -319,7 +319,11 @@ export interface CellBorderBox {
     // (undocumented)
     readonly right: TableBorderSide;
     // (undocumented)
+    readonly tl2br?: TableBorderSide;
+    // (undocumented)
     readonly top: TableBorderSide;
+    // (undocumented)
+    readonly tr2bl?: TableBorderSide;
 }
 
 // @public
@@ -2980,6 +2984,8 @@ export interface ResolvedCellBorders {
     // (undocumented)
     readonly bottom?: ResolvedTableBorderEdge;
     // (undocumented)
+    readonly diagonals?: readonly TableCellDiagonalRecord[];
+    // (undocumented)
     readonly edgeSegments?: readonly ResolvedTableBorderEdgeSegment[];
     // (undocumented)
     readonly left?: ResolvedTableBorderEdge;
@@ -4531,6 +4537,30 @@ export interface TableCellContext {
 }
 
 // @public
+export interface TableCellDiagonalRecord {
+    // (undocumented)
+    readonly clipHeight: number;
+    // (undocumented)
+    readonly clipWidth: number;
+    // (undocumented)
+    readonly color: string | null;
+    // (undocumented)
+    readonly cssStyle: 'solid' | 'dashed' | 'dotted';
+    // (undocumented)
+    readonly direction: 'tl2br' | 'tr2bl';
+    // (undocumented)
+    readonly widthPt: number;
+    // (undocumented)
+    readonly x1: number;
+    // (undocumented)
+    readonly x2: number;
+    // (undocumented)
+    readonly y1: number;
+    // (undocumented)
+    readonly y2: number;
+}
+
+// @public
 export interface TableCellFragmentRecord {
     readonly blocks: readonly BlockFragmentRecord[];
     readonly borders?: ResolvedCellBorders;
@@ -4656,6 +4686,22 @@ export interface TextArtFit {
 }
 
 // @public
+export type TextboxOutlineProjection = {
+    readonly kind: 'ellipse';
+}
+/** The corner radius is `arc` times the box's shorter side. */
+| {
+    readonly arc: number;
+    readonly kind: 'roundRect';
+} | {
+    readonly kind: 'polygon';
+    readonly subpaths: readonly (readonly {
+        readonly x: number;
+        readonly y: number;
+    }[])[];
+};
+
+// @public
 export type TextboxOwnerRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
 // @public
@@ -4665,18 +4711,38 @@ export type TextboxStoryFallbackReason = 'textbox-nesting-limit' | 'textbox-frag
 
 // @public
 export interface TextboxStoryLayout {
+    readonly chromeRotationDegrees?: number;
     readonly clippedResourceToken?: string;
     readonly contentHeight: number;
     readonly contentOffset: Readonly<{
         x: number;
         y: number;
     }>;
+    readonly contentRotation?: Readonly<{
+        degrees: number;
+        pivot: Readonly<{
+            x: number;
+            y: number;
+        }>;
+    }>;
     readonly contentWidth: number;
+    readonly extentHeight?: number;
     readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;
     readonly fragments: readonly BlockFragmentRecord[];
+    readonly outline?: TextboxOutlineProjection;
+    readonly shadow?: Readonly<{
+        alpha: number;
+        dx: number;
+        dy: number;
+        hex: string;
+        obscured: boolean;
+    }>;
+    readonly strokeCap?: 'round' | 'square';
+    readonly strokeCentered?: true;
+    readonly strokeDashPt?: readonly number[];
     readonly strokeHex: string | null;
     readonly strokeWidthPt: number;
 }

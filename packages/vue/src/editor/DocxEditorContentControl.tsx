@@ -1,5 +1,5 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
-import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useStableDocxId } from '../lib/stable-id';
 import { useTranslation } from '../i18n';
@@ -345,17 +345,17 @@ const ContentControlRoot = defineComponent({
           event.preventDefault();
           chrome.closeInspector();
         };
-        const onMouseDown = (event: MouseEvent): void => {
-          const panel = panelRef.value;
-          if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
-          chrome.closeInspector();
-        };
         const doc = hostDocumentOf(panelRef.value);
         doc.addEventListener('keydown', onKeyDown);
-        doc.addEventListener('mousedown', onMouseDown, true);
+        // The panel can render after this watcher runs, so membership reads the ref at press time.
+        const stopPress = listenForOutsidePress({
+          popup: doc,
+          contains: (node) => panelRef.value?.contains(node) === true,
+          close: () => chrome.closeInspector(),
+        });
         onCleanup(() => {
           doc.removeEventListener('keydown', onKeyDown);
-          doc.removeEventListener('mousedown', onMouseDown, true);
+          stopPress();
         });
       }
     );

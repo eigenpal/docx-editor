@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A continued section can place its first line below the occupied page content area.",
+  "after": "The section advances through occupied columns before it places the first line.",
+  "reason": "Only local pagination changes. The canonical tree, replication operations, and saved package format stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/continuous-section-first-line-overflow.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-continuous-section-flow.test.ts"
+  ],
+  "changeset": "continuous-section-first-line",
+  "migration": null
+}

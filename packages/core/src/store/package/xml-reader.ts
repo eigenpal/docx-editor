@@ -6,7 +6,8 @@
 // raw lexical values. Output is ordered and every attribute record has a null prototype.
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import { isValidXmlText } from './sinks.ts';
+import { decodeXmlEntities, ownString, validateXmlText } from './xml-text.ts';
+import { fastReadXml } from './xml-fast-read.ts';
 import { DEFAULT_LIMITS, HARD_CEILINGS } from '../runtime/limits.ts';
 
 /**
@@ -54,65 +55,6 @@ export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
 // These are defensive budgets, not a guarantee that every document fits the host's memory.
 export const XML_DEFAULT_MAX_ELEMENTS = DEFAULT_LIMITS.maxElementCount;
 export const XML_HARD_MAX_ELEMENTS = HARD_CEILINGS.maxElementCount;
-
-/**
- * Decode ONLY the five predefined XML entities and numeric character references.
- * Safe because `readXml` has already rejected any DTD / custom entity declaration
- * or reference before this runs — so `&amp;`/`&#nn;` are the only refs possible,
- * and `processEntities:false` leaves them raw (avoiding entity-expansion attacks).
- * Without this, run text keeps its escaped lexical form and a re-serialize
- * double-escapes it.
- */
-/**
- * A copy of `value` that does not point into the part's XML text. V8 keeps a substring of 13 or
- * more characters as a view of its parent, so one long attribute or run kept the whole decoded
- * part alive for as long as the tree. Shorter strings are already copies.
- */
-function ownString(value: string): string {
-  return value.length < 13 ? value : (value + ' ').slice(0, -1);
-}
-
-function decodeXmlEntities(s: string): string {
-  const decoded =
-    s.indexOf('&') < 0
-      ? s
-      : s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (_match, e: string) => {
-          switch (e) {
-            case 'amp':
-              return '&';
-            case 'lt':
-              return '<';
-            case 'gt':
-              return '>';
-            case 'quot':
-              return '"';
-            case 'apos':
-              return "'";
-            default: {
-              const code = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-              if (
-                !Number.isSafeInteger(code) ||
-                !(
-                  code === 0x9 ||
-                  code === 0xa ||
-                  code === 0xd ||
-                  (code >= 0x20 && code <= 0xd7ff) ||
-                  (code >= 0xe000 && code <= 0xfffd) ||
-                  (code >= 0x10000 && code <= 0x10ffff)
-                )
-              )
-                throw new Error('numeric reference is not a valid XML 1.0 scalar');
-              return String.fromCodePoint(code);
-            }
-          }
-        });
-  return ownString(validateXmlText(decoded));
-}
-
-function validateXmlText(value: string): string {
-  if (!isValidXmlText(value)) throw new Error('value is not valid XML 1.0 text');
-  return value;
-}
 
 class DepthError extends Error {}
 class ElementCountError extends Error {}
@@ -341,11 +283,16 @@ export function preflightXml(
   }
 }
 
-/** @internal {@link preflightXml}, yielding between its whole-part scans. */
-export function* preflightXmlSteps(
+/**
+ * The first of the bounded checks: valid limits, and a part within the byte budget. Gives the
+ * element budget. Every read runs it before anything else looks at the part.
+ *
+ * @internal
+ */
+export function checkXmlSize(
   xml: string,
   limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
-): Generator<void, XmlChecked> {
+): XmlChecked {
   if (
     !validLimit(limits.maxBytes) ||
     (limits.maxElements !== undefined && !validLimit(limits.maxElements))
@@ -357,6 +304,17 @@ export function* preflightXmlSteps(
     XML_HARD_MAX_ELEMENTS
   );
   if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
+  return { ok: true, maxElements };
+}
+
+/** @internal {@link preflightXml}, yielding between its whole-part scans. */
+export function* preflightXmlSteps(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): Generator<void, XmlChecked> {
+  const sized = checkXmlSize(xml, limits);
+  if (!sized.ok) return sized;
+  const { maxElements } = sized;
   const forbidden = preflightForbiddenXml(xml);
   if (forbidden) return { ok: false, reason: forbidden };
   yield;
@@ -387,6 +345,24 @@ export interface XmlElementBudget {
  * order, attributes, whitespace and raw lexical form — everything a lossless re-emit needs.
  */
 export function readXml(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): XmlResult {
+  // A part in the plain subset reads in one pass (`xml-fast-read.ts`); anything else, and
+  // every refusal, takes the full bounded read below.
+  const sized = checkXmlSize(xml, limits);
+  if (!sized.ok) return sized;
+  const fast = fastReadXml(xml, sized.maxElements);
+  if (fast !== null) return { ok: true, nodes: fast };
+  return readXmlBounded(xml, limits);
+}
+
+/**
+ * {@link readXml} without the one-pass reader: every bounded check, then the parse.
+ *
+ * @internal Exported so tests can hold the one-pass reader to this one.
+ */
+export function readXmlBounded(
   xml: string,
   limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
 ): XmlResult {

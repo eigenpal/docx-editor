@@ -13,6 +13,8 @@ Imported rows with omitted leading or trailing grid cells retain borders on thei
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
+Imported cell borders can include `w:tl2br` and `w:tr2bl` diagonals. Table styles can supply them. Direct `nil` or `none` clears an inherited diagonal. Diagonals use the cell rectangle, including a vertical merge, in the editor and PDF export. Each repeated header or page fragment uses its own rectangle. A continuous diagonal across page fragments is not supported. Diagonals do not change cell size or text placement. The border toolbar and HTML clipboard do not add or transfer diagonal borders.
+
 ## Insert a table
 
 `Range.insertTable(rowCount, columnCount, location, values?)` accepts `Before` or `After`. Counts must be positive integers. Supplied values must form a matching rectangular string matrix. Resolve the range, create the table, then configure it after sync:

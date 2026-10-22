@@ -622,6 +622,153 @@ describe('a w:numStyleLink definition', () => {
   });
 });
 
+describe('a list item numbered through its paragraph style', () => {
+  // Word's List Bullet shape: the paragraph names only its style, and the style's w:numPr
+  // names the list. The item has no w:numPr of its own.
+  const STYLES =
+    '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/>' +
+    '<w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="ListBullet2"><w:name w:val="List Bullet 2"/>' +
+    '<w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr></w:pPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="ListOther"><w:name w:val="List Other"/>' +
+    '<w:pPr><w:numPr><w:numId w:val="2"/></w:numPr></w:pPr></w:style>';
+  const styled = (text: string, style = 'ListBullet', props = '') =>
+    `<w:p><w:pPr><w:pStyle w:val="${style}"/>${props}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const mountStyled = (body: string) => mount(body, true, { stylesXml: STYLES });
+  const savedNumPr = (surface: PaginatedSurface) =>
+    strFromU8(unzipSync(surface.session.save())['word/document.xml']!).match(
+      /<w:numPr>.*?<\/w:numPr>/
+    )?.[0] ?? null;
+
+  test('Increase and Decrease Indent change the level', () => {
+    const surface = mountStyled(styled('alpha'));
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: '○', level: 1 });
+
+    expect(surface.adjustIndent('decrease')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+  });
+
+  test('the level is written as the paragraph’s own w:numPr, naming the style’s list', () => {
+    const surface = mountStyled(styled('alpha'));
+    surface.adjustIndent('increase');
+    expect(savedNumPr(surface)).toBe('<w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr>');
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: '○', level: 1 });
+  });
+
+  test('Tab demotes and Shift+Tab promotes', () => {
+    const surface = mountStyled(styled('alpha'));
+    const handler = createKeyDownHandler(surface);
+    handler(key({ key: 'Tab' }));
+    expect(markerOf(surface)?.level).toBe(1);
+    handler(key({ key: 'Tab', shiftKey: true }));
+    expect(markerOf(surface)?.level).toBe(0);
+  });
+
+  test('Enter on an empty nested item steps out a level at a time, then leaves the list', () => {
+    const surface = mountStyled(styled('alpha', 'ListBullet2'));
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    const handler = createKeyDownHandler(surface);
+    const levelAtCaret = () => markerFor(surface, surface.state().selection.head.paragraphId);
+    handler(key({ key: 'Enter' }));
+    expect(levelAtCaret()?.level).toBe(1);
+    handler(key({ key: 'Enter' }));
+    expect(levelAtCaret()?.level).toBe(0);
+    handler(key({ key: 'Enter' }));
+    expect(levelAtCaret()).toBeUndefined();
+    expect(surface.session.paragraphIds()).toHaveLength(2);
+  });
+
+  test('Bullets turns the list off, and it stays off after a save', () => {
+    const surface = mountStyled(styled('alpha'));
+    expect(surface.toggleList('bullet')).toBe(true);
+    expect(surface.isListParagraph()).toBe(false);
+    expect(savedNumPr(surface)).toBe('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>');
+    expect(markerOf(mountBytes(surface.session.save()))).toBeUndefined();
+  });
+
+  test('Bullets after an indent turns the list off rather than undoing the indent', () => {
+    const surface = mountStyled(styled('alpha'));
+    surface.adjustIndent('increase');
+    surface.toggleList('bullet');
+    expect(surface.isListParagraph()).toBe(false);
+    expect(savedNumPr(surface)).toBe('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/></w:numPr>');
+    expect(markerOf(mountBytes(surface.session.save()))).toBeUndefined();
+  });
+
+  test('Bullets turns the list back on in place of the override', () => {
+    const surface = mountStyled(styled('alpha'));
+    surface.toggleList('bullet');
+    surface.toggleList('bullet');
+    expect(surface.isListParagraph()).toBe(true);
+    const saved = strFromU8(unzipSync(surface.session.save())['word/document.xml']!);
+    expect(saved.match(/<w:numPr>/g)).toHaveLength(1);
+  });
+
+  test('a w:numPr of its own that names only the level keeps inheriting the list', () => {
+    const surface = mountStyled(
+      styled('alpha', 'ListBullet', '<w:numPr><w:ilvl w:val="0"/></w:numPr>')
+    );
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)?.level).toBe(1);
+    expect(savedNumPr(surface)).toBe('<w:numPr><w:ilvl w:val="1"/></w:numPr>');
+  });
+
+  // A struck mark: the proposed view draws the paragraph as one line with the item after it.
+  const STRUCK = '<w:rPr><w:del w:id="1" w:author="A"/></w:rPr>';
+  /** The saved markup of `absorbed` after `edit`, run with the caret in it. */
+  function editAbsorbed(
+    absorbed: string,
+    edit: (surface: PaginatedSurface) => void,
+    survivor = styled('item')
+  ): string {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(
+      container,
+      docx(absorbed + survivor, true, { stylesXml: STYLES }),
+      { revisionDisplayMode: 'proposed' }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    const [id] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: id!, offset: 1 },
+      head: { paragraphId: id!, offset: 1 },
+    });
+    expect(surface.isListParagraph()).toBe(true);
+    edit(surface);
+    const saved = strFromU8(unzipSync(surface.session.save())['word/document.xml']!);
+    return saved.split('</w:p>')[0]!;
+  }
+  const indent = (surface: PaginatedSurface) => surface.adjustIndent('increase');
+  const bulletsOff = (surface: PaginatedSurface) => surface.toggleList('bullet');
+  const other = styled('other ', 'ListOther', STRUCK);
+
+  test('a plain paragraph drawn inside a list item in a resolved view is not numbered', () => {
+    const plain = `<w:p><w:pPr>${STRUCK}</w:pPr><w:r><w:t xml:space="preserve">plain </w:t></w:r></w:p>`;
+    expect(editAbsorbed(plain, indent)).not.toContain('numPr');
+  });
+
+  test('a style-numbered paragraph drawn inside an item of another list keeps its own list', () => {
+    expect(editAbsorbed(other, indent)).not.toContain('numPr');
+    expect(editAbsorbed(other, bulletsOff)).not.toContain('numPr');
+  });
+
+  test('a style-numbered paragraph drawn inside an item of its own list is left as it is', () => {
+    const same = styled('same ', 'ListBullet', STRUCK);
+    expect(editAbsorbed(same, indent, styled('item', 'ListBullet2'))).not.toContain('numPr');
+    expect(editAbsorbed(same, bulletsOff)).not.toContain('numPr');
+  });
+});
+
 describe('list kind is read from w:numFmt, not the marker glyph', () => {
   test('a bullet level using a letter-shaped glyph is still a bullet', () => {
     const numberingXml =

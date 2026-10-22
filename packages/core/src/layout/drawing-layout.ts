@@ -2,8 +2,9 @@ import { inlinePictureExtent } from './inline-picture-extent.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
 
-import { layoutTextArt, rotatedBounds, type DrawingTextArtRecord } from './drawing-text-art.ts';
-import { clipBoxToRegion } from './drawing-clip-box.ts';
+import { layoutTextArt, rotatedBounds, turnedTextboxBounds } from './drawing-text-art.ts';
+import type { DrawingTextArtRecord } from './drawing-text-art.ts';
+import { clipBoxToRegion, hitBoundsOf } from './drawing-clip-box.ts';
 export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
 
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
@@ -460,10 +461,7 @@ export function clipInlineDrawingRecordToRegion(
   region: LayoutBox
 ): InlineDrawingRecord {
   const paintBounds = clipBoxToRegion(drawing.paintBounds, region);
-  const hitBounds =
-    paintBounds.width > 0 && paintBounds.height > 0
-      ? paintBounds
-      : Object.freeze({ ...paintBounds });
+  const hitBounds = hitBoundsOf(paintBounds);
   const dx = drawing.x - drawing.geometry.contentBounds.x;
   const dy = drawing.y - drawing.geometry.contentBounds.y;
   const shiftedGeometry = shiftGeometry(drawing.geometry, dx, dy);
@@ -985,10 +983,7 @@ export function clipAnchoredDrawingRecordToRegion(
     height: drawing.height,
   });
   const paintBounds = clipBoxToRegion(extentBox, region);
-  const hitBounds =
-    paintBounds.width > 0 && paintBounds.height > 0
-      ? paintBounds
-      : Object.freeze({ ...paintBounds });
+  const hitBounds = hitBoundsOf(paintBounds);
   return Object.freeze({
     ...drawing,
     paintBounds,
@@ -1022,15 +1017,12 @@ export function buildAnchoredDrawingRecord(options: {
     extentWidth: measure.width,
     extentHeight: measure.height,
   });
-  // Turned text reaches past its box; the painted area holds the whole turn.
+  // Turned text or a turned text box reaches past its box; the painted area holds the turn.
   const turned = textArt
     ? rotatedBounds(geometry.paintBounds, textArt.rotationDegrees)
-    : geometry.paintBounds;
+    : turnedTextboxBounds(geometry.paintBounds, options.textboxStory);
   const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
-  const hitBounds =
-    paintBounds.width > 0 && paintBounds.height > 0
-      ? paintBounds
-      : Object.freeze({ ...paintBounds });
+  const hitBounds = hitBoundsOf(paintBounds);
   return Object.freeze({
     kind: 'anchoredDrawing',
     drawingNodeId: options.input.drawingNodeId,
@@ -1349,6 +1341,8 @@ export function buildInlineDrawingRecord(options: {
     extentWidth: measure.width,
     extentHeight: measure.height,
   });
+  // A turned, shadowed or outlined text box reaches past its extent; the clip keeps that reach.
+  const reach = turnedTextboxBounds(geometry.paintBounds, textboxStory);
   const clipRegion =
     options.contentTop !== undefined && options.contentBottom !== undefined
       ? Object.freeze({
@@ -1359,15 +1353,12 @@ export function buildInlineDrawingRecord(options: {
         })
       : Object.freeze({
           x: options.contentLeft,
-          y: geometry.paintBounds.y,
+          y: reach.y,
           width: Math.max(0, options.contentRight - options.contentLeft),
-          height: geometry.paintBounds.height,
+          height: reach.height,
         });
-  const paintBounds = clipBoxToRegion(geometry.paintBounds, clipRegion);
-  const hitBounds =
-    paintBounds.width > 0 && paintBounds.height > 0
-      ? paintBounds
-      : Object.freeze({ ...paintBounds });
+  const paintBounds = clipBoxToRegion(reach, clipRegion);
+  const hitBounds = hitBoundsOf(paintBounds);
   const record: InlineDrawingRecord = Object.freeze({
     kind: 'inlineDrawing',
     drawingNodeId: options.input.drawingNodeId,

@@ -118,7 +118,9 @@ export function ownTopAndBottomSkip(
  *
  * The band clears the drawing, so it begins where the drawing begins. A `wp:positionV` whose frame
  * is the anchor's own flow position (`paragraph` or `line`) displaces the drawing down by
- * `wp:posOffset`, and the band with it — the painted geometry already applies that offset. Frames
+ * `wp:posOffset`, and the band with it — the painted geometry already applies that offset. A
+ * `paragraph` frame measures from the paragraph's top (`paragraphY`), not from the line that holds
+ * the anchor, so an anchor on a later line keeps its band where its drawing is painted. Frames
  * that resolve against the page or its margins do not start at the anchor, and an alignment needs a
  * frame box the paragraph does not know while it is breaking; both keep the anchor line top.
  */
@@ -128,13 +130,14 @@ export function topAndBottomBandAnchorY(
     relativeFrom: string;
     align: string | null;
     offsetEmu: number | null;
-  }> | null
+  }> | null,
+  paragraphY = anchorLineY
 ): number {
   if (!vertical || vertical.align !== null) return anchorLineY;
   if (vertical.relativeFrom !== 'paragraph' && vertical.relativeFrom !== 'line') return anchorLineY;
   const offset = emuToPointsSafe(vertical.offsetEmu ?? 0);
   if (offset === null) return anchorLineY;
-  return anchorLineY + offset;
+  return (vertical.relativeFrom === 'paragraph' ? paragraphY : anchorLineY) + offset;
 }
 
 /**

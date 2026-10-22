@@ -3,7 +3,7 @@ import { ordinaryMoveRanges, ordinaryMoveInsertionSites } from './revision-move-
 import { mergeAdjacentSameKindEdits } from './review-inline-groups.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
-import { textUnder } from './review-text.ts';
+import { reviewCardText } from './review-text.ts';
 export { commentBodyText, commentInitials } from './review-text.ts';
 // Derive pending review decisions from the canonical tree, not the visible spans:
 // original/proposed display modes must never hide a decision from review actions.
@@ -219,7 +219,7 @@ function computeRevisionItemsOf(
     // Unused history, and the legacy list history, lists as no change; bulk decisions drop it.
     if (unboundHistories.has(site.node.id) || site.node.localName === 'numberingChange') continue;
     const moveRange = moveRanges.get(site.node.id);
-    const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
+    const siteText = reviewCardText(moveRange ? moveRange.content : [site.node]);
     const sourceId = wmlAttribute(site.node, 'id');
     const id = sourceId ?? `missing-${site.node.id}`;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it

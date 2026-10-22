@@ -21,6 +21,8 @@ function furnitureTextboxFragments(page: PageRecord): ParagraphFragmentRecord[] 
       story,
       (fragment, context) => {
         if (context.textboxDepth === 0 || context.textboxOwner?.accessibility.hidden) return;
+        // Overlay boxes stay upright, so a turned story has none rather than misplaced ones.
+        if (context.textboxOwner?.textboxStory?.contentRotation) return;
         fragments.push(
           translateParagraphFragment(
             fragment,
@@ -46,6 +48,8 @@ export function textboxPresenceLayout(layout: SemanticLayout): SemanticLayout {
   const pages = layout.pages.map((page) => {
     const fragments = textboxDrawingsOnPage(page).flatMap((drawing) => {
       const story = drawing.textboxStory;
+      // Overlay boxes stay upright, so a turned story has none rather than misplaced ones.
+      if (story.contentRotation) return [];
       return story.fragments.flatMap((fragment) =>
         fragment.kind === 'paragraph'
           ? [

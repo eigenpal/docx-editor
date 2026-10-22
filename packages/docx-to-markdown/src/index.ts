@@ -126,6 +126,7 @@ export type {
   RevisionAttribution,
   RevisionDisplayMode,
   SourceCrop,
+  TextboxOutlineProjection,
   TextboxStoryLayout,
   TextMeasurer,
   VectorShapeProjection,

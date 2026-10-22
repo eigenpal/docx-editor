@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   runToolbarCommand,
   toolbarCommandState,
   type DocxEditorInstance,
@@ -138,18 +138,10 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
 
   useEffect(() => {
     if (!open) return undefined;
-    const onMouseDown = (event: MouseEvent): void => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    // Capture, like the link popover: the surface prevents default on its own pointer
-    // handling, so a bubbling listener never sees a click that lands on the pages.
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('mousedown', onMouseDown, true);
-    return () => {
-      doc.removeEventListener('mousedown', onMouseDown, true);
-    };
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
   // Escape through the shared rule: a host input keeps its own Escape.
   usePopupEscape(open, rootRef, (fromInside) => {

@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { hostDocumentOf, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import {
+  hostDocumentOf,
+  listenForOutsidePress,
+  toolbarCommandState,
+} from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
@@ -41,15 +45,10 @@ export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersPr
   useEffect(() => {
     if (!open) return undefined;
     menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')?.focus();
-    const onMouseDown = (event: MouseEvent): void => {
-      if (rootRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('mousedown', onMouseDown, true);
-    return () => {
-      doc.removeEventListener('mousedown', onMouseDown, true);
-    };
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
   // Escape through the shared rule: a host input keeps its own Escape.
   usePopupEscape(open, rootRef, (fromInside) => {

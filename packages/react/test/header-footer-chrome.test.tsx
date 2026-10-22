@@ -16,6 +16,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorHeaderFooterChrome } from '../src/editor/DocxEditorHeaderFooter.tsx';
 import { useHeaderFooterState } from '../src/editor/useHeaderFooterState.ts';
 import { useScopedChromeAnchor } from '../src/editor/useScopedChromeAnchor.ts';
+import { pressCancelledPages } from './cancelled-press.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -305,6 +306,26 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     });
     fireEvent.click(inherited.view.getByText('Options'));
     expect(inherited.view.getByText('Unlink from previous')).toBeTruthy();
+  });
+
+  test('a press on the pages closes the options menu, although the pages cancel it', async () => {
+    const { view, editor } = mountChrome(docxWithHeader());
+    await act(async () => {
+      editor().exec({ type: 'editHeaderFooter', position: 'header' });
+    });
+    fireEvent.click(view.getByText('Options'));
+    const menu = () => view.container.querySelector('.docx-hf-chrome__options-menu');
+    expect(menu()).not.toBeNull();
+    act(() => {
+      fireEvent.pointerDown(menu()!);
+    });
+    expect(menu()).not.toBeNull();
+    let event: PointerEvent | undefined;
+    act(() => {
+      event = pressCancelledPages(view.container);
+    });
+    expect(event?.defaultPrevented).toBe(true);
+    expect(menu()).toBeNull();
   });
 
   test('close dispatches exitHeaderFooter', async () => {

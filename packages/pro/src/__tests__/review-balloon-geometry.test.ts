@@ -16,6 +16,7 @@ import {
   anchorFromRevisionElement,
   balloonBox,
   remeasureBalloonAnchor,
+  revisionElementAtPress,
   type BalloonAnchor,
 } from '../react/review-balloon-anchor.ts';
 
@@ -125,5 +126,29 @@ describe('measuring the painted site', () => {
     // A site that is not painted keeps the last position rather than jumping.
     scroller.querySelector('[data-revision-id]')!.remove();
     expect(remeasureBalloonAnchor(moved, scroller, rail, null)).toBe(moved);
+  });
+});
+
+describe('which change a press in the page opens', () => {
+  const rect = (left: number, top: number, right: number, bottom: number) =>
+    ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
+  const press = (x: number, y: number) => new MouseEvent('pointerdown', { clientX: x, clientY: y });
+
+  test('a field result that ignores the pointer is found through its line', () => {
+    // A field result paints with pointer-events: none, so the press targets the line.
+    const line = document.createElement('div');
+    line.className = 'docx-line';
+    const words = document.createElement('span');
+    const field = document.createElement('span');
+    field.dataset.revisionId = '7';
+    field.style.pointerEvents = 'none';
+    line.append(words, field);
+    field.getBoundingClientRect = () => rect(50, 10, 62, 22);
+    expect(revisionElementAtPress(line, press(55, 15))).toBe(field);
+    expect(revisionElementAtPress(line, press(20, 15))).toBeNull();
+    // Inside a revision, the press target already names it.
+    expect(revisionElementAtPress(field, press(0, 0))).toBe(field);
+    // Outside a line, nothing is hit-tested.
+    expect(revisionElementAtPress(words, press(55, 15))).toBeNull();
   });
 });

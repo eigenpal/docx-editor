@@ -157,7 +157,7 @@ export function withTableContentBorders(
     }
   const include = (
     cell: SemanticTableCell,
-    side: keyof CellBorderBox,
+    side: 'top' | 'left' | 'bottom' | 'right',
     edge: ResolvedTableBorderEdge
   ) => {
     const head = headById.get(cell.id) ?? cell;

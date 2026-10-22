@@ -121,6 +121,11 @@ export interface ParagraphFlowOptions {
    * next region would block the line the same way.
    */
   readonly regionBottomY?: number;
+  /**
+   * Model offsets of the paragraph's own paragraph-framed top-and-bottom anchors whose bands
+   * apply from the first line, set on the second break of `top-and-bottom-earlier-lines.ts`.
+   */
+  readonly ownBandsFromFirstLine?: ReadonlySet<number>;
   /** Active exclusion zones on the current page while breaking. */
   readonly pageExclusionZones?: readonly ExclusionZone[];
   /** When breaking inside a table cell, the cell content box for anchored frame resolution. */

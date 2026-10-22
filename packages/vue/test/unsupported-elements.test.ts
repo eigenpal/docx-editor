@@ -85,26 +85,36 @@ test('custom components preserve context and clean up on repaint, null, and unmo
     },
   });
   app.mount(mount);
-  await tick();
-  expect(container.querySelector('button')!.textContent).toBe('from host');
-  expect(first.fallback.hidden).toBe(true);
-  container.querySelector('button')!.click();
-  expect(clicks).toBe(1);
-  first.element.remove();
-  const second = placeholder(container, 'second');
-  await tick();
-  expect(unmounts).toBe(1);
-  expect(second.fallback.hidden).toBe(true);
-  custom.value = false;
-  await nextTick();
-  expect(second.fallback.hidden).toBe(false);
-  expect(container.querySelector('button')).toBeNull();
-  custom.value = true;
-  await nextTick();
-  app.unmount();
-  expect(unmounts).toBe(3);
-  expect(second.fallback.hidden).toBe(false);
-  expect(container.querySelector('button')).toBeNull();
+  let mounted = true;
+  try {
+    await tick();
+    expect(container.querySelector('button')!.textContent).toBe('from host');
+    expect(first.fallback.hidden).toBe(true);
+    container.querySelector('button')!.click();
+    expect(clicks).toBe(1);
+    // The observer stays live while collection must not remove its mutation callback.
+    Bun.gc(true);
+    first.element.remove();
+    const second = placeholder(container, 'second');
+    await tick();
+    expect(unmounts).toBe(1);
+    expect(second.fallback.hidden).toBe(true);
+    custom.value = false;
+    await nextTick();
+    expect(second.fallback.hidden).toBe(false);
+    expect(container.querySelector('button')).toBeNull();
+    custom.value = true;
+    await nextTick();
+    app.unmount();
+    mounted = false;
+    expect(unmounts).toBe(3);
+    expect(second.fallback.hidden).toBe(false);
+    expect(container.querySelector('button')).toBeNull();
+  } finally {
+    if (mounted) app.unmount();
+    container.replaceChildren();
+    mount.remove();
+  }
 });
 
 test('the public Vue editor customizes the sample canvas', async () => {

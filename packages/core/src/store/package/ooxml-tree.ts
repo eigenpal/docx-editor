@@ -1813,8 +1813,17 @@ export function openElement(
 ): OpenedElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
-  const resolvedAttributes = resolveAttributes(element, declarations.bindings);
-  const attributes = metadata.shareAttributes(resolvedAttributes.attributes);
+  const { resolvedAttributes, attributes } = metadata.recordRead(
+    element.attributes,
+    declarations.bindings,
+    () => {
+      const resolved = resolveAttributes(element, declarations.bindings);
+      return {
+        resolvedAttributes: resolved,
+        attributes: metadata.shareAttributes(resolved.attributes),
+      };
+    }
+  );
   validateQNameAttributeValues(
     attributes,
     declarations.bindings,

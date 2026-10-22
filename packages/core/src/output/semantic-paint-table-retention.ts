@@ -119,6 +119,11 @@ function sameBorderPaint(
   painted: readonly HTMLElement[] | undefined
 ): boolean {
   if (before === after) return true;
+  if (
+    before?.diagonals !== after?.diagonals &&
+    ((before?.diagonals?.length ?? 0) > 0 || (after?.diagonals?.length ?? 0) > 0)
+  )
+    return false;
   if (!before || !after || !sameRecordExcept(before, after, BORDER_GEOMETRY)) return false;
   const a = before.strokes ?? NO_STROKES;
   const b = after.strokes ?? NO_STROKES;

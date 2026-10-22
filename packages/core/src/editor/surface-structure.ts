@@ -17,7 +17,9 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
+  type StyleCascadeTable,
 } from '@docx-editor.dev/core/layout';
+import { createListNumberingOps } from './list-numbering-ops.ts';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
@@ -104,6 +106,8 @@ export interface SurfaceStructureDeps {
   paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
   numberingLevelExists(numId: string, level: number): boolean;
+  /** For telling whether a paragraph's style numbers it, its own `w:numPr` aside. */
+  styleCascade(): StyleCascadeTable | undefined;
   /** Paragraph ids in reading order for the active scope. */
   paragraphOrder(): readonly string[];
   /**
@@ -279,6 +283,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   // Word's list gesture is two writes: the numbering, and the List Paragraph style that
   // carries `w:contextualSpacing`. The style half lives in its own lane.
   const listStyle = createListStyleWrites({ session, storyPart });
+  const listNumbering = createListNumberingOps({
+    storyPart,
+    styleCascade: deps.styleCascade,
+    layout: deps.layout,
+  });
   const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
     get value(): SemanticLayout {
@@ -454,11 +463,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         const next = level + step;
         if (next < 0 || next > MAX_LIST_LEVEL) continue;
         if (!ensureListLevel(marker, next)) continue;
-        ops.push({
-          op: 'setListLevel',
-          paragraphId,
-          level: next,
-        });
+        ops.push(listNumbering.levelOp(paragraphId, marker.numId, next));
         continue;
       }
       // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
@@ -601,11 +606,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // after the numbering op would put back what that op had just removed.
       const ops: TreeDocOp[] = [];
       if (outdented) {
-        ops.push({ op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 });
+        ops.push(listNumbering.levelOp(from.paragraphId, marker.numId, marker.level - 1));
       } else {
         const cleared = listStyle.clearOp(from.paragraphId);
         if (cleared) ops.push(cleared);
-        ops.push({ op: 'setListNumbering', paragraphId: from.paragraphId, numId: null });
+        ops.push(listNumbering.leaveOp(from.paragraphId));
       }
       let committed = false;
       commit(() => {
@@ -644,6 +649,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // in List Paragraph until the user picks another style.
       const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
       for (const paragraphId of touched) {
+        if (turningOff) {
+          ops.push(listNumbering.leaveOp(paragraphId));
+          continue;
+        }
         // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
         // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet
         // to a number IN PLACE: pressing Numbered on a level-2 item left it at level 2,

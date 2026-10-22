@@ -2,7 +2,11 @@ import { computed, defineComponent, nextTick, ref, watch, type PropType } from '
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { toolbarCommandState, hostDocumentOf } from '@docx-editor.dev/core/editor';
+import {
+  hostDocumentOf,
+  listenForOutsidePress,
+  toolbarCommandState,
+} from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -47,15 +51,14 @@ export const ToolbarReviewers = Object.assign(
         (isOpen, _, onCleanup) => {
           if (!isOpen) return;
           menuRef.value?.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')?.focus();
-          const onMouseDown = (event: MouseEvent) => {
-            if (rootRef.value?.contains(event.target as Node)) return;
-            open.value = false;
-          };
-          const doc = hostDocumentOf(rootRef.value);
-          doc.addEventListener('mousedown', onMouseDown, true);
-          onCleanup(() => {
-            doc.removeEventListener('mousedown', onMouseDown, true);
-          });
+          onCleanup(
+            listenForOutsidePress({
+              popup: rootRef.value,
+              close: () => {
+                open.value = false;
+              },
+            })
+          );
         },
         { flush: 'post' }
       );

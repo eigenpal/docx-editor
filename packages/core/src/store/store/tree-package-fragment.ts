@@ -22,6 +22,8 @@ import {
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
+import type { RevisionAttributionInput } from './tree-op-validate.ts';
+import { trackedFragment } from './clipboard-fragment-tracked.ts';
 
 /** Decoded fragment payloads above this cap are refused before any package work. */
 export const MAX_FRAGMENT_DECODED_BYTES = 16 * 1024 * 1024;
@@ -43,6 +45,11 @@ export interface FragmentPasteInput {
    * merged document shows it. Omitted (solo) keeps Word's dense sequences.
    */
   readonly actorId?: string;
+  /**
+   * Suggesting mode: the author and date the whole paste is proposed under, as one tracked
+   * insertion (`trackedFragment`). The caller tracks `priorOps` itself.
+   */
+  readonly revision?: RevisionAttributionInput;
 }
 
 export type FragmentPasteResult =
@@ -105,7 +112,9 @@ export function applyFragmentPaste(
   if (!read.ok) {
     return { ok: false, reason: 'invalidArgs', detail: `fragment-read:${read.reason}` };
   }
-  const fragment: OoxmlPackage = read.package;
+  const proposed = input.revision ? trackedFragment(read.package, input.revision) : read.package;
+  if (!proposed) return { ok: false, reason: 'invalidArgs', detail: 'fragment-untrackable' };
+  const fragment: OoxmlPackage = proposed;
 
   // The insert budgets, applied BEFORE the merge: `insertFragment` would refuse an
   // oversized fragment anyway, but only after the merge had already walked the whole
@@ -162,13 +171,28 @@ export function applyFragmentPaste(
           }
           if (!packageApplied) return;
           blockCount = landed.blocks.length;
-          ctx.apply({
-            op: 'insertFragment',
-            paragraphId: input.paragraphId,
-            offset: input.offset,
-            blocks: landed.blocks,
-            lastMarkCovered: input.lastMarkCovered,
-          });
+          if (
+            !ctx.apply({
+              op: 'insertFragment',
+              paragraphId: input.paragraphId,
+              offset: input.offset,
+              blocks: landed.blocks,
+              lastMarkCovered: input.lastMarkCovered,
+            })
+          ) {
+            return;
+          }
+          // A fragment that opens with a table (or another block) splits the host paragraph,
+          // and the head keeps a copy of the host mark: a NEW mark, which a suggested paste
+          // proposes like its own. Opening with a paragraph, the head takes that one's mark.
+          if (input.revision && landed.blocks[0]?.kind !== 'paragraph') {
+            ctx.apply({
+              op: 'setParagraphMarkRevision',
+              paragraphId: input.paragraphId,
+              kind: 'ins',
+              revision: input.revision,
+            });
+          }
         },
         {
           story,

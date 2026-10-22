@@ -9,6 +9,8 @@ import type {
   TableBorderStrokeRecord,
 } from '@docx-editor.dev/core/layout';
 
+import { paintCellDiagonals } from './table-cell-diagonal-paint.ts';
+
 const HEX = /^[0-9A-Fa-f]{6}$/;
 
 export type TableBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
@@ -172,6 +174,7 @@ export function applyCellBorders(
   borders: ResolvedCellBorders | undefined,
   scale: number
 ): HTMLElement[] | undefined {
+  paintCellDiagonals(document, element, borders, scale);
   const publishedSides = new Set((borders?.strokes ?? []).map((stroke) => stroke.side));
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
     const cssSide = `${side[0]!.toUpperCase()}${side.slice(1)}` as TableBorderSide;

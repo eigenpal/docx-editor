@@ -36,7 +36,10 @@ import {
   paragraphTextMarkingOptionalHyphens,
   withoutOptionalHyphens,
 } from '../layout/optional-hyphen-copy-text.ts';
-import { fieldResultSpeller } from '../layout/field-copy-text.ts';
+import { fieldResultSpeller, REMOVED_COPY_UNIT, copiedText } from '../layout/field-copy-text.ts';
+import { paragraphMarkDeleted } from '../layout/revision-visibility.ts';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
@@ -51,12 +54,16 @@ type HistoryMark = { paragraphId: string; start: number; end: number };
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 
-/**
- * The plain-text clipboard flavour: an optional hyphen element is a hint for line breaking,
- * not a character of the text, so plain text leaves it out. A literal U+00AD in run text is
- * text and stays. The HTML flavour keeps both.
- */
-const plainCopyText = withoutOptionalHyphens;
+/** Whether the paragraph's own mark is a pending deletion: plain text joins it to the next. */
+function markDeletedIn(part: OoxmlPart, paragraphId: string): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || !paragraphMarkDeleted(paragraph)) return false;
+  // Only a paragraph that follows in the same container takes the joined text. A deleted
+  // mark before a table or at the end of a cell joins nothing, so the break stays.
+  const siblings = parentNodeOf(part, paragraphId)?.children ?? [];
+  const next = siblings[siblings.findIndex((child) => child.id === paragraphId) + 1];
+  return next?.kind === 'paragraph';
+}
 
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
@@ -100,6 +107,17 @@ export interface SurfaceClipboardDeps {
     redoMark?: HistoryMark
   ): TreeApplyResult;
   caretMark(position: { paragraphId: string; offset: number }): HistoryMark;
+  /** The review display mode; the Original view copies the text before the changes. */
+  revisionDisplayMode?(): string;
+  /**
+   * Suggesting mode with an author: who and when a rich paste is proposed by. Undefined
+   * otherwise, which keeps the rich lane to edit mode.
+   */
+  suggestion?(): { readonly author: string; readonly date: string } | undefined;
+  /** The selection-clearing ops, attributed the way typing attributes them. */
+  trackedOps?(ops: readonly TreeDocOp[], date?: string): TreeDocOp[];
+  /** Tell the host a tracked change landed, as every other tracked lane does. */
+  trackedChangeLanded?(): void;
   commit(
     run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
@@ -261,8 +279,18 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       );
       return { text: '', html: null, reason: 'unsupported-content' };
     }
+    // Plain text is the proposed text: deleted words and deleted paragraph marks stay out, as
+    // the HTML flavour already leaves them out. The Original view shows the text before the
+    // changes, so it copies what it shows.
+    const proposed = deps.revisionDisplayMode?.() !== 'original';
+    const baseText = copiedText(paragraphTextMarkingOptionalHyphens, !proposed);
+    // An optional hyphen element is a hint for line breaking, not a character of the text, so
+    // plain text leaves it out. A literal U+00AD in run text is text and stays. The HTML
+    // flavour keeps both.
+    const plainCopyText = (text: string): string =>
+      withoutOptionalHyphens(text).replaceAll(REMOVED_COPY_UNIT, '');
     // Plain text spells each computed field with its painted result, not its one model unit.
-    const fields = fieldResultSpeller(deps.layout(), paragraphTextMarkingOptionalHyphens);
+    const fields = fieldResultSpeller(deps.layout(), baseText);
     if (rectangle) {
       return buildCopyFlavours({
         text: plainCopyText(cellSelectionText(deps.layout(), rectangle, fields.spelledText)),
@@ -283,7 +311,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         (id, offset) =>
           fields.resultAt(id, offset) ??
           (textPart ? equationPlainText(textPart, id, offset) : null),
-        fields.markedText
+        fields.markedText,
+        proposed && textPart ? (id) => markDeletedIn(textPart, id) : undefined
       )
     );
     const scope = deps.storyScope();
@@ -310,11 +339,16 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     bytes: Uint8Array,
     lastMarkCovered: boolean
   ): boolean | 'unsupported-content' {
-    if (deps.editingMode() !== 'edit') return false;
+    const suggestion = deps.editingMode() === 'suggest' ? deps.suggestion?.() : undefined;
+    if (deps.editingMode() !== 'edit' && suggestion === undefined) return false;
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
     deps.flushPendingInputAndLayout();
     const plan = deps.deleteSelectionPlan();
+    // Suggesting: the selection is struck, not removed, and the paste is one proposal.
+    const priorOps = suggestion
+      ? (deps.trackedOps?.(plan.ops, suggestion.date) ?? plan.ops)
+      : plan.ops;
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
     let unsupported = false;
@@ -324,7 +358,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         // through `applyFragmentPaste`, past `applyOps`, so without this a disconnected
         // replica landed a rich paste locally and never replicated it. The selection-
         // clearing plan is the op-shaped half of the write, so it is what the gate sees.
-        const collaborationRefusal = deps.collaborationGate(plan.ops, { kind: 'body' });
+        const collaborationRefusal = deps.collaborationGate(priorOps, { kind: 'body' });
         if (collaborationRefusal) {
           return {
             committed: false,
@@ -341,11 +375,13 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             offset: target.offset,
             fragmentBytes: bytes,
             lastMarkCovered,
-            priorOps: plan.ops as unknown as TreeDocOp[],
+            priorOps: priorOps as unknown as TreeDocOp[],
             ...(actorId !== undefined ? { actorId } : {}),
+            ...(suggestion ? { revision: suggestion } : {}),
           }
         );
         landed = result.ok;
+        if (landed && suggestion) deps.trackedChangeLanded?.();
         unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
           committed: result.ok,
@@ -369,7 +405,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       {
         richLaneOpen:
           (deps.richPasteAllowed?.() ?? true) &&
-          deps.editingMode() === 'edit' &&
+          (deps.editingMode() === 'edit' ||
+            (deps.editingMode() === 'suggest' && deps.suggestion?.() !== undefined)) &&
           deps.storyScope().kind === 'body' &&
           deps.cellSelection() === null,
         pasteFragment: (fragmentBytes, lastMarkCovered) =>

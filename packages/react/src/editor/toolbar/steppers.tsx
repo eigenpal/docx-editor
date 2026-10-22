@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -165,18 +165,16 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
     [editor]
   );
 
-  // Outside mousedown closes the list, the same pattern the zoom menu uses.
+  // Capture pointer presses before the surface cancels compatibility mouse events.
   useEffect(() => {
     if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-      setDraft(null);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('mousedown', onMouseDown);
-    return () => doc.removeEventListener('mousedown', onMouseDown);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => {
+        setOpen(false);
+        setDraft(null);
+      },
+    });
   }, [open]);
 
   if (hidden) return null;
@@ -320,17 +318,13 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const rootRef = useRef<HTMLSpanElement | null>(null);
   usePickerKeyboard(rootRef, open, () => setOpen(false));
 
-  // Outside mousedown closes the level menu (same pattern as FontFamily.Content).
+  // Outside pointer presses close the level menu, as in FontFamily.Content.
   useEffect(() => {
     if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(rootRef.current);
-    doc.addEventListener('mousedown', onMouseDown);
-    return () => doc.removeEventListener('mousedown', onMouseDown);
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
 
   const apply = useCallback(

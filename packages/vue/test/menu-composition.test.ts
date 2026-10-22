@@ -9,6 +9,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorMenu } from '../src/editor/menu';
+import { pressCancelledPages } from './helpers/cancelled-press';
 import { mountEditorTree } from './helpers/mount';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -71,6 +72,38 @@ describe('DocxEditorMenu composition', () => {
       for (const id of menuIds) {
         expect(bar!.querySelector(`[data-menu="${id}"]`)).not.toBeNull();
       }
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
+
+  test('a press on the pages closes the open menu, although the pages cancel it', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () => [
+              h(DocxEditorMenu),
+              h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+            ],
+          }
+        ),
+    });
+    try {
+      app.mount(container);
+      await flush();
+      container.querySelector<HTMLButtonElement>('.docx-menubar__trigger')!.click();
+      await flush();
+      expect(container.querySelectorAll('[role="menu"]').length).toBe(1);
+      const event = pressCancelledPages(container);
+      await flush();
+      expect(event.defaultPrevented).toBe(true);
+      expect(container.querySelectorAll('[role="menu"]').length).toBe(0);
     } finally {
       app.unmount();
       container.remove();

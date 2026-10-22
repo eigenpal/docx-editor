@@ -1,0 +1,19 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A VML text box on an oval, a preset template, a turned shape, a vertical story, or a shape with unknown path flags has no projection, and supported boxes paint as plain rectangles.",
+  "after": "These text boxes project their story with the shape's text area, outline geometry, turn, text flow, dash pattern, shadow, and fitted size. Turned and vertical stories refuse editing; source XML is unchanged.",
+  "reason": "Only drawing projection, layout, and paint change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-textbox-frames.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-formulas.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-textbox-frame-layout.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-textbox-layout.test.ts",
+    "packages/core/src/output/__tests__/legacy-textbox-shape-paint.test.ts",
+    "packages/core/src/editor/__tests__/textbox-presence-turned.test.ts",
+    "packages/core/src/export/__tests__/export-document-resources.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vml-textboxes.test.ts"
+  ],
+  "changeset": "vml-textbox-shapes",
+  "migration": null
+}

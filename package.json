@@ -232,8 +232,8 @@
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
-    "@happy-dom/global-registrator": "20.9.0",
-    "happy-dom": "20.9.0",
+    "@happy-dom/global-registrator": "20.11.2",
+    "happy-dom": "20.11.2",
     "vue": "3.5.33"
   },
   "resolutions": {
@@ -241,8 +241,8 @@
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
-    "@happy-dom/global-registrator": "20.9.0",
-    "happy-dom": "20.9.0",
+    "@happy-dom/global-registrator": "20.11.2",
+    "happy-dom": "20.11.2",
     "vue": "3.5.33"
   },
   "dependencies": {

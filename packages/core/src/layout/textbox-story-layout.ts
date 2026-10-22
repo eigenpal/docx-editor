@@ -36,6 +36,11 @@ import { flowBlocksInBox, type HostedStoryFlowDeps } from './semantic-table-layo
 import type { BlockFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { textboxStoryBlocks } from './story-roots.ts';
+import { fitTextboxFrame, textboxContentFrame } from './textbox-frame-layout.ts';
+import type { TextboxOutlineProjection } from '../store/package/legacy-vml-textbox-geometry.ts';
+
+/** Layout passes a box that fits its text takes for its line width to settle. */
+const MAX_FIT_PASSES = 4;
 
 /** Hard ceiling on textbox-in-textbox story descent (mirrors `MAX_TABLE_NESTING`'s role). */
 export const MAX_TEXTBOX_STORY_NESTING = 4;
@@ -82,6 +87,8 @@ export interface TextboxStoryLayout {
    * insets. Placement resolves the shape at this width. Absent when the extent width holds.
    */
   readonly extentWidth?: number;
+  /** Box height a story that fits its shape sizes it to; absent when the extent height holds. */
+  readonly extentHeight?: number;
   /** Content box height (extent minus vertical insets). */
   readonly contentHeight: number;
   /** Solid fill of the hosting shape, painted behind the story; null for no fill. */
@@ -90,6 +97,33 @@ export interface TextboxStoryLayout {
   readonly strokeHex: string | null;
   /** Outline width in points; 0 when absent. */
   readonly strokeWidthPt: number;
+  /**
+   * Clockwise turn of the content box about `pivot`, in drawing-extent points. Absent when
+   * the story is upright: vertical text and text that turns with its shape set it.
+   */
+  readonly contentRotation?: Readonly<{
+    degrees: number;
+    pivot: Readonly<{ x: number; y: number }>;
+  }>;
+  /** Shape outline painted instead of a rectangle; absent for a rectangle. */
+  readonly outline?: TextboxOutlineProjection;
+  /** Clockwise turn of the fill and outline about the extent centre; absent when upright. */
+  readonly chromeRotationDegrees?: number;
+  /** The outline is centred on the extent edge rather than inside it. */
+  readonly strokeCentered?: true;
+  /** Outline dash pattern in points; absent for solid. */
+  readonly strokeDashPt?: readonly number[];
+  /** How outline dashes end; absent for flat ends. */
+  readonly strokeCap?: 'round' | 'square';
+  /** Shadow colour, opacity and page offset in points. */
+  readonly shadow?: Readonly<{
+    hex: string;
+    alpha: number;
+    dx: number;
+    dy: number;
+    /** The solid silhouette, seen only outside the shape; no text shadow. */
+    obscured: boolean;
+  }>;
   /** True when layout hit a named bound and returned a truncated / empty story. */
   readonly fallbackReason?: TextboxStoryFallbackReason;
   /**
@@ -485,6 +519,24 @@ export function hostedStoryFlowDeps(
 }
 
 /**
+ * Dash and gap lengths in points for a pattern in outline widths. A round or square cap adds
+ * half a width at each dash end, so each dash keeps its length with the caps included: its core
+ * shortens by one width and the gap after it grows by one.
+ */
+function dashLengths(
+  pattern: readonly number[],
+  strokeWidthPt: number,
+  cap: 'round' | 'square' | undefined
+): readonly number[] {
+  const width = Math.max(0.5, strokeWidthPt);
+  return pattern.map((length, index) => {
+    const points = length * width;
+    if (!cap) return points;
+    return index % 2 === 0 ? Math.max(0, points - width) : points + width;
+  });
+}
+
+/**
  * Lay a drawing's textbox story out inside its extent.
  *
  * Returns null when the projection carries no textbox story. Never throws: bound hits
@@ -500,14 +552,25 @@ export function layoutTextboxStory(
   const extentWidth = emuToPoints(projection.extentEmu.cx);
   const extentHeight = emuToPoints(projection.extentEmu.cy);
   const strokeWidthPt = emuToPoints(story.strokeWidthEmu);
-  // The outline is centered on the shape edge, so its inner half also insets the text.
-  const outlineInset = story.strokeHex !== null ? strokeWidthPt / 2 : 0;
-  const insetLeft = emuToPoints(story.insetsEmu.left) + outlineInset;
-  const insetRight = emuToPoints(story.insetsEmu.right) + outlineInset;
-  const insetTop = emuToPoints(story.insetsEmu.top) + outlineInset;
-  const insetBottom = emuToPoints(story.insetsEmu.bottom) + outlineInset;
-  const extentContentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
-  const contentHeight = Math.max(0, extentHeight - insetTop - insetBottom);
+  // The outline is centered on the shape edge, so its inner half also insets the text; an
+  // inset pen lies wholly inside and insets it by its full width.
+  const outlineInset =
+    story.strokeHex !== null ? (story.strokeInset ? strokeWidthPt : strokeWidthPt / 2) : 0;
+  // A legacy shape's text area sits inside its outline: an oval, a round rectangle, a preset.
+  const legacy = story.legacyFrame;
+  const area = legacy?.textAreaEmu;
+  const insetLeft = emuToPoints(story.insetsEmu.left + (area?.left ?? 0)) + outlineInset;
+  const insetRight = emuToPoints(story.insetsEmu.right + (area?.right ?? 0)) + outlineInset;
+  const insetTop = emuToPoints(story.insetsEmu.top + (area?.top ?? 0)) + outlineInset;
+  const insetBottom = emuToPoints(story.insetsEmu.bottom + (area?.bottom ?? 0)) + outlineInset;
+  const frame = textboxContentFrame(
+    extentWidth,
+    extentHeight,
+    { top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft },
+    legacy
+  );
+  const extentContentWidth = frame.width;
+  const contentHeight = frame.height;
 
   const chrome = {
     fillHex: story.fillHex,
@@ -515,7 +578,32 @@ export function layoutTextboxStory(
     strokeWidthPt,
     contentWidth: extentContentWidth,
     contentHeight,
+    ...(frame.rotationDegrees
+      ? { contentRotation: { degrees: frame.rotationDegrees, pivot: frame.pivot } }
+      : {}),
+    ...(legacy?.outline ? { outline: legacy.outline } : {}),
+    ...(legacy?.rotationDegrees ? { chromeRotationDegrees: legacy.rotationDegrees } : {}),
+    ...(story.strokeCentered ? { strokeCentered: true as const } : {}),
+    ...(story.strokeCap && story.strokeHex !== null ? { strokeCap: story.strokeCap } : {}),
+    ...(story.strokeDash && story.strokeHex !== null
+      ? { strokeDashPt: dashLengths(story.strokeDash, strokeWidthPt, story.strokeCap) }
+      : {}),
+    ...(story.shadow
+      ? {
+          shadow: {
+            hex: story.shadow.hex,
+            alpha: story.shadow.alpha,
+            dx: emuToPoints(story.shadow.offsetXEmu),
+            dy: emuToPoints(story.shadow.offsetYEmu),
+            obscured: story.shadow.obscured,
+          },
+        }
+      : {}),
   };
+
+  // A shape whose text area hides its text paints the shape alone.
+  if (legacy?.textHidden)
+    return { fragments: [], flowHeight: 0, contentOffset: { x: frame.x, y: frame.y }, ...chrome };
 
   const depth = options.depth ?? 0;
   if (depth >= MAX_TEXTBOX_STORY_NESTING) {
@@ -525,7 +613,7 @@ export function layoutTextboxStory(
     return {
       fragments: [],
       flowHeight: 0,
-      contentOffset: { x: insetLeft, y: insetTop },
+      contentOffset: { x: frame.x, y: frame.y },
       ...chrome,
       fallbackReason: 'textbox-nesting-limit',
     };
@@ -588,7 +676,12 @@ export function layoutTextboxStory(
   // at that width, so paragraph alignment places each line inside the widest line's column.
   // An inline box keeps its extent: the host line already reserved that advance, so a box
   // that grew here would paint and hit-test outside the space its line gave it.
-  const noWrap = story.noWrap === true && projection.wrap !== 'inline';
+  // A turned frame keeps its extent: its line width comes from the box's other side.
+  const noWrap =
+    story.noWrap === true &&
+    projection.wrap !== 'inline' &&
+    !frame.rotationDegrees &&
+    !(legacy && legacy.rotationDegrees !== 0);
   let contentWidth = extentContentWidth;
   let flow = flowAt(noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
   const unwrappedWidth = noWrap ? widestLineWidth(flow.blocks) : 0;
@@ -599,6 +692,40 @@ export function layoutTextboxStory(
     flow = flowAt(contentWidth);
   }
 
+  // A box that fits its text takes the text's height, or its width when the text runs
+  // vertically; it never clips or anchors. A turned shape keeps its box.
+  const fits =
+    story.fitHeightToText === true && projection.wrap !== 'inline' && !legacy?.rotationDegrees;
+  const fitFor = (height: number) =>
+    fitTextboxFrame(
+      height,
+      extentWidth,
+      extentHeight,
+      { top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft },
+      {
+        top: emuToPoints(area?.top ?? 0),
+        right: emuToPoints(area?.right ?? 0),
+        bottom: emuToPoints(area?.bottom ?? 0),
+        left: emuToPoints(area?.left ?? 0),
+      },
+      legacy
+    );
+  let fit = fits ? fitFor(flow.bottom) : undefined;
+  // A text area that follows the fitted size can change the line width: the story lays out
+  // again at the new width and the box fits that layout, until the width holds. The passes are
+  // bounded; the last one's width and frame stay together.
+  for (
+    let pass = 0;
+    fit &&
+    unwrappedWidth === 0 &&
+    pass < MAX_FIT_PASSES &&
+    Math.abs(fit.frame.width - contentWidth) > 0.01;
+    pass++
+  ) {
+    contentWidth = fit.frame.width;
+    flow = flowAt(contentWidth);
+    fit = fitFor(flow.bottom);
+  }
   let fragments = flow.blocks;
   let flowHeight = flow.bottom;
   let fallbackReason: TextboxStoryFallbackReason | undefined;
@@ -617,7 +744,7 @@ export function layoutTextboxStory(
 
   // Word clips overflow at the box. Keep fragments that START inside the content height so a
   // partially visible line still paints (the container clips precisely); drop fully-below ones.
-  if (flowHeight > contentHeight + 0.001) {
+  if (fit === undefined && flowHeight > contentHeight + 0.001) {
     const kept = fragments.filter((fragment) => fragment.box.y < contentHeight - 0.001);
     if (kept.length < fragments.length) {
       collectDrawingResourceTokens(
@@ -631,17 +758,31 @@ export function layoutTextboxStory(
 
   // Vertical anchoring positions the flowed content inside the box; overflow pins to the top
   // (offsets never go negative, matching Word's clip-from-top behaviour).
-  const slack = Math.max(0, contentHeight - flowHeight);
+  const slack = fit === undefined ? Math.max(0, contentHeight - flowHeight) : 0;
   const anchorOffset =
     story.verticalAnchor === 'center' ? slack / 2 : story.verticalAnchor === 'bottom' ? slack : 0;
 
   return {
     fragments,
     flowHeight,
-    contentOffset: { x: insetLeft, y: insetTop + anchorOffset },
+    contentOffset: fit
+      ? { x: fit.frame.x, y: fit.frame.y }
+      : { x: frame.x, y: frame.y + anchorOffset },
     ...chrome,
     contentWidth,
     ...(unwrappedWidth > 0 ? { extentWidth: unwrappedWidth + insetLeft + insetRight } : {}),
+    ...(fit
+      ? {
+          contentHeight: fit.frame.height,
+          ...(fit.frame.rotationDegrees
+            ? {
+                contentRotation: { degrees: fit.frame.rotationDegrees, pivot: fit.frame.pivot },
+              }
+            : {}),
+          ...(fit.extentWidth !== undefined ? { extentWidth: fit.extentWidth } : {}),
+          ...(fit.extentHeight !== undefined ? { extentHeight: fit.extentHeight } : {}),
+        }
+      : {}),
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
       ? // Length-framed — resource keys embed file-derived ids, so any separator boundary

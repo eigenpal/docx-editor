@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
-import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, hostWindowOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 
 export interface MenuItem {
   icon?: string;
@@ -136,18 +136,6 @@ export function MenuDropdown({ label, items, disabled, showChevron = false }: Me
   useEffect(() => {
     if (!isOpen) return;
 
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        triggerRef.current &&
-        !triggerRef.current.contains(target) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(target)
-      ) {
-        closeMenu();
-      }
-    }
-
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') closeMenu();
     }
@@ -159,11 +147,21 @@ export function MenuDropdown({ label, items, disabled, showChevron = false }: Me
 
     const doc = hostDocumentOf(triggerRef.current);
     const win = hostWindowOf(triggerRef.current);
-    doc.addEventListener('mousedown', handleClickOutside);
+    // A press inside the trigger or the menu keeps it open. Without both elements the
+    // menu has nothing to stay open for, so the press closes it.
+    const stopPress = listenForOutsidePress({
+      popup: triggerRef.current,
+      contains: (node) =>
+        !triggerRef.current ||
+        !dropdownRef.current ||
+        triggerRef.current.contains(node) ||
+        dropdownRef.current.contains(node),
+      close: closeMenu,
+    });
     doc.addEventListener('keydown', handleEscape);
     win.addEventListener('scroll', handleScroll, true);
     return () => {
-      doc.removeEventListener('mousedown', handleClickOutside);
+      stopPress();
       doc.removeEventListener('keydown', handleEscape);
       win.removeEventListener('scroll', handleScroll, true);
     };

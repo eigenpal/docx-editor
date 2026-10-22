@@ -21,23 +21,47 @@ afterEach(() => {
 
 const V = 'urn:schemas-microsoft-com:vml';
 
-/** A legacy VML text box with no modern alternative: floating, or on the line. */
-function vmlBoxRun(text: string, inline: boolean): string {
-  const style = inline
-    ? 'width:144pt;height:36pt;mso-position-horizontal-relative:char;mso-position-vertical-relative:line'
-    : 'position:absolute;margin-left:200pt;margin-top:0;width:144pt;height:48pt;z-index:1';
+type BoxKind = 'floating' | 'inline' | 'pathFlags' | 'oval' | 'turned' | 'vertical';
+
+/**
+ * A legacy VML text box with no modern alternative: floating, on the line, a page-anchored
+ * text box shape whose path flags only switch the outline off, an oval, a quarter-turned box
+ * whose text stays upright, or a box whose text runs vertically.
+ */
+function vmlBoxRun(text: string, kind: BoxKind): string {
+  const textboxStyle = kind === 'vertical' ? ' style="layout-flow:vertical"' : '';
+  const story = `<v:textbox${textboxStyle}><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent></v:textbox>`;
+  const floating =
+    'position:absolute;margin-left:200pt;margin-top:0;width:144pt;height:48pt;z-index:1';
+  if (kind === 'oval')
+    return `<w:r><w:pict xmlns:v="${V}"><v:oval style="${floating}" filled="f">${story}</v:oval></w:pict></w:r>`;
+  if (kind === 'turned' || kind === 'vertical')
+    return (
+      `<w:r><w:pict xmlns:v="${V}"><v:rect style="${floating}${kind === 'turned' ? ';rotation:90' : ''}" ` +
+      `fillcolor="#ccecff">${story}</v:rect></w:pict></w:r>`
+    );
+  if (kind === 'pathFlags')
+    return (
+      `<w:r><w:pict xmlns:v="${V}"><v:shape type="#_x0000_t202" style="width:144pt;height:48pt;` +
+      'margin-top:60pt;margin-left:36pt;mso-position-horizontal-relative:page;' +
+      'mso-position-vertical-relative:page;position:absolute;z-index:1" filled="f" stroked="f">' +
+      `<v:path strokeok="f" textboxrect="0,0,21600,21600"/>${story}</v:shape></w:pict></w:r>`
+    );
+  const style =
+    kind === 'inline'
+      ? 'width:144pt;height:36pt;mso-position-horizontal-relative:char;mso-position-vertical-relative:line'
+      : 'position:absolute;margin-left:200pt;margin-top:0;width:144pt;height:48pt;z-index:1';
   return (
     `<w:r><w:pict xmlns:v="${V}"><v:rect style="${style}" fillcolor="#ccecff">` +
-    `<v:textbox><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent>` +
-    '</v:textbox></v:rect></w:pict></w:r>'
+    `${story}</v:rect></w:pict></w:r>`
   );
 }
 
-async function pair(inline: boolean) {
+async function pair(kind: BoxKind) {
   const peers = await harness.pair(
     zipDocument(
       '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
-        `<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>${vmlBoxRun('Shared', inline)}` +
+        `<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>${vmlBoxRun('Shared', kind)}` +
         '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>' +
         '<w:p><w:r><w:t>Tail</w:t></w:r></w:p><w:sectPr/>'
     )
@@ -78,10 +102,19 @@ function enterBox(editor: Editor, text: string): void {
   editor.surface!.setSelection({ anchor: end, head: end });
 }
 
-for (const inline of [false, true]) {
-  describe(inline ? 'inline VML text box' : 'floating VML text box', () => {
+const KIND_NAMES: Record<BoxKind, string> = {
+  floating: 'floating VML text box',
+  inline: 'inline VML text box',
+  pathFlags: 'VML text box with inert path flags',
+  oval: 'VML oval text box',
+  turned: 'quarter-turned VML text box with upright text',
+  vertical: 'VML text box with vertical text',
+};
+
+for (const kind of ['floating', 'inline', 'pathFlags', 'oval', 'turned'] as const) {
+  describe(KIND_NAMES[kind], () => {
     test('typing replicates, converges, and survives save and reopen', async () => {
-      const { alice, bob, converged } = await pair(inline);
+      const { alice, bob, converged } = await pair(kind);
       enterBox(alice, 'Shared');
       expect(alice.exec({ type: 'insertText', text: ' story' }).ok).toBe(true);
       converged();
@@ -97,7 +130,7 @@ for (const inline of [false, true]) {
     });
 
     test('concurrent typing in one box keeps both edits', async () => {
-      const { alice, bob, sync, converged, pause, resume } = await pair(inline);
+      const { alice, bob, sync, converged, pause, resume } = await pair(kind);
       enterBox(alice, 'Shared');
       enterBox(bob, 'Shared');
       pause();
@@ -113,7 +146,7 @@ for (const inline of [false, true]) {
     });
 
     test('undo and redo of box typing replicate', async () => {
-      const { alice, bob, converged } = await pair(inline);
+      const { alice, bob, converged } = await pair(kind);
       enterBox(alice, 'Shared');
       expect(alice.exec({ type: 'insertText', text: ' undone' }).ok).toBe(true);
       converged();
@@ -126,7 +159,7 @@ for (const inline of [false, true]) {
     });
 
     test('deleting the host paragraph while a peer types in the box converges', async () => {
-      const { alice, bob, sync, converged, pause, resume } = await pair(inline);
+      const { alice, bob, sync, converged, pause, resume } = await pair(kind);
       enterBox(bob, 'Shared');
       const host = alice.findMatches('before')[0]!.blockId;
       const tail = alice.findMatches('Tail')[0]!.blockId;
@@ -153,3 +186,36 @@ for (const inline of [false, true]) {
     });
   });
 }
+
+describe(KIND_NAMES.vertical, () => {
+  test('the turned story refuses editing while edits around it converge and save', async () => {
+    const { alice, bob, sync, converged, pause, resume } = await pair('vertical');
+    const match = alice.findMatches('Shared')[0]!;
+    expect(match.scope?.kind).toBe('frame');
+    // Turned text has no upright caret, so the box cannot be entered.
+    expect(alice.surface!.setActiveScope(match.scope!)).toBe(false);
+    const tail = bob.findMatches('Tail')[0]!;
+    pause();
+    const end = { paragraphId: tail.blockId, offset: tail.start + tail.length };
+    bob.surface!.setSelection({ anchor: end, head: end });
+    expect(bob.exec({ type: 'insertText', text: ' Bob' }).ok).toBe(true);
+    const body = alice.findMatches('Body')[0]!;
+    const start = { paragraphId: body.blockId, offset: 0 };
+    alice.surface!.setSelection({ anchor: start, head: start });
+    expect(alice.exec({ type: 'insertText', text: 'Alice ' }).ok).toBe(true);
+    sync();
+    resume();
+    converged();
+    for (const editor of [alice, bob]) {
+      expect(editor.findMatches('Alice Body')).toHaveLength(1);
+      expect(editor.findMatches('Tail Bob')).toHaveLength(1);
+      expect(editor.findMatches('Shared')[0]?.scope?.kind).toBe('frame');
+    }
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: new Uint8Array(await bob.save()),
+    });
+    editors.push(reopened);
+    expect(reopened.findMatches('Shared')[0]?.scope?.kind).toBe('frame');
+  });
+});

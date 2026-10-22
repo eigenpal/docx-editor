@@ -6,7 +6,12 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { FocusEvent as ReactFocusEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { isDomNode, toolbarPopupLeft, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  isDomNode,
+  listenForOutsidePress,
+  toolbarPopupLeft,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -34,15 +39,11 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
   // default on its own pointer handling. The editor's own document, which is not the global
   // one when the editor renders into an iframe or a popup window.
   useEffect(() => {
-    const doc = rootRef.current?.ownerDocument;
-    if (!open || !doc) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && isDomNode(event.target) && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    doc.addEventListener('mousedown', onMouseDown, true);
-    return () => doc.removeEventListener('mousedown', onMouseDown, true);
+    if (!open || !rootRef.current) return undefined;
+    return listenForOutsidePress({
+      popup: rootRef.current,
+      close: () => setOpen(false),
+    });
   }, [open]);
 
   // Every open, by pointer or key, moves focus into the grid's tab stop, so the grid's own

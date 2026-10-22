@@ -21,7 +21,7 @@ import type { CSSProperties } from 'react';
 import { useTranslation } from '../i18n';
 import { useContentControl, type ContentControlInspectorState } from './useContentControl';
 import { Slot } from './toolbar/Slot';
-import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -192,17 +192,17 @@ function ContentControlRoot({
       event.preventDefault();
       closeInspector();
     };
-    const onMouseDown = (event: MouseEvent): void => {
-      const panel = panelRef.current;
-      if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
-      closeInspector();
-    };
     const doc = hostDocumentOf(panelRef.current);
     doc.addEventListener('keydown', onKeyDown);
-    doc.addEventListener('mousedown', onMouseDown, true);
+    // Membership reads the ref at press time, like the panel's other handlers.
+    const stopPress = listenForOutsidePress({
+      popup: doc,
+      contains: (node) => panelRef.current?.contains(node) === true,
+      close: closeInspector,
+    });
     return () => {
       doc.removeEventListener('keydown', onKeyDown);
-      doc.removeEventListener('mousedown', onMouseDown, true);
+      stopPress();
     };
   }, [inspectorOpen, closeInspector]);
 

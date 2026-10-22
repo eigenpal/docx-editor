@@ -37,6 +37,7 @@ import {
 import type { LayoutBox } from './semantic-records.ts';
 import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
+import { turnedWrapBox } from './textbox-wrap-box.ts';
 
 /** Paint layer relative to body text — not the OOXML wrap element. */
 export type DrawingPaintLayer = 'behind' | 'inFront';
@@ -205,12 +206,15 @@ export function wrapExclusionInputForProjection(options: {
   const mode = exclusionModeFromWrap(options.projection.wrap);
   if (!mode || !options.projection.wrapGeometry) return null;
   const wrap = options.projection.wrapGeometry;
-  const contentBounds = Object.freeze({
+  const box = {
     x: options.anchorX,
     y: options.anchorY,
     width: options.geometry.contentBounds.width,
     height: options.geometry.contentBounds.height,
-  });
+  };
+  // A turned legacy text box keeps text off both its box and the box turned about its centre.
+  const turn = options.projection.textboxStory?.legacyFrame?.rotationDegrees ?? 0;
+  const contentBounds = Object.freeze(turn ? turnedWrapBox(box, turn, wrap.distancesEmu) : box);
   return wrapExclusionFromProjection({
     mode,
     contentBounds,
@@ -484,7 +488,9 @@ function placedTextboxProjection(
   projection: DrawingProjection,
   layoutTextboxStory: TextboxStoryLayouter | undefined
 ): DrawingProjection {
-  if (!projection.textboxStory?.noWrap || !layoutTextboxStory) return projection;
+  // A story that sizes its box, unwrapped or fitted to its text, sizes the exclusion too.
+  const story = projection.textboxStory;
+  if (!(story?.noWrap || story?.fitHeightToText) || !layoutTextboxStory) return projection;
   let placed = placedByLayouter.get(layoutTextboxStory);
   if (!placed) {
     placed = new WeakMap();
@@ -636,7 +642,8 @@ export function synthesizeParagraphTopAndBottomZones(options: {
       pageFramed ??
       topAndBottomBandAnchorY(
         options.paragraphStartY + lineTop,
-        atom.projection.position?.vertical ?? null
+        atom.projection.position?.vertical ?? null,
+        options.paragraphStartY
       );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({

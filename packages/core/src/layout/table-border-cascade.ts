@@ -54,10 +54,21 @@ export function mergeTableBorders(base: TableBorderBox, over: TableBorderBox): T
 /** The same layering for a cell box, which has no interior sides. */
 export function mergeCellBorders(base: CellBorderBox, over: CellBorderBox): CellBorderBox {
   const side = later;
+  const diagonal = (name: 'tl2br' | 'tr2bl'): TableBorderSide | undefined =>
+    over[name]?.state === 'omitted' ? base[name] : (over[name] ?? base[name]);
+  const tl2br = diagonal('tl2br');
+  const tr2bl = diagonal('tr2bl');
   return {
     top: side(base.top, over.top),
     left: side(base.left, over.left),
     bottom: side(base.bottom, over.bottom),
     right: side(base.right, over.right),
+    ...(tl2br ? { tl2br } : {}),
+    ...(tr2bl ? { tr2bl } : {}),
   };
+}
+
+/** Inherit only cell-owned diagonals without applying the layer's physical sides. */
+export function mergeCellDiagonalBorders(base: CellBorderBox, over: CellBorderBox): CellBorderBox {
+  return mergeCellBorders(base, { ...base, tl2br: over.tl2br, tr2bl: over.tr2bl });
 }

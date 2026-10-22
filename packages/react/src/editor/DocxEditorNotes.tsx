@@ -25,7 +25,7 @@ import { useDocxEditor } from './context';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
 import { useNotePropertiesState, useNoteScopeState } from './useNoteScopeState';
 import { useScopedChromeAnchor } from './useScopedChromeAnchor';
-import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
+import { hostWindowOf, listenForOutsidePress } from '@docx-editor.dev/core/editor';
 
 const NOTE_SCOPE_RE = /^(footnote|endnote):(-?\d{1,10})$/;
 
@@ -76,13 +76,7 @@ function NoteStoryOptions(props: {
 
   useEffect(() => {
     if (!open) return undefined;
-    const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-    const doc = hostDocumentOf(menuRef.current);
-    doc.addEventListener('mousedown', onDocumentMouseDown);
-    return () => doc.removeEventListener('mousedown', onDocumentMouseDown);
+    return listenForOutsidePress({ popup: menuRef.current, close: () => setOpen(false) });
   }, [open]);
 
   return (

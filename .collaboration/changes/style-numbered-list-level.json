@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Indent, outdent, Tab and Enter on an empty nested item refuse a list item numbered through its paragraph style, and turning such an item's list off, or Enter on it when empty at level 0, leaves it numbered.",
+  "after": "A level move writes the item's own w:numPr naming its style's list, and leaving the list writes a w:numPr with w:numId 0. Items with their own numbering, and paragraphs drawn under another paragraph's marker, keep the previous writes.",
+  "reason": "Both writes are existing setListNumbering operations that released participants already apply, journal and serialize; only which operation the editor chooses changes. Shared nodes, text offsets, identities and the collaboration format are unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-style-numbered-list-level.test.ts",
+    "packages/core/src/editor/__tests__/word-keymap-indent.test.ts"
+  ],
+  "changeset": "style-numbered-list-level",
+  "migration": null
+}

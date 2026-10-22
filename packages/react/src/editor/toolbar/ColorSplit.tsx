@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 // the registry's swatch — the red "A"); the narrow CHEVRON half opens Word's picker:
 // Automatic (or No Color), the document's theme-colour matrix (ten columns, base plus
 // five tint/shade rows), the standard-colour row, and a custom hex field. The popup
-// follows the FontFamily pattern: outside mousedown closes it, a pick applies and
+// follows the FontFamily pattern: outside pointer presses close it, a pick applies and
 // closes, and every control keeps the caret (mousedown prevented, except the hex
 // input, which needs focus).
 //
@@ -21,8 +21,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   commandForSlotValue,
-  hostDocumentOf,
-  isDomNode,
+  listenForOutsidePress,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -423,18 +422,13 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
         ? themeEntries.map((entry) => entry.hex)
         : DEFAULT_THEME_HEXES;
 
-    // Outside mousedown closes the popup — mousedown, not click, so the popup is gone
-    // before any click lands (same reasoning as FontFamily.Content).
+    // Capture before the surface cancels compatibility mouse events or stops propagation.
     useEffect(() => {
       if (!open) return undefined;
-      const onMouseDown = (event: globalThis.MouseEvent) => {
-        const root = rootRef.current;
-        if (root && isDomNode(event.target) && root.contains(event.target)) return;
-        setOpen(false);
-      };
-      const doc = hostDocumentOf(rootRef.current);
-      doc.addEventListener('mousedown', onMouseDown);
-      return () => doc.removeEventListener('mousedown', onMouseDown);
+      return listenForOutsidePress({
+        popup: rootRef.current,
+        close: () => setOpen(false),
+      });
     }, [open]);
 
     const apply = useCallback(

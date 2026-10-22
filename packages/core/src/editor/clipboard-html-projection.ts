@@ -5,6 +5,7 @@ import type {
 } from './clipboard-html-numbering.ts';
 import type { HtmlFragmentRel as RelEntry } from './clipboard-html-package.ts';
 import type { ClipboardNoteKind } from './clipboard-html-notes.ts';
+import type { HtmlRevision, HtmlRevisionAttribution } from './clipboard-html-revisions.ts';
 import type { HtmlParagraphAlign, HtmlParaProps, HtmlRunProps } from './clipboard-html-styles.ts';
 
 type RunProps = HtmlRunProps;
@@ -21,6 +22,12 @@ export interface FlowContext {
   /** Set while projecting a note definition body: the note the blocks belong to. */
   readonly noteBody?: { readonly kind: ClipboardNoteKind; readonly id: number };
   readonly rels?: RelEntry[];
+  /** The `<ins>` / `<del>` revisions open around this content, outermost first. */
+  readonly revisions?: readonly HtmlRevision[];
+  /** The formatting revision open around this content (`mso-prop-change`). */
+  readonly runChange?: HtmlRevisionAttribution;
+  /** Previous run property values (`!msorm` declarations) open around this content. */
+  readonly originalRunStyle?: ReadonlyMap<string, string>;
 }
 
 export interface Projection {
@@ -31,6 +38,13 @@ export interface Projection {
   readonly maxImageBytes: number;
   readonly wordHtml: boolean;
   lastMarkCovered: boolean;
+  /** Mark revisions an `<o:p>` recorded for the paragraph being walked. */
+  markRevision: string | null;
+  /**
+   * Whether the paragraph just emitted took a mark revision. Its mark is then content the
+   * paste must land, like a styled mark (`lastMarkCovered`).
+   */
+  markRevisionTaken: boolean;
   readonly rels: RelEntry[];
   readonly media: Map<string, Uint8Array>;
   readonly mediaExtensions: Map<string, string>;

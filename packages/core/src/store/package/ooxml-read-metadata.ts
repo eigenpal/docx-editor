@@ -26,6 +26,25 @@ function attributesKey(attributes: readonly OoxmlAttribute[]): string {
 export class OoxmlReadMetadata {
   private readonly attributes = new Map<string, readonly OoxmlAttribute[]>();
   private keyBytes = 0;
+  /** Reads of a shared, frozen authored record, with the namespace scope they were read in. */
+  private readonly recordReads = new WeakMap<
+    object,
+    { readonly bindings: ReadonlyMap<string, string>; readonly read: unknown }
+  >();
+
+  /**
+   * The read of the authored attribute `record` in scope `bindings`, remembered. Only a frozen
+   * record is remembered: the XML reader freezes the records it shares between elements with
+   * equal attribute text, and the read depends on the record and the scope alone.
+   */
+  recordRead<T>(record: object, bindings: ReadonlyMap<string, string>, read: () => T): T {
+    if (!Object.isFrozen(record)) return read();
+    const known = this.recordReads.get(record);
+    if (known !== undefined && known.bindings === bindings) return known.read as T;
+    const value = read();
+    this.recordReads.set(record, { bindings, read: value });
+    return value;
+  }
 
   shareAttributes(attributes: readonly OoxmlAttribute[]): readonly OoxmlAttribute[] {
     if (attributes.length === 0) return EMPTY_ATTRIBUTES;
