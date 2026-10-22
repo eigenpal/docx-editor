@@ -1,8 +1,5 @@
 import type { SurfaceCaretInput } from './surface-caret.ts';
-import { parentNodeOf } from '../store/package/ooxml-edit.ts';
-import { findDirectChild } from '../store/package/drawing-shape-projection.ts';
-import { schemaAttributeValue, WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
-import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import { authoredRunPropertiesAt } from './surface-formatting.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
@@ -16,6 +13,7 @@ import {
   type TextboxDrawingRecord,
 } from '../layout/textbox-drawing-records.ts';
 import { furnitureTextboxDrawingsOnPage } from '../layout/furniture-textbox-records.ts';
+import { textboxTakesCaret } from './textbox-caret-rules.ts';
 
 type FrameScope = Extract<ViewScope, { kind: 'frame' }>;
 type FurnitureOwner = { readonly kind: 'headerFooter'; readonly rId: string };
@@ -220,30 +218,6 @@ export function createTextboxEditing(deps: {
           candidate.drawingNodeId === scope.drawingNodeId &&
           candidate.hostParagraphId === scope.hostParagraphId
       );
-    // Shape transforms are separate from the picture transform on the layout record.
-    const textbox = part && story && parentNodeOf(part, story.root.id);
-    const shape = textbox && parentNodeOf(part, textbox.id);
-    const shapeProperties =
-      shape &&
-      findDirectChild(shape.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'spPr' });
-    const transform =
-      shapeProperties &&
-      findDirectChild(shapeProperties.children, {
-        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-        localName: 'xfrm',
-      });
-    const bodyProperties =
-      shape &&
-      findDirectChild(shape.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'bodyPr' });
-    const rotation = transform && schemaAttributeValue(transform.attributes, 'rot');
-    const textRotation = bodyProperties && schemaAttributeValue(bodyProperties.attributes, 'rot');
-    const vertical = bodyProperties && schemaAttributeValue(bodyProperties.attributes, 'vert');
-    if (
-      (rotation && Number(rotation) !== 0) ||
-      (textRotation && Number(textRotation) !== 0) ||
-      (vertical && vertical !== 'horz')
-    )
-      return false;
     const open = deps.headerFooter.active();
     const owner = scope.owner as FurnitureOwner | undefined;
     // A box in the open story edits on its page; otherwise on the page in view, so an entry
@@ -257,15 +231,7 @@ export function createTextboxEditing(deps: {
         : undefined);
     const placed = placementOf(deps.layout(), scope, preferred);
     const drawing = placed?.drawing;
-    if (
-      !story ||
-      !placed ||
-      !drawing ||
-      drawing.transform.rotationDegrees !== 0 ||
-      // Turned text has no upright caret geometry; upright text in a turned box keeps it.
-      drawing.textboxStory.contentRotation !== undefined ||
-      drawing.textboxStory.fragments.some((fragment) => fragment.kind !== 'paragraph')
-    )
+    if (!part || !story || !placed || !drawing || !textboxTakesCaret(part, story.root.id, drawing))
       return false;
     const first = drawing.textboxStory.fragments[0];
     if (!first || first.kind !== 'paragraph') return false;

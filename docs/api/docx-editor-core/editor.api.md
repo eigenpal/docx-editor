@@ -3968,6 +3968,14 @@ export const TEXT_FORM_FORMATS: {
 };
 
 // @public
+export function textboxFrameReason(target: {
+    readonly canMove: boolean;
+    readonly canResize: boolean;
+    readonly textEditable?: boolean;
+    readonly textbox?: boolean;
+}, editingMode: string): 'imageOverlay.textLocked' | 'imageOverlay.locked' | null;
+
+// @public
 export interface TextFormFieldChromeHandlers {
     // (undocumented)
     readonly onRequest?: (session: TextFormFieldDialogSession) => void;

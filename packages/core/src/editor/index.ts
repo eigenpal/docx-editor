@@ -55,6 +55,7 @@ export {
   type OpenEditorWindowOptions,
 } from './editor-window.ts';
 export { storyLabelTop } from './story-label-placement.ts';
+export { textboxFrameReason } from './textbox-overlay-frame.ts';
 export {
   editorHostDocument,
   editorHostElement,

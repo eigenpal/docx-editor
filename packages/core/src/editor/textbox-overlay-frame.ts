@@ -12,6 +12,9 @@ import {
 } from '../layout/semantic-hit-test.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { textboxTakesCaret } from './textbox-caret-rules.ts';
 
 /** The overlay frame of the text box `scope` edits, with the caret on page `caretPage`. */
 export function editedTextboxOverlayFrame(
@@ -43,18 +46,47 @@ export function editedTextboxOverlayFrame(
 }
 
 /**
- * `{ textEditable }` for a text box drawing: false when its text takes no caret (rotated or
- * vertical text, or a story holding a table). Nothing for any other drawing.
+ * `{ textEditable }` for a text box drawing in `part`: whether its story takes a caret, by the
+ * same rule entering the box applies. Nothing for any other drawing.
  */
-export function textboxTextEditable(record: InlineDrawingRecord | AnchoredDrawingRecord): {
-  readonly textEditable?: boolean;
-} {
-  const story = record.textboxStory;
-  if (!story) return {};
-  return {
-    textEditable:
-      record.transform.rotationDegrees === 0 &&
-      story.contentRotation === undefined &&
-      story.fragments.every((fragment) => fragment.kind === 'paragraph'),
-  };
+export function textboxTextEditable(
+  record: InlineDrawingRecord | AnchoredDrawingRecord,
+  part: OoxmlPart
+): { readonly textEditable?: boolean } {
+  if (!record.textboxStory) return {};
+  const story = textboxStoriesInPart(part).find(
+    (candidate) => candidate.drawingNodeId === record.drawingNodeId
+  );
+  return { textEditable: !!story && textboxTakesCaret(part, story.root.id, record) };
+}
+
+/**
+ * The message key saying why a selected text box frame takes no caret or offers no handles, or
+ * null when it does both. Only in editing mode: viewing and suggesting refuse the edit
+ * themselves, so the box is not what stops it.
+ *
+ * @param target - The overlay target of the selected drawing.
+ * @param editingMode - The surface's editing mode.
+ * @returns `imageOverlay.textLocked`, `imageOverlay.locked`, or null.
+ *
+ * @example
+ * ```ts
+ * const key = textboxFrameReason(target, editor.surface!.editingMode());
+ * const title = key ? t(key) : undefined;
+ * ```
+ *
+ * @public
+ */
+export function textboxFrameReason(
+  target: {
+    readonly textbox?: boolean;
+    readonly textEditable?: boolean;
+    readonly canMove: boolean;
+    readonly canResize: boolean;
+  },
+  editingMode: string
+): 'imageOverlay.textLocked' | 'imageOverlay.locked' | null {
+  if (!target.textbox || editingMode !== 'edit') return null;
+  if (target.textEditable === false) return 'imageOverlay.textLocked';
+  return !target.canMove && !target.canResize ? 'imageOverlay.locked' : null;
 }

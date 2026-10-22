@@ -1262,7 +1262,10 @@ export function selectedDrawingOverlayTargetOf(
   return Object.freeze({
     id: record.drawingNodeId,
     textbox: 'textboxStory' in record && !!record.textboxStory,
-    ...textboxTextEditable(record),
+    ...textboxTextEditable(
+      record,
+      surface.session.partFor(surface.storyScope()) ?? surface.session.part()
+    ),
     pageIndex: frame.pageIndex,
     x: frame.x,
     y: frame.y,

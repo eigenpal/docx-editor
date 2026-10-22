@@ -720,3 +720,23 @@ test('an entry from code opens a shared header box on the page in view', () => {
     destroy();
   }
 });
+
+for (const [name, change] of [
+  ['vertical', (xml: string) => xml.replace('<wps:bodyPr/>', '<wps:bodyPr vert="vert"/>')],
+  ['rotated', (xml: string) => xml.replace('<wps:bodyPr/>', '<wps:bodyPr rot="5400000"/>')],
+] as const) {
+  test(`a header box with ${name} text refuses a caret, and its frame says so`, () => {
+    const { editor, destroy } = open(docx({ header: change(drawingBox('turned box', 7, 457200)) }));
+    try {
+      const surface = editor.surface!;
+      expect(surface.setActiveScope(frameMatch(editor, 'turned box').scope!)).toBe(false);
+      expect(surface.setActiveScope({ kind: 'headerFooter', rId: 'rHeader' })).toBe(true);
+      const box = surface.layout().pages[0]!.header!;
+      const drawing = box.anchoredDrawings![0]!;
+      expect(surface.selectDrawing(drawing.drawingNodeId, drawing.paragraphId)).toBe(true);
+      expect(selectedDrawingOverlayTargetOf(surface)?.textEditable).toBe(false);
+    } finally {
+      destroy();
+    }
+  });
+}

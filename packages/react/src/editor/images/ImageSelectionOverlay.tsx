@@ -20,6 +20,7 @@ import {
   isElementNode,
   isStaleImageInteractionCommit,
   selectedDrawingOverlayTargetOf,
+  textboxFrameReason,
   type ImageInteractionSession,
   type ImageOverlayScrollPort,
   type ImageResizeHandle,
@@ -564,6 +565,9 @@ export function ImageSelectionOverlay({
     };
     const showHandles = active.canResize;
     const showMove = active.kind === 'anchored' && active.canMove;
+    // A text box frame says why it takes no caret or offers no handles.
+    const frameReason = textboxFrameReason(active, editor.surface.editingMode());
+    const frameLabel = frameReason ? t(frameReason) : undefined;
     return (
       <div
         ref={overlayRef}
@@ -577,16 +581,9 @@ export function ImageSelectionOverlay({
             showMove ? ' docx-editor-one-surface__overlay-control' : ''
           }`}
           data-textbox={active.textbox ? 'true' : undefined}
-          // A text box frame says why it takes no caret or offers no handles, to pointer and
-          // screen reader users alike.
-          title={
-            textboxFrameReason(active, editor.surface.editingMode() === 'edit') &&
-            t(textboxFrameReason(active, editor.surface.editingMode() === 'edit')!)
-          }
-          aria-description={
-            textboxFrameReason(active, editor.surface.editingMode() === 'edit') &&
-            t(textboxFrameReason(active, editor.surface.editingMode() === 'edit')!)
-          }
+          // To pointer and screen reader users alike.
+          title={frameLabel}
+          aria-description={frameLabel}
           role="group"
           aria-label={t('imageOverlay.selection')}
           style={{
@@ -653,20 +650,4 @@ export function ImageSelectionOverlay({
 
   if (!rendered || !portalRef.current) return null;
   return createPortal(rendered, portalRef.current);
-}
-
-/** The message saying why a text box frame takes no caret or offers no handles, if any. */
-function textboxFrameReason(
-  target: {
-    readonly textbox?: boolean;
-    readonly textEditable?: boolean;
-    readonly canMove: boolean;
-    readonly canResize: boolean;
-  },
-  editing: boolean
-): 'imageOverlay.textLocked' | 'imageOverlay.locked' | undefined {
-  // Viewing and suggesting refuse the edit themselves; the box is not what stops it.
-  if (!target.textbox || !editing) return undefined;
-  if (target.textEditable === false) return 'imageOverlay.textLocked';
-  return !target.canMove && !target.canResize ? 'imageOverlay.locked' : undefined;
 }

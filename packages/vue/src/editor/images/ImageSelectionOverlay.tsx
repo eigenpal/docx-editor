@@ -18,6 +18,7 @@ import {
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
   isStaleImageInteractionCommit,
   selectedDrawingOverlayTargetOf,
+  textboxFrameReason,
   type ImageInteractionSession,
   type ImageOverlayScrollPort,
   type ImageResizeHandle,
@@ -590,6 +591,12 @@ export const ImageSelectionOverlay = defineComponent({
       };
       const showHandles = current.canResize;
       const showMove = current.kind === 'anchored' && current.canMove;
+      // A text box frame says why it takes no caret or offers no handles.
+      const frameReason = textboxFrameReason(
+        current,
+        editorRef.value?.surface?.editingMode() ?? 'view'
+      );
+      const frameLabel = frameReason ? t(frameReason) : undefined;
       return (
         <Teleport to={portal}>
           <div
@@ -607,16 +614,9 @@ export const ImageSelectionOverlay = defineComponent({
                 showMove ? ' docx-editor-one-surface__overlay-control' : ''
               }`}
               data-textbox={current.textbox ? 'true' : undefined}
-              // A text box frame says why it takes no caret or offers no handles, to pointer and
-              // screen reader users alike.
-              title={
-                textboxFrameReason(current, editorRef.value?.surface?.editingMode() === 'edit') &&
-                t(textboxFrameReason(current, editorRef.value?.surface?.editingMode() === 'edit')!)
-              }
-              aria-description={
-                textboxFrameReason(current, editorRef.value?.surface?.editingMode() === 'edit') &&
-                t(textboxFrameReason(current, editorRef.value?.surface?.editingMode() === 'edit')!)
-              }
+              // To pointer and screen reader users alike.
+              title={frameLabel}
+              aria-description={frameLabel}
               role="group"
               aria-label={t('imageOverlay.selection')}
               style={{
@@ -683,19 +683,3 @@ export const ImageSelectionOverlay = defineComponent({
     };
   },
 });
-
-/** The message saying why a text box frame takes no caret or offers no handles, if any. */
-function textboxFrameReason(
-  target: {
-    readonly textbox?: boolean;
-    readonly textEditable?: boolean;
-    readonly canMove: boolean;
-    readonly canResize: boolean;
-  },
-  editing: boolean
-): 'imageOverlay.textLocked' | 'imageOverlay.locked' | undefined {
-  // Viewing and suggesting refuse the edit themselves; the box is not what stops it.
-  if (!target.textbox || !editing) return undefined;
-  if (target.textEditable === false) return 'imageOverlay.textLocked';
-  return !target.canMove && !target.canResize ? 'imageOverlay.locked' : undefined;
-}
