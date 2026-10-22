@@ -32,6 +32,8 @@ import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
 import { paintTextArt } from './semantic-paint-text-art.ts';
+import { paintTextboxStory } from './semantic-paint-textbox.ts';
+import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   revisionPresentationOf,
@@ -312,39 +314,6 @@ function refusalLabel(
   }
 }
 
-function applyAccessibility(
-  element: HTMLElement,
-  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  interactive: boolean
-): void {
-  const { accessibility } = drawing;
-  if (accessibility.hidden) return;
-  element.setAttribute('role', interactive ? 'link' : 'img');
-  if (accessibility.label) {
-    element.setAttribute('aria-label', accessibility.label);
-  } else if (!interactive) {
-    element.setAttribute('aria-hidden', 'true');
-  }
-}
-
-function positionedBox(
-  element: HTMLElement,
-  box: LayoutBox,
-  scale: number,
-  origin?: LayoutBox
-): void {
-  const ox = origin?.x ?? 0;
-  const oy = origin?.y ?? 0;
-  element.style.position = 'absolute';
-  element.style.left = `${(box.x - ox) * scale}px`;
-  element.style.top = `${(box.y - oy) * scale}px`;
-  element.style.width = `${box.width * scale}px`;
-  element.style.height = `${box.height * scale}px`;
-  element.style.boxSizing = 'border-box';
-  element.style.overflow = 'hidden';
-  element.style.pointerEvents = 'auto';
-}
-
 /** The box the image fills: a group picture's member frame, else the drawing's content box. */
 function imageFrameBounds(drawing: InlineDrawingRecord | AnchoredDrawingRecord): LayoutBox {
   const corners = drawing.groupPicture ? drawing.geometry.imageTransformCorners : undefined;
@@ -599,68 +568,6 @@ function paintVectorShape(
   } else {
     applyAccessibility(outer, drawing, false);
   }
-  return outer;
-}
-
-/**
- * Paint a textbox drawing's laid-out story: optional fill/outline box, then the story
- * fragments inside a clipped content container at the resolved anchor position. The
- * container is page furniture — non-editable, with no selection bindings inside.
- */
-function paintTextboxStory(
-  document: Document,
-  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  story: NonNullable<InlineDrawingRecord['textboxStory']>,
-  ctx: DrawingPaintContext,
-  origin?: LayoutBox
-): HTMLElement {
-  const scale = ctx.scale;
-  const outer = document.createElement('div');
-  outer.className = 'docx-drawing docx-drawing-textbox';
-  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
-  outer.setAttribute('contenteditable', 'false');
-  positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
-  outer.style.overflow = 'hidden';
-
-  // Extent box in paint-bounds-relative coordinates (paintBounds may be a clipped subregion).
-  const extentLeft = (drawing.x - drawing.paintBounds.x) * scale;
-  const extentTop = (drawing.y - drawing.paintBounds.y) * scale;
-
-  if (story.fillHex !== null || story.strokeHex !== null) {
-    const box = document.createElement('div');
-    box.className = 'docx-drawing-textbox-box';
-    box.style.position = 'absolute';
-    box.style.left = `${extentLeft}px`;
-    box.style.top = `${extentTop}px`;
-    box.style.width = `${drawing.width * scale}px`;
-    box.style.height = `${drawing.height * scale}px`;
-    box.style.boxSizing = 'border-box';
-    // SAFE: hex colors are validated 6-digit sRGB at the projection trust boundary.
-    if (story.fillHex !== null) box.style.backgroundColor = `#${story.fillHex}`;
-    if (story.strokeHex !== null) {
-      box.style.border = `${Math.max(story.strokeWidthPt * scale, 0.5)}px solid #${story.strokeHex}`;
-    }
-    outer.append(box);
-  }
-
-  const content = document.createElement('div');
-  content.className = 'docx-drawing-textbox-content';
-  content.style.position = 'absolute';
-  content.style.left = `${extentLeft + story.contentOffset.x * scale}px`;
-  content.style.top = `${extentTop + story.contentOffset.y * scale}px`;
-  content.style.width = `${story.contentWidth * scale}px`;
-  content.style.height = `${Math.max(0, story.contentHeight) * scale}px`;
-  content.style.overflow = 'hidden';
-  for (const fragment of story.fragments) {
-    content.append(ctx.paintStoryFragment!(document, fragment));
-  }
-  // Keep story bindings inert until the surface enters this textbox for editing.
-  for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {
-    bound.dataset.textboxParagraphId = bound.dataset.paragraphId;
-    delete bound.dataset.paragraphId;
-  }
-  outer.append(content);
-  applyAccessibility(outer, drawing, false);
   return outer;
 }
 

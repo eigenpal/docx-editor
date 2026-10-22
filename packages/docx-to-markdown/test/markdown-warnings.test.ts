@@ -14,10 +14,11 @@ test('plain text with bundled fonts has no warnings', async () => {
 });
 
 test('reports legacy text boxes even when layout omits their records', async () => {
-  // Vertical text flow is outside the laid-out subset, so these boxes produce no records.
+  // A picture fill is outside the laid-out subset, so these boxes produce no records.
   const textbox =
     '<w:p><w:r><w:pict><v:shape id="box" type="#_x0000_t202" xmlns:v="urn:schemas-microsoft-com:vml" ' +
-    'style="position:absolute;width:200pt;height:100pt"><v:textbox style="layout-flow:vertical"><w:txbxContent>' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+    'style="position:absolute;width:200pt;height:100pt"><v:imagedata r:id="rFill"/><v:textbox><w:txbxContent>' +
     '<w:p><w:r><w:t>Text box content</w:t></w:r></w:p>' +
     '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>';
   const result = await exportMarkdown(

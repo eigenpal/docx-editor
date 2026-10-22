@@ -27,5 +27,13 @@ export function textboxLayoutToken(story: NonNullable<DrawingProjection['textbox
     String(story.strokeWidthEmu),
     // Appended only when set, so wrapped boxes keep their existing tokens.
     ...(story.noWrap ? ['nowrap'] : []),
+    // The frame is file-derived numbers and fixed names, so its JSON is a stable key.
+    ...(story.legacyFrame ? ['frame', JSON.stringify(story.legacyFrame)] : []),
+    ...(story.strokeCentered ? ['centered'] : []),
+    ...(story.strokeInset ? ['inset'] : []),
+    ...(story.fitHeightToText ? ['fit'] : []),
+    ...(story.strokeDash ? ['dash', story.strokeDash.join(' ')] : []),
+    ...(story.strokeCap ? ['cap', story.strokeCap] : []),
+    ...(story.shadow ? ['shadow', JSON.stringify(story.shadow)] : []),
   ]);
 }

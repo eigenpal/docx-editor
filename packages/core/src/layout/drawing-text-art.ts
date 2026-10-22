@@ -159,6 +159,49 @@ function fitTextArt(
   });
 }
 
+/**
+ * Paint bounds that hold a text box shape: grown by the outer half of a centred outline, then
+ * turned about the box centre.
+ */
+export function turnedTextboxBounds(
+  bounds: LayoutBox,
+  story:
+    | {
+        readonly chromeRotationDegrees?: number;
+        readonly strokeCentered?: true;
+        readonly strokeHex: string | null;
+        readonly strokeWidthPt: number;
+        readonly shadow?: Readonly<{ dx: number; dy: number }>;
+      }
+    | null
+    | undefined
+): LayoutBox {
+  if (!story) return bounds;
+  const reach =
+    story.strokeCentered && story.strokeHex !== null ? Math.max(0, story.strokeWidthPt) / 2 : 0;
+  const grown = reach
+    ? Object.freeze({
+        x: bounds.x - reach,
+        y: bounds.y - reach,
+        width: bounds.width + 2 * reach,
+        height: bounds.height + 2 * reach,
+      })
+    : bounds;
+  const degrees = story.chromeRotationDegrees;
+  const turned = degrees ? rotatedBounds(grown, degrees) : grown;
+  // A shadow repeats the shape at a page offset; the painted area holds both.
+  const shadow = story.shadow;
+  if (!shadow || (shadow.dx === 0 && shadow.dy === 0)) return turned;
+  const x = Math.min(turned.x, turned.x + shadow.dx),
+    y = Math.min(turned.y, turned.y + shadow.dy);
+  return Object.freeze({
+    x,
+    y,
+    width: turned.width + Math.abs(shadow.dx),
+    height: turned.height + Math.abs(shadow.dy),
+  });
+}
+
 /** The box turned about its centre, as the axis-aligned box that holds it. */
 export function rotatedBounds(box: LayoutBox, degrees: number): LayoutBox {
   if (degrees % 360 === 0) return box;

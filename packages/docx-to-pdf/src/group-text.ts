@@ -9,7 +9,8 @@ import {
   type ParagraphFragmentRecord,
   type SemanticDrawingVisit,
 } from '@docx-editor.dev/core/layout';
-import { number as n, rect } from './context.ts';
+import { rect } from './context.ts';
+import { turnAbout } from './textbox-shape.ts';
 
 type GroupOwner = SemanticDrawingVisit['drawing'];
 type MemberStory = GroupTextboxStoryRecord['story'];
@@ -54,17 +55,8 @@ export function openMemberClip(
 ): string[] {
   const out = ['q'];
   const turn = member.rotationDegrees;
-  if (turn !== 0 && Number.isFinite(turn)) {
-    // Clockwise on the page is a negative angle in PDF space, whose y axis points up.
-    const radians = (turn * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    const cx = x + member.box.width / 2;
-    const cy = pageHeight - (y + member.box.height / 2);
-    const e = cx - (cos * cx + sin * cy);
-    const f = cy - (-sin * cx + cos * cy);
-    out.push(`${n(cos)} ${n(-sin)} ${n(sin)} ${n(cos)} ${n(e)} ${n(f)} cm`);
-  }
+  if (turn !== 0 && Number.isFinite(turn))
+    out.push(turnAbout(x + member.box.width / 2, y + member.box.height / 2, turn, pageHeight));
   const story = member.story;
   const content = {
     x: x + story.contentOffset.x,

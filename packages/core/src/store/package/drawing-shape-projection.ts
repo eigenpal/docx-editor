@@ -23,6 +23,11 @@ import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import { transformComponent } from './drawing-group-transform.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
+import type {
+  TextboxOutlineProjection,
+  TextboxTextAreaRule,
+} from './legacy-vml-textbox-geometry.ts';
+import type { LegacyTextboxShadow } from './legacy-vml-textbox-stroke.ts';
 
 const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
@@ -119,6 +124,41 @@ export interface TextboxStoryProjection {
   readonly strokeHex: string | null;
   /** Outline width in EMU; 0 when absent. */
   readonly strokeWidthEmu: number;
+  /** The shape around a legacy VML story; absent for an upright rectangle. */
+  readonly legacyFrame?: TextboxLegacyFrame;
+  /** The outline is centred on the shape edge, half outside the extent, as VML strokes it. */
+  readonly strokeCentered?: true;
+  /** VML `insetpen`: the outline lies inside the box and insets the text by its full width. */
+  readonly strokeInset?: true;
+  /** VML `mso-fit-shape-to-text`: the box height follows its text when laid out. */
+  readonly fitHeightToText?: true;
+  /** Outline dash pattern in multiples of the outline width; absent for solid. */
+  readonly strokeDash?: readonly number[];
+  /** How outline dashes end; absent for flat ends. */
+  readonly strokeCap?: 'round' | 'square';
+  /** The shape painted again under itself in one colour, offset on the page. */
+  readonly shadow?: LegacyTextboxShadow;
+}
+
+/** Shape geometry, turn and text flow of a legacy VML text box. */
+export interface TextboxLegacyFrame {
+  /** Space between the shape box and its text area, in EMU, before the story insets. */
+  readonly textAreaEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
+  /** Outline geometry; null for a rectangle. */
+  readonly outline: TextboxOutlineProjection | null;
+  /** Clockwise shape turn in degrees, in [0, 360). */
+  readonly rotationDegrees: number;
+  /** The text turns with the shape; otherwise it stays upright in the turned box. */
+  readonly textTurnsWithShape: boolean;
+  /**
+   * `vertical` runs lines top to bottom, stacked right to left; `verticalBottomToTop` runs
+   * them bottom to top, stacked left to right.
+   */
+  readonly flow: 'horizontal' | 'vertical' | 'verticalBottomToTop';
+  /** The shape paints and its text does not, as a text area some shapes write hides it. */
+  readonly textHidden?: true;
+  /** How the text area follows the box size, for a box that fits its text. */
+  readonly textAreaRule?: TextboxTextAreaRule;
 }
 
 interface ShapeColor {

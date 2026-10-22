@@ -243,9 +243,10 @@ describe('drawings inside a VML text box story', () => {
 describe('VML text box refusals', () => {
   const refused = (content: string) => expect(projectDrawingsInPart(parse(content))).toEqual([]);
 
-  test('vertical text, unknown children, and malformed insets refuse the shape', () => {
-    refused(floatingBox({ textbox: ' style="layout-flow:vertical"' }));
+  test('unknown children, an extrusion, and malformed insets refuse the shape', () => {
     refused(floatingBox({ children: '<o:extrusion v:ext="view" on="t"/>' }));
+    refused(floatingBox({ children: '<v:imagedata r:id="rPhoto"/>' }));
+    refused(floatingBox({ textbox: ' style="layout-flow:vertical-ideographic-alt"' }));
     refused(floatingBox({ textbox: ' inset="1e9pt,0,0,0"' }));
     refused(floatingBox({ textbox: ' inset="0,0,0,0,0"' }));
     refused(
@@ -259,22 +260,18 @@ describe('VML text box refusals', () => {
     );
   });
 
-  test('a text box on an ellipse or custom path is outside the subset', () => {
-    refused(
-      `<w:pict><v:oval style="position:absolute;width:72pt;height:72pt"><v:textbox>${story('X')}</v:textbox></v:oval></w:pict>`
-    );
+  test('a text box on an open custom path is outside the subset', () => {
     refused(
       `<w:pict><v:shape style="position:absolute;width:72pt;height:72pt" path="m,l21600,21600e"><v:textbox>${story('X')}</v:textbox></v:shape></w:pict>`
     );
   });
 
-  test('percentage positions and rotation stay refused', () => {
+  test('percentage positions stay refused', () => {
     refused(
       floatingBox({
         style: 'position:absolute;width:72pt;height:36pt;mso-left-percent:500',
       })
     );
-    refused(floatingBox({ style: 'position:absolute;width:72pt;height:36pt;rotation:45' }));
   });
 
   test('a DrawingML choice wins over its VML fallback and paints once', () => {

@@ -18,6 +18,16 @@ export const escapeXml = (value: string) =>
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!
   );
+/**
+ * A VML fraction: `19661f` is 19661/65536, a plain number is the value itself. Undefined when
+ * absent, NaN when malformed.
+ */
+export function vmlFraction(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!/^-?(?:\d{1,7}(?:\.\d{1,6})?|\.\d{1,6})f?$/.test(trimmed)) return NaN;
+  return trimmed.endsWith('f') ? numeric(trimmed.slice(0, -1)) / 65536 : numeric(trimmed);
+}
 export function numeric(value: string | undefined): number {
   if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value ?? '')) return NaN;
   const n = Number(value);

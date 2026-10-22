@@ -226,6 +226,53 @@ describe('inline VML text box', () => {
   });
 });
 
+describe('VML text box path flags', () => {
+  const pathBox = (path: string, shapeAttrs = 'filled="f" stroked="f"') =>
+    '<w:r><w:pict><v:shape type="#_x0000_t202" style="width:154pt;height:330pt;' +
+    'margin-top:200pt;margin-left:36pt;mso-position-horizontal-relative:page;' +
+    `mso-position-vertical-relative:page;position:absolute;z-index:251662336" ${shapeAttrs}>` +
+    `${path}<v:textbox inset="0,0,0,0"><w:txbxContent>${paragraph('Side note')}` +
+    `${paragraph('Second note')}</w:txbxContent></v:textbox></v:shape></w:pict></w:r>`;
+  const anchored = (path: string, shapeAttrs?: string) =>
+    layoutBody(documentPart(`<w:p>${pathBox(path, shapeAttrs)}</w:p>` + paragraph('Body')))
+      .pages[0]!.anchoredDrawings ?? [];
+
+  test('an unstroked path with a whole-shape text rectangle lays out the story', () => {
+    const drawings = anchored('<v:path strokeok="f" textboxrect="0,0,21600,21600"/>');
+    expect(drawings).toHaveLength(1);
+    expect(drawings[0]!.width).toBe(154);
+    expect(drawings[0]!.height).toBe(330);
+    expect(storyTexts(drawings[0]!)).toEqual(['Side note', 'Second note']);
+    expect(drawings[0]!.textboxStory!.contentOffset).toEqual({ x: 0, y: 0 });
+    expect(drawings[0]!.textboxStory!.fillHex).toBeNull();
+    expect(drawings[0]!.textboxStory!.strokeHex).toBeNull();
+  });
+
+  test('strokeok off removes the outline of a stroked shape', () => {
+    const stroked = anchored('<v:path gradientshapeok="t"/>', 'filled="f"')[0]!;
+    expect(stroked.textboxStory!.strokeHex).toBe('000000');
+    const unstroked = anchored('<v:path strokeok="f"/>', 'filled="f"')[0]!;
+    expect(unstroked.textboxStory!.strokeHex).toBeNull();
+    expect(storyTexts(unstroked)).toEqual(['Side note', 'Second note']);
+  });
+
+  test('the text rectangle is read in the shape coordinate space', () => {
+    const drawings = anchored(
+      '<v:path textboxrect="0,0,1000,1000"/>',
+      'coordsize="1000,1000" filled="f" stroked="f"'
+    );
+    expect(storyTexts(drawings[0]!)).toEqual(['Side note', 'Second note']);
+  });
+
+  test('a text box shape ignores a text rectangle of its own', () => {
+    for (const rect of ['1000,0,21600,21600', '0,0,10800,21600', '0,0,1000,1000', '0,0;0,0']) {
+      const drawings = anchored(`<v:path textboxrect="${rect}"/>`);
+      expect(storyTexts(drawings[0]!)).toEqual(['Side note', 'Second note']);
+      expect(drawings[0]!.textboxStory!.contentOffset).toEqual({ x: 0, y: 0 });
+    }
+  });
+});
+
 describe('VML text box in a header', () => {
   test('the header story lays out the box story', () => {
     const bytes = zipSync({
