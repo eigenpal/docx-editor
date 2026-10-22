@@ -55,6 +55,18 @@ import {
   prepareWordEquations,
 } from './clipboard-html-equations.ts';
 import type { FlowContext, ListState, Projection } from './clipboard-html-projection.ts';
+import {
+  htmlRevisionOf,
+  paragraphMarkRevisionXml,
+  wrapInRevisions,
+  wrapRevisionPieces,
+} from './clipboard-html-revisions.ts';
+import {
+  applyParagraphPropertyChange,
+  numberProjectedRevisionIds,
+  revisionContextOf,
+  withMarkRevision,
+} from './clipboard-html-revision-context.ts';
 import { projectHtmlTable } from './clipboard-html-table-project.ts';
 import { htmlPositionalTabXml, htmlTabRunContents } from './clipboard-html-tabs.ts';
 import {
@@ -120,6 +132,9 @@ function allocateRel(
 
 // --- Walk
 
+/** A piece ending in a line break, also when a revision around the break closes there. */
+const LINE_BREAK_END = /<w:br\/><\/w:r>(?:<\/w:(?:ins|del)>)*$/;
+
 function collectInline(
   node: Node,
   depth: number,
@@ -155,7 +170,11 @@ function collectInline(
     }
     // Collapse ASCII whitespace only: an NBSP is real content Word preserves, and
     // JS `\s` would fold it into a plain breakable space.
-    const collapsed = raw.replace(/[ \t\r\n\f\v]+/g, ' ');
+    let collapsed = raw.replace(/[ \t\r\n\f\v]+/g, ' ');
+    // A collapsed space that starts the line after a `<br>` does not render, so it is not text.
+    if (collapsed.startsWith(' ') && LINE_BREAK_END.test(runs[runs.length - 1] ?? '')) {
+      collapsed = collapsed.slice(1);
+    }
     if (collapsed.length === 0) return;
     // Whitespace between blocks: bookmark furniture is not visible content, so a
     // standalone anchor must not turn the gap into a space paragraph — but a
@@ -225,7 +244,12 @@ function collectInline(
     );
     return;
   }
-  let taggedRun = applyInlineTag(ctx.run, tag);
+  // A tracked `<ins>` / `<del>` is a revision, not underline or strike formatting.
+  const found = htmlRevisionOf(node, tag, p.wordHtml);
+  // `w:del` cannot hold `w:ins`: an insertion inside a deletion is struck along with it.
+  const nested = found?.kind === 'ins' && ctx.revisions?.some((open) => open.kind === 'del');
+  const revision = nested ? null : found;
+  let taggedRun = found === null ? applyInlineTag(ctx.run, tag) : ctx.run;
   const linkHref = tag === 'a' ? node.getAttribute('href') : null;
   const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
   if (noteReference === null && isClipboardHyperlink(linkHref)) {
@@ -235,11 +259,20 @@ function collectInline(
   }
   // Never mutate the shared context run: helpers return `base` by identity when idle.
   const nextRun = applyElementRunProps(taggedRun, node);
-  const nextCtx: FlowContext = {
-    ...ctx,
-    run: nextRun,
-    pre: ctx.pre || tag === 'pre',
-  };
+  const nextCtx: FlowContext = revisionContextOf(
+    { ...ctx, run: nextRun, pre: ctx.pre || tag === 'pre' },
+    node,
+    style,
+    revision
+  );
+  if (revision !== null) {
+    const inner: string[] = [];
+    for (const child of Array.from(node.childNodes)) {
+      collectInline(child, depth + 1, nextCtx, inner, p);
+    }
+    for (const piece of wrapRevisionPieces(revision, inner)) runs.push(piece);
+    return;
+  }
   if (noteReference !== null) {
     // Word renders note marks superscript via a character style the fragment does
     // not carry; direct formatting keeps the number off the baseline — always.
@@ -297,8 +330,11 @@ function collectInline(
     }
     const anchor = href?.startsWith('#') ? clipboardBookmarkName(href.slice(1)) : null;
     let content = inner.join('');
+    // A hyperlink cannot sit inside `w:ins` / `w:del`; the revisions go inside it instead.
+    const linked = (): string =>
+      nextCtx.revisions === undefined ? content : wrapInRevisions(nextCtx.revisions, content);
     if (anchor !== null) {
-      content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
+      content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${linked()}</w:hyperlink>`;
     } else if (href !== null && !href.startsWith('#')) {
       // A fragment-only href never becomes an EXTERNAL relationship: Word treats
       // that target as a URI and the click errors. Unstorable fragment names are
@@ -306,7 +342,7 @@ function collectInline(
       const sanitized = sanitizeHref(href);
       if (sanitized.ok && sanitized.href.length > 0) {
         const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true, ctx.rels ?? p.rels);
-        content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
+        content = `<w:hyperlink r:id="${relId}">${linked()}</w:hyperlink>`;
       }
     }
     if (bookmarkName !== null) {
@@ -317,6 +353,10 @@ function collectInline(
     }
     if (content.length > 0) runs.push(content);
     return;
+  }
+  // An `<o:p>` inside a revision says the paragraph mark itself was inserted or deleted.
+  if (tag === 'o:p' && ctx.revisions !== undefined) {
+    p.markRevision = paragraphMarkRevisionXml(ctx.revisions);
   }
   for (const child of Array.from(node.childNodes)) {
     collectInline(child, depth + 1, nextCtx, runs, p);
@@ -358,6 +398,7 @@ function paragraphContextOf(
   if (mso) para.numPr = mso;
   applyWordParagraphAlignment(para, element, p.classAlignments);
   applyParaCss(para, style);
+  applyParagraphPropertyChange(para, element, style);
   // The background lands on BOTH the paragraph (w:pPr/w:shd) and its runs: the
   // single-paragraph inline paste path keeps only run content, so a run-level fill
   // is what survives a mid-paragraph paste.
@@ -392,6 +433,7 @@ function projectParagraph(
     return;
   }
   if (depth > p.maxDepth) return;
+  p.markRevision = null;
   const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
 }
@@ -510,11 +552,11 @@ function projectFlow(
     // Bare inline text consumes a pending Word page break like a block would,
     // so the break lands BEFORE the text, not appended after it.
     const para = pageBreak.pending ? { ...flushPara, pageBreakBefore: true } : flushPara;
-    out.push(paragraphXml(para, pending));
+    out.push(paragraphXml(withMarkRevision(para, p), pending));
     if (flushPara.pageBreakBefore) flushPara = { ...flushPara, pageBreakBefore: undefined };
     pageBreak.pending = false;
     pageBreak.skipSpacer = false;
-    p.lastMarkCovered = ctx.paragraphMarkCovered;
+    p.lastMarkCovered = ctx.paragraphMarkCovered || p.markRevisionTaken;
     pending = [];
   };
   for (const node of nodes) {
@@ -666,9 +708,9 @@ function projectFlow(
     pending.length > 0 &&
     !pending.some((piece) => piece.includes('<w:r') || isEquationPiece(piece))
   ) {
-    out.push(paragraphXml(flushPara, pending));
+    out.push(paragraphXml(withMarkRevision(flushPara, p), pending));
     pending = [];
-    p.lastMarkCovered = ctx.paragraphMarkCovered;
+    p.lastMarkCovered = ctx.paragraphMarkCovered || p.markRevisionTaken;
   }
   flush();
   // Leading furniture splices into this flow's FIRST paragraph right after its
@@ -707,9 +749,9 @@ function projectFlow(
   }
   // An explicit block emits its paragraph even when empty.
   if (forceEmit && out.length === before) {
-    out.push(paragraphXml(flushPara, pending));
+    out.push(paragraphXml(withMarkRevision(flushPara, p), pending));
     pending = [];
-    p.lastMarkCovered = ctx.paragraphMarkCovered;
+    p.lastMarkCovered = ctx.paragraphMarkCovered || p.markRevisionTaken;
   }
 }
 
@@ -786,6 +828,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     wordHtml: isWordClipboardHtml(html),
     truncated: false,
     lastMarkCovered: false,
+    markRevision: null,
+    markRevisionTaken: false,
     rels: [],
     media: new Map(),
     mediaExtensions: new Map(),
@@ -902,6 +946,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   projection.lastMarkCovered = bodyLastMarkCovered;
   reconcileUnreachableNotes(projection, definedNotes, blocks, allocateRel);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
+  numberProjectedRevisionIds(blocks, projection.notes);
   return { ok: true, projection, blocks };
 }
 

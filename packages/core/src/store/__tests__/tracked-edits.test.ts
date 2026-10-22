@@ -756,29 +756,6 @@ describe('an atomic field survives a tracked edit whole', () => {
     const serialized = xml(after);
     expect(serialized.indexOf('<w:ins ')).toBeLessThan(serialized.indexOf('w:fldCharType="begin"'));
   });
-
-  test('a simple field is struck from INSIDE, because w:del cannot hold one', () => {
-    // `CT_RunTrackChange` takes `EG_ContentRunContent`, and `w:fldSimple` is not in it —
-    // so the deletion goes inside the field, which is what Word writes.
-    const before = part(
-      `<w:p><w:r><w:t>ab</w:t></w:r>` +
-        `<w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple>` +
-        `<w:r><w:t>cd</w:t></w:r></w:p>`
-    );
-    const after = apply(before, {
-      op: 'deleteText',
-      paragraphId: paragraphId(before),
-      start: 2,
-      end: 3,
-      revision: ADA,
-    });
-    const serialized = xml(after);
-    expect(serialized).toMatch(/<w:fldSimple[^>]*><w:del\b/);
-    expect(serialized).toContain('<w:delText>7</w:delText>');
-    // The field element itself survives: it is the thing being proposed for deletion, not
-    // something to dissolve.
-    expect(serialized).toContain('w:instr=" PAGE "');
-  });
 });
 
 // A TRACKED PAGE FIELD IS ONE PROPOSAL. The whole atom — begin, instruction, separator,

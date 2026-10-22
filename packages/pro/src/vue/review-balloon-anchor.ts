@@ -297,6 +297,28 @@ export function matchBalloonReviewItem(
   return null;
 }
 
+/**
+ * The tracked change a press in the page landed on.
+ *
+ * A field result paints with `pointer-events: none`, so the line under it takes the press and
+ * `closest()` from the target never reaches the field's revision. The line's own revision
+ * sites are then hit-tested by their painted boxes, so a struck field opens its balloon as
+ * struck words do.
+ */
+export function revisionElementAtPress(target: Element, event: Event): Element | null {
+  const direct = target.closest('[data-revision-id]');
+  if (direct || !target.classList.contains('docx-line')) return direct;
+  const { clientX, clientY } = event as MouseEvent;
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') return null;
+  for (const site of target.querySelectorAll('[data-revision-id]')) {
+    const box = site.getBoundingClientRect();
+    const inside =
+      clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
+    if (inside) return site;
+  }
+  return null;
+}
+
 /** Run/paragraph formatting has painted anchors; other formatting needs a sidebar fallback. */
 export function hasFormattingBalloon(item: ReviewItemView): boolean {
   return (

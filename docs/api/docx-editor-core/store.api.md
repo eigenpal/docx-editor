@@ -1662,6 +1662,7 @@ export interface FragmentPasteInput {
     // (undocumented)
     readonly paragraphId: string;
     readonly priorOps?: readonly TreeDocOp[];
+    readonly revision?: RevisionAttributionInput;
 }
 
 // @public (undocumented)

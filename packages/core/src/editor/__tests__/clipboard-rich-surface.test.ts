@@ -308,7 +308,7 @@ describe('rich paste', () => {
     expect(reverted.includes('center')).toBe(false);
   });
 
-  test('suggesting mode degrades the rich payload to the tracked plain lane', () => {
+  test('suggesting mode lands the rich payload as one tracked insertion', () => {
     const flavours = copyRichFlavours();
     const container = document.createElement('div');
     const mounted = mountPaginatedSurface(container, docx(paragraph('')), {
@@ -323,9 +323,10 @@ describe('rich paste', () => {
 
     const markup = serializeOoxmlPart(surface.session.part());
     expect(surface.session.bodyText()).toContain('bold');
-    // Plain lane: the text arrives tracked, the structure does not travel.
-    expect(markup).toContain('w:ins');
-    expect(markup.includes('w:jc w:val="center"')).toBe(false);
+    // The structure travels, and all of it is proposed: runs and the pasted paragraph mark.
+    expect(markup).toMatch(/<w:ins [^>]*w:author="Reviewer"[^>]*><w:r><w:rPr><w:b\/>/);
+    expect(markup).toContain('w:jc w:val="center"');
+    expect(markup).toMatch(/<w:rPr><w:ins [^>]*w:author="Reviewer"[^>]*\/><\/w:rPr><\/w:pPr>/);
   });
 
   test('an armed force-plain paste skips the rich lanes once', () => {

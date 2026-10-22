@@ -6,7 +6,7 @@ import {
 import { symbolDisplayText } from '../package/symbol-glyph.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
-import { isInstrText } from '../package/field-nodes.ts';
+import { fldCharType, fldSimpleInstr, isFldSimple, isInstrText } from '../package/field-nodes.ts';
 import type { CommentRecord } from './comment-reads.ts';
 
 /**
@@ -108,4 +108,79 @@ export function textUnder(node: OoxmlNode): string {
   let text = '';
   for (const child of node.children) text += textUnder(child);
   return text;
+}
+
+/** Nested fields a card walk tracks; a deeper one reads as its result only. */
+const MAX_CARD_FIELD_DEPTH = 64;
+
+/** `{PAGE}` for ` PAGE \* MERGEFORMAT `: the field name, as a card can show it. */
+function fieldNameText(instruction: string): string {
+  const name = /^\s*([A-Za-z][A-Za-z0-9]{0,31})/.exec(instruction)?.[1];
+  return name === undefined ? '' : `{${name.toUpperCase()}}`;
+}
+
+function valueTextOf(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.value;
+  let text = '';
+  for (const child of node.children) text += valueTextOf(child);
+  return text;
+}
+
+/**
+ * The text a revision card shows: `textUnder`, except that a field with no saved result reads
+ * as its field name (`{PAGE}`). Such a field shows a value computed at layout, so a deleted
+ * PAGE or TITLE field otherwise made a card with no text at all.
+ */
+export function reviewCardText(nodes: readonly OoxmlNode[]): string {
+  const fields: { instruction: string; result: string; separated: boolean }[] = [];
+  let skipped = 0;
+  let out = '';
+  const emit = (text: string): void => {
+    const field = fields[fields.length - 1];
+    if (field === undefined) out += text;
+    else if (field.separated) field.result += text;
+  };
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return emit(node.value);
+    const type = fldCharType(node);
+    const field = fields[fields.length - 1];
+    if (type === 'begin') {
+      if (fields.length < MAX_CARD_FIELD_DEPTH) {
+        fields.push({ instruction: '', result: '', separated: false });
+      } else skipped += 1;
+      return;
+    }
+    if (type === 'separate') {
+      if (field && skipped === 0) field.separated = true;
+      return;
+    }
+    if (type === 'end') {
+      if (skipped > 0) skipped -= 1;
+      else {
+        const closed = fields.pop();
+        if (closed) emit(closed.result || fieldNameText(closed.instruction));
+      }
+      return;
+    }
+    if (isInstrText(node)) {
+      if (field && !field.separated && skipped === 0) field.instruction += valueTextOf(node);
+      return;
+    }
+    if (isFldSimple(node)) {
+      return emit(reviewCardText(node.children) || fieldNameText(fldSimpleInstr(node) ?? ''));
+    }
+    if (
+      node.kind === 'tab' ||
+      node.kind === 'hardBreak' ||
+      isSymbolElement(node) ||
+      inlineCharacterTextOf(node) !== null
+    ) {
+      return emit(textUnder(node));
+    }
+    for (const child of node.children) visit(child);
+  };
+  for (const node of nodes) visit(node);
+  // A field the revision covers only the start of shows the result it holds.
+  while (fields.length > 0) emit(fields.pop()!.result);
+  return out;
 }

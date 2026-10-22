@@ -66,6 +66,8 @@ export function rPrXml(props: HtmlRunProps): string {
   if (langAttributes.length > 0) {
     inner += `<w:lang${langAttributes}/>`;
   }
+  // Last in `CT_RPr`.
+  if (props.changeXml !== undefined) inner += props.changeXml;
   return inner.length > 0 ? `<w:rPr>${inner}</w:rPr>` : '';
 }
 
@@ -157,6 +159,9 @@ export function pPrXml(para: HtmlParaProps): string {
             : 'left'
           : para.jc;
   if (jc !== undefined) inner += `<w:jc w:val="${jc}"/>`;
+  // The mark's `w:rPr`, then `w:pPrChange`: the last two children of `CT_PPr`.
+  if (para.markRevisionXml) inner += `<w:rPr>${para.markRevisionXml}</w:rPr>`;
+  if (para.changeXml !== undefined) inner += para.changeXml;
   return inner.length > 0 ? `<w:pPr>${inner}</w:pPr>` : '';
 }
 

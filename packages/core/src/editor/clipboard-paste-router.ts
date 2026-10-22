@@ -5,14 +5,15 @@ import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts
 // the degrade is CONTINUOUS: a payload that fails decoding, fails the bounded package
 // read, or has a recoverable apply refusal falls to the next flavour. Unsupported object
 // content refuses without fallback. Other failures do not leave a no-op
-// paste. Suggesting mode and non-body stories force the plain lane, whose tracked-write
-// behaviour already exists; the drop lane never routes through here.
+// paste. Non-body stories force the plain lane. Suggesting mode with an author lands the rich
+// lanes as one tracked insertion; without an author it falls to the plain lane, which refuses.
+// The drop lane never routes through here.
 
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { projectExternalHtml } from './clipboard-html-read.ts';
 
 export interface PasteRouteTarget {
-  /** True when a fragment landing is even possible: body story, edit mode. */
+  /** True when a fragment landing is even possible: body story, editing or suggesting. */
   readonly richLaneOpen: boolean;
   /** False permits fallback; unsupported-content refuses the complete paste. */
   pasteFragment(bytes: Uint8Array, lastMarkCovered: boolean): boolean | 'unsupported-content';

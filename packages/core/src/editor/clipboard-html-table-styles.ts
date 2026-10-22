@@ -1,4 +1,5 @@
 import { tableSide } from './clipboard-table-direction.ts';
+import { rowRevisionXml } from './clipboard-html-revisions.ts';
 import {
   cssBackgroundFill,
   parseCssColor,
@@ -316,15 +317,17 @@ export function tableBordersXml(table: Element, rtl = false): string {
   return inner.length > 0 ? `<w:tblBorders>${inner}</w:tblBorders>` : '';
 }
 
-/** Preserve a bounded Word row height and its exact/at-least rule. */
+/** Preserve a bounded Word row height and its exact/at-least rule, and a tracked row. */
 export function tableRowPropertiesXml(row: Element): string {
   const style = parseInlineStyle(row);
+  // `w:ins` / `w:del` follow the row properties in `CT_TrPr`.
+  const revisions = rowRevisionXml(style);
   const points = parseCssLengthPt(style.get('height') ?? '');
-  if (points === null || points <= 0) return '';
+  if (points === null || points <= 0) return revisions ? `<w:trPr>${revisions}</w:trPr>` : '';
   const height = clamp(Math.round(points * 20), 1, MAX_TABLE_TWIPS);
   const rule = style.get('mso-height-rule')?.trim().toLowerCase();
   const hRule = rule === 'exactly' ? 'exact' : 'atLeast';
-  return `<w:trPr><w:trHeight w:val="${height}" w:hRule="${hRule}"/></w:trPr>`;
+  return `<w:trPr><w:trHeight w:val="${height}" w:hRule="${hRule}"/>${revisions}</w:trPr>`;
 }
 
 function cellMarginsXml(style: ReadonlyMap<string, string>, rtl: boolean): string {

@@ -80,9 +80,7 @@ export interface SimpleFieldRewrite {
 }
 
 /**
- * Replace the simple field `simpleId` with its complex form. The instruction and the result
- * runs are kept as they are. The field's `w:fldLock` and `w:dirty` attributes and its
- * `w:fldData` move to the begin marker.
+ * Replace the simple field `simpleId` with its complex form (`complexFieldNodes`).
  */
 export function complexFieldFromSimple(
   part: OoxmlPart,
@@ -93,9 +91,28 @@ export function complexFieldFromSimple(
   const parent = parentOf(part, simpleId);
   if (!simple || !isFldSimple(simple) || simple.kind === 'textValue' || !parent)
     return { ok: false };
-  const nextId = createNodeIdAllocator(part);
-  const rPr = resultRunProperties(simple);
   const created: string[] = [];
+  const complex = complexFieldNodes(simple, createNodeIdAllocator(part), created);
+  const rebuilt = parent.children.flatMap((child) => (child.id === simpleId ? complex : [child]));
+  const replaced = replaceChildren(part, parent.id, rebuilt, options);
+  return replaced.ok
+    ? { ok: true, part: replaced.part, created, deleted: [simpleId] }
+    : { ok: false };
+}
+
+/**
+ * The complex form of a simple field: begin, instruction, separate, the same result runs,
+ * end. The instruction and the result runs are kept as they are. The field's `w:fldLock` and
+ * `w:dirty` attributes and its `w:fldData` move to the begin marker. Each marker run's id is
+ * pushed onto `created`.
+ */
+export function complexFieldNodes(
+  simple: OoxmlNode,
+  nextId: () => string,
+  created: string[] = []
+): OoxmlNode[] {
+  if (simple.kind === 'textValue') return [simple];
+  const rPr = resultRunProperties(simple);
   const run = (child: OoxmlNode): OoxmlNode => {
     const children = rPr ? [markerRunProperties(rPr, nextId), child] : [child];
     const marker = element(nextId, 'run', 'r', [], children);
@@ -128,16 +145,11 @@ export function complexFieldFromSimple(
     ],
     [{ id: nextId(), kind: 'textValue', value: fldSimpleInstr(simple) ?? '' } as OoxmlNode]
   );
-  const complex = [
+  return [
     run(fldChar(beginAttributes, fieldData)),
     run(instruction),
     run(fldChar([attribute('fldCharType', 'separate')])),
     ...result,
     run(fldChar([attribute('fldCharType', 'end')])),
   ];
-  const rebuilt = parent.children.flatMap((child) => (child.id === simpleId ? complex : [child]));
-  const replaced = replaceChildren(part, parent.id, rebuilt, options);
-  return replaced.ok
-    ? { ok: true, part: replaced.part, created, deleted: [simpleId] }
-    : { ok: false };
 }

@@ -119,6 +119,12 @@ const SHAPES: readonly {
   readonly name: string;
   readonly body: string;
   readonly carriesRevisions?: boolean;
+  /**
+   * What a rejected deletion over `[atomStart, atomEnd)` gives back, when it is not `body`.
+   * A struck simple field is written in its complex form, because `w:del` cannot hold a
+   * `w:fldSimple`, and rejecting the deletion keeps that equivalent form.
+   */
+  readonly rejectedAtom?: { readonly start: number; readonly end: number; readonly body: string };
 }[] = [
   { name: 'plain text', body: '<w:p><w:r><w:t>alpha beta gamma</w:t></w:r></w:p>' },
   {
@@ -153,6 +159,18 @@ const SHAPES: readonly {
       '<w:p><w:r><w:t xml:space="preserve">page </w:t></w:r>' +
       '<w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple>' +
       '<w:r><w:t xml:space="preserve"> of many</w:t></w:r></w:p>',
+    rejectedAtom: {
+      start: 5,
+      end: 6,
+      body:
+        '<w:p><w:r><w:t xml:space="preserve">page </w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>7</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+        '<w:r><w:t xml:space="preserve"> of many</w:t></w:r></w:p>',
+    },
   },
   {
     name: 'a tab and a break',
@@ -184,6 +202,15 @@ const SHAPES: readonly {
   },
 ];
 
+/** The rejected baseline for a deletion over `[start, end)`. */
+function rejectedBaseline(shape: (typeof SHAPES)[number]): (start: number, end: number) => string {
+  const plain = observable(rejectAll(part(shape.body)));
+  const atom = shape.rejectedAtom;
+  if (!atom) return () => plain;
+  const rewritten = observable(rejectAll(part(atom.body)));
+  return (start, end) => (start <= atom.start && end >= atom.end ? rewritten : plain);
+}
+
 describe('rejecting a tracked edit gives the document back', () => {
   for (const shape of SHAPES) {
     test(`${shape.name}: an insert at every position`, () => {
@@ -206,12 +233,13 @@ describe('rejecting a tracked edit gives the document back', () => {
 
     test(`${shape.name}: a delete over every range`, () => {
       const before = part(shape.body);
-      const baseline = observable(rejectAll(before));
+      const baselineFor = rejectedBaseline(shape);
       const id = paragraphOf(before).id;
       const length = paragraphLength(paragraphOf(before));
 
       for (let start = 0; start < length; start += 1) {
         for (let end = start + 1; end <= length; end += 1) {
+          const baseline = baselineFor(start, end);
           const edited = apply(before, {
             op: 'deleteText',
             paragraphId: id,
@@ -228,12 +256,13 @@ describe('rejecting a tracked edit gives the document back', () => {
       // Typing over a selection: a delete and an insert in one transaction, which is where
       // the two writers meet and where the halves can disagree about the offset space.
       const before = part(shape.body);
-      const baseline = observable(rejectAll(before));
+      const baselineFor = rejectedBaseline(shape);
       const id = paragraphOf(before).id;
       const length = paragraphLength(paragraphOf(before));
 
       for (let start = 0; start < length; start += 1) {
         for (let end = start + 1; end <= length; end += 1) {
+          const baseline = baselineFor(start, end);
           const struck = apply(before, {
             op: 'deleteText',
             paragraphId: id,
