@@ -507,19 +507,19 @@ export function compactRevisionGrid(table: OoxmlElement, mint: () => string): Oo
         : properties.length
           ? ({ ...element(n, 'trPr', {}, mint), children: properties } as OoxmlElement)
           : undefined;
+      const rest = n.children
+        .filter((c) => !isWmlNamed(c, 'trPr'))
+        .map((c) => {
+          const range = ranges.get(c.id);
+          if (!range || c.kind !== 'tableCell') return c;
+          const span = positions.get(range[1])! - positions.get(range[0])!;
+          return patch(c, { gridSpan: span === 1 ? null : { val: String(span) } }, mint);
+        });
+      // A row states `w:tblPrEx` first, then `w:trPr`.
+      const at = rest.findIndex((c) => isWmlNamed(c, 'tblPrEx')) + 1;
       return {
         ...n,
-        children: [
-          ...(rowProperties ? [rowProperties] : []),
-          ...n.children
-            .filter((c) => !isWmlNamed(c, 'trPr'))
-            .map((c) => {
-              const range = ranges.get(c.id);
-              if (!range || c.kind !== 'tableCell') return c;
-              const span = positions.get(range[1])! - positions.get(range[0])!;
-              return patch(c, { gridSpan: span === 1 ? null : { val: String(span) } }, mint);
-            }),
-        ],
+        children: rowProperties ? [...rest.slice(0, at), rowProperties, ...rest.slice(at)] : rest,
       } as OoxmlElement;
     }),
   } as OoxmlElement;

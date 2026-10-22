@@ -7,6 +7,7 @@ import {
 import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { keepAlignmentRows } from './revision-table-alignment-rows.ts';
+import { trimDecidedExceptions } from './revision-row-exceptions.ts';
 import { restoreDecisionEmptiedControls } from './content-control-prompt-restore.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
 import { ordinaryMoveRanges, planOrdinaryMoves } from './revision-move-ranges.ts';
@@ -952,8 +953,9 @@ export function resolveRevisions(
   }
   const replaced = replaceChildren(part, part.root.id, root.children, options);
   const decided = new Set(matched.map((site) => site.node.id));
-  const settled =
+  const aligned =
     replaced.ok && keepAlignmentRows(part, sites, decided, action, replaced.part, options);
+  const settled = aligned && trimDecidedExceptions(part, matched, aligned, options);
   if (!settled) {
     return { ok: false, reason: 'tree-invariant' };
   }
