@@ -386,6 +386,11 @@ const BalloonChangeSummary = defineComponent({
   },
 });
 
+/** A part's root element, or undefined while it renders nothing (`$el` is then a comment). */
+function elementOf(node: unknown): HTMLElement | undefined {
+  return isElementNode(node) ? (node as HTMLElement) : undefined;
+}
+
 /**
  * `DocxEditorReview.Balloon`: the balloon that opens a review item at its text. Takes
  * {@link ReviewBalloonProps}.
@@ -436,7 +441,9 @@ export const ReviewBalloon = markPart(
       let balloonCleanup: (() => void) | undefined;
       onMounted(() => {
         const host = getCurrentInstance()?.proxy?.$el ?? instance?.proxy?.$el;
-        const railEl = host?.closest('.docx-review') as HTMLElement | null;
+        // A hidden balloon renders nothing, so `$el` is a comment node with nothing to wire.
+        if (!isElementNode(host)) return;
+        const railEl = host.closest('.docx-review') as HTMLElement | null;
         const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
           railEl?.offsetParent) as HTMLElement | null;
         if (!host || !railEl || !scroller) return;
@@ -524,7 +531,7 @@ export const ReviewBalloon = markPart(
         [navigationActiveKey, navigationNeedsBalloon, () => rail.value.revisionsIn, revealCount],
         ([activeKey, needsBalloon, revisionsIn], _previous, onCleanup) => {
           const active = navigationActive.value;
-          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const host = elementOf(instance?.proxy?.$el);
           const railEl = host?.closest('.docx-review') as HTMLElement | null;
           const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
             railEl?.offsetParent) as HTMLElement | null;
@@ -580,7 +587,7 @@ export const ReviewBalloon = markPart(
         [() => anchor.value !== null, zoom, layoutTick],
         ([open], _previous, onCleanup) => {
           if (!open) return;
-          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const host = elementOf(instance?.proxy?.$el);
           const railEl = host?.closest('.docx-review') as HTMLElement | null;
           const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
             railEl?.offsetParent) as HTMLElement | null;
@@ -625,7 +632,7 @@ export const ReviewBalloon = markPart(
         (_next, _previous, onCleanup) => {
           const current = anchor.value;
           if (!current) return;
-          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const host = elementOf(instance?.proxy?.$el);
           const railEl = host?.closest('.docx-review') as HTMLElement | null;
           const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
             railEl?.offsetParent) as HTMLElement | null;

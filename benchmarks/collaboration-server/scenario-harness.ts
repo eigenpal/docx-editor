@@ -357,7 +357,7 @@ class Simulation {
         const pendingBefore = shownOrPending(replica);
         if (action.kind === 'redo' ? session.redo() : session.undo()) {
           this.undos += 1;
-          this.decisions.undone(action.replica);
+          this.decisions.undone(action.replica, replica.ydoc);
           this.tokens.undoOn(action.replica, sharedBefore, sharedTextOf(replica.ydoc), {
             before: pendingBefore,
             after: shownOrPending(replica),
@@ -387,7 +387,7 @@ class Simulation {
             break;
           }
           const removing = this.tokens.beforeEdit(editor.store, op);
-          const decision = this.decisions.before(editor.store, op, editor.index);
+          const decision = this.decisions.before(editor.store, op, editor.index, editor.ydoc);
           const result = applyOp(editor.store, op, `replica-${editor.index}`);
           if (!result.ok) {
             const reason = result.reason ?? 'refused';

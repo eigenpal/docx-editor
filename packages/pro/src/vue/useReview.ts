@@ -136,7 +136,8 @@ export interface UseReviewReturn {
    * packaged rail recorded. Cleared by the next write that lands and by a change to the
    * document, the editing mode, editability, the collaboration status or the author filter; a
    * caret move keeps it. The packaged cards show it as a sentence; a custom card reads `key` to
-   * place it and `code`, the public diagnostic code, to word it.
+   * place it, `useReviewRefusalMessage()` to word it, and `code`, the public diagnostic code, to
+   * branch on the cause.
    */
   readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;
   readonly paneOpen: ComputedRef<boolean>;
@@ -328,7 +329,9 @@ function useReviewOfInternal(
     if (!editor) return false;
     if (item.kind === 'custom') return false;
     if (item.kind === 'revision' && item.readOnly) return false;
-    return settle('remove', item.key, editor.deleteReviewItem(item.key));
+    // Discarding a tracked change rejects it, so its refusal reads as the reject's does.
+    const action = item.kind === 'revision' ? 'reject' : 'remove';
+    return settle(action, item.key, editor.deleteReviewItem(item.key));
   };
 
   const reply = (item: ReviewItemView, text: string, author?: string): boolean => {

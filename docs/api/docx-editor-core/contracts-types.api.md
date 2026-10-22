@@ -585,7 +585,7 @@ export interface RevisionBatchResult {
 }
 
 // @public
-export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites' | 'paired-change' | 'removed-content' | 'replaced-properties' | 'emptied-change' | 'enclosing-change' | 'grouped-change' | 'nested-table' | 'locked-content' | 'bound-content';
 
 // @public
 export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';

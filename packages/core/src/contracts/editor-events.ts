@@ -2,6 +2,7 @@ import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { EditorError, EditorSnapshot } from './editor.ts';
 import type { HistoryDiagnostic } from './editor-scope.ts';
 import type { EditorDiagnostic } from './diagnostics.ts';
+import type { RevisionBatchSkipDetail } from './types.ts';
 
 /**
  * What `editor.on(...)` can be subscribed to, and what each handler receives.
@@ -58,6 +59,20 @@ export interface EditorEvents {
    * ```
    */
   reviewItemReveal: (event: ReviewItemRevealEvent) => void;
+  /**
+   * An accept-all or reject-all decision committed: from the toolbar, the menu, or
+   * `exec({ type: 'resolveAllReviewChanges' })`. `skipped` names the changes it left pending,
+   * so a host can say why they stay. A remote decision in a collaboration session never fires
+   * it: it is a local event.
+   *
+   * @example
+   * ```ts
+   * editor.on('reviewChangesResolved', ({ skipped }) => {
+   *   if (skipped.length) showNotice(`${skipped.length} changes stay pending`);
+   * });
+   * ```
+   */
+  reviewChangesResolved: (event: ReviewChangesResolvedEvent) => void;
   /**
    * The editor's pages are now in another document: it was attached for the first time, moved
    * into another element or window, detached (`document` is `null`), or found its element
@@ -124,6 +139,38 @@ export interface ReviewItemRevealEvent {
    * to `setActiveReviewItem` (and so `useReview().setActive`) with `announce: true`.
    */
   readonly source: ReviewItemRevealSource;
+}
+
+/**
+ * The payload of the `reviewChangesResolved` event.
+ *
+ * @public
+ */
+export interface ReviewChangesResolvedEvent {
+  /** Whether the decision accepted or rejected the changes. */
+  readonly action: 'accept' | 'reject';
+  /** How many listed changes it resolved. The `exec` result lists them in `revisions.resolved`. */
+  readonly resolvedCount: number;
+  /**
+   * The listed changes it left pending, with why: `'retained-structure'` for a row that stays
+   * to keep a nested table, `'incomplete-group'` for a change that would also resolve one the
+   * selection leaves out, `'unsupported-revision'` for a structure the engine cannot resolve,
+   * and `'unknown-revision'` for a key that no longer names a change. `reviewCodeOfSkip(skip)`
+   * gives each entry's review code, with its `detail`.
+   */
+  readonly skipped: readonly {
+    /** The skipped change's key, as `getReviewItems({ pairReplacements: false })` lists it. */
+    readonly key: string;
+    /** The key of the replacement it is one half of, as the default `getReviewItems()` lists it. */
+    readonly pairKey?: string;
+    readonly reason:
+      | 'unsupported-revision'
+      | 'incomplete-group'
+      | 'retained-structure'
+      | 'unknown-revision';
+    /** Which condition kept it, such as `'locked-content'` (a content lock) or `'bound-content'` (a data binding). */
+    readonly detail?: RevisionBatchSkipDetail;
+  }[];
 }
 
 /** What asked to reveal a review item. See {@link ReviewItemRevealEvent.source}. @public */

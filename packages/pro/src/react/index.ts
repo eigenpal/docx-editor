@@ -101,6 +101,8 @@ export {
   type UseReviewReturn,
 } from './useReview';
 export type { ReviewWriteAction, ReviewWriteRefusal } from '../review/review-refusal.ts';
+export { useReviewRefusalMessage } from './review-refusal-message.ts';
+export type { ReviewDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
 export {
   useCollaborationStatus,
   type UseCollaborationStatusReturn,

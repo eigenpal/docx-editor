@@ -6,6 +6,14 @@ import { REFRESH_WRITE_REFUSAL } from '../refresh-write-guard.ts';
 import { READ_ONLY_PROTECTION_REASON } from '../opening-editing-mode.ts';
 
 describe('reviewWriteRefusal', () => {
+  test('a decision a lock or a binding keeps gets the exec code an edit there gets', () => {
+    // Such as the locked half of a move, which the planner adds to the card's decision.
+    const locked = 'locked-content: the change stays pending';
+    const bound = 'bound-content: the change stays pending';
+    expect(reviewWriteRefusal(locked, 'x')).toEqual({ ok: false, code: 'locked', reason: locked });
+    expect(reviewWriteRefusal(bound, 'x')).toEqual({ ok: false, code: 'bound', reason: bound });
+  });
+
   test('a write that refused without a reason keeps the fallback and its code', () => {
     expect(reviewWriteRefusal(null, 'the reply could not be committed')).toEqual({
       ok: false,

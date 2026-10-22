@@ -3,6 +3,8 @@ import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
 import { reviewItemKey } from '../store/store/review-items.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
+import { retainedNestedRowSites } from '../store/store/revision-table-preserve-nested.ts';
+import { guardKeepsOps, holdsGuardedControls } from '../store/store/revision-content-lock.ts';
 import {
   invalidRevisionAuthorInput,
   planRevisionAuthorChange,
@@ -191,11 +193,13 @@ export function revisionBatchPlan(
       code: 'unsupported-content' as const,
       message: 'invalid revision batch',
     };
+  // Revisions the caller names are decided as single calls on them would be.
   const plan = planRevisionBatch(
     selection.reads.part,
     operation.action,
     selection.keys,
-    selection.scopeRoot
+    selection.scopeRoot,
+    operation.revisions === undefined ? undefined : { explicit: true }
   );
   return { ok: true as const, reads: selection.reads, ...plan };
 }
@@ -351,12 +355,47 @@ export function planRevisionDecision(
         message: 'an earlier decision in this batch resolved changes',
       },
     };
+  // A strict decision refuses rather than report the story reviewed while a row stays pending
+  // to keep a nested table its content still needs.
+  // The full plan runs only when the story holds a row that could stay.
+  const scope = sharesItsPart(target.reads.story) ? target.reads.root : undefined;
+  const action = operation.op === 'acceptAllRevisions' ? 'accept' : 'reject';
+  const root = scope && scope.kind !== 'textValue' ? scope : undefined;
+  const scoped = root ? { ...target.reads.part, root } : target.reads.part;
+  if (
+    retainedNestedRowSites(scoped, collectRevisionSites(scoped), action).size > 0 &&
+    planRevisionBatch(target.reads.part, action, undefined, root, {
+      countRemaining: false,
+    }).result.skipped.some((skip) => skip.reason === 'retained-structure')
+  )
+    return {
+      ok: false,
+      error: {
+        code: 'unsupported-revision',
+        message: 'a tracked row must stay to keep the nested table inside it',
+        detail: 'retained-structure:nested-table',
+      },
+    };
+  // A lock or a binding the decision's own ops meet refuses it with that code, before they run.
+  const ops = revisionCollectionOps(operation, target.reads);
+  const kept = holdsGuardedControls(target.reads.part)
+    ? guardKeepsOps(target.reads.part, ops)
+    : null;
+  if (kept)
+    return {
+      ok: false,
+      error: {
+        code: 'transaction-refused',
+        message: 'a content control keeps a change in that decision',
+        detail: kept,
+      },
+    };
   ledger.whole = true;
   return {
     ok: true,
     kind: 'command',
     story: target.reads.story,
-    ops: revisionCollectionOps(operation, target.reads),
+    ops,
     answer: () => ({ kind: 'applied' }),
   };
 }

@@ -329,7 +329,7 @@ export function prometheusName(definition: MetricDefinition): string;
 export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
 
 // @public
-export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.locked-content' | 'review.bound-content' | 'review.stale-revision';
 
 // @public
 export type ReviewOperation = 'accept' | 'reject' | 'reassign';

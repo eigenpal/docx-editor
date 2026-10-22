@@ -16,12 +16,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // offers — a read-only `content` would be a different contract from upstream's, so the member is
 // omitted and the text is published as DocxEditor's own `text`.
 //
-// A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Individually unpublishable structural
-// cards — a row, a cell, a section, the table grid, when this API cannot name their Word
-// subtype — are omitted from the listing so code walking `items` never stalls on an object
-// whose `type` we cannot publish. Collection membership is not the collection decision set:
+// A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Rows, cells, cell merges, and tracked
+// numbering are listed by their revision type. A structural card with no single type, such as
+// table grid history, is omitted so code walking `items` never stalls on an object whose `type`
+// we cannot publish. Collection membership is not the collection decision set:
 // `acceptAll` / `rejectAll` still resolve every store-resolvable revision, including a
-// complete tracked row, and refuse atomically when any `readOnly` or otherwise unsupported
+// complete tracked row, and refuse atomically when any read-only or otherwise unsupported
 // revision remains.
 
 import {
@@ -57,10 +57,11 @@ export type {
  * Word's own names for a kind of change.
  *
  * The WHOLE upstream vocabulary, because a declaration says what a caller may be handed and a caller
- * switching on it should not have to be told which subset this engine happens to produce. Seven of
- * these actually occur as published objects — insert, delete, replace, the two property kinds and
- * the two move halves. Structural cards whose exact Word subtype this API cannot name are omitted
- * from `items`; collection-wide decisions still resolve every store-resolvable revision. See
+ * switching on it should not have to be told which subset this engine happens to produce. Nine of
+ * these occur as published objects: Insert, Delete, Property, MovedFrom, MovedTo, CellInsertion,
+ * CellDeletion, CellMerge and ParagraphNumber. A structural card with no single type, such as
+ * table grid history, is omitted from `items`; collection-wide decisions still resolve every
+ * store-resolvable revision. See
  * `compat/manifest.json`.
  */
 export type RevisionType =
@@ -482,11 +483,12 @@ export class CommentCollection extends HandleCollection<Comment> {
 }
 
 /**
- * One tracked change, published when this API can name its Word subtype.
+ * One tracked change.
  *
- * Structural cards whose exact Word subtype cannot be typed — a row, a cell, a section, the table
- * grid — are omitted from the collection rather than shipped as objects with an unpublishable
- * `type`. That listing is not the collection decision set: see {@link RevisionCollection}.
+ * A row is listed as `Insert` or `Delete`, and a cell or tracked numbering by its own type. A
+ * structural card with no single type, such as table grid history, is omitted rather than
+ * shipped with an unpublishable `type`. That listing is not the collection decision set: see
+ * {@link RevisionCollection}.
  *
  * @public
  */
@@ -532,8 +534,9 @@ export class Revision extends ModelObject implements PromisedItem {
     return this.loadedProperty<RevisionType>('type');
   }
 
-  /** The words the change covers. */
+  /** The words the change covers. Each read returns the same proxy, so a load on it is kept. */
   get range(): Range {
+    if (this.#range) return this.#range;
     const label = `${this.path.label}.range`;
     const found = Range.promised(this.context, label, false);
     this.read(
@@ -543,11 +546,22 @@ export class Revision extends ModelObject implements PromisedItem {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }
     );
+    this.#range = found;
     return found;
   }
+  #range: Range | undefined;
 
   /**
-   * Keep the change, resolving every site that carries its identity in one transaction.
+   * Keep the change, in one transaction, with every part of it: both halves of a move or a cell
+   * merge, and the changes inside content it removes, such as another author's insertion in a
+   * deleted row. Rejecting a formatting change restores the earlier properties, so another
+   * author's change inside the replaced properties, such as tracked numbering, goes with it.
+   *
+   * After a sync resolves this change, another call on the same object fails with
+   * `InvalidObjectPath`, because the change is gone. Within one sync, a decision on a change an
+   * earlier decision removed is skipped. Read `debugInfo.innerError.code` on a refusal, such as
+   * `review.retained-structure` for a row that must stay to keep a nested table, or
+   * `review.locked-content` and `review.bound-content` for a change a content control keeps.
    *
    * In a React or Vue host with the review module, use `useReview().accept` from
    * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` for a review UI.
@@ -559,7 +573,7 @@ export class Revision extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Undo the change, likewise in one transaction.
+   * Undo the change, likewise in one transaction and with the same rules as {@link Revision.accept}.
    *
    * In a React or Vue host with the review module, use `useReview().reject` for a review UI.
    */
@@ -626,16 +640,17 @@ export interface RevisionAuthorOptions {
 
 /** What one revision collection addresses. */
 type RevisionScope =
-  | { readonly body: AutomationHandle }
+  // Read when an operation is built, so a story body that a later sync names still answers.
+  | { readonly body: () => AutomationHandle }
   | { readonly span: () => AutomationSpanRef }
   | { readonly key: string };
 
 /**
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
- * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
+ * `items` omits a structural card with no single revision type; see {@link Revision}.
  * On a story's collection, `acceptAll` / `rejectAll` still resolve every store-resolvable
- * revision in the story and refuse atomically if any `readOnly` or otherwise unsupported
+ * revision in the story and refuse atomically if any read-only or otherwise unsupported
  * revision remains. On {@link Range.revisions} and `getReviewItemRevisions`, they resolve the
  * changes the range overlaps or the key names, and `resolve` and `setAuthor` refuse with
  * `NotSupported`.
@@ -650,7 +665,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
     context: RequestContext,
     label: string,
     owner: ObjectPath,
-    body: AutomationHandle
+    body: () => AutomationHandle
   ): RevisionCollection {
     return new RevisionCollection(context, ObjectPath.derived(label, owner), { body });
   }
@@ -683,10 +698,11 @@ export class RevisionCollection extends HandleCollection<Revision> {
   /**
    * Keep every change in this story, as ONE decision and one undo unit.
    *
-   * Resolves every store-resolvable revision in the story, including complete tracked rows
-   * omitted from `items`. Refuses the sync outright where any `readOnly` or otherwise
-   * unsupported revision remains, rather than reporting the story as reviewed while pending
-   * changes remain.
+   * Resolves every store-resolvable revision in the story, including history omitted from
+   * `items`. Refuses the sync outright where any read-only or otherwise unsupported revision
+   * remains, a row must stay to keep a nested table (`review.retained-structure`), or a content
+   * control keeps a change (`review.locked-content`, `review.bound-content`), rather
+   * than reporting the story as reviewed while pending changes remain.
    *
    * On a collection from {@link Range.revisions}, resolves every change the range overlaps at
    * sync time, structural changes absent from `items` included. A change the range covers in
@@ -713,11 +729,14 @@ export class RevisionCollection extends HandleCollection<Revision> {
   #scopeRef(): { body: AutomationHandle } | { scope: AutomationSpanRef } | { key: string } {
     const scope = this.#scope;
     if ('span' in scope) return { scope: scope.span() };
-    return 'key' in scope ? { key: scope.key } : { body: scope.body };
+    return 'key' in scope ? { key: scope.key } : { body: scope.body() };
   }
 
-  /** The story handle, or `NotSupported` on a collection that a range or a key scopes. */
-  #storyBody(member: string): AutomationHandle {
+  /**
+   * The story handle, read when the operation is built, or `NotSupported` at the call on a
+   * collection that a range or a key scopes.
+   */
+  #storyBody(member: string): () => AutomationHandle {
     const scope = this.#scope;
     if (!('body' in scope)) fail({ code: 'NotSupported', target: `${this.path.label}.${member}` });
     return scope.body;
@@ -725,7 +744,10 @@ export class RevisionCollection extends HandleCollection<Revision> {
 
   /**
    * Resolve eligible revisions in this story and report skipped decisions after sync.
-   * Omit revisions to include unsupported and structural decisions absent from items.
+   * Omit revisions to include unsupported decisions and history absent from items. Named
+   * revisions resolve as single `accept()` or `reject()` calls on them would, except that a
+   * row kept for a nested table is reported as `retained-structure` while the other named
+   * changes resolve, where a single call refuses whole.
    * Pass an empty array to select nothing. Duplicate objects resolve once; stale targets
    * are reported as unknown-revision. This must be the only write in its sync batch.
    * Unlike acceptAll/rejectAll, unsupported decisions do not block independent changes.
@@ -737,7 +759,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * const result = context.document.revisions.resolve('accept');
    * await context.sync();
    * console.log(result.value.resolved.length, result.value.remaining);
-   * for (const skipped of result.value.skipped) console.log(skipped.reason);
+   * for (const skipped of result.value.skipped)
+   *   console.log(skipped.reason, skipped.detail ?? '');
    * ```
    */
   resolve(
@@ -758,7 +781,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'resolveRevisionBatch',
-        body,
+        body: body(),
         action,
         ...(targets === undefined
           ? {}
@@ -827,7 +850,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'setRevisionAuthorBatch',
-        body,
+        body: body(),
         author,
         // Written to the second, as every other revision date is.
         ...(date === undefined ? {} : { date: `${date.toISOString().slice(0, 19)}Z` }),

@@ -34,7 +34,7 @@ import {
 import { authorCardStyle } from './review-author-styles.ts';
 import { SEND_ICON, icon } from './review-icons.tsx';
 import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
-import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
+import type { ReviewWriteRefusal } from '../review/review-refusal.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
@@ -58,7 +58,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       const text = ref('');
       const refused = ref(false);
       // Taken when the comment is refused, so the sentence holds still while it shows.
-      const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
+      const refusedCode = ref<ReviewWriteRefusal['code'] | undefined>(undefined);
       const editorRef = useDocxEditor();
       const fieldId = useReviewStableId('draft');
       let measuredBy: ReviewRailValue['measure'] | null = null;
@@ -254,7 +254,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const draft = ref('');
     const refused = ref(false);
     // The cause the editor named for the refused reply, when it named one.
-    const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
+    const refusedCode = ref<ReviewWriteRefusal['code'] | undefined>(undefined);
     const submit = (root: ParentNode | null) => {
       const entry = entryRef();
       const { review, readOnly, byId } = rail.value;

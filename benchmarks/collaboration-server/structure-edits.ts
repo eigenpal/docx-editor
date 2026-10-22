@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * ids that replica holds, so a shrunk action list stays meaningful.
  */
 import type { OoxmlNode, TreeDocOp } from '@docx-editor.dev/core/store';
-import { elements } from './scenario-tree.ts';
+import { elements, textOf } from './scenario-tree.ts';
 
 export type StructureEditKind =
   | 'list'
@@ -65,6 +65,34 @@ export interface NodeTarget {
   readonly within?: number;
   /** The op takes a list of ids. */
   readonly array?: boolean;
+  /**
+   * Count only elements with these attribute values; a missing attribute matches `''`. A
+   * tracked change's site is addressed among its own identity's sites, and a content wrapper
+   * only while it holds text: a replica can merge an empty wrapper into its neighbour where a
+   * solo store keeps it, which shifts a count over every wrapper. Markers hold no text and
+   * always count.
+   */
+  readonly identity?: Readonly<Record<string, string>>;
+}
+
+const CONTENT_WRAPPERS = new Set(['ins', 'del', 'moveFrom', 'moveTo']);
+
+/** The elements a target counts. */
+export function targetElements(scope: OoxmlNode, target: NodeTarget): OoxmlNode[] {
+  const all = elements(scope, target.localName);
+  const identity = target.identity;
+  if (!identity) return all;
+  return all.filter(
+    (node) =>
+      node.kind !== 'textValue' &&
+      Object.entries(identity).every(
+        ([name, value]) =>
+          (node.attributes.find((attribute) => attribute.localName === name)?.value ?? '') === value
+      ) &&
+      (!CONTENT_WRAPPERS.has(node.localName) ||
+        node.children.length === 0 ||
+        textOf(node, '').length > 0)
+  );
 }
 
 export interface NodeAddressed {
@@ -82,7 +110,7 @@ export function bindNodeIds(root: OoxmlNode, addressed: NodeAddressed): TreeDocO
   for (const target of addressed.targets) {
     const scope = target.within === undefined ? root : bound[target.within];
     if (!scope) return null;
-    const node = elements(scope, target.localName)[target.index];
+    const node = targetElements(scope, target)[target.index];
     if (!node) return null;
     bound.push(node);
     if (target.array) {

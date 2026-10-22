@@ -131,3 +131,48 @@ test('a refused reply names its cause in the reply line', async () => {
   expect(view.getByTestId('custom-probe').textContent).toBe('edit.collaboration-not-ready');
   expect(view.getByTestId('review-refusal-live').textContent).toBe(WAITING);
 });
+
+const LOCKED = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>` +
+      `<w:sdtContent><w:p><w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">` +
+      `<w:r><w:t>added text</w:t></w:r></w:ins></w:p></w:sdtContent></w:sdt></w:body></w:document>`
+  ),
+});
+
+/** Discards the first revision through the hook and shows the refusal code. */
+function DiscardProbe() {
+  const { items, remove, lastRefusal } = useReview();
+  const revision = items.find((item) => item.kind === 'revision');
+  return (
+    <>
+      <button data-testid="discard" onClick={() => revision && remove(revision)} />
+      <output data-testid="discard-code">{lastRefusal?.code ?? ''}</output>
+    </>
+  );
+}
+
+test('discarding a locked tracked change names the lock, as rejecting it does', async () => {
+  const view = render(
+    <DocxEditorRoot document={LOCKED} author="Grace Hopper" modules={[reviewModule()]}>
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+      <DiscardProbe />
+    </DocxEditorRoot>
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
+    fireEvent.click(view.getByTestId('discard'));
+  });
+  expect(view.getByTestId('discard-code').textContent).toBe('review.locked-content');
+});

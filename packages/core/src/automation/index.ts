@@ -149,6 +149,7 @@ export {
   countBucket,
   createDiagnosticEmitter,
   openDiagnosticCode,
+  reviewCodeOfSkip,
   reviewDiagnosticCode,
   storeEditDiagnosticCode,
   type DiagnosticEmitter,
@@ -165,6 +166,7 @@ export {
   diagnosticErrorName,
   documentPartKind,
   exceptionCause,
+  reviewSkipOfReason,
 } from './diagnostic-context.ts';
 export type {
   ByteSizeBucket,

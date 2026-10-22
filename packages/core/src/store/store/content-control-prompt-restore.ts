@@ -15,6 +15,7 @@ import {
 import {
   createNodeIdAllocator,
   findNode,
+  parentNodeOf,
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
@@ -28,7 +29,7 @@ import {
   isRunPropertiesNode,
 } from './tree-op-nodes.ts';
 import { paragraphLength } from './tree-op-segments.ts';
-import type { TreeOpResult } from './tree-op-types.ts';
+import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 /** The kinds whose empty content shows a prompt. A checkbox or a picture has none. */
 const PROMPT_KINDS: ReadonlySet<ContentControlKind> = new Set<ContentControlKind>([
@@ -57,18 +58,24 @@ function holdsContent(node: OoxmlNode, depth: number): boolean {
 export function restoreEmptiedPlaceholder(
   result: TreeOpResult,
   controlId: string,
-  options?: EditOptions
+  options?: EditOptions,
+  /** The text that stands in for the content; the type's own prompt when absent. */
+  prompt?: string
 ): TreeOpResult {
   if (!result.ok) return result;
   const control = findContentControl(result.part, controlId);
   if (!control) return result;
   const summary = contentControlPropertiesOf(control);
-  if (summary.showingPlaceholder || !PROMPT_KINDS.has(summary.type)) return result;
+  // A decision's placeholder also stands in an untyped control, which reads as rich text, and
+  // replaces a prompt the decision emptied.
+  const decision = prompt !== undefined;
+  if (summary.showingPlaceholder && !decision) return result;
+  if (!PROMPT_KINDS.has(summary.type) && !(decision && summary.type === 'untyped')) return result;
   const content = contentControlContentOf(control);
   if (!content || holdsContent(content, 0)) return result;
   const nextId = createNodeIdAllocator(result.part);
   const inline = isInlineControl(result.part, control.id);
-  const children = contentWithText(content, promptFor(summary.type), nextId, inline);
+  const children = contentWithText(content, prompt ?? promptFor(summary.type), nextId, inline);
   if (!children) return result;
   const sdtPr = contentControlPropertiesContainerOf(control);
   const properties = editedProperties(sdtPr, { showingPlaceholder: true }, nextId);
@@ -83,6 +90,44 @@ export function restoreEmptiedPlaceholder(
   const written = replaceNode(result.part, control.id, rebuilt, options);
   return written.ok ? { ...result, part: written.part } : result;
 }
+
+/**
+ * Restore the placeholder of each inline control a revision decision emptied. A decision writes
+ * five spaces under `w:showingPlcHdr`, the placeholder a control without its own prompt text
+ * shows, so the control keeps a place for the caret and for the next value.
+ */
+export function restoreDecisionEmptiedControls(
+  before: OoxmlPart,
+  decidedIds: Iterable<string>,
+  after: OoxmlPart,
+  options?: EditOptions
+): OoxmlPart {
+  const controls = new Set<string>();
+  const inside = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > MAX_INLINE_CONTAINER_DEPTH) return;
+    if (node.kind === 'contentControl') controls.add(node.id);
+    for (const child of node.children) inside(child, depth + 1);
+  };
+  // The controls around each decided change, and the ones a removed change held.
+  for (const id of decidedIds) {
+    for (let node = parentNodeOf(before, id); node; node = parentNodeOf(before, node.id))
+      if (node.kind === 'contentControl') controls.add(node.id);
+    const decided = findNode(before, id);
+    if (decided) inside(decided, 0);
+  }
+  let result: TreeOpResult = { ok: true, part: after, effect: NO_EFFECT };
+  for (const id of controls) {
+    if (!isInlineControl(before, id)) continue;
+    const control = findContentControl(before, id);
+    const content = control && contentControlContentOf(control);
+    if (!content || !holdsContent(content, 0)) continue;
+    result = restoreEmptiedPlaceholder(result, id, options, DECISION_PLACEHOLDER);
+  }
+  return result.ok ? result.part : after;
+}
+const DECISION_PLACEHOLDER = '     ';
+/** The effect is the caller's; the restore reads only the part. */
+const NO_EFFECT = {} as TreeOpEffect;
 
 /**
  * Where the caller's characters go once a prompt has been emptied.

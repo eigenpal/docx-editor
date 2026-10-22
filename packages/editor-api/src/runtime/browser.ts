@@ -23,9 +23,15 @@ import {
   editorPreviewActive,
   reportAutomationException,
   reportAutomationRefusal,
+  reportAutomationReviewSkip,
   type DocxEditorInstance,
 } from '@docx-editor.dev/core/editor';
-import { classifyRefusal, trackedDuring } from './diagnostics.ts';
+import {
+  classifyRefusal,
+  reviewOperationOf,
+  reviewRefusalCode,
+  trackedDuring,
+} from './diagnostics.ts';
 import { refusalCause } from './batch.ts';
 import { createRuntime, type DocxEditorRuntime, type RevisionTextView } from './runtime.ts';
 
@@ -71,6 +77,16 @@ export function createBrowser(
     save: false,
     // A refused batch reaches the editor's own diagnostics, so its telemetry module hears it.
     onRefusal: (error, operations) => {
+      const review = reviewRefusalCode(error);
+      if (review) {
+        reportAutomationReviewSkip(
+          editor,
+          review,
+          reviewOperationOf(operations),
+          refusalCause(error)
+        );
+        return;
+      }
       const { code, tracked } = classifyRefusal(error, host, operations);
       reportAutomationRefusal(editor, code, tracked, refusalCause(error));
     },

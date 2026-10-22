@@ -21,7 +21,11 @@ import type {
   AutomationErrorCode,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
-import { diagnosticCause, storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
+import {
+  diagnosticCause,
+  reviewSkipOfReason,
+  storeEditDiagnosticCode,
+} from '@docx-editor.dev/core/automation';
 import { DocxEditorError, type DocxEditorErrorCode } from './errors.ts';
 import type { QueuedAction } from './queue.ts';
 
@@ -90,7 +94,13 @@ export function hostFailure(
 ): DocxEditorError {
   const code = HOST_CODES[error.code] ?? 'GeneralException';
   const stale = code === 'StaleDocument';
-  const diagnostic = error.detail === undefined ? null : storeEditDiagnosticCode(error.detail);
+  // A refused tracked-change decision names its skip reason and structure, such as
+  // `incomplete-group:paired-change`; an edit names its rule.
+  const review = reviewSkipOfReason(error.detail);
+  const diagnostic =
+    error.detail === undefined
+      ? null
+      : (storeEditDiagnosticCode(error.detail) ?? review?.code ?? null);
   const failure = new DocxEditorError({
     code,
     ...(diagnostic === null ? {} : { diagnostic }),
@@ -102,7 +112,12 @@ export function hostFailure(
       ? { actualRevision: context.actualRevision }
       : {}),
   });
-  const cause = diagnosticCause(error.detail);
+  // A bare detail such as `locked-content` is its own cause; a structure the engine does not
+  // know, after a colon, names none.
+  const bare = error.detail !== undefined && !error.detail.includes(':');
+  const cause = review
+    ? (review.cause ?? (bare ? diagnosticCause(error.detail) : undefined))
+    : diagnosticCause(error.detail);
   if (cause) REFUSAL_CAUSES.set(failure, cause);
   return failure;
 }

@@ -1,0 +1,27 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A formatting change on text and its paragraph mark lists two decisions. Single decisions on formatting inside another change, on one move or vertical merge half, or on a deleted paragraph or row that holds another author's change, refuse. The visible bulk decision leaves table property history.",
+  "after": "Contiguous formatting changes by one author list one decision. A single or named decision resolves nested changes, whole moves and merges, the changes inside the content it removes, one changed cell of a row, and a merge head whose continuation row is deleted; accepting a deletion of a whole cell removes the cell in any decision order; rejecting an inserted cell and its neighbour's width change decide together; an alignment-only table change lists with the row and cell changes of its table, stays pending after a cell decision, and its rejection keeps the current alignment in rows without such changes; a change ends at the edge of a content control, hyperlink, simple field, or direction wrapper, and at an unchanged field character; changes in comment text list and resolve; a content lock keeps only the decisions that change what a control holds; a decision that empties a control restores its placeholder, moves an emptied block control inline, joins equal tables left side by side, and removes an emptied equation; a decision that would remove one half of another move refuses; filtered decisions resolve nested changes they keep. Collections list tracked cells, merges, and numbering. The visible bulk decision without a filter clears table property history.",
+  "reason": "Each replica derives the review queue from the shared tree, and decisions emit the existing revision resolution operations. Shared nodes, text offsets, operation kinds, and package serialization are unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/review-paragraph-mark-formatting.test.ts",
+    "packages/core/src/store/__tests__/revision-batch.test.ts",
+    "packages/core/src/store/__tests__/revision-explicit-decisions.test.ts",
+    "packages/editor-api/src/model/__tests__/model-revision-nested-decisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-mark-formatting-review.test.ts",
+    "packages/core/src/store/__tests__/revision-orphan-wrapper.test.ts",
+    "packages/core/src/store/__tests__/revision-emptied-cell.test.ts",
+    "packages/core/src/store/__tests__/revision-merge-deleted-row.test.ts",
+    "packages/core/src/store/__tests__/revision-table-alignment.test.ts",
+    "packages/core/src/store/__tests__/revision-table-alignment-rows.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revision-boundaries.test.ts",
+    "packages/core/src/store/__tests__/revision-boundary-rules.test.ts",
+    "packages/core/src/editor/__tests__/review-comment-text-revisions.test.ts",
+    "packages/core/src/store/__tests__/revision-neighbour-width.test.ts",
+    "packages/core/src/store/__tests__/revision-orphan-swept.test.ts"
+  ],
+  "changeset": "tracked-change-single-decisions",
+  "migration": null
+}

@@ -220,7 +220,8 @@ export interface UseReviewReturn {
    *
    * One verb for both, so a card can carry one "remove this" control whatever it holds.
    * Reports whether it landed — a comment the engine refused to delete must not vanish from
-   * the caller's own state while the document still holds it.
+   * the caller's own state while the document still holds it. A refused discard of a tracked
+   * change is recorded in `lastRefusal` with `action: 'reject'`, as a refused reject is.
    */
   readonly remove: (item: ReviewItemView) => boolean;
   /**
@@ -264,13 +265,15 @@ export interface UseReviewReturn {
    * packaged rail recorded. Set by a refused write and cleared by the next one that lands, and
    * by a change to the document, the editing mode, editability, the collaboration status or
    * the author filter. A caret move keeps it. The packaged cards show it as a sentence; a
-   * custom card reads `key` to place it and `code`, the public diagnostic code, to word it.
+   * custom card reads `key` to place it, `useReviewRefusalMessage()` to word it, and `code`, the
+   * public diagnostic code, to branch on the cause.
    *
    * @example
    * ```tsx
    * const { lastRefusal } = useReview();
+   * const refusalMessage = useReviewRefusalMessage();
    * // The packaged rail announces it; this only shows it.
-   * return lastRefusal?.key === item.key ? <p>{lastRefusal.code}</p> : null;
+   * return lastRefusal?.key === item.key ? <p>{refusalMessage(lastRefusal)}</p> : null;
    * ```
    */
   readonly lastRefusal: ReviewWriteRefusal | null;
@@ -449,7 +452,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       // put a refusal in the console for a button a surface should not have drawn.
       if (item.kind === 'custom') return false;
       if (item.kind === 'revision' && item.readOnly) return false;
-      return settle('remove', item.key, editor.deleteReviewItem(item.key));
+      // Discarding a tracked change rejects it, so its refusal reads as the reject's does.
+      const action = item.kind === 'revision' ? 'reject' : 'remove';
+      return settle(action, item.key, editor.deleteReviewItem(item.key));
     },
     [editor, settle]
   );

@@ -249,7 +249,7 @@ export class Body extends ModelObject {
    *
    * DocxEditor's own accessor: upstream reaches revisions from the document, and this story-scoped
    * collection is what makes a header's, footer's, or note's changes reachable at all. Recorded in
-   * `compat/manifest.json`. `items` may omit structural cards; collection-wide decisions still
+   * `compat/manifest.json`. `items` may omit a structural card with no single type; collection-wide decisions still
    * resolve every store-resolvable revision in this story.
    */
   get revisions(): RevisionCollection {
@@ -257,7 +257,7 @@ export class Body extends ModelObject {
       this.context,
       `${this.path.label}.revisions`,
       this.path,
-      this.#handle()
+      () => this.#handle()
     );
     return this.#revisions;
   }

@@ -96,9 +96,13 @@ export function comparableBody(pkg: OoxmlPackage): string {
   );
 }
 
+/** A run and the next one with the same properties: the second run's text joins the first. */
+const SAME_PROPERTY_RUNS =
+  /(<w:r>(<w:rPr>(?:(?!<\/?w:r[ >]).)*?<\/w:rPr>)<w:(t|delText)>(?:(?!<\/w:\3>).)*)<\/w:\3><\/w:r><w:r>\2<w:\3>/g;
+
 /**
  * Two adjacent revision elements of one author and date as one, and inside one revision, two
- * adjacent runs without properties as one run.
+ * adjacent runs with the same properties as one run.
  *
  * An edit splits another author's change into pieces, and a single store joins the pieces back
  * on its own schedule: when the text between them goes, or at its next edit of the paragraph.
@@ -117,11 +121,16 @@ function joinAdjacentRevisions(xml: string): string {
       '$1$4'
     );
   } while (joined !== previous);
-  return joined.replace(/<w:(ins|del)( [^>]*)?>(?:(?!<\/?w:\1[ >]).)*<\/w:\1>/g, (element) =>
-    element
+  return joined.replace(/<w:(ins|del)( [^>]*)?>(?:(?!<\/?w:\1[ >]).)*<\/w:\1>/g, (element) => {
+    let runs = element
       .replace(/ xml:space="preserve"/g, '')
-      .replace(/<\/w:(t|delText)><\/w:r><w:r><w:\1>/g, '')
-  );
+      .replace(/<\/w:(t|delText)><\/w:r><w:r><w:\1>/g, '');
+    for (let before = ''; before !== runs; ) {
+      before = runs;
+      runs = runs.replace(SAME_PROPERTY_RUNS, '$1');
+    }
+    return runs;
+  });
 }
 
 export function fingerprint(pkg: OoxmlPackage): string {

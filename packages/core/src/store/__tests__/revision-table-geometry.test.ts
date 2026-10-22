@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { collectRevisionSites } from '../store/tree-op-revisions.ts';
 import {
   applyTreeOp,
   readOoxmlPart,
@@ -159,8 +160,11 @@ for (const action of ['accept', 'reject'] as const) {
     );
     const part = load(body);
     const batch = planRevisionBatch(part, action);
-    const result = applyTreeOp(part, batch.ops[0]!);
-    expect(result.ok).toBe(false);
+    expect(batch.ops).toEqual([]);
+    expect(batch.result.skipped).toMatchObject([{ detail: 'locked-content' }]);
+    const siteNodeIds = collectRevisionSites(part).map((site) => site.node.id);
+    const op = action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions';
+    expect(applyTreeOp(part, { op, siteNodeIds }).ok).toBe(false);
     expect(serializeOoxmlPart(part)).toContain('protected');
   });
 }
@@ -230,7 +234,11 @@ for (const action of ['accept', 'reject'] as const) {
     const part = load(body);
     const before = serializeOoxmlPart(part);
     const batch = planRevisionBatch(part, action);
-    expect(applyTreeOp(part, batch.ops[0]!).ok).toBe(false);
+    expect(batch.ops).toEqual([]);
+    expect(batch.result.skipped).toMatchObject([{ detail: 'locked-content' }]);
+    const siteNodeIds = collectRevisionSites(part).map((site) => site.node.id);
+    const op = action === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions';
+    expect(applyTreeOp(part, { op, siteNodeIds }).ok).toBe(false);
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 }

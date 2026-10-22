@@ -168,11 +168,15 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The edit was refused for a reason without a specific code. Read snapshot().lastRejection for the local message.',
 
   'review.revision-unsupported':
-    'A tracked change of this kind cannot be accepted or rejected yet. It was left in the document.',
+    'The editor cannot accept or reject a tracked change of this kind, so it was left in the document. Keep it, or replace the content with a direct edit while change tracking is off.',
   'review.incomplete-group':
-    'The tracked change is part of a group that was not fully selected. Select the whole group, or resolve it from the review pane.',
+    'The tracked change resolves only together with a change the decision leaves out, such as the deleted row that holds it or a change the filter hides. Decide that change first, or clear the filter to review it.',
   'review.retained-structure':
-    'Resolving the tracked change would remove structure that other content still needs, so it was left in place.',
+    'The row stays because it holds a table whose rows are not tracked. To resolve the changes in its cells, use resolve(), or Accept All or Reject All in the editor; acceptAll() and rejectAll() refuse whole. Delete the row with change tracking off to remove it.',
+  'review.locked-content':
+    'A content control locks the content, so the decision would change locked text. Remove the lock (set `ContentControl.cannotEdit` to false, or ask the document owner), then decide the change.',
+  'review.bound-content':
+    'The change is in a content control bound to a custom XML part, which the editor cannot keep in step. Keep the change, or update the bound data and remove the binding outside the editor, then decide it.',
   'review.stale-revision':
     'The tracked change no longer exists, usually because it was resolved already. Read the review items again.',
 

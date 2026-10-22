@@ -7,12 +7,18 @@ import {
   bindNodeIds,
   planStructureEdit,
   STRUCTURE_WEIGHTS,
+  targetElements,
   type NodeAddressed,
+  type NodeTarget,
   type StructureEditKind,
 } from './structure-edits.ts';
 import {
   addPackageComment,
+  findNode,
   paragraphTextOf,
+  planRevisionBatch,
+  reviewItemKey,
+  revisionItemsOf,
   type StoryScope,
   type TreeDocOp,
   type TreePackageStore,
@@ -61,7 +67,11 @@ export type TrackedEditKind =
   | 'acceptRevision'
   | 'rejectRevision'
   | 'acceptAll'
-  | 'rejectAll';
+  | 'rejectAll'
+  // A decision on one review card, planned as the editor's card and the API plan it: whole
+  // moves and merges, and the changes inside the content it removes.
+  | 'acceptCard'
+  | 'rejectCard';
 
 /**
  * A tracked edit's date, from the seed so a seed replays exactly. Edits get different dates, so
@@ -93,6 +103,8 @@ export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
   rejectRevision: 0,
   acceptAll: 0,
   rejectAll: 0,
+  acceptCard: 0,
+  rejectCard: 0,
   ...STRUCTURE_WEIGHTS,
 };
 
@@ -100,6 +112,26 @@ export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
  * The mix of the `tracked` shapes: authors type and strike in suggesting mode inside, beside
  * and over each other's pending changes, while others accept and reject those changes.
  */
+/**
+ * The mix of the `trackedStructures` shapes: card decisions over formatting on text and marks,
+ * nested changes, moves, rows, and merges, beside typing and suggesting-mode edits.
+ */
+export const TRACKED_STRUCTURE_WEIGHTS: Partial<Record<EditKind, number>> = {
+  type: 10,
+  delete: 4,
+  trackedType: 20,
+  trackedDelete: 10,
+  acceptCard: 10,
+  rejectCard: 9,
+  acceptRevision: 3,
+  rejectRevision: 3,
+  acceptAll: 1,
+  rejectAll: 1,
+  split: 0,
+  join: 0,
+  format: 4,
+};
+
 export const TRACKED_WEIGHTS: Partial<Record<EditKind, number>> = {
   type: 10,
   delete: 4,
@@ -135,6 +167,51 @@ function revisionAt(
   return {
     revision: { id, author, ...(date === undefined ? {} : { date }) },
     localName: site.localName,
+  };
+}
+
+/**
+ * One card's decision, as the planner gives it, addressed by the position of each site it
+ * resolves so a replay binds it to the replica's own ids. Null when the card cannot resolve.
+ */
+function planCardDecision(
+  store: TreePackageStore,
+  random: () => number,
+  action: 'accept' | 'reject'
+): Addressed | null {
+  const part = store.bodyStore().part;
+  const items = revisionItemsOf(part).filter((item) => !item.readOnly);
+  if (items.length === 0) return null;
+  const item = items[Math.floor(random() * items.length)]!;
+  const plan = planRevisionBatch(part, action, [reviewItemKey(item)], undefined, {
+    countRemaining: false,
+    explicit: true,
+  });
+  const decision = plan.ops.find(
+    (op) => op.op === 'acceptAllRevisions' || op.op === 'rejectAllRevisions'
+  ) as { op: string; siteNodeIds?: readonly string[] } | undefined;
+  if (!decision?.siteNodeIds?.length) return null;
+  const targets: NodeTarget[] = [];
+  for (const id of decision.siteNodeIds) {
+    const node = findNode(part, id);
+    if (!node || node.kind === 'textValue') return null;
+    const attribute = (name: string) =>
+      node.attributes.find((entry) => entry.localName === name)?.value ?? '';
+    const target: NodeTarget = {
+      field: 'siteNodeIds',
+      localName: node.localName,
+      index: 0,
+      array: true,
+      identity: { id: attribute('id'), author: attribute('author'), date: attribute('date') },
+    };
+    const index = targetElements(part.root, target).findIndex((entry) => entry.id === id);
+    if (index < 0) return null;
+    targets.push({ ...target, index });
+  }
+  return {
+    kind: 'node',
+    op: { op: decision.op, siteNodeIds: [] } as unknown as TreeDocOp,
+    targets,
   };
 }
 
@@ -268,6 +345,9 @@ export function planEdit(
         paragraphs: [pick],
       };
     }
+    case 'acceptCard':
+    case 'rejectCard':
+      return planCardDecision(store, random, kind === 'acceptCard' ? 'accept' : 'reject');
     case 'acceptAll':
     case 'rejectAll':
       return {

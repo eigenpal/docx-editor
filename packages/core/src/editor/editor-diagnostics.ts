@@ -39,9 +39,19 @@ import {
   formattingChangeKind,
   reviewChangeKind,
 } from '../automation/diagnostic-context.ts';
-import type { FailureStage, ReviewOperation } from '../automation/diagnostic-vocabulary.ts';
+import type {
+  FailureStage,
+  ReviewDiagnosticCode,
+  ReviewOperation,
+} from '../automation/diagnostic-vocabulary.ts';
 import type { ReviewRevisionItem } from '../store/store/index.ts';
 import { READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
+
+/** The skip reason a refusal leads with, or `unsupported-revision` when it names none. */
+function leadingReviewReason(reason: string): string {
+  const token = reason.split(':', 1)[0]!;
+  return reviewDiagnosticCode(token) ? token : 'unsupported-revision';
+}
 
 /** A skipped change as the store reports it: the reason, the change, and the engine condition. */
 interface SkippedChange {
@@ -57,6 +67,7 @@ import {
   diagnosticCodeOfRefusal,
   fontDiagnosticCode,
   openDiagnosticCode,
+  reviewCodeOfSkip,
   reviewDiagnosticCode,
 } from './diagnostic-codes.ts';
 import { warnFontFailureOnce } from './font-configuration.ts';
@@ -141,6 +152,26 @@ export function reportAutomationRefusal(
   cause?: string
 ): void {
   AUTOMATION_REPORTERS.get(editor)?.(code, tracked, cause);
+}
+
+/** Each editor's reporter for a refused tracked-change decision from a runtime. */
+const AUTOMATION_REVIEW_REPORTERS = new WeakMap<
+  object,
+  (code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string) => void
+>();
+
+/**
+ * Report a tracked-change decision an editing API batch refused into the diagnostics of the
+ * editor it ran on, as one `review.skipped` event. `cause` is the structure behind the skip; a
+ * value the engine does not know is left out. Does nothing for an object that is not an editor.
+ */
+export function reportAutomationReviewSkip(
+  editor: object,
+  code: ReviewDiagnosticCode,
+  operation?: ReviewOperation,
+  cause?: string
+): void {
+  AUTOMATION_REVIEW_REPORTERS.get(editor)?.(code, operation, cause);
 }
 
 /**
@@ -265,7 +296,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     const groups = new Map<string, { readonly event: Record<string, unknown>; count: number }>();
     for (const [skipped, operation] of batches)
       for (const { reason, revision, detail } of skipped) {
-        const code = reviewDiagnosticCode(reason);
+        const code = reviewCodeOfSkip({ reason, ...(detail === undefined ? {} : { detail }) });
         if (!code) continue;
         const changeKind = reviewChangeKind(revision?.revisionKind);
         const formattingKind =
@@ -446,7 +477,22 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         const gate: EditDiagnosticCode = diagnosticCodeOfRefusal(result.reason, result.code);
         const gated =
           gate === 'edit.refresh-in-progress' || gate === 'edit.collaboration-not-ready';
-        if (result.code === 'notFound' || (result.code === 'unsupported' && item && !gated)) {
+        // A card a lock or a binding keeps is refused before the surface commit, so its
+        // rejected edit is reported here; it is still a skipped change.
+        const kept =
+          (result.code === 'locked' && result.reason.startsWith('locked-content:')) ||
+          (result.code === 'bound' && result.reason.startsWith('bound-content:'));
+        if (kept && inputRejections === reportedBefore)
+          deliver({
+            kind: 'edit.rejected',
+            code: gate,
+            origin: 'command',
+            tracked: tracked(),
+          });
+        if (
+          result.code === 'notFound' ||
+          ((result.code === 'unsupported' || kept) && item && !gated)
+        ) {
           // Read only on this failure path: the planner's preflight names the exact condition.
           const described = item ? describe(item, action) : {};
           const revision = item && {
@@ -454,15 +500,25 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
             partName: described.partName ?? '',
             ...(item.formattingKind ? { formattingKind: item.formattingKind } : {}),
           };
+          // A refusal led by a skip reason reports the structure behind it, such as
+          // `nested-table`, not the reason a second time.
+          const leading = reviewDiagnosticCode(result.reason.split(':', 1)[0]!) !== null;
           const detail =
             result.reason === READ_ONLY_REVISION_REASON
               ? (described.detail ?? 'read-only')
-              : (diagnosticCause(result.reason) ?? described.detail);
+              : leading
+                ? (described.detail ?? diagnosticCause(result.reason))
+                : (diagnosticCause(result.reason) ?? described.detail);
           reportSkips([
             [
               [
                 {
-                  reason: result.code === 'notFound' ? 'unknown-revision' : 'unsupported-revision',
+                  // A refusal that leads with a skip reason, such as a row kept for its nested
+                  // table, reports that reason, as the review UI's code does.
+                  reason:
+                    result.code === 'notFound'
+                      ? 'unknown-revision'
+                      : leadingReviewReason(result.reason),
                   ...(revision ? { revision } : {}),
                   detail,
                 },
@@ -590,6 +646,16 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         editor,
         (command, result) => void this.exec(command, tracked(), () => result)
       );
+      AUTOMATION_REVIEW_REPORTERS.set(editor, (code, operation, reason) => {
+        const cause = diagnosticCause(reason);
+        deliver({
+          kind: 'review.skipped',
+          code,
+          count: 1,
+          ...(operation ? { operation } : {}),
+          ...(cause ? { cause } : {}),
+        });
+      });
       AUTOMATION_REPORTERS.set(editor, (code, automationTracked, reason, exception) => {
         // Checked again here: a cause must be one the engine knows, whoever passes it.
         const cause = diagnosticCause(reason);

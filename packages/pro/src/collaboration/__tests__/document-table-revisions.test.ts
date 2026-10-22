@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import {
   planRevisionBatch,
+  reviewItemKey,
   revisionItemsOf,
   serializeOoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -61,3 +62,41 @@ for (const action of ['accept', 'reject'] as const) {
     expect(serializeOoxmlPart(bob.store.bodyStore().part)).toBe(after);
   });
 }
+
+test('a cell decision keeps a table alignment change pending for its row on both peers', async () => {
+  const width = (twips: number) => `<w:tcW w:w="${twips}" w:type="dxa"/>`;
+  const cell = (text: string) =>
+    `<w:tc><w:tcPr>${width(3000)}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+  const body =
+    '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:jc w:val="center"/><w:tblPrChange w:id="1" w:author="Ada"><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr></w:tblPrChange></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `<w:tr>${cell('a')}${cell('b')}<w:tc><w:tcPr>${width(1500)}<w:cellIns w:id="4" w:author="Ada"/><w:tcPrChange w:id="5" w:author="Ada"><w:tcPr>${width(3000)}</w:tcPr></w:tcPrChange></w:tcPr><w:p><w:r><w:t>inserted</w:t></w:r></w:p></w:tc></w:tr>` +
+    `<w:tr>${cell('x')}${cell('y')}${cell('z')}</w:tr></w:tbl><w:p/>`;
+  const { alice, bob } = await peers.pair(zipDocument(body));
+  const keyOf = (part: Parameters<typeof revisionItemsOf>[0], kind: string) =>
+    reviewItemKey(revisionItemsOf(part).find((item) => item.revisionKind === kind)!);
+  const decide = (peer: typeof alice, key: string) => {
+    const plan = planRevisionBatch(peer.store.bodyStore().part, 'reject', [key], undefined, {
+      explicit: true,
+    });
+    expect(plan.result.skipped).toEqual([]);
+    peers.apply(peer, plan.ops);
+    peers.expectConverged(alice, bob);
+  };
+  const alignment = keyOf(alice.store.bodyStore().part, 'format');
+  decide(alice, keyOf(alice.store.bodyStore().part, 'structural'));
+  expect(revisionItemsOf(bob.store.bodyStore().part).map(reviewItemKey)).toEqual([alignment]);
+  decide(bob, alignment);
+  const after = serializeOoxmlPart(alice.store.bodyStore().part);
+  expect(after).not.toContain('inserted');
+  expect(after).toContain(
+    '<w:tblPrEx><w:jc w:val="center"/></w:tblPrEx><w:trPr><w:jc w:val="center"/></w:trPr>'
+  );
+  expect(revisionItemsOf(alice.store.bodyStore().part)).toHaveLength(0);
+  expect(bob.room.session.undo()).toBe(true);
+  peers.expectConverged(alice, bob);
+  expect(revisionItemsOf(alice.store.bodyStore().part).map(reviewItemKey)).toEqual([alignment]);
+  expect(bob.room.session.redo()).toBe(true);
+  peers.expectConverged(alice, bob);
+  expect(serializeOoxmlPart(alice.store.bodyStore().part)).toBe(after);
+});

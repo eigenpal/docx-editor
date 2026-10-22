@@ -3117,6 +3117,9 @@ export function reportAutomationException(editor: object, error: unknown, tracke
 export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode, tracked: boolean, cause?: string): void;
 
 // @public
+export function reportAutomationReviewSkip(editor: object, code: ReviewDiagnosticCode, operation?: ReviewOperation, cause?: string): void;
+
+// @public
 export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;
 
 // @public
@@ -3198,6 +3201,9 @@ export interface ReviewAuthorInfo {
 }
 
 // @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.locked-content' | 'review.bound-content' | 'review.stale-revision';
+
+// @public
 export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
 
 // @public
@@ -3230,6 +3236,9 @@ export interface ReviewModuleContribution {
     readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
 
 // @internal
 export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number, overflow?: ReviewPaneOverflow): number | null;

@@ -130,10 +130,12 @@ describe('every op kind is classified, and an unclassified one reaches everythin
   });
 });
 
+// A decision that keeps the locked content as it reads, such as accepting an insertion, goes
+// through; one that would remove content, such as rejecting it, meets the lock.
 describe('accepting and rejecting a tracked change meets the lock', () => {
-  test('acceptRevision inside a locked control is refused', () => {
+  test('acceptRevision of an insertion inside a locked control keeps the content', () => {
     const part = lockedWithRevision();
-    expect(refusal(part, { op: 'acceptRevision', revision: QA })).toBe('locked');
+    expect(refusal(part, { op: 'acceptRevision', revision: QA })).toBeNull();
   });
 
   test('rejectRevision inside a locked control is refused', () => {
@@ -141,9 +143,9 @@ describe('accepting and rejecting a tracked change meets the lock', () => {
     expect(refusal(part, { op: 'rejectRevision', revision: QA })).toBe('locked');
   });
 
-  test('acceptAllRevisions is refused while any locked content carries one', () => {
+  test('acceptAllRevisions keeps the locked content, so it goes through', () => {
     const part = lockedWithRevision();
-    expect(refusal(part, { op: 'acceptAllRevisions' })).toBe('locked');
+    expect(refusal(part, { op: 'acceptAllRevisions' })).toBeNull();
   });
 
   test('rejectAllRevisions is refused the same way', () => {
@@ -171,8 +173,8 @@ describe('accepting and rejecting a tracked change meets the lock', () => {
     const notes = part.root.children.filter(
       (node) => node.kind !== 'textValue' && node.localName === 'footnote'
     );
-    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[0]!.id })).toBeNull();
-    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[1]!.id })).toBe('locked');
+    expect(refusal(part, { op: 'rejectAllRevisions', scopeRootId: notes[0]!.id })).toBeNull();
+    expect(refusal(part, { op: 'rejectAllRevisions', scopeRootId: notes[1]!.id })).toBe('locked');
   });
 
   // `sdtLocked` guards the control, not its content, so a decision about the content is allowed.
@@ -187,7 +189,8 @@ describe('all-revision decisions reach nested opposite-direction removals', () =
     `<w:sdt><w:sdtPr><w:lock w:val="sdtLocked"/></w:sdtPr><w:sdtContent>` +
     `<w:r><w:${textElement}>locked</w:${textElement}></w:r></w:sdtContent></w:sdt>`;
 
-  test('accept-all unwraps an insertion but refuses its nested locked deletion in note scope', () => {
+  // An sdtLocked control stays as an empty shell where a decision removes the content around it.
+  test('accept-all unwraps an insertion and keeps its nested deleted sdtLocked control', () => {
     const part = parseNotes(
       `<w:footnote w:id="1"><w:p>` +
         `<w:ins w:id="1" w:author="QA"><w:del w:id="2" w:author="QA">` +
@@ -199,7 +202,7 @@ describe('all-revision decisions reach nested opposite-direction removals', () =
     )!;
     const before = serializeOoxmlPart(part);
 
-    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: note.id })).toBe('locked');
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: note.id })).toBeNull();
     expect(serializeOoxmlPart(part)).toBe(before);
     expect(
       refusal(part, {
@@ -210,7 +213,7 @@ describe('all-revision decisions reach nested opposite-direction removals', () =
     ).toBeNull();
   });
 
-  test('reject-all unwraps a deletion but refuses its nested locked insertion', () => {
+  test('reject-all unwraps a deletion and keeps its nested inserted sdtLocked control', () => {
     const part = parseDoc(
       `<w:p><w:del w:id="1" w:author="QA">` +
         `<w:ins w:id="2" w:author="QA">${locked('t')}</w:ins>` +
@@ -218,7 +221,7 @@ describe('all-revision decisions reach nested opposite-direction removals', () =
     );
     const before = serializeOoxmlPart(part);
 
-    expect(refusal(part, { op: 'rejectAllRevisions' })).toBe('locked');
+    expect(refusal(part, { op: 'rejectAllRevisions' })).toBeNull();
     expect(serializeOoxmlPart(part)).toBe(before);
     expect(
       refusal(part, {

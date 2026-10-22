@@ -325,7 +325,7 @@ Use plain text and explicit revision information when preparing a model prompt. 
 
 ## Inspect revisions by story
 
-`Document.revisions` addresses the main story. `Body.revisions` addresses that body's story, including a header, footer, or note. It never merges all stories into one collection.
+`Document.revisions` addresses the main story. `Body.revisions` addresses that body's story, including a header, footer, note, or text box. It never merges all stories into one collection, so `Document.revisions.acceptAll()` leaves changes in those stories pending. The editor's **Accept All** resolves the changes in every story. Tracked changes to style definitions belong to no story, so no revision collection lists or resolves them. The editor's **Accept All** and **Reject All** without a filter resolve them with the document's other changes.
 
 Load collection membership, then load `author`, `date`, and `type`:
 
@@ -348,7 +348,7 @@ const pending = await runtime.run(async (context) => {
 
 `Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `setAuthor()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
 
-`items` omits a formatting change that leaves the resolved formatting unchanged after styles and list levels apply, as the editor's review list does. `acceptAll()` and `rejectAll()` on the story's collection still remove it, and a story-wide `setAuthor()` leaves its author unchanged.
+`items` lists tracked rows as `Insert` or `Delete`, and tracked cells, cell merges, and list numbering as `CellInsertion`, `CellDeletion`, `CellMerge`, and `ParagraphNumber`. It omits a formatting change that leaves the resolved formatting unchanged after styles and list levels apply, as the editor's review list does, and history with no single type, such as a table grid change. `acceptAll()` and `rejectAll()` on the story's collection still remove it, and a story-wide `setAuthor()` leaves its author unchanged.
 
 ## Inspect revisions in a range
 
@@ -379,7 +379,7 @@ await runtime.run(async (context) => {
 On a range collection, `acceptAll()` and `rejectAll()` resolve every change the range overlaps, in one transaction:
 
 - A change that the range covers in part resolves whole, including its characters outside the range.
-- Structural changes and unchanged-formatting records that `items` omits, such as a complete tracked row, resolve too.
+- Records that `items` omits, such as table grid history or unchanged formatting, resolve too.
 - If the range overlaps only part of a group of nested changes, only the overlapped changes resolve, and the others stay pending.
 - If one of the changes is read-only or can't resolve, the sync fails with `NotImplemented` and nothing changes.
 - If two decisions in one sync reach the same change, the later one skips it. Contrary decisions on one change fail with `ConflictingChanges`.
@@ -414,14 +414,14 @@ await runtime.run(async (context) => {
 
 Read `result.value` after `context.sync()`. Changes commit in one transaction and one undo step. Browser writes require the Pro review module and an editable document.
 
-To process the whole story, omit the selection. This includes complete tracked rows and reports unsupported changes omitted from `items`:
+To process the whole story, omit the selection. This includes history omitted from `items` and reports unsupported changes:
 
 ```ts
 await runtime.run(async (context) => {
   const result = context.document.revisions.resolve('reject');
   await context.sync();
   for (const skipped of result.value.skipped) {
-    console.log(skipped.revision?.author, skipped.reason);
+    console.log(skipped.revision?.author, skipped.reason, skipped.detail ?? '');
   }
 });
 ```
@@ -433,19 +433,50 @@ Keep `resolve()` as the only write in its sync batch; reads can share the batch.
 | Field | Meaning |
 | --- | --- |
 | `resolved` | Resolved decisions, with their key, author, part name, and revision kind. |
-| `skipped` | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
+| `skipped` | Requested decisions left pending, with a key, reason, `revision` metadata when known, and a `detail` such as `locked-content` when the engine names the condition. |
 | `remaining` | Number of pending decisions in the story, including excluded and unsupported changes. |
 
 A decision can contain several XML markers, such as split deletion fragments. A replacement keeps its deletion and addition decisions separate. A successful batch can leave changes pending:
 
 | Skip reason | Next step |
 | --- | --- |
-| `unsupported-revision` | Resolve the unsupported structure in Word. Independent supported changes can still resolve. |
-| `incomplete-group` | Review and select all related decisions together. |
+| `unsupported-revision` | The change has a structure this API cannot resolve. Keep it, or replace the content with a direct edit while tracking is off. Independent supported changes can still resolve. With the `locked-content` detail, a content lock keeps the change: remove the lock to decide it. With the `bound-content` detail, a data binding keeps it: keep it, or update the bound data and remove the binding outside the editor. |
+| `incomplete-group` | The change resolves only together with a change the decision leaves out. Under an author or tracked-changes filter, the other change is hidden: clear the filter to review it first. Without a filter, the other change is often the deleted row that holds this change, as with a merge continuation in a deleted row. Decide that change first, or decide both in one `resolve()` call. |
 | `retained-structure` | A row remains to preserve nested table content. Other selected text changes may have applied; inspect the remaining decision. |
 | `unknown-revision` | Reload the collection; the target no longer exists. |
 
-Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. A single `Revision.accept()` or `Revision.reject()` call on a text insertion or deletion nested in another pending text change resolves that change alone, also when several authors' changes share one insertion. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection. A `retained-structure` result is different: supported text changes in the selected row can resolve while its structural marker stays pending to preserve the nested table.
+Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form groups. A single `Revision.accept()` or `Revision.reject()` call follows these rules:
+
+- A text insertion or deletion nested in another pending text change resolves alone, also when several authors' changes share one insertion.
+- A run formatting change inside an insertion or deletion, and the change around it, also resolve alone.
+- A change to one table cell resolves alone, also when other cells in the row have their own changes.
+- One half of a move or cell merge resolves both halves. The other half's object then names a change that is gone, so a call on it in a later sync fails with `InvalidObjectPath`. Queue decisions in one sync, or load `items` again after each sync.
+- Accepting a merge whose continuation is in a deleted row resolves the merge's first cell alone. The row's decision removes the continuation. Accepting the continuation itself refuses with `incomplete-group`, because it would clear the row's deleted text. Decide the row first, or decide both in one `resolve()` call.
+- Accepting the deletion of every paragraph in a table cell, its last paragraph mark too, removes the cell. A row with no cells left, and a table with no rows left, go too. The order of the decisions does not change the result: accepting the deleted mark of a cell's last paragraph joins that paragraph into the one before it.
+- Rejecting an inserted cell, or accepting a deleted one, also decides the width change on the cell beside it that takes its space, so the row is the same as after **Accept All** or **Reject All**. When one author made both changes, a decision on the width change also decides the cell. A decision on another author's width change leaves the cell pending, and so does a decision that reaches a width change only through another change, such as a table alignment change. The cell decided later can then span the freed columns. A decision on the cell leaves a table alignment change pending, and a decision on the alignment change leaves the cell pending.
+- An alignment-only table change and the row and cell formatting changes in that table are one change, named after the author of the row or cell change. A table with no such change has no pending alignment change.
+- An alignment-only table change applies to the rows that hold a row or cell formatting change. Rejecting it restores the old alignment in those rows and keeps the current alignment in the others. The table states the alignment of its first row, and each other row states its own alignment in `w:tblPrEx`. The editor lays out every row at the alignment of the table.
+- A decision on a cell that removes the last formatting change of its row keeps an unchanged row formatting change (`w:trPrChange`) in that row, so the alignment change stays pending for the row.
+- A moved paragraph's marks are separate decisions, so a moved paragraph takes up to three calls.
+- A change ends at the edge of a content control, hyperlink, simple field, or `w:dir` wrapper. Text inserted on both sides of the edge is two revisions. A field character that the change does not hold also ends it, so a field instruction and its result are separate revisions. The mark of the last paragraph in a block content control is a revision of its own, unless the control ends a table cell. Bookmarks and comment ranges do not end a change.
+- A tracked row inside a row-level content control, such as a repeating section item, is one revision.
+- A change inside an equation is part of the text change around it, so a deleted paragraph that holds an equation is one revision.
+- A field reads as one character, so the range of a change inside a field result, and a range that finds it, is the whole field.
+- Inside a content-locked control (`contentLocked` or `sdtContentLocked`), a decision applies only when it keeps the content as it reads: accepting an insertion or a formatting change, or rejecting a deletion. Rejecting an insertion, accepting a deletion, and rejecting a formatting change leave the change pending. Accept All and Reject All skip those changes with the `locked-content` detail. A single decision on one of them, and `acceptAll()` or `rejectAll()` over one, fail with `GeneralException` and `debugInfo.innerError.code` set to `review.locked-content`. To decide the change, set `ContentControl.cannotEdit` to `false` first.
+- A decision that removes a control locked against removal (`sdtLocked`) keeps the control, empty.
+- A change inside a data-bound control (`w:dataBinding`) stays pending, because the engine cannot keep the bound data part in step. Accept All and Reject All skip it with the `bound-content` detail. A single decision on it, and `acceptAll()` or `rejectAll()` over it, fail with `GeneralException` and `debugInfo.innerError.code` set to `review.bound-content`.
+- A decision that empties an inline content control gives it a placeholder of five spaces under `w:showingPlcHdr`. A block content control that a decision empties moves inline to the start of the next paragraph, with the same placeholder.
+- A paragraph that a decision empties, and whose mark it removes, goes when a block content control follows it, or when it is the last paragraph of a text box. A table cell, a block content control, and a comment keep their last paragraph.
+- Two tables with the same properties and grid that a decision leaves side by side become one table.
+- A decision that empties an equation removes it.
+- Changes inside comment text are review items in the editor, and every editor decision resolves them. `document.revisions` covers the main body.
+- A legacy `w:numberingChange` record is not a revision. **Accept All** and **Reject All** remove it and keep the list.
+- A call that removes content, such as accepting a deleted paragraph or row, also resolves the changes inside that content. A change that the removed content holds only in part, such as one table formatting change that records both the table grid and the removed row's cells, resolves whole.
+- Rejecting a formatting change restores the earlier properties. Another author's change inside the replaced properties, such as tracked numbering, resolves with it and is reported in `resolved`.
+
+`resolve()` with a list of revisions decides them as single calls on them would, with one exception. A row that must stay to keep a nested table makes a single call refuse whole. `resolve()` resolves the other selected changes and reports the row as `retained-structure`.
+
+A toolbar decision under an author or tracked-changes filter, which names no keys, is stricter. It skips a decision that would also resolve a change the filter hides. A card decision, or keys you name, decides as a single call would, also under a filter: a change it takes along can be by a hidden author. A decision with keys lists that change in `resolved`; a card decision returns only whether it applied.
 
 Pass an empty array to select nothing. Duplicate objects resolve once; stale objects produce `unknown-revision`. Objects from another context or story fail validation.
 
@@ -487,6 +518,26 @@ To include all authors across supported stories, pass `scope: 'document'`. To re
 
 The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
 
+Changes named by `keys` resolve as card decisions on them would, so a change inside removed content goes with it. Without keys, a decision under an author or tracked-changes filter is stricter: it skips a change that would also resolve a change the filter hides. With keys, a change taken along can be by a hidden author, and `resolved` lists it. A row kept for a nested table is skipped as `retained-structure`, while the changes in its cells and the other selected changes resolve.
+
+| Result | When |
+| --- | --- |
+| `notFound` | No listed change is selected by the scope or filter. |
+| `unsupported` | Every selected change is skipped with nothing to apply, or `unsupported: 'fail'` is set and one is skipped. Keys that name no pending change, such as keys read before another decision, answer the same way: read the review items again. A retained row whose cells hold changes still applies them, so it answers `ok`. |
+| `locked` | The document is open for viewing, the content is protected, or a content control lock keeps every selected change. |
+| `bound` | A data-bound content control holds every selected change. |
+
+If a decision is refused, `reviewCodeOfRefusal(result.reason)` from `@docx-editor.dev/core` gives its review code, such as `review.locked-content` or `review.bound-content`.
+
+To tell a reader which changes stayed pending after a toolbar decision, listen for `reviewChangesResolved`. `reviewCodeOfSkip(skip)` gives each change's review code. The packaged review pane shows that code's sentence on the first such card:
+
+```ts
+editor.on('reviewChangesResolved', ({ action, resolvedCount, skipped }) => {
+  for (const skip of skipped) markCard(skip.key, reviewCodeOfSkip(skip));
+  console.log(`${action}: ${resolvedCount} resolved, ${skipped.length} pending`);
+});
+```
+
 ## Work with review items
 
 A review panel lists cards from `useReview().items` or `editor.getReviewItems()`. Each card has a `key`. Pass the key to these DocxEditor functions to act on the same item through the object model:
@@ -513,7 +564,7 @@ function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key:
 }
 ```
 
-Use `getReviewItemRevisions` to decide a card. Its collection refuses `resolve()` and `setAuthor()` with `NotSupported`. Use the story's `body.revisions` for those operations. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
+Use `getReviewItemRevisions` to decide a card. Its collection refuses `resolve()` and `setAuthor()` with `NotSupported`. Use the story's `body.revisions` for those operations. A text change that holds a nested text change by another author resolves alone, and the nested change stays pending. Rejecting a formatting change restores the earlier properties, so another author's change inside the replaced properties, such as tracked numbering, resolves with it and is reported in `resolved`; a decision under a filter skips it. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
 
 A key names an item in the current document. After someone accepts or rejects that change, the key names nothing:
 
@@ -586,7 +637,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Omitting a selection includes structural changes, such as tracked rows, that `items` omits. It also takes the changes of human authors, so pass a selection when you mean only some authors. An empty array selects nothing.
+Omitting a selection includes history that `items` omits. It also takes the changes of human authors, so pass a selection when you mean only some authors. An empty array selects nothing.
 
 The revision objects you pass stay valid. After the sync, load `author` again to read the new value. Selection rules and transactions match `resolve()`. Browser writes require the Pro review module and an editable document.
 
@@ -670,11 +721,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-These collection methods ignore editor filters and fail the entire sync if any revision is unsupported. They include complete tracked rows omitted from `items`. An empty collection succeeds and keeps document content unchanged.
+These collection methods ignore editor filters and fail the entire sync if any revision is unsupported, or if a row must stay to keep a nested table (`review.retained-structure`). They include history omitted from `items`. An empty collection succeeds and keeps document content unchanged.
 
 Malformed content revision wrappers refuse resolution and retain their content. This includes `w:ins` or `w:del` wrappers containing paragraphs.
 
-If a strict batch fails with `NotImplemented`, use `resolve()` to process supported changes and report what remains. For `StaleDocument`, start a fresh run and reload revisions before deciding again.
+If a strict batch fails with `NotImplemented`, or with `GeneralException` and `review.locked-content` or `review.bound-content` for a change a content control keeps, use `resolve()` to process supported changes and report what remains. For `StaleDocument`, start a fresh run and reload revisions before deciding again.
 
 ### Update existing integrations
 

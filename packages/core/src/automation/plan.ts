@@ -2417,9 +2417,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getRevisionRange': {
         const found = revisionAt(operation.revision);
         if (!found.ok) return found.planned;
-        const [first] = found.item.item.ranges;
+        const { ranges } = found.item.item;
+        const first = ranges[0];
         if (!first) return refuse('invalid-handle', 'that change covers no characters');
-        const span = spanOfReviewRange(found.reads, first);
+        // A change over several paragraphs spans from its first range to its last; a row or
+        // cell change keeps its first range.
+        const structural = found.item.item.revisionKind === 'structural';
+        const last = structural ? first : { ...first, end: ranges[ranges.length - 1]!.end };
+        const span = spanOfReviewRange(found.reads, last) ?? spanOfReviewRange(found.reads, first);
         if (!span) return refuse('invalid-handle', 'that change’s range is no longer in the story');
         return query({ kind: 'span', span });
       }

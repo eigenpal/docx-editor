@@ -240,8 +240,11 @@ export interface ReviewSkippedDiagnostic extends DiagnosticBase {
   /** The role of the part the changes are in, such as `'footnotes'`. Never its name. */
   readonly part?: DocumentPartKind;
   /**
-   * For `review.revision-unsupported`, the engine condition that refused the change, such as
-   * `unaddressed` (no `w:id` or author) or `unrecorded-properties`. See `diagnosticCauses()`.
+   * The structure behind the skip. For `review.revision-unsupported`, the engine condition that
+   * refused the change, such as `unaddressed` (no `w:id` or author). For
+   * `review.incomplete-group`, the change the decision would also decide, such as
+   * `paired-change` (the other half of a move or merge) or `removed-content`. For
+   * `review.retained-structure`, `nested-table`. See `diagnosticCauses()`.
    */
   readonly cause?: string;
 }

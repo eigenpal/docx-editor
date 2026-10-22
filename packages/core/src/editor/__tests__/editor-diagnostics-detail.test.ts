@@ -10,6 +10,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { collectReviewItems } from '../../store/index.ts';
 import {
   diagnosticCause,
   diagnosticCauses,
@@ -17,6 +18,7 @@ import {
   documentPartKind,
   formattingChangeKind,
 } from '../../automation/diagnostic-context.ts';
+import { reviewCodeOfSkip } from '../diagnostic-codes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -310,4 +312,110 @@ describe('context helpers', () => {
     expect(formattingChangeKind(SECRET_PART)).toBe('other');
     expect(formattingChangeKind(undefined)).toBeUndefined();
   });
+});
+
+test('a card decision refused for a kept row reports the structure behind it', () => {
+  const { events, module } = observe();
+  const stamp = (id: number) => `w:id="${id}" w:author="Ada" w:date="2026-10-01T10:00:00Z"`;
+  const cell = (content: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
+  const inserted = (id: number, text: string) =>
+    `<w:p><w:pPr><w:rPr><w:ins ${stamp(id)}/></w:rPr></w:pPr><w:ins ${stamp(id + 1)}><w:r><w:t>${text}</w:t></w:r></w:ins></w:p>`;
+  // An inserted row that holds a nested table with an untracked row stays when it is rejected.
+  const nested =
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="1500"/></w:tblGrid>' +
+    `<w:tr>${cell(paragraph('inner'))}</w:tr></w:tbl>`;
+  const body =
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `<w:tr>${cell(paragraph('a'))}${cell(paragraph('b'))}</w:tr>` +
+    `<w:tr><w:trPr><w:ins ${stamp(30)}/></w:trPr>${cell(nested + inserted(32, ''))}${cell(inserted(34, 'n2'))}</w:tr>` +
+    `</w:tbl>${paragraph('After')}`;
+  const review = {
+    id: 'review',
+    review: {
+      displayModes: ['all-markup', 'proposed', 'original'] as const,
+      collectReviewItems,
+      revisionItemsOfParagraph: () => [],
+    },
+  };
+  const editor = createDocxEditor({
+    container: mount(),
+    document: docx(body),
+    modules: [review, module],
+  });
+  try {
+    const row = editor
+      .getReviewItems({ placement: false })
+      .find((entry) => entry.item.kind === 'revision' && entry.item.revisionKind === 'structural')!;
+    expect(editor.rejectReviewItem(row.key).ok).toBe(false);
+    expect(events.filter((event) => event.kind === 'review.skipped')).toEqual([
+      expect.objectContaining({
+        code: 'review.retained-structure',
+        operation: 'reject',
+        changeKind: 'structural',
+        cause: 'nested-table',
+      }),
+    ]);
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('a change a content lock keeps reports the lock code on every path', () => {
+  const { events, module } = observe();
+  const stamp = (id: number) => `w:id="${id}" w:author="Ada" w:date="2026-01-02T03:04:05Z"`;
+  const bold = `<w:rPr><w:b/><w:rPrChange ${stamp(2)}><w:rPr/></w:rPrChange></w:rPr>`;
+  const body =
+    '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+    `<w:p><w:ins ${stamp(1)}><w:r><w:t>${SECRET_TEXT}</w:t></w:r></w:ins>` +
+    `<w:r>${bold}<w:t>b</w:t></w:r></w:p></w:sdtContent></w:sdt>`;
+  const review = {
+    id: 'review',
+    review: {
+      displayModes: ['all-markup', 'proposed', 'original'] as const,
+      collectReviewItems,
+      revisionItemsOfParagraph: () => [],
+    },
+  };
+  const editor = createDocxEditor({
+    container: mount(),
+    document: docx(body),
+    modules: [review, module],
+  });
+  try {
+    const locked = expect.objectContaining({
+      code: 'review.locked-content',
+      operation: 'reject',
+      cause: 'locked-content',
+    });
+    editor.exec({ type: 'resolveAllReviewChanges', action: 'reject' });
+    expect(events.filter((event) => event.kind === 'review.skipped')).toEqual([
+      expect.objectContaining({ changeKind: 'insert' }),
+      expect.objectContaining({ changeKind: 'format' }),
+    ]);
+    expect(events.filter((event) => event.kind === 'review.skipped')).toEqual([locked, locked]);
+    // A text card and a formatting card both stay locks to the host, with the lock code.
+    for (const entry of editor.getReviewItems({ placement: false })) {
+      events.length = 0;
+      expect(editor.rejectReviewItem(entry.key)).toMatchObject({ ok: false, code: 'locked' });
+      // Reported once each, edit.rejected first, as for every refused card.
+      expect(events.map((event) => [event.kind, 'code' in event ? event.code : null])).toEqual([
+        ['edit.rejected', 'edit.protected-content'],
+        ['review.skipped', 'review.locked-content'],
+      ]);
+      expect(events.filter((event) => event.kind === 'review.skipped')).toEqual([locked]);
+    }
+    expectNoSecrets(events);
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('a skipped change names its detail code first, then its reason code', () => {
+  const reason = 'unsupported-revision';
+  expect(reviewCodeOfSkip({ reason, detail: 'locked-content' })).toBe('review.locked-content');
+  expect(reviewCodeOfSkip({ reason, detail: 'bound-content' })).toBe('review.bound-content');
+  expect(reviewCodeOfSkip({ reason, detail: 'read-only' })).toBe('review.revision-unsupported');
+  expect(reviewCodeOfSkip({ reason: 'retained-structure' })).toBe('review.retained-structure');
+  expect(reviewCodeOfSkip({ reason: '__proto__', detail: 'constructor' })).toBeNull();
 });

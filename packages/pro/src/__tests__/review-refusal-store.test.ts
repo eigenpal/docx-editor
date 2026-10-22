@@ -7,7 +7,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { expect, test } from 'bun:test';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
-import { reviewRefusalStore } from '../review/review-refusal.ts';
+import {
+  reviewRefusalLabelKey,
+  reviewRefusalMessage,
+  reviewRefusalStore,
+  reviewWriteRefusalOf,
+} from '../review/review-refusal.ts';
 
 function fakeEditor() {
   const state = { revision: 1, mode: 'editing', editable: true, collaboration: 'ready' };
@@ -27,7 +32,8 @@ function fakeEditor() {
       return () => set.delete(listener);
     },
   } as unknown as Editor;
-  const emit = (event: string) => listeners.get(event)?.forEach((listener) => listener());
+  const emit = (event: string, payload?: unknown) =>
+    listeners.get(event)?.forEach((listener) => (listener as (value: unknown) => void)(payload));
   const listenerCount = () => [...listeners.values()].reduce((sum, set) => sum + set.size, 0);
   return { editor, state, emit, listenerCount };
 }
@@ -59,8 +65,8 @@ test('a change of state clears the refusal; a caret move does not', () => {
   const store = reviewRefusalStore(editor);
   let notified = 0;
   const off = store.subscribe(() => (notified += 1));
-  // Idle: nothing held, so the store watches nothing on the editor.
-  expect(listenerCount()).toBe(0);
+  // Idle: nothing held, so the store watches only for an accept-all that leaves changes.
+  expect(listenerCount()).toBe(1);
 
   store.record('remove', 'k1', REFUSED);
   expect(notified).toBe(1);
@@ -72,8 +78,9 @@ test('a change of state clears the refusal; a caret move does not', () => {
   emit('change');
   expect(store.get()).toBeNull();
   expect(notified).toBe(2);
-  expect(listenerCount()).toBe(0);
+  expect(listenerCount()).toBe(1);
   off();
+  expect(listenerCount()).toBe(0);
 });
 
 test('every refusal moves the sequence, so a repeat is announced again', () => {
@@ -119,4 +126,101 @@ test('a refusal from an ended session is final', () => {
   expect(store.get()).toMatchObject({ code: 'edit.collaboration-not-ready', final: true });
   store.record('accept', 'k1', REFUSED);
   expect(store.get()!.final).toBe(false);
+});
+
+test('a tracked change the engine could not decide names its review code and sentence', () => {
+  for (const [reason, code, label] of [
+    [
+      'retained-structure: the row stays',
+      'review.retained-structure',
+      'review.refusedRetainedStructure',
+    ],
+    [
+      'incomplete-group: each change would also resolve',
+      'review.incomplete-group',
+      'review.refusedIncompleteGroup',
+    ],
+    [
+      'locked-content: the change stays pending',
+      'review.locked-content',
+      'review.refusedLockedContent',
+    ],
+    [
+      'bound-content: the change stays pending',
+      'review.bound-content',
+      'review.refusedBoundContent',
+    ],
+    ['unsupported-revision: read-only', 'review.revision-unsupported', 'review.refusedUnsupported'],
+    ['unknown-revision', 'review.stale-revision', 'review.refusedStale'],
+  ] as const) {
+    const refusal = reviewWriteRefusalOf(
+      'accept',
+      'k',
+      { ok: false, code: 'unsupported', reason },
+      1
+    );
+    expect(refusal?.code).toBe(code);
+    expect(reviewRefusalLabelKey(refusal?.code, 'review.actionRefused')).toBe(label);
+  }
+});
+
+test('an accept-all that leaves a change pending holds the reason on that change', () => {
+  const { editor, emit } = fakeEditor();
+  const store = reviewRefusalStore(editor);
+  const off = store.subscribe(() => {});
+  emit('reviewChangesResolved', {
+    action: 'reject',
+    resolvedCount: 1,
+    skipped: [{ key: 'row', reason: 'retained-structure' }],
+  });
+  expect(store.get()).toMatchObject({
+    action: 'reject',
+    key: 'row',
+    code: 'review.retained-structure',
+  });
+  emit('reviewChangesResolved', { action: 'accept', resolvedCount: 2, skipped: [] });
+  expect(store.get()).toBeNull();
+  // A skipped half of a replacement names the pair's card, which the pane lists.
+  emit('reviewChangesResolved', {
+    action: 'accept',
+    resolvedCount: 0,
+    skipped: [{ key: 'half', pairKey: 'pair', reason: 'incomplete-group' }],
+  });
+  expect(store.get()).toMatchObject({ key: 'pair', code: 'review.incomplete-group' });
+  // A lock or a binding names its own code and sentence, as a card decision on it does.
+  for (const [detail, code] of [
+    ['locked-content', 'review.locked-content'],
+    ['bound-content', 'review.bound-content'],
+  ] as const) {
+    emit('reviewChangesResolved', {
+      action: 'accept',
+      resolvedCount: 0,
+      skipped: [{ key: 'kept', reason: 'unsupported-revision', detail }],
+    });
+    expect(store.get()).toMatchObject({ key: 'kept', code });
+  }
+  off();
+});
+
+test('the packaged sentence for a refusal reads its cause, or the action sentence', () => {
+  const t = (key: string) => `<${key}>`;
+  const retained = reviewWriteRefusalOf(
+    'reject',
+    'row',
+    { ok: false, code: 'unsupported', reason: 'retained-structure: the row stays' },
+    1
+  )!;
+  expect(reviewRefusalMessage(retained, t)).toBe('<review.refusedRetainedStructure>');
+  const other = reviewWriteRefusalOf('reply', 'c', REFUSED, 2)!;
+  expect(reviewRefusalMessage({ ...other, code: 'edit.refused' }, t)).toBe('<review.replyRefused>');
+});
+
+test('a stale card names the stale code; a reply never names a review code', () => {
+  const stale = {
+    ok: false as const,
+    code: 'notFound' as const,
+    reason: 'unknown-revision: no revision with that key',
+  };
+  expect(reviewWriteRefusalOf('accept', 'k', stale, 1)?.code).toBe('review.stale-revision');
+  expect(reviewWriteRefusalOf('reply', 'c', stale, 2)?.code).not.toMatch(/^review\./);
 });

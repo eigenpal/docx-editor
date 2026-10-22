@@ -362,3 +362,33 @@ describe('Vue review layout preferences', () => {
     }
   });
 });
+
+test('a hidden balloon mounts without wiring listeners or failing', async () => {
+  const errors: unknown[] = [];
+  const original = console.error;
+  const originalWarn = console.warn;
+  console.error = (...args: unknown[]) => errors.push(args);
+  console.warn = (...args: unknown[]) => {
+    if (String(args[0]).includes('mounted hook')) errors.push(args);
+  };
+  try {
+    const mounted = mountEditorTree(
+      () => [],
+      BALLOON_SOURCE,
+      () => [
+        h(DocxEditorReview, { revisionsIn: 'balloons' }, () => [
+          h(DocxEditorReview.Balloon, { hidden: true }),
+        ]),
+      ],
+      [reviewModule()],
+      { author: 'Grace Hopper' }
+    );
+    await flush();
+    await flush();
+    expect(errors).toEqual([]);
+    mounted.unmount();
+  } finally {
+    console.error = original;
+    console.warn = originalWarn;
+  }
+});

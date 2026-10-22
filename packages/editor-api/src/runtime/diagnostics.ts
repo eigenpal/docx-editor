@@ -22,6 +22,8 @@ import {
   type DocumentOpenDiagnosticCode,
   type DocumentPartKind,
   type EditDiagnosticCode,
+  type ReviewDiagnosticCode,
+  type ReviewOperation,
 } from '@docx-editor.dev/core/automation';
 import type { DocxEditorError } from './errors.ts';
 import { refusalCause } from './batch.ts';
@@ -68,6 +70,19 @@ export type RuntimeDiagnostic = {
       readonly errorName?: DiagnosticErrorName;
       /** `automation` when `cause` is `exception`. */
       readonly stage?: 'automation';
+    }
+  | {
+      /** A tracked-change decision the batch refused, with why and in what structure. */
+      readonly kind: 'review.skipped';
+      readonly code: ReviewDiagnosticCode;
+      /** Always 1: a refused batch is one decision. */
+      readonly count: number;
+      readonly operation?: ReviewOperation;
+      /**
+       * The structure behind the skip, such as `paired-change` for the other half of a move,
+       * or `nested-table` for a row kept for its nested table. See `diagnosticCauses()`.
+       */
+      readonly cause?: string;
     }
 );
 
@@ -135,6 +150,33 @@ export function classifyRefusal(
   return { code, tracked: trackedDuring(host, operations) };
 }
 
+/** What a refused batch's tracked-change decision asked, or undefined for another batch. */
+export function reviewOperationOf(
+  operations: readonly AutomationOperation[]
+): ReviewOperation | undefined {
+  for (const operation of operations) {
+    switch (operation.op) {
+      case 'acceptRevision':
+      case 'acceptAllRevisions':
+        return 'accept';
+      case 'rejectRevision':
+      case 'rejectAllRevisions':
+        return 'reject';
+      case 'resolveRevisionBatch':
+        return operation.action;
+      case 'setRevisionAuthorBatch':
+        return 'reassign';
+    }
+  }
+  return undefined;
+}
+
+/** The review code of a refusal that skipped a tracked-change decision, or null. */
+export function reviewRefusalCode(error: DocxEditorError): ReviewDiagnosticCode | null {
+  const inner = error.debugInfo.innerError?.code;
+  return inner?.startsWith('review.') ? (inner as ReviewDiagnosticCode) : null;
+}
+
 /** Diagnostics for these listeners, or null when there are none. */
 export function runtimeDiagnostics(
   listeners: readonly ((event: RuntimeDiagnostic) => unknown)[]
@@ -185,6 +227,18 @@ export function runtimeDiagnostics(
     },
     refused(error, host, operations) {
       const cause = refusalCause(error);
+      const review = reviewRefusalCode(error);
+      if (review) {
+        const operation = reviewOperationOf(operations);
+        deliver({
+          kind: 'review.skipped',
+          code: review,
+          count: 1,
+          ...(operation ? { operation } : {}),
+          ...(cause ? { cause } : {}),
+        });
+        return;
+      }
       deliver({
         kind: 'edit.rejected',
         origin: 'automation',

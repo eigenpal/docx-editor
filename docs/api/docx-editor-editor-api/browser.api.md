@@ -20,6 +20,8 @@ import { EditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { HistoryGroup } from '@docx-editor.dev/core/automation';
 import { HistoryGroupOutcome } from '@docx-editor.dev/core/automation';
+import { ReviewDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { ReviewOperation } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorSkipReason } from '@docx-editor.dev/core/automation';
@@ -1418,7 +1420,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
     // @internal
     protected listing(): AutomationOperation;
     // @internal
-    static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): RevisionCollection;
+    static of(context: RequestContext, label: string, owner: ObjectPath, body: () => AutomationHandle): RevisionCollection;
     // @internal
     static ofReviewKey(context: RequestContext, label: string, owner: ObjectPath, key: string): RevisionCollection;
     // @internal
@@ -1469,6 +1471,12 @@ export type RuntimeDiagnostic = {
     readonly origin: 'automation';
     readonly stage?: 'automation';
     readonly tracked: boolean;
+} | {
+    readonly cause?: string;
+    readonly code: ReviewDiagnosticCode;
+    readonly count: number;
+    readonly kind: 'review.skipped';
+    readonly operation?: ReviewOperation;
 });
 
 // @public

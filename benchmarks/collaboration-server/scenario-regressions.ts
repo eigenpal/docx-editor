@@ -139,6 +139,19 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'trackedEverything', delivery: 'peer', seed: 7 },
   { config: 'undoGroups', delivery: 'server', seed: 1 },
   { config: 'undoGroups', delivery: 'peer', seed: 2 },
+  // Review-card decisions on grouped changes: mark formatting, moves, rows, merges, numbering.
+  { config: 'trackedStructures', delivery: 'server', seed: 1 },
+  { config: 'trackedStructures', delivery: 'peer', seed: 1 },
+  { config: 'trackedStructuresEverything', delivery: 'peer', seed: 1 },
+  // A card decided one piece of a change another author's typing had split, and the oracle
+  // counted the other piece, its own card, as left undecided.
+  { config: 'trackedStructures', delivery: 'peer', seed: 7 },
+  // A peer's undo of a decision restored the change while a card decided it, and the oracle
+  // counted the card's decision as lost.
+  { config: 'trackedStructuresEverything', delivery: 'server', seed: 3 },
+  // A card addressed its change among every wrapper, and a plain store that kept an empty
+  // wrapper of a change bound it to another change.
+  { config: 'trackedStructuresSequential', delivery: 'in-order', seed: 4 },
 ];
 
 /**

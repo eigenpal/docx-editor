@@ -801,7 +801,10 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     for (const form of ['body', 'document'] as const) {
       const host = open(bytes);
       const { document, body } = roots(host);
-      expect(revisionsOf(host, body)).toEqual([]);
+      // The row and its cell record are one listed insertion.
+      const [row, ...rest] = revisionsOf(host, body);
+      const type = host.execute({ operations: [{ op: 'getRevisionType', revision: row! }] });
+      expect([textAt(type, 0), rest.length]).toEqual(['Insert', 0]);
       const operation =
         form === 'body'
           ? ({ op: 'acceptAllRevisions', body } as const)

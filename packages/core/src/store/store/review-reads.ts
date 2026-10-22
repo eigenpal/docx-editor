@@ -9,8 +9,10 @@ export { commentBodyText, commentInitials } from './review-text.ts';
 // original/proposed display modes must never hide a decision from review actions.
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
+import { revisionSegments } from './review-revision-segments.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
 import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
+import { mergeParagraphMarkFormatting } from './review-paragraph-mark-formatting.ts';
 import { mergeConsecutiveParagraphPropertyChanges } from './review-paragraph-property-groups.ts';
 import {
   changedLanguages,
@@ -209,9 +211,11 @@ function computeRevisionItemsOf(
   >();
 
   const currentInlineGroup = new Map<string, string>();
+  const segments = revisionSegments(part);
   const unboundHistories = unboundTableHistories(part, sites);
   for (const site of sites) {
-    if (unboundHistories.has(site.node.id)) continue;
+    // Unused history, and the legacy list history, lists as no change; bulk decisions drop it.
+    if (unboundHistories.has(site.node.id) || site.node.localName === 'numberingChange') continue;
     const moveRange = moveRanges.get(site.node.id);
     const siteText = moveRange ? moveRange.content.map(textUnder).join('') : textUnder(site.node);
     const sourceId = wmlAttribute(site.node, 'id');
@@ -238,7 +242,15 @@ function computeRevisionItemsOf(
     const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;
 
     const structuralChange = kind === 'structural' ? structuralChangeOf(site) : undefined;
-    const start = located.get(site.node.id);
+    // A change inside an equation sits where the equation does.
+    // A change inside a complex field's result sits where the field does: the field reads as
+    // one character, as a simple field does.
+    const own = located.get(site.node.id);
+    const field = own && own.start === own.end ? segments.fieldOf(site.node.id) : undefined;
+    const start =
+      (field ? located.get(field) : undefined) ??
+      own ??
+      located.get(segments.equationOf(site.node.id) ?? '');
     const end = moveRange?.end && located.get(moveRange.end.id);
     const where =
       start && end && start.paragraphId === end.paragraphId ? { ...start, end: end.end } : start;
@@ -265,7 +277,12 @@ function computeRevisionItemsOf(
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const sourceKey = sourceKeyOf(site.node, kind, address);
+    // A wrapper's edge or a field character ends a change: fragments on either side are two.
+    const segment =
+      kind === 'paragraphMark'
+        ? segments.markSegmentOf(site.node.id)
+        : segments.segmentOf(site.node.id);
+    const sourceKey = `${sourceKeyOf(site.node, kind, address)}\u0000${segment}`;
     // Same attributes do not join text across an unchanged character.
     let key = currentInlineGroup.get(sourceKey) ?? sourceKey;
     const previous = byAddress.get(key);
@@ -328,7 +345,11 @@ function computeRevisionItemsOf(
     byAddress.set(key, {
       address,
       localName: site.node.localName,
-      ...(kind === 'insert' || kind === 'delete'
+      // A change that a wrapper's edge or a field character divides names its first site in
+      // every part, so deciding one part never hands its key to the next.
+      ...(kind === 'insert' ||
+      kind === 'delete' ||
+      segment !== (kind === 'paragraphMark' ? '' : '\u0000')
         ? { identitySuffix: `\u0000site-${site.node.id}` }
         : {}),
       ...(structuralChange ? { structuralChanges: [structuralChange] } : {}),
@@ -355,51 +376,65 @@ function computeRevisionItemsOf(
     });
   }
 
-  const items = [...byAddress.values()].map(
-    (entry): ReviewRevisionItem =>
-      registerRevisionSiteNodeIds(
-        {
-          kind: 'revision' as const,
-          // Include the part: body/header revisions can share id, author, and date.
-          id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}${entry.identitySuffix ?? ''}`,
-          address: entry.address,
-          addresses: [entry.address],
-          revisionKind: entry.revisionKind,
-          ...(entry.revisionKind === 'format' ? { formattingKind: entry.localName } : {}),
-          ...(entry.structuralChanges?.length
-            ? { structuralChanges: entry.structuralChanges }
-            : {}),
-          ...(entry.formattingChanges?.length
-            ? { formattingChanges: entry.formattingChanges }
-            : {}),
-          ...(entry.formattingLanguages?.length
-            ? { formattingLanguages: entry.formattingLanguages }
-            : {}),
-          ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
-          author: entry.author,
-          ...(entry.date === undefined ? {} : { date: entry.date }),
-          text: entry.text || entry.deletedText,
-          replacedText: '',
-          ranges: entry.ranges,
-          nesting: entry.nesting,
-          readOnly: entry.readOnly,
-          // Filled by `collectReviewItems`, which is the only place that sees the comments too.
-          replyIds: [],
-        },
-        entry.siteNodeIds
-      )
-  );
+  // A change split at a wrapper's edge or a field character is two items with one address:
+  // each later one names its first site, so every key stays unique.
+  const usedIds = new Set<string>();
+  const items = [...byAddress.values()].map((entry): ReviewRevisionItem => {
+    const base = `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}${entry.identitySuffix ?? ''}`;
+    const id = usedIds.has(base) ? `${base}\u0000site-${entry.siteNodeIds[0]}` : base;
+    usedIds.add(id);
+    return registerRevisionSiteNodeIds(
+      {
+        kind: 'revision' as const,
+        // Include the part: body/header revisions can share id, author, and date.
+        id,
+        address: entry.address,
+        addresses: [entry.address],
+        revisionKind: entry.revisionKind,
+        ...(entry.revisionKind === 'format' ? { formattingKind: entry.localName } : {}),
+        ...(entry.structuralChanges?.length ? { structuralChanges: entry.structuralChanges } : {}),
+        ...(entry.formattingChanges?.length ? { formattingChanges: entry.formattingChanges } : {}),
+        ...(entry.formattingLanguages?.length
+          ? { formattingLanguages: entry.formattingLanguages }
+          : {}),
+        ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
+        author: entry.author,
+        ...(entry.date === undefined ? {} : { date: entry.date }),
+        text: entry.text || entry.deletedText,
+        replacedText: '',
+        ranges: entry.ranges,
+        nesting: entry.nesting,
+        readOnly: entry.readOnly,
+        // Filled by `collectReviewItems`, which is the only place that sees the comments too.
+        replyIds: [],
+      },
+      entry.siteNodeIds
+    );
+  });
   const order = dependencies.deepOrder(part);
+  // Formatting on text and on the paragraph mark it reaches is one decision.
+  const firstSite = (item: ReviewRevisionItem) => revisionSiteNodeIdsOf(item)[0] ?? '';
+  const tableItems = mergeParagraphMarkFormatting(
+    groupTableRevisions(part, items, sites, located, order, (item) =>
+      segments.segmentOf(firstSite(item))
+    ),
+    part,
+    sites,
+    order
+  );
   // Finish inline chains before a paragraph mark connects their endpoints. Otherwise a
   // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
   // an atomic field, leaving those wrappers as separate review decisions.
-  const tableItems = groupTableRevisions(part, items, sites, located, order);
   // Same-kind fragments remain one decision even when their source dates differ.
   const textItems = mergeParagraphBreakEdits(
-    mergeAdjacentSameKindEdits(tableItems, order),
+    mergeAdjacentSameKindEdits(tableItems, order, (item) => segments.segmentOf(firstSite(item))),
     part,
     order,
-    previewByNode
+    previewByNode,
+    (item) =>
+      item.revisionKind === 'paragraphMark'
+        ? segments.markSegmentOf(firstSite(item))
+        : segments.containerOf(firstSite(item))
   );
   return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
 }
@@ -537,9 +572,11 @@ export function collectReviewItemsWith(
   // or the same shared header under two sections — cannot double every card in it.
   const parts: OoxmlPart[] = [input.storyPart];
   const seen = new Set<string>([input.storyPart.name]);
+  // Comment text holds tracked changes too; the comment cards come from the same part below.
   for (const part of [
     ...(input.furnitureParts ?? []),
     ...(input.stylesPart ? [input.stylesPart] : []),
+    ...(input.commentsPart ? [input.commentsPart] : []),
   ]) {
     if (seen.has(part.name)) continue;
     seen.add(part.name);

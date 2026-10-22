@@ -747,13 +747,13 @@ describe('comments and tracked changes are what a document says about itself', (
     expect(remaining).toEqual({ count: 1, text: before });
   });
 
-  test('accept all resolves a complete tracked row even though it is omitted from items', async () => {
+  test('accept all resolves a complete tracked row, listed as one insertion', async () => {
     const runtime = await serverRuntime(TRACKED_COMPLETE_ROW);
     await runtime.run(async (context) => {
       const revisions = context.document.revisions;
-      revisions.load('items');
+      revisions.load('items/type');
       await context.sync();
-      expect(revisions.items).toHaveLength(0);
+      expect(revisions.items.map((revision) => revision.type)).toEqual(['Insert']);
       revisions.acceptAll();
       await context.sync();
     });

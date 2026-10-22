@@ -37,8 +37,9 @@ for (const action of ['accept', 'reject'] as const) {
     const part = load(body);
     const item = revisionItemsOf(part).find((item) => item.revisionKind === 'moveTo')!;
     const plan = planRevisionBatch(part, action, [reviewItemKey(item)]);
-    expect(plan.ops).toHaveLength(1);
-    expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+    expect(plan.ops).toEqual([]);
+    expect(plan.result.skipped.length).toBeGreaterThan(0);
+    expect(plan.result.skipped.every((entry) => entry.detail === 'locked-content')).toBe(true);
   });
   test(`${action} move cannot split a source revision identity shared outside its range`, () => {
     const deletion = pair.match(/<w:del\b.*?<\/w:del>/)![0];
@@ -151,7 +152,9 @@ test('accepting source deletion cannot clear move metadata in a locked destinati
   const part = load(body);
   const deletion = revisionItemsOf(part).find((item) => item.revisionKind === 'delete')!;
   const plan = planRevisionBatch(part, 'accept', [reviewItemKey(deletion)]);
-  expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.skipped.length).toBeGreaterThan(0);
+  expect(plan.result.skipped.every((entry) => entry.detail === 'locked-content')).toBe(true);
 });
 
 for (const action of ['accept', 'reject'] as const) {

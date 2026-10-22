@@ -36,7 +36,7 @@ for (const action of ['acceptRevision', 'rejectRevision'] as const) {
     expect(xml).toContain('<w:ins');
     expect(xml).not.toMatch(/<w:move(?:From|To)Range/);
   });
-  test(`automation ${action} preflights single-site row dependencies`, () => {
+  test(`automation ${action} resolves each row and text decision alone`, () => {
     const fixture = reviewTableGroupingCases.find(
       (c) =>
         c.name ===
@@ -64,8 +64,8 @@ for (const action of ['acceptRevision', 'rejectRevision'] as const) {
         expect(savedPartBytes(current.host, 'word/document.xml')).toEqual(before);
       }
     }
-    // Three independent text edits resolve; the row requires its contained edits.
-    expect(refused).toBe(1);
+    // Three text edits resolve alone, and the row resolves with the cell text it removes.
+    expect(refused).toBe(0);
   });
   test(`automation ${action} resolves mixed table formatting`, () => {
     const fixture = reviewTableGroupingCases.find((c) => c.name === 'format-row-and-cells')!;

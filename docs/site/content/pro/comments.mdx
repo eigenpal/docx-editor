@@ -135,6 +135,8 @@ The editor refuses cross-cell anchors and empty comment text. It does not change
 
 You can also reply to a revision. The editor creates a comment over the revision range because OOXML gives `w:ins` and `w:del` no body.
 
+Tracked changes inside comment text are review items too, and every editor decision resolves them. For more information, see [Tracked changes](/docs/2.x/editor-api/revisions).
+
 This example adds a fixed reply to any review item:
 
 <FrameworkTabs>
@@ -271,7 +273,7 @@ The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and 
 | `reply(item, text, author?)` | Adds a reply, or comments on a revision range | Returns `false` |
 | `resolve(item)` | Marks an open thread complete | Repeating it succeeds without a write |
 | `reopen(item)` | Reopens a complete thread | Repeating it succeeds without a write |
-| `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused |
+| `remove(item)` | Deletes a comment thread or rejects a tracked change | Returns `false` when refused; a refused tracked change sets `lastRefusal.action` to `reject` |
 
 The hook does not own the caller's draft state.
 
@@ -349,14 +351,20 @@ In a custom card, read `lastRefusal` from `useReview()`. Every `useReview()` ove
 
 While `DocxEditorReview` is mounted, it announces every refused review action in one polite live region, including actions from your own controls that use `useReview()`. A repeated refusal is announced again. Do not add a second live region for the same refusal. If your interface does not mount `DocxEditorReview`, announce `lastRefusal` yourself and key the announcement on `lastRefusal.sequence`.
 
-| `code`                         | Cause                                         |
-| ------------------------------ | --------------------------------------------- |
-| `edit.refresh-in-progress`     | An external document refresh is in progress   |
-| `edit.read-only`               | The document is open for viewing              |
-| `edit.protected-content`       | Document protection does not allow the change |
-| `edit.collaboration-not-ready` | The collaboration session is not ready yet    |
+| `code`                         | Cause                                               |
+| ------------------------------ | --------------------------------------------------- |
+| `edit.refresh-in-progress`     | An external document refresh is in progress         |
+| `edit.read-only`               | The document is open for viewing                    |
+| `edit.protected-content`       | Document protection does not allow the change       |
+| `edit.collaboration-not-ready` | The collaboration session is not ready yet          |
+| `review.incomplete-group`      | The change resolves only with another change        |
+| `review.retained-structure`    | The row stays to keep a nested table                |
+| `review.revision-unsupported`  | The editor cannot make this decision on this change |
+| `review.stale-revision`        | The change was already decided or changed           |
+| `review.locked-content`        | A content control locks the change                  |
+| `review.bound-content`         | The change is in a data-bound control               |
 
-When the collaboration session has ended, `lastRefusal.final` is `true`. Retrying cannot help then, and the packaged notice asks the reader to reload the document. For every code, see [Diagnostics](/docs/2.x/guides/diagnostics#edit).
+When the collaboration session has ended, `lastRefusal.final` is `true`. Retrying cannot help then, and the packaged notice asks the reader to reload the document. For every code and its next step, see [Diagnostics](/docs/2.x/guides/diagnostics#codes).
 
 This example shows the cause under a custom card:
 
@@ -364,10 +372,17 @@ This example shows the cause under a custom card:
 <Framework value="react">
 
 ```tsx
+import {
+  useReview,
+  useReviewRefusalMessage,
+  type ReviewItemView,
+} from '@docx-editor.dev/pro/react';
+
 function RefusalNotice({ item }: { item: ReviewItemView }) {
   const { lastRefusal } = useReview();
+  const refusalMessage = useReviewRefusalMessage();
   if (lastRefusal?.key !== item.key) return null;
-  return <p>Not applied: {lastRefusal.code}</p>;
+  return <p>{refusalMessage(lastRefusal)}</p>;
 }
 ```
 
@@ -376,16 +391,17 @@ function RefusalNotice({ item }: { item: ReviewItemView }) {
 
 ```vue
 <script setup lang="ts">
-import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/vue';
+import { useReview, useReviewRefusalMessage, type ReviewItemView } from '@docx-editor.dev/pro/vue';
 
 defineProps<{ item: ReviewItemView }>();
 
 const review = useReview();
+const refusalMessage = useReviewRefusalMessage();
 </script>
 
 <template>
-  <p v-if="review.lastRefusal.value?.key === item.key">
-    Not applied: {{ review.lastRefusal.value.code }}
+  <p v-if="review.lastRefusal.value && review.lastRefusal.value.key === item.key">
+    {{ refusalMessage(review.lastRefusal.value) }}
   </p>
 </template>
 ```

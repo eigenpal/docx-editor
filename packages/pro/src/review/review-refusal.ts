@@ -10,10 +10,27 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // protection, a collaboration session that is not ready). The review hooks used to reduce each
 // answer to a boolean, so a card's button did nothing and said nothing.
 
-import { diagnosticCodeOfRefusal } from '@docx-editor.dev/core';
-import type { EditDiagnosticCode, Editor } from '@docx-editor.dev/core/contracts/editor';
+import {
+  diagnosticCodeOfRefusal,
+  reviewCodeOfRefusal,
+  reviewCodeOfSkip,
+} from '@docx-editor.dev/core';
+
+import type {
+  EditDiagnosticCode,
+  Editor,
+  ReviewDiagnosticCode,
+} from '@docx-editor.dev/core/contracts/editor';
 import type { ExecResult } from '@docx-editor.dev/core/contracts/types';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
+
+/** What a skip's refusal leads with: a detail with its own code, such as a lock, else the reason. */
+function skipLead(skip: { readonly reason: string; readonly detail?: string }): string {
+  const own =
+    skip.detail !== undefined &&
+    reviewCodeOfSkip(skip) !== reviewCodeOfSkip({ reason: skip.reason });
+  return own ? skip.detail! : skip.reason;
+}
 
 /**
  * The review write a refusal answered.
@@ -35,12 +52,16 @@ export type ReviewWriteAction =
  * @public
  */
 export interface ReviewWriteRefusal {
-  /** Which write was refused. */
+  /** Which write was refused. A discarded tracked change reports `'reject'`. */
   readonly action: ReviewWriteAction;
   /** The card the write addressed, or null for a new comment on the selection. */
   readonly key: string | null;
-  /** The public diagnostic code, the same one `onDiagnostic` reports for the refusal. */
-  readonly code: EditDiagnosticCode;
+  /**
+   * The public diagnostic code, the same one `onDiagnostic` reports for the refusal. A tracked
+   * change the engine could not decide names its review code, such as
+   * `review.retained-structure` for a row that stays to keep a nested table.
+   */
+  readonly code: EditDiagnosticCode | ReviewDiagnosticCode;
   /**
    * Rises with every refusal of this editor, so the same refusal twice still differs. Key a
    * live announcement on it to announce a repeat.
@@ -61,7 +82,12 @@ export function reviewWriteRefusalOf(
   sequence: number
 ): ReviewWriteRefusal | null {
   if (result.ok) return null;
-  const code = diagnosticCodeOfRefusal(result.reason, result.code);
+  // Only a decision on a tracked change names a review code; a reply or a comment write keeps
+  // its edit code.
+  const decision = action === 'accept' || action === 'reject';
+  const code =
+    (decision && typeof result.reason === 'string' ? reviewCodeOfRefusal(result.reason) : null) ??
+    diagnosticCodeOfRefusal(result.reason, result.code);
   const final = result.reason === 'collaboration-session-destroyed';
   return { action, key, code, sequence, final };
 }
@@ -82,12 +108,12 @@ export function reviewAuthorFilterKey(
 /**
  * The packaged sentence for a refusal: its cause when the editor named one, else `fallback`.
  *
- * A cause a reader can act on (wait for a refresh, leave viewing) gets its own sentence; any
- * other refusal keeps the action's own sentence, because the code names an engine condition
- * the reader cannot change.
+ * A cause the editor names gets its own sentence with a next step: a refresh, viewing,
+ * protection, the collaboration session, and every `review.*` code. Any other refusal keeps the
+ * action's own sentence.
  */
 export function reviewRefusalLabelKey(
-  code: EditDiagnosticCode | undefined,
+  code: EditDiagnosticCode | ReviewDiagnosticCode | undefined,
   fallback: TranslationKey,
   final = false
 ): TranslationKey {
@@ -101,9 +127,31 @@ export function reviewRefusalLabelKey(
       return 'review.refusedProtected';
     case 'edit.collaboration-not-ready':
       return 'review.refusedCollaboration';
+    case 'review.retained-structure':
+      return 'review.refusedRetainedStructure';
+    case 'review.incomplete-group':
+      return 'review.refusedIncompleteGroup';
+    case 'review.revision-unsupported':
+      return 'review.refusedUnsupported';
+    case 'review.stale-revision':
+      return 'review.refusedStale';
+    case 'review.locked-content':
+      return 'review.refusedLockedContent';
+    case 'review.bound-content':
+      return 'review.refusedBoundContent';
     default:
       return fallback;
   }
+}
+
+/** The packaged sentence for a refused review write; hosts reach it as `useReviewRefusalMessage`. */
+export function reviewRefusalMessage(
+  refusal: ReviewWriteRefusal,
+  t: (key: TranslationKey) => string
+): string {
+  return t(
+    reviewRefusalLabelKey(refusal.code, reviewRefusalFallbackKey(refusal.action), refusal.final)
+  );
 }
 
 /** The packaged sentence for an action refused without a cause a reader can act on. */
@@ -158,6 +206,7 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
   let count = 0;
   const listeners = new Set<() => void>();
   let detach: (() => void) | null = null;
+  let offResolved: (() => void) | null = null;
   const notify = (): void => {
     for (const listener of [...listeners]) listener();
   };
@@ -202,6 +251,23 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
     },
     subscribe(listener) {
       listeners.add(listener);
+      // An accept-all or reject-all that leaves changes pending says why on the first one's
+      // card, as a card decision refused for that reason would.
+      offResolved ??= editor.on('reviewChangesResolved', ({ action, skipped }) => {
+        // A key a caller named that no longer exists has no card to explain.
+        const first = skipped.find((skip) => skip.reason !== 'unknown-revision');
+        store.record(
+          action,
+          first ? (first.pairKey ?? first.key) : null,
+          first
+            ? {
+                ok: false,
+                code: 'unsupported',
+                reason: `${skipLead(first)}: the change stays pending`,
+              }
+            : { ok: true, changed: true }
+        );
+      });
       sync();
       // A refusal held while nobody listened may be about a state that has since moved on.
       // Checked after the subscribe returns, so subscribing never notifies other readers from
@@ -209,6 +275,10 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
       queueMicrotask(recheck);
       return () => {
         listeners.delete(listener);
+        if (listeners.size === 0) {
+          offResolved?.();
+          offResolved = null;
+        }
         sync();
       };
     },

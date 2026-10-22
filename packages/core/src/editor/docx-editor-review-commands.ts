@@ -3,6 +3,7 @@ import {
   type RevisionAuthorVisibility,
 } from './revision-author-visibility.ts';
 import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
+import { emptiedTableCells } from '../store/store/revision-table-emptied-cells.ts';
 import type {
   EditorModuleRegistry,
   ReviewDisplayMode,
@@ -11,7 +12,6 @@ import type {
 } from '../contracts/modules.ts';
 
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
-import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import {
   invalidRevisionAuthorInput,
@@ -30,7 +30,10 @@ import type {
   ReviewRevisionItem,
   ReviewRevisionPlacement,
 } from '../contracts/editor.ts';
-import type { ReviewItemRevealEvent } from '../contracts/editor-events.ts';
+import type {
+  ReviewChangesResolvedEvent,
+  ReviewItemRevealEvent,
+} from '../contracts/editor-events.ts';
 import type { StoryScope, TreeDocOp } from '../store/index.ts';
 import {
   deepParagraphOrderOfPart,
@@ -42,6 +45,8 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { EditorDiagnostics } from './editor-diagnostics.ts';
 import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { BOUND_CHANGES_REFUSAL, LOCKED_CHANGES_REFUSAL } from './review-guard-refusals.ts';
+import { guardKeepsRevisions, holdsGuardedControls } from '../store/store/revision-content-lock.ts';
 import { withReviewItemFilter } from '../binding/review-item-filter.ts';
 import {
   inertPropertyChangeInputsOf,
@@ -78,6 +83,8 @@ interface ReviewCommandDependencies {
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
   reveal(event: ReviewItemRevealEvent): void;
+  /** Announce a committed accept-all or reject-all decision. */
+  resolved?(event: ReviewChangesResolvedEvent): void;
   setDisplayMode(mode: ReviewDisplayMode): void;
   /** Reports a single accept or reject, which does not go through `exec`. */
   report?: {
@@ -204,15 +211,32 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           .map(reviewItemKey)
     );
     const scopes = new Map<string, { scope: StoryScope; part: OoxmlPart; keys: string[] }>();
-    const unfilteredDocument = command.scope === 'document' && command.keys === undefined;
+    // A visible decision whose filter hides nothing decides the whole document, so history
+    // without a card, such as a table's property record, resolves with it.
+    const unfilteredDocument =
+      command.keys === undefined &&
+      (command.scope === 'document' || !deps.authorVisibility.hasFilter);
     if (unfilteredDocument) {
       const session = deps.surface()!.session;
+      // A visible decision reaches the stories that hold a listed change, and `place` below adds
+      // the story of each unlisted record it sweeps; a document-wide one reaches every story.
+      const listed =
+        command.scope === 'document'
+          ? null
+          : new Set(
+              items.flatMap((item) => {
+                const ids = item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : [];
+                const part = ids.length ? partOfNodeId(session, ids[0]) : null;
+                return part ? [part.name] : [];
+              })
+            );
       for (const part of session.storyParts())
-        scopes.set(part.name, {
-          scope: storyScopeOfNodeId(session, part.root.id, { kind: 'body' }),
-          part,
-          keys: [],
-        });
+        if (!listed || listed.has(part.name))
+          scopes.set(part.name, {
+            scope: storyScopeOfNodeId(session, part.root.id, { kind: 'body' }),
+            part,
+            keys: [],
+          });
     }
     let unlistedMemo: readonly ReviewRevisionItem[] | null = null;
     const unlisted = () => (unlistedMemo ??= unlistedRecordsNow());
@@ -247,16 +271,21 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       : new Set<string>();
     return { scopes: [...scopes.values()], missing: [...selected], unfilteredDocument, silent };
   };
-  /** Story ops commit as groups; the styles part commits as a part op. */
+  /** Whether a part holds no editable story, such as the styles part or comment text. */
+  const outsideStories = (part: OoxmlPart): boolean =>
+    !deps
+      .surface()!
+      .session.storyParts()
+      .some((story) => story.name === part.name);
+  /** Story ops commit as groups; parts outside the stories commit as part ops. */
   const routed = (
     plans: readonly { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[]
   ) => {
-    const styles = stylesPartOf(deps.surface()!.session.currentPackage());
     const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
     const partOps: { partName: string; ops: readonly TreeDocOp[] }[] = [];
     for (const { scope, part, ops } of plans) {
       if (!ops.length) continue;
-      if (part.name === styles?.name) partOps.push({ partName: part.name, ops });
+      if (outsideStories(part)) partOps.push({ partName: part.name, ops });
       else groups.push({ scope, ops });
     }
     return { groups, partOps };
@@ -279,7 +308,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         command.action,
         unfilteredDocument ? undefined : keys,
         undefined,
-        { countRemaining: false }
+        // Keys a caller names are decided as card decisions on them would be, as the API's
+        // named revisions are; only an author filter keeps the stricter rule.
+        { countRemaining: false, explicit: command.keys !== undefined }
       );
       for (const entry of plan.result.resolved) if (!silent.has(entry.key)) resolved.push(entry);
       for (const entry of plan.result.skipped) if (!silent.has(entry.key)) skipped.push(entry);
@@ -489,12 +520,12 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (invalidSelection) return invalidSelection;
     const { result, groups, partOps } = bulkPlan(command);
     if (command.unsupported === 'fail' && result.skipped.length)
-      return { ok: false, code: 'unsupported', reason: 'some selected changes cannot be resolved' };
+      return { ok: false, code: 'unsupported', reason: SOME_UNRESOLVABLE_REFUSAL };
     if (!result.resolved.length && !groups.length && !partOps.length)
       return {
         ok: false,
-        code: result.skipped.length ? 'unsupported' : 'notFound',
-        reason: 'no eligible selected changes to review',
+        code: bulkRefusalCode(result.skipped),
+        reason: bulkRefusalReason(result.skipped, deps.authorVisibility.hasFilter),
       };
     return { ok: true };
   };
@@ -520,36 +551,59 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     deps.surface()!.flushPendingInput();
     const item = findReviewPlacement(deps.placements, key)?.item;
     if (!item || item.kind !== 'revision')
-      return { ok: false, code: 'notFound', reason: 'no revision with that key' };
+      // Led by the review reason, so every reader names the stale card as the planner does.
+      return { ok: false, code: 'notFound', reason: 'unknown-revision: no revision with that key' };
     if (item.readOnly)
       return {
         ok: false,
         code: 'unsupported',
         reason: READ_ONLY_REVISION_REASON,
       };
+    // A lock or a binding keeps the card in any session state, so it is refused before the
+    // commit, with its review code; the exec code stays `locked` or `bound`, as for an edit.
+    const kept = guardedCardRefusal(
+      partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]),
+      item,
+      action
+    );
+    if (kept) return kept;
     let applied: { committed: boolean; reason?: unknown } | undefined;
     const refused = deps.surface()!.commitReviewOps((historyToken) => {
       const session = deps.surface()!.session;
       const part = partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
-      if (part && part.name === stylesPartOf(session.currentPackage())?.name) {
+      if (part && outsideStories(part)) {
+        const outside = resolutionOps(item, action, part);
+        // The planner's reason, as a card in a story gets it.
+        if (outside.refusal) {
+          applied = { committed: false, reason: outside.refusal };
+          return applied;
+        }
         applied = session.applyTreeOpsAtomic([], {
-          partOps: [{ partName: part.name, ops: resolutionOps(item, action, part) }],
+          partOps: [{ partName: part.name, ops: outside.ops }],
           historyToken,
         });
         return applied;
       }
+      const scoped = deps.surface()!.session.partFor(deps.scope(item));
+      const decision = resolutionOps(item, action, scoped);
+      // A card the planner skips, such as a row kept for its nested table, is refused with the
+      // planner's reason, not reported as resolved.
+      if (decision.refusal) {
+        applied = { committed: false, reason: decision.refusal };
+        return applied;
+      }
       applied = deps
         .surface()!
-        .session.applyTreeOps(
-          resolutionOps(item, action, deps.surface()!.session.partFor(deps.scope(item))),
-          undefined,
-          undefined,
-          deps.scope(item),
-          { historyToken }
-        );
+        .session.applyTreeOps(decision.ops, undefined, undefined, deps.scope(item), {
+          historyToken,
+        });
       return applied;
     }, 'revision-resolve');
-    if (!applied?.committed) return reviewWriteRefusal(refused, 'the revision was refused');
+    if (!applied?.committed)
+      return reviewWriteRefusal(
+        refused ?? (typeof applied?.reason === 'string' ? applied.reason : null),
+        'the revision was refused'
+      );
     return { ok: true, changed: true };
   };
   const exec = (command: EditorCommand): ExecResult | null => {
@@ -566,7 +620,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (!gate.ok) {
       if (
         command.type === 'resolveAllReviewChanges' &&
-        (gate.code === 'notFound' || gate.code === 'unsupported') &&
+        (gate.code === 'notFound' ||
+          gate.code === 'unsupported' ||
+          gate.code === 'locked' ||
+          gate.code === 'bound') &&
         ready().ok &&
         !deps.viewing()
       ) {
@@ -620,6 +677,15 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     }, 'revision-resolve');
     if (!applied?.committed) return reviewWriteRefusal(refused, 'the revisions were refused');
     deps.activate(null);
+    deps.resolved?.({
+      action: command.action,
+      resolvedCount: result.resolved.length,
+      skipped: result.skipped.map(({ key, reason, detail }) => ({
+        key,
+        reason,
+        ...(detail ? { detail } : {}),
+      })),
+    });
     return { ok: true, changed: true, revisions: { ...result, remaining: all().length } };
   };
   const revisionOf = (key: string) => {
@@ -635,8 +701,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           const part = session && partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
           if (!part) return {};
           try {
-            const plan = planRevisionBatch(part, action, [reviewItemKey(item)], undefined, {
+            // The plan the decision itself runs, so the report names the same reason.
+            const plan = planRevisionBatch(part, action, resolutionKeysOf(item), undefined, {
               countRemaining: false,
+              explicit: true,
             });
             const detail = plan.result.skipped[0]?.detail;
             return { partName: part.name, ...(detail ? { detail } : {}) };
@@ -683,26 +751,130 @@ function nextFromCaret(
   return step > 0 ? 0 : items.length - 1;
 }
 
+/** The bulk refusals chrome shows. Fixed sentences, so the catalogue can translate them. */
+const NO_REVIEW_CHANGES = 'no eligible selected changes to review';
+const HIDDEN_CHANGES_REFUSAL =
+  'these changes would also resolve changes the filter hides; clear the filter to review them first';
+const NAMED_CHANGES_REFUSAL =
+  'these changes would also resolve changes the selection leaves out; decide each card';
+const UNRESOLVABLE_CHANGES_REFUSAL = 'none of the selected changes can be resolved';
+const SOME_UNRESOLVABLE_REFUSAL = 'some selected changes cannot be resolved';
+/** @internal Every bulk refusal sentence, so a test keeps each one translatable. */
+export const BULK_REVIEW_REFUSALS = [
+  NO_REVIEW_CHANGES,
+  HIDDEN_CHANGES_REFUSAL,
+  NAMED_CHANGES_REFUSAL,
+  UNRESOLVABLE_CHANGES_REFUSAL,
+  SOME_UNRESOLVABLE_REFUSAL,
+  LOCKED_CHANGES_REFUSAL,
+  BOUND_CHANGES_REFUSAL,
+] as const;
+
+/** The exec code of a bulk decision that resolves nothing: a lock or a binding keeps its own. */
+function bulkRefusalCode(
+  skipped: readonly { readonly detail?: string }[]
+): 'notFound' | 'unsupported' | 'locked' | 'bound' {
+  if (!skipped.length) return 'notFound';
+  if (skipped.every((skip) => skip.detail === 'locked-content')) return 'locked';
+  if (skipped.every((skip) => skip.detail === 'bound-content')) return 'bound';
+  return 'unsupported';
+}
+
+/**
+ * Why a bulk decision resolves nothing. A change that would take a hidden author's change with
+ * it names the cause and the way out, in a fixed sentence the catalogue translates.
+ */
+function bulkRefusalReason(
+  skipped: readonly { readonly reason: string; readonly detail?: string }[],
+  filtered: boolean
+): string {
+  if (!skipped.length) return NO_REVIEW_CHANGES;
+  if (skipped.every((skip) => skip.reason === 'incomplete-group'))
+    return filtered ? HIDDEN_CHANGES_REFUSAL : NAMED_CHANGES_REFUSAL;
+  // Every change is kept by one cause, a lock or a binding: the refusal names it.
+  if (skipped.every((skip) => skip.detail === 'locked-content')) return LOCKED_CHANGES_REFUSAL;
+  if (skipped.every((skip) => skip.detail === 'bound-content')) return BOUND_CHANGES_REFUSAL;
+  return UNRESOLVABLE_CHANGES_REFUSAL;
+}
+
+/** Why a row decision is refused when the row must stay to keep a nested table. */
+const RETAINED_ROW_REASON =
+  'retained-structure: the row stays because it holds a nested table with untracked rows';
+
+/** Why a card is refused when it resolves only together with changes it does not name. */
+const GROUPED_CARD_REASON =
+  'incomplete-group: this change resolves only together with another change, such as the deleted row that holds it; decide that change first';
+
+/** The refusal for a card the planner skips, led by the review reason. */
+function cardRefusal(skip: { readonly reason: string; readonly detail?: string }): string {
+  if (skip.reason === 'retained-structure') return RETAINED_ROW_REASON;
+  if (skip.reason === 'incomplete-group') return GROUPED_CARD_REASON;
+  // A lock or a binding keeps this decision: the detail names its own review code.
+  if (skip.detail === 'locked-content' || skip.detail === 'bound-content')
+    return `${skip.detail}: the change stays pending`;
+  return skip.detail ? `${skip.reason}: ${skip.detail}` : skip.reason;
+}
+
+/** The refusal for a card a content control lock or data binding keeps, or null. */
+function guardedCardRefusal(
+  part: OoxmlPart | null,
+  item: ReviewRevisionItem,
+  action: 'accept' | 'reject'
+): Extract<ExecResult, { ok: false }> | null {
+  const kept =
+    part && holdsGuardedControls(part)
+      ? guardKeepsRevisions(part, revisionSiteNodeIdsOf(item), action)
+      : null;
+  if (!kept) return null;
+  return {
+    ok: false,
+    code: kept === 'locked-content' ? 'locked' : 'bound',
+    reason: cardRefusal({ reason: 'unsupported-revision', detail: kept }),
+  };
+}
+
+/** Whether accepting the card empties a table cell, which then goes. */
+function acceptEmptiesTableCell(part: OoxmlPart, item: ReviewRevisionItem): boolean {
+  const ids = new Set(revisionSiteNodeIdsOf(item));
+  const sites = collectRevisionSites(part).filter((site) => ids.has(site.node.id));
+  return (
+    sites.some((site) => site.paragraphMark) && emptiedTableCells(part, sites, 'accept').size > 0
+  );
+}
+
 /** Resolve only the canonical sites that contributed to this card. */
 function resolutionOps(
   item: ReviewRevisionItem,
   action: 'accept' | 'reject',
   part: OoxmlPart | null
-): TreeDocOp[] {
+): { readonly ops: readonly TreeDocOp[]; readonly refusal?: string } {
   const op = action === 'accept' ? 'acceptRevision' : 'rejectRevision';
-  if (!part) return [];
+  if (!part) return { ops: [] };
   // A grouped row decision can remove later constituents. Resolve its sites
   // together, with the same dependency preflight as the bulk command.
   if (
     item.revisionKind === 'structural' ||
+    // A move and a paragraph mark can resolve with another site, such as a destination with no
+    // source and its mark.
+    item.revisionKind === 'moveFrom' ||
+    item.revisionKind === 'moveTo' ||
+    item.revisionKind === 'paragraphMark' ||
     ordinaryMoveRanges(part.root).length > 0 ||
-    (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
+    // A formatting decision can replace properties that hold another change, so the planner
+    // decides it, as it decides a keyed bulk selection of the same card.
+    item.revisionKind === 'format' ||
+    // Accepting a deletion that empties a table cell removes the cell, which needs its text
+    // and its paragraph marks decided together.
+    (action === 'accept' && acceptEmptiesTableCell(part, item)) ||
+    // Text and the paragraph mark it reaches decide together, so the paragraph goes whole.
+    holdsParagraphMark(part, item)
   ) {
-    return [
-      ...planRevisionBatch(part, action, resolutionKeysOf(item), undefined, {
-        countRemaining: false,
-      }).ops,
-    ];
+    const plan = planRevisionBatch(part, action, resolutionKeysOf(item), undefined, {
+      countRemaining: false,
+      explicit: true,
+    });
+    const skip = plan.result.skipped[0];
+    return skip ? { ops: [], refusal: cardRefusal(skip) } : { ops: plan.ops };
   }
   const nodeIds = new Set(revisionSiteNodeIdsOf(item));
   const operations = new Map<
@@ -732,12 +904,24 @@ function resolutionOps(
     if (known) known.siteNodeIds.push(site.node.id);
     else operations.set(key, { revision, localName, siteNodeIds: [site.node.id] });
   }
-  return [...operations.values()].map(({ revision, localName, siteNodeIds }) => ({
-    op,
-    revision,
-    ...(localName === undefined ? {} : { localName }),
-    siteNodeIds,
-  }));
+  return {
+    ops: [...operations.values()].map(({ revision, localName, siteNodeIds }) => ({
+      op,
+      revision,
+      ...(localName === undefined ? {} : { localName }),
+      siteNodeIds,
+    })),
+  };
+}
+
+/** Whether a text change also holds a paragraph mark. */
+function holdsParagraphMark(part: OoxmlPart, item: ReviewRevisionItem): boolean {
+  if (item.revisionKind !== 'insert' && item.revisionKind !== 'delete') return false;
+  const ids = new Set(revisionSiteNodeIdsOf(item));
+  return (
+    ids.size > 1 &&
+    collectRevisionSites(part).some((site) => site.paragraphMark && ids.has(site.node.id))
+  );
 }
 
 /** Date metadata shared by comment and revision placements. */

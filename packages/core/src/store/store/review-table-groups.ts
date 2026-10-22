@@ -45,6 +45,20 @@ function holdsTableStructure(node: OoxmlNode): boolean {
   return result;
 }
 
+/** A table's row-level children, with the rows of row-level controls and custom XML in place. */
+function rowLevelChildren(node: OoxmlElement): OoxmlNode[] {
+  const out: OoxmlNode[] = [];
+  for (const child of node.children) {
+    if (isW(child, 'sdt') && child.kind !== 'textValue') {
+      const content = child.children.find((n) => isW(n, 'sdtContent'));
+      if (content && content.kind !== 'textValue') out.push(...rowLevelChildren(content));
+    } else if (isW(child, 'customXml') && child.kind !== 'textValue') {
+      out.push(...rowLevelChildren(child));
+    } else out.push(child);
+  }
+  return out;
+}
+
 // Word-created nested rows include tracked cell paragraph marks. Those marks
 // distinguish a complete row decision from a standalone nested row-end marker.
 function hasTrackedCellParagraphs(
@@ -157,7 +171,7 @@ function groupRowRevisions(
     }
     if (isW(node, 'tbl')) {
       let current: RowGroup | undefined;
-      for (const child of node.children) {
+      for (const child of rowLevelChildren(node)) {
         if (child.kind === 'textValue' || !isW(child, 'tr')) {
           current = undefined;
           continue;
@@ -368,11 +382,13 @@ export function groupTableRevisions(
   items: readonly ReviewRevisionItem[],
   sites: readonly RevisionSite[],
   locations: ReadonlyMap<string, SiteLocation>,
-  order: ReadonlyMap<string, number>
+  order: ReadonlyMap<string, number>,
+  segmentOf: (item: ReviewRevisionItem) => string = () => ''
 ): ReviewRevisionItem[] {
   const grouped = groupAdjacentRunFormatting(
     groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
-    sites
+    sites,
+    segmentOf
   );
   // Row markers start in property XML but nested decisions belong at row ends.
   // Preserve the existing site-order contract for paragraph-local derivations.

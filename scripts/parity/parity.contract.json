@@ -179,10 +179,13 @@
         "useReviewRailMetrics",
         "useStackedReviewPositions",
         "ReviewWriteAction",
-        "ReviewWriteRefusal"
+        "ReviewWriteRefusal",
+        "ReviewDiagnosticCode",
+        "useReviewRefusalMessage"
       ],
       "deferredInVue": {},
       "vueExclusive": {
+        "UseReviewRefusalMessageReturn": "Vue composables declare a named Use<Name>Return interface; the React hook returns the same function type inline, so only Vue exports this type.",
         "UseCollaborationParticipantsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the participants array directly, so only Vue exports this type.",
         "UseCollaborationSessionReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the session directly, so only Vue exports this type.",
         "UseReviewRailMetricsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the metrics directly, so only Vue exports this type."

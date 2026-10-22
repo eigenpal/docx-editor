@@ -24,7 +24,7 @@ import {
   type ScenarioOptions,
 } from './scenario-harness.ts';
 import { readCase, replayOf, writeCase, type SavedCase } from './scenario-case.ts';
-import { TRACKED_WEIGHTS } from './scenario-plan.ts';
+import { TRACKED_STRUCTURE_WEIGHTS, TRACKED_WEIGHTS } from './scenario-plan.ts';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
@@ -57,6 +57,46 @@ const TRACKED_BODY = [
   `<w:p><w:r><w:t xml:space="preserve">Notice goes to </w:t></w:r><w:del w:id="2" ${REVISION}><w:r><w:delText>the registered office of </w:delText></w:r></w:del><w:r><w:t>each party.</w:t></w:r></w:p>`,
   `<w:p><w:r><w:t xml:space="preserve">The term is </w:t></w:r><w:del w:id="3" ${REVISION}><w:r><w:delText xml:space="preserve">two years </w:delText></w:r></w:del><w:ins w:id="4" ${REVISION}><w:r><w:t>one year</w:t></w:r></w:ins><w:r><w:t xml:space="preserve"> from signing.</w:t></w:r></w:p>`,
   '<w:p><w:r><w:t>Plain text without changes, for edits beside them.</w:t></w:r></w:p>',
+].join('');
+
+/**
+ * Pending changes whose decisions reach more than one record: formatting on text and on its
+ * paragraph mark into the next paragraph, formatting inside another author's insertion, a
+ * deleted paragraph with another author's alignment, a named move, a deleted row that holds
+ * another author's insertion, a vertical cell merge, and tracked numbering under another
+ * author's paragraph change.
+ */
+const STAMP = (id: number, author: string) =>
+  `w:id="${id}" w:author="${author}" w:date="2025-12-0${1 + (id % 8)}T00:00:00Z"`;
+const RUN = (text: string, props = '') =>
+  `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ''}<w:t xml:space="preserve">${text}</w:t></w:r>`;
+const BOLD_CHANGE = (id: number) =>
+  `<w:b/><w:rPrChange ${STAMP(id, 'Counterparty')}><w:rPr/></w:rPrChange>`;
+const CELL = (content: string, props = '') =>
+  `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/>${props}</w:tcPr>${content}</w:tc>`;
+const PLAIN = (text: string) => `<w:p>${RUN(text)}</w:p>`;
+const TRACKED_STRUCTURES_BODY = [
+  `<w:p><w:pPr><w:rPr>${BOLD_CHANGE(10)}</w:rPr></w:pPr>${RUN('Bold through the mark ', BOLD_CHANGE(11))}</w:p>`,
+  `<w:p>${RUN('and into the next paragraph', BOLD_CHANGE(12))}${RUN(' then plain text.')}</w:p>`,
+  `<w:p>${RUN('Keep ')}<w:ins ${STAMP(20, 'Reviewer')}>${RUN('inserted with bold', BOLD_CHANGE(21))}</w:ins>${RUN(' tail.')}</w:p>`,
+  `<w:p><w:pPr><w:jc w:val="center"/><w:rPr><w:del ${STAMP(30, 'Counterparty')}/></w:rPr><w:pPrChange ${STAMP(31, 'Reviewer')}><w:pPr/></w:pPrChange></w:pPr><w:del ${STAMP(32, 'Counterparty')}><w:r><w:delText>Deleted centered paragraph.</w:delText></w:r></w:del></w:p>`,
+  `<w:p>${RUN('Alpha ')}<w:moveFromRangeStart w:id="40" w:name="mv1" ${STAMP(40, 'Counterparty').replace('w:id="40" ', '')}/><w:moveFrom ${STAMP(41, 'Counterparty')}>${RUN('moved words ')}</w:moveFrom><w:moveFromRangeEnd w:id="40"/>${RUN('beta.')}</w:p>`,
+  `<w:p>${RUN('Gamma ')}<w:moveToRangeStart w:id="42" w:name="mv1" ${STAMP(42, 'Counterparty').replace('w:id="42" ', '')}/><w:moveTo ${STAMP(43, 'Counterparty')}>${RUN('moved words ')}</w:moveTo><w:moveToRangeEnd w:id="42"/>${RUN('delta.')}</w:p>`,
+  '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `<w:tr>${CELL(PLAIN('a1'))}${CELL(PLAIN('b1'))}</w:tr>` +
+    `<w:tr><w:trPr><w:del ${STAMP(50, 'Counterparty')}/></w:trPr>` +
+    CELL(
+      `<w:p><w:pPr><w:rPr><w:del ${STAMP(51, 'Counterparty')}/></w:rPr></w:pPr><w:del ${STAMP(52, 'Counterparty')}><w:r><w:delText>gone</w:delText></w:r></w:del></w:p>`
+    ) +
+    CELL(
+      `<w:p><w:pPr><w:rPr><w:del ${STAMP(53, 'Counterparty')}/></w:rPr></w:pPr><w:ins ${STAMP(54, 'Reviewer')}>${RUN('new in deleted row')}</w:ins></w:p>`
+    ) +
+    '</w:tr>' +
+    `<w:tr>${CELL(PLAIN('top'), `<w:cellMerge ${STAMP(60, 'Counterparty')} w:vMerge="rest"/>`)}${CELL(PLAIN('b3'))}</w:tr>` +
+    `<w:tr>${CELL(PLAIN('below'), `<w:cellMerge ${STAMP(61, 'Counterparty')} w:vMerge="cont"/>`)}${CELL(PLAIN('b4'))}</w:tr>` +
+    '</w:tbl>',
+  `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/><w:ins ${STAMP(70, 'Reviewer')}/></w:numPr><w:jc w:val="right"/><w:pPrChange ${STAMP(71, 'Counterparty')}><w:pPr/></w:pPrChange></w:pPr>${RUN('Numbered and aligned.')}</w:p>`,
+  PLAIN('Plain text without changes, for edits beside them.'),
 ].join('');
 
 /** Named scenario shapes. Each varies one source of concurrency over the same edit mix. */
@@ -110,6 +150,27 @@ export const SCENARIO_CONFIGS = {
     steps: 200,
     documentBody: TRACKED_BODY,
     weights: TRACKED_WEIGHTS,
+  },
+  // Card decisions on changes that resolve together, against typing and other decisions.
+  trackedStructures: {
+    replicas: 3,
+    steps: 200,
+    documentBody: TRACKED_STRUCTURES_BODY,
+    weights: TRACKED_STRUCTURE_WEIGHTS,
+  },
+  trackedStructuresSequential: {
+    replicas: 3,
+    steps: 150,
+    delivery: 'in-order',
+    documentBody: TRACKED_STRUCTURES_BODY,
+    weights: TRACKED_STRUCTURE_WEIGHTS,
+  },
+  trackedStructuresEverything: {
+    ...DENSE,
+    replicas: 4,
+    steps: 200,
+    documentBody: TRACKED_STRUCTURES_BODY,
+    weights: TRACKED_STRUCTURE_WEIGHTS,
   },
 } as const satisfies Record<
   string,

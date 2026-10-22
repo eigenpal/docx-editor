@@ -236,9 +236,45 @@ const REVIEW_CODES: Readonly<Record<RevisionBatchSkipReason, ReviewDiagnosticCod
   'unknown-revision': 'review.stale-revision',
 };
 
+/** The skip details that name a review code of their own. */
+const REVIEW_DETAIL_CODES: Readonly<Record<string, ReviewDiagnosticCode>> = {
+  'locked-content': 'review.locked-content',
+  'bound-content': 'review.bound-content',
+};
+
+/**
+ * The public code for a skipped tracked change, such as an entry of `reviewChangesResolved`'s
+ * `skipped` list: the detail's own code when it has one (`review.locked-content`,
+ * `review.bound-content`), else the reason's.
+ *
+ * @example
+ * ```ts
+ * editor.on('reviewChangesResolved', ({ skipped }) => {
+ *   for (const skip of skipped) console.warn(reviewCodeOfSkip(skip));
+ * });
+ * ```
+ *
+ * @public
+ */
+export function reviewCodeOfSkip(skip: {
+  readonly reason: string;
+  readonly detail?: string;
+}): ReviewDiagnosticCode | null {
+  return (
+    (skip.detail === undefined
+      ? null
+      : own<ReviewDiagnosticCode>(REVIEW_DETAIL_CODES, skip.detail)) ??
+    reviewDiagnosticCode(skip.reason)
+  );
+}
+
 /** The public code for a skipped tracked change, or null for a reason with no public code. */
 export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null {
-  return own<ReviewDiagnosticCode>(REVIEW_CODES, reason) ?? null;
+  return (
+    own<ReviewDiagnosticCode>(REVIEW_CODES, reason) ??
+    own<ReviewDiagnosticCode>(REVIEW_DETAIL_CODES, reason) ??
+    null
+  );
 }
 
 /** Every open, store, host and review reason token the tables above know. */
@@ -248,6 +284,7 @@ export function knownReasonTokens(): readonly string[] {
     'too-large',
     ...Object.keys(STORE_EDIT_CODES),
     ...Object.keys(REVIEW_CODES),
+    ...Object.keys(REVIEW_DETAIL_CODES),
   ];
 }
 

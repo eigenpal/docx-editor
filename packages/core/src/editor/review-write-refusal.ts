@@ -23,6 +23,10 @@ export function reviewWriteRefusal(
 ): Extract<ExecResult, { ok: false }> {
   if (refused === null || refused === UNEXPLAINED_WRITE_REFUSAL)
     return { ok: false, code, reason: fallback };
+  // A decision a lock or a binding keeps, such as the locked half of a move, keeps the exec
+  // code an edit there gets.
+  if (refused.startsWith('locked-content:')) return { ok: false, code: 'locked', reason: refused };
+  if (refused.startsWith('bound-content:')) return { ok: false, code: 'bound', reason: refused };
   const diagnostic = diagnosticCodeOfRefusal(refused);
   const locked = diagnostic === 'edit.read-only' || diagnostic === 'edit.protected-content';
   return { ok: false, code: locked ? 'locked' : 'unsupported', reason: refused };

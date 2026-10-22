@@ -320,7 +320,9 @@ export function rebuildRevisionTable(
       : ['text', 'deletedText'].includes(node.kind)
         ? node.children.some((child) => child.kind === 'textValue' && child.value.length > 0)
         : node.children.some(hasText);
-  const continuations = rows.map((row) => {
+  // The grid intervals a row continues from the row above, by live merge or, with `tracked`,
+  // by a merge change too.
+  const continuationsOf = (row: OoxmlElement, tracked = false) => {
     const result = new Set<string>();
     const pr = child(row, 'trPr');
     let at = number(pr && child(pr, 'gridBefore'), 'val', 0);
@@ -328,11 +330,29 @@ export function rebuildRevisionTable(
       const pr = child(cell, 'tcPr');
       const end = at + number(pr && child(pr, 'gridSpan'), 'val', 1);
       const merge = pr && child(pr, 'vMerge');
-      if (merge && revisionAttribute(merge, 'val') !== 'restart') result.add(`${at}:${end}`);
+      const change = tracked ? pr && child(pr, 'cellMerge') : undefined;
+      if (
+        (merge && revisionAttribute(merge, 'val') !== 'restart') ||
+        (change && revisionAttribute(change, 'vMerge') === 'cont')
+      )
+        result.add(`${at}:${end}`);
       at = end;
     }
     return result;
-  });
+  };
+  const continuations = rows.map((row) => continuationsOf(row));
+  const trackedContinuations = rows.map((row) => continuationsOf(row, true));
+  // Whether the row below `index` continues the merge, live or by a pending change.
+  const mergesBelow = (index: number, key: string): boolean =>
+    !!trackedContinuations[index + 1]?.has(key);
+  const originalOrder = tableChildren(original, 'tableRow');
+  // What continued below each row before the decision.
+  const continuedBelow = new Map(
+    originalOrder.map((row, index) => {
+      const below = originalOrder[index + 1];
+      return [row.id, below ? continuationsOf(below, true) : new Set<string>()];
+    })
+  );
   rows = rows.map((row, rowIndex) => {
     const active = new Set<string>();
     const promoted = new Set<string>();
@@ -345,8 +365,19 @@ export function rebuildRevisionTable(
       const key = `${column}:${end}`;
       column = end;
       const merge = pr && child(pr, 'vMerge');
-      if (!merge) return cell;
+      if (!merge) {
+        // A pending merge continuation carries the merge to the rows below it.
+        const change = pr && child(pr, 'cellMerge');
+        if (change && revisionAttribute(change, 'vMerge') === 'cont' && above.has(key)) {
+          active.add(key);
+          if (promotedAbove.has(key)) promoted.add(key);
+        }
+        return cell;
+      }
       const continuation = revisionAttribute(merge, 'val') !== 'restart';
+      // A merge head whose continuation below the decision removes merges nothing.
+      if (!continuation && continuedBelow.get(row.id)?.has(key) && !mergesBelow(rowIndex, key))
+        return patch(cell, { vMerge: null }, mint);
       if (continuation && !above.has(key)) {
         if (continuations[rowIndex + 1]?.has(key)) {
           active.add(key);

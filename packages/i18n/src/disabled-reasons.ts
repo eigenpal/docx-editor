@@ -90,6 +90,18 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
     'disabledReason.lockedSectionBreak',
   'a section break cannot be inserted in locked or linked content':
     'disabledReason.lockedContentBreak',
+  // Keyed on the bulk review refusals in the engine's `docx-editor-review-commands.ts`; the
+  // sentences must stay the same.
+  'no eligible selected changes to review': 'disabledReason.noReviewChanges',
+  'these changes would also resolve changes the filter hides; clear the filter to review them first':
+    'disabledReason.reviewHiddenChanges',
+  'these changes would also resolve changes the selection leaves out; decide each card':
+    'disabledReason.reviewOtherChanges',
+  'none of the selected changes can be resolved': 'disabledReason.reviewUnresolvable',
+  'some selected changes cannot be resolved': 'disabledReason.reviewSomeUnresolvable',
+  'content controls lock every remaining change; remove the locks to decide them':
+    'disabledReason.reviewLockedChanges',
+  'every remaining change is in a data-bound content control': 'disabledReason.reviewBoundChanges',
 });
 
 /**

@@ -14,6 +14,7 @@ import {
   contentControlsIn,
   paragraphOffsetIndex,
   readOoxmlPart,
+  serializeOoxmlPart,
   storyParagraphs,
   bodyStoryRoot,
   type OoxmlNode,
@@ -575,8 +576,12 @@ describe('a review decision that removes a whole locked control', () => {
     expect(contentControlsIn(after.root)).toHaveLength(0);
   });
 
-  test('rejecting an insertion that wraps an sdtLocked control is refused', () => {
-    expect(refusal(inserted('sdtLocked'), reject)).toBe('locked');
+  // A control that cannot be removed stays as an empty shell; one whose content is locked too
+  // keeps the insertion pending.
+  test('rejecting an insertion that wraps an sdtLocked control keeps the control empty', () => {
+    const after = applied(inserted('sdtLocked'), reject);
+    expect(contentControlsIn(after.root)).toHaveLength(1);
+    expect(serializeOoxmlPart(after)).not.toContain('LOCKED');
     expect(refusal(inserted('sdtContentLocked'), reject)).toBe('locked');
   });
 

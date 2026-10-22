@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { collectRevisionSites } from '../store/tree-op-revisions.ts';
 import {
   applyTreeOp,
   planRevisionBatch,
@@ -78,8 +79,14 @@ test('unrecorded cell restoration checks protected neighbours', () => {
     )
   );
   const plan = planRevisionBatch(part, 'reject');
-  expect(plan.ops).toHaveLength(1);
-  expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+  // The plan skips what the op's own guard would refuse, and the guard still refuses it.
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.skipped).toMatchObject([{ detail: 'locked-content' }]);
+  const siteNodeIds = collectRevisionSites(part).map((site) => site.node.id);
+  expect(applyTreeOp(part, { op: 'rejectAllRevisions', siteNodeIds })).toMatchObject({
+    ok: false,
+    reason: 'locked',
+  });
 });
 
 for (const fixed of [false, true]) {
@@ -109,8 +116,17 @@ test('implicit grid restoration checks protected cells in unchanged rows', () =>
     )
   );
   const plan = planRevisionBatch(part, 'reject');
-  expect(plan.ops).toHaveLength(1);
-  expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+  // The plan skips what the op's own guard would refuse, and the guard still refuses it.
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.skipped.map((skip) => skip.detail)).toEqual([
+    'locked-content',
+    'locked-content',
+  ]);
+  const siteNodeIds = collectRevisionSites(part).map((site) => site.node.id);
+  expect(applyTreeOp(part, { op: 'rejectAllRevisions', siteNodeIds })).toMatchObject({
+    ok: false,
+    reason: 'locked',
+  });
 });
 test('explicit old grids retain priority over inferred row geometry', () => {
   const part = load('format-separated-rows', (xml) =>

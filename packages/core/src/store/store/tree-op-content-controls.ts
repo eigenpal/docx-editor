@@ -67,9 +67,14 @@ import {
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import { strikesWholeControl } from './tree-op-control-strike.ts';
-import { holdsRevisionContainer, REVISION_LOCAL_NAMES } from './revision-container-presence.ts';
+import { holdsRevisionContainer } from './revision-container-presence.ts';
 import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
+import {
+  isRevisionNode,
+  revisionDecisionKeepsContent,
+  revisionNodeRemovesContent,
+} from './revision-content-lock.ts';
 import type {
   RevisionAddress,
   TreeDocOp,
@@ -639,6 +644,10 @@ interface ControlTouch {
    * half of the whole chain.
    */
   readonly survivingLocks?: readonly ContentControlLock[];
+  /** A revision decision that keeps the content as it reads: no content lock refuses it. */
+  readonly keepsContent?: boolean;
+  /** A removed control locked only against removal stays as an empty shell. */
+  readonly shellKept?: boolean;
 }
 
 /** What an op reaches, resolved against the part: the controls, and the nodes it named. */
@@ -956,17 +965,22 @@ function resolveRevisionReach(
     if (isRevisionNode(node, revision, localName, siteNodeIdSet)) {
       seen += 1;
       if (controls.length === 0) unprotected.push(node.id);
+      const keepsContent = revisionDecisionKeepsContent(node, action);
       for (let index = 0; index < controls.length; index += 1) {
         touches.push({
           control: controls[index]!,
           locks: locksOf(controls.slice(0, index + 1)),
           removed: false,
           discarded: false,
+          keepsContent,
         });
       }
       // Only the direction that removes a revision wrapper's content removes nested controls.
       // The keep direction still reaches the marker and its enclosing controls above.
       if (revisionNodeRemovesContent(node, action)) {
+        // An insertion or deletion keeps a control locked only against removal as an empty
+        // shell. A move takes the control whole.
+        const shellKept = node.localName === 'ins' || node.localName === 'del';
         for (const entry of contentControlsIn(node)) {
           touches.push({
             control: entry.node,
@@ -974,6 +988,7 @@ function resolveRevisionReach(
             removed: true,
             discarded: false,
             survivingLocks: locksOf(controls),
+            shellKept,
           });
         }
         // Nothing below a discarded wrapper survives this decision. Its controls were marked as
@@ -1029,39 +1044,6 @@ function resolveRevisionReach(
 /** Bounds the revision scan the way every other file-driven walk in this module is bounded. */
 const MAX_REVISION_NODES = 50_000;
 
-function isRevisionNode(
-  node: OoxmlNode,
-  revision: RevisionAddress | undefined,
-  localName?: string,
-  siteNodeIds?: ReadonlySet<string>
-): boolean {
-  if (node.kind === 'textValue') return false;
-  if (siteNodeIds !== undefined && !siteNodeIds.has(node.id)) return false;
-  if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
-  if (!REVISION_LOCAL_NAMES.has(node.localName)) return false;
-  if (localName !== undefined && node.localName !== localName) return false;
-  if (!revision) return true;
-  const attribute = (name: string): string | undefined =>
-    node.attributes.find(
-      (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
-    )?.value;
-  if (attribute('id') !== revision.id) return false;
-  if (
-    (attribute('author') ?? (node.localName === 'tblGridChange' ? '' : undefined)) !==
-    revision.author
-  )
-    return false;
-  if (revision.date !== undefined && attribute('date') !== revision.date) return false;
-  return true;
-}
-
-function revisionNodeRemovesContent(node: OoxmlNode, action: RevisionOpAction): boolean {
-  if (node.kind === 'textValue') return false;
-  if (node.localName === 'ins' || node.localName === 'moveTo') return action === 'reject';
-  if (node.localName === 'del' || node.localName === 'moveFrom') return action === 'accept';
-  return false;
-}
-
 /**
  * Whether a lock refuses an op, checked before any tree work.
  *
@@ -1083,7 +1065,7 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
   // A control nested in one being removed goes with it, so only its removal half is asked.
   const removingNamedControl = reach.kind === 'control' && reach.intent === 'removal';
   for (const touch of resolveReach(part, reach).touches) {
-    if (namedControlAnswersForItself && !touch.discarded) continue;
+    if ((namedControlAnswersForItself && !touch.discarded) || touch.keepsContent) continue;
     const resolved = resolveContentControlLock(touch.locks);
     if (touch.discarded && removingNamedControl) {
       if (lockForbidsRemoval(resolved)) return 'locked';
@@ -1093,7 +1075,9 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
       ? resolveContentControlLock(touch.survivingLocks)
       : resolved;
     if (lockForbidsEdit(edited)) return 'locked';
-    if ((touch.removed || touch.discarded) && lockForbidsRemoval(resolved)) return 'locked';
+    const shell = touch.shellKept && !lockForbidsEdit(resolved);
+    if ((touch.removed || touch.discarded) && lockForbidsRemoval(resolved) && !shell)
+      return 'locked';
   }
   return null;
 }

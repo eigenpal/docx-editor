@@ -1062,6 +1062,9 @@ export interface ReviewBalloonProps {
 }
 
 // @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.locked-content' | 'review.bound-content' | 'review.stale-revision';
+
+// @public
 export interface ReviewDraftProps extends ReviewPartProps {
     left?: number | null;
     top?: number;
@@ -1171,7 +1174,7 @@ export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 're
 // @public
 export interface ReviewWriteRefusal {
     readonly action: ReviewWriteAction;
-    readonly code: EditDiagnosticCode;
+    readonly code: EditDiagnosticCode | ReviewDiagnosticCode;
     readonly final: boolean;
     readonly key: string | null;
     readonly sequence: number;
@@ -1265,6 +1268,15 @@ export interface UseReviewRailMetricsOptions {
 // @public
 export interface UseReviewRailMetricsReturn {
     readonly metrics: Readonly<Ref<ReviewRailMetrics>>;
+}
+
+// @public
+export function useReviewRefusalMessage(): UseReviewRefusalMessageReturn;
+
+// @public
+export interface UseReviewRefusalMessageReturn {
+    // (undocumented)
+    (refusal: ReviewWriteRefusal): string;
 }
 
 // @public (undocumented)

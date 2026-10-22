@@ -91,6 +91,8 @@ export type ReviewDiagnosticCode =
   | 'review.revision-unsupported'
   | 'review.incomplete-group'
   | 'review.retained-structure'
+  | 'review.locked-content'
+  | 'review.bound-content'
   | 'review.stale-revision';
 
 /** Why a font did not load. The family name is never reported. @public */

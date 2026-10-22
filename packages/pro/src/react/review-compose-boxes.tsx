@@ -19,7 +19,6 @@ import {
   reviewRefusalStore,
   type ReviewWriteRefusal,
 } from '../review/review-refusal.ts';
-import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '@docx-editor.dev/react';
 
 interface ComposePartDeps {
@@ -106,7 +105,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const [text, setText] = useState('');
     const [refused, setRefused] = useState(false);
     // Taken when the write is refused, so the sentence holds still while it shows.
-    const [refusedCode, setRefusedCode] = useState<EditDiagnosticCode | undefined>(undefined);
+    const [refusedCode, setRefusedCode] = useState<ReviewWriteRefusal['code'] | undefined>(
+      undefined
+    );
     const editor = useDocxEditor();
     const fieldRef = useRef<HTMLInputElement | null>(null);
     const fieldId = useId();
@@ -233,7 +234,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const [draft, setDraft] = useState('');
     const [refused, setRefused] = useState(false);
     // Taken when the reply is refused, so the sentence holds still while it shows.
-    const [refusedCode, setRefusedCode] = useState<EditDiagnosticCode | undefined>(undefined);
+    const [refusedCode, setRefusedCode] = useState<ReviewWriteRefusal['code'] | undefined>(
+      undefined
+    );
     const editor = useDocxEditor();
     const submit = useCallback(() => {
       if (!entry || readOnly || draft.trim().length === 0) return;

@@ -1908,13 +1908,25 @@ export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
 
 // @public
-export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+export function reviewCodeOfSkip(skip: {
+    readonly detail?: string;
+    readonly reason: string;
+}): ReviewDiagnosticCode | null;
+
+// @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.locked-content' | 'review.bound-content' | 'review.stale-revision';
 
 // @public
 export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null;
 
 // @public
 export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
+export function reviewSkipOfReason(reason: string | undefined): {
+    readonly cause?: string;
+    readonly code: ReviewDiagnosticCode;
+} | null;
 
 // @public
 export interface RevisionAuthorEntry extends RevisionBatchEntry {
@@ -1963,7 +1975,7 @@ export interface RevisionBatchResult {
 }
 
 // @public
-export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites' | 'paired-change' | 'removed-content' | 'replaced-properties' | 'emptied-change' | 'enclosing-change' | 'grouped-change' | 'nested-table' | 'locked-content' | 'bound-content';
 
 // @public
 export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';

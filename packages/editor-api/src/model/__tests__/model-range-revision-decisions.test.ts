@@ -128,7 +128,7 @@ describe('what a range decision covers', () => {
     expect(xml).toContain('w:id="2"');
   });
 
-  test('a complete tracked row absent from items resolves with the range', async () => {
+  test('a complete tracked row is listed and resolves with the range', async () => {
     const bytes = docx(
       para(run('before')) +
         '<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr><w:tc>' +
@@ -139,9 +139,9 @@ describe('what a range decision covers', () => {
     );
     const xml = await withRuntime(bytes, async (context) => {
       const range = context.document.body.getRange('Whole');
-      range.revisions.load('items');
+      range.revisions.load('items/type');
       await context.sync();
-      expect(range.revisions.items).toHaveLength(0);
+      expect(range.revisions.items.map((revision) => revision.type)).toEqual(['Insert']);
       range.revisions.rejectAll();
       await context.sync();
     });

@@ -17,6 +17,7 @@ import {
   serializeOoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { EditorModule } from '../../contracts/modules.ts';
+import { reviewCodeOfRefusal } from '../diagnostic-codes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -418,7 +419,9 @@ for (const action of ['accept', 'reject'] as const) {
       }
     });
   }
-  test(`${action} skips mixed unsupported changes, but a locked selected change aborts atomically`, async () => {
+  // A change in locked content resolves when the decision keeps the content (accepting an
+  // insertion) and is skipped when it would remove it (rejecting one).
+  test(`${action} skips mixed unsupported changes and changes a content lock keeps`, async () => {
     for (const locked of [false, true]) {
       const supported = locked
         ? '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
@@ -433,11 +436,15 @@ for (const action of ['accept', 'reject'] as const) {
       try {
         const before = await editor.save();
         const result = editor.exec({ type: 'resolveAllReviewChanges', action });
-        expect(result.ok).toBe(!locked);
-        if (locked) expect(await editor.save()).toEqual(before);
-        else {
-          expect(result.revisions?.skipped).toHaveLength(1);
-          expect(result.revisions?.remaining).toBe(1);
+        expect(result.ok).toBe(true);
+        const kept = locked && action === 'reject';
+        if (kept)
+          expect(result.revisions?.skipped.map((entry) => entry.detail)).toContain(
+            'locked-content'
+          );
+        {
+          expect(result.revisions?.skipped).toHaveLength(kept ? 2 : 1);
+          expect(result.revisions?.remaining).toBe(kept ? 2 : 1);
           expect(editor.can({ type: 'resolveAllReviewChanges', action }).ok).toBe(false);
           editor.exec({ type: 'undo' });
           expect(await editor.save()).toEqual(before);
@@ -617,4 +624,44 @@ describe('reviewItemReveal', () => {
     expect(Object.isFrozen(payload)).toBe(true);
     editor.destroy();
   });
+});
+
+// When one cause keeps every change, the bulk refusal names it, and each card names its code.
+test('a bulk decision a lock or a binding keeps everywhere names that cause', () => {
+  for (const [action, properties, sentence, code] of [
+    [
+      'reject',
+      '<w:lock w:val="contentLocked"/>',
+      'content controls lock every remaining change; remove the locks to decide them',
+      'review.locked-content',
+    ],
+    [
+      'accept',
+      '<w:dataBinding w:storeItemID="{1}" w:xpath="/a"/>',
+      'every remaining change is in a data-bound content control',
+      'review.bound-content',
+    ],
+  ] as const) {
+    const editor = mountEditor(
+      `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>${ins(1)}</w:sdtContent></w:sdt>`
+    );
+    try {
+      expect(editor.exec({ type: 'resolveAllReviewChanges', action })).toMatchObject({
+        ok: false,
+        code: code === 'review.locked-content' ? 'locked' : 'bound',
+        reason: sentence,
+      });
+      expect(reviewCodeOfRefusal(sentence)).toBe(code);
+      const [card] = editor.getReviewItems({ pairReplacements: false });
+      const result =
+        action === 'accept'
+          ? editor.acceptReviewItem(card!.key)
+          : editor.rejectReviewItem(card!.key);
+      // The exec code stays the edit's own, `locked` or `bound`; the reason names the review code.
+      expect(result).toMatchObject({ code: code === 'review.locked-content' ? 'locked' : 'bound' });
+      expect(reviewCodeOfRefusal(result.ok ? '' : result.reason)).toBe(code);
+    } finally {
+      editor.destroy();
+    }
+  }
 });

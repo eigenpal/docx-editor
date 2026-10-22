@@ -268,7 +268,12 @@ export {
   type EditorPreviewFork,
   type EditorPreviewRefusal,
 } from './editor-preview.ts';
-export { reportAutomationException, reportAutomationRefusal } from './editor-diagnostics.ts';
+export {
+  reportAutomationException,
+  reportAutomationRefusal,
+  reportAutomationReviewSkip,
+} from './editor-diagnostics.ts';
+export type { ReviewDiagnosticCode, ReviewOperation } from '../automation/diagnostic-vocabulary.ts';
 // The capability seam: what `createDocxEditor({ modules })` accepts and what a
 // capability package (the pro review module) implements.
 export {

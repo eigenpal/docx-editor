@@ -6,7 +6,10 @@
 // issues the same accept/reject ops a host would issue for the halves, in one transaction.
 
 import type { ReviewItemPlacement, ReviewItemQuery } from '../contracts/editor.ts';
-import type { ReviewItemRevealEvent } from '../contracts/editor-events.ts';
+import type {
+  ReviewChangesResolvedEvent,
+  ReviewItemRevealEvent,
+} from '../contracts/editor-events.ts';
 import {
   isReplacementPair,
   REPLACEMENT_PAIR_ID_PREFIX,
@@ -280,6 +283,27 @@ export function withRevealPairKey(
     ? event.key
     : keyUnderQuery(placements, event.key, { pairReplacements: true });
   return pairKey !== null && isReplacementPairKey(pairKey) ? { ...event, pairKey } : event;
+}
+
+/** The bulk decision event with each skipped half's pair key, as a reveal carries it. */
+export function withSkippedPairKeys(
+  placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
+  event: ReviewChangesResolvedEvent
+): ReviewChangesResolvedEvent {
+  if (!event.skipped.length) return event;
+  // One paired read for the whole decision, however many changes it skipped.
+  const pairOf = new Map<string, string>();
+  for (const entry of placements({ placement: false, pairReplacements: true })) {
+    if (!isReplacementPairKey(entry.key)) continue;
+    for (const half of resolutionKeysOf(entry.item as ReviewItem)) pairOf.set(half, entry.key);
+  }
+  return {
+    ...event,
+    skipped: event.skipped.map((skip) => {
+      const pairKey = pairOf.get(skip.key);
+      return pairKey === undefined ? skip : { ...skip, pairKey };
+    }),
+  };
 }
 
 const keyedQueues = new WeakMap<readonly ReviewItem[], ReadonlyMap<string, ReviewItem>>();

@@ -43,7 +43,7 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 | --- | --- | --- |
 | `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` and the [failure detail](#failure-detail) when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. An opened document also has `shape`, with part, paragraph, review item, and embedded font buckets. |
 | `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, `command` for a refused `exec` call, and the [failure detail](#failure-detail). |
-| `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code`, `count`, and the [failure detail](#failure-detail): `operation`, `changeKind`, `formattingKind`, and `part`. |
+| `review.skipped` | An editor decision on tracked changes, such as a card or **Accept All**, or a reassignment, skipped some of them. A refused card also reports `edit.rejected` first. On the editing API, only a batch that refuses a tracked-change decision reports this event, with a `count` of 1; `resolve()` reports its skips in its result. | `code`, `count`, and the [failure detail](#failure-detail): `operation`, `changeKind`, `formattingKind`, `part`, and `cause`. |
 | `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
 | `history` | An undo step did not group as the gesture intended. Informational. | `code`. |
 | `custom-node` | A custom node payload in the document could not be read. The node name is not included. | `code`. |
@@ -61,7 +61,7 @@ A code identifies the failure. Optional detail fields identify the engine condit
 
 | Field | On | What it holds |
 | --- | --- | --- |
-| `cause` | `document.open`, `document.save`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, or `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. For an error the engine did not expect, `exception`. |
+| `cause` | `document.open`, `document.save`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. On `review.locked-content` and `review.bound-content`, the cause is `locked-content` or `bound-content`. On `review.skipped`, the structure that blocked the decision: under `review.incomplete-group`, the change the decision would also decide, such as `paired-change` (the other half of a move or merge, or another part of the same change), `removed-content`, `replaced-properties`, `emptied-change`, `enclosing-change`, or `grouped-change`; under `review.retained-structure`, `nested-table`. For an error the engine did not expect, `exception`. |
 | `errorName` | `document.open`, `document.save`, `edit.rejected` | The class of the exception when `cause` is `exception`, such as `TypeError`. The message is never included, because it can quote the document. |
 | `stage` | `document.open`, `document.save`, `edit.rejected` | Where an exception was caught: `open-mount`, `open-layout`, `command`, `review-item` (accept or reject from a review card), `automation` (an editing API batch), or `save`. |
 | `part` | `document.open`, `review.skipped` | The role of the package part, such as `main-document`, `header`, `footnotes`, or `relationships`, never its name. A part under a nonstandard name reports `other`. |
@@ -182,9 +182,11 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 
 | Code | Cause and action |
 | --- | --- |
-| <a id="review-revision-unsupported" />`review.revision-unsupported` | A tracked change of this kind cannot be accepted or rejected yet. It was left in the document. |
-| <a id="review-incomplete-group" />`review.incomplete-group` | The tracked change is part of a group that was not fully selected. Select the whole group, or resolve it from the review pane. |
-| <a id="review-retained-structure" />`review.retained-structure` | Resolving the tracked change would remove structure that other content still needs, so it was left in place. |
+| <a id="review-revision-unsupported" />`review.revision-unsupported` | The editor cannot accept or reject a tracked change of this kind, so it was left in the document. Keep it, or replace the content with a direct edit while change tracking is off. |
+| <a id="review-incomplete-group" />`review.incomplete-group` | The tracked change would also resolve a change the decision leaves out. If a filter hides that change, clear the filter to review it first. Otherwise, decide that change first, such as the deleted row that holds this change, or decide both together. |
+| <a id="review-retained-structure" />`review.retained-structure` | The row stays because it holds a table whose rows are not tracked. To resolve the changes in its cells, use `resolve()`, or **Accept All** or **Reject All** in the editor; `acceptAll()` and `rejectAll()` refuse whole. Delete the row with change tracking off to remove it. |
+| <a id="review-locked-content" />`review.locked-content` | A content control locks the content, so the decision would change locked text. Remove the lock (set `ContentControl.cannotEdit` to false, or ask the document owner), then decide the change. |
+| <a id="review-bound-content" />`review.bound-content` | The change is in a content control bound to a custom XML part, which the editor cannot keep in step. Keep the change, or update the bound data and remove the binding outside the editor, then decide it. |
 | <a id="review-stale-revision" />`review.stale-revision` | The tracked change no longer exists, usually because it was resolved already. Read the review items again. |
 
 ### Font

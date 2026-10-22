@@ -1,7 +1,8 @@
 import { retainsNestedTable } from './revision-table-preserve-nested.ts';
 import { tableChildren, isTableWrapper } from './revision-table-children.ts';
-import { parentNodeOf } from '../package/ooxml-edit.ts';
+import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { ancestorIdsOf } from './node-ancestors.ts';
+import { emptiedTableCells } from './revision-table-emptied-cells.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -91,6 +92,8 @@ export function tableRevisionRemovals(
     if (target && !retainsNestedTable(target, action))
       removed.set(target.id, [...(removed.get(target.id) ?? []), site.node.id]);
   }
+  for (const [cell, marks] of emptiedTableCells(part, sites, action))
+    if (!removed.has(cell)) removed.set(cell, marks);
   if (!removed.size) return removed;
   // Only an ancestor of a removed cell or row can lose all its rows or cells.
   const ancestors = ancestorIdsOf(part, removed.keys());
@@ -189,8 +192,73 @@ export function tableRevisionNeighbours(
   return neighbours;
 }
 
-/** A merge chain shares its head/continuation decisions even across different authors. */
-export function tableMergeDependencies(part: OoxmlPart): readonly (readonly string[])[] {
+/**
+ * A removed cell, an inserted one on reject or a deleted one on accept, and the width history
+ * of the cell in its row that takes its space decide together: that history already describes
+ * the row with or without the cell, so either decision alone gives a different row than both. Only history that records another width or
+ * span pairs; other cell formatting resolves on its own.
+ */
+export function neighbourWidthPairs(
+  part: OoxmlPart,
+  sites: readonly RevisionSite[],
+  action: 'accept' | 'reject'
+): readonly (readonly string[])[] {
+  if (!sites.some((site) => site.node.localName === 'tcPrChange')) return [];
+  const removed = tableRevisionRemovals(part, sites, action);
+  // A cell its deleted paragraphs empty goes by their marks too.
+  const emptied = emptiedTableCells(part, sites, action);
+  const named = (node: OoxmlNode | null | undefined, name: string) =>
+    node && node.kind !== 'textValue'
+      ? node.children.find((n) => n.kind !== 'textValue' && n.localName === name)
+      : undefined;
+  const value = (properties: OoxmlNode | undefined, name: string, attribute: string) => {
+    const node = named(properties, name);
+    return node && node.kind !== 'textValue' ? revisionAttribute(node, attribute) : undefined;
+  };
+  // The width history of a cell, when it records another width or span than the live one.
+  const widthHistory = (cell: OoxmlElement) => {
+    const live = named(cell, 'tcPr');
+    const history = named(live, 'tcPrChange');
+    const recorded = named(history, 'tcPr');
+    const differs = (name: string, attribute: string) =>
+      value(live, name, attribute) !== value(recorded, name, attribute);
+    return history && (differs('tcW', 'w') || differs('tcW', 'type') || differs('gridSpan', 'val'))
+      ? history
+      : undefined;
+  };
+  const pairs: string[][] = [];
+  const rows = new Set<string>();
+  for (const id of removed.keys()) {
+    const cell = findNode(part, id);
+    const row = cell?.kind === 'tableCell' ? parentNodeOf(part, cell.id) : null;
+    if (row?.kind === 'tableRow' && !removed.has(row.id)) rows.add(row.id);
+  }
+  for (const id of rows) {
+    const cells = tableChildren(findNode(part, id) as OoxmlElement, 'tableCell');
+    const first = cells.find((cell) => !removed.has(cell.id));
+    let previous: OoxmlElement | undefined;
+    for (const cell of cells) {
+      const markers = removed.get(cell.id);
+      if (!markers) {
+        previous = cell;
+        continue;
+      }
+      const receiver = previous ?? first;
+      const history = receiver && widthHistory(receiver);
+      if (history) pairs.push([...markers, ...(emptied.get(cell.id) ?? []), history.id]);
+    }
+  }
+  return pairs;
+}
+
+/**
+ * A merge chain shares its head/continuation decisions even across different authors. On
+ * accept, a continuation in a deleted row resolves apart: the row's decision takes it away.
+ */
+export function tableMergeDependencies(
+  part: OoxmlPart,
+  action?: 'accept' | 'reject'
+): readonly (readonly string[])[] {
   const groups: string[][] = [];
   const direct = (node: OoxmlElement, name: string): OoxmlElement | undefined => {
     for (const child of node.children)
@@ -209,6 +277,7 @@ export function tableMergeDependencies(part: OoxmlPart): readonly (readonly stri
       for (const row of tableChildren(node, 'tableRow')) {
         const current = new Map<string, { ids: string[]; active: boolean }>();
         const pr = direct(row, 'trPr');
+        const apart = action === 'accept' && !!pr && !!direct(pr, 'del');
         let at = Number(pr && revisionAttribute(direct(pr, 'gridBefore') ?? pr, 'val')) || 0;
         for (const cell of tableChildren(row, 'tableCell')) {
           const pr = direct(cell, 'tcPr');
@@ -223,7 +292,13 @@ export function tableMergeDependencies(part: OoxmlPart): readonly (readonly stri
           const continuation = merge
             ? ['vMerge', 'vMergeOrig'].some((name) => revisionAttribute(merge, name) === 'cont')
             : live && revisionAttribute(live, 'val') !== 'restart';
-          const prior = above.get(key);
+          // The continuations below a deleted row chain past it to the head.
+          const passed = apart && continuation ? above.get(key) : undefined;
+          if (passed) {
+            current.set(key, passed);
+            continue;
+          }
+          const prior = apart ? undefined : above.get(key);
           if (continuation && prior?.active && own.length) {
             groups.push([...prior.ids, ...own]);
           }

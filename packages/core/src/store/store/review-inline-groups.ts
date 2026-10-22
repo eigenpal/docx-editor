@@ -27,7 +27,9 @@ import type { RevisionAddress } from './tree-op-types.ts';
  */
 export function mergeAdjacentSameKindEdits(
   items: readonly ReviewRevisionItem[],
-  order: ReadonlyMap<string, number>
+  order: ReadonlyMap<string, number>,
+  /** The content control an item sits in: a control's edge ends a change. */
+  containerOf: (item: ReviewRevisionItem) => string = () => ''
 ): readonly ReviewRevisionItem[] {
   const mergeable = items.filter(
     (item) =>
@@ -47,7 +49,7 @@ export function mergeAdjacentSameKindEdits(
   // the list claims. Checking costs one pass and sorting is skipped whenever it holds.
   const buckets = new Map<string, ReviewRevisionItem[]>();
   for (const item of mergeable) {
-    const key = JSON.stringify([item.revisionKind, item.author, item.nesting]);
+    const key = JSON.stringify([item.revisionKind, item.author, item.nesting, containerOf(item)]);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(item);
     else buckets.set(key, [item]);

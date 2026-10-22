@@ -1,5 +1,5 @@
 import { readTwipsMeasure } from '../units.ts';
-import { WML_NAMESPACE_URI, type OoxmlElement } from '../package/ooxml-tree.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { tableChildren, replaceTableChildren } from './revision-table-children.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';
 function elements(node: OoxmlElement): OoxmlElement[] {
@@ -189,9 +189,25 @@ export function restoreImplicitRowGrid(
       );
       children.splice(index < 0 ? children.length : index, 0, replacement);
     }
+    const patched = { ...pr, children } as OoxmlNode;
+    // An existing container keeps its place; a new `w:trPr` follows the row's `w:tblPrEx`.
+    if (node.children.some((n) => n.id === pr.id))
+      return {
+        ...node,
+        children: node.children.map((n) => (n.id === pr.id ? patched : n)),
+      } as OoxmlElement;
+    const at =
+      name === 'trPr'
+        ? node.children.findIndex(
+            (n) =>
+              n.kind !== 'textValue' &&
+              n.namespaceUri === WML_NAMESPACE_URI &&
+              n.localName === 'tblPrEx'
+          ) + 1
+        : 0;
     return {
       ...node,
-      children: [{ ...pr, children }, ...node.children.filter((n) => n.id !== pr.id)],
+      children: [...node.children.slice(0, at), patched, ...node.children.slice(at)],
     } as OoxmlElement;
   };
   const fixed = attr(child(child(original, 'tblPr'), 'tblLayout'), 'type') === 'fixed';

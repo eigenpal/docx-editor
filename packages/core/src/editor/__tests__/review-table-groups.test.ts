@@ -80,18 +80,27 @@ for (const command of ['acceptReviewItem', 'rejectReviewItem'] as const) {
       editor.destroy();
     }
   });
-  test(`${command} preflights single-site row dependencies`, () => {
+  test(`${command} resolves a removed nested row with its own cell text`, () => {
     const editor = mount(
       command === 'acceptReviewItem' ? 'nested-following-gap-del' : 'nested-following-gap-ins'
     );
     try {
+      const xml = () => serializeOoxmlPart(editor.surface!.session.part());
       const before = editor.getReviewItems({ placement: false });
+      const original = xml();
       const row = before.find((item) => item.key.includes('revision-structural'))!;
       expect(row).toBeDefined();
-      expect(editor[command](row.key).ok).toBe(false);
-      expect(editor.getReviewItems({ placement: false }).map((item) => item.key)).toEqual(
-        before.map((item) => item.key)
-      );
+      expect(editor[command](row.key).ok).toBe(true);
+      // The row's cell text goes with the row; the text after the nested table stays pending.
+      expect(
+        editor
+          .getReviewItems({ placement: false })
+          .map((entry) => entry.item.kind === 'revision' && entry.item.text)
+      ).toEqual(['Following']);
+      expect(xml()).not.toContain('Nested A');
+      expect(xml()).toContain('Unchanged');
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(xml()).toBe(original);
     } finally {
       editor.destroy();
     }
@@ -258,6 +267,71 @@ for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
   }
 }
 
+for (const name of ['format-table-property', 'format-grid-only'])
+  for (const action of ['accept', 'reject'] as const) {
+    test(`${action}: the toolbar decision has nothing to do when ${name} is the only history`, () => {
+      // The review list is empty, so the button agrees with it; history beside a listed change
+      // clears with that change.
+      const editor = mount(name);
+      try {
+        const xml = () => serializeOoxmlPart(editor.surface!.session.part());
+        const before = xml();
+        expect(editor.can({ type: 'resolveAllReviewChanges', action })).toMatchObject({
+          ok: false,
+          code: 'notFound',
+        });
+        expect(editor.exec({ type: 'resolveAllReviewChanges', action }).ok).toBe(false);
+        expect(xml()).toBe(before);
+      } finally {
+        editor.destroy();
+      }
+    });
+  }
+
+test('a bulk decision that keeps a row says so in reviewChangesResolved', () => {
+  const editor = mount('nested-plain-ins');
+  try {
+    const events: unknown[] = [];
+    const off = editor.on('reviewChangesResolved', (event) => events.push(event));
+    const row = editor
+      .getReviewItems({ placement: false })
+      .find((entry) => entry.item.kind === 'revision' && entry.item.revisionKind === 'structural')!;
+    expect(editor.exec({ type: 'resolveAllReviewChanges', action: 'reject' }).ok).toBe(true);
+    off();
+    expect(events).toEqual([
+      expect.objectContaining({
+        action: 'reject',
+        skipped: [{ key: row.key, reason: 'retained-structure', detail: 'nested-table' }],
+      }),
+    ]);
+  } finally {
+    editor.destroy();
+  }
+});
+
+for (const [name, command] of [
+  ['nested-plain-ins', 'rejectReviewItem'],
+  ['nested-plain-del', 'acceptReviewItem'],
+] as const)
+  test(`${command} on a row kept for its nested table refuses and changes nothing`, () => {
+    const editor = mount(name);
+    try {
+      const xml = () => serializeOoxmlPart(editor.surface!.session.part());
+      const before = xml();
+      const row = editor
+        .getReviewItems({ placement: false })
+        .find(
+          (entry) => entry.item.kind === 'revision' && entry.item.revisionKind === 'structural'
+        )!;
+      const result = editor[command](row.key);
+      expect(result).toMatchObject({ ok: false, code: 'unsupported' });
+      expect(result.ok ? '' : result.reason).toContain('retained-structure');
+      expect(xml()).toBe(before);
+    } finally {
+      editor.destroy();
+    }
+  });
+
 for (const [name, action] of [
   ['nested-plain-ins', 'reject'],
   ['nested-plain-del', 'accept'],
@@ -304,3 +378,24 @@ for (const [name, action] of [
     }
   });
 }
+
+for (const [name, command] of [
+  ['cell-markers-del', 'acceptReviewItem'],
+  ['cell-markers-ins', 'rejectReviewItem'],
+] as const)
+  test(`${command} on one changed cell leaves the neighbour cell's change pending`, () => {
+    const editor = mount(name);
+    try {
+      const cells = () =>
+        editor
+          .getReviewItems({ placement: false })
+          .filter(
+            (entry) => entry.item.kind === 'revision' && entry.item.revisionKind === 'structural'
+          );
+      expect(cells()).toHaveLength(2);
+      expect(editor[command](cells()[0]!.key)).toMatchObject({ ok: true });
+      expect(cells()).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });

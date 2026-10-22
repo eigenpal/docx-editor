@@ -31,25 +31,94 @@ function plainGrid(node: OoxmlElement, omit?: string): boolean {
   );
 }
 
-/** Standalone alignment/grid snapshots without a row decision are unused history in Word.
+const TABLE_FORMATTING_RECORDS: ReadonlySet<string> = new Set([
+  'tblPrChange',
+  'tblGridChange',
+  'tblPrExChange',
+  'trPrChange',
+  'tcPrChange',
+]);
+
+/** Standalone alignment/grid snapshots without row or cell history record nothing a decision applies.
  * Keep live properties and clean only the unambiguous metadata on unfiltered bulk actions. */
 export function unboundTableHistories(
   part: OoxmlPart,
   sites: readonly RevisionSite[]
 ): ReadonlySet<string> {
+  const histories = alignmentHistories(part, sites);
+  const snapshots = new Set(histories.map(({ history }) => history));
   const result = new Set<string>();
+  for (const { history, others } of histories)
+    if (others.every((id) => snapshots.has(id))) result.add(history);
+  return result;
+}
+
+/** Alignment-only table changes that row or cell history keeps a pending decision. */
+export function boundTableAlignments(
+  part: OoxmlPart,
+  sites: readonly RevisionSite[]
+): ReadonlySet<string> {
+  const unbound = unboundTableHistories(part, sites);
+  const result = new Set<string>();
+  for (const { history, alignment } of alignmentHistories(part, sites))
+    if (alignment && !unbound.has(history)) result.add(history);
+  return result;
+}
+
+/**
+ * An alignment snapshot in a table whose cells hold formatting history is one decision with
+ * that history, so deciding either decides them all.
+ */
+export function bundledTableHistories(
+  part: OoxmlPart,
+  sites: readonly RevisionSite[]
+): readonly (readonly string[])[] {
+  // An inserted or deleted cell's own history goes with the cell, not with the table.
+  const ownedByCell = (site: RevisionSite) =>
+    !!site.parent &&
+    site.parent.children.some(
+      (n) => n.kind !== 'textValue' && (n.localName === 'cellIns' || n.localName === 'cellDel')
+    );
+  const cells = new Set(
+    sites
+      .filter((site) => site.node.localName === 'tcPrChange' && !ownedByCell(site))
+      .map((site) => site.node.id)
+  );
+  if (!cells.size) return [];
+  const alignments = new Set(
+    sites.filter((site) => site.node.localName === 'tblPrChange').map((site) => site.node.id)
+  );
+  return alignmentHistories(part, sites).flatMap(({ history, others }) => {
+    const bundled = others.filter((id) => cells.has(id));
+    return alignments.has(history) && bundled.length ? [[history, ...bundled]] : [];
+  });
+}
+
+/** Alignment and grid snapshots, each with the table's other formatting history sites. */
+function alignmentHistories(
+  part: OoxmlPart,
+  sites: readonly RevisionSite[]
+): readonly {
+  readonly history: string;
+  readonly alignment: boolean;
+  readonly others: readonly string[];
+}[] {
+  const result: { history: string; alignment: boolean; others: string[] }[] = [];
   if (!sites.some((s) => ['tblPrChange', 'tblGridChange'].includes(s.node.localName)))
     return result;
   const identity = (site: RevisionSite) =>
     JSON.stringify(['id', 'author', 'date'].map((name) => attr(site.node, name)));
   const identities = new Map<string, number>();
-  const tableRecords = new Map<string, number>();
+  const tableRecords = new Map<string, string[]>();
   for (const site of sites) {
     const key = identity(site);
     identities.set(key, (identities.get(key) ?? 0) + 1);
+    // Inserted or deleted rows and text are not formatting history of the table.
+    if (!TABLE_FORMATTING_RECORDS.has(site.node.localName)) continue;
     let ancestor = site.parent;
     while (ancestor && ancestor.kind !== 'table') ancestor = parentNodeOf(part, ancestor.id);
-    if (ancestor) tableRecords.set(ancestor.id, (tableRecords.get(ancestor.id) ?? 0) + 1);
+    if (ancestor)
+      tableRecords.set(ancestor.id, [...(tableRecords.get(ancestor.id) ?? []), site.node.id]);
   }
   for (const site of sites) {
     if (
@@ -88,9 +157,14 @@ export function unboundTableHistories(
     }
     const table = parentNodeOf(part, current.id);
     if (table?.kind !== 'table' || !children(table, 'tr').length) continue;
-    // Keep reused identities and any table with another formatting history explicit.
-    if (identities.get(identity(site)) !== 1 || tableRecords.get(table.id) !== 1) continue;
-    result.add(site.node.id);
+    // Keep reused identities explicit.
+    if (identities.get(identity(site)) !== 1) continue;
+    const others = (tableRecords.get(table.id) ?? []).filter((id) => id !== site.node.id);
+    result.push({
+      history: site.node.id,
+      alignment: site.node.localName === 'tblPrChange',
+      others,
+    });
   }
   return result;
 }

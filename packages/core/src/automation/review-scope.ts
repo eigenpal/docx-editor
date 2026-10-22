@@ -142,7 +142,7 @@ export function planKeyedDecision(
     action,
     keys,
     sharesItsPart(reads.story) ? reads.root : undefined,
-    { countRemaining: false }
+    { countRemaining: false, explicit: true }
   );
   let ops = decision.ops;
   const skipped = decision.result.skipped;
@@ -151,16 +151,27 @@ export function planKeyedDecision(
     const nested = skipped.every((skip) => skip.reason === 'incomplete-group')
       ? nestedDecisionOps(reads, pending, action)
       : null;
+    // The detail names the skip and its structure, `incomplete-group:paired-change`, for
+    // diagnostics; neither comes from the file.
+    const skip = skipped[0];
+    // A lock or a binding keeps the decision: its code names which, as `acceptAll()` does.
+    const guarded = skipped.find(
+      (entry) => entry.detail === 'locked-content' || entry.detail === 'bound-content'
+    );
+    if (!nested && guarded)
+      return refuse('transaction-refused', 'a content control keeps that change', guarded.detail);
     if (!nested)
       return refuse(
         'unsupported-revision',
         'a tracked change in that decision cannot be resolved',
-        skipped[0]?.reason
+        skip && (skip.detail ? `${skip.reason}:${skip.detail}` : skip.reason)
       );
     ops = nested;
     settle(keys);
   } else {
     settle([...keys, ...decision.result.resolved.map((entry) => entry.key)]);
+    // Changes inside a removed paragraph or row go with it, as text inside removed text does.
+    for (const key of decision.swept ?? []) ledger.decided.set(key, 'removed');
   }
   return { ok: true, kind: 'command', story: reads.story, ops, answer: () => APPLIED };
 }

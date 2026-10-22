@@ -6,6 +6,7 @@ import {
   type ReviewRevisionItem,
 } from './review-items.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
+import { preservedRevisionProperty } from './revision-property-records.ts';
 
 const canonical = (node: OoxmlNode): unknown =>
   node.kind === 'textValue'
@@ -24,7 +25,10 @@ const properties = (node: OoxmlElement) =>
       .filter(
         (child) =>
           child.kind !== 'textValue' &&
-          !(child.namespaceUri === WML_NAMESPACE_URI && child.localName === 'rPrChange')
+          // The record itself, and what its reject keeps, such as a mark's own insertion, are
+          // not formatting.
+          !(child.namespaceUri === WML_NAMESPACE_URI && child.localName === 'rPrChange') &&
+          !preservedRevisionProperty('rPrChange', child)
       )
       .map((child) =>
         child.kind === 'textValue'
@@ -36,9 +40,17 @@ const properties = (node: OoxmlElement) =>
       )
   );
 
-/** Compare the formatting delta, including properties not exposed by UI summaries. */
-function signature(site: RevisionSite): string | undefined {
-  if (site.node.localName !== 'rPrChange' || !site.parent || site.paragraphMark || site.refused)
+/**
+ * Compare the formatting delta, including properties not exposed by UI summaries. A paragraph
+ * mark's record has one only when `marks` asks for it: run grouping keeps to text.
+ */
+export function runFormattingSignature(site: RevisionSite, marks = false): string | undefined {
+  if (
+    site.node.localName !== 'rPrChange' ||
+    !site.parent ||
+    (site.paragraphMark && !marks) ||
+    site.refused
+  )
     return;
   const previous = site.node.children.find(
     (node) =>
@@ -58,9 +70,11 @@ function signature(site: RevisionSite): string | undefined {
 
 export function groupAdjacentRunFormatting(
   items: readonly ReviewRevisionItem[],
-  sites: readonly RevisionSite[]
+  sites: readonly RevisionSite[],
+  /** Where the item sits: a wrapper's edge or a field character ends a change. */
+  segmentOf: (item: ReviewRevisionItem) => string = () => ''
 ): ReviewRevisionItem[] {
-  const signatures = new Map(sites.map((site) => [site.node.id, signature(site)]));
+  const signatures = new Map(sites.map((site) => [site.node.id, runFormattingSignature(site)]));
   const buckets = new Map<string, ReviewRevisionItem[]>();
   for (const item of items) {
     if (
@@ -79,7 +93,13 @@ export function groupAdjacentRunFormatting(
     const ids = revisionSiteNodeIdsOf(item);
     const change = ids.length ? signatures.get(ids[0]!) : undefined;
     if (!change || !ids.every((id) => signatures.get(id) === change)) continue;
-    const key = JSON.stringify([item.author, range.partName, range.start.paragraphId, change]);
+    const key = JSON.stringify([
+      item.author,
+      range.partName,
+      range.start.paragraphId,
+      change,
+      segmentOf(item),
+    ]);
     const bucket = buckets.get(key) ?? [];
     bucket.push(item);
     buckets.set(key, bucket);

@@ -40,6 +40,7 @@ import {
   replacementPairHalves,
   reviewItemWithHalves,
   withRevealPairKey,
+  withSkippedPairKeys,
 } from './review-replacement-pairs.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 import {
@@ -77,6 +78,7 @@ import {
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
+import { furnitureHomeOfItem, noteStoryScopeOfItem } from './review-item-story.ts';
 import type {
   CanResult,
   DocumentHandle,
@@ -1428,27 +1430,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
   const anchorIndexOf = createAnchorIndex();
 
-  /**
-   * Which story a review item lives in, from the part name its ranges carry.
-   *
-   * `null` rId means the part is not a header/footer this document's sections resolve —
-   * i.e. the body (or an unknown part, which is treated as body rather than guessed at).
-   */
-  function furnitureHomeOf(
-    item: ReviewItem
-  ): { readonly kind: 'header' | 'footer'; readonly rId: string } | null {
-    const partName = firstReviewRange(item)?.partName;
-    if (!partName || !surface || partName === surface.session.part().name) return null;
-    for (const section of surface.session.headerFooterResolutionBySection()) {
-      for (const kind of ['header', 'footer'] as const) {
-        const slots = kind === 'header' ? section.headers : section.footers;
-        for (const slot of slots.values()) {
-          if (slot.partName === partName) return { kind, rId: slot.rId };
-        }
-      }
-    }
-    return null;
-  }
+  // Which header, footer, or notes part a card lives in, from the part name its range carries.
+  const furnitureHomeOf = (item: ReviewItem) => furnitureHomeOfItem(surface?.session, item);
+  const noteStoryScopeOf = (item: ReviewItem) => noteStoryScopeOfItem(surface?.session, item);
 
   /**
    * The note a card's range sits in, as the scope id `enterNote` takes.
@@ -1463,30 +1447,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const layout = surface?.publishedLayout();
     if (!range || !layout) return null;
     return noteScopeIndexOf(layout).get(range.start.paragraphId) ?? null;
-  }
-
-  /**
-   * The notes PART a card lives in, for a write that must land there.
-   *
-   * Derived from the part NAME, not from the note: which part a write targets is a
-   * question the range answers by itself, and routing it through the per-note lookup made
-   * it fail whenever that lookup did — a note whose `w:id` the file omits, or one the
-   * layout has not painted. The card was then treated as a body card, so Accept reported
-   * `unknown-revision` on a card the queue itself listed as resolvable.
-   */
-  function noteStoryScopeOf(
-    item: ReviewItem
-  ): { readonly kind: 'notesPart'; readonly noteKind: 'footnote' | 'endnote' } | null {
-    const partName = firstReviewRange(item)?.partName;
-    if (!partName || !surface) return null;
-    // Read from the PACKAGE, never `partFor`: resolving a notes scope opens a story store,
-    // and this runs per item on read paths (`getTrackedChanges`, the review placements).
-    for (const noteKind of ['footnote', 'endnote'] as const) {
-      if (resolveNotesPart(surface.session.currentPackage(), noteKind)?.name === partName) {
-        return { kind: 'notesPart', noteKind };
-      }
-    }
-    return null;
   }
 
   /** The story a card's range lives in, for a write that must land in that part. */
@@ -1783,6 +1743,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     authorVisibility: reviewAuthorVisibility,
     scope: storyScopeOfReviewItem,
     reveal: (event) => events.emitReviewItemReveal(withRevealPairKey(reviewPlacements, event)),
+    // The pair keys read the placements, so only a decision someone listens to pays for them.
+    resolved: (event) => {
+      if (events.hasReviewChangesResolvedHandlers())
+        events.emitReviewChangesResolved(withSkippedPairKeys(reviewPlacements, event));
+    },
     activate: (key, allowExcludedFormat) => {
       allowExcludedFormatNavigation = allowExcludedFormat ?? false;
       try {

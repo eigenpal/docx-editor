@@ -7,12 +7,13 @@
  * tables, so a part name, an element name or a message from the file can never pass through.
  */
 import type { RevisionBatchSkipDetail, ReviewRevisionKind } from '../store/store/index.ts';
-import { knownReasonTokens } from './diagnostics.ts';
+import { knownReasonTokens, reviewDiagnosticCode } from './diagnostics.ts';
 import type {
   DiagnosticErrorName,
   DocumentPartKind,
   FormattingChangeKind,
   ReviewChangeKind,
+  ReviewDiagnosticCode,
 } from './diagnostic-vocabulary.ts';
 
 /**
@@ -40,6 +41,15 @@ const REVIEW_SKIP_CAUSES: Readonly<Record<RevisionBatchSkipDetail, true>> = {
   'unrecorded-properties': true,
   'read-only': true,
   'no-sites': true,
+  'paired-change': true,
+  'removed-content': true,
+  'replaced-properties': true,
+  'emptied-change': true,
+  'enclosing-change': true,
+  'grouped-change': true,
+  'nested-table': true,
+  'locked-content': true,
+  'bound-content': true,
 };
 
 /** An exception the engine did not expect. */
@@ -80,6 +90,26 @@ export function diagnosticCause(reason: string | undefined): string | undefined 
   const colon = reason.indexOf(':');
   const token = colon < 0 ? reason : reason.slice(0, colon);
   return causeSet().has(token) ? token : undefined;
+}
+
+/**
+ * The review code and structure in a refused decision's reason, such as
+ * `incomplete-group:paired-change`, or null when the reason names no review skip. The
+ * structure is reported only when it is one of the engine's own skip details.
+ *
+ * @public
+ */
+export function reviewSkipOfReason(
+  reason: string | undefined
+): { readonly code: ReviewDiagnosticCode; readonly cause?: string } | null {
+  if (!reason) return null;
+  const colon = reason.indexOf(':');
+  const code = reviewDiagnosticCode(colon < 0 ? reason : reason.slice(0, colon));
+  if (!code) return null;
+  const structure = colon < 0 ? undefined : reason.slice(colon + 1);
+  return structure !== undefined && Object.hasOwn(REVIEW_SKIP_CAUSES, structure)
+    ? { code, cause: structure }
+    : { code };
 }
 
 /** The cause of a failure the engine did not name: an exception. */

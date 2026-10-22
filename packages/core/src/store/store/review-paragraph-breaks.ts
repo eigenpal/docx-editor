@@ -57,7 +57,9 @@ export function mergeParagraphBreakEdits(
   items: readonly ReviewRevisionItem[],
   part: OoxmlPart,
   order: ReadonlyMap<string, number>,
-  previewByNode: ReadonlyMap<string, { readonly range: ReviewRange; readonly text: string }>
+  previewByNode: ReadonlyMap<string, { readonly range: ReviewRange; readonly text: string }>,
+  /** The container an item sits in; a join across a mark stays inside one. */
+  containerOf: (item: ReviewRevisionItem) => string = () => ''
 ): readonly ReviewRevisionItem[] {
   if (!items.some((item) => item.revisionKind === 'paragraphMark')) return items;
   // Only sibling paragraphs share a break.
@@ -74,7 +76,7 @@ export function mergeParagraphBreakEdits(
   const ends = new Map<string, number[]>();
   // NUL-separated: XML text cannot carry U+0000, so a file's author name cannot forge a boundary.
   const key = (item: ReviewRevisionItem, paragraph: string, offset: number): string =>
-    `${item.revisionKind === 'paragraphMark' ? item.markDirection : item.revisionKind}\u0000${item.author}\u0000${item.nesting}\u0000${paragraph}\u0000${offset}`;
+    `${item.revisionKind === 'paragraphMark' ? item.markDirection : item.revisionKind}\u0000${item.author}\u0000${item.nesting}\u0000${paragraph}\u0000${offset}\u0000${containerOf(item)}`;
   const add = (map: Map<string, number[]>, at: string, index: number): void => {
     const bucket = map.get(at);
     if (bucket) bucket.push(index);

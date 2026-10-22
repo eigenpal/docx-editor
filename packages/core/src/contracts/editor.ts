@@ -62,6 +62,7 @@ export type {
   EditorEvents,
   EditorHostChange,
   EditorHostDocument,
+  ReviewChangesResolvedEvent,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
 } from './editor-events.ts';
@@ -696,7 +697,13 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    *
    * Refused for a card whose kind the engine cannot resolve structurally, which is why
    * `readOnly` is on the item — a surface should not offer the button in the first place.
-   * Other refusals name their cause, as {@link addComment} describes.
+   * Other refusals name their cause, as {@link addComment} describes. A change that resolves
+   * only together with another change refuses with a reason led by `incomplete-group:`, and a
+   * row that stays to keep a nested table with one led by `retained-structure:`. A change a
+   * content control lock keeps refuses with `code: 'locked'` and a reason led by
+   * `locked-content:`; one in a data-bound control with `code: 'bound'` and `bound-content:`.
+   * `reviewCodeOfRefusal(result.reason)` names the review code of each. In a React or
+   * Vue host, `useReviewRefusalMessage()` turns `useReview().lastRefusal` into a sentence.
    *
    * Neither call scrolls. In a React or Vue host with the review module, `useReview().accept`
    * and `useReview().reject` call these. For headless or server use, see `Revision.accept()`

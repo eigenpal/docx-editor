@@ -35,15 +35,12 @@ Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow
 For batch PDF exports, use Node with a bounded JavaScript heap:
 
 ```sh
-node --max-old-space-size=768 --experimental-transform-types \
+node --max-old-space-size=768 \
   --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
   packages/docx-to-pdf/scripts/evaluation/export.ts input.docx output.pdf
 ```
 
-Use Node.js 24 or later for this source loader. Keep an external process memory limit and timeout.
-The heap limit excludes native font, image, and compression memory.
-Record the runtime version, flags, and loader identity with the engine identity.
-Different runtimes can produce different compressed PDF bytes. Compare decoded content when checking rendering parity.
+Use Node.js 24 or later for this source loader. Keep an external process memory limit and timeout. The heap limit excludes native font, image, and compression memory. Record the runtime version, flags, and loader identity with the engine identity. Different runtimes can produce different compressed PDF bytes. Compare decoded content when checking rendering parity.
 
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
@@ -79,7 +76,7 @@ bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts packages
 For Node 24.2 or later, load source aliases before starting the worker:
 
 ```sh
-node --experimental-transform-types \
+node \
   --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
   packages/docx-to-pdf/scripts/evaluation/layout-worker.ts
 ```

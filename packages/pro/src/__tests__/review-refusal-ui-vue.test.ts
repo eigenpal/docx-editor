@@ -11,7 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, expect, test } from 'bun:test';
 import { defineComponent, h } from 'vue';
-import { TRACKED, flush, waitFor } from './review-vue-harness.ts';
+import { TRACKED, docx, flush, waitFor } from './review-vue-harness.ts';
 import { DocxEditorReview } from '../vue/DocxEditorReview.tsx';
 import { useReview } from '../vue/useReview.ts';
 import { reviewModule } from '../index.ts';
@@ -110,6 +110,50 @@ test('a refused reply names its cause in the reply line', async () => {
       'edit.collaboration-not-ready'
     );
     expect(query(mounted.container, 'review-refusal-live')!.textContent).toBe(WAITING);
+  } finally {
+    mounted.unmount();
+  }
+});
+
+const LOCKED = docx(
+  '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent><w:p>' +
+    '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:t>added text</w:t></w:r></w:ins></w:p></w:sdtContent></w:sdt>'
+);
+
+/** Discards the first revision through the hook and shows the refusal code. */
+const DiscardProbe = defineComponent({
+  setup() {
+    const review = useReview();
+    return () => [
+      h('button', {
+        'data-testid': 'discard',
+        onClick: () => {
+          const revision = review.items.value.find((item) => item.kind === 'revision');
+          if (revision) review.remove(revision);
+        },
+      }),
+      h('output', { 'data-testid': 'discard-code' }, review.lastRefusal.value?.code ?? ''),
+    ];
+  },
+});
+
+test('discarding a locked tracked change names the lock, as rejecting it does', async () => {
+  const mounted = mountEditorTree(
+    () => [h(DiscardProbe)],
+    LOCKED,
+    () => [],
+    [reviewModule()],
+    {
+      author: 'Grace Hopper',
+    }
+  );
+  try {
+    await flush();
+    query(mounted.container, 'discard')!.click();
+    await flush();
+    await waitFor(() => query(mounted.container, 'discard-code')!.textContent !== '');
+    expect(query(mounted.container, 'discard-code')!.textContent).toBe('review.locked-content');
   } finally {
     mounted.unmount();
   }

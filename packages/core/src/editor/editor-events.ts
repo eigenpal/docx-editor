@@ -4,6 +4,7 @@ import type {
   EditorEvents,
   EditorHostChange,
   EditorSnapshot,
+  ReviewChangesResolvedEvent,
   ReviewItemRevealEvent,
   Unsubscribe,
 } from '../contracts/editor.ts';
@@ -26,6 +27,7 @@ export function createEditorEvents(
     diagnostic: new Set(),
     revisionMarkupChange: new Set(),
     reviewItemReveal: new Set(),
+    reviewChangesResolved: new Set(),
     hostChange: new Set(),
   };
   /**
@@ -116,6 +118,12 @@ export function createEditorEvents(
         for (const handler of [...handlers.revisionMarkupChange]) handler(value);
       });
     },
+    emitReviewChangesResolved(event: ReviewChangesResolvedEvent) {
+      dispatch(() => {
+        const value = Object.freeze({ ...event, skipped: Object.freeze([...event.skipped]) });
+        for (const handler of [...handlers.reviewChangesResolved]) handler(value);
+      });
+    },
     emitReviewItemReveal(event: ReviewItemRevealEvent) {
       dispatch(() => {
         const value = Object.freeze({ ...event });
@@ -124,6 +132,7 @@ export function createEditorEvents(
     },
     hasErrorHandlers: () => handlers.error.size > 0,
     hasDiagnosticHandlers: () => handlers.diagnostic.size > 0,
+    hasReviewChangesResolvedHandlers: () => handlers.reviewChangesResolved.size > 0,
     clear() {
       pending = [];
       for (const set of Object.values(handlers)) set.clear();

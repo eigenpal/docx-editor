@@ -1,6 +1,7 @@
 // Node-level helpers for rebuilding a part after a tracked-change decision.
 
 import { parentNodeOf } from '../package/ooxml-edit.ts';
+import { declaredLockOf } from './tree-op-nodes.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -9,6 +10,25 @@ import {
 } from '../package/ooxml-tree.ts';
 
 export type Resolution = 'unwrap' | 'remove' | 'restore';
+
+/**
+ * The controls a removal must keep: a control locked against removal (`sdtLocked`,
+ * `sdtContentLocked`) stays, emptied, where the removed content held it. The decision then
+ * restores its placeholder.
+ */
+export function lockedControlShells(node: OoxmlNode): OoxmlNode[] {
+  if (node.kind === 'textValue') return [];
+  if (node.kind === 'contentControl' && declaredLockOf(node).wrapper)
+    return [
+      {
+        ...node,
+        children: node.children.map((child) =>
+          child.kind === 'contentControlContent' ? { ...child, children: [] } : child
+        ),
+      } as OoxmlNode,
+    ];
+  return node.children.flatMap(lockedControlShells);
+}
 
 /** How one wrapper resolves, given the action. */
 export function resolutionOf(node: OoxmlElement, action: 'accept' | 'reject'): Resolution {

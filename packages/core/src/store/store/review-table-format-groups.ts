@@ -1,4 +1,5 @@
 import { implicitTableRowAlignments } from './revision-table-implicit-alignment.ts';
+import { boundTableAlignments } from './revision-table-unbound-history.ts';
 import { ooxmlTreesEqual } from '../package/ooxml-serialize.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
@@ -14,6 +15,8 @@ interface FormatGroup {
   tableId: string;
   ids: Set<string>;
   author: string;
+  /** A table alignment the entry carries, which names the entry so its key outlives the rows. */
+  alignment?: string;
 }
 
 /** Word's row/cell formatting entries, kept separate from text/property-run decisions. */
@@ -36,6 +39,7 @@ export function groupTableFormatting(
   );
   if (!formatting.size) return [...items];
   const alignmentHistories = implicitTableRowAlignments(part, sites).tableHistories;
+  const boundAlignments = boundTableAlignments(part, sites);
   const groups: FormatGroup[] = [];
   const owner = new Map<string, FormatGroup>();
   const authorOf = (site: RevisionSite) =>
@@ -83,6 +87,15 @@ export function groupTableFormatting(
       const last = tableGroups.at(-1);
       if (last && !refusedRow && grid.every((site) => !site.refused)) {
         for (const site of grid) last.ids.add(site.node.id);
+        // An alignment-only change and the row and cell history beside it are one entry,
+        // whoever made each. The entry takes the row history's author, as for the cells.
+        const alignment = tableProperties.find(
+          (site) => !site.refused && boundAlignments.has(site.node.id)
+        );
+        if (alignment && tableGroups.length === 1) {
+          last.ids.add(alignment.node.id);
+          last.alignment = alignment.node.id;
+        }
         // Word writes unchanged table snapshots alongside a cell-width edit.
         // With one unambiguous row group, those snapshots belong to its entry.
         // Keep meaningful table changes and multi-group lifetimes independent.
@@ -149,8 +162,13 @@ export function groupTableFormatting(
     const membersOfGroup = members.get(group) ?? [];
     const primary =
       membersOfGroup.find(
+        (item) =>
+          group.alignment !== undefined && revisionSiteNodeIdsOf(item).includes(group.alignment)
+      ) ??
+      membersOfGroup.find(
         (item) => !['tblGridChange', 'tblPrChange'].includes(item.formattingKind ?? '')
-      ) ?? membersOfGroup[0];
+      ) ??
+      membersOfGroup[0];
     const entries = primary ? [primary, ...membersOfGroup.filter((item) => item !== primary)] : [];
     const ids = entries.flatMap(revisionSiteNodeIdsOf);
     const included = new Set(ids);

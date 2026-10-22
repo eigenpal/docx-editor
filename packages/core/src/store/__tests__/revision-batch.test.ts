@@ -38,20 +38,28 @@ for (const action of ['accept', 'reject'] as const) {
     expect(all.result.resolved).toHaveLength(2);
     expect(all.result.skipped[0]?.reason).toBe('unsupported-revision');
   });
-  test(`${action}: an excluded nested revision blocks its entire group`, () => {
+  test(`${action}: an excluded nested revision resolves only when the decision keeps it`, () => {
     const part = load(`<w:p>${ins(1, 'Ada', ins(2, 'Grace'))}</w:p><w:p>${ins(3)}</w:p>`);
     const keys = revisionItemsOf(part)
       .filter((item) => item.author === 'Ada')
       .map(reviewItemKey);
     const plan = planRevisionBatch(part, action, keys);
-    expect(plan.result.resolved).toHaveLength(1);
-    expect(plan.result.skipped[0]?.reason).toBe('incomplete-group');
     const applied = applyTreeOp(part, plan.ops[0]!);
     if (!applied.ok) throw new Error(applied.reason);
-    expect(revisionItemsOf(applied.part)).toHaveLength(2);
-    expect(serializeOoxmlPart(applied.part).match(/<w:p>.*?<\/w:p>/)?.[0]).toBe(
-      serializeOoxmlPart(part).match(/<w:p>.*?<\/w:p>/)?.[0]
-    );
+    if (action === 'accept') {
+      // Accepting Ada's insertion keeps Grace's insertion inside it pending.
+      expect(plan.result.resolved).toHaveLength(2);
+      expect(plan.result.skipped).toEqual([]);
+      expect(revisionItemsOf(applied.part).map((item) => item.author)).toEqual(['Grace']);
+    } else {
+      // Rejecting it would remove Grace's insertion, which the selection excludes.
+      expect(plan.result.resolved).toHaveLength(1);
+      expect(plan.result.skipped[0]?.reason).toBe('incomplete-group');
+      expect(revisionItemsOf(applied.part)).toHaveLength(2);
+      expect(serializeOoxmlPart(applied.part).match(/<w:p>.*?<\/w:p>/)?.[0]).toBe(
+        serializeOoxmlPart(part).match(/<w:p>.*?<\/w:p>/)?.[0]
+      );
+    }
   });
   test(`${action}: unsupported descendants remain intact with their containing insertion`, () => {
     const content = '<w:r><w:rPr><w:ins w:id="2" w:author="Grace"/></w:rPr><w:t>keep</w:t></w:r>';
@@ -88,12 +96,21 @@ for (const action of ['accept', 'reject'] as const) {
       remaining: 0,
     });
   });
-  test(`${action}: a selected change inside a locked content control still refuses`, () => {
+  // Accepting an insertion keeps the locked content; rejecting it would remove it.
+  test(`${action}: a content lock keeps only decisions that change what the control holds`, () => {
     const part = load(
       `<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent><w:p>${ins(1)}</w:p></w:sdtContent></w:sdt>`
     );
     const plan = planRevisionBatch(part, action);
-    expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+    if (action === 'accept') {
+      expect(plan.result.skipped).toEqual([]);
+      expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: true });
+    } else {
+      expect(plan.ops).toEqual([]);
+      expect(plan.result.skipped).toMatchObject([
+        { reason: 'unsupported-revision', detail: 'locked-content' },
+      ]);
+    }
   });
 }
 

@@ -7,9 +7,10 @@
 // to "what does this document hold", and the two would part company at the first document neither
 // author had in mind.
 //
-// WHAT IS LEFT OUT OF THE LISTING IS LEFT OUT ON PURPOSE. A structural revision whose exact Word
-// subtype this protocol cannot name — such as cell-structure changes — is omitted from
-// `revisionReads`, because an object whose `type` we cannot publish is worse than an absence.
+// WHAT IS LEFT OUT OF THE LISTING IS LEFT OUT ON PURPOSE. Rows, cells, cell merges, and tracked
+// numbering are listed by their revision type. A structural card that mixes kinds with no single
+// type is omitted from `revisionReads`, because an object whose `type` we cannot publish is worse
+// than an absence.
 // Collection membership is therefore not the collection decision set: `acceptAll` / `rejectAll`
 // still resolve every store-resolvable revision, including a complete tracked row
 // (`revisionKind: structural` and `readOnly: false`), and refuse atomically when any `readOnly`
@@ -70,7 +71,13 @@ const MARK_TYPES = {
   moveTo: 'MovedTo',
 } as const;
 
-export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISION_TYPES];
+export type AutomationRevisionType =
+  | (typeof REVISION_TYPES)[keyof typeof REVISION_TYPES]
+  /** Structural changes: a cell proposed, struck, or merged, and tracked list numbering. */
+  | 'CellInsertion'
+  | 'CellDeletion'
+  | 'CellMerge'
+  | 'ParagraphNumber';
 
 /**
  * Whether other stories live in this story's part.
@@ -139,6 +146,33 @@ export function listedRevisionItemsInStory(
 }
 
 /**
+ * The revision type of a structural change. A row change names the card even when the row's cells
+ * carry their own records; a card of one cell or numbering kind takes that kind's name.
+ */
+function structuralType(
+  changes: NonNullable<ReviewRevisionItem['structuralChanges']>
+): AutomationRevisionRead['type'] | undefined {
+  const inserts = changes.includes('rowInsert');
+  const deletes = changes.includes('rowDelete');
+  // A card that proposes one row and strikes another has no single type.
+  if (inserts && deletes) return undefined;
+  if (inserts) return 'Insert';
+  if (deletes) return 'Delete';
+  const kinds = new Set(changes);
+  if (kinds.size !== 1) return undefined;
+  const [kind] = kinds;
+  return kind === 'cellInsert'
+    ? 'CellInsertion'
+    : kind === 'cellDelete'
+      ? 'CellDeletion'
+      : kind === 'cellMerge'
+        ? 'CellMerge'
+        : kind === 'numberingInsert'
+          ? 'ParagraphNumber'
+          : undefined;
+}
+
+/**
  * The decisions of one story, in document order.
  *
  * Omits `readOnly` items and structural cards whose Word subtype this protocol cannot name.
@@ -153,14 +187,9 @@ export function revisionReads(
   const listed = listedRevisionItemsInStory(reads, pkg);
   for (const item of listed) {
     if (item.readOnly) continue;
-    const rowChange = item.structuralChanges?.length === 1 ? item.structuralChanges[0] : undefined;
     const type =
       item.revisionKind === 'structural'
-        ? rowChange === 'rowInsert'
-          ? 'Insert'
-          : rowChange === 'rowDelete'
-            ? 'Delete'
-            : undefined
+        ? structuralType(item.structuralChanges ?? [])
         : item.revisionKind === 'paragraphMark'
           ? item.markDirection && MARK_TYPES[item.markDirection]
           : REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];

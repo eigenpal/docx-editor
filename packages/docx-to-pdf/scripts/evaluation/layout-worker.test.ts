@@ -22,12 +22,7 @@ for (const runtime of ['bun', 'node'] as const)
       const command =
         runtime === 'bun'
           ? ['bun', '--tsconfig-override', new URL('../../tsconfig.json', import.meta.url).pathname]
-          : [
-              'node',
-              '--experimental-transform-types',
-              '--import',
-              new URL('./runtime-loader.mjs', import.meta.url).pathname,
-            ];
+          : ['node', '--import', new URL('./runtime-loader.mjs', import.meta.url).pathname];
       const worker = Bun.spawn(
         [...command, new URL('./layout-worker.ts', import.meta.url).pathname],
         { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' }

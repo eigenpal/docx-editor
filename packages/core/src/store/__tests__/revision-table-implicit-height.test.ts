@@ -78,13 +78,13 @@ for (const [name, alter] of [
     expect(body).not.toBe(wordCreatedNewRowHeight);
     expect(resolve(body, 'reject')).toContain('<w:trHeight');
   });
-test('a locked containing control refuses implicit row restoration', () => {
+test('a locked containing control keeps implicit row restoration pending', () => {
   const part = load(
     `<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>${wordCreatedNewRowHeight}</w:sdtContent></w:sdt>`
   );
   const plan = planRevisionBatch(part, 'reject');
-  expect(plan.ops).toHaveLength(1);
-  expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.skipped.every((entry) => entry.detail === 'locked-content')).toBe(true);
 });
 
 test('implicit row restoration checks locked descendants outside the property snapshots', () => {
@@ -94,9 +94,15 @@ test('implicit row restoration checks locked descendants outside the property sn
     `<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>${paragraph}</w:sdtContent></w:sdt>`
   );
   const part = load(body);
+  // The plan skips what the op's own guard would refuse, and the guard still refuses it.
   const plan = planRevisionBatch(part, 'reject');
-  expect(plan.ops).toHaveLength(1);
-  expect(applyTreeOp(part, plan.ops[0]!)).toMatchObject({ ok: false, reason: 'locked' });
+  expect(plan.ops).toEqual([]);
+  expect(plan.result.skipped).toMatchObject([{ detail: 'locked-content' }]);
+  const siteNodeIds = collectRevisionSites(part).map((site) => site.node.id);
+  expect(applyTreeOp(part, { op: 'rejectAllRevisions', siteNodeIds })).toMatchObject({
+    ok: false,
+    reason: 'locked',
+  });
 });
 
 test('an explicit partial cell-history operation does not reset the row height', () => {

@@ -6,11 +6,15 @@
  * browser moved the DOM in a way no op explains, and the surface's own refusal sentences.
  * Only the RESULT of a lookup leaves the engine; the raw reason never does.
  */
-import type { EditDiagnosticCode, FontDiagnosticCode } from '../contracts/diagnostics.ts';
+import type {
+  EditDiagnosticCode,
+  FontDiagnosticCode,
+  ReviewDiagnosticCode,
+} from '../contracts/diagnostics.ts';
 import type { EditorFontErrorCode } from '../contracts/editor.ts';
 import type { ExecErrorCode } from '../contracts/types.ts';
 import type { TreeBindingRejection } from '@docx-editor.dev/core/binding';
-import { storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { reviewDiagnosticCode, storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { BINDING_CAUSES } from '../automation/diagnostic-context.ts';
 import { FORMS_WRITE_REASON, TRACKED_CHANGES_AUTHOR_REASON } from './command-protection.ts';
 import {
@@ -28,6 +32,7 @@ import { COLLABORATION_FIELD_RESULTS_REFUSAL } from './field-results-scope.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
 import { PREVIEW_WRITE_REFUSAL, REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
+import { BOUND_CHANGES_REFUSAL, LOCKED_CHANGES_REFUSAL } from './review-guard-refusals.ts';
 import {
   LOCKED_CONTENT_BREAK_REFUSAL,
   LOCKED_SECTION_BREAK_REFUSAL,
@@ -35,7 +40,11 @@ import {
   TABLE_CELL_BREAK_REFUSAL,
 } from './surface-section-breaks.ts';
 
-export { openDiagnosticCode, reviewDiagnosticCode } from '@docx-editor.dev/core/automation';
+export {
+  openDiagnosticCode,
+  reviewCodeOfSkip,
+  reviewDiagnosticCode,
+} from '@docx-editor.dev/core/automation';
 
 /** The binding's reasons and the diagnostic causes list the same tokens, in both directions. */
 type BindingCause = (typeof BINDING_CAUSES)[number];
@@ -125,6 +134,26 @@ export function diagnosticCodeOfRefusal(
       : undefined) ??
     'edit.refused'
   );
+}
+
+/**
+ * The review code a tracked-change refusal leads with, such as `retained-structure: ...` for a
+ * row that stays to keep a nested table, or null when the refusal names no review reason. A
+ * card or an Accept All or Reject All that a content control lock or a data binding keeps gives
+ * `review.locked-content` or `review.bound-content`.
+ *
+ * @example
+ * ```ts
+ * const result = editor.exec({ type: 'resolveAllReviewChanges', action: 'reject' });
+ * if (!result.ok) console.warn(reviewCodeOfRefusal(result.reason));
+ * ```
+ *
+ * @public
+ */
+export function reviewCodeOfRefusal(reason: string): ReviewDiagnosticCode | null {
+  if (reason === LOCKED_CHANGES_REFUSAL) return 'review.locked-content';
+  if (reason === BOUND_CHANGES_REFUSAL) return 'review.bound-content';
+  return reviewDiagnosticCode(reason.split(':', 1)[0]!);
 }
 
 const EXEC_CODES: Readonly<Record<ExecErrorCode, EditDiagnosticCode>> = {

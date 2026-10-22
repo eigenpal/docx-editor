@@ -17,6 +17,7 @@ import {
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 import { commentMarkersOfParagraph } from '../store/store/comment-reads.ts';
+import { isInertMarker } from '../store/store/revision-marker-content.ts';
 import {
   findNode,
   parentNodeOf,
@@ -380,14 +381,57 @@ function onlyBodyChanged(
   );
 }
 
-/** Whether the paragraph before `paragraphId` holds a paragraph-mark revision. */
-function previousHoldsMarkRevision(part: OoxmlPart, paragraphId: string): boolean {
+/**
+ * The paragraph whose mark a formatting change in `paragraphId` can continue from: the previous
+ * sibling, or for a cell's first paragraph the previous cell's last one, or for the first cell
+ * of a table the paragraph just before the table.
+ */
+function formattingPredecessor(part: OoxmlPart, paragraphId: string): OoxmlNode | undefined {
   const owner = parentNodeOf(part, paragraphId);
-  if (!owner) return false;
+  if (!owner) return undefined;
   const index = owner.children.findIndex((child) => child.id === paragraphId);
-  const previous = owner.children[index - 1];
+  if (owner.kind !== 'tableCell' || owner.children.slice(0, index).some(isBlockChild)) {
+    const previous = previousContent(owner.children, index);
+    return previous?.kind === 'paragraph' ? previous : undefined;
+  }
+  const row = parentNodeOf(part, owner.id);
+  if (!row) return undefined;
+  const cells = row.children.filter((child) => child.kind === 'tableCell');
+  const at = cells.indexOf(owner);
+  if (at > 0) {
+    const cell = cells[at - 1]!;
+    const last = cell.kind === 'textValue' ? undefined : cell.children.filter(isBlockChild).at(-1);
+    return last?.kind === 'paragraph' ? last : undefined;
+  }
+  const table = parentNodeOf(part, row.id);
+  if (!table || table.children.find((child) => child.kind === 'tableRow') !== row) return undefined;
+  const outer = parentNodeOf(part, table.id);
+  if (!outer) return undefined;
+  const before = previousContent(
+    outer.children,
+    outer.children.findIndex((child) => child.id === table.id)
+  );
+  return before?.kind === 'paragraph' ? before : undefined;
+}
+/** The child before `index`, past position markers such as bookmarks, as the grouping reads it. */
+function previousContent(children: readonly OoxmlNode[], index: number): OoxmlNode | undefined {
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const child = children[at]!;
+    if (child.kind !== 'textValue' && !isInertMarker(child)) return child;
+  }
+  return undefined;
+}
+const isBlockChild = (node: OoxmlNode): boolean =>
+  node.kind === 'paragraph' ||
+  node.kind === 'table' ||
+  (node.kind === 'generic' && (node.localName === 'sdt' || node.localName === 'customXml'));
+
+/** Whether the paragraph a formatting change in `paragraphId` continues from holds a mark revision. */
+function previousHoldsMarkRevision(part: OoxmlPart, paragraphId: string): boolean {
+  const previous = formattingPredecessor(part, paragraphId);
   return (
-    previous?.kind === 'paragraph' &&
+    previous !== undefined &&
+    previous.kind !== 'textValue' &&
     collectRevisionSites({ ...part, root: previous }).some((site) => site.paragraphMark)
   );
 }
