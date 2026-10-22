@@ -4,6 +4,7 @@ import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-ca
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
 import { lineContentEdges } from './pending-line.ts';
+import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 // Pointer hit testing in MODEL space, over semantic layout records.
 //
 // A pointer lands somewhere on a sheet; this answers which text position the person meant.
@@ -1339,10 +1340,13 @@ export function findDrawingOverlayFrameInLayout(
         if (drawing.drawingNodeId !== drawingNodeId) continue;
         const bounds = drawing.paintBounds;
         if (bounds.width <= 0 || bounds.height <= 0 || drawing.accessibility.hidden) return null;
+        // A page-relative axis resolves against the page, a story-relative one against the
+        // story box, exactly as the furniture layer paints it.
+        const origin = headerFooterAnchoredDrawingOrigin(drawing, story.box, page.box);
         return Object.freeze({
           pageIndex: page.index,
-          x: story.box.x + bounds.x - page.contentBox.x,
-          y: story.box.y + bounds.y - page.contentBox.y,
+          x: origin.x + bounds.x - drawing.x - page.contentBox.x,
+          y: origin.y + bounds.y - drawing.y - page.contentBox.y,
           width: bounds.width,
           height: bounds.height,
           record: drawing,

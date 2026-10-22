@@ -74,8 +74,18 @@ export function useScopedChromeAnchor(
             : currentChrome.offsetHeight;
         const clearance = placement === 'story-label' ? 6 : 4;
         const attachedInsideViewport = containingViewport === viewport;
+        // A story label with no room above its story on the sheet, such as a header that starts
+        // at the paper edge, goes below the story instead of over the gap between sheets.
+        const sheetTop = anchor.closest('.docx-page')?.getBoundingClientRect().top;
+        const above = anchorRect.top - chromeHeight - clearance;
+        const labelBelow =
+          placement === 'story-label' && sheetTop !== undefined && above < sheetTop;
         const anchorTop =
-          placement === 'after' ? anchorRect.bottom + 6 : anchorRect.top - chromeHeight - clearance;
+          placement === 'after'
+            ? anchorRect.bottom + 6
+            : labelBelow
+              ? anchorRect.bottom + clearance
+              : above;
         const documentPoint = attachedInsideViewport
           ? absolutePointInScroller(viewport, anchorRect.left, anchorTop)
           : { left: anchorRect.left, top: anchorTop };

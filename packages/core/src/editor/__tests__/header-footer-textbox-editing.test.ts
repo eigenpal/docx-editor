@@ -8,6 +8,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
+import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -507,6 +509,52 @@ test('a header box takes text formatting and plain-text paste in its header', as
     expect(header).toContain(' pasted');
     expect(header).not.toContain('<w:tbl');
     expect(await partText(editor, 'word/document.xml')).not.toContain('<w:b/>');
+  } finally {
+    destroy();
+  }
+});
+
+// Page-relative anchors: 914400 EMU from the page left, 457200 EMU from its top, on a page
+// with one-inch margins, so the extent sits at (0, -36) in page-content points.
+test('a header box being edited shows its frame where it paints, with handles', () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope(frameMatch(editor, 'header box').scope!)).toBe(true);
+    const target = selectedDrawingOverlayTargetOf(surface)!;
+    expect(target).toMatchObject({ textbox: true, pageIndex: 0, kind: 'anchored' });
+    expect([target.x, target.y, target.width, target.height]).toEqual([0, -36, 144, 36]);
+    expect(target.canMove).toBe(true);
+    expect(target.canResize).toBe(true);
+  } finally {
+    destroy();
+  }
+});
+
+test('a legacy header box being edited shows its frame without handles', () => {
+  const { editor, destroy } = open(docx({ header: vmlBox('legacy box') }));
+  try {
+    const surface = editor.surface!;
+    expect(surface.setActiveScope(frameMatch(editor, 'legacy box').scope!)).toBe(true);
+    const target = selectedDrawingOverlayTargetOf(surface)!;
+    expect(target).toMatchObject({ textbox: true, pageIndex: 0, canMove: false, canResize: false });
+    // The default 0.75pt outline is centred on the edge, so the frame reaches half of it out.
+    expect([target.x, target.y]).toEqual([-0.375, 20 - 72 - 0.375]);
+  } finally {
+    destroy();
+  }
+});
+
+test('a page-relative header drawing frames at its painted place', () => {
+  const { editor, destroy } = open(docx({ header: drawingBox('header box', 7, 457200) }));
+  try {
+    const layout = editor.surface!.layout();
+    const id = frameMatch(editor, 'header box').scope!;
+    const frame = findDrawingOverlayFrameInLayout(
+      layout,
+      id.kind === 'frame' ? id.drawingNodeId : ''
+    )!;
+    expect([frame.pageIndex, frame.x, frame.y]).toEqual([0, 0, -36]);
   } finally {
     destroy();
   }

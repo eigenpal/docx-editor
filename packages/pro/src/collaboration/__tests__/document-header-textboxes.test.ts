@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
+import { strFromU8, unzipSync } from 'fflate';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support.ts';
@@ -276,5 +277,39 @@ describe('header text box', () => {
     expect(bob.exec({ type: 'insertText', text: 'Still ' }).ok).toBe(true);
     converged();
     expect(alice.findMatches('Still Header tail')).toHaveLength(1);
+  });
+
+  test('moving and resizing the box from its frame replicate while a peer types in it', async () => {
+    const { alice, bob, sync, converged, pause, resume } = await pair();
+    enterBox(bob, 'Shared');
+    enterBox(alice, 'Shared');
+    const scope = alice.surface!.activeScope();
+    if (scope.kind !== 'frame') throw new Error('not in the box');
+    // The frame's own gesture: select the box's shape, then move and resize it.
+    expect(alice.surface!.selectDrawing(scope.drawingNodeId, scope.hostParagraphId)).toBe(true);
+    pause();
+    expect(bob.exec({ type: 'insertText', text: ' typed' }).ok).toBe(true);
+    expect(
+      alice.exec({
+        type: 'setImagePosition',
+        horizontalEmu: 3657600 - 381000,
+        verticalEmu: 228600 + 254000,
+        relativeToH: 'page',
+        relativeToV: 'page',
+      }).ok
+    ).toBe(true);
+    expect(
+      alice.exec({ type: 'setImageProperties', widthEmu: 2286000, heightEmu: 685800 }).ok
+    ).toBe(true);
+    sync();
+    resume();
+    converged();
+    for (const editor of [alice, bob]) {
+      const header = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/header1.xml']!);
+      expect(header).toContain('<wp:posOffset>3276600</wp:posOffset>');
+      expect(header).toContain('<wp:posOffset>482600</wp:posOffset>');
+      expect(header).toContain('cx="2286000"');
+      expect(inBox(editor, 'Shared typed')).toHaveLength(1);
+    }
   });
 });

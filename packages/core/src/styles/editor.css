@@ -8589,8 +8589,11 @@ p.docx-review__refused {
   }
 }
 
-/* The frame captures its border while pointer input reaches textbox contents. */
+/* The frame captures its border while pointer input reaches textbox contents. Its border sits
+   just outside the box, so text set against the box edge (a box with no inset) stays visible. */
 .docx-image-selection-overlay__frame[data-textbox='true'] {
+  box-sizing: content-box;
+  margin: -2px 0 0 -2px;
   clip-path: polygon(
     evenodd,
     0 0,

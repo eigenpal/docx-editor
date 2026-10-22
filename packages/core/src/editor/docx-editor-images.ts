@@ -26,6 +26,7 @@ import { verticalMarginInsets } from '../layout/page-body-margins.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
+import { editedTextboxOverlayFrame } from './textbox-overlay-frame.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type {
   DrawingPositionInput,
@@ -68,7 +69,7 @@ export {
   pointsToEmu,
   type ImageResizeHandle,
 } from './image-overlay-geometry.ts';
-import type { ImageResizeHandle } from './image-overlay-geometry.ts';
+import { pointsToEmu, type ImageResizeHandle } from './image-overlay-geometry.ts';
 
 const IMAGE_ASYNC_COMMAND_TYPES = new Set(['insertImage', 'replaceImage']);
 const IMAGE_COMMAND_TYPES = new Set([
@@ -1216,21 +1217,27 @@ export function selectedDrawingOverlayTargetOf(
     (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset)
   )
     return null;
-  const record =
+  // `layout()`, not only `publishedLayout()`: the caller is about to act on this geometry —
+  // place handles, stamp a drag session — so a pass still parked on the scheduler's timer must
+  // land first. Nothing pending makes this a plain read.
+  const layout = surface.layout();
+  const edited =
     scope.kind === 'frame'
-      ? findDrawingOverlayFrameInLayout(surface.layout(), scope.drawingNodeId)?.record
-      : resolveSelectedDrawingRecord(surface);
+      ? editedTextboxOverlayFrame(layout, scope, surface.currentPage('caret') - 1)
+      : null;
+  const record = scope.kind === 'frame' ? edited?.record : resolveSelectedDrawingRecord(surface);
   if (!record) return null;
   if (record.accessibility.hidden) return null;
-  // `layout()`, not `publishedLayout()`: the caller is about to act on this geometry — place
-  // handles, stamp a drag session — so a pass still parked on the scheduler's timer must land
-  // first. Nothing pending makes this a plain read.
-  const layout = surface.layout();
-  const frame = findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
+  const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
   if (!frame) return null;
   const projection = projectDrawingForRecord(surface, record);
-  if (!projection || projection.locks.select) return null;
-  const caps = overlayCapabilityFlags(record, projection);
+  // A text box being edited keeps its frame even when its shape cannot be selected, moved or
+  // resized, as a legacy shape cannot: the frame shows which box the caret is in.
+  const shapeSelectable = projection !== null && !projection.locks.select;
+  if (!shapeSelectable && scope.kind !== 'frame') return null;
+  const caps = shapeSelectable
+    ? overlayCapabilityFlags(record, projection)
+    : { canResize: false, canMove: false, aspectLocked: true };
   // The MODE, on top of the drawing's own OOXML locks. Without it a viewing-mode reader got
   // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the
   // document — then snapped back when the write was refused. The selection ring stays: the
@@ -1253,9 +1260,9 @@ export function selectedDrawingOverlayTargetOf(
     width: frame.width,
     height: frame.height,
     kind: record.kind === 'inlineDrawing' ? 'inline' : 'anchored',
-    widthEmu: projection.extentEmu.cx,
-    heightEmu: projection.extentEmu.cy,
-    position: positionInputOf(projection),
+    widthEmu: projection?.extentEmu.cx ?? pointsToEmu(frame.width),
+    heightEmu: projection?.extentEmu.cy ?? pointsToEmu(frame.height),
+    position: projection ? positionInputOf(projection) : null,
     anchorFrameOrigin,
     transform: record.transform,
     ...gated,
