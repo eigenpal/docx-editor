@@ -481,9 +481,12 @@ export function createParagraphCjkOpticalFitter(
   measurer: TextMeasurer,
   typography: CjkParagraphTypography,
   hasPageExclusions: boolean,
-  preserveColonAdvances: boolean
+  preserveColonAdvances: boolean,
+  justified: boolean
 ) {
+  // Compression fits a line only when the paragraph is justified.
   const opticalPolicy =
+    justified &&
     typography.settings?.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&
     !hasPageExclusions &&

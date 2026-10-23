@@ -15,6 +15,8 @@ import type { LayoutBox } from './semantic-records.ts';
 export interface ParagraphFlowOptions {
   readonly paragraphRtl?: boolean;
   readonly justifySpaceShrink?: boolean;
+  /** Justified paragraphs may compress East Asian punctuation to fit a line; others keep natural widths. */
+  readonly cjkPunctuationFit?: boolean;
   readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */

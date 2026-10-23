@@ -59,7 +59,7 @@ function probe(text = mixed, options: ProbeOptions = {}) {
     `<w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="28"/><w:kern w:val="${options.kern ?? 2}"/>${options.runProps ?? ''}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const split = options.split ?? text.length;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/><w:ind w:firstLine="559"/></w:pPr>${run(text.slice(0, split))}${run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/><w:ind w:firstLine="559"/></w:pPr>${run(text.slice(0, split))}${run(text.slice(split))}</w:p></w:body></w:document>`
   );
   const styles = part(
     `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>${options.eastAsianDefaults === false ? '' : '<w:rFonts w:eastAsia="Test CJK"/>'}</w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
@@ -221,7 +221,8 @@ function fit(o: FitOptions = {}) {
     m,
     p,
     !!o.exclusions,
-    !!o.preserveColon
+    !!o.preserveColon,
+    true
   );
   const tailWidth = tail.reduce((sum, text) => sum + m.measure(text, style), 0);
   const available =

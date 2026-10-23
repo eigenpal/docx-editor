@@ -62,7 +62,7 @@ function fixture(
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>` +
-        `<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr>${sourceRuns}</w:p>` +
+        `<w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/></w:pPr>${sourceRuns}</w:p>` +
         `<w:p>${run('target')}</w:p><w:sectPr><w:pgSz w:w="2200" w:h="10000"/>` +
         '<w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/></w:sectPr></w:body></w:document>'
     ),

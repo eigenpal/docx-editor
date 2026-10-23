@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Punctuation fitting could compress East Asian punctuation on lines of any paragraph alignment.",
+  "after": "Punctuation fitting runs only for justified paragraphs; other alignments wrap instead of fitting.",
+  "reason": "Only local line geometry changes, derived from the paragraph alignment already in the shared document. Canonical text, run properties, operations, snapshots, awareness, and room formats stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-optical-fit.test.ts",
+    "packages/pro/src/collaboration/__tests__/cjk-optical-editors.test.ts"
+  ],
+  "changeset": "cjk-fit-justified-only",
+  "migration": null
+}

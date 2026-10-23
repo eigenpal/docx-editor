@@ -379,6 +379,17 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 - **THEN** line layout draws the same boundary advance that table AutoFit counts
 - **AND** the caret after the boundary sits after the advance
 
+### Requirement: East Asian punctuation fitting only on justified paragraphs
+
+The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the paragraph alignment is justified (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value). Paragraphs with any other alignment SHALL wrap instead of fitting. Adjacent full-width punctuation pairs compress at every alignment.
+
+#### Scenario: A left-aligned paragraph wraps instead of compressing
+
+- **GIVEN** document punctuation compression and a line that fits only when its punctuation compresses
+- **WHEN** the paragraph is left-aligned, centered, or right-aligned
+- **THEN** the line wraps instead of fitting
+- **AND** the same paragraph fits the line when it is justified
+
 ### Requirement: East Asian punctuation fitting on mixed lines
 
 When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges.

@@ -265,23 +265,29 @@ test('paragraph factory keeps source switches float passages and colon policy co
       measurer,
       { ...policy, settings },
       false,
-      false
+      false,
+      true
     );
     expect(actual.opticalParagraph).toBe(false);
     expect(actual.opticalCompression).toBe(false);
   }
   expect(
-    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, true, false)
+    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, true, false, true)
       .opticalCompression
   ).toBe(false);
   expect(
-    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, false, true)
+    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, false, true, true)
       .opticalCompression
   ).toBe(false);
   expect(
-    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, false, false)
+    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, false, false, true)
       .opticalCompression
   ).toBe(true);
+  // A paragraph that is not justified keeps natural punctuation widths.
+  expect(
+    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measurer, policy, false, false, false)
+      .opticalCompression
+  ).toBe(false);
 });
 
 function part(xml: string) {
@@ -313,7 +319,7 @@ function layout(text: string, width: number, options: Options = {}) {
   const source =
     options.source ??
     part(
-      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr>${content}</w:p></w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr>${content}</w:p></w:body></w:document>`
     );
   const before = serializeOoxmlPart(source);
   const styles = part(

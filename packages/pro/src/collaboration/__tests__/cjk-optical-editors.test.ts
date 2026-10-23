@@ -88,7 +88,7 @@ test.each(['甲）AV（乙末', '甲）AV（乙≥丙末'])(
     try {
       const pair = await harness.pair(
         zipDocument(
-          `<w:p><w:pPr><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
+          `<w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/><w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
           {
             documentRels: `<Relationships xmlns="${REL}"><Relationship Id="styles" Type="${R}/styles" Target="styles.xml"/><Relationship Id="settings" Type="${R}/settings" Target="settings.xml"/></Relationships>`,
             extraXml: {

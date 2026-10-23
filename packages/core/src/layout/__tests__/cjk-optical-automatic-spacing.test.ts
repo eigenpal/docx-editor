@@ -47,7 +47,7 @@ function probe(
     `<w:r><w:rPr><w:rFonts w:ascii="Test Latin" w:hAnsi="Test Latin" w:eastAsia="Test CJK"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${value}</w:t></w:r>`;
   const split = options.split ?? text.length;
   const source = part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/>${options.automatic === false ? '<w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/>' : ''}</w:pPr>${run(text.slice(0, split))}${run(text.slice(split))}</w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/>${options.automatic === false ? '<w:autoSpaceDE w:val="0"/><w:autoSpaceDN w:val="0"/>' : ''}</w:pPr>${run(text.slice(0, split))}${run(text.slice(split))}</w:p></w:body></w:document>`
   );
   const before = serializeOoxmlPart(source);
   const styles = part(

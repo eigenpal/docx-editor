@@ -167,7 +167,7 @@ test('implicit slot admission cannot activate a missing source East Asian paragr
   const typography = { ...policy, settings },
     breaks = cjkParagraphBreaks(pieces, typography);
   expect(
-    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measure, typography, false, false)
+    createParagraphCjkOpticalFitter(pieces, pieces, breaks, measure, typography, false, false, true)
       .opticalCompression
   ).toBe(false);
   expect(
@@ -178,7 +178,8 @@ test('implicit slot admission cannot activate a missing source East Asian paragr
       measure,
       { ...typography, settings: { ...settings, sourceEastAsianFont: true } },
       false,
-      false
+      false,
+      true
     ).opticalCompression
   ).toBe(true);
 });

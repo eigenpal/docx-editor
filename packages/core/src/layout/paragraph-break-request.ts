@@ -228,6 +228,7 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
       justifySpaceShrink:
         hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
         paragraphAlignment(formatting.props) === 'both',
+      cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
       equationCacheToken: request.producer,
