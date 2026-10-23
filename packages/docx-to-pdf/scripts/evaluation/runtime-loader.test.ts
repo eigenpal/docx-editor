@@ -16,6 +16,7 @@ import {
   utimesSync,
   existsSync,
   chmodSync,
+  realpathSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
@@ -126,6 +127,37 @@ test('different compiler versions and options cannot reuse previous output', () 
   expect(run(f.source, f.cache, changedVersion).stats.hits).toBe(1);
 });
 
+test('cached modules preserve aliases, relative imports, and their original source URL', () => {
+  const f = fixture();
+  const selected = alternateLoader(f.root, 'aliases', (source) => source);
+  writeFileSync(join(f.root, 'dependency.ts'), 'export const amount = 5; export const token = {};');
+  writeFileSync(join(f.root, 'other.ts'), 'export const amount = 8; export const token = {};');
+  const config = join(f.root, 'compiler/tsconfig.json');
+  const aliases = (target: string) =>
+    JSON.stringify({ compilerOptions: { paths: { '@fixture/value': [target] } } });
+  writeFileSync(config, aliases('../dependency.ts'));
+  writeFileSync(
+    f.source,
+    `
+    import { amount, token } from '@fixture/value';
+    import { token as direct } from './dependency.ts';
+    export class NumberBox {
+      constructor(public value = amount + Number(token === direct) +
+        Number(import.meta.url === ${JSON.stringify(pathToFileURL(realpathSync(f.source)).href)})) {}
+    }
+  `
+  );
+  expect(run(f.source, f.cache, selected).value).toBe(7);
+  const warm = run(f.source, f.cache, selected);
+  expect(warm.value).toBe(7);
+  expect(warm.stats.hits).toBe(2);
+  expect(warm.stats.compiled).toBe(0);
+  writeFileSync(config, aliases('../other.ts'));
+  const changed = run(f.source, f.cache, selected);
+  expect(changed.value).toBe(9);
+  expect(changed.stats.compiled).toBe(1);
+});
+
 test('damaged and mismatched cache entries compile again', () => {
   const f = fixture();
   run(f.source, f.cache);
@@ -148,6 +180,27 @@ test('unavailable cache storage does not prevent compilation', () => {
     value: 7,
     stats: { hits: 0, compiled: 1, disabled: true },
   });
+});
+
+test('an empty setting uses the default private cache', () => {
+  const f = fixture();
+  const child = Bun.spawnSync(command(f.source), {
+    env: {
+      ...process.env,
+      DOCX_EVAL_TRANSPILE_CACHE: '',
+      TMPDIR: f.root,
+      TMP: f.root,
+      TEMP: f.root,
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  expect(child.exitCode, child.stderr.toString()).toBe(0);
+  expect(JSON.parse(child.stdout.toString()).stats.disabled).toBe(false);
+  expect(JSON.parse(child.stdout.toString()).stats.warning).toBeNull();
+  expect(existsSync(join(f.root, `docx-editor-typescript-${process.getuid?.() ?? 'user'}`))).toBe(
+    true
+  );
 });
 
 test('insecure cache directories produce one actionable diagnostic on stderr', () => {

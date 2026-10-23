@@ -70,7 +70,7 @@ export const transpileCacheStats = {
 
 function prepareCache() {
   const root =
-    process.env.DOCX_EVAL_TRANSPILE_CACHE ??
+    process.env.DOCX_EVAL_TRANSPILE_CACHE ||
     resolve(tmpdir(), `docx-editor-typescript-${process.getuid?.() ?? 'user'}`);
   try {
     mkdirSync(root, { recursive: true, mode: 0o700 });
