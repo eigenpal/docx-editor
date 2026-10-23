@@ -269,6 +269,7 @@ export type {
 } from '../store/package/drawing-gradient.ts';
 export type { ShapeShadow } from '../store/package/drawing-shape-effects.ts';
 export type { VectorPattern } from '../store/package/drawing-pattern-fill.ts';
+export type { ShapeColor } from '../store/package/drawing-shape-color.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,

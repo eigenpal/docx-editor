@@ -4027,6 +4027,14 @@ export const sha256FontBytes: (bytes: Uint8Array) => string;
 // @public
 export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined;
 
+// @public (undocumented)
+export interface ShapeColor {
+    // (undocumented)
+    readonly alpha: number;
+    // (undocumented)
+    readonly hex: string;
+}
+
 // @public
 export interface ShapedCluster {
     // (undocumented)
@@ -4737,6 +4745,7 @@ export type TextboxStoryFallbackReason = 'textbox-nesting-limit' | 'textbox-frag
 
 // @public
 export interface TextboxStoryLayout {
+    readonly chromeByVector?: true;
     readonly chromeRotationDegrees?: number;
     readonly clippedResourceToken?: string;
     readonly contentHeight: number;
@@ -4883,6 +4892,15 @@ export interface VectorGradient {
     readonly stops: readonly GradientStop[];
 }
 
+// @public
+export interface VectorPattern {
+    // (undocumented)
+    readonly background: ShapeColor;
+    // (undocumented)
+    readonly foreground: ShapeColor;
+    readonly rows: readonly number[];
+}
+
 // @public (undocumented)
 export interface VectorShapeComponent {
     readonly arrowheadsEmu?: readonly (readonly Readonly<{
@@ -4895,6 +4913,7 @@ export interface VectorShapeComponent {
     readonly fillGradient?: VectorGradient;
     // (undocumented)
     readonly fillHex: string | null;
+    readonly fillPattern?: VectorPattern;
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)

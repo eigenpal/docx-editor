@@ -980,6 +980,7 @@ export type TextboxOutlineProjection = {
 
 // @public
 export interface TextboxStoryLayout {
+    readonly chromeByVector?: true;
     readonly chromeRotationDegrees?: number;
     readonly clippedResourceToken?: string;
     readonly contentHeight: number;
