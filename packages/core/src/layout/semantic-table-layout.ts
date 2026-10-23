@@ -1409,8 +1409,9 @@ export function layoutRowFragmentBounded(
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
-    // A cell crops its own pictures; a header's paper room stops at the table.
-    const cellDeps = withInlinePictureRoom(flowDeps, undefined);
+    // Pictures paint over the cell margins and crop at the cell box (a btLr cell: its text).
+    const pictureRoom = vertical ? undefined : { left: cellX, right: cellX + cellW };
+    const cellDeps = withInlinePictureRoom(flowDeps, pictureRoom);
     const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
       flowBlocksInBoxBounded(
         cell.blocks,

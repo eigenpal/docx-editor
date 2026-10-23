@@ -163,9 +163,41 @@ test('a header picture with a negative indent paints into the left margin up to 
   expect(storyPictures('hdr', picture(300, '<w:ind w:left="-2000"/>'))).toEqual([[-72, 200]]);
 });
 
-test('a header table cell keeps its own picture crop', () => {
-  // The header's paper room stops at the table: the cell crops at its text column.
+test('a picture in a header table cell crops at the cell box, not the paper', () => {
+  // The cell box is 180pt wide and starts one cell margin left of the text column.
   const [cell] = storyPictures('hdr', table(picture(300)));
   expect(cell![0]).toBeCloseTo(0, 5);
-  expect(cell![1]).toBeCloseTo(169.2, 5);
+  expect(cell![1]).toBeCloseTo(174.6, 5);
+});
+
+test('a picture in a fixed cell crops at the cell box, margins included', () => {
+  // Default 5.4pt margins: the text column ends 5.4pt before the cell box does.
+  const plain = bodyPictures(table(picture(300)));
+  const [left, right] = plain.cells[0]!;
+  expect([left, right]).toEqual([0, 180]);
+  expect(plain.pictures).toEqual([[left! + 5.4, right!]]);
+  // 36pt margins: the text ends 36pt before the cell box, the picture paints to the box.
+  const wide = bodyPictures(table(picture(300), [720, 720]));
+  expect(wide.cells[0]).toEqual([0, 180]);
+  expect(wide.pictures).toEqual([[left! + 36, right!]]);
+});
+
+test('a picture with a negative indent in a cell crops at the cell left edge', () => {
+  const plain = bodyPictures(table(picture(300, '<w:ind w:left="-800"/>')));
+  expect(plain.pictures).toEqual([plain.cells[0]!]);
+  const wide = bodyPictures(table(picture(300, '<w:ind w:left="-1440"/>'), [720, 720]));
+  expect(wide.pictures).toEqual([wide.cells[0]!]);
+});
+
+test('a picture in a nested cell crops at the nested cell box', () => {
+  const inner =
+    '<w:tbl><w:tblPr><w:tblW w:w="2000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/>' +
+    `<w:tcMar><w:left w:w="720" w:type="dxa"/><w:right w:w="720" w:type="dxa"/></w:tcMar></w:tcPr>${picture(300)}` +
+    '</w:tc></w:tr></w:tbl><w:p/>';
+  const nested = bodyPictures(table(inner));
+  // Outer cell, its nested cell, then the second outer cell.
+  const [left, right] = nested.cells[1]!;
+  expect(right! - left!).toBeCloseTo(100, 5);
+  expect(nested.pictures).toEqual([[left! + 36, right!]]);
 });
