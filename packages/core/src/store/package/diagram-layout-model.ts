@@ -303,11 +303,12 @@ function stepAxis(model: DiagramModel, id: string, axis: string, out: string[]):
       const siblings = childrenOf(model, parent);
       const index = siblings.indexOf(owner);
       const sequence: string[] = [];
-      for (const sibling of siblings) {
+      siblings.forEach((sibling, i) => {
         sequence.push(sibling);
-        const trans = model.sibTransOf.get(sibling);
+        // The transition after the last sibling is hidden (`hideLastTrans`, on by default).
+        const trans = i < siblings.length - 1 ? model.sibTransOf.get(sibling) : undefined;
         if (trans) sequence.push(trans);
-      }
+      });
       const at = sequence.indexOf(id === owner ? owner : id);
       if (index < 0 || at < 0) return;
       if (axis === 'followSib') for (let i = at + 1; i < sequence.length; i++) push(sequence[i]!);

@@ -36,6 +36,8 @@ export interface NodeState {
   readonly values: Map<string, number>;
   /** The reference value behind each constrained value, before its factor. */
   readonly bases: Map<string, number>;
+  /** Values an `equ` constraint ties to another value; rules leave them alone. */
+  readonly tied: Set<string>;
   box: Box | null;
   /** Rotation in degrees set by the algorithm (connectors), added to the shape's own. */
   rotation: number;
@@ -378,6 +380,7 @@ function applyConstraint(
       continue;
     }
     const stored = setValue(context, state, constraint.type, value, base);
+    if (constraint.op === 'equ' && refNode !== null) state.tied.add(constraint.type);
     // An equality with another value of the same node holds both ways: a limited target
     // limits its source too (a circle kept round when its height reaches the box).
     if (
@@ -415,6 +418,11 @@ function constraintsOnChildren(
         applyConstraint(context, child, constraint, `${child.index}#${i}`, bounds);
       });
     }
+    // The owner's own values that read its children (spacing from a child's width).
+    owner.constraints.forEach((constraint, i) => {
+      if (constraint.for !== 'self' || constraint.refFor === 'self') return;
+      applyConstraint(context, owner, constraint, `${owner.index}#${i}`, bounds);
+    });
   }
   for (const { state, constraint, value } of bounds) {
     const current = state.values.get(constraint.type);
@@ -429,6 +437,7 @@ function freshState(node: DiagramLayoutNode): NodeState {
     node,
     values: new Map(),
     bases: new Map(),
+    tied: new Set(),
     box: null,
     rotation: 0,
     preset: null,
@@ -473,10 +482,18 @@ export function solveDiagramLayout(
       });
     },
   };
-  const visit = (
-    node: DiagramLayoutNode,
-    inherited: readonly { owner: DiagramLayoutNode; constraint: LayoutConstraint; key: string }[]
-  ): boolean => {
+  type Inherited = readonly {
+    owner: DiagramLayoutNode;
+    constraint: LayoutConstraint;
+    key: string;
+  }[];
+  // Connectors join shapes anywhere in the tree, so they lay out once everything else has.
+  const connectors: { node: DiagramLayoutNode; inherited: Inherited }[] = [];
+  const visit = (node: DiagramLayoutNode, inherited: Inherited, now = false): boolean => {
+    if (node.algorithm.type === 'conn' && !now) {
+      connectors.push({ node, inherited });
+      return true;
+    }
     const state = context.states[node.index]!;
     const own = node.constraints
       .map((constraint, i) => ({ owner: node, constraint, key: `${node.index}#${i}` }))
@@ -485,12 +502,17 @@ export function solveDiagramLayout(
     fitOwnBox(state);
     constraintsOnChildren(context, node, inherited);
     if (!placeChildren(placement, state)) return false;
+    if (node.algorithm.type === 'conn') constraintsOnChildren(context, node, inherited);
     for (const child of node.children) {
       if (!visit(child, passed)) return false;
     }
     return true;
   };
   if (!visit(tree.root, [])) return null;
+  for (let i = 0; i < connectors.length; i++) {
+    const { node, inherited } = connectors[i]!;
+    if (!visit(node, inherited, true)) return null;
+  }
   for (const state of context.states) {
     if (!state.values.has('primFontSz') && state.node.showsText) {
       setValue(context, state, 'primFontSz', DEFAULT_FONT_SIZE_PT, null);

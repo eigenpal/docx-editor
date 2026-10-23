@@ -263,11 +263,41 @@ export function textFits(
 
 /** The geometry a node draws with: an algorithm's choice, else its shape type. */
 export function nodePreset(state: NodeState): string | null {
+  const own = userGeometry(state);
+  if (own) return own.preset;
   return state.preset ?? state.node.shape.type;
+}
+
+/** A presentation point's own geometry (`dgm:spPr/a:prstGeom`): a shape the user changed. */
+function userGeometry(
+  state: NodeState
+): { readonly preset: string; readonly adjust: Map<string, number> } | null {
+  const spPr = state.node.pres.spPr;
+  if (!spPr) return null;
+  for (const node of spPr.children) {
+    if (!isElement(node) || node.namespaceUri !== A || node.localName !== 'prstGeom') continue;
+    const preset = node.attributes.find((attribute) => attribute.localName === 'prst')?.value;
+    if (!preset || !presetGeometryDefinition(preset)) return null;
+    const adjust = new Map<string, number>();
+    for (const list of node.children) {
+      if (!isElement(list) || list.localName !== 'avLst') continue;
+      for (const gd of list.children) {
+        if (!isElement(gd) || gd.localName !== 'gd') continue;
+        const name = gd.attributes.find((attribute) => attribute.localName === 'name')?.value;
+        const formula = gd.attributes.find((attribute) => attribute.localName === 'fmla')?.value;
+        const match = formula ? /^val (-?\d{1,10})$/.exec(formula) : null;
+        if (name && match && adjust.size < 16) adjust.set(name, Number(match[1]));
+      }
+    }
+    return { preset, adjust };
+  }
+  return null;
 }
 
 /** Adjust values by guide name: an algorithm's, else the shape's `adjLst` by index. */
 export function nodeAdjust(state: NodeState): Map<string, number> | null {
+  const own = userGeometry(state);
+  if (own) return own.adjust.size > 0 ? own.adjust : null;
   if (state.adjust) return state.adjust;
   const preset = nodePreset(state);
   if (!preset || state.node.shape.adjust.size === 0) return null;

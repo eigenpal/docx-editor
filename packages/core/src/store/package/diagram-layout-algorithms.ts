@@ -4,6 +4,7 @@
 // nothing of their own; their children take the node's box.
 
 import type { DiagramModel } from './diagram-layout-model.ts';
+import { placeCycle, placeSnake } from './diagram-layout-flow.ts';
 import { compositeAxis, type Box, type NodeState } from './diagram-layout-solve.ts';
 
 export interface PlacementContext {
@@ -14,7 +15,7 @@ export interface PlacementContext {
   readonly resolveSelf: (state: NodeState, except: string) => void;
 }
 
-const SUPPORTED = new Set(['composite', 'lin', 'conn', 'tx', 'sp']);
+const SUPPORTED = new Set(['composite', 'lin', 'conn', 'tx', 'sp', 'snake', 'cycle']);
 
 export function isSupportedAlgorithm(type: string): boolean {
   return SUPPORTED.has(type);
@@ -146,8 +147,16 @@ function siblingNamed(
     const sibling = siblings[i]!;
     if (sibling.node.algorithm.type !== 'conn' && sibling.box) return sibling;
   }
+  // Around a cycle the last connector closes the ring on the first node.
+  if (parent.algorithm.type === 'cycle') {
+    const ends = direction === 1 ? siblings : [...siblings].reverse();
+    return ends.find((sibling) => sibling.node.algorithm.type !== 'conn' && sibling.box) ?? null;
+  }
   return null;
 }
+
+/** Pads a connector keeps from its ends when its definition sets none. */
+const DEFAULT_PADS = { begPad: 0.25, endPad: 0.22 } as const;
 
 function padding(state: NodeState, type: 'begPad' | 'endPad', distance: number): number {
   for (const constraint of state.node.constraints) {
@@ -155,7 +164,28 @@ function padding(state: NodeState, type: 'begPad' | 'endPad', distance: number):
     if (constraint.refType === 'connDist') return distance * constraint.fact;
     if (!Number.isNaN(constraint.val)) return constraint.val * 36_000;
   }
-  return state.values.get(type) ?? 0;
+  return state.values.get(type) ?? distance * DEFAULT_PADS[type];
+}
+
+/**
+ * A parent transition joins the sibling showing the parent content to the one showing the
+ * child content it leads to.
+ */
+function parentTransitionEnds(
+  context: PlacementContext,
+  state: NodeState
+): { source: NodeState | null; target: NodeState | null } | null {
+  const parent = state.node.parent;
+  const child = context.model.transitionOwner.get(state.node.assoc);
+  if (!parent || !child) return null;
+  const owner = context.model.contentParent.get(child);
+  const siblings = parent.children.map((node) => context.states[node.index]!);
+  const drawn = (assoc: string | undefined) =>
+    siblings.find(
+      (sibling) =>
+        sibling.node.assoc === assoc && sibling.node.algorithm.type !== 'conn' && sibling.box
+    ) ?? null;
+  return { source: drawn(owner), target: drawn(child) };
 }
 
 /**
@@ -164,8 +194,12 @@ function padding(state: NodeState, type: 'begPad' | 'endPad', distance: number):
  */
 function placeConnector(context: PlacementContext, state: NodeState): void {
   const params = state.node.algorithm.params;
-  const source = siblingNamed(context, state, params.get('srcNode'), -1);
-  const target = siblingNamed(context, state, params.get('dstNode'), 1);
+  const parentLink =
+    state.node.assocType === 'parTrans' && !params.has('srcNode') && !params.has('dstNode')
+      ? parentTransitionEnds(context, state)
+      : null;
+  const source = parentLink?.source ?? siblingNamed(context, state, params.get('srcNode'), -1);
+  const target = parentLink?.target ?? siblingNamed(context, state, params.get('dstNode'), 1);
   const slot = state.box!;
   if (!source?.box || !target?.box) {
     state.hidden = true;
@@ -242,6 +276,8 @@ export function placeChildren(context: PlacementContext, state: NodeState): bool
   if (!box) return true;
   if (type === 'composite') placeComposite(context, state);
   else if (type === 'lin') placeLinear(context, state);
+  else if (type === 'snake') placeSnake(context, state);
+  else if (type === 'cycle') placeCycle(context, state);
   else {
     for (const child of childStates(context, state)) child.box = { ...box };
   }

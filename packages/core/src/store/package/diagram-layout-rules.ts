@@ -93,6 +93,9 @@ export function solveWithRules(
     if (!rules) continue;
     const paragraphs = nodeParagraphs(tree.model, solution.states[node.index]!);
     if (!hasVisibleText(paragraphs)) continue;
+    // Text whose every run sets its own size gains nothing from the rules.
+    const sized = paragraphs.filter((paragraph) => paragraph.text.trim() !== '');
+    if (sized.every((paragraph) => paragraph.explicitSize !== null)) continue;
     targets.push({ node, rules, paragraphs });
   }
   const groupOf = (index: number, type: string): readonly number[] => {
@@ -151,6 +154,8 @@ export function solveWithRules(
         continue;
       }
       if (rule.type !== 'w' && rule.type !== 'h') continue;
+      // A size tied to another node's by an equality moves only with it.
+      if (state.tied.has(rule.type)) continue;
       // A taller box cannot fit a word wider than the line.
       if (rule.type === 'h' && !current.wordsFit) continue;
       const base = state.bases.get(rule.type);

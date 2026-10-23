@@ -190,6 +190,16 @@ export function scoreCase(fixtures: LayoutFixtures, item: LayoutCase): CaseScore
     else misses.push(`${name}: preset ${shape.prst} for ${saved.prst}`);
     if (a.rot % 21_600_000 === b.rot % 21_600_000) rotations++;
     else misses.push(`${name}: rotation ${a.rot} for ${b.rot}`);
+    if (saved.txXfrm && saved.hasText) {
+      const frame = shape.txXfrm;
+      const want = saved.txXfrm;
+      const off = frame
+        ? [frame.x - want.x, frame.y - want.y, frame.cx - want.cx, frame.cy - want.cy]
+        : null;
+      if (!off || off.some((delta) => Math.abs(delta) > tolerance)) {
+        misses.push(`${name}: text frame off by ${off ? off.map(Math.round).join(',') : 'none'}`);
+      }
+    }
     if (saved.hasText && saved.fontSizes.length > 0) {
       fontsCompared++;
       const want = saved.fontSizes[0]! / 100;
