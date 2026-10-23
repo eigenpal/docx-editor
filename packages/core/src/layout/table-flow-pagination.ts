@@ -14,7 +14,7 @@ import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
 import { positionedTableOriginX } from './table-origin.ts';
-import { withoutFloatingTableZones } from './table-float-overlap.ts';
+import { exactTerminalBorderPt, tableTerminalDeps } from './table-exact-terminal-border.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   finalizeTableRows,
@@ -154,11 +154,8 @@ export function* paginateTableInFlowSteps(
     takePreviousRows(table, flowDeps)
   );
   /** One row's natural height at the current table origin. */
-  const rowHeightOf = (
-    probeRow: SemanticTableRow,
-    top = flow.cursorY,
-    deps?: TableFlowDeps
-  ): number => rowProbes.measure(probeRow, tableLeft, top, deps ?? tableDeps);
+  const rowHeightOf = (row: SemanticTableRow, top = flow.cursorY, deps = tableDeps): number =>
+    rowProbes.measure(row, tableLeft, top, deps) - exactTerminalBorderPt(row, deps);
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
@@ -166,7 +163,7 @@ export function* paginateTableInFlowSteps(
     outOfFlow || structure.float
       ? null
       : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, flowDeps);
-  const tableDeps = floats?.deps ?? (outOfFlow ? withoutFloatingTableZones(flowDeps) : flowDeps);
+  const tableDeps = tableTerminalDeps(structure, flowDeps, floats?.deps, outOfFlow);
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
     if (row.isHeader) headerRows.push(row);
@@ -820,7 +817,9 @@ export function* paginateTableInFlowSteps(
             contentHeight()
           );
         placed = fragmentCarry.current.adjustPlacement(bodyRowIndex, placed, contentHeight());
-        if (placed.bottom > contentHeight() + 0.001) {
+        // A fitting exact row keeps its page. Only its outer closing rule can overflow.
+        const terminalExtent = exactTerminalBorderPt(row, placementDeps);
+        if (placed.bottom > contentHeight() + terminalExtent + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',
             `Table row ${row.id} overflowed the page content box after placement`

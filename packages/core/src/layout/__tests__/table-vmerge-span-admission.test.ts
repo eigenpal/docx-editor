@@ -10,7 +10,11 @@ import { vMergePlanFor } from '../table-vmerge-plan.ts';
 // inside the page is not the same claim, and a cell's content is `overflow: visible`.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
+import {
+  readOoxmlPart,
+  serializeOoxmlPart,
+  type OoxmlPart,
+} from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type {
   PageGeometry,
@@ -43,10 +47,11 @@ const CONTINUE = '<w:tcPr><w:vMerge/></w:tcPr>';
 const exactRow = (twips: number) =>
   `<w:trPr><w:trHeight w:val="${twips}" w:hRule="exact"/></w:trPr>`;
 
+const GRID_RULE_PT = 1;
 const GRID =
   '<w:tblPr><w:tblBorders>' +
   ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
-    .map((side) => `<w:${side} w:val="single" w:sz="8" w:color="000000"/>`)
+    .map((side) => `<w:${side} w:val="single" w:sz="${GRID_RULE_PT * 8}" w:color="000000"/>`)
     .join('') +
   '</w:tblBorders></w:tblPr>';
 
@@ -156,47 +161,78 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     // The span's last row is `hRule="exact"`, which fixes it at its authored box (17.18.37).
     // Handing it the surplus drops the surplus, and the merged content then runs past the
     // table it lives in. The head row is the last row of this span that can grow.
-    const layout = layoutTiny(
-      loadPart(
-        `<w:tbl>${GRID}` +
-          `<w:tr>${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
-          `<w:tr>${exactRow(400)}${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
-          '</w:tbl>' +
-          p('AFTER')
-      )
+    const part = loadPart(
+      `<w:tbl>${GRID}` +
+        `<w:tr>${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
+        `<w:tr>${exactRow(400)}${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
+        '</w:tbl>' +
+        p('AFTER')
     );
+    const source = serializeOoxmlPart(part);
+    const layout = layoutTiny(part);
     const table = tablesOf(layout, 0)[0]!;
     const head = table.rows[0]!.cells[0]!;
     expect(head.rowSpan).toBe(2);
-    // The exact row keeps its 20pt; the head row took the whole surplus.
-    expect(table.rows[1]!.box.height).toBe(20);
-    expect(table.rows[0]!.box.height).toBe(table.box.height - 20);
+    // The authored row keeps 20pt. Its fragment includes the outer closing rule.
+    const authoredLastRowPt = 400 / 20;
+    const terminalExtentPt = authoredLastRowPt + GRID_RULE_PT;
+    expect(table.rows[1]!.box.height).toBe(terminalExtentPt);
+    expect(table.rows[0]!.box.height).toBe(table.box.height - terminalExtentPt);
     expect(head.box.height).toBe(table.box.height);
+    const visibleLines = head.blocks.flatMap((block) =>
+      block.kind === 'paragraph'
+        ? block.lines.map((line) => line.spans.map((span) => span.text).join(''))
+        : []
+    );
+    expect(visibleLines).toEqual(['T0', 'T1', 'T2', 'T3', 'T4']);
+    expect(
+      head.blocks.every((block) => block.kind !== 'paragraph' || block.clipToBox !== true)
+    ).toBe(true);
+    expect(contentBottomOf(head)).toBeLessThanOrEqual(
+      table.box.y + table.box.height - GRID_RULE_PT + 0.001
+    );
+
     // Every line of the merged content is inside the merged cell, and so inside the table.
+    const after = layout.pages[0]!.fragments.find(
+      (fragment) =>
+        fragment.kind === 'paragraph' &&
+        fragment.lines.some((line) => line.spans.some((span) => span.text === 'AFTER'))
+    );
+    expect(after?.box.y).toBeCloseTo(table.box.y + table.box.height, 8);
+    expect(serializeOoxmlPart(part)).toBe(source);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
   test('a span where nothing can grow keeps its authored height and clips at its bottom', () => {
-    const layout = layoutTiny(
-      loadPart(
-        `<w:tbl>${GRID}` +
-          `<w:tr>${exactRow(400)}${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
-          `<w:tr>${exactRow(400)}${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
-          '</w:tbl>' +
-          p('AFTER')
-      )
+    const part = loadPart(
+      `<w:tbl>${GRID}` +
+        `<w:tr>${exactRow(400)}${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
+        `<w:tr>${exactRow(400)}${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
+        '</w:tbl>' +
+        p('AFTER')
     );
+    const source = serializeOoxmlPart(part);
+    const layout = layoutTiny(part);
     const table = tablesOf(layout, 0)[0]!;
-    expect(table.rows.map((row) => row.box.height)).toEqual([20, 20]);
+    const authoredSpanPt = (400 + 400) / 20;
+    expect(table.rows.map((row) => row.box.height)).toEqual([20, 20 + GRID_RULE_PT]);
     const head = table.rows[0]!.cells[0]!;
-    expect(head.box.height).toBe(40);
+    expect(head.box.height).toBe(authoredSpanPt + GRID_RULE_PT);
     // The span cannot hold the head, so the merged text runs through both rows and is
     // clipped at the bottom of the second one.
     expect(contentBottomOf(head)).toBeGreaterThan(head.box.y + 20);
-    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 40 + 0.001);
+    // Clipping stops at the authored span, before its outer closing rule.
+    expect(contentBottomOf(head)).toBeCloseTo(head.box.y + authoredSpanPt, 8);
     const cut = head.blocks.at(-1)!;
     expect(cut.kind === 'paragraph' && cut.clipToBox).toBe(true);
+    const after = layout.pages[0]!.fragments.find(
+      (fragment) =>
+        fragment.kind === 'paragraph' &&
+        fragment.lines.some((line) => line.spans.some((span) => span.text === 'AFTER'))
+    );
+    expect(after?.box.y).toBeCloseTo(table.box.y + table.box.height, 8);
+    expect(serializeOoxmlPart(part)).toBe(source);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
