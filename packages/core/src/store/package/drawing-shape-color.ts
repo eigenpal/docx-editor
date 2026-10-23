@@ -1,6 +1,7 @@
 // DrawingML colour and fill reads for shapes: `a:srgbClr`/`a:schemeClr` with their transforms,
 // resolved at the store trust boundary into validated 6-digit sRGB hex and an alpha.
 
+import { presetColorHex } from './drawing-preset-colors.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
@@ -204,6 +205,8 @@ function baseColorHex(
       if (last !== undefined && SHAPE_HEX_RE.test(last)) return { hex: last, alpha: 1 };
       return { hex: token !== undefined ? SYSTEM_COLOR_DEFAULTS.get(token) : null, alpha: 1 };
     }
+    case 'prstClr':
+      return { hex: presetColorHex(token), alpha: 1 };
     case 'scrgbClr': {
       const channels: number[] = [];
       for (const name of ['r', 'g', 'b']) {
@@ -221,7 +224,7 @@ function baseColorHex(
   }
 }
 
-const BASE_COLOR_NAMES = new Set(['srgbClr', 'schemeClr', 'sysClr', 'scrgbClr']);
+const BASE_COLOR_NAMES = new Set(['srgbClr', 'schemeClr', 'sysClr', 'scrgbClr', 'prstClr']);
 
 /**
  * Transforms with signed values, applied in HSL (channel 0..2) or to alpha (channel 3).

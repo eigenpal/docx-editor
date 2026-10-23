@@ -39,6 +39,16 @@ export function transformComponent(
           },
         }
       : {}),
+    ...(component.clipEmu
+      ? {
+          clipEmu: component.clipEmu.map((path) =>
+            path.map((point) => ({
+              x: offset.x + point.x * scaleX,
+              y: offset.y + point.y * scaleY,
+            }))
+          ),
+        }
+      : {}),
     subpathsEmu: component.subpathsEmu.map((path) =>
       path.map((point) => ({
         x: offset.x + point.x * scaleX,

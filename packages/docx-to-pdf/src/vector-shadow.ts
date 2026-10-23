@@ -8,13 +8,13 @@ import type { VectorShapeComponent } from '@docx-editor.dev/core/layout';
 import { color, number as n } from './context.ts';
 
 /** Rings grown around the silhouette, at these multiples of the blur's standard deviation. */
-const RING_REACH = [0.5, 1, 1.5];
+const RING_REACH = [0.25, 0.5, 0.75, 1, 1.25, 1.5];
 
 /**
  * An outer shadow under one component: its silhouette offset, in the shadow colour. PDF has no
  * blur here, so the edge is a stepped Gaussian: the silhouette at half the shadow's opacity,
- * then rings that each add a sixth, so the edge carries half the opacity and fades out over
- * one and a half standard deviations (half the blur radius each).
+ * then six rings that each add a twelfth, so the edge carries half the opacity and fades out
+ * over one and a half standard deviations.
  */
 export function shadowOps(
   doc: PDFDocument,
@@ -48,7 +48,7 @@ export function shadowOps(
   } else {
     const sigma = shadow.blurEmu / 4;
     layer(opacity / 2, 0);
-    for (const reach of RING_REACH) layer(opacity / 6, sigma * reach);
+    for (const reach of RING_REACH) layer(opacity / (2 * RING_REACH.length), sigma * reach);
   }
   out.push('Q');
   return out.join('\n');

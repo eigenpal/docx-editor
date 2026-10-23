@@ -210,5 +210,28 @@ export function appendShadow(
     path.setAttribute('filter', `url(#${id})`);
   }
   path.setAttribute('data-docx-shadow', '');
+  // An inner shadow stays inside its shape: the clip wraps the offset path, so it does not move.
+  if (component.clipEmu?.length) {
+    const clipId = `docx-shadow-clip-${++nextShadowId}`;
+    const clip = document.createElementNS(SVG_NAMESPACE, 'clipPath');
+    clip.setAttribute('id', clipId);
+    const outline = document.createElementNS(SVG_NAMESPACE, 'path');
+    outline.setAttribute(
+      'd',
+      component.clipEmu
+        .map(
+          (points) =>
+            `M${points.map((point) => `${finiteNumber(point.x)} ${finiteNumber(point.y)}`).join('L')}Z`
+        )
+        .join('')
+    );
+    outline.setAttribute('clip-rule', 'evenodd');
+    clip.append(outline);
+    const group = document.createElementNS(SVG_NAMESPACE, 'g');
+    group.setAttribute('clip-path', `url(#${clipId})`);
+    group.append(path);
+    svg.append(clip, group);
+    return;
+  }
   svg.append(path);
 }

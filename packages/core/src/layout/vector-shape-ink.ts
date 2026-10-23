@@ -124,7 +124,8 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
   for (const component of shape.components) {
     // An outer shadow reaches past the geometry by its offset and its blur. Only geometry
     // inside the extent casts it: outside parts stay clipped like the shape itself.
-    const shadow = component.shadow;
+    // An inner shadow stays inside its shape; it adds no ink outside it.
+    const shadow = component.clipEmu ? undefined : component.shadow;
     if (shadow) {
       let left = Infinity;
       let top = Infinity;

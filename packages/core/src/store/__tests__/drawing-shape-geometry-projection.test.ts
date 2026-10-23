@@ -204,7 +204,7 @@ describe('gradient fills', () => {
           WPS,
           shape(
             `${XFRM}<a:prstGeom prst="rect"/><a:gradFill><a:gsLst>` +
-              '<a:gs pos="0"><a:prstClr val="red"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>' +
+              '<a:gs pos="0"><a:hslClr hue="0" sat="100000" lum="50000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>' +
               '</a:gsLst></a:gradFill>'
           )
         )
@@ -328,6 +328,40 @@ describe('glows', () => {
       fillHex: null,
       strokeWidthEmu: 127000 + 25400,
     });
+  });
+});
+
+describe('inner shadows', () => {
+  test('an inner shadow paints over the fill, clipped to the shape, on its own side', () => {
+    const effect =
+      '<a:effectLst><a:innerShdw blurRad="63500" dist="50800" dir="13500000">' +
+      '<a:prstClr val="black"><a:alpha val="50000"/></a:prstClr></a:innerShdw></a:effectLst>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="ellipse"/>${FILL}${effect}`))
+    );
+    const [body, inner] = vector.components;
+    expect(body!.fillHex).toBe('336699');
+    expect(inner).toMatchObject({ shadowOnly: true, fillHex: '000000' });
+    expect(inner!.clipEmu).toEqual(body!.subpathsEmu);
+    // A frame around the shape casts it: the frame moves away from the shadow's direction.
+    expect(inner!.subpathsEmu).toHaveLength(body!.subpathsEmu.length + 1);
+    expect(inner!.shadow!.dxEmu).toBeGreaterThan(0);
+    expect(inner!.shadow!.dyEmu).toBeGreaterThan(0);
+    expect(inner!.shadow!.alpha).toBeCloseTo(0.5, 6);
+  });
+
+  test('preset colours resolve by name and short form', () => {
+    const vector = onlyVector(
+      inline(
+        1000000,
+        500000,
+        WPS,
+        shape(
+          `${XFRM}<a:prstGeom prst="rect"/><a:solidFill><a:prstClr val="dkSlateBlue"/></a:solidFill>`
+        )
+      )
+    );
+    expect(vector.components[0]!.fillHex).toBe('483D8B');
   });
 });
 

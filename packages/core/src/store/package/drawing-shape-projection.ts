@@ -30,7 +30,9 @@ import type { GeometryFill } from './drawing-geometry-engine.ts';
 import {
   darkEdgeOutline,
   glowComponent,
+  innerShadowComponent,
   readShapeGlow,
+  readShapeInnerShadow,
   readShapeShadow,
   type ShapeShadow,
 } from './drawing-shape-effects.ts';
@@ -136,6 +138,8 @@ export interface VectorShapeComponent {
   readonly strokeJoin?: 'round' | 'bevel';
   /** Dash and gap lengths in multiples of the stroke width; absent for a solid outline. */
   readonly strokeDash?: readonly number[];
+  /** Paint clips to these closed subpaths, as an inner shadow clips to its shape. */
+  readonly clipEmu?: readonly (readonly Readonly<{ x: number; y: number }>[])[];
   /** In a picture's frame: paints under the picture (its shadow and fill), not over it. */
   readonly belowPicture?: true;
   /**
@@ -513,6 +517,15 @@ export function projectShapeComponents(
       shadow,
       shadowOnly: true,
     });
+  }
+  // An inner shadow paints over the fill, inside the filled paths.
+  const inner = readShapeInnerShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const filled = components.find(
+    (component) => !component.shadowOnly && component.fillHex !== null
+  );
+  if (inner && filled) {
+    const shade = innerShadowComponent(inner, filled.subpathsEmu, extent);
+    components.splice(components.indexOf(filled) + 1, 0, shade);
   }
   // A glow paints under everything else: around the filled paths, or around a line.
   const glow = readShapeGlow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);

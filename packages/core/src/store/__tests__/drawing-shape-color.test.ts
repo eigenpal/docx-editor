@@ -44,7 +44,9 @@ describe('shape colour bases', () => {
   test('scheme colours resolve through the resolver; unknown ones refuse', () => {
     expect(resolve('<a:schemeClr val="accent1"/>')?.hex).toBe('4F81BD');
     expect(resolve('<a:schemeClr val="accent6"/>')).toBeNull();
-    expect(resolve('<a:prstClr val="red"/>')).toBeNull();
+    expect(resolve('<a:hslClr hue="0" sat="100000" lum="50000"/>')).toBeNull();
+    expect(resolve('<a:prstClr val="red"/>')?.hex).toBe('FF0000');
+    expect(resolve('<a:prstClr val="notAColour"/>')).toBeNull();
   });
 });
 

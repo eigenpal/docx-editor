@@ -49,9 +49,10 @@ function shadowOf(
   effectLst: OoxmlElement,
   resolveSchemeColor: ShapeSchemeColorResolver | undefined,
   placeholder: ShapeColor | undefined,
-  turn: ShapeTurn | undefined
+  turn: ShapeTurn | undefined,
+  localName: 'outerShdw' | 'innerShdw' = 'outerShdw'
 ): ShapeShadow | null {
-  const outer = findDirectChild(effectLst.children, { namespaceUri: A, localName: 'outerShdw' });
+  const outer = findDirectChild(effectLst.children, { namespaceUri: A, localName });
   if (!outer) return null;
   let colorNode: OoxmlElement | null = null;
   for (const node of outer.children) {
@@ -143,6 +144,53 @@ export function readShapeShadow(
 ): ShapeShadow | null {
   const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
   return list ? shadowOf(list.effectLst, resolveSchemeColor, list.placeholder, turn) : null;
+}
+
+/** The inner shadow a shape paints (`a:innerShdw`), or null when it has none. */
+export function readShapeInnerShadow(
+  shape: OoxmlElement,
+  spPr: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  turn?: ShapeTurn
+): ShapeShadow | null {
+  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  return list
+    ? shadowOf(list.effectLst, resolveSchemeColor, list.placeholder, turn, 'innerShdw')
+    : null;
+}
+
+/**
+ * An inner shadow as a component that paints only its shadow, clipped to the shape: the
+ * shadow of a frame around the shape, so it falls inside along the edges its direction
+ * points to.
+ */
+export function innerShadowComponent(
+  shadow: ShapeShadow,
+  subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[],
+  extent: Readonly<{ cx: number; cy: number }>
+): VectorShapeComponent {
+  const margin = Math.abs(shadow.dxEmu) + Math.abs(shadow.dyEmu) + shadow.blurEmu * 2 + 1;
+  const frame = [
+    { x: -margin, y: -margin },
+    { x: extent.cx + margin, y: -margin },
+    { x: extent.cx + margin, y: extent.cy + margin },
+    { x: -margin, y: extent.cy + margin },
+  ];
+  return {
+    subpathsEmu: [frame, ...subpathsEmu],
+    subpathsClosed: [true, ...subpathsEmu.map(() => true)],
+    fillHex: shadow.hex,
+    fillAlpha: 1,
+    strokeHex: null,
+    strokeAlpha: 1,
+    strokeWidthEmu: 0,
+    // The shadow falls on the side its direction points to: the frame moves the other way.
+    // An inner shadow's blur spreads twice as far as an outer one's.
+    shadow: { ...shadow, dxEmu: -shadow.dxEmu, dyEmu: -shadow.dyEmu, blurEmu: shadow.blurEmu * 2 },
+    shadowOnly: true,
+    clipEmu: subpathsEmu,
+  };
 }
 
 /** A glow (`a:glow`): a soft halo of its colour around the shape. */

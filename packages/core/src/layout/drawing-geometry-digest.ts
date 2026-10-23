@@ -48,6 +48,7 @@ export function vectorShapeLayoutToken(
       // Gradient stops and placement are file-derived numbers and names: JSON is stable.
       component.fillGradient ? JSON.stringify(component.fillGradient) : '',
       component.fillPattern ? JSON.stringify(component.fillPattern) : '',
+      component.clipEmu ? JSON.stringify(component.clipEmu) : '',
       component.shadow ? JSON.stringify(component.shadow) : '',
       component.shadowOnly ? 'shadow-only' : '',
       component.strokeDash ? component.strokeDash.join(' ') : '',

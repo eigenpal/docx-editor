@@ -96,7 +96,15 @@ export function paintVectorShape(
     const geometry = component.subpathsEmu
       .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
       .join('\n');
-    if (component.shadow) out.push(shadowOps(doc, page, component, geometry, unit));
+    if (component.shadow) {
+      // An inner shadow paints inside its shape only.
+      const clip = component.clipEmu?.map((points) => path(points, true)).join('\n');
+      out.push(
+        clip
+          ? `q ${clip} W* n\n${shadowOps(doc, page, component, geometry, unit)}\nQ`
+          : shadowOps(doc, page, component, geometry, unit)
+      );
+    }
     // A shadow silhouette paints only its shadow.
     if (component.shadowOnly) {
       out.push('Q');

@@ -15,6 +15,7 @@ export function freezeVectorShapeComponent(component: VectorShapeComponent): Vec
     ...(component.arrowheadsEmu ? { arrowheadsEmu: freezePaths(component.arrowheadsEmu) } : {}),
     ...(component.shadow ? { shadow: Object.freeze({ ...component.shadow }) } : {}),
     ...(component.strokeDash ? { strokeDash: Object.freeze([...component.strokeDash]) } : {}),
+    ...(component.clipEmu ? { clipEmu: freezePaths(component.clipEmu) } : {}),
     ...(component.fillPattern
       ? {
           fillPattern: Object.freeze({
