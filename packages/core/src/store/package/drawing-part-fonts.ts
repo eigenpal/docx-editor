@@ -1,0 +1,65 @@
+// Faces named by the parts a drawing renders from: chart parts and saved diagram drawings.
+//
+// Their labels lower to stories that live outside every document story, so a collector that
+// walks the stories never sees the faces they name. Theme font tokens (`+mn-lt`, `+mj-lt`)
+// name the theme's faces, which chart text also takes when it names none. The walk and the
+// result are bounded: family names are file-supplied.
+
+import { CHART_NAMESPACE_URI } from './chart-parts.ts';
+import { DIAGRAM_DRAWING_NAMESPACE_URI } from './diagram-parts.ts';
+import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
+import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
+import { validFontFamily } from './run-defaults.ts';
+
+const MAX_NODES = 200_000;
+const MAX_FAMILIES = 32;
+const FACE_ELEMENTS = new Set(['latin', 'ea', 'cs']);
+
+/** The theme's Latin faces, for theme font tokens. */
+export interface DrawingPartThemeFonts {
+  readonly major?: string | null;
+  readonly minor?: string | null;
+}
+
+/** Faces named in chart and saved diagram parts, in part order. */
+export function drawingPartFontFamilies(
+  pkg: OoxmlPackage,
+  theme: DrawingPartThemeFonts = {}
+): readonly string[] {
+  const byFold = new Map<string, string>();
+  const add = (raw: string | null | undefined): void => {
+    const family = raw ? validFontFamily(raw) : null;
+    if (family === null) return;
+    const fold = family.toLowerCase();
+    if (!byFold.has(fold)) byFold.set(fold, family);
+  };
+  let visited = 0;
+  for (const part of pkg.parts.values()) {
+    const root = part.root;
+    if (
+      root.namespaceUri !== CHART_NAMESPACE_URI &&
+      root.namespaceUri !== DIAGRAM_DRAWING_NAMESPACE_URI
+    )
+      continue;
+    // Text that names no face takes the theme's body face.
+    add(theme.minor);
+    const stack: OoxmlElement[] = [root];
+    while (stack.length > 0) {
+      if (++visited > MAX_NODES || byFold.size >= MAX_FAMILIES) return [...byFold.values()];
+      const node = stack.pop()!;
+      if (node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI && FACE_ELEMENTS.has(node.localName)) {
+        const typeface = schemaAttributeValue(node.attributes, 'typeface');
+        if (typeface?.startsWith('+mj')) add(theme.major);
+        else if (typeface?.startsWith('+mn')) add(theme.minor);
+        else add(typeface);
+        continue;
+      }
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        const child = node.children[index]!;
+        if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
+      }
+    }
+  }
+  return [...byFold.values()];
+}

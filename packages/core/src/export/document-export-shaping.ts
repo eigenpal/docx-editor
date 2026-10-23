@@ -1,5 +1,6 @@
 // Document-aware font resolution shared by every headless exporter.
 
+import { drawingPartFontFamilies } from '../store/package/drawing-part-fonts.ts';
 import { textPathFontFamily } from '../store/package/legacy-vml-text-art.ts';
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
 import {
@@ -572,6 +573,11 @@ function documentFontFamilies(view: HeadlessDocumentView): readonly string[] {
   // tier, direct/synthetic/marker faces precede inherited candidates. This keeps a hostile header
   // or orphan note from crowding the body's active Normal face out of the resolver cap.
   appendStoryTier(bodyRoots, 'body');
+  // Chart and saved diagram parts name their labels' faces outside every story.
+  for (const family of drawingPartFontFamilies(view.currentPackage(), theme)) {
+    const fold = family.toLowerCase();
+    if (!byFold.has(fold)) byFold.set(fold, family);
+  }
   appendStoryTier(furnitureRoots, 'furniture');
   appendStoryTier(noteRoots, 'note');
   return [...byFold.values()];
