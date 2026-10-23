@@ -13,6 +13,7 @@ import {
   legacyLineReach,
   legacyPictureBorder,
   legacyShapeFragment,
+  legacyBoxShape,
   legacyLineShape,
   type LegacyLineEnds,
   type LegacyBox,
@@ -385,6 +386,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     outerHeight = height + 2 * inset;
   const grow = vector ? 0 : inset;
   const fragments: LegacyGraphicFragment[] = [];
+  let boxShape: VectorShapeProjection | null = null;
   const box = { x: 0, y: 0, width, height };
   // The story paints the shape's fill and outline itself, so a text box has no graphic.
   const textboxStory = textbox
@@ -405,8 +407,15 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     if ((border || readOnly) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
     // A vector shape is validated by the same reading and painted from its own projection.
     if (!vector) fragments.push(fragment);
+    // A plain rectangle or oval is a vector shape too, over the same box as its preview.
+    if (!readOnly && typeof fragment === 'string')
+      boxShape = legacyBoxShape(
+        root,
+        { x: inset, y: inset, width, height },
+        { x: 0, y: 0, width: outerWidth, height: outerHeight }
+      );
   }
-  const vectorShape = line ? legacyLineShape(root, width, height, line.ends) : null;
+  const vectorShape = line ? legacyLineShape(root, width, height, line.ends) : boxShape;
   if (line && !vectorShape) return null;
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
   if (wrapNodes.length > 1) return null;
@@ -607,6 +616,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
             width: outerWidth,
             height: outerHeight,
             fragments: Object.freeze(fragments),
+            ...soleImage(fragments, inset),
           }),
         }
       : {}),
@@ -629,6 +639,17 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     compatibilityBranchNodeId: null,
     diagnostics: Object.freeze([]),
   });
+}
+
+/** The one uncropped picture that fills a graphic with no outline reach, if that is all it is. */
+function soleImage(
+  fragments: readonly LegacyGraphicFragment[],
+  inset: number
+): { soleImageRelationshipId?: string } {
+  const only = fragments.length === 1 ? fragments[0] : undefined;
+  if (inset !== 0 || !only || typeof only === 'string' || !only.nativeCrop) return {};
+  const { left, top, right, bottom } = only.nativeCrop;
+  return left || top || right || bottom ? {} : { soleImageRelationshipId: only.relationshipId };
 }
 
 /**

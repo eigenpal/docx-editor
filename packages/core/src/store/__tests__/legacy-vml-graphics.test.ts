@@ -695,3 +695,49 @@ describe('legacy VML picture borders', () => {
     }
   });
 });
+
+describe('plain legacy rectangles and ovals', () => {
+  const EMU = 12_700;
+  const shapeOf = (content: string) => onlyProjection(parse(`<w:pict>${content}</w:pict>`));
+
+  test('project as a vector shape over the box the preview covered', () => {
+    const projection = shapeOf('<v:rect id="mask" style="width:60pt;height:40pt" stroked="f"/>');
+    expect(projection.legacyGraphic).toBeUndefined();
+    const shape = projection.vectorShape!;
+    expect(shape.extentEmu).toEqual({ cx: 60 * EMU, cy: 40 * EMU });
+    // A rectangle with no fill color paints white; this one has no outline.
+    expect(shape.components[0]).toMatchObject({ fillHex: 'FFFFFF', strokeHex: null });
+    const xs = shape.components[0]!.subpathsEmu.flat().map((point) => point.x);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([0, 60 * EMU]);
+  });
+
+  test('keep the outline inside the widened box and round the corners', () => {
+    const shape = shapeOf(
+      '<v:roundrect id="r" style="width:60pt;height:40pt" arcsize="0.5" fillcolor="#ff0000" strokecolor="#0000ff" strokeweight="2pt"/>'
+    ).vectorShape!;
+    // The outline reaches 1pt past each side, so the box grows by 2pt.
+    expect(shape.extentEmu).toEqual({ cx: 62 * EMU, cy: 42 * EMU });
+    expect(shape.components[0]).toMatchObject({
+      fillHex: 'FF0000',
+      strokeHex: '0000FF',
+      strokeWidthEmu: 2 * EMU,
+    });
+    const points = shape.components[0]!.subpathsEmu.flat();
+    expect(Math.min(...points.map((point) => point.x))).toBe(EMU);
+    // A rounded corner keeps no point at the box corner itself.
+    expect(points.some((point) => point.x === EMU && point.y === EMU)).toBe(false);
+  });
+
+  test('flatten an oval inside its box', () => {
+    const shape = shapeOf(
+      '<v:oval id="o" style="width:40pt;height:20pt" fillcolor="#00ff00" stroked="f"/>'
+    ).vectorShape!;
+    const points = shape.components[0]!.subpathsEmu.flat();
+    expect(points.length).toBeGreaterThan(8);
+    for (const point of points) {
+      const nx = (point.x - 20 * EMU) / (20 * EMU),
+        ny = (point.y - 10 * EMU) / (10 * EMU);
+      expect(nx * nx + ny * ny).toBeLessThan(1.01);
+    }
+  });
+});

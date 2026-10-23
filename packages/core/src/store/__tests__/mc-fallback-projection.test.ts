@@ -106,7 +106,7 @@ describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
       kind: 'inline',
       extentEmu: { cx: 100 * 12700, cy: 4 * 12700 },
     });
-    expect(projection!.legacyGraphic).toBeDefined();
+    expect(projection!.vectorShape).toBeTruthy();
     expect(projection!.footprintOnly).toBeUndefined();
     expect(projectDrawingsInPart(source)).toHaveLength(1);
     // The line holds the fallback, never the chosen branch's extent.

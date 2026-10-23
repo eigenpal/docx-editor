@@ -403,13 +403,20 @@ describe('VML lines and rectangles', () => {
           'fillcolor="#339" strokecolor="yellow"/></w:pict>'
       )
     );
-    // The outline's reach widens the graphic so the stroke stays inside its image.
+    // The outline's reach widens the drawing so the stroke stays inside its box.
     expect(projection.extentEmu).toEqual({ cx: 20.75 * EMU, cy: 10.75 * EMU });
-    expect(projection.legacyGraphic).toMatchObject({ width: 20.75, height: 10.75 });
+    expect(projection.vectorShape?.extentEmu).toEqual({ cx: 20.75 * EMU, cy: 10.75 * EMU });
     expect(projection.position?.horizontal.offsetEmu).toBe(Math.round(-0.375 * EMU));
-    expect(projection.legacyGraphic?.fragments[0]).toBe(
-      '<rect x="0.375" y="0.375" width="20" height="10" fill="#333399" stroke="#ffff00" stroke-width="0.75"/>'
-    );
+    expect(projection.vectorShape?.components[0]).toMatchObject({
+      fillHex: '333399',
+      strokeHex: 'FFFF00',
+      strokeWidthEmu: 0.75 * EMU,
+    });
+    const xs = projection.vectorShape!.components[0]!.subpathsEmu.flat().map((p) => p.x);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([
+      Math.round(0.375 * EMU),
+      Math.round(20.375 * EMU),
+    ]);
   });
 
   test('an arrow on a closed shape does not widen it', () => {
@@ -429,11 +436,12 @@ describe('VML lines and rectangles', () => {
         '<w:pict><v:roundrect style="width:40pt;height:20pt" arcsize="0.5" fillcolor="red"/></w:pict>'
       )
     );
-    // The outline's reach widens the graphic so the stroke stays inside its image.
+    // The outline's reach widens the drawing so the stroke stays inside its box.
     expect(projection.extentEmu).toEqual({ cx: 40.75 * EMU, cy: 20.75 * EMU });
-    expect(projection.legacyGraphic?.fragments[0]).toContain(
-      '<rect x="0.375" y="0.375" width="40" height="20" rx="5" ry="5"'
-    );
+    const points = projection.vectorShape!.components[0]!.subpathsEmu.flat();
+    // A 5pt corner radius: the top edge starts 5pt in from the left side.
+    const top = points.filter((p) => Math.abs(p.y - 0.375 * EMU) <= 1).map((p) => p.x);
+    expect(Math.abs(Math.min(...top) - 5.375 * EMU)).toBeLessThanOrEqual(1);
   });
 });
 

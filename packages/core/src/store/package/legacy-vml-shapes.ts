@@ -4,6 +4,7 @@ import { legacyChromaKeyFilter } from './legacy-vml-chromakey.ts';
 import { LEGACY_IMAGE_EFFECT_ATTRIBUTES, legacyImageEffects } from './legacy-vml-image-effects.ts';
 import type { VectorShapeProjection } from './drawing-shape-projection.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
+import { evaluateGeometry, presetGeometryDefinition } from './drawing-geometry-engine.ts';
 import {
   attribute as a,
   children,
@@ -28,6 +29,11 @@ export interface LegacyGraphicProjection {
   readonly width: number;
   readonly height: number;
   readonly fragments: readonly LegacyGraphicFragment[];
+  /**
+   * The relationship of the one uncropped picture that fills the whole graphic, when that is
+   * all it paints. The graphic then resolves to that picture, which every output can paint.
+   */
+  readonly soleImageRelationshipId?: string;
 }
 export interface LegacyBox {
   readonly x: number;
@@ -360,6 +366,65 @@ export function legacyLineShape(
     }),
     subpathsEmu: component.subpathsEmu,
     fillHex: null,
+    fillAlpha: 1,
+    strokeHex,
+    strokeAlpha: 1,
+    strokeWidthEmu: component.strokeWidthEmu,
+    components: Object.freeze([component]),
+  });
+}
+
+/**
+ * A `v:rect`, `v:roundrect` or `v:oval` with a plain fill and outline, as a vector shape over
+ * the graphic's `outer` box with the shape at `box`. It paints the same pixels as its graphic
+ * preview, in every output. Null for any other shape.
+ */
+export function legacyBoxShape(
+  node: OoxmlElement,
+  box: LegacyBox,
+  outer: LegacyBox
+): VectorShapeProjection | null {
+  const preset = ({ rect: 'rect', roundrect: 'roundRect', oval: 'ellipse' } as const)[
+    node.localName as 'rect' | 'roundrect' | 'oval'
+  ];
+  const ink = preset ? paint(node) : null;
+  if (!preset || !ink) return null;
+  const radius = preset === 'roundRect' ? cornerRadius(node, box) : 0;
+  const definition = presetGeometryDefinition(preset);
+  if (radius === null || !definition) return null;
+  const shortSide = Math.min(box.width, box.height);
+  const adjust = new Map([['adj', shortSide > 0 ? Math.round((radius / shortSide) * 100_000) : 0]]);
+  const geometry = evaluateGeometry(
+    definition,
+    box.width * EMU_PER_POINT,
+    box.height * EMU_PER_POINT,
+    adjust
+  );
+  const outline = geometry?.paths[0];
+  if (!outline) return null;
+  const dx = box.x * EMU_PER_POINT,
+    dy = box.y * EMU_PER_POINT;
+  const stroked = ink.stroke !== 'none' && ink.weight > 0;
+  const fillHex = ink.fill === 'none' ? null : ink.fill.slice(1).toUpperCase();
+  const strokeHex = stroked ? ink.stroke.slice(1).toUpperCase() : null;
+  const component = freezeVectorShapeComponent({
+    subpathsEmu: outline.subpaths.map((subpath) =>
+      subpath.points.map((point) => ({ x: Math.round(point.x + dx), y: Math.round(point.y + dy) }))
+    ),
+    subpathsClosed: outline.subpaths.map((subpath) => subpath.closed),
+    fillHex,
+    fillAlpha: 1,
+    strokeHex,
+    strokeAlpha: 1,
+    strokeWidthEmu: stroked ? Math.round(ink.weight * EMU_PER_POINT) : 0,
+  });
+  return Object.freeze({
+    extentEmu: Object.freeze({
+      cx: Math.round(outer.width * EMU_PER_POINT),
+      cy: Math.round(outer.height * EMU_PER_POINT),
+    }),
+    subpathsEmu: component.subpathsEmu,
+    fillHex,
     fillAlpha: 1,
     strokeHex,
     strokeAlpha: 1,

@@ -48,6 +48,9 @@ export function createLegacyGraphicResolver(options: {
     options.ensureActive();
     const graphic = projection.legacyGraphic;
     if (!graphic || graphic.fragments.length > 128) return refused('unsupported-format');
+    // One picture alone is that picture: no composite, so every output paints its pixels.
+    if (graphic.soleImageRelationshipId)
+      return options.resolveEmbedded(projection.ownerPartName, graphic.soleImageRelationshipId);
     const pixelWidth = Math.ceil((graphic.width * 96) / 72),
       pixelHeight = Math.ceil((graphic.height * 96) / 72);
     const { limits, registry } = options;

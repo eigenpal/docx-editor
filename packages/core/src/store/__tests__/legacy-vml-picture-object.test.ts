@@ -163,7 +163,13 @@ describe('a picture with an embedded object beside it', () => {
     });
     expect(projection.legacyGraphic!.fragments).toHaveLength(1);
     expect(projection.legacyGraphic!.fragments[0]).toMatchObject({ relationshipId: 'rPreview' });
+    expect(projection.legacyGraphic!.soleImageRelationshipId).toBe('rPreview');
     expect(JSON.stringify(projection)).not.toContain('rOle');
+    // A cropped preview stays a composite: the crop lives in the generated graphic.
+    const cropped = projectDrawingsInPart(
+      parse(picture().replace('o:title=""', 'o:title="" croptop="0.25"'))
+    )[0]!;
+    expect(cropped.legacyGraphic!.soleImageRelationshipId).toBeUndefined();
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 

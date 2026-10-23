@@ -252,7 +252,8 @@ describe('embedded object cached previews', () => {
         const projection = projectDrawingsInPackage(pkg)[0]!;
         const state = await lookup.resolveForProjection(projection);
         if (format === 'png') {
-          expect(state).toMatchObject({ kind: 'ready', mime: 'image/svg+xml' });
+          // The preview is one uncropped picture, so it resolves to that picture itself.
+          expect(state).toMatchObject({ kind: 'ready', mime: 'image/png' });
           expect(decoded).toEqual(['image/png']);
         } else {
           // No metafile converter: an honest unsupported-format state, never a fake picture.
