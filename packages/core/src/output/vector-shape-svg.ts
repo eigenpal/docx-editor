@@ -2,6 +2,7 @@
 // extent axis, and inset outlines (`a:ln algn="in"`).
 import type { VectorShapeProjection } from '../store/package/drawing-projection.ts';
 import type { VectorGradient } from '../store/package/drawing-gradient.ts';
+import type { VectorPattern } from '../store/package/drawing-pattern-fill.ts';
 import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
 
@@ -101,6 +102,48 @@ export function applyGradientFill(
 
 function finiteNumber(value: number): string {
   return Number.isFinite(value) ? String(value) : '0';
+}
+
+let nextPatternId = 0;
+/** One pattern cell is one point, in the extent's EMU space. */
+const PATTERN_CELL_EMU = 12_700;
+
+/**
+ * Fill `path` with an 8 × 8 pattern tile: the background, then one square per
+ * foreground cell, merged into a single path.
+ */
+export function applyPatternFill(
+  document: Document,
+  svg: SVGSVGElement,
+  path: SVGPathElement,
+  pattern: VectorPattern
+): void {
+  const id = `docx-pattern-${++nextPatternId}`;
+  const cell = PATTERN_CELL_EMU;
+  const element = document.createElementNS(SVG_NAMESPACE, 'pattern');
+  element.setAttribute('id', id);
+  element.setAttribute('patternUnits', 'userSpaceOnUse');
+  element.setAttribute('width', finiteNumber(cell * 8));
+  element.setAttribute('height', finiteNumber(cell * 8));
+  const layer = (hex: string, alpha: number, d: string) => {
+    if (alpha <= 0 || !d) return;
+    const node = document.createElementNS(SVG_NAMESPACE, 'path');
+    node.setAttribute('d', d);
+    // SAFE: pattern colours are validated 6-digit sRGB from the projection.
+    node.setAttribute('fill', `#${hex}`);
+    if (alpha < 1) node.setAttribute('fill-opacity', finiteNumber(alpha));
+    element.append(node);
+  };
+  layer(pattern.background.hex, pattern.background.alpha, `M0 0H${cell * 8}V${cell * 8}H0Z`);
+  const cells: string[] = [];
+  pattern.rows.slice(0, 8).forEach((row, y) => {
+    for (let x = 0; x < 8; x += 1) {
+      if ((row >> (7 - x)) & 1) cells.push(`M${x * cell} ${y * cell}h${cell}v${cell}h${-cell}Z`);
+    }
+  });
+  layer(pattern.foreground.hex, pattern.foreground.alpha, cells.join(''));
+  svg.append(element);
+  path.setAttribute('fill', `url(#${id})`);
 }
 
 let nextShadowId = 0;

@@ -20,6 +20,11 @@ import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { compoundBands } from './drawing-line-compound.ts';
 import { drawingTextboxFrame } from './drawing-textbox-frame.ts';
+import {
+  authoredPatternFill,
+  patternMeanColor,
+  type VectorPattern,
+} from './drawing-pattern-fill.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
 import {
@@ -117,6 +122,8 @@ export interface VectorShapeComponent {
    * `fillHex` then holds the mean of its stops.
    */
   readonly fillGradient?: VectorGradient;
+  /** A preset pattern the fill paints with; `fillHex` is its mean colour. */
+  readonly fillPattern?: VectorPattern;
   /** The outer shadow the shape casts, painted under this component. */
   readonly shadow?: ShapeShadow;
   /**
@@ -297,8 +304,11 @@ function shapePaint(
   const styleFill = authoredFill.present
     ? null
     : readStyleReference(wsp, 'fillRef', resolveSchemeColor, resolveStyleMatrixReference);
+  const pattern = authoredFill.present ? authoredPatternFill(spPr, resolveSchemeColor) : null;
   const fill = authoredFill.present
-    ? (authoredFill.color ?? (authoredGradient ? gradientMeanColor(authoredGradient) : null))
+    ? (authoredFill.color ??
+      (authoredGradient ? gradientMeanColor(authoredGradient) : null) ??
+      (pattern ? patternMeanColor(pattern) : null))
     : (styleFill?.color ?? null);
   const fillGradient = authoredFill.present ? authoredGradient : (styleFill?.gradient ?? null);
   const ln = findDirectChild(spPr.children, {
@@ -319,7 +329,7 @@ function shapePaint(
     authoredStroke?.present === true
       ? (authoredStroke.color ?? (strokeGradient ? gradientMeanColor(strokeGradient) : null))
       : (styleStroke?.color ?? null);
-  return { fill, fillGradient, ln, stroke, styleStroke };
+  return { fill, fillGradient, pattern, ln, stroke, styleStroke };
 }
 
 /** The shape's `spPr`, in its own namespace: `wps:spPr`, or `dsp:spPr` in a diagram drawing. */
@@ -383,7 +393,7 @@ export function projectShapeComponents(
       if (!schemaFlagIsUnset(value) && !schemaFlagIsSet(value)) return null;
     }
   }
-  const { fill, fillGradient, ln, stroke, styleStroke } = shapePaint(
+  const { fill, fillGradient, pattern, ln, stroke, styleStroke } = shapePaint(
     wsp,
     spPr,
     resolveSchemeColor,
@@ -454,6 +464,7 @@ export function projectShapeComponents(
                 : shadeGradient(gradient, (color) => pathFillColor(color, path.fill) ?? color),
           }
         : {}),
+      ...(pattern && pathFill && path.fill === 'norm' ? { fillPattern: pattern } : {}),
       strokeHex: pathStroke?.hex ?? null,
       strokeAlpha: pathStroke?.alpha ?? 1,
       strokeWidthEmu: pathStroke ? strokeWidthEmu : 0,

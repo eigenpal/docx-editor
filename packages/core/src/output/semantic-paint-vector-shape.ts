@@ -11,6 +11,7 @@ import type { VectorShapeComponent } from '../store/package/drawing-shape-projec
 import {
   appendShadow,
   applyGradientFill,
+  applyPatternFill,
   applyInsetStroke,
   vectorShapeViewport,
 } from './vector-shape-svg.ts';
@@ -109,10 +110,12 @@ export function vectorShapeFrame(
     path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
     if (component.fillHex !== null && component.fillGradient) {
       applyGradientFill(document, svg, path, component.fillGradient);
+    } else if (component.fillHex !== null && component.fillPattern) {
+      applyPatternFill(document, svg, path, component.fillPattern);
     }
     path.setAttribute('fill-rule', 'evenodd');
-    // A gradient's stops carry their own opacity; the mean would apply it twice.
-    if (component.fillAlpha < 1 && !component.fillGradient) {
+    // Gradient stops and pattern colours carry their own opacity; the mean would apply it twice.
+    if (component.fillAlpha < 1 && !component.fillGradient && !component.fillPattern) {
       path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
     }
     if (component.strokeHex !== null) {

@@ -77,3 +77,19 @@ test('a dashed outline sets a dash pattern scaled by the line width', async () =
   // A 2 pt line: three widths of dash, one of gap.
   expect(commands).toContain('[6 2] 0 d');
 });
+
+test('a pattern fill paints with a tiling pattern of one-point cells', async () => {
+  const { pdf, commands } = await commandsOf(
+    '<a:pattFill prst="dnDiag"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr>' +
+      '<a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill>'
+  );
+  expect(commands).toMatch(/\/Pattern cs \/ShapePattern\d+ scn/);
+  const patterns = pdf.getPage(0).node.Resources()!.lookup(PDFName.of('Pattern'), PDFDict);
+  const [name] = patterns.keys();
+  const pattern = pdf.context.lookup(patterns.get(name!) as never) as PDFRawStream;
+  expect(pattern.dict.get(PDFName.of('XStep'))?.toString()).toBe('8');
+  const tile = new TextDecoder().decode(decodePDFRawStream(pattern).decode());
+  // The top-left cell of a downward diagonal sits in the top row of pattern space.
+  expect(tile).toContain('1 0 0 rg');
+  expect(tile).toContain('0 7 1 1 re');
+});

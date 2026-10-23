@@ -12,6 +12,7 @@ import {
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { gradientShading } from './vector-gradient.ts';
 import { shadowOps } from './vector-shadow.ts';
+import { patternFillOperator } from './vector-pattern.ts';
 
 /**
  * Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic.
@@ -78,7 +79,13 @@ export function paintVectorShape(
     // An inset outline strokes at twice its width, clipped to the closed path, so the
     // authored width stays inside the shape.
     const width = Math.max(1, component.strokeWidthEmu) * (inset ? 2 : 1);
-    if (component.fillHex !== null) out.push(`${color(component.fillHex)} rg`);
+    if (component.fillHex !== null) {
+      out.push(
+        component.fillPattern
+          ? patternFillOperator(doc, page, component.fillPattern)
+          : `${color(component.fillHex)} rg`
+      );
+    }
     if (component.strokeHex !== null)
       out.push(`${color(component.strokeHex)} RG ${n(width / unit)} w`);
     // Dashes scale with the authored width, also under an inset outline's doubled stroke.
