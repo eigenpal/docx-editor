@@ -21,11 +21,22 @@ afterEach(() => {
   harness.cleanup();
 });
 const BODY =
-  '<w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>' +
+  '<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr>' +
   '<w:sz w:val="22"/><w:lang w:eastAsia="zh-CN"/></w:rPr>' +
   '<w:t>Alpha Beta, Next</w:t></w:r></w:p>' +
   '<w:sectPr><w:pgSz w:w="2800" w:h="8000"/>' +
   '<w:pgMar w:top="400" w:bottom="400" w:left="800" w:right="800"/></w:sectPr>';
+// Punctuation hangs only in a justified paragraph of a document with an East Asian default face.
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const SOURCE = {
+  overrides:
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>',
+  documentRels:
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+  extraXml: {
+    'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="SimSun"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+  },
+};
 function lines(editor: Editor) {
   return editor
     .surface!.layout()
@@ -46,7 +57,7 @@ function select(editor: Editor, from: number, to = from) {
 }
 
 test('Latin punctuation layout converges through concurrent edits, history, and reconnect', async () => {
-  const peers = await harness.pair(zipDocument(BODY));
+  const peers = await harness.pair(zipDocument(BODY, SOURCE));
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
     const editor = createDocxEditor({
