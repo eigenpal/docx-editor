@@ -102,6 +102,14 @@ describe('picture frames', () => {
     expect(fill!.belowPicture).toBe(true);
   });
 
+  test('a glow paints under the picture', () => {
+    const projection = picture(
+      `${RECT}<a:effectLst><a:glow rad="50800"><a:srgbClr val="4472C4"/></a:glow></a:effectLst>`
+    );
+    const [halo] = projection.vectorShape!.components;
+    expect(halo).toMatchObject({ belowPicture: true, shadowOnly: true, strokeWidthEmu: 50800 });
+  });
+
   test('a compound outline paints its bands outside the picture', () => {
     const projection = picture(`${RECT}<a:ln w="76200" cmpd="dbl">${RED}</a:ln>`);
     const bands = projection.vectorShape!.components;

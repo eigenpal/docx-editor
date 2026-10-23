@@ -1,7 +1,7 @@
 // The frame a picture draws from its `pic:spPr`: the geometry that clips the picture, the
 // outline over it, and the outer shadow and fill under it.
 
-import { readShapeShadow } from './drawing-shape-effects.ts';
+import { glowComponent, readShapeGlow, readShapeShadow } from './drawing-shape-effects.ts';
 import { directFill, type ShapeColor } from './drawing-shape-color.ts';
 import { gradientMeanColor, readGradientFill } from './drawing-gradient.ts';
 import { readShapeGeometry, shapePointTransform } from './drawing-shape-geometry.ts';
@@ -111,6 +111,24 @@ export function projectPictureFrame(
       strokeWidthEmu: 0,
       shadow,
       shadowOnly: true,
+      belowPicture: true,
+    });
+  }
+  // A glow is a halo around the picture, under it and under its shadow.
+  const glow = readShapeGlow(
+    picture,
+    spPr,
+    ctx.resolveSchemeColor,
+    ctx.resolveStyleMatrixReference
+  );
+  if (glow && filled.length) {
+    components.unshift({
+      ...glowComponent(
+        glow,
+        filled.map((subpath) => subpath.points),
+        filled.map(() => true),
+        true
+      ),
       belowPicture: true,
     });
   }

@@ -291,6 +291,46 @@ describe('outer shadows', () => {
   });
 });
 
+describe('glows', () => {
+  const glow =
+    '<a:effectLst><a:glow rad="127000"><a:srgbClr val="FFC000"><a:alpha val="60000"/>' +
+    '</a:srgbClr></a:glow></a:effectLst>';
+
+  test('a glow is a halo under the shape: the outline widened and blurred in its colour', () => {
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="ellipse"/>${FILL}${glow}`))
+    );
+    const [halo, body] = vector.components;
+    expect(halo).toMatchObject({
+      shadowOnly: true,
+      fillHex: 'FFC000',
+      strokeHex: 'FFC000',
+      strokeWidthEmu: 127000,
+      shadow: { dxEmu: 0, dyEmu: 0, hex: 'FFC000' },
+    });
+    expect(halo!.shadow!.blurEmu).toBeCloseTo((127000 * 2) / 3, 6);
+    expect(halo!.shadow!.alpha).toBeCloseTo(0.6, 6);
+    expect(body!.fillHex).toBe('336699');
+  });
+
+  test('a line glows around its stroke', () => {
+    const line = '<a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>';
+    const vector = onlyVector(
+      inline(
+        1000000,
+        0,
+        WPS,
+        shape(`${XFRM.replace('cy="500000"', 'cy="0"')}<a:prstGeom prst="line"/>${line}${glow}`)
+      )
+    );
+    expect(vector.components[0]).toMatchObject({
+      shadowOnly: true,
+      fillHex: null,
+      strokeWidthEmu: 127000 + 25400,
+    });
+  });
+});
+
 describe('drawing canvases', () => {
   const box = (id: number, x: number, text: string) =>
     `<wps:wsp><wps:cNvPr id="${id}" name="Box ${id}"/><wps:cNvSpPr/><wps:spPr>` +

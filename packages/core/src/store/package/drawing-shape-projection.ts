@@ -22,7 +22,13 @@ import { compoundBands } from './drawing-line-compound.ts';
 import { drawingTextboxFrame } from './drawing-textbox-frame.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
-import { darkEdgeOutline, readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
+import {
+  darkEdgeOutline,
+  glowComponent,
+  readShapeGlow,
+  readShapeShadow,
+  type ShapeShadow,
+} from './drawing-shape-effects.ts';
 import {
   gradientMeanColor,
   placeGradient,
@@ -491,6 +497,26 @@ export function projectShapeComponents(
       shadow,
       shadowOnly: true,
     });
+  }
+  // A glow paints under everything else: around the filled paths, or around a line.
+  const glow = readShapeGlow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const painted = components.filter((component) => !component.shadowOnly);
+  if (glow && painted.length) {
+    const filled = painted.filter((component) => component.fillHex !== null);
+    const casters = filled.length ? filled : painted;
+    components.unshift(
+      glowComponent(
+        glow,
+        casters.flatMap((component) => component.subpathsEmu),
+        casters.flatMap((component) =>
+          component.subpathsEmu.map((_, index) => component.subpathsClosed?.[index] !== false)
+        ),
+        filled.length > 0,
+        filled.length
+          ? 0
+          : casters.reduce((widest, component) => Math.max(widest, component.strokeWidthEmu), 0)
+      )
+    );
   }
   // A dark-edged bevel shows a rim inside the filled outline; it paints over the fill.
   const edge = darkEdgeOutline(spPr);

@@ -1,6 +1,6 @@
-// Shape effects painters can draw: the outer shadow (`a:outerShdw`). It comes from the shape's
-// own `a:effectLst`, which replaces the theme effects, or from the theme effect style its
-// `effectRef` names. Other effects (glow, reflection, soft edges, 3-D) are not painted.
+// Shape effects painters can draw: the outer shadow (`a:outerShdw`) and the glow (`a:glow`).
+// They come from the shape's own `a:effectLst`, which replaces the theme effects, or from the
+// theme effect style its `effectRef` names. Reflection, soft edges, and 3-D are not painted.
 
 import { themeEffectStyle } from './drawing-group-theme-effects.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
@@ -10,7 +10,7 @@ import {
   type ShapeColor,
   type ShapeSchemeColorResolver,
 } from './drawing-shape-color.ts';
-import type { ShapeStyleMatrixResolver } from './drawing-shape-projection.ts';
+import type { ShapeStyleMatrixResolver, VectorShapeComponent } from './drawing-shape-projection.ts';
 import { collapseSchemaWhitespace, schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
@@ -93,16 +93,18 @@ function shadowOf(
   };
 }
 
-/** The outer shadow a shape paints, or null when it has none the painters can draw. */
-export function readShapeShadow(
+/**
+ * The effect list a shape paints with: its own `a:effectLst`, or the theme effect style its
+ * `effectRef` names, with that reference's colour as the placeholder colour.
+ */
+function effectList(
   shape: OoxmlElement,
   spPr: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  turn?: ShapeTurn
-): ShapeShadow | null {
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): { readonly effectLst: OoxmlElement; readonly placeholder?: ShapeColor } | null {
   const direct = findDirectChild(spPr.children, { namespaceUri: A, localName: 'effectLst' });
-  if (direct) return shadowOf(direct, resolveSchemeColor, undefined, turn);
+  if (direct) return { effectLst: direct };
   const style = findDirectChild(shape.children, {
     namespaceUri: shape.namespaceUri,
     localName: 'style',
@@ -128,7 +130,81 @@ export function readShapeShadow(
   const placeholder = placeholderNode
     ? (resolveColorNode(placeholderNode, resolveSchemeColor) ?? undefined)
     : undefined;
-  return shadowOf(effectLst, resolveSchemeColor, placeholder, turn);
+  return { effectLst, ...(placeholder ? { placeholder } : {}) };
+}
+
+/** The outer shadow a shape paints, or null when it has none the painters can draw. */
+export function readShapeShadow(
+  shape: OoxmlElement,
+  spPr: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  turn?: ShapeTurn
+): ShapeShadow | null {
+  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  return list ? shadowOf(list.effectLst, resolveSchemeColor, list.placeholder, turn) : null;
+}
+
+/** A glow (`a:glow`): a soft halo of its colour around the shape. */
+export interface ShapeGlow {
+  readonly radiusEmu: number;
+  readonly hex: string;
+  readonly alpha: number;
+}
+
+/** The glow a shape paints, or null when it has none. */
+export function readShapeGlow(
+  shape: OoxmlElement,
+  spPr: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): ShapeGlow | null {
+  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const glow = list
+    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'glow' })
+    : null;
+  if (!list || !glow) return null;
+  const radiusEmu = nonNegative(glow, 'rad');
+  const colorNode = glow.children.find(isElement);
+  const color = colorNode
+    ? resolveColorNode(colorNode, resolveSchemeColor, list.placeholder)
+    : null;
+  if (!color || color.alpha <= 0 || radiusEmu <= 0) return null;
+  return { radiusEmu, hex: color.hex, alpha: color.alpha };
+}
+
+/**
+ * A glow as a component that paints only its shadow: the outline of `subpathsEmu` widened by
+ * half the glow radius and blurred with a standard deviation of a sixth of it, which puts the
+ * halo's half-strength edge half the radius out and its last trace at the radius.
+ */
+export function glowComponent(
+  glow: ShapeGlow,
+  subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[],
+  subpathsClosed: readonly boolean[],
+  filled: boolean,
+  /** The width of the outline the glow surrounds, for an unfilled shape such as a line. */
+  baseWidthEmu = 0
+): VectorShapeComponent {
+  return {
+    subpathsEmu,
+    subpathsClosed,
+    fillHex: filled ? glow.hex : null,
+    fillAlpha: 1,
+    strokeHex: glow.hex,
+    strokeAlpha: 1,
+    strokeWidthEmu: glow.radiusEmu + baseWidthEmu,
+    strokeJoin: 'round',
+    strokeCap: 'round',
+    shadow: {
+      dxEmu: 0,
+      dyEmu: 0,
+      blurEmu: (glow.radiusEmu * 2) / 3,
+      hex: glow.hex,
+      alpha: glow.alpha,
+    },
+    shadowOnly: true,
+  };
 }
 
 /** The rim a dark-edged bevel shows, as an outline inside the shape. */
