@@ -403,6 +403,24 @@ export interface CascadeDeletedNoteReferencesOptions {
 export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
+export interface ChartPart {
+    readonly chartSpace: OoxmlElement;
+    readonly partName: string;
+    readonly themeFaces: ChartThemeFaces;
+}
+
+// @public
+export type ChartPartResolver = (chart: OoxmlElement) => ChartPart | null;
+
+// @public (undocumented)
+export interface ChartThemeFaces {
+    // (undocumented)
+    readonly major: string | null;
+    // (undocumented)
+    readonly minor: string | null;
+}
+
+// @public
 export function childElements(node: Extract<XmlNode, {
     type: 'element';
 }>, name: string): Extract<XmlNode, {
@@ -1202,13 +1220,21 @@ export class DeterministicMemoryMeter {
 export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnostic[];
 
 // @public
-export type DiagramPartResolver = (relIds: OoxmlElement) => DiagramParts | null;
+export interface DiagramPartResolver {
+    (relIds: OoxmlElement): DiagramParts | null;
+    readonly chart?: ChartPartResolver;
+}
 
 // @public
 export interface DiagramParts {
+    readonly colorsDef: OoxmlElement | null;
     readonly dataModel: OoxmlElement;
+    readonly dataPartName: string;
     readonly drawing: OoxmlElement | null;
     readonly drawingPartName: string | null;
+    readonly fontFamily: string;
+    readonly layoutDef: OoxmlElement | null;
+    readonly styleDef: OoxmlElement | null;
 }
 
 // @public

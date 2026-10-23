@@ -65,7 +65,9 @@ export interface DiagramParts {
  * projection threads one resolver for every part-backed graphic.
  */
 export interface DiagramPartResolver {
+  /** The diagram parts behind one `dgm:relIds` element, or null when they do not resolve. */
   (relIds: OoxmlElement): DiagramParts | null;
+  /** The chart part behind one `c:chart` element of the same story part. */
   readonly chart?: ChartPartResolver;
 }
 
