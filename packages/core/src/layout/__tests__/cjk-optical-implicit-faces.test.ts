@@ -80,14 +80,7 @@ function attempt(
     },
     originalWidth = line.width;
   const available = originalWidth + 10;
-  const result = createCjkOpticalFitter(
-    pieces,
-    cjkParagraphBreaks(pieces, policy),
-    m,
-    false,
-    true,
-    true
-  )(
+  const result = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), m, false, true)(
     line,
     1,
     '乙',
@@ -231,7 +224,6 @@ function markerAttempt(marker: string, slot?: StyleSpanRecord['fontSlot'], famil
     cjkParagraphBreaks(pieces, policy),
     measure,
     false,
-    true,
     true
   )(
     line,

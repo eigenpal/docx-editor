@@ -83,7 +83,6 @@ function attempt(
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     m,
     false,
-    true,
     options.localQualification ?? true
   )(
     line,
@@ -185,7 +184,6 @@ test('an opening curly quote after an opaque Latin word keeps its advance', () =
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     outlined,
     false,
-    true,
     true
   )(
     line,

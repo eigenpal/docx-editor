@@ -503,8 +503,7 @@ export function createParagraphCjkOpticalFitter(
       pieces,
       breaks,
       measurer,
-      typography.overflowPunctuation,
-      typography.overflowFullwidthPunctuation !== false,
+      typography.hangingPunctuation ?? typography.overflowPunctuation,
       !opticalParagraph
     ),
   };
@@ -515,8 +514,7 @@ export function createCjkOpticalFitter(
   pieces: readonly FieldAwarePiece[],
   breaks: CjkParagraphBreaks | null,
   measurer: TextMeasurer,
-  overflowPunctuation: boolean,
-  allowFullwidth = true,
+  hangingPunctuation: boolean,
   requireLocalQualification = false
 ) {
   const queued = new Map<number, CjkOpticalFit>();
@@ -611,14 +609,13 @@ export function createCjkOpticalFitter(
     )
       return undefined;
     if (
-      overflowPunctuation &&
+      hangingPunctuation &&
       canHangCjkPunctuation(
         candidates.map((candidate) => candidate.text).join(''),
         pieces[currentIndex]!,
         available - line.width,
         x - origin,
-        measurer,
-        allowFullwidth
+        measurer
       )
     )
       return undefined;

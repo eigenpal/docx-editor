@@ -274,21 +274,32 @@ describe('CJK follow-up: document and paragraph policy', () => {
         '人',
       ]);
   });
+  test('Latin punctuation in an East Asian language run hangs on a justified line', () => {
+    const props = '<w:overflowPunct/><w:jc w:val="both"/>';
+    const language = '<w:lang w:eastAsia="zh-CN"/>';
+    expect(textLines(['Alpha Beta, Next'], 60, props, language)).toEqual(['Alpha Beta,', ' Next']);
+    expect(
+      textLines(['Alpha Beta, Next'], 60, props + '<w:overflowPunct w:val="0"/>', language)
+    ).toEqual(['Alpha ', 'Beta, Next']);
+    expect(textLines(['Alpha Beta, Next'], 60, props)).toEqual(['Alpha ', 'Beta, Next']);
+  });
   test.each(['left', 'center', 'right'])(
-    'Latin punctuation keeps its overflow switch with %s alignment',
+    'Latin punctuation in an East Asian language run stays inside a %s-aligned line',
     (alignment) => {
       const props = `<w:overflowPunct/><w:jc w:val="${alignment}"/>`;
       const language = '<w:lang w:eastAsia="zh-CN"/>';
       expect(textLines(['Alpha Beta, Next'], 60, props, language)).toEqual([
-        'Alpha Beta,',
-        ' Next',
+        'Alpha ',
+        'Beta, Next',
       ]);
-      expect(
-        textLines(['Alpha Beta, Next'], 60, props + '<w:overflowPunct w:val="0"/>', language)
-      ).toEqual(['Alpha ', 'Beta, Next']);
-      expect(textLines(['Alpha Beta, Next'], 60, props)).toEqual(['Alpha ', 'Beta, Next']);
     }
   );
+  test('a closing curly quote in a Japanese run hangs only on a justified line', () => {
+    const japanese = '<w:lang w:eastAsia="ja-JP"/>';
+    const props = (alignment: string) => `<w:overflowPunct/><w:jc w:val="${alignment}"/>`;
+    expect(textLines(['天地人”'], 18, props('both'), japanese)).toEqual(['天地人”']);
+    expect(textLines(['天地人”'], 18, props('left'), japanese)).toEqual(['天地', '人”']);
+  });
   test('authored punctuation thresholds act independently of characterSpacingControl', () => {
     const ordinary = layout(['天地。。'], 21);
     expect(ordinary).toHaveLength(2);

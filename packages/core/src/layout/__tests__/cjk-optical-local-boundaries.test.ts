@@ -122,7 +122,6 @@ function fitWord(
     cjkParagraphBreaks(pieces, policy),
     measure,
     false,
-    true,
     true
   );
   shapeCalls.length = 0;

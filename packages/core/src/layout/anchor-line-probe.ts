@@ -139,15 +139,8 @@ export function anchorLineStartsByModelOffset(input: {
         probeWordStartWidth = probeWidth;
       }
       const hangs =
-        input.typography?.overflowPunctuation &&
-        canHangCjkPunctuation(
-          candidate,
-          piece,
-          probeLineAvail() - probeWidth,
-          width,
-          measurer,
-          input.typography.overflowFullwidthPunctuation !== false
-        );
+        (input.typography?.hangingPunctuation ?? input.typography?.overflowPunctuation) &&
+        canHangCjkPunctuation(candidate, piece, probeLineAvail() - probeWidth, width, measurer);
       const fitWidth = (input.seamNaturalWidths?.get(piece) ?? width) + gap();
       if (!hangs && probeWidth > 0 && probeWidth + fitWidth > probeLineAvail()) {
         if (probeDecision === 'forbidden' && probeWordStartWidth <= 0) {

@@ -396,6 +396,17 @@ The layout engine SHALL fit a line by compressing East Asian punctuation against
 - **THEN** the line wraps instead of fitting
 - **AND** the same paragraph fits the line when it is justified
 
+### Requirement: Hanging punctuation only on justified paragraphs
+
+With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin.
+
+#### Scenario: A closing quote stays inside a left-aligned line
+
+- **GIVEN** a Japanese-language run that ends with a closing curly quote one character past the margin
+- **WHEN** the paragraph is left-aligned, centered, or right-aligned
+- **THEN** the quote wraps to the next line with the character before it
+- **AND** the same quote hangs past the margin when the paragraph is justified
+
 ### Requirement: East Asian punctuation fitting on mixed lines
 
 When document punctuation compression is on and the document defaults name an East Asian face, a line that also holds complete Latin words, digit groups, or ASCII symbol groups SHALL be able to fit by compressing adjacent East Asian punctuation against measured glyph ink. The Latin groups SHALL keep their natural advances and source ranges.

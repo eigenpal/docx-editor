@@ -118,7 +118,6 @@ function fit(
     cjkParagraphBreaks(pieces, policy),
     measure,
     false,
-    true,
     true
   )(
     line,

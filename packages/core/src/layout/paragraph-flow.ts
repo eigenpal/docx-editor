@@ -1364,15 +1364,8 @@ export function breakParagraph(
       let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
       const hangs =
-        typography.overflowPunctuation &&
-        canHangCjkPunctuation(
-          candidate,
-          piece,
-          lineAvailable() - line.width,
-          width,
-          measurer,
-          typography.overflowFullwidthPunctuation !== false
-        );
+        (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
+        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
       const applyOpticalFit =
         opticalCompression && sameParagraphAnchorStarts.length === 0
           ? () => {

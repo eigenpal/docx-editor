@@ -95,7 +95,6 @@ function setup(o: Options = {}) {
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     m,
     false,
-    true,
     true
   );
   const before = snapshot(line),

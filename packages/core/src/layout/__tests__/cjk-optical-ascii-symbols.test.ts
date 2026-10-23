@@ -74,7 +74,6 @@ test('plain ASCII mathematical tokens retain their existing external-outline sea
       cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
       m,
       false,
-      true,
       true
     )(
       line,
