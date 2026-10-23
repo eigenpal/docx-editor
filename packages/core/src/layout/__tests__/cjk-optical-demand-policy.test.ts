@@ -347,12 +347,17 @@ test('finite EA capacity alone cannot borrow missing whole opaque ink or mutate 
   reject({ noInk: true });
   reject({ opaqueInk: true, deficit: 36 });
 });
-test('the half-glyph precondition still rejects short CJK remnants and keeps its existing exact boundary', () => {
-  for (const remaining of [5.59, 3.8, 6.9]) {
+test('a short CJK remnant fits only when its compression share stays within the expansion it saves', () => {
+  // Four blank sides give 28pt. Leaving the 14pt glyph off spreads its room r over the 123.125pt
+  // of advances before the line's last glyph. The glyph fits when (14 - r) / 28 <= r * 64 /
+  // 123.125, that is r >= 0.9001pt.
+  for (const remaining of [0, 0.5, 0.89]) {
     const x = reject({ candidate: ['丁'], remaining });
+    // The bound on the blank sides refuses before any word is shaped for its ink.
     expect(x.calls).toHaveLength(0);
   }
-  expect(fit({ candidate: ['丁'], remaining: 7 }).result).toBeDefined();
+  for (const remaining of [0.91, 3.8, 7])
+    expect(fit({ candidate: ['丁'], remaining }).result).toBeDefined();
 });
 test('manual spacing scale complex shaping unqualified faces fields and unsupported ownership retain all guards', () => {
   for (const delta of [

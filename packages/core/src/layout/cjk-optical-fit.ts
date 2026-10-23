@@ -8,7 +8,7 @@ import { automaticTextSpacingBefore } from './cjk-automatic-spacing.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { isDefaultGraphemeBoundary, segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
-import { canHangCjkPunctuation } from './cjk-spacing.ts';
+import { hangingCjkPunctuationAdvance, hangsWithin } from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import {
@@ -21,6 +21,8 @@ const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const PUNCTUATION = /^[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]$/u;
 const HAS_PUNCTUATION = /[〈《「『【〔〖〘〚（［｛、。〉》」』】〕〗〙〛），．］｝：]/u;
 const TOLERANCE = 0.001;
+// The fit gate weighs expansion in units of 1/64 of an advance (see `expansionGate`).
+const EXPANSION_UNITS = 64;
 // A curly quote in the East Asian font slot fits like the matching bracket.
 function curlyRole(text: string): 'opening' | 'closing' | undefined {
   if (text === '‘' || text === '“') return 'opening';
@@ -198,8 +200,12 @@ function cellsOf(
           span.box.width <= 0
         )
           return undefined;
-        // An all-space group has no ink: it blocks adjacent seams without vetoing others.
-        const ordinaryOpaque = (printableAscii && /[^ ]/u.test(span.text)) || numberMarker;
+        // An all-space group has no ink: it blocks adjacent seams without vetoing others. A word
+        // or a Latin-face curly quote is a glyph that an adjacent blank side can face.
+        const ordinaryOpaque =
+          (printableAscii && /[^ ]/u.test(span.text)) ||
+          /^[A-Za-z0-9‘’“”]+$/u.test(span.text) ||
+          numberMarker;
         cells.push({
           sourceIndex,
           alreadyReduced: 0,
@@ -232,10 +238,20 @@ function cellsOf(
         measureDisplayText(span.text.slice(0, cluster.utf16To), face, measurer)
       )
     );
+    // Authored tracking is not a blank side; the rest of a narrower advance is already compressed.
+    const authoredSpacing = memoized(
+      memo,
+      span,
+      'authored',
+      () => layoutDerivedSpacingStyleForEditing(face).characterSpacingPt
+    );
     let previous = 0;
     for (const [index, cluster] of clusters.entries()) {
       const end = cluster.utf16To === span.text.length ? span.box.width : ends[index]!;
       const width = end - previous;
+      const natural = memoized(memo, span, `n:${cluster.text}`, () =>
+        measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
+      );
       const modelStart = span.range.start + cluster.utf16From;
       let low = 0;
       let high = baselinePieces.length - 1;
@@ -251,11 +267,10 @@ function cellsOf(
         ...(qualifiedCurly ? { qualifiedCurly } : {}),
         alreadyReduced: Math.max(
           0,
-          (baseline.style.characterSpacingPt - span.style.characterSpacingPt) * cluster.text.length
+          (baseline.style.characterSpacingPt - span.style.characterSpacingPt) * cluster.text.length,
+          natural + authoredSpacing * cluster.text.length - width
         ),
-        natural: memoized(memo, span, `n:${cluster.text}`, () =>
-          measureDisplayText(cluster.text, { ...face, characterSpacingPt: 0 }, measurer)
-        ),
+        natural,
         ink: memoized(memo, span, `i:${cluster.text}`, () =>
           measurer.inkBounds?.(cluster.text, face)
         ),
@@ -277,6 +292,17 @@ function cellsOf(
   }
   return cells;
 }
+// A glyph a blank side can face: an ideograph, punctuation, a qualified quote, or a word. A space
+// is not one.
+function fitNeighbour(cell: Cell): boolean {
+  const text = cell.span.text;
+  return (
+    cell.ordinaryOpaque === true ||
+    cell.qualifiedCurly !== undefined ||
+    PUNCTUATION.test(text) ||
+    isCjk(text.codePointAt(0)!)
+  );
+}
 function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: number } } {
   return (
     cell.ink !== undefined &&
@@ -286,6 +312,39 @@ function finiteInk(cell: Cell): cell is Cell & { ink: { left: number; right: num
   );
 }
 
+const blankSided = (cell: Cell): boolean =>
+  cell.qualifiedCurly !== undefined ||
+  OPENING.test(cell.span.text) ||
+  CLOSING.test(cell.span.text) ||
+  cell.span.text === '：';
+/**
+ * A justified line takes another ordinary glyph by compression only when the share of the
+ * compression capacity it spends is at most the expansion that leaving the glyph off would
+ * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
+ * whose gaps the shorter line would spread its room over.
+ */
+function expansionGate(
+  cells: readonly Cell[],
+  sourceCount: number,
+  room: number,
+  deficit: number
+): { readonly capacityBound: number; admits(capacity: number): boolean } {
+  let spread = 0;
+  let capacityBound = 0;
+  let lastLineCell: Cell | undefined;
+  for (const cell of cells) {
+    if (blankSided(cell)) capacityBound += cell.natural / 2;
+    if (cell.sourceIndex >= sourceCount) continue;
+    spread += cell.natural;
+    lastLineCell = cell;
+  }
+  if (lastLineCell) spread -= lastLineCell.natural;
+  return {
+    capacityBound,
+    admits: (capacity) =>
+      room > TOLERANCE && deficit * spread <= room * capacity * EXPANSION_UNITS + TOLERANCE,
+  };
+}
 /** Try a complete protected group without changing the line when it cannot fit. */
 function fitCjkOptically(
   line: PendingLine,
@@ -326,29 +385,25 @@ function fitCjkOptically(
   );
   if (!cells) return undefined;
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
-  // Word only pulls another ordinary glyph when at least half of it fits already.
-  // Its protected trailing punctuation remains part of the same candidate.
-  if (
-    isCjk(first.span.text.codePointAt(0)!) &&
-    !PUNCTUATION.test(first.span.text) &&
-    available - line.width + TOLERANCE < first.natural / 2
-  )
-    return undefined;
-
   const last = cells.at(-1)!;
-  // The final closing bearing is removed first. Its measured ink must stay inside.
   const beforeLast = cells.at(-2);
-  // A final curly quote needs an East Asian character before it; other neighbours have no measured pair.
+  // A final qualified closing quote drops its trailing blank after any glyph, a word included.
   const curlyFinal =
-    last.qualifiedCurly === 'closing' &&
-    beforeLast !== undefined &&
-    isCjk(beforeLast.span.text.codePointAt(0)!) &&
-    !PUNCTUATION.test(beforeLast.span.text);
+    last.qualifiedCurly === 'closing' && beforeLast !== undefined && fitNeighbour(beforeLast);
+  // The final closing bearing is removed first. A bracket's measured ink must stay
+  // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
   if ((CLOSING.test(last.span.text) || curlyFinal) && finiteInk(last)) {
-    const extent = Math.max(last.natural / 2, last.ink.right + (last.span.glyphOffsetPt ?? 0));
+    const inkEnd = curlyFinal ? 0 : last.ink.right + (last.span.glyphOffsetPt ?? 0);
+    const extent = Math.max(last.natural / 2, inkEnd);
     last.reduction = Math.min(deficit, Math.max(0, last.span.box.width - extent));
     deficit -= last.reduction;
   }
+  // Check the expansion gate against an upper bound before any word is shaped for its ink.
+  const gate =
+    isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)
+      ? expansionGate(cells, sourceCount, available - line.width, deficit)
+      : undefined;
+  if (gate && !gate.admits(gate.capacityBound)) return undefined;
   // Shape only a word beside an eligible EA seam, once per cell in this fit.
   // Cache missing outlines too; unrelated opaque text needs no outline at all.
   const opaqueBoundaryInk = new Map<Cell, Cell['ink']>();
@@ -360,38 +415,20 @@ function fitCjkOptically(
     }
     return { ...cell, ink: opaqueBoundaryInk.get(cell) };
   };
+  // A blank side compresses next to any glyph on the line: a closing mark's right side, a
+  // colon's right side, and an opening mark's left side, each up to half its advance. A closing
+  // mark or colon before an opening mark gives both sides.
   const seams: { cell: Cell; capacity: number; left: boolean }[] = [];
   for (let index = 1; index < cells.length; index++) {
     const previous = cells[index - 1]!;
     const current = cells[index]!;
-    const before = previous.span.text;
-    const after = current.span.text;
-    let cell: Cell;
-    let left: boolean;
-    // Curly quotes join only the ideograph and colon seams; nothing measures their other pairs.
-    if (
-      (OPENING.test(after) &&
-        (CLOSING.test(before) ||
-          ((isCjk(before.codePointAt(0)!) || previous.ordinaryOpaque === true) &&
-            !PUNCTUATION.test(before)))) ||
-      (current.qualifiedCurly === 'opening' &&
-        isCjk(before.codePointAt(0)!) &&
-        !PUNCTUATION.test(before))
-    ) {
-      cell = current;
-      left = true;
-    } else if (
-      (before === '：' && (OPENING.test(after) || current.qualifiedCurly === 'opening')) ||
-      (CLOSING.test(before) &&
-        (isCjk(after.codePointAt(0)!) || current.ordinaryOpaque === true) &&
-        !PUNCTUATION.test(after)) ||
-      (previous.qualifiedCurly === 'closing' &&
-        isCjk(after.codePointAt(0)!) &&
-        !PUNCTUATION.test(after))
-    ) {
-      cell = previous;
-      left = false;
-    } else continue;
+    if (!fitNeighbour(previous) || !fitNeighbour(current)) continue;
+    const right =
+      CLOSING.test(previous.span.text) ||
+      previous.span.text === '：' ||
+      previous.qualifiedCurly === 'closing';
+    const left = OPENING.test(current.span.text) || current.qualifiedCurly === 'opening';
+    if (!right && !left) continue;
     if (
       (!previous.ordinaryOpaque && !finiteInk(previous)) ||
       (!current.ordinaryOpaque && !finiteInk(current))
@@ -400,25 +437,42 @@ function fitCjkOptically(
     const previousBoundary = boundaryCell(previous);
     const currentBoundary = boundaryCell(current);
     if (!finiteInk(previousBoundary) || !finiteInk(currentBoundary)) continue;
-    const gap =
+    let gap =
       previous.span.box.width +
       (current.span.glyphOffsetPt ?? 0) +
       currentBoundary.ink.left -
       (previous.span.glyphOffsetPt ?? 0) -
       previousBoundary.ink.right;
-    const capacity = Math.max(
-      0,
-      Math.min(
-        cell.natural / 2 - cell.alreadyReduced,
-        cell.span.box.width - cell.reduction,
-        left ? currentBoundary.ink.left + (current.span.glyphOffsetPt ?? 0) : Infinity,
-        gap
-      )
-    );
-    if (capacity > TOLERANCE) seams.push({ cell, capacity, left });
+    // Both sides of one seam give at most half of the smaller glyph each.
+    const pairHalf = right && left ? Math.min(previous.natural, current.natural) / 2 : Infinity;
+    if (right) {
+      const capacity = Math.max(
+        0,
+        Math.min(
+          Math.min(previous.natural / 2, pairHalf) - previous.alreadyReduced,
+          previous.span.box.width - previous.reduction,
+          gap
+        )
+      );
+      gap -= capacity;
+      if (capacity > TOLERANCE) seams.push({ cell: previous, capacity, left: false });
+    }
+    if (left) {
+      const capacity = Math.max(
+        0,
+        Math.min(
+          Math.min(current.natural / 2, pairHalf) - current.alreadyReduced,
+          current.span.box.width - current.reduction,
+          gap
+        )
+      );
+      if (capacity > TOLERANCE) seams.push({ cell: current, capacity, left: true });
+    }
   }
-  if (deficit > seams.reduce((sum, seam) => sum + seam.capacity, 0) + TOLERANCE) return undefined;
-  // Equal reductions reproduce Word's ordinary/opening, closing/ordinary, and colon seams.
+  const capacity = seams.reduce((sum, seam) => sum + seam.capacity, 0);
+  if (deficit > capacity + TOLERANCE) return undefined;
+  if (gate && !gate.admits(capacity)) return undefined;
+  // The shrink goes in equal shares to every blank side; a side that runs out passes the rest on.
   let active = seams;
   while (deficit > TOLERANCE && active.length) {
     const share = deficit / active.length;
@@ -607,17 +661,15 @@ export function createCjkOpticalFitter(
       x - origin - trailingWidth <= available - line.width + TOLERANCE
     )
       return undefined;
-    if (
-      hangingPunctuation &&
-      canHangCjkPunctuation(
-        candidates.map((candidate) => candidate.text).join(''),
-        pieces[currentIndex]!,
-        available - line.width,
-        x - origin,
-        measurer
-      )
-    )
-      return undefined;
+    const hangAdvance = hangingPunctuation
+      ? hangingCjkPunctuationAdvance(
+          candidates.map((candidate) => candidate.text).join(''),
+          pieces[currentIndex]!,
+          measurer
+        )
+      : undefined;
+    // A group that hangs at its natural width needs no fit.
+    if (hangsWithin(hangAdvance, available - line.width, x - origin)) return undefined;
     const fitted = fitCjkOptically(
       line,
       candidates,

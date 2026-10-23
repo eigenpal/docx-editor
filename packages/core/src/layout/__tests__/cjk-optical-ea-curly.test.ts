@@ -132,8 +132,8 @@ test('the paragraph-wide path leaves curly quotes unchanged', () => {
   unchanged(attempt({ localQualification: false }));
 });
 
-test('an opening curly quote after an opaque Latin word keeps its advance', () => {
-  // The Latin word has an outline, so only the curly rule can refuse this seam.
+test('an opening curly quote after a Latin word gives up its outer blank side', () => {
+  // The Latin word has an outline, so the quote's left side faces measured ink.
   const outlined: TextMeasurer = {
     ...measure,
     textOutline: (text) => ({
@@ -195,8 +195,10 @@ test('an opening curly quote after an opaque Latin word keeps its advance', () =
     x + 36 - 4,
     true
   );
+  expect(result).toBeDefined();
   const quote = [...line.spans, ...(result?.candidate ?? [])].find((span) => span.text === '“');
-  expect(quote?.box.width).toBe(12);
+  // Three blank sides share the 4pt: the full stop, the opening quote, and the closing quote.
+  expect(quote?.box.width).toBeCloseTo(12 - 4 / 3, 8);
 });
 
 test('EA curly fitting requires resolved, untracked, unscaled, simple shaping', () => {
@@ -227,7 +229,8 @@ function layout(
   noPunctuationKerning = false,
   hint = 'eastAsia',
   text = '甲。乙“丙”丁',
-  width = 78
+  width = 78,
+  measurer = measure
 ) {
   const doc = part(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="both"/><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Fixture Latin" w:hAnsi="Fixture Latin" w:eastAsia="Fixture EA" w:hint="${hint}"/><w:sz w:val="24"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
@@ -245,7 +248,7 @@ function layout(
   );
   const lines = linesOf(
     layoutSemanticDocument(doc, 0, {
-      measurer: measure,
+      measurer,
       styleCascade: cascade,
       geometry: {
         width: width + 20,
@@ -279,8 +282,16 @@ test('unhinted curly quotes keep their advances while other seams fit the line',
   for (const quote of quotes) expect(quote.box.width).toBe(12);
 });
 
-const spansOf = (text: string, width: number, hint = 'eastAsia') =>
-  layout(false, hint, text, width).lines.map((line) => line.spans);
+const spansOf = (text: string, width: number, hint = 'eastAsia', measurer = measure) =>
+  layout(false, hint, text, width, measurer).lines.map((line) => line.spans);
+// Latin-face quotes are whole words; their outline supplies the ink a blank side faces.
+const outlined: TextMeasurer = {
+  ...measure,
+  textOutline: (text) => ({
+    path: null,
+    ink: { left: 1, right: 12 * text.length - 1, top: -10, bottom: 2 },
+  }),
+};
 const widthOf = (spans: readonly { text: string; box: { width: number } }[], text: string) =>
   spans.find((span) => span.text === text)?.box.width;
 test('a final closing curly quote after an ideograph loses its trailing bearing', () => {
@@ -292,27 +303,38 @@ test('a final closing curly quote after an ideograph loses its trailing bearing'
   expect(widthOf(unhinted[0]!, '”')).toBe(12);
   expect(widthOf(unhinted[0]!, '。')).toBe(6);
 });
-test('a final closing curly quote after a Latin word keeps its advance', () => {
-  expect(spansOf('甲乙丙。AB”', 78)).toHaveLength(2);
+test('a final closing curly quote after a Latin word loses its trailing bearing', () => {
+  const lines = spansOf('甲乙丙。AB”', 78);
+  expect(lines).toHaveLength(1);
+  expect(widthOf(lines[0]!, '”')).toBe(6);
+  // Nothing else compresses: the other glyphs keep their 72pt.
+  expect(lines[0]!.reduce((sum, s) => sum + s.box.width, 0)).toBe(78);
 });
-test('a colon before an opening curly quote gives up its bearing', () => {
+test('a colon before an opening curly quote shares the fit over both blank sides', () => {
   const hinted = spansOf('甲乙：“丙丁', 66);
   expect(hinted).toHaveLength(1);
-  expect(widthOf(hinted[0]!, '：')).toBe(6);
-  expect(widthOf(hinted[0]!, '“')).toBe(12);
-  expect(spansOf('甲乙：“丙丁', 66, 'default')).toHaveLength(2);
+  expect(widthOf(hinted[0]!, '：')).toBeCloseTo(9, 8);
+  expect(widthOf(hinted[0]!, '“')).toBeCloseTo(9, 8);
 });
-test('curly quotes share no seam with adjacent closing punctuation', () => {
+test('a colon before a Latin-face curly quote gives up its own blank side', () => {
+  const unhinted = spansOf('甲乙：“丙丁', 66, 'default', outlined);
+  expect(unhinted).toHaveLength(1);
+  expect(widthOf(unhinted[0]!, '：')).toBe(6);
+  expect(widthOf(unhinted[0]!, '“')).toBe(12);
+});
+test('curly quotes share the fit with adjacent punctuation', () => {
   const opening = spansOf('甲乙。“丙丁', 66);
-  expect(opening).toHaveLength(2);
-  for (const span of opening.flat()) expect(span.box.width).toBe(12 * span.text.length);
-  // The justified first line spaces its glyphs out; the final quote keeps its natural width.
+  expect(opening).toHaveLength(1);
+  expect(widthOf(opening[0]!, '。')).toBeCloseTo(9, 8);
+  expect(widthOf(opening[0]!, '“')).toBeCloseTo(9, 8);
+  // A final quote after a full stop drops its trailing blank before anything else compresses.
   const final = spansOf('甲乙丙。”', 54);
-  expect(final.map((line) => line.map((s) => s.text).join(''))).toEqual(['甲乙', '丙。”']);
-  expect(final[1]!.reduce((sum, s) => sum + s.box.width, 0)).toBe(36);
+  expect(final).toHaveLength(1);
+  expect(widthOf(final[0]!, '”')).toBe(6);
+  expect(final[0]!.reduce((sum, s) => sum + s.box.width, 0)).toBe(54);
   const closing = spansOf('甲乙丙”。丁', 66).flat();
-  expect(widthOf(closing, '”')).toBe(12);
-  expect(widthOf(closing, '。')).toBe(6);
+  expect(widthOf(closing, '”')).toBeCloseTo(9, 8);
+  expect(widthOf(closing, '。')).toBeCloseTo(9, 8);
 });
 test('a curly quote fits only on the side that faces an East Asian character', () => {
   const hinted = spansOf('甲“OK”就。', 72);
@@ -321,4 +343,23 @@ test('a curly quote fits only on the side that faces an East Asian character', (
   expect(widthOf(hinted[0]!, 'OK')).toBe(24);
   expect(widthOf(hinted[0]!, '”')).toBe(9);
   expect(spansOf('甲“OK”就。', 72, 'default')).toHaveLength(2);
+});
+test('a qualified quote gives its whole half-em even where its ink crosses the middle', () => {
+  const wide: TextMeasurer = {
+    ...measure,
+    inkBounds: (text, style) =>
+      text === '“'
+        ? { left: 5, right: 11 }
+        : text === '”'
+          ? { left: 1, right: 7 }
+          : measure.inkBounds!(text, style),
+  };
+  // The opening quote's left side and the final full stop give 6pt each.
+  const opening = spansOf('甲乙“丙丁。', 60, 'eastAsia', wide);
+  expect(opening).toHaveLength(1);
+  expect(widthOf(opening[0]!, '“')).toBe(6);
+  // The final closing quote drops its whole trailing half.
+  const closing = spansOf('甲乙。丙”', 48, 'eastAsia', wide);
+  expect(closing).toHaveLength(1);
+  expect(widthOf(closing[0]!, '”')).toBe(6);
 });

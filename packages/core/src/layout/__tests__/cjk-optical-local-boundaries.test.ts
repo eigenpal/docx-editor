@@ -237,8 +237,12 @@ test('unresolved faces and authored tracking scaling or complex shaping reject t
   }
 });
 
-test('curly quotes unknown scripts and a non-demand call do not grant new word seams', () => {
-  for (const word of ['“AV”', 'AΩ', 'Aب']) {
+test('a Latin-face quoted word guards its neighbouring seams like any other word', () => {
+  expect(fitWord('“AV”').result).toBeDefined();
+});
+
+test('unknown scripts and a non-demand call do not grant new word seams', () => {
+  for (const word of ['AΩ', 'Aب']) {
     const actual = fitWord(word);
     expect(actual.result).toBeUndefined();
     expect(shapeCalls).toEqual([]);

@@ -190,50 +190,59 @@ test('a witnessed gap is retained conservatively rather than being spent to resc
   expect(result).toBeUndefined();
   expect(snapshot(a.line)).toEqual(before);
 });
-test('closing followed by opening uses only the opening left bearing and leaves the closing advance intact', () => {
+test('a closing mark before an opening mark shares the fit over both blank sides', () => {
   const a = setup({ opening: true }),
     result = a.run();
   expect(result).toBeDefined();
   const closing = a.line.spans.find((s) => s.text === '》')!,
     opening = a.line.spans.find((s) => s.text === '（')!;
-  expect(closing.box.width).toBe(12);
-  expect(closing.style.characterSpacingPt).toBe(0);
-  expect(opening.box.width).toBeCloseTo(10, 8);
-  expect(opening.glyphOffsetPt).toBeCloseTo(-2, 8);
+  expect(closing.box.width).toBeCloseTo(11, 8);
+  expect(closing.style.characterSpacingPt).toBeCloseTo(-1, 8);
+  expect(opening.box.width).toBeCloseTo(11, 8);
+  expect(opening.glyphOffsetPt).toBeCloseTo(-1, 8);
   expect(a.line.width + result!.width).toBeCloseTo(a.available, 8);
   expect(opening.box.x + 8 + opening.glyphOffsetPt! - closing.box.x - 4).toBeGreaterThanOrEqual(0);
 });
-test('opening with missing ink, insufficient left bearing or overlapping prior ink cannot provide a seam', () => {
+test('a seam with missing ink or too little room between the two inks cannot fit', () => {
   for (const inkBounds of [
     (text: string) => (text === '（' ? undefined : measurer.inkBounds!(text, style)),
-    (text: string) => (text === '（' ? { left: 0.5, right: 10 } : measurer.inkBounds!(text, style)),
+    (text: string) =>
+      text === '（'
+        ? { left: 0.5, right: 10 }
+        : text === '》'
+          ? { left: 2, right: 11 }
+          : measurer.inkBounds!(text, style),
     (text: string) => (text === '》' ? { left: 2, right: 22 } : measurer.inkBounds!(text, style)),
   ])
     rejected({ opening: true, measure: { ...measurer, inkBounds } });
 });
-test('a pre-reduced opening cannot spend its already consumed half glyph capacity again', () => {
-  rejected({ opening: true, openingReduction: 5 });
-});
-test('a repeated optical fit retains prior derived reduction and cannot compress the same opening twice', () => {
-  const a = setup({ opening: true, openingReduction: 4 }),
+test('a pre-reduced opening spends only the rest of its half glyph and the closing side takes the remainder', () => {
+  const a = setup({ opening: true, openingReduction: 5 }),
     result = a.run();
   expect(result).toBeDefined();
   expect(a.line.spans.find((s) => s.text === '（')!.box.width).toBeCloseTo(6, 8);
+  expect(a.line.spans.find((s) => s.text === '》')!.box.width).toBeCloseTo(11, 8);
+});
+test('a repeated optical fit keeps prior reductions and never takes more than half of a glyph', () => {
+  const a = setup({ opening: true, openingReduction: 4 }),
+    result = a.run();
+  expect(result).toBeDefined();
+  expect(a.line.spans.find((s) => s.text === '（')!.box.width).toBeCloseTo(7, 8);
+  expect(a.line.spans.find((s) => s.text === '》')!.box.width).toBeCloseTo(11, 8);
   a.line.spans.push(...result!.candidate);
   a.line.width += result!.width;
   a.line.end = 4;
-  const before = snapshot(a.line);
-  expect(
-    a.fit(
-      a.line,
-      4,
-      '丙',
-      { paragraphId: pid, start: 4, end: 5 },
-      12,
-      a.line.width,
-      a.line.width + 10,
-      true
-    )
-  ).toBeUndefined();
-  expect(snapshot(a.line)).toEqual(before);
+  const again = a.fit(
+    a.line,
+    4,
+    '丙',
+    { paragraphId: pid, start: 4, end: 5 },
+    12,
+    a.line.width,
+    a.line.width + 10,
+    true
+  );
+  expect(again).toBeDefined();
+  expect(a.line.spans.find((s) => s.text === '（')!.box.width).toBeCloseTo(6, 8);
+  expect(a.line.spans.find((s) => s.text === '》')!.box.width).toBeCloseTo(10, 8);
 });

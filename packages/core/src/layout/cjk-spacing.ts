@@ -342,6 +342,28 @@ export function compressCjkPieces(
   return result;
 }
 
+/** The advance of the final mark that may hang past the margin, or undefined when none may. */
+export function hangingCjkPunctuationAdvance(
+  text: string,
+  piece: FieldAwarePiece,
+  measurer: TextMeasurer
+): number | undefined {
+  if (piece.projected || piece.measureText !== undefined) return undefined;
+  // Callers check the paragraph's hanging policy first. Ordinary Latin words/spaces must not
+  // allocate a grapheme array on every placement candidate just to discover no punctuation.
+  const tail = text[text.length - 1];
+  if (!tail || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(tail)) return undefined;
+  if (!FULLWIDTH_PUNCTUATION.test(tail) && !eastAsianLanguage(piece.props)) return undefined;
+  const last = segmentGraphemes(text).at(-1)?.text;
+  if (!last || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(last)) return undefined;
+  return measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
+}
+
+/** Whether the text fits the remaining measure once its final mark hangs past the margin. */
+export function hangsWithin(advance: number | undefined, remaining: number, width: number) {
+  return advance !== undefined && width - advance <= remaining + 0.001 && remaining >= -0.001;
+}
+
 export function canHangCjkPunctuation(
   text: string,
   piece: FieldAwarePiece,
@@ -349,14 +371,5 @@ export function canHangCjkPunctuation(
   width: number,
   measurer: TextMeasurer
 ): boolean {
-  if (piece.projected || piece.measureText !== undefined) return false;
-  // Callers check the paragraph's hanging policy first. Ordinary Latin words/spaces must not
-  // allocate a grapheme array on every placement candidate just to discover no punctuation.
-  const tail = text[text.length - 1];
-  if (!tail || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(tail)) return false;
-  if (!FULLWIDTH_PUNCTUATION.test(tail) && !eastAsianLanguage(piece.props)) return false;
-  const last = segmentGraphemes(text).at(-1)?.text;
-  if (!last || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(last)) return false;
-  const advance = measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);
-  return width - advance <= remaining + 0.001 && remaining >= -0.001;
+  return hangsWithin(hangingCjkPunctuationAdvance(text, piece, measurer), remaining, width);
 }
