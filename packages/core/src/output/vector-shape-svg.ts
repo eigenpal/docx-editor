@@ -2,6 +2,7 @@
 // extent axis, and inset outlines (`a:ln algn="in"`).
 import type { VectorShapeProjection } from '../store/package/drawing-projection.ts';
 import type { VectorGradient } from '../store/package/drawing-gradient.ts';
+import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -100,4 +101,51 @@ export function applyGradientFill(
 
 function finiteNumber(value: number): string {
   return Number.isFinite(value) ? String(value) : '0';
+}
+
+let nextShadowId = 0;
+
+/**
+ * The component's outer shadow: its path offset and filled (or stroked, for a line) in the
+ * shadow colour, blurred by half the blur radius as a standard deviation. It is appended
+ * before the component's own path, so it paints underneath.
+ */
+export function appendShadow(
+  document: Document,
+  svg: SVGSVGElement,
+  d: string,
+  component: VectorShapeComponent
+): void {
+  const shadow = component.shadow;
+  if (!shadow || (component.fillHex === null && component.strokeHex === null)) return;
+  const path = document.createElementNS(SVG_NAMESPACE, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill-rule', 'evenodd');
+  // SAFE: the shadow colour is validated sRGB from the projection.
+  path.setAttribute('fill', component.fillHex !== null ? `#${shadow.hex}` : 'none');
+  if (component.strokeHex !== null) {
+    path.setAttribute('stroke', `#${shadow.hex}`);
+    path.setAttribute('stroke-width', finiteNumber(Math.max(1, component.strokeWidthEmu)));
+  }
+  path.setAttribute('opacity', finiteNumber(Math.max(0, Math.min(1, shadow.alpha))));
+  path.setAttribute(
+    'transform',
+    `translate(${finiteNumber(shadow.dxEmu)} ${finiteNumber(shadow.dyEmu)})`
+  );
+  if (shadow.blurEmu > 0) {
+    const id = `docx-shadow-${++nextShadowId}`;
+    const filter = document.createElementNS(SVG_NAMESPACE, 'filter');
+    filter.setAttribute('id', id);
+    filter.setAttribute('x', '-50%');
+    filter.setAttribute('y', '-50%');
+    filter.setAttribute('width', '200%');
+    filter.setAttribute('height', '200%');
+    const blur = document.createElementNS(SVG_NAMESPACE, 'feGaussianBlur');
+    blur.setAttribute('stdDeviation', finiteNumber(shadow.blurEmu / 2));
+    filter.append(blur);
+    svg.append(filter);
+    path.setAttribute('filter', `url(#${id})`);
+  }
+  path.setAttribute('data-docx-shadow', '');
+  svg.append(path);
 }

@@ -267,6 +267,7 @@ export type {
   GradientStop,
   VectorGradient,
 } from '../store/package/drawing-gradient.ts';
+export type { ShapeShadow } from '../store/package/drawing-shape-effects.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,

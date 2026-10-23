@@ -4168,6 +4168,17 @@ export interface ShapeInput {
 }
 
 // @public
+export interface ShapeShadow {
+    // (undocumented)
+    readonly alpha: number;
+    readonly blurEmu: number;
+    readonly dxEmu: number;
+    // (undocumented)
+    readonly dyEmu: number;
+    readonly hex: string;
+}
+
+// @public
 export interface ShapingContext {
     // (undocumented)
     readonly after: string;
@@ -4879,6 +4890,7 @@ export interface VectorShapeComponent {
     readonly fillGradient?: VectorGradient;
     // (undocumented)
     readonly fillHex: string | null;
+    readonly shadow?: ShapeShadow;
     // (undocumented)
     readonly strokeAlpha: number;
     readonly strokeCap?: 'butt' | 'round' | 'square';

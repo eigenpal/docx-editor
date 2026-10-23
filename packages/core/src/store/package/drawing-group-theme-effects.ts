@@ -15,6 +15,14 @@ export function registerGroupThemeEffects(
   effects.set(resolver, effectAt);
 }
 
+/** The theme `a:effectStyle` a style matrix resolver's theme lists at a 1-based index. */
+export function themeEffectStyle(
+  resolver: ShapeStyleMatrixResolver | undefined,
+  index: number
+): OoxmlElement | null {
+  return (resolver && effects.get(resolver)?.(index)) ?? null;
+}
+
 /** Admit only references whose selected theme effect is demonstrably empty. */
 export function identityGroupThemeEffect(
   member: OoxmlElement,

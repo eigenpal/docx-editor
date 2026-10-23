@@ -20,6 +20,7 @@ import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
+import { readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
 import {
   gradientMeanColor,
   placeGradient,
@@ -108,6 +109,8 @@ export interface VectorShapeComponent {
    * `fillHex` then holds the mean of its stops.
    */
   readonly fillGradient?: VectorGradient;
+  /** The outer shadow the shape casts, painted under this component. */
+  readonly shadow?: ShapeShadow;
   /** Authored line ends and joins, inherited from the selected theme line when absent. */
   readonly strokeCap?: 'butt' | 'round' | 'square';
   readonly strokeJoin?: 'round' | 'bevel';
@@ -376,6 +379,7 @@ export function projectShapeComponents(
   const flipH = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipH'));
   const flipV = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipV'));
   const place = shapePointTransform(extent, flipH, flipV, rotation);
+  const shadow = readShapeShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
   const gradient = fillGradient
     ? placeGradient(
         fillGradient,
@@ -411,6 +415,7 @@ export function projectShapeComponents(
         : {}),
       fillHex: pathFill?.hex ?? null,
       fillAlpha: pathFill?.alpha ?? 1,
+      ...(shadow ? { shadow } : {}),
       ...(gradient && pathFill
         ? {
             fillGradient:

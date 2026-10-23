@@ -13,6 +13,7 @@ export function freezeVectorShapeComponent(component: VectorShapeComponent): Vec
       ? { subpathsClosed: Object.freeze([...component.subpathsClosed]) }
       : {}),
     ...(component.arrowheadsEmu ? { arrowheadsEmu: freezePaths(component.arrowheadsEmu) } : {}),
+    ...(component.shadow ? { shadow: Object.freeze({ ...component.shadow }) } : {}),
     ...(component.fillGradient
       ? {
           fillGradient: Object.freeze({

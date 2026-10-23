@@ -7,6 +7,7 @@ import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
 import { vectorShapeInkClip, type SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { gradientShading } from './vector-gradient.ts';
+import { shadowOps } from './vector-shadow.ts';
 
 /** Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic. */
 export function paintVectorShape(
@@ -73,6 +74,7 @@ export function paintVectorShape(
     const geometry = component.subpathsEmu
       .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
       .join('\n');
+    if (component.shadow) out.push(shadowOps(doc, page, component, geometry, unit));
     // A gradient fills inside its own clip; the outline then strokes over it unfilled.
     const gradient = component.fillHex !== null ? component.fillGradient : undefined;
     if (gradient) {

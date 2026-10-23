@@ -18,6 +18,16 @@ export function transformComponent(
   return {
     ...rest,
     ...(inset && scaleX !== 0 && scaleY !== 0 ? { strokeInset: true } : {}),
+    ...(component.shadow
+      ? {
+          shadow: {
+            ...component.shadow,
+            dxEmu: component.shadow.dxEmu * scaleX,
+            dyEmu: component.shadow.dyEmu * scaleY,
+            blurEmu: component.shadow.blurEmu * ((Math.abs(scaleX) + Math.abs(scaleY)) / 2),
+          },
+        }
+      : {}),
     ...(component.fillGradient
       ? {
           fillGradient: {

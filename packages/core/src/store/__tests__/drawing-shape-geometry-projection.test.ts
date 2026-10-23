@@ -214,6 +214,46 @@ describe('gradient fills', () => {
   });
 });
 
+describe('outer shadows', () => {
+  test('a direct outer shadow offsets along its direction in its colour', () => {
+    const effect =
+      '<a:effectLst><a:outerShdw blurRad="40000" dist="20000" dir="5400000">' +
+      '<a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr></a:outerShdw></a:effectLst>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}${effect}`))
+    );
+    const shadow = vector.components[0]!.shadow!;
+    expect(shadow.dxEmu).toBeCloseTo(0, 6);
+    expect(shadow.dyEmu).toBeCloseTo(20000, 6);
+    expect(shadow.blurEmu).toBe(40000);
+    expect(shadow.hex).toBe('000000');
+    expect(shadow.alpha).toBeCloseTo(0.38, 6);
+  });
+
+  test('an empty direct effect list replaces any theme shadow, and none paints by default', () => {
+    const empty = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}<a:effectLst/>`))
+    );
+    expect(empty.components[0]!.shadow).toBeUndefined();
+    const plain = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}`))
+    );
+    expect(plain.components[0]!.shadow).toBeUndefined();
+  });
+
+  test('a hostile shadow distance is clamped', () => {
+    const effect =
+      '<a:effectLst><a:outerShdw blurRad="9999999999" dist="9999999999" dir="0">' +
+      '<a:srgbClr val="000000"/></a:outerShdw></a:effectLst>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}${effect}`))
+    );
+    const shadow = vector.components[0]!.shadow!;
+    expect(shadow.dxEmu).toBeLessThanOrEqual(1_270_000);
+    expect(shadow.blurEmu).toBeLessThanOrEqual(1_270_000);
+  });
+});
+
 describe('drawing canvases', () => {
   const box = (id: number, x: number, text: string) =>
     `<wps:wsp><wps:cNvPr id="${id}" name="Box ${id}"/><wps:cNvSpPr/><wps:spPr>` +
