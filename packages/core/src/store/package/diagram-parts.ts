@@ -9,13 +9,17 @@
 // `r:lo`, `r:qs` and `r:cs` name the layout, quick style and colour parts. They matter only
 // when the saved drawing is missing: the layout engine then draws the diagram from them.
 
+import {
+  CHART_NAMESPACE_URI,
+  createChartPartResolver,
+  type ChartPartResolver,
+} from './chart-parts.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
-import { RELATIONSHIPS_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
-import { resolveRelationship } from './relationships.ts';
+import { internalPartRoot, relationshipAttribute } from './package-part-links.ts';
 import { collectThemeSchemeFaces } from './theme-font-scheme.ts';
 import { packageThemeRoot } from './theme-color-resolution.ts';
 
@@ -55,24 +59,14 @@ export interface DiagramParts {
   readonly fontFamily: string;
 }
 
-/** Resolves the parts behind one `dgm:relIds` element of the owner story part. */
-export type DiagramPartResolver = (relIds: OoxmlElement) => DiagramParts | null;
-
-function internalPartRoot(
-  pkg: OoxmlPackage,
-  ownerPartName: string,
-  relationshipId: string,
-  relationshipType: string
-): { readonly root: OoxmlElement; readonly partName: string } | null {
-  for (const record of pkg.relationships.get(ownerPartName) ?? []) {
-    if (record.id !== relationshipId) continue;
-    if (record.type !== relationshipType || record.targetMode !== 'Internal') return null;
-    const resolved = resolveRelationship(record);
-    if (resolved.mode !== 'Internal' || !resolved.target.ok) return null;
-    const part = pkg.parts.get(resolved.target.partName);
-    return part ? { root: part.root, partName: resolved.target.partName } : null;
-  }
-  return null;
+/**
+ * Resolves the parts behind one `dgm:relIds` element of the owner story part. The same
+ * resolver answers the chart part behind a `c:chart` element through `chart`, so the drawing
+ * projection threads one resolver for every part-backed graphic.
+ */
+export interface DiagramPartResolver {
+  (relIds: OoxmlElement): DiagramParts | null;
+  readonly chart?: ChartPartResolver;
 }
 
 /** `dsp:dataModelExt/@relId` under the data model's `dgm:extLst/a:ext`. */
@@ -94,14 +88,6 @@ function drawingRelationshipId(dataModel: OoxmlElement): string | null {
   return null;
 }
 
-function relationshipAttribute(element: OoxmlElement, localName: string): string | undefined {
-  for (const attribute of element.attributes) {
-    if (attribute.namespaceUri === RELATIONSHIPS_NAMESPACE_URI && attribute.localName === localName)
-      return attribute.value;
-  }
-  return undefined;
-}
-
 const RESOLVERS = new WeakMap<OoxmlPackage, Map<string, DiagramPartResolver>>();
 
 /**
@@ -120,12 +106,15 @@ export function createDiagramPartResolver(
   const cached = byOwner.get(ownerPartName);
   if (cached) return cached;
   const results = new WeakMap<OoxmlElement, DiagramParts | null>();
-  const resolver: DiagramPartResolver = (relIds) => {
+  const resolveDiagram = (relIds: OoxmlElement): DiagramParts | null => {
     if (results.has(relIds)) return results.get(relIds)!;
     const result = resolveDiagramParts(pkg, ownerPartName, relIds);
     results.set(relIds, result);
     return result;
   };
+  const resolver: DiagramPartResolver = Object.assign(resolveDiagram, {
+    chart: createChartPartResolver(pkg, ownerPartName),
+  });
   byOwner.set(ownerPartName, resolver);
   return resolver;
 }
@@ -174,18 +163,19 @@ const partIds = new WeakMap<OoxmlElement, number>();
 let nextPartId = 1;
 
 /**
- * The identity of every diagram part (data model, layout, style, colors, saved drawing) in a
- * package. Layout reuses drawing projections while the story part is unchanged; a changed
- * diagram part must invalidate them too.
+ * The identity of every diagram part (data model, layout, style, colors, saved drawing) and
+ * chart part in a package. Layout reuses drawing projections while the story part is
+ * unchanged; a changed diagram or chart part must invalidate them too.
  */
 export function diagramPartsToken(pkg: OoxmlPackage): string {
   const ids: number[] = [];
-  // Diagram parts are recognised by their root, wherever a relationship places them.
+  // These parts are recognised by their root, wherever a relationship places them.
   for (const part of pkg.parts.values()) {
     const root = part.root;
     if (
       root.namespaceUri !== DIAGRAM_NAMESPACE_URI &&
-      root.namespaceUri !== DIAGRAM_DRAWING_NAMESPACE_URI
+      root.namespaceUri !== DIAGRAM_DRAWING_NAMESPACE_URI &&
+      root.namespaceUri !== CHART_NAMESPACE_URI
     )
       continue;
     let id = partIds.get(part.root);

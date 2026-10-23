@@ -1,6 +1,8 @@
 // What a drawing paints besides a plain picture: a picture frame, a group picture, vector shapes,
-// a text box story, the text of group members, a SmartArt diagram, or a drawing canvas.
+// a text box story, the text of group members, a SmartArt diagram, a chart from its chart part,
+// or a drawing canvas.
 
+import { projectChart } from './chart-projection.ts';
 import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
 import { projectCanvas } from './drawing-canvas-projection.ts';
@@ -88,7 +90,13 @@ export function projectDrawingContent(
   const groupPicture = groupAdmitted ? groupRead.picture : null;
   const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
   if (!groupPicture && !vectorShape) {
-    const diagram = projectDiagram(anchor, extent, ctx) ?? projectCanvas(anchor, extent, ctx);
+    const diagram =
+      projectDiagram(anchor, extent, ctx) ??
+      projectChart(anchor, extent, {
+        resolveChartPart: ctx.resolveDiagramParts?.chart,
+        resolveSchemeColor: ctx.resolveSchemeColor,
+      }) ??
+      projectCanvas(anchor, extent, ctx);
     if (diagram) {
       return {
         groupPicture: null,
