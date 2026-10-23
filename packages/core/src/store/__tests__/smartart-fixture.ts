@@ -87,6 +87,10 @@ export interface SmartArtDocxOptions {
   readonly omitDataId?: boolean;
   /** Extra paragraphs before the diagram paragraph. */
   readonly leadingParagraphs?: number;
+  /** Replace the layout, quick style and colour parts with this XML. */
+  readonly layoutPartXml?: string;
+  readonly stylePartXml?: string;
+  readonly colorsPartXml?: string;
 }
 
 const DEFAULT_STYLE =
@@ -275,13 +279,13 @@ export function smartArtDocx(options: SmartArtDocxOptions = {}): Uint8Array {
     'word/settings.xml': strToU8(SETTINGS),
     'word/diagrams/data1.xml': strToU8(data),
     'word/diagrams/layout1.xml': strToU8(
-      `<dgm:layoutDef xmlns:dgm="${DGM}" uniqueId="urn:test/layout"/>`
+      options.layoutPartXml ?? `<dgm:layoutDef xmlns:dgm="${DGM}" uniqueId="urn:test/layout"/>`
     ),
     'word/diagrams/quickStyle1.xml': strToU8(
-      `<dgm:styleDef xmlns:dgm="${DGM}" uniqueId="urn:test/style"/>`
+      options.stylePartXml ?? `<dgm:styleDef xmlns:dgm="${DGM}" uniqueId="urn:test/style"/>`
     ),
     'word/diagrams/colors1.xml': strToU8(
-      `<dgm:colorsDef xmlns:dgm="${DGM}" uniqueId="urn:test/colors"/>`
+      options.colorsPartXml ?? `<dgm:colorsDef xmlns:dgm="${DGM}" uniqueId="urn:test/colors"/>`
     ),
   };
   if (placement === 'data') {

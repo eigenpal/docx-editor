@@ -210,6 +210,11 @@ export function collectThemeColorScheme(
 }
 
 /** Resolve theme colours and style-matrix entries from one immutable package snapshot. */
+/** The package's theme part root, or null without one. */
+export function packageThemeRoot(pkg: OoxmlPackage): OoxmlElement | null {
+  return relatedRoot(pkg, THEME_RELATIONSHIP, '/word/theme/theme1.xml');
+}
+
 export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShapeThemeResolvers {
   const cached = PACKAGE_THEME_CACHE.get(pkg);
   if (cached) return cached;

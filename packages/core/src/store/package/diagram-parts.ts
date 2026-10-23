@@ -5,6 +5,9 @@
 // drawing part: the shapes Office last laid out. Office writes that relationship on the STORY
 // part (the part holding the `w:drawing`), not on the data part, so it resolves there first.
 // Only parsed internal parts resolve; external targets never load.
+//
+// `r:lo`, `r:qs` and `r:cs` name the layout, quick style and colour parts. They matter only
+// when the saved drawing is missing: the layout engine then draws the diagram from them.
 
 import { findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
@@ -13,6 +16,8 @@ import { RELATIONSHIPS_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 import { resolveRelationship } from './relationships.ts';
+import { collectThemeSchemeFaces } from './theme-font-scheme.ts';
+import { packageThemeRoot } from './theme-color-resolution.ts';
 
 export const DIAGRAM_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
 export const DIAGRAM_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
@@ -23,6 +28,12 @@ const DATA_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData';
 const DRAWING_RELATIONSHIP_TYPE =
   'http://schemas.microsoft.com/office/2007/relationships/diagramDrawing';
+const LAYOUT_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout';
+const STYLE_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle';
+const COLORS_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors';
 
 /** The parts one diagram drawing renders from. */
 export interface DiagramParts {
@@ -32,6 +43,16 @@ export interface DiagramParts {
   readonly drawing: OoxmlElement | null;
   /** Canonical name of the saved drawing part, for diagnostics and cache keys. */
   readonly drawingPartName: string | null;
+  /** Canonical name of the data model part. */
+  readonly dataPartName: string;
+  /** The layout definition root (`dgm:layoutDef`), or null. */
+  readonly layoutDef: OoxmlElement | null;
+  /** The quick style root (`dgm:styleDef`), or null. */
+  readonly styleDef: OoxmlElement | null;
+  /** The colours root (`dgm:colorsDef`), or null. */
+  readonly colorsDef: OoxmlElement | null;
+  /** The theme's body (minor) Latin font, which diagram text uses unless it names one. */
+  readonly fontFamily: string;
 }
 
 /** Resolves the parts behind one `dgm:relIds` element of the owner story part. */
@@ -129,10 +150,23 @@ function resolveDiagramParts(
     drawing !== null &&
     drawing.root.namespaceUri === DIAGRAM_DRAWING_NAMESPACE_URI &&
     drawing.root.localName === 'drawing';
+  const definition = (name: string, type: string, localName: string) => {
+    const id = relationshipAttribute(relIds, name);
+    const part = id ? internalPartRoot(pkg, ownerPartName, id, type) : null;
+    const root = part?.root;
+    return root && root.namespaceUri === DIAGRAM_NAMESPACE_URI && root.localName === localName
+      ? root
+      : null;
+  };
   return {
     dataModel: data.root,
     drawing: valid ? drawing.root : null,
     drawingPartName: valid ? drawing.partName : null,
+    dataPartName: data.partName,
+    layoutDef: definition('lo', LAYOUT_RELATIONSHIP_TYPE, 'layoutDef'),
+    styleDef: definition('qs', STYLE_RELATIONSHIP_TYPE, 'styleDef'),
+    colorsDef: definition('cs', COLORS_RELATIONSHIP_TYPE, 'colorsDef'),
+    fontFamily: collectThemeSchemeFaces(packageThemeRoot(pkg)).minor ?? 'Calibri',
   };
 }
 

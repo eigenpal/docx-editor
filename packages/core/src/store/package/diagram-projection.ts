@@ -17,6 +17,7 @@ import {
 } from './diagram-parts.ts';
 import { findGraphicData, schemaFlagIsUnset } from './drawing-group-frame.ts';
 import { transformComponent } from './drawing-group-transform.ts';
+import { synthesizeDiagramDrawing } from './diagram-layout-synthesis.ts';
 import { readLineProperties } from './drawing-line-properties.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { directFill, resolveColorNode } from './drawing-shape-color.ts';
@@ -333,8 +334,11 @@ function themeKey(context: DiagramProjectionContext): string {
 interface DiagramMemo {
   readonly cx: number;
   readonly cy: number;
-  readonly drawing: OoxmlElement;
+  /** The saved drawing, or the layout definition the drawing was laid out from. */
+  readonly source: OoxmlElement;
   readonly dataModel: OoxmlElement;
+  readonly styleDef: OoxmlElement | null;
+  readonly colorsDef: OoxmlElement | null;
   readonly theme: string;
   readonly result: DiagramProjection | null;
 }
@@ -342,8 +346,9 @@ interface DiagramMemo {
 const PROJECTIONS = new WeakMap<OoxmlElement, DiagramMemo>();
 
 /**
- * The shapes and text of a SmartArt drawing, or null when the drawing is not a diagram, its
- * saved drawing part is missing, or a visible shape is outside the supported subset.
+ * The shapes and text of a SmartArt drawing, or null when the drawing is not a diagram or a
+ * visible shape is outside the supported subset. A diagram saved without its drawing part
+ * is laid out from its data model, layout, quick style and colour parts.
  *
  * Layout keys text by story identity, so an unchanged drawing projects the same objects on
  * every pass: the memo holds one result per anchor, extent, diagram parts and theme.
@@ -360,31 +365,60 @@ export function projectDiagram(
   }
   const relIds = child(data, DIAGRAM_NAMESPACE_URI, 'relIds');
   const parts = relIds ? context.resolveDiagramParts(relIds) : null;
-  if (!parts?.drawing || !parts.drawingPartName) return null;
+  if (!parts) return null;
+  const source = parts.drawing ?? parts.layoutDef;
+  if (!source) return null;
   const theme = themeKey(context);
   const memo = PROJECTIONS.get(anchor);
   if (
     memo &&
     memo.cx === extent.cx &&
     memo.cy === extent.cy &&
-    memo.drawing === parts.drawing &&
+    memo.source === source &&
     memo.dataModel === parts.dataModel &&
+    memo.styleDef === parts.styleDef &&
+    memo.colorsDef === parts.colorsDef &&
     memo.theme === theme
   ) {
     return memo.result;
   }
-  const result = projectDiagramParts(
-    parts.drawing,
-    parts.dataModel,
-    parts.drawingPartName,
-    extent,
-    context
-  );
+  let result: DiagramProjection | null = null;
+  if (parts.drawing && parts.drawingPartName) {
+    result = projectDiagramParts(
+      parts.drawing,
+      parts.dataModel,
+      parts.drawingPartName,
+      extent,
+      context
+    );
+  } else if (parts.layoutDef) {
+    const drawing = synthesizeDiagramDrawing(
+      {
+        dataModel: parts.dataModel,
+        layoutDef: parts.layoutDef,
+        styleDef: parts.styleDef,
+        colorsDef: parts.colorsDef,
+      },
+      extent,
+      { fontFamily: parts.fontFamily, resolveSchemeColor: context.resolveSchemeColor }
+    );
+    result = drawing
+      ? projectDiagramParts(
+          drawing,
+          parts.dataModel,
+          `${parts.dataPartName}#layout`,
+          extent,
+          context
+        )
+      : null;
+  }
   PROJECTIONS.set(anchor, {
     cx: extent.cx,
     cy: extent.cy,
-    drawing: parts.drawing,
+    source,
     dataModel: parts.dataModel,
+    styleDef: parts.styleDef,
+    colorsDef: parts.colorsDef,
     theme,
     result,
   });
