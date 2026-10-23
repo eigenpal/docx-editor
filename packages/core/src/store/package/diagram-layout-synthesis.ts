@@ -13,7 +13,7 @@ import { tableDiagramTextMeasurer, type DiagramTextMeasurer } from './diagram-la
 import { readDiagramModel } from './diagram-layout-model.ts';
 import { solveWithRules } from './diagram-layout-rules.ts';
 import { isSupportedAlgorithm } from './diagram-layout-algorithms.ts';
-import { buildDiagramLayoutTree } from './diagram-layout-tree.ts';
+import { buildDiagramLayoutTree, layoutVariable } from './diagram-layout-tree.ts';
 import type { ShapeSchemeColorResolver } from './drawing-shape-projection.ts';
 import { readOoxmlPart, type OoxmlElement } from './ooxml-tree.ts';
 
@@ -49,6 +49,12 @@ export function synthesizeDiagramDrawing(
   const tree = buildDiagramLayoutTree(model, parts.layoutDef);
   if (!tree) return null;
   if (tree.nodes.some((node) => !isSupportedAlgorithm(node.algorithm.type))) return null;
+  // Hanging, one-sided and assistant branches of organization charts are not modelled.
+  const branched = tree.nodes.some(
+    (node) =>
+      node.algorithm.type === 'hierRoot' && layoutVariable(model, node.pres, 'hierBranch') !== 'std'
+  );
+  if (branched) return null;
   const solution = solveWithRules(tree, extent, {
     measurer: options.measurer ?? tableDiagramTextMeasurer,
     fontFamily: options.fontFamily ?? 'Calibri',

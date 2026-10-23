@@ -5,6 +5,11 @@
 
 import type { DiagramModel } from './diagram-layout-model.ts';
 import { placeCycle, placeSnake } from './diagram-layout-flow.ts';
+import {
+  isHierarchyAlgorithm,
+  placeHierarchy,
+  placeLineConnector,
+} from './diagram-layout-hierarchy.ts';
 import { compositeAxis, type Box, type NodeState } from './diagram-layout-solve.ts';
 
 export interface PlacementContext {
@@ -15,7 +20,17 @@ export interface PlacementContext {
   readonly resolveSelf: (state: NodeState, except: string) => void;
 }
 
-const SUPPORTED = new Set(['composite', 'lin', 'conn', 'tx', 'sp', 'snake', 'cycle']);
+const SUPPORTED = new Set([
+  'composite',
+  'lin',
+  'conn',
+  'tx',
+  'sp',
+  'snake',
+  'cycle',
+  'hierRoot',
+  'hierChild',
+]);
 
 export function isSupportedAlgorithm(type: string): boolean {
   return SUPPORTED.has(type);
@@ -25,12 +40,39 @@ function childStates(context: PlacementContext, state: NodeState): NodeState[] {
   return state.node.children.map((child) => context.states[child.index]!);
 }
 
+/**
+ * `composite`: each child at its own edges and sizes. The children together are then
+ * aligned in the box (`horzAlign`, `vertAlign`; centred by default, `none` to keep them).
+ */
 function placeComposite(context: PlacementContext, state: NodeState): void {
   const box = state.box!;
-  for (const child of childStates(context, state)) {
+  const children = childStates(context, state);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const child of children) {
     const [x, w] = compositeAxis(child.values, ['l', 'r', 'w', 'ctrX'], box.w);
     const [y, h] = compositeAxis(child.values, ['t', 'b', 'h', 'ctrY'], box.h);
     child.box = { x: box.x + x, y: box.y + y, w: Math.max(0, w), h: Math.max(0, h) };
+    minX = Math.min(minX, child.box.x);
+    maxX = Math.max(maxX, child.box.x + child.box.w);
+    minY = Math.min(minY, child.box.y);
+    maxY = Math.max(maxY, child.box.y + child.box.h);
+  }
+  if (children.length === 0) return;
+  const params = state.node.algorithm.params;
+  const shift = (align: string, start: number, end: number, from: number, size: number) => {
+    if (align === 'none' || !(end - start < size)) return 0;
+    if (align === 'l' || align === 't') return from - start;
+    if (align === 'r' || align === 'b') return from + size - end;
+    return from + (size - (end - start)) / 2 - start;
+  };
+  const dx = shift(params.get('horzAlign') ?? 'ctr', minX, maxX, box.x, box.w);
+  const dy = shift(params.get('vertAlign') ?? 'mid', minY, maxY, box.y, box.h);
+  if (dx === 0 && dy === 0) return;
+  for (const child of children) {
+    child.box = { ...child.box!, x: child.box!.x + dx, y: child.box!.y + dy };
   }
 }
 
@@ -269,8 +311,10 @@ export function placeChildren(context: PlacementContext, state: NodeState): bool
   const type = state.node.algorithm.type;
   if (!SUPPORTED.has(type)) return false;
   if (type === 'conn') {
-    if ((state.node.algorithm.params.get('dim') ?? '2D') !== '2D') return false;
-    placeConnector(context, state);
+    const dim = state.node.algorithm.params.get('dim') ?? '2D';
+    if (dim === '1D') placeLineConnector(context, state);
+    else if (dim === '2D') placeConnector(context, state);
+    else return false;
   }
   const box = state.box;
   if (!box) return true;
@@ -278,6 +322,7 @@ export function placeChildren(context: PlacementContext, state: NodeState): bool
   else if (type === 'lin') placeLinear(context, state);
   else if (type === 'snake') placeSnake(context, state);
   else if (type === 'cycle') placeCycle(context, state);
+  else if (isHierarchyAlgorithm(type)) placeHierarchy(context, state);
   else {
     for (const child of childStates(context, state)) child.box = { ...box };
   }

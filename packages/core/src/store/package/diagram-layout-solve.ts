@@ -48,6 +48,10 @@ export interface NodeState {
   flipH: boolean;
   /** Set when the algorithm hides the node (`sp`, or a connector with nothing to join). */
   hidden: boolean;
+  /** How far an enclosing layout scaled its solved sizes down (hierarchies). */
+  scale: number;
+  /** A line connector's path, relative to its box, drawn instead of a preset. */
+  path: readonly { readonly x: number; readonly y: number }[] | null;
 }
 
 export interface EquGroup {
@@ -150,6 +154,19 @@ interface SolveContext {
   readonly overrides: ReadonlyMap<string, number>;
   readonly groups: Map<string, { type: string; members: number[] }>;
   readonly model: DiagramModel;
+  /** `lte`/`gte` limits per target value, by the constraint that set each. */
+  readonly limits: Map<string, Map<string, { readonly op: 'lte' | 'gte'; readonly value: number }>>;
+}
+
+/** A value inside every limit recorded for it. */
+function limited(context: SolveContext, key: string, value: number): number {
+  const limits = context.limits.get(key);
+  if (!limits) return value;
+  let out = value;
+  for (const limit of limits.values()) {
+    out = limit.op === 'lte' ? Math.min(out, limit.value) : Math.max(out, limit.value);
+  }
+  return out;
 }
 
 function matches(node: DiagramLayoutNode, forName: string | null, ptType: string): boolean {
@@ -327,6 +344,7 @@ function setValue(
     const limit = box ? (type === 'w' ? box.w : box.h) : Infinity;
     if (stored > limit) stored = limit;
   }
+  stored = limited(context, overrideKey(state.node.index, type), stored);
   state.values.set(type, stored);
   if (base !== null) state.bases.set(type, base);
   return stored;
@@ -359,7 +377,15 @@ function applyConstraint(
   if (constraint.op === 'gte' || constraint.op === 'lte') {
     if (value === null) return true;
     for (const target of targets) {
-      bounds.push({ state: context.states[target.index]!, constraint, value });
+      const state = context.states[target.index]!;
+      const key = overrideKey(target.index, constraint.type);
+      let limits = context.limits.get(key);
+      if (!limits) context.limits.set(key, (limits = new Map()));
+      limits.set(groupKey, { op: constraint.op, value });
+      // Values set before the limit was known keep inside it too.
+      const current = state.values.get(constraint.type);
+      if (current !== undefined) state.values.set(constraint.type, limited(context, key, current));
+      bounds.push({ state, constraint, value });
     }
     return true;
   }
@@ -375,8 +401,11 @@ function applyConstraint(
   for (const target of targets) {
     const state = context.states[target.index]!;
     if (value === null) {
-      // A constraint naming no value declares the value; it never replaces a set one.
-      if (!state.values.has(constraint.type)) setValue(context, state, constraint.type, 0, null);
+      // A constraint naming no value declares the value as 0; it never replaces a set one.
+      // An equality naming none only groups its targets.
+      if (constraint.op !== 'equ' && !state.values.has(constraint.type)) {
+        setValue(context, state, constraint.type, 0, null);
+      }
       continue;
     }
     const stored = setValue(context, state, constraint.type, value, base);
@@ -444,6 +473,8 @@ function freshState(node: DiagramLayoutNode): NodeState {
     adjust: null,
     flipH: false,
     hidden: false,
+    scale: 1,
+    path: null,
   };
 }
 
@@ -460,6 +491,7 @@ export function solveDiagramLayout(
     states: tree.nodes.map(freshState),
     overrides,
     groups: new Map(),
+    limits: new Map(),
     model: tree.model,
   };
   const rootState = context.states[tree.root.index]!;

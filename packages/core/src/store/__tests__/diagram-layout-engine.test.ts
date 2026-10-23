@@ -31,13 +31,13 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   vList5: { boxes: 32, presets: 32, rotations: 32, fonts: 29, refused: 0 },
   equation1: { boxes: 40, presets: 40, rotations: 40, fonts: 24, refused: 0 },
   list1: { boxes: 0, presets: 12, rotations: 12, fonts: 0, refused: 0 },
-  hList2: { boxes: 0, presets: 24, rotations: 24, fonts: 5, refused: 0 },
+  hList2: { boxes: 24, presets: 36, rotations: 36, fonts: 21, refused: 0 },
   pyramid1: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
   cycle2: { boxes: 24, presets: 24, rotations: 24, fonts: 12, refused: 0 },
-  radial5: { boxes: 24, presets: 56, rotations: 56, fonts: 21, refused: 0 },
+  radial5: { boxes: 24, presets: 56, rotations: 56, fonts: 24, refused: 0 },
   default: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
-  hierarchy1: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
-  hierarchy2: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
+  hierarchy1: { boxes: 52, presets: 68, rotations: 68, fonts: 20, refused: 0 },
+  hierarchy2: { boxes: 44, presets: 44, rotations: 44, fonts: 20, refused: 0 },
   HalfCircleOrganizationChart: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
 };
 

@@ -241,7 +241,8 @@ export function textFits(
       for (const word of hard.split(/\s+/)) {
         if (word === '') continue;
         const w = measurer.width(word, size, family, false);
-        if (w > available) wordsFit = false;
+        // A word at a size the content sets itself overflows whatever the rules do.
+        if (w > available && paragraph.explicitSize === null) wordsFit = false;
         if (current === 0) current = w;
         else if (current + space + w <= available) current += space + w;
         else {

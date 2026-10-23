@@ -61,7 +61,9 @@ export function collectShapes(
     const preset = nodePreset(state);
     const paragraphs = nodeParagraphs(model, state);
     const shows = state.node.showsText && paragraphs.length > 0;
-    const geometry = preset !== null && preset !== 'conn' && !state.node.shape.hideGeometry;
+    const geometry =
+      state.path !== null ||
+      (preset !== null && preset !== 'conn' && !state.node.shape.hideGeometry);
     if (geometry) {
       shapes.push({ owner: state, text: shows ? state : null, textOnly: false });
     } else if (shows) {
@@ -151,7 +153,20 @@ function overrideMarkup(state: NodeState): string {
   return out;
 }
 
+function pathMarkup(path: readonly { readonly x: number; readonly y: number }[]): string {
+  let commands = '';
+  path.forEach((point, i) => {
+    const name = i === 0 ? 'moveTo' : 'lnTo';
+    commands += `<a:${name}><a:pt x="${emu(point.x)}" y="${emu(point.y)}"/></a:${name}>`;
+  });
+  return (
+    '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="0" b="0"/>' +
+    `<a:pathLst><a:path>${commands}</a:path></a:pathLst></a:custGeom><a:noFill/>`
+  );
+}
+
 function geometryMarkup(state: NodeState): string {
+  if (state.path) return pathMarkup(state.path);
   const preset = nodePreset(state) ?? 'rect';
   const adjust = nodeAdjust(state);
   let guides = '';
