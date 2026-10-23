@@ -122,7 +122,8 @@ export interface DataLabelSpec {
   readonly showPercent: boolean;
   readonly showCategory: boolean;
   readonly showSeries: boolean;
-  readonly separator: string;
+  /** Text between the label parts; null until the plot type supplies its default. */
+  readonly separator: string | null;
   readonly position: string | null;
   readonly formatCode: string | null;
   readonly txPr: OoxmlElement | null;
@@ -133,7 +134,7 @@ function labelFlags(element: OoxmlElement, inherited: DataLabelSpec | null): Dat
   if (childFlag(element, 'delete', false)) return null;
   const numFmt = child(element, 'numFmt');
   const linked = numFmt ? schemaAttributeValue(numFmt.attributes, 'sourceLinked') === '1' : true;
-  let separator = inherited?.separator ?? ', ';
+  let separator = inherited?.separator ?? null;
   const separatorElement = child(element, 'separator');
   if (separatorElement) {
     let text = '';
@@ -171,7 +172,10 @@ export function dataLabelFor(
     break;
   }
   if (!spec) return null;
-  return spec.showValue || spec.showPercent || spec.showCategory || spec.showSeries ? spec : null;
+  if (!(spec.showValue || spec.showPercent || spec.showCategory || spec.showSeries)) return null;
+  // Pie labels put each part on its own line unless the file names a separator.
+  const round = plot.kind === 'pie' || plot.kind === 'doughnut' || plot.kind === 'ofPie';
+  return spec.separator === null ? { ...spec, separator: round ? '\n' : ', ' } : spec;
 }
 
 /** The text of one data label. */
@@ -198,5 +202,5 @@ export function dataLabelText(
       )
     );
   }
-  return parts.join(spec.separator);
+  return parts.join(spec.separator ?? ', ');
 }

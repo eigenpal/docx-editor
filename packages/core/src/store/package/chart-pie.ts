@@ -44,6 +44,8 @@ interface PieLabel {
 }
 
 const FIT_SLACK = 0.75;
+/** How far outside labels may reach past the plot area, in points. */
+const LABEL_REACH = 10;
 const DEFAULT_LEADER: ChartStroke = {
   hex: 'A6A6A6',
   alpha: 1,
@@ -139,98 +141,120 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
   const labelStyle = elementText(context.baseText, null);
   const room = outsideLabels && !context.placed ? 2 * 1.38 * labelStyle.sizePt : 0;
   const diameter = Math.max(1, Math.min(box.r - box.l, box.b - box.t) - room);
-  // Exploded slices move out from the full radius; the pie does not shrink to fit them.
-  const radius = diameter / 2;
   const cx = (box.l + box.r) / 2;
   const cy = (box.t + box.b) / 2;
-  const hole = doughnut ? (radius * plot.holeSize) / 100 : 0;
-  const ringWidth = (radius - hole) / rings.length;
-  const pending: PieLabel[] = [];
-  for (const [ringIndex, item] of rings.entries()) {
-    const total = item.values.reduce<number>(
-      (sum, value) => sum + (value !== null && value > 0 ? value : 0),
-      0
-    );
-    if (!(total > 0)) continue;
-    const inner = doughnut ? hole + ringIndex * ringWidth : 0;
-    const outer = doughnut ? inner + ringWidth : radius;
-    let angle = plot.firstSliceAngle;
-    const count = item.values.length;
-    for (let index = 0; index < count; index += 1) {
-      const value = item.values[index];
-      if (value === null || value === undefined || !(value > 0)) continue;
-      const sweep = (value / total) * 360;
-      const middle = angle + sweep / 2;
-      const explosion = (explosionOf(plot, plot.series.indexOf(item), index) / 100) * radius;
-      const radians = (middle * Math.PI) / 180;
-      const ox = cx + explosion * Math.sin(radians);
-      const oy = cy - explosion * Math.cos(radians);
-      const look = seriesLook(
-        plot,
-        item,
-        context.look,
-        variesByPoint(plot) || item.points.has(index) ? { index, count } : undefined
+  // Exploded slices move out from the full radius; the pie does not shrink to fit them.
+  const run = (radius: number, paint: boolean): PieLabel[] => {
+    const hole = doughnut ? (radius * plot.holeSize) / 100 : 0;
+    const ringWidth = (radius - hole) / rings.length;
+    const pending: PieLabel[] = [];
+    for (const [ringIndex, item] of rings.entries()) {
+      const total = item.values.reduce<number>(
+        (sum, value) => sum + (value !== null && value > 0 ? value : 0),
+        0
       );
-      context.scene.path(
-        [slice(ox, oy, outer, inner, angle, angle + sweep)],
-        true,
-        look.fill,
-        look.line,
-        'round'
-      );
-      const spec = dataLabelFor(plot, item, index);
-      if (spec) {
-        const style = elementText(context.baseText, spec.txPr, context.look.resolveSchemeColor);
-        const text = dataLabelText(
-          spec,
-          value,
-          value / total,
-          item.categories?.[index] ?? null,
-          item.name,
-          item.formatCode,
-          context.date1904
+      if (!(total > 0)) continue;
+      const inner = doughnut ? hole + ringIndex * ringWidth : 0;
+      const outer = doughnut ? inner + ringWidth : radius;
+      let angle = plot.firstSliceAngle;
+      const count = item.values.length;
+      for (let index = 0; index < count; index += 1) {
+        const value = item.values[index];
+        if (value === null || value === undefined || !(value > 0)) continue;
+        const sweep = (value / total) * 360;
+        const middle = angle + sweep / 2;
+        const explosion = (explosionOf(plot, plot.series.indexOf(item), index) / 100) * radius;
+        const radians = (middle * Math.PI) / 180;
+        const ox = cx + explosion * Math.sin(radians);
+        const oy = cy - explosion * Math.cos(radians);
+        const look = seriesLook(
+          plot,
+          item,
+          context.look,
+          variesByPoint(plot) || item.points.has(index) ? { index, count } : undefined
         );
-        const block = textBlock(text, style);
-        const width = block.width;
-        const height = lineHeight(style) * block.lines;
-        const sin = Math.sin(radians);
-        const cos = Math.cos(radians);
-        const extent = (width / 2) * Math.abs(sin) + (height / 2) * Math.abs(cos);
-        const position = spec.position ?? (doughnut ? 'ctr' : 'bestFit');
-        const geometry = { cx: ox, cy: oy, inner, outer, from: angle, sweep };
-        const inside = position === 'ctr' || doughnut ? (inner + outer) / 2 : outer - extent - 4;
-        let outside = position === 'outEnd';
-        if (position === 'bestFit') {
-          // A label that does not fit inside its slice moves out, next to the slice.
-          outside = !fitsInSlice(ox + inside * sin, oy - inside * cos, width, height, geometry);
-        }
-        // Outside-end labels keep a little gap; best-fit ones that move out sit at the edge.
-        const distance = outside ? outer + extent + (position === 'outEnd' ? 6 : 0) : inside;
-        const frame = width * 1.3 + style.sizePt * 2;
-        const lx = ox + distance * sin;
-        const ly = oy - distance * cos;
-        pending.push({
-          label: {
-            paragraphs: [[{ text, style }]],
-            align: 'ctr',
-            x: lx - frame / 2,
-            y: ly - height / 2,
-            width: frame,
+        if (paint)
+          context.scene.path(
+            [slice(ox, oy, outer, inner, angle, angle + sweep)],
+            true,
+            look.fill,
+            look.line,
+            'round'
+          );
+        const spec = dataLabelFor(plot, item, index);
+        if (spec) {
+          const style = elementText(context.baseText, spec.txPr, context.look.resolveSchemeColor);
+          const text = dataLabelText(
+            spec,
+            value,
+            value / total,
+            item.categories?.[index] ?? null,
+            item.name,
+            item.formatCode,
+            context.date1904
+          );
+          const block = textBlock(text, style);
+          const width = block.width;
+          const height = lineHeight(style) * block.lines;
+          const sin = Math.sin(radians);
+          const cos = Math.cos(radians);
+          const extent = (width / 2) * Math.abs(sin) + (height / 2) * Math.abs(cos);
+          const position = spec.position ?? (doughnut ? 'ctr' : 'bestFit');
+          const geometry = { cx: ox, cy: oy, inner, outer, from: angle, sweep };
+          const inside = position === 'ctr' || doughnut ? (inner + outer) / 2 : outer - extent - 4;
+          let outside = position === 'outEnd';
+          if (position === 'bestFit') {
+            // A label that does not fit inside its slice moves out, next to the slice.
+            outside = !fitsInSlice(ox + inside * sin, oy - inside * cos, width, height, geometry);
+          }
+          // Outside-end labels keep a little gap; best-fit ones that move out sit at the edge.
+          const distance = outside ? outer + extent + (position === 'outEnd' ? 6 : 0) : inside;
+          const frame = width * 1.3 + style.sizePt * 2;
+          const lx = ox + distance * sin;
+          const ly = oy - distance * cos;
+          pending.push({
+            label: {
+              paragraphs: [[{ text, style }]],
+              align: 'ctr',
+              x: lx - frame / 2,
+              y: ly - height / 2,
+              width: frame,
+              height,
+              rotation: 0,
+            },
+            anchor: { x: ox + outer * sin, y: oy - outer * cos },
+            outside,
+            right: sin >= 0,
+            cx: lx,
+            cy: ly,
+            width,
             height,
-            rotation: 0,
-          },
-          anchor: { x: ox + outer * sin, y: oy - outer * cos },
-          outside,
-          right: sin >= 0,
-          cx: lx,
-          cy: ly,
-          width,
-          height,
-        });
+          });
+        }
+        angle += sweep;
       }
-      angle += sweep;
     }
+    return pending;
+  };
+  // Labels that move out of their slices may reach a little past the plot area, not past the
+  // chart: the pie shrinks until they fit, down to half its size.
+  let radius = diameter / 2;
+  for (let pass = 0; pass < 3 && !context.placed; pass += 1) {
+    let overflow = 0;
+    for (const item of run(radius, false)) {
+      if (!item.outside) continue;
+      overflow = Math.max(
+        overflow,
+        item.cx + item.width / 2 - (box.r + LABEL_REACH),
+        box.l - LABEL_REACH - (item.cx - item.width / 2),
+        box.t - LABEL_REACH - (item.cy - item.height / 2),
+        item.cy + item.height / 2 - (box.b + LABEL_REACH)
+      );
+    }
+    if (overflow <= 0.5) break;
+    radius = Math.max(diameter / 4, radius - overflow);
   }
+  const pending = run(radius, true);
   separate(pending, cy);
   const leader = leaderStroke(rings[0]?.dLbls ?? plot.dLbls, context);
   for (const item of pending) {
