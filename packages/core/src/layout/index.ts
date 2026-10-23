@@ -270,6 +270,8 @@ export type {
 export type { ShapeShadow } from '../store/package/drawing-shape-effects.ts';
 export type { VectorPattern } from '../store/package/drawing-pattern-fill.ts';
 export type { ShapeColor } from '../store/package/drawing-shape-color.ts';
+export type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
+export type { ShapeReflection } from '../store/package/drawing-shape-effects.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,

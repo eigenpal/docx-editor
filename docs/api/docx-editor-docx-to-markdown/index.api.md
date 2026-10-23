@@ -413,8 +413,10 @@ export interface InlineDrawingRecord {
     readonly drawingNodeId: string;
     // (undocumented)
     readonly effects: DrawingImageEffects;
+    readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    // (undocumented)
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
@@ -717,6 +719,12 @@ export type OpenMarkdownDocumentForExportResult = {
 }>;
 
 // @public
+export interface PictureFrameEffects {
+    readonly reflection?: ShapeReflection;
+    readonly softEdgeEmu?: number;
+}
+
+// @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
 signal?: AbortSignal) => Promise<Readonly<{
     bytes: Uint8Array;
@@ -948,6 +956,16 @@ export interface SemanticTrackedChangeArtifactRecord {
     readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface ShapeReflection {
+    // (undocumented)
+    readonly blurEmu: number;
+    readonly distanceEmu: number;
+    readonly endAlpha: number;
+    readonly endPosition: number;
+    readonly startAlpha: number;
 }
 
 // @public

@@ -1606,8 +1606,10 @@ export interface InlineDrawingRecord {
     readonly drawingNodeId: string;
     // (undocumented)
     readonly effects: DrawingImageEffects;
+    readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    // (undocumented)
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
@@ -2837,6 +2839,12 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null;
 
 // @public
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
+
+// @public
+export interface PictureFrameEffects {
+    readonly reflection?: ShapeReflection;
+    readonly softEdgeEmu?: number;
+}
 
 // @public
 export interface PlacedCell {
@@ -4179,6 +4187,16 @@ export interface ShapeInput {
 }
 
 // @public
+export interface ShapeReflection {
+    // (undocumented)
+    readonly blurEmu: number;
+    readonly distanceEmu: number;
+    readonly endAlpha: number;
+    readonly endPosition: number;
+    readonly startAlpha: number;
+}
+
+// @public
 export interface ShapeShadow {
     // (undocumented)
     readonly alpha: number;
@@ -4908,6 +4926,10 @@ export interface VectorShapeComponent {
         y: number;
     }>[])[];
     readonly belowPicture?: true;
+    readonly clipEmu?: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
     // (undocumented)
     readonly fillAlpha: number;
     readonly fillGradient?: VectorGradient;
