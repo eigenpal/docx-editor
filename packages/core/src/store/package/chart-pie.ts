@@ -5,12 +5,7 @@ import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import type { ChartPlot } from './chart-model.ts';
 import { slice, type ChartScene } from './chart-scene.ts';
 import { seriesLook, variesByPoint, type LookContext } from './chart-series.ts';
-import {
-  estimateTextWidth,
-  lineHeight,
-  type ChartLabel,
-  type ChartTextStyle,
-} from './chart-text.ts';
+import { lineHeight, textBlock, type ChartLabel, type ChartTextStyle } from './chart-text.ts';
 import type { Box } from './chart-axes.ts';
 import { childVal } from './chart-model.ts';
 
@@ -20,6 +15,8 @@ export interface PieContext {
   readonly labels: ChartLabel[];
   readonly baseText: ChartTextStyle;
   readonly date1904: boolean;
+  /** The plot area has a manual inner layout. */
+  readonly placed: boolean;
 }
 
 function explosionOf(plot: ChartPlot, seriesIndex: number, pointIndex: number): number {
@@ -42,18 +39,11 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
     item.values.some((_, index) => dataLabelFor(plot, item, index) !== null)
   );
   const labelStyle = elementText(context.baseText, null);
-  let maxExplosion = 0;
-  for (const [seriesIndex] of rings.entries()) {
-    for (let index = 0; index < rings[seriesIndex]!.values.length; index += 1) {
-      maxExplosion = Math.max(
-        maxExplosion,
-        explosionOf(plot, plot.series.indexOf(rings[seriesIndex]!), index)
-      );
-    }
-  }
-  const room = anyLabels ? 2 * 1.73 * labelStyle.sizePt : 0;
+  // An automatic plot area leaves room for labels round the pie; a placed one is the pie.
+  const room = anyLabels && !context.placed ? 2 * 1.73 * labelStyle.sizePt : 0;
   const diameter = Math.max(1, Math.min(box.r - box.l, box.b - box.t) - room);
-  const radius = diameter / 2 / (1 + maxExplosion / 100);
+  // Exploded slices move out from the full radius; the pie does not shrink to fit them.
+  const radius = diameter / 2;
   const cx = (box.l + box.r) / 2;
   const cy = (box.t + box.b) / 2;
   const hole = doughnut ? (radius * plot.holeSize) / 100 : 0;
@@ -103,8 +93,9 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
           item.formatCode,
           context.date1904
         );
-        const width = estimateTextWidth(text, style);
-        const height = lineHeight(style);
+        const block = textBlock(text, style);
+        const width = block.width;
+        const height = lineHeight(style) * block.lines;
         const sin = Math.sin(radians);
         const cos = Math.cos(radians);
         const extent = (width / 2) * Math.abs(sin) + (height / 2) * Math.abs(cos);

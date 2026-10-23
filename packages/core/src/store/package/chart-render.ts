@@ -81,18 +81,23 @@ export function renderChart(
         ? [[{ text: fallback, style }]]
         : [];
     if (paragraphs.length > 0) {
-      const total = paragraphsHeight(paragraphs, style);
       const textWidth = paragraphsWidth(paragraphs);
-      const frame = Math.min(width, textWidth * 1.3 + style.sizePt * 2);
       const manual = readManualLayout(child(titleElement, 'layout'));
       const overlay = childVal(titleElement, 'overlay') === '1';
       const rich = child(child(titleElement, 'tx'), 'rich');
+      // An automatic title wraps past four fifths of the chart width.
+      const wrapWidth = width * 0.8;
+      const wraps = !manual && textWidth > wrapWidth;
+      const frame = wraps ? wrapWidth : textWidth * 1.3 + style.sizePt * 2;
+      const total =
+        paragraphsHeight(paragraphs, style) * (wraps ? Math.ceil(textWidth / wrapWidth) : 1);
       const top = manual ? manual.y * height : box.t - 3.4;
-      const left = manual ? manual.x * width : width / 2 - frame / 2;
+      // A placed title's box starts at its authored corner; its lines centre in that box.
+      const center = manual ? manual.x * width + textWidth / 2 : width / 2;
       labels.push({
         paragraphs,
         align: 'ctr',
-        x: manual ? left - (frame - textWidth) / 2 : left,
+        x: center - frame / 2,
         y: top,
         width: frame,
         height: total,
@@ -152,7 +157,14 @@ export function renderChart(
       );
     }
     for (const plot of round) {
-      paintPie(plot, plotBox, { look, scene, labels, baseText, date1904: model.date1904 });
+      paintPie(plot, plotBox, {
+        look,
+        scene,
+        labels,
+        baseText,
+        date1904: model.date1904,
+        placed: model.plotLayout?.inner === true,
+      });
     }
   }
   if (legendLayout && legendStyle) paintLegend(legendLayout, legendStyle, scene, labels);

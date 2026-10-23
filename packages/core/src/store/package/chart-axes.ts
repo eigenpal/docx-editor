@@ -212,12 +212,14 @@ export function scaleValues(
     date1904
   );
   const labelWidth = estimateTextWidth(estimateLabel, style);
-  const minInterval = vertical ? 1.75 * style.sizePt : labelWidth + 3.5 * style.sizePt;
-  const fitting = Math.floor(0.79 * Math.sqrt(Math.max(1, length)));
+  // A vertical axis keeps two label sizes between ticks; a horizontal one keeps its widest
+  // label clear of the next by three and a half. A fixed percent range takes one tick more.
+  const minInterval = vertical ? 2.05 * style.sizePt : labelWidth + 3.5 * style.sizePt;
+  const fitting = Math.floor(length / minInterval) + (percentFixed ? 1 : 0);
   return autoValueScale({
     dataMin,
     dataMax,
-    lengthPt: Math.min(length, fitting * minInterval),
+    lengthPt: Math.max(1, fitting) * minInterval,
     minIntervalPt: minInterval,
     fixedMin: axis?.min ?? (percentFixed ? (dataMin < 0 ? -1 : 0) : null),
     fixedMax: axis?.max ?? (percentFixed ? 1 : null),

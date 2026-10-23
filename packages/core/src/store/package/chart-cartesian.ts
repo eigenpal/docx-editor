@@ -110,6 +110,23 @@ interface InnerLayout {
   readonly plot: Box;
   readonly categoryRotation: number;
   readonly categorySkip: number;
+  /** Category labels wrap at this width; 0 when they keep one line. */
+  readonly categoryWrap: number;
+}
+
+/** Lines `text` takes when its words wrap at `width`. */
+function wrappedLines(text: string, style: ChartTextStyle, width: number): number {
+  const space = estimateTextWidth(' ', style);
+  let lines = 1;
+  let line = 0;
+  for (const word of text.split(/\s+/).slice(0, 256)) {
+    const wordWidth = estimateTextWidth(word, style);
+    if (line > 0 && line + space + wordWidth > width) {
+      lines += 1;
+      line = wordWidth;
+    } else line += (line > 0 ? space : 0) + wordWidth;
+  }
+  return lines;
 }
 
 /** Paint the plots that use axes inside `outer`. False when the combination is unsupported. */
@@ -247,6 +264,7 @@ export function paintCartesian(
         },
         categoryRotation: 0,
         categorySkip: 1,
+        categoryWrap: 0,
       };
     }
     const box: Box =
@@ -286,6 +304,7 @@ export function paintCartesian(
     }
     let rotation = 0;
     let skip = 1;
+    let wrap = 0;
     for (const view of views) {
       if (!view.labelled || vertical(view.side)) continue;
       const size = view.style.sizePt;
@@ -294,8 +313,25 @@ export function paintCartesian(
         const slot = categorySlot(categories, box.r - box.l);
         const widest = maxWidth(categories.labels, view.style);
         const authoredRotation = bodyRotation(view.axis?.txPr ?? null);
+        // Labels too wide for their slot wrap between words, and turn only when one word
+        // alone is wider than the slot.
+        const wordsFit = categories.labels.every((label) =>
+          label
+            .split(/\s+/)
+            .slice(0, 256)
+            .every((word) => estimateTextWidth(word, view.style) <= slot * 0.98)
+        );
         if (authoredRotation !== null && authoredRotation !== 0) rotation = authoredRotation;
-        else if (widest > slot * 0.98 && categories.count > 1) rotation = -45;
+        else if (widest > slot * 0.98 && categories.count > 1) {
+          if (wordsFit) wrap = slot;
+          else rotation = -45;
+        }
+        if (wrap > 0) {
+          const lines = Math.max(
+            ...categories.labels.map((label) => wrappedLines(label, view.style, wrap))
+          );
+          band += (lines - 1) * lineHeight(view.style);
+        }
         if (rotation !== 0) {
           const radians = (Math.abs(rotation) * Math.PI) / 180;
           band =
@@ -315,7 +351,7 @@ export function paintCartesian(
       const texts = valueLabels(view, model);
       if (texts.length > 0) box.r -= estimateTextWidth(texts[texts.length - 1]!, view.style) / 2;
     }
-    return { plot: box, categoryRotation: rotation, categorySkip: skip };
+    return { plot: box, categoryRotation: rotation, categorySkip: skip, categoryWrap: wrap };
   };
 
   const scaleAll = (inner: Box) => {
@@ -603,13 +639,17 @@ export function paintCartesian(
         });
         continue;
       }
+      // A wrapped label sets in a frame as wide as its slot, so it breaks where the slot ends.
+      const wrapWidth = inner.categoryWrap;
+      const lines = wrapWidth > 0 ? wrappedLines(text, view.style, wrapWidth) : 1;
+      const width = wrapWidth > 0 ? wrapWidth : frame;
       context.labels.push({
         paragraphs: [[{ text, style: view.style }]],
         align: 'ctr',
-        x: at - frame / 2,
-        y: top,
-        width: frame,
-        height,
+        x: at - width / 2,
+        y: view.side === 'b' ? top : top - (lines - 1) * height,
+        width,
+        height: height * lines,
         rotation: 0,
       });
     }

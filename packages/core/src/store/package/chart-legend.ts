@@ -30,12 +30,16 @@ export function legendEntries(
   for (const plot of model.plots) {
     const plotEntries: LegendEntry[] = [];
     const line = plot.kind === 'line' || plot.kind === 'scatter';
-    if (variesByPoint(plot)) {
+    // A lone series whose points are coloured one by one lists its categories.
+    const lone = model.plots.length === 1 && plot.series.length === 1;
+    const varied = variesByPoint(plot);
+    if (varied || (lone && plot.series[0]!.points.size > 0 && !line)) {
       const series = plot.series[0]!;
       const count = series.values.length;
       for (let index = 0; index < count && index < MAX_ENTRIES; index += 1) {
         const text = series.categories?.[index] ?? String(index + 1);
-        plotEntries.push({ text, look: seriesLook(plot, series, context, { index, count }), line });
+        const point = varied || series.points.has(index) ? { index, count } : undefined;
+        plotEntries.push({ text, look: seriesLook(plot, series, context, point), line });
       }
     } else {
       for (const series of plot.series) {

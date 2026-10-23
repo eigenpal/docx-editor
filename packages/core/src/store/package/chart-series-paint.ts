@@ -14,7 +14,7 @@ import {
 } from './chart-scene.ts';
 import { seriesLook, variesByPoint } from './chart-series.ts';
 import type { ChartPaint } from './chart-style.ts';
-import { estimateTextWidth, lineHeight, type ChartLabel } from './chart-text.ts';
+import { estimateTextWidth, lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
 
 export interface SeriesMapping {
   readonly categoryAt: (index: number) => number;
@@ -76,8 +76,9 @@ export function paintSeries(
       context.model.date1904
     );
     if (text === '') return;
-    const width = estimateTextWidth(text, style);
-    const height = lineHeight(style);
+    const block = textBlock(text, style);
+    const width = block.width;
+    const height = lineHeight(style) * block.lines;
     const frame = width * 1.3 + style.sizePt * 2;
     const gap = 0.48 * style.sizePt;
     let cx = anchor.x;

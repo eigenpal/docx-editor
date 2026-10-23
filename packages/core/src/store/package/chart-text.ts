@@ -21,6 +21,7 @@ const A = DRAWINGML_MAIN_NAMESPACE_URI;
 const EMU_PER_POINT = 12_700;
 const MAX_LABEL_UNITS = 512;
 const MAX_FACE_UNITS = 128;
+const MAX_LINES = 16;
 
 /** Advance widths of the default chart face for U+0020..U+007E, in thousandths of an em. */
 const REGULAR_ADVANCES = [
@@ -192,6 +193,35 @@ function runXml(run: ChartTextRun): string {
   );
 }
 
+/** Paragraphs with every line break inside a run made a paragraph of its own. */
+function splitLines(paragraphs: readonly (readonly ChartTextRun[])[]): (readonly ChartTextRun[])[] {
+  const out: ChartTextRun[][] = [];
+  for (const runs of paragraphs) {
+    let current: ChartTextRun[] = [];
+    for (const run of runs) {
+      const lines = run.text.split(/\r\n|\r|\n/);
+      for (const [index, line] of lines.entries()) {
+        if (index > 0) {
+          out.push(current);
+          current = [];
+        }
+        if (line !== '') current.push({ text: line, style: run.style });
+      }
+    }
+    out.push(current);
+  }
+  return out.slice(0, MAX_LINES);
+}
+
+/** Lines of a label text and the widest line's estimated width. */
+export function textBlock(text: string, style: ChartTextStyle): { lines: number; width: number } {
+  const lines = text.split(/\r\n|\r|\n/).slice(0, MAX_LINES);
+  return {
+    lines: lines.length,
+    width: Math.max(...lines.map((line) => estimateTextWidth(line, style))),
+  };
+}
+
 export type ChartTextAlign = 'l' | 'ctr' | 'r';
 
 /** Label frame and text in chart points; the projection converts to EMU. */
@@ -218,7 +248,7 @@ export function chartLabelTextbox(
   partName: string
 ): GroupTextboxProjection | null {
   const paragraphs: string[] = [];
-  for (const runs of label.paragraphs) {
+  for (const runs of splitLines(label.paragraphs)) {
     const usable = runs.filter((run) => run.text !== '' && isValidXmlText(run.text));
     if (usable.length === 0) continue;
     // The paragraph mark takes the size of the text, so it does not raise the line.
