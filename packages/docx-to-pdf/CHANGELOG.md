@@ -1,5 +1,15 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.33.0
+
+### Minor Changes
+
+- 2b4c7b8: Render authored diagonal cell borders in the editor and PDF export.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/fonts-cjk@2.33.0, @docx-editor.dev/fonts@2.33.0
+
 ## 2.32.0
 
 ### Patch Changes

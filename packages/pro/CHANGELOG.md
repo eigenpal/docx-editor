@@ -1,5 +1,12 @@
 # @docx-editor.dev/pro
 
+## 2.33.0
+
+### Patch Changes
+
+- d00c1a4: Keep tracked changes and formatting when you paste rich text, including in suggesting mode, where the paste becomes one proposed insertion. Deleting a field in suggesting mode proposes the deletion, and copied plain text leaves out deleted text. Fixes #1475. Fixes #1397.
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/react@2.33.0, @docx-editor.dev/vue@2.33.0
+
 ## 2.32.0
 
 ### Minor Changes

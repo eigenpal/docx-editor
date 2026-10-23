@@ -1,5 +1,45 @@
 # @docx-editor.dev/core
 
+## 2.33.0
+
+### Minor Changes
+
+- 26b5382: Edit text boxes in headers and footers: double-clicking one opens its header or footer, where you can type, format, paste, move, resize, and delete the box as in the body, including during collaboration. Legacy VML text boxes now move and resize, inline text boxes resize, and typing in a header or footer repaints only the header and footer of each page.
+- 1df327c: Honor the noColumnBalance compatibility option in documents saved in compatibility mode 14 or earlier, or with no declared mode, and keep continuous sections below all preceding columns.
+- 2b4c7b8: Render authored diagonal cell borders in the editor and PDF export.
+- 241085f: Accepting and rejecting tracked changes now resolves formatting with its paragraph mark, nested changes, table and list changes, moves, content controls, fields, equations, and comment text as one decision, and counts changes the same way in every list. A change that stays pending reports why through the `reviewChangesResolved` event, `reviewCodeOfSkip`, and the new `review.locked-content` and `review.bound-content` codes. Fixes #1458, fixes #1459, fixes #1460
+
+### Patch Changes
+
+- b9cbb36: Table AutoFit now counts adjacent East Asian punctuation pairs at their compressed width when it sizes a column to its widest line.
+- 3933348: Inline pictures in the main document text that are wider than the text area extend into the left and right page margins instead of being cut at the text edge.
+- de9e468: Make repeated text measurements in the browser faster.
+- b9cbb36: Inline pictures in table cells that are wider than the cell text extend over the cell margins and are cut at the cell edge instead of the text edge.
+- 41059e7: Use legal CJK paragraph breaks for table autofit minimum widths. Preserve contextual unwrapped maximum widths, paragraph-wide dash cuts, and zero-width-space handling.
+- cf213e9: Table AutoFit minimum widths use the compressed width of adjacent full-width punctuation that shares a line. Fixes #1468
+- d09efc6: Add automatic spacing between East Asian text and Latin letters or digits.
+- d19e13b: East Asian punctuation now compresses to fit a line only in justified paragraphs, so left-aligned, centered, and right-aligned paragraphs wrap instead.
+- 981b790: Add automatic spacing between Latin text and the East Asian text after it for common fonts that a substitute font draws.
+- 6a1464d: Keep the first line of a continued section inside its page content area.
+- cdd42c3: Curly quotes in runs with the East Asian font hint now compress beside East Asian characters, so these lines no longer wrap early.
+- b9cbb36: Documents whose defaults name no East Asian font no longer compress East Asian punctuation to fit a justified line or hang punctuation past the margin.
+- b9cbb36: A justified East Asian line can now hang its final punctuation mark past the margin and compress the punctuation before it in the same line.
+- b9cbb36: Line-end punctuation now hangs past the margin only in justified paragraphs, so Latin punctuation in East Asian language runs stays inside left-aligned, centered, and right-aligned lines.
+- b9cbb36: Inline pictures in headers and footers that are wider than the text area extend into the left and right page margins up to the paper edge instead of being cut at the text edge.
+- 3933348: Reduce layout work on lines that contain no inline picture.
+- b9cbb36: Text that East Asian line-break rules keep together now breaks at its last fitting character when it is wider than a whole line, instead of running past the margin.
+- 89b1ef0: Fit East Asian punctuation on lines that also contain Latin words or digits, without changing the widths of those words.
+- b0c962c: Fix the menu bar, link popup, header and footer options, note options, content control inspector, and dropdown menus staying open when you press the document.
+- fc28dba: Open documents with large, markup-dense parts faster by reading their XML in one pass. Fixes #1464
+- b9cbb36: Justified East Asian lines now compress punctuation on every blank side, including both sides of adjacent marks, and can fit up to nearly one more full-width character.
+- c72b146: Document search no longer keeps a list of story paragraphs for every revision that the undo history holds.
+- e01c2d9: `findMatches` builds each paragraph's searchable text once per paragraph node instead of once per query, so a paragraph an edit did not touch keeps its text across revisions. A host asking many queries of one document paid a walk of every story and a rebuild of every paragraph's text for each one: about 33 ms a query on a 120-page document with footnotes, now under 1 ms. The answers are the same.
+- 57819e9: Indent, outdent, Tab, Enter on an empty item, and the Bullets and Numbering toggles now work on a list item numbered through its paragraph style, such as List Bullet. Fixes #1461, fixes #1462
+- 2a72389: A drawing wrapped top and bottom and offset from its paragraph keeps its band where the drawing is painted when its anchor sits on a later line of the paragraph, so the paragraph's own lines that the band crosses move below it instead of running under the drawing.
+- 6691767: Lines before the anchor of a drawing wrapped top and bottom and positioned from its paragraph now move below the drawing when its band crosses them.
+- 24fdb13: Render legacy text boxes on ovals, rounded rectangles, and preset shapes, with turned boxes, vertical text, dashed outlines, shadows, and boxes that fit their text, in the editor and in PDF export.
+- Updated dependencies: @docx-editor.dev/i18n@2.33.0
+
 ## 2.32.0
 
 ### Minor Changes
