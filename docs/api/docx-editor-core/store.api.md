@@ -1202,6 +1202,16 @@ export class DeterministicMemoryMeter {
 export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnostic[];
 
 // @public
+export type DiagramPartResolver = (relIds: OoxmlElement) => DiagramParts | null;
+
+// @public
+export interface DiagramParts {
+    readonly dataModel: OoxmlElement;
+    readonly drawing: OoxmlElement | null;
+    readonly drawingPartName: string | null;
+}
+
+// @public
 export function diffSemanticDigests(before: SemanticDigest, after: SemanticDigest): DigestDifference[];
 
 // @public
@@ -3625,6 +3635,7 @@ export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
     limits: DrawingProjectionLimits;
     namespaceScope?: ReadonlyMap<string, string>;
     ownerPartName: string;
+    resolveDiagramParts?: DiagramPartResolver;
     resolveRelationship?: RelationshipTargetResolver;
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;

@@ -18,6 +18,9 @@ export interface AbstractNumDefinition {
 export function activeReviewItem(items: readonly ReviewItem[], position: ReviewPosition, order: ReadonlyMap<string, number>): ReviewItem | null;
 
 // @public
+export type AffineMatrix = readonly [number, number, number, number, number, number];
+
+// @public
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
 
 // @public (undocumented)
@@ -1339,6 +1342,13 @@ export interface GlyphOutline {
 
 // @public
 export function glyphSizeFactorOf(style: ResolvedRunStyle): number;
+
+// @public (undocumented)
+export interface GradientStop {
+    readonly alpha: number;
+    readonly hex: string;
+    readonly offset: number;
+}
 
 // @public
 export const GRAPHEME_SEGMENTER_LOCALE: 'und';
@@ -2758,6 +2768,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    readonly descentAnchored?: true;
     readonly gridPitch?: number;
     readonly preserveExactBaseline?: true;
     // (undocumented)
@@ -4848,6 +4859,15 @@ export class UnsupportedScriptError extends Error {
 // @public
 export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number;
 
+// @public
+export interface VectorGradient {
+    readonly coords: readonly number[];
+    // (undocumented)
+    readonly kind: 'linear' | 'radial';
+    readonly matrix: AffineMatrix;
+    readonly stops: readonly GradientStop[];
+}
+
 // @public (undocumented)
 export interface VectorShapeComponent {
     readonly arrowheadsEmu?: readonly (readonly Readonly<{
@@ -4856,6 +4876,7 @@ export interface VectorShapeComponent {
     }>[])[];
     // (undocumented)
     readonly fillAlpha: number;
+    readonly fillGradient?: VectorGradient;
     // (undocumented)
     readonly fillHex: string | null;
     // (undocumented)

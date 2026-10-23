@@ -24,7 +24,9 @@ export type AffineMatrix = readonly [number, number, number, number, number, num
 export interface GradientStop {
   /** Position along the gradient, 0..1. */
   readonly offset: number;
+  /** Validated six-character sRGB hex, without `#`. */
   readonly hex: string;
+  /** Opacity, 0..1. */
   readonly alpha: number;
 }
 
@@ -35,8 +37,11 @@ export interface GradientStop {
  */
 export interface VectorGradient {
   readonly kind: 'linear' | 'radial';
+  /** Stops in offset order; at least two. */
   readonly stops: readonly GradientStop[];
+  /** `[x1, y1, x2, y2]` for a linear gradient, `[cx, cy, r]` for a radial one. */
   readonly coords: readonly number[];
+  /** Gradient space onto the component's point space. */
   readonly matrix: AffineMatrix;
 }
 

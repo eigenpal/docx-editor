@@ -194,6 +194,7 @@ export {
   type SourceCrop,
 } from '../package/drawing-projection.ts';
 export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';
+export type { DiagramPartResolver, DiagramParts } from '../package/diagram-parts.ts';
 
 export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
 export {
