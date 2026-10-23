@@ -288,6 +288,10 @@ function runProperties(
   // `spc` is in hundredths of a point; `w:spacing` is in twips.
   if (spacing !== null && spacing !== 0)
     parts.push(`<w:spacing w:val="${Math.round(spacing / 5)}"/>`);
+  // `kern` is the smallest size, in hundredths of a point, that kerns; `w:kern` is half points.
+  const kern = intAttr(own, 'kern', 0, 400_000) ?? intAttr(fallback, 'kern', 0, 400_000);
+  if (kern !== null && kern > 0)
+    parts.push(`<w:kern w:val="${Math.max(1, Math.round(kern / 50))}"/>`);
   parts.push(`<w:sz w:val="${halfPoints}"/><w:szCs w:val="${halfPoints}"/>`);
   const underline = pick('u');
   parts.push(`<w:u w:val="${underline && underline !== 'none' ? 'single' : 'none'}"/>`);

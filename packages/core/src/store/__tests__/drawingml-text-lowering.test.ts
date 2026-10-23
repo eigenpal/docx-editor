@@ -351,6 +351,17 @@ describe('DrawingML text lowering', () => {
     expect(lowerRaw(BODY + paragraph('', runs))).toBe('unsupported');
   });
 
+  test('a kerning threshold carries over in half points, and zero leaves kerning off', () => {
+    const kerned = lower(
+      BODY + paragraph('', run('AV', '<a:rPr lang="en-US" sz="1400" kern="1200"/>'))
+    );
+    expect(all(kerned.content, 'kern').map((element) => value(element))).toContain('24');
+    const plain = lower(
+      BODY + paragraph('', run('AV', '<a:rPr lang="en-US" sz="1400" kern="0"/>'))
+    );
+    expect(all(plain.content, 'kern')).toEqual([]);
+  });
+
   test('a long typeface name falls back to the theme font instead of repeating per run', () => {
     const face = 'F'.repeat(4096);
     const runs = Array.from(

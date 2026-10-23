@@ -749,7 +749,9 @@ export function layoutTextboxStory(
 
   // Word clips overflow at the box. Keep fragments that START inside the content height so a
   // partially visible line still paints (the container clips precisely); drop fully-below ones.
-  if (fit === undefined && flowHeight > contentHeight + 0.001) {
+  // DrawingML shape text does not clip: lines past the box keep painting around it.
+  const overflows = story.drawingText === true;
+  if (fit === undefined && !overflows && flowHeight > contentHeight + 0.001) {
     const kept = fragments.filter((fragment) => fragment.box.y < contentHeight - 0.001);
     if (kept.length < fragments.length) {
       collectDrawingResourceTokens(
@@ -763,7 +765,12 @@ export function layoutTextboxStory(
 
   // Vertical anchoring positions the flowed content inside the box; overflow pins to the top
   // (offsets never go negative, matching Word's clip-from-top behaviour).
-  const slack = fit === undefined ? Math.max(0, contentHeight - flowHeight) : 0;
+  const slack =
+    fit === undefined
+      ? overflows
+        ? contentHeight - flowHeight
+        : Math.max(0, contentHeight - flowHeight)
+      : 0;
   const anchorOffset =
     story.verticalAnchor === 'center' ? slack / 2 : story.verticalAnchor === 'bottom' ? slack : 0;
 
@@ -774,6 +781,10 @@ export function layoutTextboxStory(
       ? { x: fit.frame.x, y: fit.frame.y }
       : { x: frame.x, y: frame.y + anchorOffset },
     ...chrome,
+    // An overflowing DrawingML story reports the box its lines cover, so paint keeps them.
+    ...(overflows && fit === undefined
+      ? { contentHeight: Math.max(contentHeight, flowHeight) }
+      : {}),
     contentWidth,
     ...(unwrappedWidth > 0 ? { extentWidth: unwrappedWidth + insetLeft + insetRight } : {}),
     ...(fit
