@@ -117,13 +117,13 @@ test('custom components preserve context and clean up on repaint, null, and unmo
   }
 });
 
-test('the public Vue editor customizes the sample canvas', async () => {
+test('the public Vue editor customizes the sample chart', async () => {
   const { readFileSync } = await import('node:fs');
   const { DocxEditor } = await import('../src/components/DocxEditor');
   const { flush } = await import('./helpers/mount');
   const source = new Uint8Array(
     readFileSync(
-      new URL('../../core/src/output/__tests__/fixtures/unsupported-canvas.docx', import.meta.url)
+      new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
     )
   );
   const container = document.createElement('div');
@@ -143,7 +143,7 @@ test('the public Vue editor customizes the sample canvas', async () => {
                 element.drawing
                   ? h(
                       'button',
-                      { 'data-testid': 'canvas-custom' },
+                      { 'data-testid': 'chart-custom' },
                       element.drawing?.placeholderGraphicKind ?? 'graphic'
                     )
                   : null,
@@ -153,8 +153,8 @@ test('the public Vue editor customizes the sample canvas', async () => {
   });
   app.mount(container);
   await flush();
-  await waitForElement(container, '[data-testid="canvas-custom"]');
-  expect(container.querySelector('[data-testid="canvas-custom"]')!.textContent).toBe('graphic');
+  await waitForElement(container, '[data-testid="chart-custom"]');
+  expect(container.querySelector('[data-testid="chart-custom"]')!.textContent).toBe('graphic');
   expect(container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!.hidden).toBe(
     true
   );
@@ -213,7 +213,7 @@ test('Vue sugar scoped slots retain context and restore fallback for empty conte
   const { flush } = await import('./helpers/mount');
   const source = new Uint8Array(
     readFileSync(
-      new URL('../../core/src/output/__tests__/fixtures/unsupported-canvas.docx', import.meta.url)
+      new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
     )
   );
   const visible = ref(true);

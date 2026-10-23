@@ -77,7 +77,7 @@ test('close commands keep closed shapes and do not add open-line decorations', (
 test('unsupported visible ends, invalid flips and unknown presets remain refused', () => {
   for (const options of [
     { flip: 'flipH="yes"' },
-    { geom: 'bentConnector3' },
+    { geom: 'notAPreset' },
     { ends: '<a:tailEnd type="stealth"/>' },
     { ends: '<a:tailEnd type="triangle" w="url(x)"/>' },
   ]) {

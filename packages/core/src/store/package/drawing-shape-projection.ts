@@ -478,6 +478,9 @@ function shapePaths(
   if (custGeom) {
     const polygons = readCustomPolygons(custGeom, extent, pointBudget);
     if (polygons) return [polygons];
+    // Only what the polygon reader cannot express goes to the engine. A path the reader
+    // refuses for its sizes, such as a zero path space on a sized axis, stays refused.
+    if (!needsGeometryEngine(custGeom)) return null;
   }
   const geometry = readShapeGeometry(spPr, extent);
   if (!geometry) return null;
@@ -488,6 +491,25 @@ function shapePaths(
   if (points > pointBudget.remaining) return null;
   pointBudget.remaining -= points;
   return geometry.paths;
+}
+
+/** Whether a custom geometry uses arcs, quadratic curves, guides, or per-path paint modes. */
+function needsGeometryEngine(custGeom: OoxmlElement): boolean {
+  for (const list of custGeom.children) {
+    if (!isElement(list) || list.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
+    if (list.localName === 'gdLst' && list.children.some(isElement)) return true;
+    if (list.localName !== 'pathLst') continue;
+    for (const path of list.children) {
+      if (!isElement(path)) continue;
+      const fillMode = schemaAttributeValue(path.attributes, 'fill');
+      if (fillMode !== undefined && fillMode !== 'norm') return true;
+      if (schemaFlagIsUnset(schemaAttributeValue(path.attributes, 'stroke') ?? '1')) return true;
+      for (const command of path.children) {
+        if (isElement(command) && ['arcTo', 'quadBezTo'].includes(command.localName)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** The polygon reader's view of an `a:custGeom`: one filled and stroked path set. */

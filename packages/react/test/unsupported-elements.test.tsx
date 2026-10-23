@@ -90,13 +90,13 @@ test('null keeps the default, and changes apply without repainting', () => {
   expect(container.querySelector('b')).toBeNull();
 });
 
-test('the sample canvas uses the public editor override and saves its original content', async () => {
+test('the sample chart uses the public editor override and saves its original content', async () => {
   const { readFileSync } = await import('node:fs');
   const { unzipSync, strFromU8 } = await import('fflate');
   const { DocxEditor } = await import('../src/index.ts');
   const source = new Uint8Array(
     readFileSync(
-      new URL('../../core/src/output/__tests__/fixtures/unsupported-canvas.docx', import.meta.url)
+      new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
     )
   );
   let editor: import('@docx-editor.dev/core/editor').DocxEditorInstance | undefined;
@@ -111,19 +111,19 @@ test('the sample canvas uses the public editor override and saves its original c
       <DocxEditor.UnsupportedElement>
         {({ element }) =>
           element.drawing ? (
-            <button data-testid="canvas-custom">{element.drawing?.placeholderGraphicKind}</button>
+            <button data-testid="chart-custom">{element.drawing?.placeholderGraphicKind}</button>
           ) : null
         }
       </DocxEditor.UnsupportedElement>
     </DocxEditor>
   );
   await waitFor(() => {
-    expect(view.container.querySelector('[data-testid="canvas-custom"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="chart-custom"]')).not.toBeNull();
     expect(
       view.container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!.hidden
     ).toBe(true);
   });
-  expect(view.getByTestId('canvas-custom').textContent).toBe('graphic');
+  expect(view.getByTestId('chart-custom').textContent).toBe('graphic');
   const label = view.container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!;
   expect(label.hidden).toBe(true);
   const drawing = view.container.querySelector<HTMLElement>('.docx-drawing-placeholder')!;
@@ -133,11 +133,10 @@ test('the sample canvas uses the public editor override and saves its original c
   const saved = await editor!.save();
   expect(saved).not.toBeNull();
   const xml = strFromU8(unzipSync(new Uint8Array(saved!))['word/document.xml']!);
-  expect(xml).toContain('wpc');
-  expect(xml).toContain('Start');
-  expect(xml).toContain('Process');
-  expect(xml).toContain('End');
-  expect(xml).not.toContain('canvas-custom');
+  expect(xml).toContain('c:chart');
+  expect(xml).toContain('r:id="rId9"');
+  expect(xml).toContain('A simple DrawingML diagram');
+  expect(xml).not.toContain('chart-custom');
   view.rerender(<DocxEditor document={source} chrome={false} />);
   await tick();
   const restoredLabel = view.container.querySelector<HTMLElement>(
@@ -155,7 +154,7 @@ test('public custom components retain local state across edits and restore the f
   const { DocxEditor } = await import('../src/index.ts');
   const source = new Uint8Array(
     readFileSync(
-      new URL('../../core/src/output/__tests__/fixtures/unsupported-canvas.docx', import.meta.url)
+      new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
     )
   );
   let editor: import('@docx-editor.dev/core/editor').DocxEditorInstance | undefined;
@@ -231,7 +230,7 @@ test('custom inputs keep native menus and own keyboard, input, and drop events',
   const { DocxEditor } = await import('../src/index.ts');
   const source = new Uint8Array(
     readFileSync(
-      new URL('../../core/src/output/__tests__/fixtures/unsupported-canvas.docx', import.meta.url)
+      new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
     )
   );
   let editor: import('@docx-editor.dev/core/editor').DocxEditorInstance | undefined;

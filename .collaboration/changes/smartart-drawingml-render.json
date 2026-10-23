@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "SmartArt diagrams and drawing canvases have no graphic projection and paint a placeholder.",
+  "after": "SmartArt diagrams render from their saved drawing part and drawing canvases render their members, read-only, without changing their source XML or package parts.",
+  "reason": "Only graphic projection and paint change. Shared nodes, text offsets, operations, diagram parts, and package serialization remain unchanged; joining peers render the same diagrams from the shared package.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/diagram-drawings.test.ts",
+    "packages/core/src/store/__tests__/diagram-projection.test.ts",
+    "packages/core/src/store/__tests__/diagram-projection-invalidation.test.ts",
+    "packages/core/src/store/__tests__/drawing-shape-geometry-projection.test.ts"
+  ],
+  "changeset": "smartart-drawingml-render",
+  "migration": null
+}
