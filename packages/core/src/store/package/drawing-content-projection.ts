@@ -21,6 +21,7 @@ import {
 } from './drawing-shape-projection.ts';
 import { groupTextboxesField, type GroupTextboxProjection } from './group-textbox-projection.ts';
 import { projectPictureFrame } from './drawing-picture-frame.ts';
+import { projectTextboxChrome } from './drawing-textbox-chrome.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
 export interface DrawingContentContext {
@@ -107,15 +108,26 @@ export function projectDrawingContent(
       };
     }
   }
+  const textboxStory = projectTextboxStory(
+    anchor,
+    extent,
+    ctx.resolveSchemeColor,
+    ctx.resolveStyleMatrixReference
+  );
+  // A box whose shape needs more than one solid colour paints that shape as vector components.
+  const chrome =
+    textboxStory && !vectorShape
+      ? projectTextboxChrome(
+          anchor,
+          extent,
+          ctx.resolveSchemeColor,
+          ctx.resolveStyleMatrixReference
+        )
+      : null;
   return {
     groupPicture,
-    vectorShape,
-    textboxStory: projectTextboxStory(
-      anchor,
-      extent,
-      ctx.resolveSchemeColor,
-      ctx.resolveStyleMatrixReference
-    ),
+    vectorShape: vectorShape ?? chrome,
+    textboxStory: chrome && textboxStory ? { ...textboxStory, chromeByVector: true } : textboxStory,
     ...groupTextboxesField(anchor, extent, { picture: null, groupPicture, vectorShape }, ctx),
     paints: groupPicture !== null || vectorShape !== null,
   };

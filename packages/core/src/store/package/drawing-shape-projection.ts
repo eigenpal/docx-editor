@@ -199,6 +199,11 @@ export interface TextboxStoryProjection {
    * lays out without the document's styles and with the DrawingML line rule.
    */
   readonly drawingText?: true;
+  /**
+   * The drawing's `vectorShape` paints the box's fill, outline and effects; the story paints
+   * only its text. The fill and outline fields stay for the text insets they give.
+   */
+  readonly chromeByVector?: true;
 }
 
 /** Shape geometry, turn and text flow of a text box: a legacy VML one, or a DrawingML one. */
@@ -263,7 +268,7 @@ function readStyleReference(
 }
 
 /** The `wps:wsp` under the anchor's graphic data, or null when the payload is something else. */
-function findWspInAnchor(anchor: OoxmlElement): OoxmlElement | null {
+export function findWspInAnchor(anchor: OoxmlElement): OoxmlElement | null {
   const data = findGraphicData(anchor);
   if (!data) return null;
   if (schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return null;

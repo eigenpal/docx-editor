@@ -216,7 +216,14 @@ export class ImageWriter {
       if (chromeTurn) commands.push('Q');
       return commands;
     };
-    const shadow = story.shadow;
+    // A box whose shape paints as vector components: that shape first, under its own ink
+    // clip, then only the text in the box.
+    const vector =
+      story.chromeByVector && d.vectorShape
+        ? paintVectorShape(this.doc, page, visit, this.work)
+        : null;
+    if (vector !== null) out.unshift(vector);
+    const shadow = vector === null ? story.shadow : undefined;
     if (shadow) {
       // The shape again, under itself in the shadow colour, at its page offset. A plain shadow
       // copies the outline, and the text of an unfilled shape; an obscured one is the solid
@@ -275,7 +282,7 @@ export class ImageWriter {
       }
       out.push('Q');
     }
-    out.push(...chrome(story.fillHex, story.strokeHex));
+    if (vector === null) out.push(...chrome(story.fillHex, story.strokeHex));
     out.push('q', ...contentTurn, `${rect(content, 0, 0, height)} W n`, ...body, 'Q', 'Q');
     return out.join('\n');
   }

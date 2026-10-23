@@ -11,8 +11,9 @@ const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const CX = 2_286_000;
 const CY = 914_400;
+const LINE = '<a:ln w="19050"><a:solidFill><a:srgbClr val="2F5496"/></a:solidFill></a:ln>';
 
-function story(prst: string, xfrm = '', bodyPr = '') {
+function projection(prst: string, xfrm = '', bodyPr = '', paint = LINE) {
   const xml =
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
     `xmlns:wps="${WPS}"><w:body><w:p><w:r><w:drawing><wp:inline distT="0" distB="0" ` +
@@ -20,7 +21,7 @@ function story(prst: string, xfrm = '', bodyPr = '') {
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr>` +
     `<a:xfrm${xfrm}><a:off x="0" y="0"/><a:ext cx="${CX}" cy="${CY}"/></a:xfrm>` +
     `<a:prstGeom prst="${prst}"><a:avLst/></a:prstGeom>` +
-    `<a:ln w="19050"><a:solidFill><a:srgbClr val="2F5496"/></a:solidFill></a:ln></wps:spPr>` +
+    `${paint}</wps:spPr>` +
     `<wps:txbx><w:txbxContent><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:txbxContent></wps:txbx>` +
     `<wps:bodyPr${bodyPr}/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>` +
     `</w:r></w:p></w:body></w:document>`;
@@ -29,9 +30,13 @@ function story(prst: string, xfrm = '', bodyPr = '') {
     contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
   });
   if (!parsed.ok) throw new Error(parsed.reason);
-  const [projection] = projectDrawingsInPart(parsed.part);
-  expect(projection?.textboxStory).toBeTruthy();
-  return projection!.textboxStory!;
+  const [projected] = projectDrawingsInPart(parsed.part);
+  expect(projected?.textboxStory).toBeTruthy();
+  return projected!;
+}
+
+function story(prst: string, xfrm = '', bodyPr = '') {
+  return projection(prst, xfrm, bodyPr).textboxStory!;
 }
 
 describe('DrawingML text box frames', () => {
@@ -86,5 +91,26 @@ describe('DrawingML text box frames', () => {
     const flipped = story('round1Rect', ' flipH="1"').legacyFrame!;
     expect(flipped.textAreaEmu.left).toBeCloseTo(plain.textAreaEmu.right, 6);
     expect(flipped.textAreaEmu.right).toBeCloseTo(plain.textAreaEmu.left, 6);
+  });
+
+  test('a gradient box paints its shape as vector components under its text', () => {
+    const gradient =
+      '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FFF2CC"/></a:gs>' +
+      '<a:gs pos="100000"><a:srgbClr val="F4B183"/></a:gs></a:gsLst>' +
+      '<a:lin ang="5400000" scaled="0"/></a:gradFill>';
+    const drawing = projection('roundRect', '', '', gradient + LINE);
+    expect(drawing.textboxStory!.chromeByVector).toBe(true);
+    const [shape] = drawing.vectorShape!.components;
+    expect(shape!.fillGradient?.stops).toHaveLength(2);
+    expect(shape!.strokeHex).toBe('2F5496');
+    // The story keeps its outline for the text inset it gives.
+    expect(drawing.textboxStory!.strokeHex).toBe('2F5496');
+  });
+
+  test('a solid box keeps painting as the story box', () => {
+    const solid = '<a:solidFill><a:srgbClr val="DEEAF6"/></a:solidFill>';
+    const drawing = projection('roundRect', '', '', solid + LINE);
+    expect(drawing.textboxStory!.chromeByVector).toBeUndefined();
+    expect(drawing.vectorShape).toBeNull();
   });
 });

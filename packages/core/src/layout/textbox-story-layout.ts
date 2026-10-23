@@ -130,6 +130,11 @@ export interface TextboxStoryLayout {
   /** DrawingML shape text: lines past the box paint outside it, not clipped at the drawing. */
   readonly overflowVisible?: true;
   /**
+   * The drawing's `vectorShape` paints the box; the fill, outline and shadow fields here only
+   * describe it, and painters draw just the text.
+   */
+  readonly chromeByVector?: true;
+  /**
    * Resource identities of the drawings the clip DROPPED, in flow order.
    *
    * The furniture invalidation token walks laid-out records, and a dropped fragment leaves
@@ -587,6 +592,7 @@ export function layoutTextboxStory(
     ...(legacy?.outline ? { outline: legacy.outline } : {}),
     ...(legacy?.rotationDegrees ? { chromeRotationDegrees: legacy.rotationDegrees } : {}),
     ...(story.strokeCentered ? { strokeCentered: true as const } : {}),
+    ...(story.chromeByVector ? { chromeByVector: true as const } : {}),
     ...(story.strokeCap && story.strokeHex !== null ? { strokeCap: story.strokeCap } : {}),
     ...(story.strokeDash && story.strokeHex !== null
       ? { strokeDashPt: dashLengths(story.strokeDash, strokeWidthPt, story.strokeCap) }

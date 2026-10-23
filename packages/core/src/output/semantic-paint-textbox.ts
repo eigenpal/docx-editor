@@ -11,6 +11,8 @@ import type { LayoutBox } from '../layout/semantic-records.ts';
 import type { TextboxStoryLayout } from '../layout/textbox-story-layout.ts';
 import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
 import { applyAccessibility, positionedBox } from './semantic-paint-drawing-box.ts';
+import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
+import { vectorShapeInkClip } from '../layout/vector-shape-ink.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const n = (value: number) => String(Math.round(value * 1000) / 1000);
@@ -177,7 +179,18 @@ export function paintTextboxStory(
   const extentLeft = (drawing.x - drawing.paintBounds.x) * scale;
   const extentTop = (drawing.y - drawing.paintBounds.y) * scale;
 
-  if (story.fillHex !== null || story.strokeHex !== null) {
+  // A box whose shape paints as vector components: that shape, under the text.
+  if (story.chromeByVector && drawing.vectorShape) {
+    const frame = vectorShapeFrame(document, drawing, scale);
+    applyVectorInkReach(
+      outer,
+      frame,
+      drawing.paintBounds,
+      vectorShapeInkClip(drawing, drawing.paintBounds),
+      scale
+    );
+    outer.append(frame);
+  } else if (story.fillHex !== null || story.strokeHex !== null) {
     const box = document.createElement('div');
     box.className = 'docx-drawing-textbox-box';
     box.style.position = 'absolute';
@@ -234,7 +247,7 @@ export function paintTextboxStory(
   }
   outer.append(content);
   // The text of an unfilled shape casts a plain shadow too.
-  const shadow = story.shadow;
+  const shadow = story.chromeByVector ? undefined : story.shadow;
   if (shadow && !shadow.obscured && story.fillHex === null) {
     const alpha = Math.round(shadow.alpha * 255)
       .toString(16)
