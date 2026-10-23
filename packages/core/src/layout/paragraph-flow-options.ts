@@ -99,7 +99,7 @@ export interface ParagraphFlowOptions {
   readonly contentLeft?: number;
   /** Right edge of the containing text column in paragraph-relative coordinates. */
   readonly contentRight?: number;
-  /** @internal Body paint receives its horizontal paper clip after placement. */
+  /** @internal Line placement applies the horizontal clip: the paper, a cell box, or a column. */
   readonly deferInlineDrawingHorizontalClip?: boolean;
   /**
    * Horizontal origin of the active column within page-content coordinates.

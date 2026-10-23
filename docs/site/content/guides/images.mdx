@@ -37,7 +37,7 @@ TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The ori
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
-An inline picture in the main document text that is wider than the text area extends into the left and right page margins. The paper edge crops it. In a multi-column section, a picture extends only to the middle of the gap to a neighboring column. Pictures in table cells, framed paragraphs, headers, footers, footnotes, endnotes, and text boxes stay cropped to their text area. Layout keeps the authored size and the original image.
+An inline picture in the main document text, a header, or a footer that is wider than the text area extends into the left and right page margins. The paper edge crops it. In a multi-column section, a picture extends only to the middle of the gap to a neighboring column. Pictures in table cells, framed paragraphs, footnotes, endnotes, and text boxes stay cropped to their text area. Layout keeps the authored size and the original image.
 
 Inline pictures rotated by 90 or 270 degrees reserve their rotated width and height before effect margins. Text wrapping, pagination, and caret positions use these dimensions. Saving preserves the authored extent and rotation.
 

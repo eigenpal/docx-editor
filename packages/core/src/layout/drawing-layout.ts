@@ -1322,7 +1322,7 @@ export function buildInlineDrawingRecord(options: {
   readonly contentRight: number;
   readonly contentTop?: number;
   readonly contentBottom?: number;
-  /** @internal Body placement applies the horizontal paper clip later. */
+  /** @internal Line placement applies the horizontal clip later. */
   readonly deferHorizontalClip?: boolean;
   readonly revisions?: readonly RevisionAttribution[];
   readonly bidiLevel?: number;

@@ -58,6 +58,11 @@ import { cellBreakKeyInputs, cellBreakKeyParts } from './cell-break-key.ts';
 import { rememberCellLine } from './table-row-geometry-reuse.ts';
 import { alignCellLine } from './cell-line-alignment.ts';
 import {
+  inlinePictureClip,
+  withInlinePictureRoom,
+  type InlinePictureRoom,
+} from './drawing-page-clip.ts';
+import {
   cellParagraphLines,
   zonesReachingCellParagraph,
   type HeldCellBreak,
@@ -271,6 +276,8 @@ export interface TableFlowDeps {
    */
   readonly refFields?: import('./field-ref.ts').RefFieldContext;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
+  /** Where inline pictures may paint sideways: the cell box, or a header's sheet; else the text. */
+  readonly inlinePictureRoom?: InlinePictureRoom | undefined;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /** Per-paragraph semantic projection identity for cached cell lines. */
@@ -538,6 +545,8 @@ function placeCellParagraph(
           ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
           ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
           ...inlineDrawingFlow(deps.inlineDrawingLayout, deps.hostedStory),
+          // Placement clips pictures where alignment put them, to the room or the text column.
+          deferInlineDrawingHorizontalClip: true,
           contentLeft: 0,
           contentRight: cellBoxWidth,
           paragraphStartY: top,
@@ -676,12 +685,12 @@ function placeCellParagraph(
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
     // Spans and inline drawings come from one pen, so they share one origin.
     const penX = originX - (rtl && lineIndex === 0 ? firstLineOffset : 0);
-    const cellClip = Object.freeze({
-      x: originX,
-      y: top,
-      width: cellContentWidth,
-      height: Math.max(0, maxBottom - top),
-    });
+    const cellClip = inlinePictureClip(
+      deps.inlinePictureRoom,
+      { x: originX, width: cellContentWidth },
+      top,
+      maxBottom
+    );
     const placedDrawings = pendingLine.drawings.map((drawing) =>
       Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId })
     );
@@ -1400,6 +1409,8 @@ export function layoutRowFragmentBounded(
     let complete = true;
     let fitted = false;
     let nestedSplitBlocked = false;
+    // A cell crops its own pictures; a header's paper room stops at the table.
+    const cellDeps = withInlinePictureRoom(flowDeps, undefined);
     const flowTo = (right: number, relayout = false): ReturnType<typeof flowBlocksInBoxBounded> =>
       flowBlocksInBoxBounded(
         cell.blocks,
@@ -1408,7 +1419,7 @@ export function layoutRowFragmentBounded(
         contentTop,
         contentMaxBottom,
         depth,
-        relayout ? withoutAnchorSinks(flowDeps) : flowDeps,
+        relayout ? withoutAnchorSinks(cellDeps) : cellDeps,
         cursor,
         cell.styleFormatting,
         true,

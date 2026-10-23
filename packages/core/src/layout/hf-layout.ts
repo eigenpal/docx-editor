@@ -40,7 +40,8 @@ import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
-import { pageClipRegion, type DrawingAnchorFrameContext } from './drawing-layout.ts';
+import type { DrawingAnchorFrameContext } from './drawing-layout.ts';
+import { inlinePictureRoomOf, storyPageClip } from './drawing-page-clip.ts';
 import {
   DrawingExclusionConvergenceError,
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
@@ -528,17 +529,9 @@ export function layoutHeaderFooterStory(
       anchorsWrapText,
       inlineDrawingLayout,
       anchorFrameBase,
-      pageContentClip: () => {
-        const frame = anchorFrameBase();
-        return effectiveCtx?.storyTop !== undefined
-          ? Object.freeze({
-              x: -frame.marginLeft,
-              y: -effectiveCtx.storyTop,
-              width: frame.pageWidth,
-              height: frame.pageHeight,
-            })
-          : pageClipRegion(frame);
-      },
+      pageContentClip: () => storyPageClip(anchorFrameBase(), effectiveCtx?.storyTop),
+      // An inline picture in header or footer text paints to the paper edge, as in the body.
+      inlinePictureRoom: inlinePictureRoomOf(storyPageClip(anchorFrameBase(), undefined)),
       collectAnchoredDrawings,
       columnBoxForParagraph: (paragraphBox: LayoutBox) =>
         Object.freeze({
