@@ -12,7 +12,7 @@ import { readDistances } from './drawing-distances.ts';
 import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { wrapFootprintProjection } from './drawing-wrap-footprint.ts';
-import { groupTextboxesField, hostsTextboxStory } from './group-textbox-projection.ts';
+import { hostsTextboxStory } from './group-textbox-projection.ts';
 import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
@@ -56,19 +56,15 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
-import {
-  groupVectorMembersAreBounded,
-  readGroupPicture,
-  type GroupPictureProjection,
-} from './drawing-group-picture.ts';
+import type { GroupPictureProjection } from './drawing-group-picture.ts';
+import { createDiagramPartResolver, type DiagramPartResolver } from './diagram-parts.ts';
+import { projectDrawingContent } from './drawing-content-projection.ts';
 import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
   findDirectChild,
   parseEmu,
-  projectTextboxStory,
-  projectVectorShape,
   type ShapeSchemeColorResolver,
   type ShapeStyleMatrixResolver,
   type TextboxStoryProjection,
@@ -309,6 +305,7 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
   // solid-geometry subset and placeholders the rest, so the Choice branch is understood.
   'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
   'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
 ]);
 
 const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
@@ -335,6 +332,7 @@ interface ProjectionContext {
   readonly resolveRelationship?: RelationshipTargetResolver;
   readonly resolveSchemeColor?: ShapeSchemeColorResolver;
   readonly resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+  readonly resolveDiagramParts?: DiagramPartResolver;
 }
 
 /** Resolve `(ownerPartName, r:id)` against a package's relationship records. */
@@ -1394,6 +1392,7 @@ type DrawingProjectionContext = Readonly<{
   resolveRelationship?: RelationshipTargetResolver;
   resolveSchemeColor?: ShapeSchemeColorResolver;
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+  resolveDiagramParts?: DiagramPartResolver;
 }>;
 
 /**
@@ -1413,6 +1412,7 @@ export function projectDrawing(
     resolveRelationship?: RelationshipTargetResolver;
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+    resolveDiagramParts?: DiagramPartResolver;
   }>
 ): DrawingProjection | null {
   return projectDrawingWithState(drawing, context, createWalkState());
@@ -1431,6 +1431,7 @@ export function projectDrawingWithState(
     resolveRelationship: context.resolveRelationship,
     resolveSchemeColor: context.resolveSchemeColor,
     resolveStyleMatrixReference: context.resolveStyleMatrixReference,
+    resolveDiagramParts: context.resolveDiagramParts,
   };
   const namespaceScope = context.namespaceScope ?? emptyNamespaceScope();
   const compatibilityMode = isCompatibilityDrawing(drawing);
@@ -1523,33 +1524,14 @@ export function projectDrawingWithState(
           allowOverlap: anchorFlag('allowOverlap') ?? true,
         })
       : null;
-  const groupRead = pictureResult.picture
-    ? null
-    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference, ctx.resolveSchemeColor);
-  const vectorMembers = pictureResult.picture
-    ? null
-    : projectVectorShape(
-        anchor,
-        extent,
-        compatibilityMode,
-        ctx.resolveSchemeColor,
-        ctx.resolveStyleMatrixReference,
-        groupRead?.picture.memberNodeId
-      );
-  // A group paints whole or not at all: the picture needs every other member to paint too,
-  // inside the same bounds as the picture frame.
-  const groupAdmitted =
-    groupRead !== null &&
-    (vectorMembers
-      ? groupVectorMembersAreBounded(vectorMembers, extent)
-      : !groupRead.hasOtherMembers);
-  const groupPicture = groupAdmitted ? groupRead.picture : null;
-  const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
-  const painted = { groupPicture, vectorShape };
-  const textboxStory = pictureResult.picture
-    ? null
-    : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
-  if ((vectorShape || groupPicture) && pictureResult.diagnostic) {
+  const content = projectDrawingContent(
+    anchor,
+    extent,
+    compatibilityMode,
+    pictureResult.picture !== null,
+    ctx
+  );
+  if (content.paints && pictureResult.diagnostic) {
     removeSupersededDrawingDiagnostic(state.diagnostics, pictureResult.diagnostic);
   }
   return freezeDrawingProjection(
@@ -1572,10 +1554,10 @@ export function projectDrawingWithState(
       position,
       anchor: anchorMeta,
       picture: pictureResult.picture,
-      vectorShape,
-      groupPicture,
-      textboxStory,
-      ...groupTextboxesField(anchor, extent, { picture: pictureResult.picture, ...painted }, ctx),
+      vectorShape: content.vectorShape,
+      groupPicture: content.groupPicture,
+      textboxStory: content.textboxStory,
+      ...(content.groupTextboxes ? { groupTextboxes: content.groupTextboxes } : {}),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1595,6 +1577,7 @@ export function projectRunLevelMcDrawing(
     resolveRelationship?: RelationshipTargetResolver;
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+    resolveDiagramParts?: DiagramPartResolver;
     /** Answer an anchored payload that cannot paint with its wrap footprint (layout index). */
     retainWrapFootprint?: boolean;
   }>
@@ -1745,6 +1728,7 @@ function collectDrawingsInPartBounded(
         resolveRelationship: ctx.resolveRelationship,
         resolveSchemeColor: ctx.resolveSchemeColor,
         resolveStyleMatrixReference: ctx.resolveStyleMatrixReference,
+        resolveDiagramParts: ctx.resolveDiagramParts,
         retainWrapFootprint: atomIndex !== undefined,
       });
       if (projected) {
@@ -1791,6 +1775,7 @@ export function projectDrawingsInPart(
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
+    resolveDiagramParts: context?.resolveDiagramParts,
   };
   const out: DrawingProjection[] = [];
   collectDrawingsInPartBounded(part.root, part.name, ctx, out);
@@ -1810,6 +1795,7 @@ export function indexInlineDrawingProjectionsInPart(
     resolveRelationship: context?.resolveRelationship,
     resolveSchemeColor: context?.resolveSchemeColor,
     resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
+    resolveDiagramParts: context?.resolveDiagramParts,
   };
   const out: DrawingProjection[] = [];
   const atomIndex = new Map<string, DrawingProjection>();
@@ -1839,6 +1825,7 @@ export function projectDrawingsInPackage(
       resolveRelationship: createDrawingRelationshipResolver(pkg, partName),
       resolveSchemeColor: theme.resolveSchemeColor,
       resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
+      resolveDiagramParts: createDiagramPartResolver(pkg, partName),
     });
     for (const projection of inPart) projections.push(projection);
   }

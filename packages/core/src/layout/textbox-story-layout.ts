@@ -35,6 +35,7 @@ import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-proje
 import { flowBlocksInBox, type HostedStoryFlowDeps } from './semantic-table-layout.ts';
 import type { BlockFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
+import { drawingTextCascade } from './drawing-text-cascade.ts';
 import { textboxStoryBlocks } from './story-roots.ts';
 import { fitTextboxFrame, textboxContentFrame } from './textbox-frame-layout.ts';
 import type { TextboxOutlineProjection } from '../store/package/legacy-vml-textbox-geometry.ts';
@@ -619,6 +620,10 @@ export function layoutTextboxStory(
     };
   }
 
+  // Lowered DrawingML text lays out under its own cascade: no document styles or defaults.
+  const styleCascade = story.drawingText
+    ? drawingTextCascade(options.styleCascade)
+    : options.styleCascade;
   const blocks: readonly OoxmlElement[] = textboxStoryBlocks(
     story.content,
     options.displayMode,
@@ -627,7 +632,7 @@ export function layoutTextboxStory(
   const listItems = textboxStoryListItems(
     story.content,
     options.numberingIndex,
-    options.styleCascade,
+    styleCascade,
     options.displayMode,
     options.revisionAuthorFilter
   );
@@ -642,7 +647,7 @@ export function layoutTextboxStory(
       cache: options.cache,
       producer: `${withFieldResultsProducer(options.producer)}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
       nextLineId: () => `${prefix}-line-${lineCounter++}`,
-      styleCascade: options.styleCascade,
+      styleCascade,
       ...(listItems ? { listItems } : {}),
       ...(options.pageContext ? { pageContext: options.pageContext } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),

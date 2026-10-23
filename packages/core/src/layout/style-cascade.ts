@@ -53,6 +53,7 @@ import {
   type ParagraphBorders,
   type ParagraphLineSpacing,
   type ParagraphSpacing,
+  cascadeLineSpacingFlags,
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
@@ -976,9 +977,7 @@ export function resolveParagraphLayoutInputs(
     lineSpacing: withLineGrid(
       {
         ...paragraphLineSpacing(props),
-        ...(styleCascade?.preserveExactLineBaseline
-          ? { preserveExactBaseline: true as const }
-          : {}),
+        ...cascadeLineSpacingFlags(styleCascade),
       },
       props,
       lineUnitPt,

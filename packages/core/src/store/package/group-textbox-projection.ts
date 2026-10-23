@@ -58,7 +58,7 @@ const XSD_INT_MAX = 2_147_483_647;
  * The text keeps its reading direction under `flipH` and turns upside down under `flipV`, so
  * a flip adds either nothing or a half turn to the authored rotation.
  */
-function memberTextRotation(member: OoxmlElement): number | null {
+export function memberTextRotation(member: OoxmlElement): number | null {
   const spPr = findDirectChild(member.children, {
     namespaceUri: WPS_NAMESPACE_URI,
     localName: 'spPr',

@@ -1,5 +1,6 @@
 // Group-space to shape-space mapping for the children of one `wpg:wgp` group.
 import type { VectorShapeComponent } from './drawing-shape-projection.ts';
+import { compose } from './drawing-gradient.ts';
 
 /**
  * Map a group child's component from child coordinates into the group's extent. A zero scale
@@ -17,6 +18,17 @@ export function transformComponent(
   return {
     ...rest,
     ...(inset && scaleX !== 0 && scaleY !== 0 ? { strokeInset: true } : {}),
+    ...(component.fillGradient
+      ? {
+          fillGradient: {
+            ...component.fillGradient,
+            matrix: compose(
+              [scaleX, 0, 0, scaleY, offset.x, offset.y],
+              component.fillGradient.matrix
+            ),
+          },
+        }
+      : {}),
     subpathsEmu: component.subpathsEmu.map((path) =>
       path.map((point) => ({
         x: offset.x + point.x * scaleX,

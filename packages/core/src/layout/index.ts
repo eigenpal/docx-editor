@@ -262,6 +262,7 @@ export type {
   VectorShapeComponent,
   VectorShapeProjection,
 } from '../store/package/drawing-shape-projection.ts';
+export type { GradientStop, VectorGradient } from '../store/package/drawing-gradient.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,

@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
 import { vectorShapeInkClip, type SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
+import { gradientShading } from './vector-gradient.ts';
 
 /** Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic. */
 export function paintVectorShape(
@@ -72,7 +73,14 @@ export function paintVectorShape(
     const geometry = component.subpathsEmu
       .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
       .join('\n');
-    if (inset) {
+    // A gradient fills inside its own clip; the outline then strokes over it unfilled.
+    const gradient = component.fillHex !== null ? component.fillGradient : undefined;
+    if (gradient) {
+      out.push(`q ${geometry} W* n ${gradientShading(doc, page, gradient, unit)} Q`);
+      if (component.strokeHex !== null) {
+        out.push(inset ? `q ${geometry} W* n ${geometry} S Q` : `${geometry} S`);
+      }
+    } else if (inset) {
       // The fill lies inside the clip already, so one clipped pass fills and strokes.
       out.push(`q ${geometry} W* n`, geometry, component.fillHex !== null ? 'B* Q' : 'S Q');
     } else {

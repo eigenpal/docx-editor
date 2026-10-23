@@ -29,7 +29,6 @@ const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const V = 'urn:schemas-microsoft-com:vml';
 const OWNER = '/word/document.xml';
-const ELLIPSE_POINT_COUNT = 32;
 
 function parsePart(body: string) {
   const xml =
@@ -783,7 +782,7 @@ describe('wps vector shape projection', () => {
     const drawing = doubleRuleShapeDrawing().replace(
       '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
       '<a:solidFill><a:schemeClr val="accent1">' +
-        '<a:lumMod val="100001"/>' +
+        '<a:lumMod val="10000001"/>' +
         '</a:schemeClr></a:solidFill>'
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);
@@ -817,7 +816,8 @@ describe('wps vector shape projection', () => {
     const shape = [...atoms.values()][0]!.vectorShape!;
     expect(shape.components).toHaveLength(2);
     expect(shape.components?.map((component) => component.fillHex)).toEqual(['4472C4', 'FF0000']);
-    expect(shape.components?.[0]!.subpathsEmu[0]).toHaveLength(ELLIPSE_POINT_COUNT);
+    // The ellipse flattens adaptively from the geometry engine.
+    expect(shape.components?.[0]!.subpathsEmu[0]!.length).toBeGreaterThanOrEqual(8);
     expect(shape.components?.[1]!.subpathsEmu[0]![0]).toEqual({ x: 100000, y: 0 });
 
     const rotated = parsePart(
@@ -954,7 +954,7 @@ describe('wps vector shape projection', () => {
   test('unsupported path verbs refuse vector geometry and stay invisible under MC', () => {
     const bezier = doubleRuleShapeDrawing().replace(
       '<a:lnTo><a:pt x="0" y="38100"/></a:lnTo>',
-      '<a:quadBezTo><a:pt x="1" y="1"/><a:pt x="0" y="38100"/></a:quadBezTo>'
+      '<a:spiralTo><a:pt x="1" y="1"/><a:pt x="0" y="38100"/></a:spiralTo>'
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(bezier)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);

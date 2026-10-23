@@ -1,7 +1,7 @@
 // Outline attributes of a `wps:wsp`, inherited attribute by attribute.
 import { findDirectChild, parseEmu } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
-import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
+import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import type { ShapeStyleMatrixResolver } from './drawing-shape-projection.ts';
 
@@ -84,8 +84,9 @@ export function readStyleReferenceIndex(
   readonly index: number;
   readonly color: OoxmlElement['children'][number] | undefined;
 } | null {
+  // `wps:style` and the diagram drawing's `dsp:style` share one shape.
   const style = findDirectChild(wsp.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
+    namespaceUri: wsp.namespaceUri,
     localName: 'style',
   });
   const reference = style

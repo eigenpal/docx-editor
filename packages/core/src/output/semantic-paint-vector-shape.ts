@@ -7,7 +7,7 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { finite } from '../layout/drawing-geometry.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
-import { applyInsetStroke, vectorShapeViewport } from './vector-shape-svg.ts';
+import { applyGradientFill, applyInsetStroke, vectorShapeViewport } from './vector-shape-svg.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -83,6 +83,9 @@ export function vectorShapeFrame(
     path.setAttribute('d', d);
     // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
     path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
+    if (component.fillHex !== null && component.fillGradient) {
+      applyGradientFill(document, svg, path, component.fillGradient);
+    }
     path.setAttribute('fill-rule', 'evenodd');
     if (component.fillAlpha < 1) {
       path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));

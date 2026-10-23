@@ -151,10 +151,27 @@ export interface ParagraphLineSpacing {
   /** Legacy noExtraLineSpacing: retain the natural baseline within an exact-height box. */
   readonly preserveExactBaseline?: true;
   /**
+   * DrawingML shape text: an `auto` line keeps its descent at the bottom of the box, so the
+   * space a multiple adds or removes is above the glyphs, never below them.
+   */
+  readonly descentAnchored?: true;
+  /**
    * Active section line-grid pitch in points (`w:docGrid/@w:linePitch`). Present only when
    * the paragraph snaps to the grid; only with `auto`. See `line-grid.ts`.
    */
   readonly gridPitch?: number;
+}
+
+/** The document-level line rules a style cascade turns on for every paragraph it resolves. */
+export function cascadeLineSpacingFlags(
+  cascade:
+    | { readonly preserveExactLineBaseline?: true; readonly drawingTextLines?: true }
+    | undefined
+): Pick<ParagraphLineSpacing, 'preserveExactBaseline' | 'descentAnchored'> {
+  return {
+    ...(cascade?.preserveExactLineBaseline ? { preserveExactBaseline: true as const } : {}),
+    ...(cascade?.drawingTextLines ? { descentAnchored: true as const } : {}),
+  };
 }
 
 /** Single spacing: what a paragraph that says nothing gets. */
@@ -472,6 +489,9 @@ export function applyLineSpacing(
     };
   }
   const delta = height - naturalHeight;
+  if (spacing.rule === 'auto' && spacing.descentAnchored) {
+    return { height, baseline: naturalBaseline + delta };
+  }
   if (delta < 0) {
     return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
   }

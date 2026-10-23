@@ -1,6 +1,7 @@
 // SVG support for the vector-shape painter: the viewport of a straight line with a zero
 // extent axis, and inset outlines (`a:ln algn="in"`).
 import type { VectorShapeProjection } from '../store/package/drawing-projection.ts';
+import type { VectorGradient } from '../store/package/drawing-gradient.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -56,4 +57,47 @@ export function applyInsetStroke(
   svg.append(clip);
   path.setAttribute('stroke-width', String(2 * Math.max(1, widthEmu)));
   path.setAttribute('clip-path', `url(#${id})`);
+}
+
+let nextGradientId = 0;
+
+/**
+ * Fill `path` with `gradient`: a gradient element in user space, mapped onto the extent's
+ * point space by the gradient's own matrix. Stop colours are validated sRGB from the
+ * projection, so no file string reaches an attribute.
+ */
+export function applyGradientFill(
+  document: Document,
+  svg: SVGSVGElement,
+  path: SVGPathElement,
+  gradient: VectorGradient
+): void {
+  const id = `docx-gradient-${++nextGradientId}`;
+  const element = document.createElementNS(
+    SVG_NAMESPACE,
+    gradient.kind === 'linear' ? 'linearGradient' : 'radialGradient'
+  );
+  element.setAttribute('id', id);
+  element.setAttribute('gradientUnits', 'userSpaceOnUse');
+  element.setAttribute(
+    'gradientTransform',
+    `matrix(${gradient.matrix.map(finiteNumber).join(' ')})`
+  );
+  const names = gradient.kind === 'linear' ? ['x1', 'y1', 'x2', 'y2'] : ['cx', 'cy', 'r'];
+  names.forEach((name, index) =>
+    element.setAttribute(name, finiteNumber(gradient.coords[index] ?? 0))
+  );
+  for (const stop of gradient.stops) {
+    const node = document.createElementNS(SVG_NAMESPACE, 'stop');
+    node.setAttribute('offset', finiteNumber(Math.max(0, Math.min(1, stop.offset))));
+    node.setAttribute('stop-color', `#${stop.hex}`);
+    if (stop.alpha < 1) node.setAttribute('stop-opacity', finiteNumber(Math.max(0, stop.alpha)));
+    element.append(node);
+  }
+  svg.append(element);
+  path.setAttribute('fill', `url(#${id})`);
+}
+
+function finiteNumber(value: number): string {
+  return Number.isFinite(value) ? String(value) : '0';
 }

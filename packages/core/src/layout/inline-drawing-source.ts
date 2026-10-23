@@ -20,7 +20,6 @@ import type {
   OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import {
-  createDrawingRelationshipResolver,
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   indexInlineDrawingProjectionsInPart,
   isRunLevelMcAlternateContent,
@@ -42,6 +41,7 @@ import {
   type ValidatedImageBytesReleaseToken,
 } from '../store/package/validated-image-bytes.ts';
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
+import { packageDrawingProjectionContext } from '../store/package/drawing-projection-context.ts';
 import { wrapFootprintProjection } from '../store/package/drawing-wrap-footprint.ts';
 import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -483,15 +483,12 @@ function createPartDrawingContextSlot(options: {
   let resourceEpoch = 0;
   let lastCompatiblePart = part;
 
-  const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const theme = createPackageShapeThemeResolvers(pkg);
   const stylesPart = stylesPartOf(pkg);
-  const atomProjections = indexInlineDrawingProjectionsInPart(part, {
-    stylesPart,
-    resolveRelationship: resolveRelationshipTarget,
-    resolveSchemeColor: theme.resolveSchemeColor,
-    resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
-  });
+  const atomProjections = indexInlineDrawingProjectionsInPart(
+    part,
+    packageDrawingProjectionContext(pkg, ownerPartName)
+  );
   const atomIdentities = drawingAtomIdentities(part);
   const hasObjects = atomIdentities
     ? Array.from(atomIdentities.values()).some(
@@ -690,12 +687,10 @@ function createPartDrawingContextSlot(options: {
           return true;
         }
       }
-      const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
-        stylesPart: stylesPartOf(nextPkg),
-        resolveRelationship: createDrawingRelationshipResolver(nextPkg, ownerPartName),
-        resolveSchemeColor: nextTheme.resolveSchemeColor,
-        resolveStyleMatrixReference: nextTheme.resolveStyleMatrixReference,
-      });
+      const nextProjections = indexInlineDrawingProjectionsInPart(
+        nextPart,
+        packageDrawingProjectionContext(nextPkg, ownerPartName)
+      );
       if (nextProjections.size !== atomProjections.size) return false;
       for (const [atomId, projection] of atomProjections) {
         const next = nextProjections.get(atomId);

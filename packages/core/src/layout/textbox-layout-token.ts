@@ -35,5 +35,6 @@ export function textboxLayoutToken(story: NonNullable<DrawingProjection['textbox
     ...(story.strokeDash ? ['dash', story.strokeDash.join(' ')] : []),
     ...(story.strokeCap ? ['cap', story.strokeCap] : []),
     ...(story.shadow ? ['shadow', JSON.stringify(story.shadow)] : []),
+    ...(story.drawingText ? ['drawing-text'] : []),
   ]);
 }
