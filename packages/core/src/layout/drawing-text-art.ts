@@ -7,6 +7,7 @@
 import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer, TextOutline } from './semantic-records.ts';
 import type { LegacyTextArtProjection } from '../store/package/legacy-vml-text-art.ts';
+import type { TextboxOutlineProjection } from '../store/package/legacy-vml-textbox-geometry.ts';
 
 /** Size the string is measured and, without outlines, drawn at; the fit scales it to the box. */
 export const TEXT_ART_FONT_SIZE_PT = 100;
@@ -168,6 +169,7 @@ export function turnedTextboxBounds(
   story:
     | {
         readonly chromeRotationDegrees?: number;
+        readonly outline?: TextboxOutlineProjection;
         readonly strokeCentered?: true;
         readonly strokeHex: string | null;
         readonly strokeWidthPt: number;
@@ -177,16 +179,29 @@ export function turnedTextboxBounds(
     | undefined
 ): LayoutBox {
   if (!story) return bounds;
+  // An outline polygon can leave its box, as a callout's tail does.
+  let [left, top, right, bottom] = [0, 0, 1, 1];
+  if (story.outline?.kind === 'polygon') {
+    for (const subpath of story.outline.subpaths) {
+      for (const point of subpath) {
+        left = Math.min(left, point.x);
+        top = Math.min(top, point.y);
+        right = Math.max(right, point.x);
+        bottom = Math.max(bottom, point.y);
+      }
+    }
+  }
   const reach =
     story.strokeCentered && story.strokeHex !== null ? Math.max(0, story.strokeWidthPt) / 2 : 0;
-  const grown = reach
-    ? Object.freeze({
-        x: bounds.x - reach,
-        y: bounds.y - reach,
-        width: bounds.width + 2 * reach,
-        height: bounds.height + 2 * reach,
-      })
-    : bounds;
+  const grown =
+    reach || left < 0 || top < 0 || right > 1 || bottom > 1
+      ? Object.freeze({
+          x: bounds.x + left * bounds.width - reach,
+          y: bounds.y + top * bounds.height - reach,
+          width: (right - left) * bounds.width + 2 * reach,
+          height: (bottom - top) * bounds.height + 2 * reach,
+        })
+      : bounds;
   const degrees = story.chromeRotationDegrees;
   const turned = degrees ? rotatedBounds(grown, degrees) : grown;
   // A shadow repeats the shape at a page offset; the painted area holds both.

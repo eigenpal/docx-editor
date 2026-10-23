@@ -19,6 +19,7 @@ import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.t
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { compoundBands } from './drawing-line-compound.ts';
+import { drawingTextboxFrame } from './drawing-textbox-frame.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
 import { darkEdgeOutline, readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
@@ -187,7 +188,7 @@ export interface TextboxStoryProjection {
   readonly drawingText?: true;
 }
 
-/** Shape geometry, turn and text flow of a legacy VML text box. */
+/** Shape geometry, turn and text flow of a text box: a legacy VML one, or a DrawingML one. */
 export interface TextboxLegacyFrame {
   /** Space between the shape box and its text area, in EMU, before the story insets. */
   readonly textAreaEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
@@ -814,7 +815,22 @@ export function projectTextboxStory(
 ): TextboxStoryProjection | null {
   const wsp = findWspInAnchor(anchor);
   if (!wsp) return null;
-  return projectWspTextboxStory(wsp, extent, resolveSchemeColor, resolveStyleMatrixReference);
+  const story = projectWspTextboxStory(
+    wsp,
+    extent,
+    resolveSchemeColor,
+    resolveStyleMatrixReference
+  );
+  const spPr = shapeProperties(wsp);
+  if (!story || !spPr) return story;
+  // A top-level box paints the outline of its geometry, turns, and flows its text vertically;
+  // a group member's shape paints with the group.
+  const bodyPr = findDirectChild(wsp.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'bodyPr',
+  });
+  const frame = drawingTextboxFrame(spPr, bodyPr, extent);
+  return frame ? { ...story, legacyFrame: frame, strokeCentered: true } : story;
 }
 
 /**
