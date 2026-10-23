@@ -132,6 +132,10 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
     : null;
   const parts = (): Placed[] => (placedOwn ? [placedOwn, ...rows] : rows);
   if (!row) {
+    if (placedOwn) {
+      placedOwn.x = (size.w - base.w) / 2;
+      placedOwn.y = (size.h - base.h) / 2;
+    }
     for (const empty of rows) {
       empty.x = size.w / 2;
       empty.y = size.h / 2;

@@ -16,6 +16,8 @@ export interface PlacementContext {
   readonly model: DiagramModel;
   readonly states: readonly NodeState[];
   readonly readValue: (state: NodeState, type: string) => number | null;
+  /** Keep a value an algorithm set from later constraint passes. */
+  readonly pin: (state: NodeState, type: string) => void;
   /** Re-solve a node's own constraints, leaving `except` as it is. */
   readonly resolveSelf: (state: NodeState, except: string) => void;
 }
@@ -77,6 +79,32 @@ function placeComposite(context: PlacementContext, state: NodeState): void {
 }
 
 /**
+ * The size a node's children need along `key`: summed along a line that runs that way,
+ * otherwise the largest. Unbounded or unknown sizes count as 0.
+ */
+function naturalSize(
+  context: PlacementContext,
+  state: NodeState,
+  key: 'w' | 'h',
+  depth: number
+): number {
+  if (depth > 16) return 0;
+  const children = childStates(context, state);
+  const sizes = children.map((child) => {
+    const value = child.values.get(key);
+    if (value !== undefined && Number.isFinite(value)) return Math.max(0, value);
+    return naturalSize(context, child, key, depth + 1);
+  });
+  const direction = state.node.algorithm.params.get('linDir') ?? 'fromL';
+  const along =
+    state.node.algorithm.type === 'lin' &&
+    (key === 'w') === (direction === 'fromL' || direction === 'fromR');
+  return along
+    ? sizes.reduce((sum, size) => sum + size, 0)
+    : sizes.reduce((max, size) => Math.max(max, size), 0);
+}
+
+/**
  * `lin`: children in a row or column. The primary sizes scale down together until the line
  * fits; each child then re-solves its own constraints from its new primary size (a node as
  * tall as 0.6 of its width stays so). A line still too thick scales down as a whole.
@@ -94,13 +122,33 @@ function placeLinear(context: PlacementContext, state: NodeState): void {
   const primaryBox = horizontal ? box.w : box.h;
   const crossBox = horizontal ? box.h : box.w;
   const gap = state.values.get('sp') ?? 0;
-  const primaries = children.map((child) => Math.max(0, child.values.get(primaryKey) ?? 0));
+  let unbounded = false;
+  const natural = new Set<NodeState>();
+  const primaries = children.map((child) => {
+    const value = child.values.get(primaryKey) ?? 0;
+    if (Number.isFinite(value)) return value;
+    // An unbounded size (`INF`) takes what the child's own children need.
+    unbounded = true;
+    natural.add(child);
+    return naturalSize(context, child, primaryKey, 0);
+  });
   const total = primaries.reduce((sum, size) => sum + size, 0) + gap * (children.length - 1);
-  const scale = total > primaryBox && total > 0 ? primaryBox / total : 1;
+  // A line too long shrinks to fit. A line with an unbounded child also grows to fill the
+  // box, so sizes that follow the text size (a list sized in font units) fill the frame.
+  const scale = total > 0 && (total > primaryBox || unbounded) ? primaryBox / total : 1;
   const crosses = children.map((child, index) => {
     if (scale !== 1) {
       child.values.set(primaryKey, primaries[index]! * scale);
       context.resolveSelf(child, primaryKey);
+      // A size taken from the child's children scales with them.
+      if (natural.has(child)) {
+        for (const inner of childStates(context, child)) {
+          const size = inner.values.get(primaryKey);
+          if (size === undefined || !Number.isFinite(size)) continue;
+          inner.values.set(primaryKey, size * scale);
+          context.pin(inner, primaryKey);
+        }
+      }
     }
     return Math.max(0, child.values.get(crossKey) ?? crossBox);
   });
@@ -131,8 +179,8 @@ function placeLinear(context: PlacementContext, state: NodeState): void {
     if (crossAlign === 't' || crossAlign === 'l') crossStart = 0;
     else if (crossAlign === 'b' || crossAlign === 'r') crossStart = crossBox - cross;
     child.box = horizontal
-      ? { x: box.x + cursor, y: box.y + crossStart, w: primary, h: cross }
-      : { x: box.x + crossStart, y: box.y + cursor, w: cross, h: primary };
+      ? { x: box.x + cursor, y: box.y + crossStart, w: Math.max(0, primary), h: cross }
+      : { x: box.x + crossStart, y: box.y + cursor, w: cross, h: Math.max(0, primary) };
     cursor += primary + spacing;
   }
 }

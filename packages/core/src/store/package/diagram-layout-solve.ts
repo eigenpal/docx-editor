@@ -155,6 +155,8 @@ interface SolveContext {
   readonly groups: Map<string, { type: string; members: number[] }>;
   readonly model: DiagramModel;
   /** `lte`/`gte` limits per target value, by the constraint that set each. */
+  /** Values an algorithm fixed (index:type); constraints no longer change them. */
+  readonly pinned: Set<string>;
   readonly limits: Map<string, Map<string, { readonly op: 'lte' | 'gte'; readonly value: number }>>;
 }
 
@@ -334,6 +336,9 @@ function setValue(
   value: number,
   base: number | null
 ): number {
+  if (context.pinned.has(overrideKey(state.node.index, type))) {
+    return state.values.get(type) ?? value;
+  }
   const override = context.overrides.get(overrideKey(state.node.index, type));
   let stored = override ?? value;
   // A composite child never grows past its parent's box: the box is a hard limit and the
@@ -375,7 +380,8 @@ function applyConstraint(
     value = convertConstant(constraint.val, constraint.type);
   }
   if (constraint.op === 'gte' || constraint.op === 'lte') {
-    if (value === null) return true;
+    // A negative limit (an overlap) does not bind: the value its own constraint sets stands.
+    if (value === null || value < 0) return true;
     for (const target of targets) {
       const state = context.states[target.index]!;
       const key = overrideKey(target.index, constraint.type);
@@ -481,8 +487,12 @@ function applyUserAdjustments(state: NodeState): void {
   let owner = state.node.parent;
   while (owner && owner.algorithm.type === 'composite') owner = owner.parent;
   const moves = owner?.algorithm.type === 'hierRoot' || owner?.algorithm.type === 'hierChild';
-  const fx = moves ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
-  const fy = moves ? presFactor(state, 'custLinFactNeighborY', 0) : 0;
+  // A move counts along the row of siblings only: across in a row, down in a column.
+  const row = owner?.algorithm.type === 'hierChild' ? owner : owner?.parent;
+  const direction = row?.algorithm.params.get('linDir') ?? 'fromL';
+  const column = direction === 'fromT' || direction === 'fromB';
+  const fx = moves && !column ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
+  const fy = moves && column ? presFactor(state, 'custLinFactNeighborY', 0) : 0;
   if (sx === 1 && sy === 1 && fx === 0 && fy === 0) return;
   const w = box.w * sx;
   const h = box.h * sy;
@@ -525,6 +535,7 @@ export function solveDiagramLayout(
     overrides,
     groups: new Map(),
     limits: new Map(),
+    pinned: new Set(),
     model: tree.model,
   };
   const rootState = context.states[tree.root.index]!;
@@ -540,6 +551,9 @@ export function solveDiagramLayout(
     model: tree.model,
     states: context.states,
     readValue: (state, type) => readValue(state, type, parentBoxOf(context, state.node)),
+    pin: (state, type) => {
+      context.pinned.add(overrideKey(state.node.index, type));
+    },
     resolveSelf: (state, except) => {
       state.node.constraints.forEach((constraint, i) => {
         if (constraint.for !== 'self' || constraint.type === except) return;

@@ -38,7 +38,7 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   lProcess2: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
   vList5: { boxes: 32, presets: 32, rotations: 32, fonts: 29, refused: 0 },
   equation1: { boxes: 40, presets: 40, rotations: 40, fonts: 24, refused: 0 },
-  list1: { boxes: 0, presets: 12, rotations: 12, fonts: 0, refused: 0 },
+  list1: { boxes: 18, presets: 24, rotations: 24, fonts: 2, refused: 0 },
   hList2: { boxes: 24, presets: 36, rotations: 36, fonts: 21, refused: 0 },
   pyramid1: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
   cycle2: { boxes: 24, presets: 24, rotations: 24, fonts: 12, refused: 0 },
