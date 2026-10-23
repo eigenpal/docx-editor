@@ -52,6 +52,20 @@ async function commandsOf(bytes: Uint8Array): Promise<string> {
     .join('\n');
 }
 
+test('soft edges and a reflection paint through soft masks', async () => {
+  const commands = await commandsOf(
+    input(
+      '<a:effectLst><a:softEdge rad="76200"/>' +
+        '<a:reflection stA="50000" endPos="40000" dir="5400000" sy="-100000" algn="bl"/>' +
+        '</a:effectLst>'
+    )
+  );
+  const draws = commands.match(/\/PictureMask\d+ gs[^\n]*?\/Im\d+ Do/g) ?? [];
+  // The picture through its soft edge, then its mirror image through the fade.
+  expect(draws).toHaveLength(2);
+  expect(draws[1]).toMatch(/ -\d+(\.\d+)? [\d.-]+ [\d.-]+ cm/);
+});
+
 test('a picture paints its shadow before the image and its outline after it', async () => {
   const commands = await commandsOf(
     input(

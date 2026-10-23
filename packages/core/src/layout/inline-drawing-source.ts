@@ -351,6 +351,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
           picture.clipUnit?.map((point) => `${point.x},${point.y}`).join(' ') ?? '',
+          picture.frameEffects ? JSON.stringify(picture.frameEffects) : '',
           picture.fillMode,
         ])
       : '',

@@ -20,7 +20,7 @@ import {
   type VectorShapeProjection,
 } from './drawing-shape-projection.ts';
 import { groupTextboxesField, type GroupTextboxProjection } from './group-textbox-projection.ts';
-import { projectPictureFrame } from './drawing-picture-frame.ts';
+import { projectPictureFrame, type PictureFrameEffects } from './drawing-picture-frame.ts';
 import { projectTextboxChrome } from './drawing-textbox-chrome.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
@@ -39,6 +39,8 @@ export interface DrawingContentProjection {
   readonly paints: boolean;
   /** A picture's clip ring in the unit square of its extent; see `projectPictureFrame`. */
   readonly pictureClipUnit?: readonly Readonly<{ x: number; y: number }>[];
+  /** A picture's reflection and soft edges; see `projectPictureFrame`. */
+  readonly pictureEffects?: PictureFrameEffects;
 }
 
 const NOTHING: DrawingContentProjection = Object.freeze({
@@ -65,6 +67,7 @@ export function projectDrawingContent(
       ...NOTHING,
       vectorShape: frame.vectorShape,
       ...(frame.clipUnit ? { pictureClipUnit: frame.clipUnit } : {}),
+      ...(frame.effects ? { pictureEffects: frame.effects } : {}),
     };
   }
   const groupRead = readGroupPicture(
@@ -133,12 +136,20 @@ export function projectDrawingContent(
   };
 }
 
-/** The picture with the clip ring its frame gives it, when its geometry is not a rectangle. */
+/** The picture with what its frame gives it: a clip ring for its geometry, and its effects. */
 export function withPictureClip<P extends object>(
   picture: P | null,
   content: DrawingContentProjection
-): (P & { readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[] }) | null {
-  return picture && content.pictureClipUnit
-    ? { ...picture, clipUnit: content.pictureClipUnit }
-    : picture;
+):
+  | (P & {
+      readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[];
+      readonly frameEffects?: PictureFrameEffects;
+    })
+  | null {
+  if (!picture || (!content.pictureClipUnit && !content.pictureEffects)) return picture;
+  return {
+    ...picture,
+    ...(content.pictureClipUnit ? { clipUnit: content.pictureClipUnit } : {}),
+    ...(content.pictureEffects ? { frameEffects: content.pictureEffects } : {}),
+  };
 }

@@ -1,7 +1,14 @@
 // The frame a picture draws from its `pic:spPr`: the geometry that clips the picture, the
 // outline over it, and the outer shadow and fill under it.
 
-import { glowComponent, readShapeGlow, readShapeShadow } from './drawing-shape-effects.ts';
+import {
+  glowComponent,
+  readShapeGlow,
+  readShapeReflection,
+  readShapeShadow,
+  readShapeSoftEdge,
+  type ShapeReflection,
+} from './drawing-shape-effects.ts';
 import { directFill, type ShapeColor } from './drawing-shape-color.ts';
 import { gradientMeanColor, readGradientFill } from './drawing-gradient.ts';
 import { readShapeGeometry, shapePointTransform } from './drawing-shape-geometry.ts';
@@ -38,12 +45,22 @@ export interface PictureFrameProjection {
    * a rectangle. Absent when the geometry is a rectangle or has more than one outline.
    */
   readonly clipUnit?: readonly Point[];
+  /** Effects that change how the picture itself paints. */
+  readonly effects?: PictureFrameEffects;
   /**
    * What the frame paints, in the extent's EMU space: components marked `belowPicture`
    * (outer shadow, fill) paint under the picture, the outline over it. Null when the frame
    * paints nothing.
    */
   readonly vectorShape: VectorShapeProjection | null;
+}
+
+/** Effects that change how a picture itself paints, beyond what its frame draws. @public */
+export interface PictureFrameEffects {
+  /** A mirror image of the picture below it. */
+  readonly reflection?: ShapeReflection;
+  /** The picture's edge fades out over this distance inside it. */
+  readonly softEdgeEmu?: number;
 }
 
 const NO_FRAME: PictureFrameProjection = Object.freeze({ vectorShape: null });
@@ -84,8 +101,26 @@ export function projectPictureFrame(
   const rotation = xfrm ? parseEmu(schemaAttributeValue(xfrm.attributes, 'rot'), false) : null;
   const flag = (name: string) =>
     xfrm ? (parseSchemaBoolean(schemaAttributeValue(xfrm.attributes, name)) ?? false) : false;
-  const clip = clipUnit ? { clipUnit } : {};
-  if (rotation !== null && rotation % 21_600_000 !== 0) return { ...clip, vectorShape: null };
+  const reflection = readShapeReflection(
+    picture,
+    spPr,
+    ctx.resolveSchemeColor,
+    ctx.resolveStyleMatrixReference
+  );
+  const softEdgeEmu = readShapeSoftEdge(
+    picture,
+    spPr,
+    ctx.resolveSchemeColor,
+    ctx.resolveStyleMatrixReference
+  );
+  const effects: PictureFrameEffects | null =
+    reflection || softEdgeEmu > 0
+      ? { ...(reflection ? { reflection } : {}), ...(softEdgeEmu > 0 ? { softEdgeEmu } : {}) }
+      : null;
+  const clip = { ...(clipUnit ? { clipUnit } : {}), ...(effects ? { effects } : {}) };
+  if (rotation !== null && rotation % 21_600_000 !== 0) {
+    return { ...(clipUnit ? { clipUnit } : {}), vectorShape: null };
+  }
 
   const place = shapePointTransform(extent, flag('flipH'), flag('flipV'), 0);
   const budget = { remaining: MAX_FRAME_POINTS };

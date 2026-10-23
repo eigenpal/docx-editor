@@ -705,7 +705,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Pictures render their outer shadow and glow under the picture, and their outline, dash pattern, and single or compound line outside the picture, in the editor and in PDF export. A picture takes the shape of any preset geometry with its adjust values. Above an inline picture, its outline and shadow stop at the top of the picture. A rotated picture keeps its shape but paints no outline or shadow. Soft edges, reflection, and 3-D bevels are not painted. Effects are not editable. Authored effect markup and effectExtent spacing are preserved.',
+      'Pictures render their outer shadow and glow under the picture, and their outline, dash pattern, and single or compound line outside the picture, in the editor and in PDF export. A picture takes the shape of any preset geometry with its adjust values. Above an inline picture, its outline and shadow stop at the top of the picture. A rotated picture keeps its shape but paints no outline or shadow. An upright picture fades out at soft edges and paints a reflection below itself. Skewed or sideways reflections and 3-D bevels are not painted. Effects are not editable. Authored effect markup and effectExtent spacing are preserved.',
   },
   {
     id: 'images.charts',

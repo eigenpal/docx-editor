@@ -173,6 +173,98 @@ export function readShapeGlow(
   return { radiusEmu, hex: color.hex, alpha: color.alpha };
 }
 
+/** A mirror image below the shape that fades out downward (`a:reflection`). @public */
+export interface ShapeReflection {
+  /** Opacity where the mirror image meets the shape. */
+  readonly startAlpha: number;
+  /** Opacity at `endPosition`; below it the mirror image is clear. */
+  readonly endAlpha: number;
+  /** Where the fade ends, as a share of the shape's height. */
+  readonly endPosition: number;
+  /** Gap between the shape and its mirror image. */
+  readonly distanceEmu: number;
+  readonly blurEmu: number;
+}
+
+/** A positive fixed percentage: thousandths of a percent, or a `%` value. */
+function share(element: OoxmlElement, name: string, fallback: number): number | null {
+  const raw = schemaAttributeValue(element.attributes, name);
+  if (raw === undefined) return fallback;
+  const text = collapseSchemaWhitespace(raw);
+  const value = /^-?\d{1,7}$/.test(text)
+    ? Number(text) / 100_000
+    : /^-?\d{1,4}(\.\d{1,3})?%$/.test(text)
+      ? Number(text.slice(0, -1)) / 100
+      : null;
+  return value === null ? null : value;
+}
+
+/**
+ * The reflection a shape paints, or null when it has none or uses a form outside the painted
+ * subset: a straight mirror image below the shape (`sy` -100%, no skew or horizontal scale),
+ * fading downward.
+ */
+export function readShapeReflection(
+  shape: OoxmlElement,
+  spPr: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): ShapeReflection | null {
+  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const reflection = list
+    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'reflection' })
+    : null;
+  if (!reflection) return null;
+  const angle = (name: string, fallback: number) => {
+    const raw = collapseSchemaWhitespace(schemaAttributeValue(reflection.attributes, name) ?? '');
+    return raw === '' ? fallback : /^-?\d{1,9}$/.test(raw) ? Number(raw) : null;
+  };
+  const sx = share(reflection, 'sx', 1);
+  const sy = share(reflection, 'sy', 1);
+  const startAlpha = share(reflection, 'stA', 1);
+  const startPosition = share(reflection, 'stPos', 0);
+  const endAlpha = share(reflection, 'endA', 0);
+  const endPosition = share(reflection, 'endPos', 1);
+  const algn = schemaAttributeValue(reflection.attributes, 'algn') ?? 'b';
+  if (
+    sx !== 1 ||
+    sy !== -1 ||
+    angle('kx', 0) !== 0 ||
+    angle('ky', 0) !== 0 ||
+    angle('dir', 0) !== 5_400_000 ||
+    angle('fadeDir', 5_400_000) !== 5_400_000 ||
+    startPosition !== 0 ||
+    (algn !== 'b' && algn !== 'bl' && algn !== 'br') ||
+    startAlpha === null ||
+    endAlpha === null ||
+    endPosition === null ||
+    endPosition <= 0
+  ) {
+    return null;
+  }
+  return {
+    startAlpha: Math.max(0, Math.min(1, startAlpha)),
+    endAlpha: Math.max(0, Math.min(1, endAlpha)),
+    endPosition: Math.min(1, endPosition),
+    distanceEmu: nonNegative(reflection, 'dist'),
+    blurEmu: nonNegative(reflection, 'blurRad'),
+  };
+}
+
+/** The soft edge radius of a shape (`a:softEdge`): its edge fades out over it. 0 for none. */
+export function readShapeSoftEdge(
+  shape: OoxmlElement,
+  spPr: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): number {
+  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const softEdge = list
+    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'softEdge' })
+    : null;
+  return softEdge ? nonNegative(softEdge, 'rad') : 0;
+}
+
 /**
  * A glow as a component that paints only its shadow: the outline of `subpathsEmu` widened by
  * half the glow radius and blurred with a standard deviation of a sixth of it, which puts the

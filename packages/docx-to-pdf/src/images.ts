@@ -16,6 +16,9 @@ import { paintTextArt } from './text-art.ts';
 import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 import { MetafileForms } from './metafile-pdf.ts';
+import { reflectionMask, softEdgeMask } from './picture-effects.ts';
+
+const EMU_PER_POINT = 12_700;
 
 /**
  * The raster formats this writer embeds directly.
@@ -521,6 +524,41 @@ export class ImageWriter {
       );
     }
     const path = clip.map((v, i) => `${n(v.x)} ${n(v.y)} ${i === 0 ? 'm' : 'l'}`).join(' ');
-    return `q ${opacityCommand}${path} h W n ${n(ax / width)} ${n(ay / width)} ${n(bx / height)} ${n(by / height)} ${n(bottomLeft.x - (ax * crop.left) / width - (bx * crop.bottom) / height)} ${n(bottomLeft.y - (ay * crop.left) / width - (by * crop.bottom) / height)} cm /${key} Do Q`;
+    const matrix = [
+      ax / width,
+      ay / width,
+      bx / height,
+      by / height,
+      bottomLeft.x - (ax * crop.left) / width - (bx * crop.bottom) / height,
+      bottomLeft.y - (ay * crop.left) / width - (by * crop.bottom) / height,
+    ];
+    const effects = d.frameEffects;
+    const soft = effects?.softEdgeEmu
+      ? softEdgeMask(this.doc, page, clip, effects.softEdgeEmu / EMU_PER_POINT)
+      : '';
+    const picture = `q ${opacityCommand}${soft}${path} h W n ${matrix.map(n).join(' ')} cm /${key} Do Q`;
+    const reflection = effects?.reflection;
+    if (!reflection) return picture;
+    // The mirror image of an upright picture, below its bottom edge and fading downward.
+    const bottom = Math.min(...p.map((v) => v.y));
+    const top = Math.max(...p.map((v) => v.y));
+    const gap = reflection.distanceEmu / EMU_PER_POINT;
+    const mirror = (y: number) => 2 * bottom - y - gap;
+    const [a, b, c, dd, e, f] = matrix as [number, number, number, number, number, number];
+    const fade = reflectionMask(
+      this.doc,
+      page,
+      bottom - gap,
+      bottom - gap - (top - bottom) * reflection.endPosition,
+      reflection.startAlpha,
+      reflection.endAlpha
+    );
+    const mirrored = clip
+      .map((v, i) => `${n(v.x)} ${n(mirror(v.y))} ${i === 0 ? 'm' : 'l'}`)
+      .join(' ');
+    return [
+      picture,
+      `q ${opacityCommand}${fade}${mirrored} h W n ${[a, -b, c, -dd, e, mirror(f)].map(n).join(' ')} cm /${key} Do Q`,
+    ].join('\n');
   }
 }

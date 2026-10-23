@@ -29,6 +29,7 @@ import {
 } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
+import { appendReflection, applySoftEdge } from './semantic-paint-picture-effects.ts';
 import {
   applyVectorInkReach,
   isFramedPicture,
@@ -437,7 +438,7 @@ function paintReadyImage(
   const outer = urlRegistry?.readyElementFor?.(elementKey) ?? document.createElement('div');
   const paintSignature = readyImagePaintSignature(drawing, resource, ctx, url, origin);
   // A group's vector members are rebuilt on every paint; only a lone image is reused.
-  const reusable = !drawing.vectorShape;
+  const reusable = !drawing.vectorShape && !drawing.frameEffects;
   if (reusable && readyImagePaintSignatures.get(outer) === paintSignature) return outer;
   outer.className = 'docx-drawing docx-drawing-ready';
   outer.style.cssText = '';
@@ -460,7 +461,10 @@ function paintReadyImage(
   // group, or a picture with its own frame, clips only its picture there: the vector paint
   // shares the outer box, which clips at the paint bounds so strokes can use the effect
   // extent, as a lone shape does.
-  const clipsPictureOnly = drawing.groupPicture !== undefined || drawing.vectorShape !== null;
+  const clipsPictureOnly =
+    drawing.groupPicture !== undefined ||
+    drawing.vectorShape !== null ||
+    drawing.frameEffects !== undefined;
   const clipPath = cssClipPathFromPolygon(
     drawing.geometry.clipPolygon ?? [],
     clipsPictureOnly ? content : paint
@@ -515,6 +519,11 @@ function paintReadyImage(
   transformStage.append(cropViewport);
   inner.append(transformStage);
   outer.replaceChildren(inner);
+  if (drawing.frameEffects) {
+    const softEdge = drawing.frameEffects.softEdgeEmu ?? 0;
+    applySoftEdge(inner, (softEdge / 12_700) * ctx.scale);
+    appendReflection(document, outer, inner, drawing, ctx.scale);
+  }
   if (drawing.vectorShape) {
     const framed = isFramedPicture(drawing);
     const ink = vectorShapeInkClip(drawing, drawing.paintBounds);

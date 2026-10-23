@@ -135,6 +135,25 @@ describe('picture frame paint', () => {
     expect(ink.y + ink.height - (paint.y + paint.height)).toBeCloseTo(2, 6);
   });
 
+  test('soft edges mask the image and a reflection mirrors it below', () => {
+    const element = paint(
+      record(
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:effectLst><a:softEdge rad="76200"/>' +
+          '<a:reflection stA="50000" endPos="40000" dir="5400000" sy="-100000" algn="bl"/>' +
+          '</a:effectLst>'
+      )
+    );
+    const frame = element.querySelector<HTMLElement>('.docx-drawing-image-frame')!;
+    expect(frame.style.getPropertyValue('mask-image')).toContain('linear-gradient');
+    const reflection = element.querySelector<HTMLElement>('.docx-drawing-reflection')!;
+    expect(reflection.style.getPropertyValue('mask-image')).toContain('rgba(0,0,0,0.5)');
+    // The mirror is two fifths of the picture's 36 pt height, right below it.
+    expect(reflection.style.height).toBe('14.4px');
+    expect(reflection.style.top).toBe('36px');
+    const copy = reflection.querySelector<HTMLElement>('.docx-drawing-image-frame')!;
+    expect(copy.style.transform).toBe('scaleY(-1)');
+  });
+
   test('a plain picture paints no frame', () => {
     const element = paint(record('<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'));
     expect(element.querySelector('svg')).toBeNull();

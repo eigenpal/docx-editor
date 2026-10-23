@@ -21,6 +21,7 @@ import {
   type VectorShapeProjection,
 } from '../store/package/drawing-projection.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
 import { pageClipRegion } from './drawing-page-clip.ts';
 export { columnPaperClip, pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
@@ -77,6 +78,7 @@ function drawingPaintFields(projection: DrawingProjection): {
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
   readonly vectorShape: VectorShapeProjection | null;
+  readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
 } {
   const picture = projection.picture;
@@ -98,6 +100,7 @@ function drawingPaintFields(projection: DrawingProjection): {
     placeholderGraphicKind:
       picture || projection.legacyGraphic || projection.textArt ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
+    ...(picture?.frameEffects ? { frameEffects: picture.frameEffects } : {}),
     ...(projection.groupPicture
       ? {
           groupPicture: Object.freeze({
@@ -335,6 +338,8 @@ export interface InlineDrawingRecord {
    * picture. The group paints whole or not at all: when the picture cannot paint, an output
    * shows no part of the group.
    */
+  /** A picture's reflection and soft edges, in the extent's EMU; absent when it has none. */
+  readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
   /**
    * The revision wrappers enclosing the owning run, outermost first — the same stack spans

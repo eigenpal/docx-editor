@@ -283,6 +283,8 @@ export interface PictureProjection {
   readonly presetGeometry: string | null;
   /** The clip ring of non-rectangular geometry, in the unit square of the extent. */
   readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[];
+  /** Effects that change how the picture itself paints: a reflection, soft edges. */
+  readonly frameEffects?: import('./drawing-picture-frame.ts').PictureFrameEffects;
 }
 
 export const DEFAULT_DRAWING_PROJECTION_LIMITS: DrawingProjectionLimits = Object.freeze({

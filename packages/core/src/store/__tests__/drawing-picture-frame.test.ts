@@ -110,6 +110,31 @@ describe('picture frames', () => {
     expect(halo).toMatchObject({ belowPicture: true, shadowOnly: true, strokeWidthEmu: 50800 });
   });
 
+  test('a reflection and soft edges reach the picture projection', () => {
+    const reflected = picture(
+      `${RECT}` +
+        '<a:effectLst><a:reflection blurRad="6350" stA="52000" endA="300" endPos="35000" ' +
+        'dir="5400000" sy="-100000" algn="bl" rotWithShape="0"/></a:effectLst>'
+    );
+    expect(reflected.picture!.frameEffects?.reflection).toEqual({
+      startAlpha: 0.52,
+      endAlpha: 0.003,
+      endPosition: 0.35,
+      distanceEmu: 0,
+      blurEmu: 6350,
+    });
+    const soft = picture(`${RECT}<a:effectLst><a:softEdge rad="76200"/></a:effectLst>`);
+    expect(soft.picture!.frameEffects?.softEdgeEmu).toBe(76200);
+  });
+
+  test('a skewed or sideways reflection is left out', () => {
+    const skewed = picture(
+      `${RECT}<a:effectLst><a:reflection stA="50000" endPos="40000" dir="5400000" ` +
+        'sy="-100000" kx="600000"/></a:effectLst>'
+    );
+    expect(skewed.picture!.frameEffects).toBeUndefined();
+  });
+
   test('a compound outline paints its bands outside the picture', () => {
     const projection = picture(`${RECT}<a:ln w="76200" cmpd="dbl">${RED}</a:ln>`);
     const bands = projection.vectorShape!.components;
