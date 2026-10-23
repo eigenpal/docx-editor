@@ -73,6 +73,8 @@ export interface CjkOpticalFit {
   readonly candidate: readonly StyleSpanRecord[];
   readonly width: number;
   readonly spanStarts?: readonly number[];
+  /** The candidate's final mark hangs past the margin; the rest of the line fills it. */
+  readonly hangs?: true;
 }
 function allowedStyle(span: Pick<StyleSpanRecord, 'style' | 'props' | 'revisions'>): boolean {
   const style = span.style;
@@ -353,7 +355,8 @@ function fitCjkOptically(
   measurer: TextMeasurer,
   baselinePieces: readonly FieldAwarePiece[],
   requireLocalQualification: boolean,
-  memo: ClusterMemo
+  memo: ClusterMemo,
+  hangAdvance: number | undefined
 ): CjkOpticalFit | undefined {
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
@@ -387,12 +390,22 @@ function fitCjkOptically(
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
   const beforeLast = cells.at(-2);
+  // A hanging line-end mark keeps its whole advance past the margin, so the rest of the line
+  // compresses only for the glyphs before it. A word keeps its final mark in its own cell.
+  const hung =
+    hangAdvance === undefined || last.sourceIndex < sourceCount
+      ? 0
+      : last.ordinaryOpaque
+        ? hangAdvance
+        : last.span.box.width;
+  const hangsLast = hung > 0;
+  deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
   const curlyFinal =
     last.qualifiedCurly === 'closing' && beforeLast !== undefined && fitNeighbour(beforeLast);
-  // The final closing bearing is removed first. A bracket's measured ink must stay
+  // Otherwise the final closing bearing is removed first. A bracket's measured ink must stay
   // inside; a quote gives its whole trailing half even where its ink reaches past the middle.
-  if ((CLOSING.test(last.span.text) || curlyFinal) && finiteInk(last)) {
+  if (!hangsLast && (CLOSING.test(last.span.text) || curlyFinal) && finiteInk(last)) {
     const inkEnd = curlyFinal ? 0 : last.ink.right + (last.span.glyphOffsetPt ?? 0);
     const extent = Math.max(last.natural / 2, inkEnd);
     last.reduction = Math.min(deficit, Math.max(0, last.span.box.width - extent));
@@ -523,8 +536,13 @@ function fitCjkOptically(
   spanStarts[sourceCount] = spans.length;
   line.spans.length = 0;
   for (const span of spans) line.spans.push(span);
-  line.width = available - candidateWidth;
-  return { candidate: candidateSpans, width: candidateWidth, spanStarts };
+  line.width = available + hung - candidateWidth;
+  return {
+    candidate: candidateSpans,
+    width: candidateWidth,
+    spanStarts,
+    ...(hangsLast ? { hangs: true as const } : {}),
+  };
 }
 
 /** Share paragraph policy and local face qualification without changing the pure CJK path. */
@@ -668,7 +686,8 @@ export function createCjkOpticalFitter(
           measurer
         )
       : undefined;
-    // A group that hangs at its natural width needs no fit.
+    // A group that hangs at its natural width needs no fit; one that does not may still hang
+    // its final mark once the rest of the line compresses.
     if (hangsWithin(hangAdvance, available - line.width, x - origin)) return undefined;
     const fitted = fitCjkOptically(
       line,
@@ -677,12 +696,13 @@ export function createCjkOpticalFitter(
       measurer,
       pieces,
       requireLocalQualification,
-      memo
+      memo,
+      hangAdvance
     );
     if (!fitted) return undefined;
     let first: CjkOpticalFit | undefined;
     let offset = 0;
-    for (const candidate of candidates) {
+    for (const [index, candidate] of candidates.entries()) {
       const fragments: StyleSpanRecord[] = [];
       let advance = 0;
       while (
@@ -693,7 +713,12 @@ export function createCjkOpticalFitter(
         fragments.push(fragment);
         advance += fragment.box.width;
       }
-      const fit = { candidate: fragments, width: advance };
+      // Only the piece that holds the final mark hangs past the margin.
+      const fit = {
+        candidate: fragments,
+        width: advance,
+        ...(fitted.hangs && index === candidates.length - 1 ? { hangs: true as const } : {}),
+      };
       if (!first) first = { ...fit, spanStarts: fitted.spanStarts };
       else queued.set(candidate.range.start, fit);
     }

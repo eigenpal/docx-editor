@@ -431,6 +431,13 @@ With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang
 - **THEN** the quote wraps to the next line with the character before it
 - **AND** the same quote hangs past the margin when the paragraph is justified
 
+#### Scenario: A hanging mark and compression fit one line
+
+- **GIVEN** a justified 12 pt line `甲乙。丙。` followed by more ideographs, with document punctuation compression
+- **WHEN** the measure is 42.1 pt, too narrow for the final full stop to hang alone
+- **THEN** the final full stop hangs past the margin and the middle full stop gives 5.9 pt
+- **AND** at 41.85 pt the last ideograph and its full stop wrap
+
 #### Scenario: A document without an East Asian default face neither fits nor hangs
 
 - **GIVEN** document punctuation compression, a justified paragraph, and document defaults that name no East Asian face

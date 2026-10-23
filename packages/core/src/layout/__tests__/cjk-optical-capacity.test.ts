@@ -73,6 +73,23 @@ function layoutLines(runs: readonly Run[], width: number, pPr = '', rPr = '') {
 }
 const lines = (runs: readonly Run[], width: number, pPr = '', rPr = '') =>
   layoutLines(runs, width, pPr, rPr).map((line) => line.spans.map((span) => span.text).join(''));
+/** Glyph origins on the first line, from its first glyph, in points to two decimals. */
+function firstOrigins(runs: readonly Run[], width: number) {
+  const spans = layoutLines(runs, width)[0]!.spans;
+  const start = spans[0]!.box.x;
+  return spans.flatMap((span) =>
+    [...span.text].map(
+      (_, offset) =>
+        Math.round(
+          (span.box.x +
+            measurer.measure(span.text.slice(0, offset), span.style) +
+            (span.glyphOffsetPt ?? 0) -
+            start) *
+            100
+        ) / 100
+    )
+  );
+}
 const textOf = (runs: readonly Run[]) =>
   runs.map((value) => (typeof value === 'string' ? value : value.text)).join('');
 function threshold(runs: readonly Run[], fits: number, breaks: number, pPr = '', rPr = '') {
@@ -119,6 +136,16 @@ test('a smaller blank side passes the rest of its share to the other sides', () 
 
 test('both sides of a mixed-size pair give at most half of the smaller glyph', () => {
   threshold([{ text: '甲》', halfPoints: 21 }, '（乙戊'], 46.5, 46.4);
+});
+
+test('a justified line hangs its final mark and compresses the marks before it', () => {
+  // The full stop hangs past the margin and the two sides before it give 11.15pt.
+  threshold(['甲。乙，丙丁。'], 60.85, 60.6);
+  threshold(['甲乙。丙。'], 42.1, 41.85);
+  // The middle full stop gives 5.9pt and the final one starts at the margin.
+  expect(firstOrigins(['甲乙。丙。'], 42.1).slice(0, 5)).toEqual([0, 12, 24, 30.1, 42.1]);
+  // With hanging off, the final mark only drops its trailing blank.
+  threshold(['甲乙。丙。'], 48.0, 47.9, '<w:overflowPunct w:val="0"/>');
 });
 
 test('a kerned pair keeps its natural compression and fits only its remaining blank side', () => {

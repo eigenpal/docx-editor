@@ -1363,7 +1363,7 @@ export function breakParagraph(
           : undefined;
       let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
-      const hangs =
+      let hangs =
         (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
         canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
       const applyOpticalFit =
@@ -1396,6 +1396,8 @@ export function breakParagraph(
           : undefined;
       const opticalSourceLine = line;
       let opticalFit = applyOpticalFit?.();
+      // A fit may compress the line so that its final mark hangs past the margin.
+      if (opticalFit?.hangs) hangs = true;
       // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
         !protectedEnd &&
@@ -1519,6 +1521,7 @@ export function breakParagraph(
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A protected group that moves must also fit against its destination line.
       if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
+      if (opticalFit?.hangs) hangs = true;
       // A word opening the line after a break at an optional hyphen no longer joins back
       // across it, so it is placed, and may be cut, at its unjoined width.
       const lineStartStyle =
