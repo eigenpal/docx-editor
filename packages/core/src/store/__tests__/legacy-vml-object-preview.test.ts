@@ -220,7 +220,6 @@ describe('embedded object cached previews', () => {
       }),
       embeddedObject({ shapeChildren: '<v:textbox/>' }),
       embeddedObject().replace('<v:imagedata r:id="rPreview" o:title=""/>', ''),
-      embeddedObject().replace('r:id="rPreview" o:title=""', 'r:id="rPreview" grayscale="t"'),
       embeddedObject().replace('r:id="rPreview"', 'o:href="https://example.invalid/preview.png"'),
       embeddedObject({ template: false }).replace('type="#_x0000_t75"', 'type="#_x0000_t202"'),
       embeddedObject().replace('o:spt="75"', 'o:spt="76"'),

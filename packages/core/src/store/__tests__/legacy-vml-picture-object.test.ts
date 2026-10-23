@@ -170,6 +170,14 @@ describe('a picture with an embedded object beside it', () => {
       parse(picture().replace('o:title=""', 'o:title="" croptop="0.25"'))
     )[0]!;
     expect(cropped.legacyGraphic!.soleImageRelationshipId).toBeUndefined();
+    // A sole preview picture keeps its colour adjustments, as a picture does.
+    const adjusted = projectDrawingsInPart(
+      parse(picture().replace('o:title=""', 'o:title="" gain="2147483647f" blacklevel="3932f"'))
+    )[0]!;
+    expect(adjusted.legacyGraphic!.soleImageRelationshipId).toBe('rPreview');
+    // The largest gain is full contrast; the black level lifts by twice its fraction.
+    expect(adjusted.effects.contrast).toBeCloseTo(100, 1);
+    expect(adjusted.effects.brightness).toBeCloseTo(12, 1);
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 

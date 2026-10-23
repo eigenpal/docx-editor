@@ -504,7 +504,10 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // Colour adjustments are picture effects; a preview, outline or composite cannot carry them.
   const imageNode = children(root).find((n) => named(n, VML, 'imagedata'));
   const effects = imageNode ? legacyImageEffects(imageNode) : null;
-  if (hasImageEffects(root) && (!photo || border)) return null;
+  // A read-only preview of one picture resolves to that picture, so it carries effects too.
+  const sole = !photo && !textboxStory && !textArt ? soleImage(fragments, inset) : {};
+  const pictured = !!photo || !!sole.soleImageRelationshipId;
+  if (hasImageEffects(root) && (!pictured || border)) return null;
   const outerCx = Math.round((vector ? width : outerWidth) * 12700),
     outerCy = Math.round((vector ? height : outerHeight) * 12700);
   return Object.freeze({
@@ -616,7 +619,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
             width: outerWidth,
             height: outerHeight,
             fragments: Object.freeze(fragments),
-            ...soleImage(fragments, inset),
+            ...sole,
           }),
         }
       : {}),
@@ -635,7 +638,9 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
           })
         : Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
     effects:
-      photo && effects ? effects : Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
+      pictured && effects
+        ? effects
+        : Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
     compatibilityBranchNodeId: null,
     diagnostics: Object.freeze([]),
   });

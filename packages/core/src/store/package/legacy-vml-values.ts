@@ -25,6 +25,11 @@ export const escapeXml = (value: string) =>
 export function vmlFraction(raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;
   const trimmed = raw.trim();
+  // A 16.16 fixed-point value spans the signed 32-bit range, up to `2147483647f`.
+  if (/^-?\d{8,10}f$/.test(trimmed)) {
+    const fixed = Number(trimmed.slice(0, -1));
+    return Math.abs(fixed) <= 2_147_483_647 ? fixed / 65536 : NaN;
+  }
   if (!/^-?(?:\d{1,7}(?:\.\d{1,6})?|\.\d{1,6})f?$/.test(trimmed)) return NaN;
   return trimmed.endsWith('f') ? numeric(trimmed.slice(0, -1)) / 65536 : numeric(trimmed);
 }

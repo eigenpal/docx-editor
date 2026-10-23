@@ -33,7 +33,8 @@ export function legacyImageEffects(image: OoxmlElement): DrawingImageEffects | n
   const grayscale = flag(a(image, 'grayscale'));
   const bilevel = flag(a(image, 'bilevel'));
   if (gain === undefined && black === undefined && !grayscale && !bilevel) return NO_EFFECTS;
-  if (gain !== undefined && !(Number.isFinite(gain) && gain > 0 && gain <= 1000)) return null;
+  // The largest gain, `2147483647f`, is the black-and-white picture: full contrast.
+  if (gain !== undefined && !(Number.isFinite(gain) && gain > 0 && gain <= 32_768)) return null;
   if (black !== undefined && !(Number.isFinite(black) && Math.abs(black) <= 1)) return null;
   const contrast = gain === undefined ? 0 : gain <= 1 ? (gain - 1) * 100 : (1 - 1 / gain) * 100;
   const brightness = black === undefined ? 0 : black * 200;
