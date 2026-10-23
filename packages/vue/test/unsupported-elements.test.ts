@@ -154,7 +154,7 @@ test('the public Vue editor customizes the sample chart', async () => {
   app.mount(container);
   await flush();
   await waitForElement(container, '[data-testid="chart-custom"]');
-  expect(container.querySelector('[data-testid="chart-custom"]')!.textContent).toBe('graphic');
+  expect(container.querySelector('[data-testid="chart-custom"]')!.textContent).toBe('chart');
   expect(container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!.hidden).toBe(
     true
   );

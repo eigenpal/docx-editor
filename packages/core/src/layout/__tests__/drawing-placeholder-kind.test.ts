@@ -98,6 +98,28 @@ describe('placeholder graphic kind', () => {
       expect(`${hostile}: ${placeholderKindFor(hostile)}`).toBe(`${hostile}: graphic`);
     }
   });
+
+  test('a refused chart reports its graphic uri, so its placeholder names a chart', () => {
+    const CHART = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+    const xml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+      `xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+      '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="914400" cy="457200"/><wp:docPr id="1" name="Chart 1"/>' +
+      `<a:graphic><a:graphicData uri="${CHART}">` +
+      `<c:chart xmlns:c="${CHART}" r:id="rId9"/></a:graphicData></a:graphic>` +
+      '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>';
+    const result = readOoxmlPart(xml, {
+      name: OWNER,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const [projection] = [...indexInlineDrawingProjectionsInPart(result.part).values()];
+    expect(projection!.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'unsupported-graphic', detail: CHART })
+    );
+  });
 });
 
 // A picture's `a:xfrm` flip is `xsd:boolean` too, but unlike a vector shape's the engine CAN

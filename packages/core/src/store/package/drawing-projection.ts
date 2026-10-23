@@ -1113,6 +1113,12 @@ function projectPicture(
         })
       : null);
   if (!data) {
+    // Non-picture payloads (charts, diagrams) stay generic; their URI names the placeholder.
+    const generic = findDirectChild(graphic.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'graphicData',
+    });
+    const genericUri = generic ? schemaAttributeValue(generic.attributes, 'uri') : undefined;
     return {
       picture: null,
       relationshipId: null,
@@ -1120,7 +1126,8 @@ function projectPicture(
       diagnostic: {
         code: 'unsupported-graphic',
         nodeId: graphic.id,
-        detail: 'missing-graphic-data',
+        detail:
+          genericUri && genericUri !== PIC_GRAPHIC_DATA_URI ? genericUri : 'missing-graphic-data',
       },
     };
   }

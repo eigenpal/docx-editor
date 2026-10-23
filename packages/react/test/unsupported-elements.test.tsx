@@ -123,7 +123,7 @@ test('the sample chart uses the public editor override and saves its original co
       view.container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!.hidden
     ).toBe(true);
   });
-  expect(view.getByTestId('chart-custom').textContent).toBe('graphic');
+  expect(view.getByTestId('chart-custom').textContent).toBe('chart');
   const label = view.container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!;
   expect(label.hidden).toBe(true);
   const drawing = view.container.querySelector<HTMLElement>('.docx-drawing-placeholder')!;
