@@ -35,6 +35,15 @@ export interface DiagramSynthesisOptions {
 export const SYNTHESIZED_DRAWING_PART = '/word/diagrams/synthesized-drawing.xml';
 
 /**
+ * Built-in layouts the engine places too far off to draw: their arcs and connectors sit
+ * around boxes in ways the hierarchy algorithms here do not model. They keep the labelled
+ * placeholder rather than show a misleading diagram.
+ */
+const UNMODELLED_LAYOUTS = new Set([
+  'urn:microsoft.com/office/officeart/2008/layout/HalfCircleOrganizationChart',
+]);
+
+/**
  * The drawing Office would save for these parts at this extent, or null when the layout is
  * outside the supported subset.
  */
@@ -56,6 +65,12 @@ export function synthesizeDiagramDrawing(
       !['std', 'init'].includes(layoutVariable(model, node.pres, 'hierBranch'))
   );
   if (branched) return null;
+  if (
+    UNMODELLED_LAYOUTS.has(
+      parts.layoutDef.attributes.find((a) => a.localName === 'uniqueId')?.value ?? ''
+    )
+  )
+    return null;
   const solution = solveWithRules(tree, extent, {
     measurer: options.measurer ?? tableDiagramTextMeasurer,
     fontFamily: options.fontFamily ?? 'Calibri',

@@ -46,7 +46,7 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   default: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
   hierarchy1: { boxes: 56, presets: 68, rotations: 68, fonts: 20, refused: 0 },
   hierarchy2: { boxes: 44, presets: 44, rotations: 44, fonts: 20, refused: 0 },
-  HalfCircleOrganizationChart: { boxes: 0, presets: 60, rotations: 60, fonts: 0, refused: 0 },
+  HalfCircleOrganizationChart: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
 };
 
 function totals(scores: readonly CaseScore[]) {
@@ -112,6 +112,43 @@ describe('SmartArt without a saved drawing', () => {
     const pkg = smartArtPackage({ drawingRelationship: 'none', dataPartXml: part('data') });
     const [projection] = projectDrawingsInPackage(pkg);
     expect(projection!.vectorShape ?? null).toBeNull();
+  });
+});
+
+describe('SmartArt organization chart gates', () => {
+  const lay = (id: string, edit: (data: string) => string = (data) => data) => {
+    const item = fixtures.cases.find((entry) => entry.id === id)!;
+    const parse = (xml: string) => {
+      const read = readOoxmlPart(xml, { name: '/part.xml', contentType: 'application/xml' });
+      if (!read.ok) throw new Error(read.reason);
+      return read.part.root;
+    };
+    const source = (key: 'data' | 'layout' | 'style' | 'colors') =>
+      fixtures.parts[item.parts[key]]!;
+    return synthesizeDiagramDrawing(
+      {
+        dataModel: parse(edit(source('data'))),
+        layoutDef: parse(source('layout')),
+        styleDef: parse(source('style')),
+        colorsDef: parse(source('colors')),
+      },
+      { cx: item.frame[0], cy: item.frame[1] }
+    );
+  };
+
+  test('the half-circle organization chart keeps its placeholder', () => {
+    expect(lay('halforg-short-1-HalfCircleOrganizationChart')).toBeNull();
+  });
+
+  test('a hierarchy whose branches inherit the standard style draws', () => {
+    const drawing = lay('mixed-short-4-hierarchy1', (data) =>
+      data.replace(
+        /(presName="hierRoot\d" presStyleCnt="0")\/>/g,
+        '$1><dgm:presLayoutVars><dgm:hierBranch val="init"/></dgm:presLayoutVars></dgm:prSet>'
+      )
+    );
+    expect(drawing).not.toBeNull();
+    expect(drawingShapes(drawing!)).toHaveLength(17);
   });
 });
 
