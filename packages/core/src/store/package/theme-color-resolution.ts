@@ -209,6 +209,11 @@ export function collectThemeColorScheme(
   return colors;
 }
 
+/** The package's theme part root, or null when it has none. */
+export function packageThemeRoot(pkg: OoxmlPackage): OoxmlElement | null {
+  return relatedRoot(pkg, THEME_RELATIONSHIP, '/word/theme/theme1.xml');
+}
+
 /** Resolve theme colours and style-matrix entries from one immutable package snapshot. */
 /** The package's theme part root, or null without one. */
 export function packageThemeRoot(pkg: OoxmlPackage): OoxmlElement | null {

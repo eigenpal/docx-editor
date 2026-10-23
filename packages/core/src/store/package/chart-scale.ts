@@ -2,11 +2,13 @@
 //
 // The axis starts at zero for data of one sign unless the data sits in a narrow band far from
 // zero. The far end gets five percent of headroom. The major unit is the smallest 1, 2 or 5
-// times a power of ten whose intervals fit the axis length the caller allows; the ends then
-// round out to whole units. Fixed `c:min`, `c:max` and `c:majorUnit` win.
+// times a power of ten that divides the data span into at most nine and a half units and
+// whose intervals fit the axis length the caller allows; the ends then round out to whole
+// units. Fixed `c:min`, `c:max` and `c:majorUnit` win.
 
 /** The search for a unit starts near a tenth of the span. */
 const MAX_INTERVALS = 10;
+const MAX_DATA_UNITS = 9.5;
 /** A tick count limit for any axis, whatever the file asks: bounds label and gridline work. */
 const MAX_TICKS = 1_000;
 
@@ -67,9 +69,13 @@ export function autoValueScale(request: ScaleRequest): ValueScale {
   let major = request.fixedMajor ?? 0;
   if (!(major > 0) || span / major > MAX_TICKS) {
     major = 0;
+    // The data span, before headroom, holds at most nine and a half units, unless both
+    // ends are fixed and only the room on the axis limits the ticks.
+    const fixedEnds = request.fixedMin !== null && request.fixedMax !== null;
+    const dataSpan = (request.fixedMax ?? high) - (request.fixedMin ?? low);
     for (const unit of niceUnits(span / MAX_INTERVALS)) {
       const count = Math.ceil(top / unit - 1e-9) - Math.floor(bottom / unit + 1e-9);
-      if (count <= intervals) {
+      if (count <= intervals && (fixedEnds || dataSpan / unit <= MAX_DATA_UNITS)) {
         major = unit;
         break;
       }

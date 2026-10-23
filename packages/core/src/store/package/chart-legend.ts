@@ -152,7 +152,9 @@ export function placeLegend(
   const pitch = 1.84 * size;
   const textWidth = Math.max(...entries.map((entry) => estimateTextWidth(entry.text, style)));
   const keyText = Math.max(...entries.map((entry) => keyMetrics(entry, size).text));
-  const fits = Math.max(1, Math.floor((height - 20 - line) / pitch) + 1);
+  // A placed legend shows the entries its box holds, centred in the box.
+  const room = manual && manual.h > 0 ? manual.h * height : height - 20;
+  const fits = Math.max(1, Math.floor((room - line) / pitch) + 1);
   const shown = entries.slice(0, fits);
   const blockHeight = line + (shown.length - 1) * pitch;
   const left = manual
@@ -162,7 +164,7 @@ export function placeLegend(
       : width - 10 - textWidth - keyText;
   const center = (box.t + height - 11) / 2;
   const top = manual
-    ? manual.y * height
+    ? manual.y * height + Math.max(0, (room - blockHeight) / 2)
     : legend.position === 'tr'
       ? box.t
       : center - blockHeight / 2;

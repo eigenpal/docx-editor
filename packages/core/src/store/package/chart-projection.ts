@@ -9,6 +9,7 @@ import { readChartModel } from './chart-model.ts';
 import {
   CHART_GRAPHIC_DATA_URI,
   CHART_NAMESPACE_URI,
+  type ChartPart,
   type ChartPartResolver,
 } from './chart-parts.ts';
 import { renderChart } from './chart-render.ts';
@@ -80,7 +81,7 @@ export function projectChart(
   });
   const part = reference ? context.resolveChartPart(reference) : null;
   if (!part) return null;
-  const theme = themeKey(context.resolveSchemeColor);
+  const theme = `${themeKey(context.resolveSchemeColor)}|${part.themeFaces.major}|${part.themeFaces.minor}`;
   const memo = PROJECTIONS.get(anchor);
   if (
     memo &&
@@ -91,7 +92,7 @@ export function projectChart(
   ) {
     return memo.result;
   }
-  const result = projectChartPart(part.chartSpace, part.partName, anchor.id, extent, context);
+  const result = projectChartPart(part, anchor.id, extent, context);
   PROJECTIONS.set(anchor, {
     cx: extent.cx,
     cy: extent.cy,
@@ -103,8 +104,7 @@ export function projectChart(
 }
 
 function projectChartPart(
-  chartSpace: OoxmlElement,
-  partName: string,
+  { chartSpace, partName, themeFaces }: ChartPart,
   anchorId: string,
   extent: Readonly<{ cx: number; cy: number }>,
   context: ChartProjectionContext
@@ -115,7 +115,8 @@ function projectChartPart(
     model,
     extent.cx / EMU_PER_POINT,
     extent.cy / EMU_PER_POINT,
-    context.resolveSchemeColor
+    context.resolveSchemeColor,
+    themeFaces
   );
   if (!rendered || rendered.labels.length > MAX_LABELS) return null;
   const texts: GroupTextboxProjection[] = [];

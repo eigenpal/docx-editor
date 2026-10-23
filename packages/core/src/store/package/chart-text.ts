@@ -8,6 +8,8 @@
 // layout sizes the plot area from an advance-width estimate, and each label is set aligned
 // inside a frame wider than the estimate, so a misestimate moves no text off its anchor.
 
+import type { ChartThemeFaces } from './chart-parts.ts';
+import { estimatedAdvance } from './chart-text-widths.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { resolveColorNode, type ShapeSchemeColorResolver } from './drawing-shape-color.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
@@ -23,22 +25,6 @@ const MAX_LABEL_UNITS = 512;
 const MAX_FACE_UNITS = 128;
 const MAX_LINES = 16;
 
-/** Advance widths of the default chart face for U+0020..U+007E, in thousandths of an em. */
-const REGULAR_ADVANCES = [
-  226, 326, 401, 498, 507, 715, 682, 221, 303, 303, 498, 498, 250, 306, 252, 386, 507, 507, 507,
-  507, 507, 507, 507, 507, 507, 507, 268, 268, 498, 498, 498, 463, 894, 579, 544, 533, 615, 488,
-  459, 631, 623, 252, 319, 520, 420, 855, 646, 662, 517, 673, 543, 459, 487, 642, 567, 890, 519,
-  487, 468, 307, 386, 307, 498, 498, 291, 479, 525, 423, 525, 498, 305, 471, 525, 229, 239, 455,
-  229, 799, 525, 527, 525, 525, 349, 391, 335, 525, 452, 715, 433, 453, 395, 314, 460, 314, 498,
-];
-const BOLD_ADVANCES = [
-  226, 326, 438, 498, 507, 729, 705, 233, 312, 312, 498, 498, 258, 306, 267, 430, 507, 507, 507,
-  507, 507, 507, 507, 507, 507, 507, 276, 276, 498, 498, 498, 463, 898, 606, 561, 529, 630, 488,
-  459, 637, 631, 267, 331, 547, 423, 874, 659, 676, 532, 686, 563, 473, 495, 653, 591, 906, 551,
-  520, 478, 325, 430, 325, 498, 498, 300, 494, 537, 418, 537, 503, 316, 474, 537, 246, 255, 480,
-  246, 813, 537, 538, 537, 537, 355, 399, 347, 537, 473, 745, 459, 474, 397, 344, 475, 344, 498,
-];
-
 /** Line height of the default chart face, as a multiple of the size. */
 export const CHART_LINE_HEIGHT = 1.22;
 
@@ -52,6 +38,8 @@ export interface ChartTextStyle {
   readonly latin: string;
   readonly eastAsian: string | null;
   readonly complex: string | null;
+  /** The theme faces the `+mj`/`+mn` tokens stand for, for width estimates only. */
+  readonly themeFaces?: ChartThemeFaces;
 }
 
 function flag(element: OoxmlElement, name: string): boolean | null {
@@ -123,19 +111,18 @@ export function bodyRotation(body: OoxmlElement | null): number | null {
   return value / 60_000;
 }
 
-function advance(code: number, bold: boolean): number {
-  if (code >= 0x20 && code <= 0x7e) return (bold ? BOLD_ADVANCES : REGULAR_ADVANCES)[code - 0x20]!;
-  if (code >= 0x2e80) return 1000;
-  return 560;
-}
-
 /** Estimated advance width of `text` in points. */
 export function estimateTextWidth(text: string, style: ChartTextStyle): number {
+  const face = style.latin.startsWith('+mj')
+    ? (style.themeFaces?.major ?? style.latin)
+    : style.latin.startsWith('+mn')
+      ? (style.themeFaces?.minor ?? style.latin)
+      : style.latin;
   let total = 0;
   let units = 0;
   for (const char of text) {
     if (++units > MAX_LABEL_UNITS) break;
-    total += advance(char.codePointAt(0)!, style.bold);
+    total += estimatedAdvance(char.codePointAt(0)!, face, style.bold);
   }
   return (total / 1000) * style.sizePt;
 }

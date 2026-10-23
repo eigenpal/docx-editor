@@ -10,6 +10,7 @@ import {
   type ChartSeries,
 } from './chart-model.ts';
 import { formatChartNumber } from './chart-number-format.ts';
+import type { ChartThemeFaces } from './chart-parts.ts';
 import {
   applyRunLayer,
   bodyDefaultRun,
@@ -41,9 +42,11 @@ export const DEFAULT_CHART_TEXT: ChartTextStyle = {
 /** The chart-wide text style: the chart space `c:txPr` over the defaults. */
 export function chartBaseText(
   model: ChartModel,
-  resolveSchemeColor?: ShapeSchemeColorResolver
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  themeFaces?: ChartThemeFaces
 ): ChartTextStyle {
-  return applyRunLayer(DEFAULT_CHART_TEXT, bodyDefaultRun(model.txPr), resolveSchemeColor);
+  const base = themeFaces ? { ...DEFAULT_CHART_TEXT, themeFaces } : DEFAULT_CHART_TEXT;
+  return applyRunLayer(base, bodyDefaultRun(model.txPr), resolveSchemeColor);
 }
 
 /** An element's text style: its `c:txPr` over the chart-wide style and element defaults. */

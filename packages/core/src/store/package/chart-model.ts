@@ -162,7 +162,6 @@ export interface ChartModel {
   readonly axes: ReadonlyMap<string, ChartAxis>;
   readonly legend: ChartLegend | null;
   readonly view3D: boolean;
-  /** Dates in the 1904 system. */
 }
 
 export function child(

@@ -14,7 +14,7 @@ import {
 } from './chart-scene.ts';
 import { seriesLook, variesByPoint } from './chart-series.ts';
 import type { ChartPaint } from './chart-style.ts';
-import { estimateTextWidth, lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
+import { lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
 
 export interface SeriesMapping {
   readonly categoryAt: (index: number) => number;

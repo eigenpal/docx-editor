@@ -18,6 +18,7 @@ import {
   type ChartStroke,
 } from './chart-style.ts';
 import { bodyRotation, paragraphsHeight, paragraphsWidth, type ChartLabel } from './chart-text.ts';
+import type { ChartThemeFaces } from './chart-parts.ts';
 import type { ShapeSchemeColorResolver } from './drawing-shape-color.ts';
 
 const MARGIN = 11;
@@ -39,11 +40,12 @@ export function renderChart(
   model: ChartModel,
   width: number,
   height: number,
-  resolveSchemeColor?: ShapeSchemeColorResolver
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  themeFaces?: ChartThemeFaces
 ): ChartRender | null {
   const scene = new ChartScene();
   const labels: ChartLabel[] = [];
-  const baseText = chartBaseText(model, resolveSchemeColor);
+  const baseText = chartBaseText(model, resolveSchemeColor, themeFaces);
   const seriesCount = model.plots.reduce((sum, plot) => sum + plot.series.length, 0);
   const look: LookContext = { model, resolveSchemeColor, seriesCount };
 
