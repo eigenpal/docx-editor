@@ -717,7 +717,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The extent is reserved with a labelled placeholder. React and Vue DocxEditor.UnsupportedElement declarations replace the fallback with an application component. The original chart payload and layout remain preserved.',
+      'Charts render read-only from the values cached in the chart part, in the editor and in PDF export: column and bar charts (clustered, stacked, and percent stacked), line, area, scatter, pie, and doughnut charts. Axes, tick label number and date formats, gridlines, chart and axis titles, legends, data labels, series colors, markers, smoothed lines, exploded slices, and manual plot layouts render. 3-D charts render flat. The embedded workbook is never read, and external data is never loaded. Trendlines and error bars are not drawn. Radar, stock, bubble, surface, and bar-of-pie charts, and charts that combine a pie with axes, keep a labelled placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The chart parts are preserved on save.',
   },
   {
     id: 'images.smartart',
