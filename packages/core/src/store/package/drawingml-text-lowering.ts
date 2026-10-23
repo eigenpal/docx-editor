@@ -25,6 +25,10 @@ const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MAX_PARAGRAPHS = 256;
 const MAX_RUNS = 2048;
 const MAX_TEXT_UNITS = 65_536;
+/** Generated markup for one text body; font names and run properties repeat per run. */
+const MAX_XML_UNITS = 4_194_304;
+/** Longer typeface names fall back to the theme font rather than repeating per run. */
+const MAX_FACE_UNITS = 128;
 
 /** DrawingML's run size when nothing names one: 18 pt (ECMA-376 21.1.2.3.9). */
 const DEFAULT_SIZE_HUNDREDTHS = 1800;
@@ -43,6 +47,13 @@ export interface DrawingTextDefaults {
   readonly color: ShapeColor | null;
 }
 
+/**
+ * A lowered text body; `'no-text'` when it holds nothing to paint; `'unsupported'` when it
+ * holds text the lowering cannot express (a vertical mode other than a quarter turn, several
+ * columns, or a body past the bounds), so its shape must not render without it.
+ */
+export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
+
 export interface LoweredDrawingText {
   /** A `w:txbxContent` root holding the lowered paragraphs; node ids are namespaced. */
   readonly content: OoxmlElement;
@@ -51,6 +62,11 @@ export interface LoweredDrawingText {
   readonly noWrap: boolean;
   /** Clockwise turn `a:bodyPr/@rot` adds to the text, in degrees. */
   readonly rotationDegrees: number;
+  /**
+   * `vert="vert"` (90) or `vert="vert270"` (270): the lines run along the box's long side, so
+   * the story lays out in the box turned a quarter. Insets are already in text space.
+   */
+  readonly quarterTurn: 0 | 90 | 270;
 }
 
 function child(parent: OoxmlElement | null | undefined, localName: string): OoxmlElement | null {
@@ -174,6 +190,13 @@ const ALIGNMENTS: ReadonlyMap<string, string> = new Map([
   ['thaiDist', 'thaiDistribute'],
 ]);
 
+/** A typeface name the lowering may copy: bounded and valid in XML. */
+function usableFace(face: string | undefined): string | undefined {
+  return face !== undefined && face.length <= MAX_FACE_UNITS && isValidXmlText(face)
+    ? face
+    : undefined;
+}
+
 /** A theme font token (`+mn-lt`, `+mj-ea`, …) as its WordprocessingML theme slot. */
 function themeFontSlot(typeface: string): string | null {
   const match = /^\+(mn|mj)-(lt|ea|cs)$/.exec(typeface);
@@ -219,29 +242,30 @@ function runProperties(
   // Half points, the unit `w:sz` carries; rounding keeps a valid integer.
   const halfPoints = Math.max(2, Math.round(sizePoints * 2));
   const parts: string[] = [];
-  const latin = attr(child(own, 'latin'), 'typeface') ?? attr(child(fallback, 'latin'), 'typeface');
-  const eastAsian = attr(child(own, 'ea'), 'typeface') ?? attr(child(fallback, 'ea'), 'typeface');
-  const complex = attr(child(own, 'cs'), 'typeface') ?? attr(child(fallback, 'cs'), 'typeface');
+  const face = (name: string) =>
+    usableFace(attr(child(own, name), 'typeface')) ??
+    usableFace(attr(child(fallback, name), 'typeface'));
+  const latin = face('latin');
+  const eastAsian = face('ea');
+  const complex = face('cs');
   const slot = context.defaults.fontSlot ?? 'minor';
   const fontAttributes: string[] = [];
   const latinFace = overrides.face ?? latin ?? `+${slot === 'major' ? 'mj' : 'mn'}-lt`;
   const latinTheme = themeFontSlot(latinFace);
   if (latinTheme) {
     fontAttributes.push(`w:asciiTheme="${latinTheme}"`, `w:hAnsiTheme="${latinTheme}"`);
-  } else if (isValidXmlText(latinFace)) {
+  } else {
     const face = escapeXmlAttribute(latinFace);
     fontAttributes.push(`w:ascii="${face}"`, `w:hAnsi="${face}"`);
   }
   const eastAsianFace = eastAsian ?? `+${slot === 'major' ? 'mj' : 'mn'}-ea`;
   const eastAsianTheme = themeFontSlot(eastAsianFace);
   if (eastAsianTheme) fontAttributes.push(`w:eastAsiaTheme="${eastAsianTheme}"`);
-  else if (isValidXmlText(eastAsianFace))
-    fontAttributes.push(`w:eastAsia="${escapeXmlAttribute(eastAsianFace)}"`);
+  else fontAttributes.push(`w:eastAsia="${escapeXmlAttribute(eastAsianFace)}"`);
   const complexFace = complex ?? `+${slot === 'major' ? 'mj' : 'mn'}-cs`;
   const complexTheme = themeFontSlot(complexFace);
   if (complexTheme) fontAttributes.push(`w:cstheme="${complexTheme}"`);
-  else if (isValidXmlText(complexFace))
-    fontAttributes.push(`w:cs="${escapeXmlAttribute(complexFace)}"`);
+  else fontAttributes.push(`w:cs="${escapeXmlAttribute(complexFace)}"`);
   parts.push(`<w:rFonts ${fontAttributes.join(' ')}/>`);
   const bold = flagAttr(own, 'b') ?? flagAttr(fallback, 'b') ?? false;
   const italic = flagAttr(own, 'i') ?? flagAttr(fallback, 'i') ?? false;
@@ -290,20 +314,18 @@ function textOfRun(run: OoxmlElement): string {
   return text;
 }
 
-/**
- * Lower one text body. Null when it carries no text worth painting, uses a text mode the
- * story layout cannot express (vertical text, multiple columns), or exceeds the bounds.
- */
+/** Lower one text body; see {@link TextBodyLowering}. */
 export function lowerDrawingTextBody(
   txBody: OoxmlElement,
   partName: string,
   defaults: DrawingTextDefaults,
   resolveSchemeColor?: ShapeSchemeColorResolver
-): LoweredDrawingText | null {
+): TextBodyLowering {
   const bodyPr = child(txBody, 'bodyPr');
   const vert = attr(bodyPr, 'vert');
-  if (vert !== undefined && vert !== 'horz') return null;
-  if ((intAttr(bodyPr, 'numCol', 1, 16) ?? 1) !== 1) return null;
+  const quarterTurn = vert === 'vert' ? 90 : vert === 'vert270' ? 270 : 0;
+  if (vert !== undefined && vert !== 'horz' && quarterTurn === 0) return 'unsupported';
+  if ((intAttr(bodyPr, 'numCol', 1, 16) ?? 1) !== 1) return 'unsupported';
   const lstStyle = child(txBody, 'lstStyle');
   const normAutofit = child(bodyPr, 'normAutofit');
   const fontScale = (intAttr(normAutofit, 'fontScale', 1_000, 100_000) ?? 100_000) / 100_000;
@@ -315,7 +337,9 @@ export function lowerDrawingTextBody(
   for (const node of txBody.children) {
     if (isElement(node) && node.namespaceUri === A && node.localName === 'p') paragraphs.push(node);
   }
-  if (paragraphs.length === 0 || paragraphs.length > MAX_PARAGRAPHS) return null;
+  if (paragraphs.length === 0) return 'no-text';
+  if (paragraphs.length > MAX_PARAGRAPHS) return 'unsupported';
+  let xmlUnits = 0;
   let runCount = 0;
   let textUnits = 0;
   let anyText = false;
@@ -329,7 +353,7 @@ export function lowerDrawingTextBody(
       if (!isElement(node) || node.namespaceUri !== A) continue;
       if (node.localName !== 'r' && node.localName !== 'br' && node.localName !== 'fld') continue;
       runCount += 1;
-      if (runCount > MAX_RUNS) return null;
+      if (runCount > MAX_RUNS) return 'unsupported';
       const rPr = runProperties(child(node, 'rPr'), props.defaultRun, runContext);
       firstSize ??= rPr.sizePoints;
       firstRun ??= { own: child(node, 'rPr'), xml: rPr.xml };
@@ -339,10 +363,11 @@ export function lowerDrawingTextBody(
       }
       const text = textOfRun(node);
       textUnits += text.length;
-      if (textUnits > MAX_TEXT_UNITS) return null;
-      if (!isValidXmlText(text)) return null;
+      if (textUnits > MAX_TEXT_UNITS || !isValidXmlText(text)) return 'unsupported';
       if (text.trim() !== '') anyText = true;
       runs.push(`<w:r>${rPr.xml}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r>`);
+      xmlUnits += rPr.xml.length + text.length * 6;
+      if (xmlUnits > MAX_XML_UNITS) return 'unsupported';
     }
     const endRun = runProperties(child(paragraph, 'endParaRPr'), props.defaultRun, runContext);
     const sizePoints = firstSize ?? endRun.sizePoints;
@@ -350,7 +375,7 @@ export function lowerDrawingTextBody(
       props.bullet && firstRun && isValidXmlText(props.bullet.char) ? props.bullet : null;
     let bulletTab = false;
     if (bullet && firstRun) {
-      const face = bullet.font && isValidXmlText(bullet.font) ? bullet.font : undefined;
+      const face = usableFace(bullet.font);
       const bulletProps = runProperties(firstRun.own, props.defaultRun, runContext, {
         ...(face ? { face } : {}),
         sizeScale: bullet.sizeScale,
@@ -391,26 +416,35 @@ export function lowerDrawingTextBody(
         `${ind}<w:contextualSpacing w:val="0"/><w:jc w:val="${jc}"/>${firstRun?.xml ?? endRun.xml}</w:pPr>${runs.join('')}</w:p>`
     );
   }
-  if (!anyText) return null;
+  if (!anyText) return 'no-text';
   const parsed = readOoxmlPart(`<w:txbxContent xmlns:w="${W_NS}">${xml.join('')}</w:txbxContent>`, {
     name: partName,
     contentType: 'application/xml',
   });
-  if (!parsed.ok) return null;
+  if (!parsed.ok) return 'unsupported';
   const inset = (name: string, fallback: number): number =>
     intAttr(bodyPr, name, 0, 51_206_400) ?? fallback;
+  const box = {
+    top: inset('tIns', DEFAULT_INSET_TB_EMU),
+    right: inset('rIns', DEFAULT_INSET_LR_EMU),
+    bottom: inset('bIns', DEFAULT_INSET_TB_EMU),
+    left: inset('lIns', DEFAULT_INSET_LR_EMU),
+  };
+  // Turned a quarter clockwise, the text's top edge lies on the box's right side.
+  const insetsEmu =
+    quarterTurn === 90
+      ? { top: box.right, right: box.bottom, bottom: box.left, left: box.top }
+      : quarterTurn === 270
+        ? { top: box.left, right: box.top, bottom: box.right, left: box.bottom }
+        : box;
   const anchor = attr(bodyPr, 'anchor');
   const rotation = intAttr(bodyPr, 'rot', -21_600_000, 21_600_000) ?? 0;
   return {
     content: parsed.part.root,
-    insetsEmu: {
-      top: inset('tIns', DEFAULT_INSET_TB_EMU),
-      right: inset('rIns', DEFAULT_INSET_LR_EMU),
-      bottom: inset('bIns', DEFAULT_INSET_TB_EMU),
-      left: inset('lIns', DEFAULT_INSET_LR_EMU),
-    },
+    insetsEmu,
     verticalAnchor: anchor === 'ctr' ? 'center' : anchor === 'b' ? 'bottom' : 'top',
     noWrap: attr(bodyPr, 'wrap') === 'none',
     rotationDegrees: rotation / 60_000,
+    quarterTurn,
   };
 }

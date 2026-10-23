@@ -87,7 +87,8 @@ export function vectorShapeFrame(
       applyGradientFill(document, svg, path, component.fillGradient);
     }
     path.setAttribute('fill-rule', 'evenodd');
-    if (component.fillAlpha < 1) {
+    // A gradient's stops carry their own opacity; the mean would apply it twice.
+    if (component.fillAlpha < 1 && !component.fillGradient) {
       path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
     }
     if (component.strokeHex !== null) {

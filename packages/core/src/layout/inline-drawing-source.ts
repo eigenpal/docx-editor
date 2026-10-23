@@ -42,6 +42,7 @@ import {
 } from '../store/package/validated-image-bytes.ts';
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 import { packageDrawingProjectionContext } from '../store/package/drawing-projection-context.ts';
+import { diagramPartsToken } from '../store/package/diagram-parts.ts';
 import { wrapFootprintProjection } from '../store/package/drawing-wrap-footprint.ts';
 import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -484,6 +485,7 @@ function createPartDrawingContextSlot(options: {
   let lastCompatiblePart = part;
 
   const theme = createPackageShapeThemeResolvers(pkg);
+  const diagramToken = diagramPartsToken(pkg);
   const stylesPart = stylesPartOf(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(
     part,
@@ -657,6 +659,7 @@ function createPartDrawingContextSlot(options: {
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
+      if (diagramPartsToken(nextPkg) !== diagramToken) return false;
       if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) {
         lastCompatiblePart = nextPart;
         return true;

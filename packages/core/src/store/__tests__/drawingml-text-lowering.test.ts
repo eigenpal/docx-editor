@@ -6,6 +6,7 @@ import {
   lowerDrawingTextBody,
   type DrawingTextDefaults,
   type LoweredDrawingText,
+  type TextBodyLowering,
 } from '../package/drawingml-text-lowering.ts';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { A, DSP } from './smartart-fixture.ts';
@@ -26,13 +27,20 @@ function txBody(inner: string): OoxmlElement {
   return parsed.part.root;
 }
 
-function lower(inner: string, defaults: DrawingTextDefaults = DEFAULTS): LoweredDrawingText | null {
+function lowerRaw(inner: string, defaults: DrawingTextDefaults = DEFAULTS): TextBodyLowering {
   return lowerDrawingTextBody(
     txBody(inner),
     '/word/diagrams/drawing1.xml#text:1',
     defaults,
     resolveScheme
   );
+}
+
+/** A body that lowers to text; any other outcome fails the test. */
+function lower(inner: string, defaults: DrawingTextDefaults = DEFAULTS): LoweredDrawingText {
+  const lowered = lowerRaw(inner, defaults);
+  if (typeof lowered === 'string') throw new Error(`expected text, got ${lowered}`);
+  return lowered;
 }
 
 function paragraph(pPr: string, runs: string): string {
@@ -311,23 +319,48 @@ describe('DrawingML text lowering', () => {
     expect(defaults.verticalAnchor).toBe('top');
   });
 
-  test('refuses vertical text and multiple columns', () => {
-    expect(lower('<a:bodyPr vert="vert"/>' + paragraph('', run('x')))).toBeNull();
-    expect(lower('<a:bodyPr vert="horz"/>' + paragraph('', run('x')))).not.toBeNull();
-    expect(lower('<a:bodyPr numCol="2"/>' + paragraph('', run('x')))).toBeNull();
+  test('turns vertical text a quarter and refuses other vertical modes and columns', () => {
+    const insets = 'lIns="1" tIns="2" rIns="3" bIns="4"';
+    const clockwise = lowerRaw(`<a:bodyPr vert="vert" ${insets}/>` + paragraph('', run('x')));
+    expect(clockwise).toMatchObject({
+      quarterTurn: 90,
+      insetsEmu: { top: 3, right: 4, bottom: 1, left: 2 },
+    });
+    const counter = lowerRaw(`<a:bodyPr vert="vert270" ${insets}/>` + paragraph('', run('x')));
+    expect(counter).toMatchObject({
+      quarterTurn: 270,
+      insetsEmu: { top: 1, right: 2, bottom: 3, left: 4 },
+    });
+    expect(lowerRaw('<a:bodyPr vert="horz"/>' + paragraph('', run('x')))).toMatchObject({
+      quarterTurn: 0,
+    });
+    expect(lowerRaw('<a:bodyPr vert="eaVert"/>' + paragraph('', run('x')))).toBe('unsupported');
+    expect(lowerRaw('<a:bodyPr numCol="2"/>' + paragraph('', run('x')))).toBe('unsupported');
   });
 
   test('a body with no visible text lowers to nothing', () => {
-    expect(lower(BODY)).toBeNull();
-    expect(lower(BODY + paragraph('', '<a:endParaRPr/>'))).toBeNull();
-    expect(lower(BODY + paragraph('', run('   ')))).toBeNull();
+    expect(lowerRaw(BODY)).toBe('no-text');
+    expect(lowerRaw(BODY + paragraph('', '<a:endParaRPr/>'))).toBe('no-text');
+    expect(lowerRaw(BODY + paragraph('', run('   ')))).toBe('no-text');
   });
 
   test('refuses bodies past the paragraph and run bounds', () => {
     const paragraphs = Array.from({ length: 257 }, () => paragraph('', run('x'))).join('');
-    expect(lower(BODY + paragraphs)).toBeNull();
+    expect(lowerRaw(BODY + paragraphs)).toBe('unsupported');
     const runs = Array.from({ length: 2049 }, () => run('x')).join('');
-    expect(lower(BODY + paragraph('', runs))).toBeNull();
+    expect(lowerRaw(BODY + paragraph('', runs))).toBe('unsupported');
+  });
+
+  test('a long typeface name falls back to the theme font instead of repeating per run', () => {
+    const face = 'F'.repeat(4096);
+    const runs = Array.from(
+      { length: 64 },
+      () => `<a:r><a:rPr lang="en-US"><a:latin typeface="${face}"/></a:rPr><a:t>x</a:t></a:r>`
+    ).join('');
+    const lowered = lowerRaw(BODY + paragraph('', runs));
+    if (typeof lowered === 'string') throw new Error(`expected text, got ${lowered}`);
+    expect(JSON.stringify(lowered.content)).not.toContain(face);
+    expect(JSON.stringify(lowered.content)).toContain('minorHAnsi');
   });
 
   test('refuses text with characters XML 1.0 cannot carry', () => {
@@ -338,6 +371,6 @@ describe('DrawingML text lowering', () => {
         ? { ...node, value: 'bad\u0001' }
         : ({ ...node, children: node.children.map(swap) } as OoxmlNode);
     const poisoned = swap(body) as OoxmlElement;
-    expect(lowerDrawingTextBody(poisoned, '/x.xml', DEFAULTS, resolveScheme)).toBeNull();
+    expect(lowerDrawingTextBody(poisoned, '/x.xml', DEFAULTS, resolveScheme)).toBe('unsupported');
   });
 });

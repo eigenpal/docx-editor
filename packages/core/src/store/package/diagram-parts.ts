@@ -135,3 +135,24 @@ function resolveDiagramParts(
     drawingPartName: valid ? drawing.partName : null,
   };
 }
+
+const partIds = new WeakMap<OoxmlElement, number>();
+let nextPartId = 1;
+
+/**
+ * The identity of every diagram part in a package. Layout reuses drawing projections while
+ * the story part is unchanged; a changed diagram part must invalidate them too.
+ */
+export function diagramPartsToken(pkg: OoxmlPackage): string {
+  const ids: number[] = [];
+  for (const [name, part] of pkg.parts) {
+    if (!name.startsWith('/word/diagrams/')) continue;
+    let id = partIds.get(part.root);
+    if (id === undefined) {
+      id = nextPartId++;
+      partIds.set(part.root, id);
+    }
+    ids.push(id);
+  }
+  return ids.join(',');
+}

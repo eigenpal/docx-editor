@@ -81,6 +81,18 @@ const PACKAGE_THEME_CACHE = new WeakMap<OoxmlPackage, PackageShapeThemeResolvers
 const THEME_ROOT_IDS = new WeakMap<OoxmlElement, number>();
 let nextThemeRootId = 1;
 
+const THEME_TOKENS = new WeakMap<(token: string) => string | null, string>();
+
+/**
+ * The theme and settings identity behind a scheme colour resolver. Resolvers are rebuilt for
+ * every package revision; the token stays the same while the theme and settings parts do.
+ */
+export function shapeThemeCacheToken(
+  resolveSchemeColor: (token: string) => string | null
+): string | undefined {
+  return THEME_TOKENS.get(resolveSchemeColor);
+}
+
 function rootIdentity(root: OoxmlElement | null): number {
   if (!root) return 0;
   const existing = THEME_ROOT_IDS.get(root);
@@ -267,6 +279,7 @@ export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShap
     },
     cacheToken: `${rootIdentity(theme)}|${rootIdentity(settings)}`,
   });
+  THEME_TOKENS.set(result.resolveSchemeColor, result.cacheToken);
   registerGroupThemeEffects(result.resolveStyleMatrixReference, (index) => {
     if (
       !formatScheme ||

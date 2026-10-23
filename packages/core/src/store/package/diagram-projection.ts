@@ -33,6 +33,7 @@ import { findDirectChild, parseEmu, readSize } from './drawing-shape-readers.ts'
 import { lowerDrawingTextBody, type DrawingTextDefaults } from './drawingml-text-lowering.ts';
 import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
+import { shapeThemeCacheToken } from './theme-color-resolution.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
 const DSP = DIAGRAM_DRAWING_NAMESPACE_URI;
@@ -242,20 +243,24 @@ function walkShapes(
       textDefaults(node, context),
       context.resolveSchemeColor
     );
-    if (!lowered) continue;
-    const cx = Math.round(frame.extent.cx * transform.scaleX);
-    const cy = Math.round(frame.extent.cy * transform.scaleY);
-    if (cx <= 0 || cy <= 0) continue;
-    const rotation = (((frame.rotation + lowered.rotationDegrees) % 360) + 360) % 360;
+    // Text a shape cannot show must not vanish silently: the diagram keeps its placeholder.
+    if (lowered === 'unsupported') return false;
+    if (lowered === 'no-text') continue;
+    const width = frame.extent.cx * transform.scaleX;
+    const height = frame.extent.cy * transform.scaleY;
+    if (!(width > 0) || !(height > 0)) continue;
+    // A quarter-turned body lays out in the box turned about its centre.
+    const turned = lowered.quarterTurn !== 0;
+    const cx = Math.round(turned ? height : width);
+    const cy = Math.round(turned ? width : height);
+    const left = transform.x + frame.offset.x * transform.scaleX + (width - cx) / 2;
+    const top = transform.y + frame.offset.y * transform.scaleY + (height - cy) / 2;
+    const rotation =
+      (((frame.rotation + lowered.rotationDegrees + lowered.quarterTurn) % 360) + 360) % 360;
     out.texts.push(
       Object.freeze({
         memberNodeId: node.id,
-        frameEmu: Object.freeze({
-          x: Math.round(transform.x + frame.offset.x * transform.scaleX),
-          y: Math.round(transform.y + frame.offset.y * transform.scaleY),
-          cx,
-          cy,
-        }),
+        frameEmu: Object.freeze({ x: Math.round(left), y: Math.round(top), cx, cy }),
         story: Object.freeze({
           contentNodeId: lowered.content.id,
           content: lowered.content,
@@ -313,6 +318,10 @@ function elementId(element: object | null | undefined): number {
  * to, not the functions themselves.
  */
 function themeKey(context: DiagramProjectionContext): string {
+  const token = context.resolveSchemeColor
+    ? shapeThemeCacheToken(context.resolveSchemeColor)
+    : undefined;
+  if (token !== undefined) return token;
   const colors = SCHEME_SLOTS.map((slot) => context.resolveSchemeColor?.(slot) ?? '').join(',');
   const matrix = context.resolveStyleMatrixReference;
   const lists = matrix
