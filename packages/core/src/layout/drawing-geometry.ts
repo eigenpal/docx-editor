@@ -757,6 +757,7 @@ export function drawingGeometryFromProjection(options: {
       crop: { left: 0, top: 0, right: 0, bottom: 0 },
       transform: defaultTransform,
       presetGeometry: null,
+      ...(groupPicture.clipUnit ? { clipUnit: groupPicture.clipUnit } : {}),
     });
     const extent = options.projection.extentEmu;
     const scaleX = extent.cx > 0 ? options.extentWidth / extent.cx : 0;

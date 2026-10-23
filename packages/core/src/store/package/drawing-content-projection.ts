@@ -22,6 +22,7 @@ import {
 import { groupTextboxesField, type GroupTextboxProjection } from './group-textbox-projection.ts';
 import { projectPictureFrame, type PictureFrameEffects } from './drawing-picture-frame.ts';
 import { projectTextboxChrome } from './drawing-textbox-chrome.ts';
+import { readShapePictureFill } from './drawing-shape-picture-fill.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
 export interface DrawingContentContext {
@@ -68,6 +69,22 @@ export function projectDrawingContent(
       vectorShape: frame.vectorShape,
       ...(frame.clipUnit ? { pictureClipUnit: frame.clipUnit } : {}),
       ...(frame.effects ? { pictureEffects: frame.effects } : {}),
+    };
+  }
+  // A shape filled with a picture paints that picture as a group picture over its extent.
+  const pictureFill = readShapePictureFill(anchor, extent);
+  if (pictureFill) {
+    return {
+      groupPicture: pictureFill,
+      vectorShape: projectVectorShape(
+        anchor,
+        extent,
+        compatibilityMode,
+        ctx.resolveSchemeColor,
+        ctx.resolveStyleMatrixReference
+      ),
+      textboxStory: null,
+      paints: true,
     };
   }
   const groupRead = readGroupPicture(

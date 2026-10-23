@@ -369,6 +369,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           groupPicture.linkedRelationshipId ?? '',
           groupPicture.memberNodeId,
           groupPicture.alternateContent ? 'mc' : '',
+          groupPicture.clipUnit?.map((point) => `${point.x},${point.y}`).join(' ') ?? '',
         ])
       : '',
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',

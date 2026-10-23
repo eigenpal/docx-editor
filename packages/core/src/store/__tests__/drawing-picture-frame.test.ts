@@ -194,3 +194,38 @@ describe('compound outlines on shapes', () => {
     expect(shape('rect', 'quad')).toHaveLength(1);
   });
 });
+
+describe('shapes filled with a picture', () => {
+  function filled(geometry: string, extra = '') {
+    return project(
+      `<wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/>` +
+        `<a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="${geometry}"><a:avLst/>` +
+        `</a:prstGeom><a:blipFill><a:blip r:embed="rId1"/>${extra}<a:stretch><a:fillRect/>` +
+        `</a:stretch></a:blipFill><a:ln w="12700">${RED}</a:ln></wps:spPr><wps:bodyPr/></wps:wsp>`,
+      WPS
+    );
+  }
+
+  test('the picture fills the box, clipped to the geometry, under the outline', () => {
+    const projection = filled('ellipse', '<a:srcRect l="10000" r="10000"/>');
+    const picture = projection.groupPicture!;
+    expect(picture.embeddedRelationshipId).toBe('rId1');
+    expect(picture.frameEmu).toEqual({ x: 0, y: 0, cx: CX, cy: CY });
+    expect(picture.crop.left).toBeCloseTo(0.1, 6);
+    expect(picture.clipUnit!.length).toBeGreaterThan(8);
+    const [outline] = projection.vectorShape!.components;
+    expect(outline!.fillHex).toBeNull();
+    expect(outline!.strokeHex).toBe('C00000');
+  });
+
+  test('a rectangle keeps the picture box, and a tiled fill is left out', () => {
+    expect(filled('rect').groupPicture!.clipUnit).toBeUndefined();
+    const tiled = project(
+      `<wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/>` +
+        `<a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+        `<a:blipFill><a:blip r:embed="rId1"/><a:tile/></a:blipFill></wps:spPr><wps:bodyPr/></wps:wsp>`,
+      WPS
+    );
+    expect(tiled.groupPicture).toBeNull();
+  });
+});

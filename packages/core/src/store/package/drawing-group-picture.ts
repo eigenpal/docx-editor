@@ -48,6 +48,8 @@ export interface GroupPictureProjection {
    * MC payloads it cannot draw.
    */
   readonly alternateContent: boolean;
+  /** The ring that clips the picture, in the unit square of the extent; absent for a box. */
+  readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[];
 }
 
 /** Whether a point, in extent EMU, lies within one extent of the drawing on every side. */
