@@ -14,6 +14,8 @@ import {
   symlinkSync,
   statSync,
   utimesSync,
+  existsSync,
+  chmodSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
@@ -55,8 +57,27 @@ function run(source: string, cache: string, selectedLoader = loader) {
   expect(result.exitCode, result.stderr.toString()).toBe(0);
   return JSON.parse(result.stdout.toString()) as {
     value: number;
-    stats: { hits: number; compiled: number; disabled: boolean };
+    stats: { hits: number; compiled: number; disabled: boolean; warning: string | null };
   };
+}
+
+function entries(cache: string) {
+  return readdirSync(cache, { recursive: true })
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => join(cache, name));
+}
+
+function alternateLoader(root: string, name: string, edit: (source: string) => string) {
+  const packageRoot = join(root, 'compiler');
+  const folder = join(packageRoot, 'scripts/evaluation');
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }));
+  if (!existsSync(join(packageRoot, 'node_modules'))) {
+    symlinkSync(join(repository, 'node_modules'), join(packageRoot, 'node_modules'));
+  }
+  const path = join(folder, `${name}.mjs`);
+  writeFileSync(path, edit(readFileSync(loader, 'utf8')));
+  return path;
 }
 
 test('fresh processes reuse compiled TypeScript, MTS, and TSX modules', () => {
@@ -64,9 +85,12 @@ test('fresh processes reuse compiled TypeScript, MTS, and TSX modules', () => {
     const f = fixture(extension);
     const cold = run(f.source, f.cache);
     expect(cold.value).toBe(7);
-    expect(cold.stats).toEqual({ hits: 0, compiled: 1, disabled: false });
+    expect(cold.stats).toEqual({ hits: 0, compiled: 1, disabled: false, warning: null });
     const warm = run(f.source, f.cache);
-    expect(warm).toEqual({ value: 7, stats: { hits: 1, compiled: 0, disabled: false } });
+    expect(warm).toEqual({
+      value: 7,
+      stats: { hits: 1, compiled: 0, disabled: false, warning: null },
+    });
   }
 });
 
@@ -81,30 +105,31 @@ test('content changes invalidate compiled code even with preserved timestamps', 
   expect(changed.value).toBe(8);
   expect(changed.stats.compiled).toBe(1);
   writeFileSync(f.source, original);
+  expect(run(f.source, f.cache).stats.compiled).toBe(1);
+  expect(entries(f.cache)).toHaveLength(1);
   expect(run(f.source, f.cache).stats.compiled).toBe(0);
 });
 
-test('different compiler options cannot reuse previous output', () => {
+test('different compiler versions and options cannot reuse previous output', () => {
   const f = fixture();
-  run(f.source, f.cache);
-  const packageRoot = join(f.root, 'compiler');
-  const folder = join(packageRoot, 'scripts/evaluation');
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(join(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }));
-  symlinkSync(join(repository, 'node_modules'), join(packageRoot, 'node_modules'));
-  const changedLoader = join(folder, 'runtime-loader.mjs');
-  writeFileSync(
-    changedLoader,
-    readFileSync(loader, 'utf8').replace('ts.ScriptTarget.ES2022', 'ts.ScriptTarget.ES2020')
+  const baseline = alternateLoader(f.root, 'baseline', (source) => source);
+  run(f.source, f.cache, baseline);
+  const changedLoader = alternateLoader(f.root, 'options', (source) =>
+    source.replace('ts.ScriptTarget.ES2022', 'ts.ScriptTarget.ES2020')
   );
   expect(run(f.source, f.cache, changedLoader).stats.compiled).toBe(1);
   expect(run(f.source, f.cache, changedLoader).stats.hits).toBe(1);
+  const changedVersion = alternateLoader(f.root, 'version', (source) =>
+    source.replace('ts.version', '`${ts.version}-test-version`')
+  );
+  expect(run(f.source, f.cache, changedVersion).stats.compiled).toBe(1);
+  expect(run(f.source, f.cache, changedVersion).stats.hits).toBe(1);
 });
 
 test('damaged and mismatched cache entries compile again', () => {
   const f = fixture();
   run(f.source, f.cache);
-  const entry = join(f.cache, readdirSync(f.cache).find((name) => name.endsWith('.json'))!);
+  const entry = entries(f.cache)[0];
   const record = JSON.parse(readFileSync(entry, 'utf8'));
   writeFileSync(
     entry,
@@ -119,11 +144,61 @@ test('damaged and mismatched cache entries compile again', () => {
 test('unavailable cache storage does not prevent compilation', () => {
   const f = fixture();
   writeFileSync(f.cache, 'this path is a file');
-  expect(run(f.source, f.cache)).toEqual({
+  expect(run(f.source, f.cache)).toMatchObject({
     value: 7,
     stats: { hits: 0, compiled: 1, disabled: true },
   });
 });
+
+test('insecure cache directories produce one actionable diagnostic on stderr', () => {
+  const f = fixture();
+  mkdirSync(f.cache);
+  chmodSync(f.cache, 0o755);
+  const child = Bun.spawnSync(command(f.source), {
+    env: { ...process.env, DOCX_EVAL_TRANSPILE_CACHE: f.cache },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  expect(child.exitCode).toBe(0);
+  expect(JSON.parse(child.stdout.toString()).stats.disabled).toBe(true);
+  expect(JSON.parse(child.stdout.toString()).stats.warning).toContain('0700');
+  expect(child.stderr.toString()).toContain('DOCX_TRANSPILE_CACHE');
+  expect(child.stderr.toString()).toContain('0700');
+  expect(readdirSync(f.cache)).toHaveLength(0);
+});
+
+test('cache write failures preserve output and report the configuration problem', () => {
+  const f = fixture();
+  run(f.source, f.cache);
+  const path = entries(f.cache)[0];
+  rmSync(path);
+  mkdirSync(path);
+  const child = Bun.spawnSync(command(f.source), {
+    env: { ...process.env, DOCX_EVAL_TRANSPILE_CACHE: f.cache },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  expect(child.exitCode).toBe(0);
+  expect(JSON.parse(child.stdout.toString()).value).toBe(7);
+  expect(JSON.parse(child.stdout.toString()).stats.warning).toContain('cache writes failed');
+  expect(child.stderr.toString()).toContain('cache writes failed');
+  expect(child.stderr.toString().match(/DOCX_TRANSPILE_CACHE/g)).toHaveLength(1);
+});
+
+test('retain eight compiler checkouts and preserve unrelated cache-directory contents', () => {
+  const f = fixture();
+  const unrelated = join(f.cache, `compile-${'a'.repeat(64)}`);
+  mkdirSync(unrelated, { recursive: true, mode: 0o700 });
+  writeFileSync(join(unrelated, 'keep.txt'), 'unrelated content');
+  for (let index = 0; index < 9; index++) {
+    const selected = alternateLoader(f.root, `compiler-${index}`, (source) =>
+      source.replace('ts.version', `\`${'${ts.version}'}-test-${index}\``)
+    );
+    expect(run(f.source, f.cache, selected).stats.compiled).toBe(1);
+  }
+  expect(entries(f.cache)).toHaveLength(8);
+  expect(readFileSync(join(unrelated, 'keep.txt'), 'utf8')).toBe('unrelated content');
+}, 20000);
 
 test('simultaneous cold processes publish complete cache entries', async () => {
   const f = fixture();
@@ -142,7 +217,11 @@ test('simultaneous cold processes publish complete cache entries', async () => {
     ]);
     expect(exitCode, stderr).toBe(0);
     expect(JSON.parse(stdout).value).toBe(7);
+    expect(JSON.parse(stdout).stats.disabled).toBe(false);
+    expect(stderr).not.toContain('DOCX_TRANSPILE_CACHE');
   }
-  expect(readdirSync(f.cache).filter((name) => name.endsWith('.tmp'))).toHaveLength(0);
+  expect(
+    readdirSync(f.cache, { recursive: true }).filter((name) => name.endsWith('.tmp'))
+  ).toHaveLength(0);
   expect(run(f.source, f.cache).stats.compiled).toBe(0);
 });
