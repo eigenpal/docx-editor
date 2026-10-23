@@ -1,6 +1,8 @@
 // The chart legend: its entries, the room it takes from the plot, and its painting.
 
-import type { ChartLegend, ChartModel, ChartPlot } from './chart-model.ts';
+import { child, type ChartLegend, type ChartModel, type ChartPlot } from './chart-model.ts';
+import { mergeStroke, readChartShapeProperties } from './chart-style.ts';
+import { seriesTrendlines } from './chart-trendline.ts';
 import { markerPath, markerStrokes, type ChartScene } from './chart-scene.ts';
 import {
   isLineKind,
@@ -57,6 +59,26 @@ export function legendEntries(
         });
       }
       if (reversesInLegend(plot, vertical)) plotEntries.reverse();
+      // Trendlines follow the series, each as a line key in its own stroke.
+      for (const series of plot.series) {
+        for (const trend of seriesTrendlines(plot, series)) {
+          if (plotEntries.length >= MAX_ENTRIES) break;
+          const own = readChartShapeProperties(
+            child(trend.element, 'spPr'),
+            context.resolveSchemeColor
+          );
+          const base = seriesLook(plot, series, context);
+          const tint =
+            base.line ??
+            (base.fill ? { ...base.fill, widthPt: 1.5, cap: 'round' as const, dash: null } : null);
+          const line = mergeStroke(own.line, tint ? { ...tint, widthPt: 1.5, dash: [1, 1] } : null);
+          plotEntries.push({
+            text: trend.name,
+            look: { fill: null, line, marker: null },
+            line: true,
+          });
+        }
+      }
     }
     for (const entry of plotEntries) entries.push(entry);
   }

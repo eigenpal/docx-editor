@@ -5,6 +5,7 @@ import type { ChartAxis, ChartModel, ChartPlot } from './chart-model.ts';
 import { formatChartNumber, isDateFormatCode } from './chart-number-format.ts';
 import { autoValueScale, type ValueScale } from './chart-scale.ts';
 import { estimateTextWidth, type ChartTextStyle } from './chart-text.ts';
+import { seriesErrorBars, seriesTrendlines } from './chart-trendline.ts';
 
 export interface Box {
   l: number;
@@ -181,6 +182,22 @@ export function extendValueRange(info: ValueInfo, plot: ChartPlot, scatterX = fa
       if (value === null || !Number.isFinite(value)) continue;
       info.dataMin = Math.min(info.dataMin, value);
       info.dataMax = Math.max(info.dataMax, value);
+    }
+  }
+  // Trendlines and error bars widen the range they are drawn in.
+  for (const series of plot.series) {
+    for (const trend of seriesTrendlines(plot, series)) {
+      for (const point of trend.points) {
+        const value = scatterX ? point.x : point.y;
+        if (!Number.isFinite(value)) continue;
+        info.dataMin = Math.min(info.dataMin, value);
+        info.dataMax = Math.max(info.dataMax, value);
+      }
+    }
+    for (const bar of seriesErrorBars(plot, series)) {
+      if ((bar.direction === 'x') !== scatterX) continue;
+      info.dataMin = Math.min(info.dataMin, bar.from, bar.to);
+      info.dataMax = Math.max(info.dataMax, bar.from, bar.to);
     }
   }
   // Bubbles reach past their centres: the horizontal range leaves a tenth more room.

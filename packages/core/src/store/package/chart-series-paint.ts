@@ -20,7 +20,8 @@ import {
   type ChartPaint,
   type ChartStroke,
 } from './chart-style.ts';
-import { lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
+import { estimateTextWidth, lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
+import { seriesErrorBars, seriesTrendlines } from './chart-trendline.ts';
 
 export interface SeriesMapping {
   readonly categoryAt: (index: number) => number;
@@ -211,6 +212,10 @@ export function paintSeries(
           start: bar.start,
           end: bar.end,
         });
+      const centres = new Map(
+        bars.map((bar) => [bar.index, map.horizontal ? bar.start.y : bar.start.x])
+      );
+      if (!stacked) paintExtras(plot, series, info, map, context, labels, centres);
     }
     return;
   }
@@ -279,6 +284,9 @@ export function paintSeries(
         });
       }
     }
+    if (!stacked) {
+      for (const series of plot.series) paintExtras(plot, series, info, map, context, labels);
+    }
     if (plot.kind === 'line') paintStockBars(plot, info, map, context);
     return;
   }
@@ -307,6 +315,7 @@ export function paintSeries(
         bubbles.push(ellipse(map.valueAt(map.xInfo, x), map.valueAt(info, y), radius, radius, 32));
       }
       if (bubbles.length > 0) scene.path(bubbles, true, style.fill, style.line);
+      paintExtras(plot, series, info, map, context, labels);
     }
     return;
   }
@@ -332,6 +341,7 @@ export function paintSeries(
           series.smooth || plot.scatterStyle === 'smooth' || plot.scatterStyle === 'smoothMarker';
         scene.line(smooth ? smoothPath(drawn) : drawn, style.line, 'round');
       }
+      paintExtras(plot, series, info, map, context, labels);
       paintMarkers(points, style.marker, scene);
       for (const [index, item] of points.entries()) {
         if (!item) continue;
@@ -450,4 +460,95 @@ function paintStockBars(
         );
     }
   }
+}
+
+const DEFAULT_ERROR_BAR: ChartStroke = {
+  hex: '000000',
+  alpha: 1,
+  widthPt: 0.75,
+  cap: 'butt',
+  dash: null,
+};
+const ERROR_CAP = 3.75;
+
+/** Trendlines, their equation labels, and error bars of one series. */
+function paintExtras(
+  plot: ChartPlot,
+  series: ChartPlot['series'][number],
+  info: ValueInfo,
+  map: SeriesMapping,
+  context: CartesianContext,
+  labels: ChartLabel[],
+  centres?: ReadonlyMap<number, number>
+): void {
+  if (series.trendlines.length === 0 && series.errorBars.length === 0) return;
+  const resolve = context.look.resolveSchemeColor;
+  const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
+  const category = (x: number): number => {
+    const index = x - 1;
+    if (centres && Number.isInteger(index) && centres.has(index)) return centres.get(index)!;
+    const step = map.categoryAt(1) - map.categoryAt(0);
+    return map.categoryAt(0) + index * (Number.isFinite(step) ? step : 0);
+  };
+  const at = (x: number, y: number): Point =>
+    xy && map.xInfo?.scale
+      ? { x: map.valueAt(map.xInfo, x), y: map.valueAt(info, y) }
+      : map.horizontal
+        ? { x: map.valueAt(info, y), y: category(x) }
+        : { x: category(x), y: map.valueAt(info, y) };
+  const color = seriesLook(plot, series, context.look);
+  const tint =
+    color.line ??
+    (color.fill ? { ...color.fill, widthPt: 1.5, cap: 'round' as const, dash: null } : null);
+  for (const trend of seriesTrendlines(plot, series)) {
+    const own = readChartShapeProperties(child(trend.element, 'spPr'), resolve);
+    const stroke = mergeStroke(own.line, tint ? { ...tint, widthPt: 1.5, dash: [1, 1] } : null);
+    const points = trend.points.map((point) => at(point.x, point.y));
+    if (stroke && points.length >= 2) context.scene.line(points, stroke, 'round');
+    if (trend.label.length > 0 && points.length > 0) {
+      const lbl = child(trend.element, 'trendlineLbl');
+      const style = elementText(context.baseText, child(lbl, 'txPr'), resolve);
+      const end = points[points.length - 1]!;
+      const width = Math.max(...trend.label.map((line) => estimateTextWidth(line, style)));
+      const height = lineHeight(style) * trend.label.length;
+      const frame = width * 1.3 + style.sizePt * 2;
+      labels.push({
+        paragraphs: [[{ text: trend.label.join('\n'), style }]],
+        align: 'ctr',
+        // The label sits just above and left of the curve's last point.
+        x: end.x - width / 2 - 8 - frame / 2,
+        y: end.y - height + 4,
+        width: frame,
+        height,
+        rotation: 0,
+      });
+    }
+  }
+  const segments: Point[][] = [];
+  let stroke: ChartStroke | null = null;
+  for (const bar of seriesErrorBars(plot, series)) {
+    stroke ??= mergeStroke(
+      readChartShapeProperties(child(bar.element, 'spPr'), resolve).line,
+      DEFAULT_ERROR_BAR
+    );
+    const vertical = (bar.direction === 'y') !== map.horizontal;
+    const from = bar.direction === 'y' ? at(bar.at.x, bar.from) : at(bar.from, bar.at.y);
+    const to = bar.direction === 'y' ? at(bar.at.x, bar.to) : at(bar.to, bar.at.y);
+    segments.push([from, to]);
+    if (!bar.caps) continue;
+    for (const end of [from, to]) {
+      segments.push(
+        vertical
+          ? [
+              { x: end.x - ERROR_CAP, y: end.y },
+              { x: end.x + ERROR_CAP, y: end.y },
+            ]
+          : [
+              { x: end.x, y: end.y - ERROR_CAP },
+              { x: end.x, y: end.y + ERROR_CAP },
+            ]
+      );
+    }
+  }
+  if (stroke && segments.length > 0) context.scene.path(segments, false, null, stroke);
 }

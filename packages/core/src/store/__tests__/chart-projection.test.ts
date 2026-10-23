@@ -182,6 +182,33 @@ describe('chart projection', () => {
     expect(hiLow).toBeDefined();
   });
 
+  test('a linear trendline fits the series and shows its equation', () => {
+    const trend =
+      '<c:trendline><c:trendlineType val="linear"/><c:dispRSqr val="1"/><c:dispEq val="1"/></c:trendline>';
+    const plot =
+      '<c:lineChart><c:grouping val="standard"/>' +
+      series(0, 'Visits', CATEGORIES, [2, 4, 6, 8], trend) +
+      '<c:axId val="1"/><c:axId val="2"/></c:lineChart>' +
+      CATEGORY_VALUE_AXES;
+    const texts = labels(project(chartSpace(plot, { legend: 'b' })));
+    expect(texts.some((text) => text.includes('y = 2x'))).toBe(true);
+    expect(texts.some((text) => text.includes('R² = 1'))).toBe(true);
+    expect(texts).toContain('Linear (Visits)');
+  });
+
+  test('percentage error bars widen the value axis', () => {
+    const bars =
+      '<c:errBars><c:errDir val="y"/><c:errBarType val="both"/><c:errValType val="percentage"/>' +
+      '<c:val val="50"/></c:errBars>';
+    const plot =
+      '<c:barChart><c:barDir val="col"/>' +
+      series(0, 'Mean', CATEGORIES, [4, 4, 4, 4], bars) +
+      '<c:axId val="1"/><c:axId val="2"/></c:barChart>' +
+      CATEGORY_VALUE_AXES;
+    // The bars reach 6, so the axis passes it.
+    expect(labels(project(chartSpace(plot)))).toContain('7');
+  });
+
   test('an external chart part is never loaded', () => {
     const plot =
       '<c:barChart><c:barDir val="col"/>' +
