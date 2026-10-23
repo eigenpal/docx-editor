@@ -323,7 +323,9 @@ const blankSided = (cell: Cell): boolean =>
  * A justified line takes another ordinary glyph by compression only when the share of the
  * compression capacity it spends is at most the expansion that leaving the glyph off would
  * need. Expansion counts in 1/64 of each advance before the line's last glyph: the advances
- * whose gaps the shorter line would spread its room over.
+ * whose gaps the shorter line would spread its room over. A final mark that hangs or drops its
+ * trailing half stays in the deficit and counts as capacity, and a candidate that opens with a
+ * bracket is gated too.
  */
 function expansionGate(
   cells: readonly Cell[],
@@ -399,6 +401,7 @@ function fitCjkOptically(
         ? hangAdvance
         : last.span.box.width;
   const hangsLast = hung > 0;
+  const fullDeficit = deficit;
   deficit -= hung;
   // A final qualified closing quote drops its trailing blank after any glyph, a word included.
   const curlyFinal =
@@ -412,11 +415,14 @@ function fitCjkOptically(
     deficit -= last.reduction;
   }
   // Check the expansion gate against an upper bound before any word is shaped for its ink.
+  // The final mark's relief (its hang or its dropped trailing half) counts as capacity.
+  const relief = fullDeficit - deficit;
   const gate =
-    isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)
-      ? expansionGate(cells, sourceCount, available - line.width, deficit)
+    (isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)) ||
+    OPENING.test(first.span.text)
+      ? expansionGate(cells, sourceCount, available - line.width, fullDeficit)
       : undefined;
-  if (gate && !gate.admits(gate.capacityBound)) return undefined;
+  if (gate && !gate.admits(gate.capacityBound + relief)) return undefined;
   // Shape only a word beside an eligible EA seam, once per cell in this fit.
   // Cache missing outlines too; unrelated opaque text needs no outline at all.
   const opaqueBoundaryInk = new Map<Cell, Cell['ink']>();
@@ -484,7 +490,7 @@ function fitCjkOptically(
   }
   const capacity = seams.reduce((sum, seam) => sum + seam.capacity, 0);
   if (deficit > capacity + TOLERANCE) return undefined;
-  if (gate && !gate.admits(capacity)) return undefined;
+  if (gate && !gate.admits(capacity + relief)) return undefined;
   // The shrink goes in equal shares to every blank side; a side that runs out passes the rest on.
   let active = seams;
   while (deficit > TOLERANCE && active.length) {

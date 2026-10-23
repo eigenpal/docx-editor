@@ -152,3 +152,16 @@ test('a kerned pair keeps its natural compression and fits only its remaining bl
   // Kerning already takes one half-em from the pair; fitting may take only the other.
   threshold(['甲」「乙戊'], 48.0, 47.9, '', '<w:kern w:val="2"/>');
 });
+
+test('the final mark relief counts as capacity in the expansion gate', () => {
+  // Hanging: the hung full stop counts as 12pt of capacity, and the deficit includes it.
+  threshold(['甲。乙，丙、丁戊。'], 84.9, 84.85);
+  threshold(['甲。乙，丙、丁：戊。己戊。'], 133.05, 133.0);
+  threshold(['甲乙丙丁戊己庚辛壬癸甲。乙，丙戊。'], 182.4, 182.35);
+  // Hanging off: the dropped trailing half counts the same way.
+  threshold(['甲。乙，丙、丁：戊。己戊。'], 133.2, 133.15, '<w:overflowPunct w:val="0"/>');
+});
+
+test('a candidate that opens with a bracket passes the expansion gate too', () => {
+  threshold(['甲。乙，丙、丁（戊'], 85.1, 85.0);
+});
