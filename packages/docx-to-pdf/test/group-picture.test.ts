@@ -228,7 +228,7 @@ test('a picture offset far outside the group exports under both policies', async
     alternateContent: false,
   });
   const { imageCount } = await pageCommands(bare, 'best-effort', [
-    { code: 'drawing', severity: 'unsupported', message: 'Unsupported drawing: graphic' },
+    { code: 'drawing', severity: 'unsupported', message: 'Unsupported drawing: group' },
   ]);
   expect(imageCount).toBe(0);
 });

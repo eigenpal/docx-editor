@@ -548,7 +548,7 @@ describe('paints non-fetching refusal cards', () => {
       null
     )!;
     expect(element.style.width).toBe(`${drawing.paintBounds.width}px`);
-    expect(element.textContent).toBe('Unsupported graphic (graphic)');
+    expect(element.textContent).toBe('Unsupported graphic (chart)');
   });
 });
 
