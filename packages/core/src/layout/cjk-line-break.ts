@@ -167,7 +167,7 @@ const FIRST_CLUSTER_EXTENDER_UNIT = 0x0300;
  * Built lazily: the Latin boundary rules cut beside spaces, tabs and dashes, which are
  * cluster boundaries by construction, so only the ideographic pass pays for segmentation —
  * once per text, and only when it found a break to check. The oversized-word chop steps by
- * cluster already, so it needs only the kinsoku half (`cjkChopCutAllowedAt`).
+ * cluster already, so it needs only the seam vetoes (`cjkChopCutAllowedAt`).
  */
 function clusterCutTester(text: string): (position: number) => boolean {
   let starts: Set<number> | null = null;
@@ -278,11 +278,12 @@ export function cjkCutAllowedBetween(
 /**
  * Whether the oversized-word chop may cut `text` at `index`.
  *
- * The chop measures a fit length that knows nothing about kinsoku — at a one-character
- * measure 天。地。人。 rendered every other line starting with 。 —  and
- * `chopOversizedWord` walks the cut to the nearest position this accepts. Grapheme and
- * surrogate safety is the chop's own (it steps by cluster), so only the kinsoku sets are
- * asked here.
+ * The chop runs only for a word or protected group wider than its whole line. Such a group is
+ * cut at its last fitting character even where the kinsoku sets forbid the break: at a
+ * one-character measure 天。地。人。 sets every character on its own line, and a strict small
+ * kana after a figure (`3ヵ`) leaves the figure at the line end. Grapheme and surrogate
+ * safety is the chop's own (it steps by cluster), so only the seams no emergency cut may take
+ * are vetoed here.
  */
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
@@ -296,8 +297,7 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
     stacksNext(text.charCodeAt(index - 1), text.codePointAt(index))
   )
     return false;
-  if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
-  return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
+  return !(next === 0x20 && withoutLineEndWhitespace(text).length > index);
 }
 
 /**
@@ -331,7 +331,13 @@ export type LineOpenDecision =
   | 'opens'
   /** No opportunity here — mid-word, as a Latin word split across runs is. */
   | 'continues'
-  /** An opportunity a rule forbids: a kinsoku seam, or one inside a grapheme cluster. */
+  /**
+   * An opportunity the kinsoku sets forbid: 。 at a line start, （ at a line end, a strict
+   * small kana, an authored `w:noLineBreaksBefore`/`w:noLineBreaksAfter` character. No line
+   * opens here, but a group wider than its whole line is cut here as an over-long word is.
+   */
+  | 'kinsoku'
+  /** A seam no cut may take: inside a grapheme cluster, before a zero-width space, or glue. */
   | 'forbidden';
 
 /**
@@ -352,11 +358,11 @@ export type LineOpenDecision =
  * following text must be able to open a line, or an overflow takes the mid-word carry
  * path and re-lays the tab with a stale advance that no longer reaches its stop.
  *
- * `continues` and `forbidden` are both "may not open", and the caller must tell them
- * apart. A Latin word wider than its line has no legal cut of its own, so it is CHOPPED at
- * the margin; a kinsoku group has no legal cut either, but chopping it is exactly the break
- * the rule forbids, so it is pushed out past the measure instead — the same answer
- * `chopOversizedWord` reaches when no accepted cut is left.
+ * `continues`, `kinsoku` and `forbidden` are all "may not open", and the caller must tell
+ * them apart. A Latin word wider than its line has no legal cut of its own, so it is CHOPPED
+ * at the margin. A kinsoku group wider than its whole line is chopped the same way, at its
+ * last fitting character, this seam included. Only a `forbidden` seam is never cut: the
+ * group is pushed out past the measure there instead.
  */
 export function lineOpenDecisionAt(
   lastEmitted: string,
@@ -403,7 +409,7 @@ export function lineOpenDecisionAt(
   // (か in one run, U+3099 in the next) would otherwise orphan its voicing mark, the
   // combining marks being inside the ideographic ranges and outside the kinsoku sets.
   if (previous !== undefined && !clusterBreaksBetween(previous, first)) return 'forbidden';
-  if (!cjkCutAllowedBetween(previous, first)) return 'forbidden';
+  if (!cjkCutAllowedBetween(previous, first)) return 'kinsoku';
   if (opportunity) return 'opens';
   return previous !== undefined && cjkBreakAllowedBetween(previous, first) ? 'opens' : 'continues';
 }

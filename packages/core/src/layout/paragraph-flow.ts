@@ -50,7 +50,7 @@ import {
 import { DEFAULT_REVISION_DISPLAY_MODE, revisionsVisible } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
-import { cjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
+import { cjkParagraphBreaks, protectedSeamAfter, protectsSeam } from './cjk-paragraph-breaks.ts';
 import { createParagraphCjkOpticalFitter, appendOpticalCjkCandidate } from './cjk-optical-fit.ts';
 import {
   compressCjkPieces,
@@ -63,6 +63,7 @@ import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   automaticLineTextGap,
   automaticTextSpan,
+  justifiedGroupGapSlack,
   splitAtAutomaticSpacing,
 } from './cjk-automatic-spacing.ts';
 import {
@@ -1339,13 +1340,10 @@ export function breakParagraph(
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A space belongs to a following protected group even across a source-run seam.
+      const groupContinues = () =>
+        protectedSeamAfter(cjkBreaks, pieces, pieceIndex, boundary, candidate);
       const protectedEnd =
-        opticalParagraph &&
-        sameParagraphAnchorStarts.length === 0 &&
-        boundary === piece.text.length &&
-        pieces[pieceIndex + 1] !== undefined &&
-        cjkBreaks?.decision(pieces[pieceIndex + 1]!, 0, candidate, pieces[pieceIndex + 1]!.text) ===
-          'forbidden';
+        opticalParagraph && !sameParagraphAnchorStarts.length && groupContinues();
       const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !protectedEnd;
       const naturalWidth = width;
       const measureFace = (text: string) =>
@@ -1363,9 +1361,10 @@ export function breakParagraph(
           : undefined;
       let clippedWordEnd = clipWordEndAtPen();
       width = clippedWordEnd?.width ?? width;
-      let hangs =
+      const hangsAtLineEnd = () =>
         (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
         canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
+      let hangs = hangsAtLineEnd();
       const applyOpticalFit =
         opticalCompression && sameParagraphAnchorStarts.length === 0
           ? () => {
@@ -1474,9 +1473,9 @@ export function breakParagraph(
             ? lineEndSpaces.wordInkWidth(candidate, measureFace)
             : undefined;
         const placeWidth = () => (inkWidth ?? baseFitWidth) + automaticGap();
-        if (openDecision === 'forbidden' && (wordStartSpan < 0 || wordOpensLine())) {
-          // Keep the protected seam on this line. The chop below may still use later safe
-          // cuts inside an oversized Latin word; only its leading fragment must stay here.
+        if (protectsSeam(openDecision) && (wordStartSpan < 0 || wordOpensLine())) {
+          // The group opens this line, so it is wider than the line: the chop below cuts it at
+          // its last fitting character, a kinsoku seam too. A `forbidden` seam stays here.
         } else if (opensWord || wordStartSpan < 0) {
           if (tryAdvanceToNextPassage() && line.width + placeWidth() <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
@@ -1521,7 +1520,7 @@ export function breakParagraph(
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A protected group that moves must also fit against its destination line.
       if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
-      if (opticalFit?.hangs) hangs = true;
+      if (opticalFit?.hangs || (line !== opticalSourceLine && hangsAtLineEnd())) hangs = true;
       // A word opening the line after a break at an optional hyphen no longer joins back
       // across it, so it is placed, and may be cut, at its unjoined width.
       const lineStartStyle =
@@ -1538,13 +1537,20 @@ export function breakParagraph(
         canChopWord &&
         !hangs &&
         (!holdsContent() || (!opensWord && wordOpensLine()) || chopsAfterLeadingTabs) &&
-        width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
+        width + automaticGap() >
+          remainingLineWidth() +
+            OVERFLOW_TOLERANCE_PT +
+            // The whole group is on the line once its last candidate arrives.
+            (openDecision === 'kinsoku' && flow?.cjkPunctuationFit && !groupContinues()
+              ? justifiedGroupGapSlack(line.spans, automaticGap())
+              : 0)
       ) {
         // Only the cut word's first piece opens the line after a hyphen break.
         let opening = lineStartStyle;
         const prefixFace = () => (opening ? styleForFontSlot(opening, piece.fontSlot) : faceStyle);
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
-          remainingLineWidth,
+          // The automatic gap before the first fragment takes room on its line too.
+          remainingLineWidth: () => remainingLineWidth() - automaticGap(),
           lineHasText: holdsContent,
           measureText: (text) => measurer.measure(displayText(text, prefixFace()), prefixFace()),
           appendPrefix: (prefix) => {

@@ -59,6 +59,26 @@ export interface CjkParagraphBreaks {
   cutAllowed(piece: FieldAwarePiece, candidateStart: number, index: number): boolean;
 }
 
+/** Whether a rule, kinsoku or not, protects the seam: the text on both sides is one group. */
+export const protectsSeam = (decision: LineOpenDecision | undefined): boolean =>
+  decision === 'forbidden' || decision === 'kinsoku';
+
+/** Whether a protected seam joins the candidate ending at `boundary` to the next piece. */
+export function protectedSeamAfter(
+  breaks: CjkParagraphBreaks | null,
+  pieces: readonly FieldAwarePiece[],
+  pieceIndex: number,
+  boundary: number,
+  candidate: string
+): boolean {
+  const next = pieces[pieceIndex + 1];
+  return (
+    boundary === pieces[pieceIndex]!.text.length &&
+    next !== undefined &&
+    protectsSeam(breaks?.decision(next, 0, candidate, next.text))
+  );
+}
+
 export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
@@ -191,7 +211,7 @@ export function cjkParagraphBreaks(
       }
     }
     if (forbidden) {
-      decisions.set(at, 'forbidden');
+      decisions.set(at, 'kinsoku');
       continue;
     }
     // Figure/letter groups move as words. Like an oversized Latin word, an
@@ -236,6 +256,7 @@ export function cjkParagraphBreaks(
     boundaries: (piece) => boundaries.get(piece)!,
     decision: (piece, offset) =>
       !isText(piece) ? 'opens' : (decisions.get(starts.get(piece)! + offset) ?? 'forbidden'),
+    // The chop asks only about a group wider than its whole line, which kinsoku cannot hold.
     cutAllowed: (piece, candidateStart, index) =>
       decisions.get(starts.get(piece)! + candidateStart + index) !== 'forbidden' &&
       decisions.has(starts.get(piece)! + candidateStart + index),

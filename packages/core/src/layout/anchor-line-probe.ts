@@ -147,6 +147,8 @@ export function anchorLineStartsByModelOffset(input: {
           // Placement pushes the group out past the measure rather than opening a line
           // before it, so this probe line does not end here either.
         } else if (opens || probeWordStartWidth <= 0) {
+          // A kinsoku group that opens the line is wider than it. Placement cuts it at its
+          // last fitting character; the probe, which never chops, ends the line at this seam.
           closeProbeLine(modelStart);
         } else {
           // Mid-word overflow: placement carries the whole word down, so the next

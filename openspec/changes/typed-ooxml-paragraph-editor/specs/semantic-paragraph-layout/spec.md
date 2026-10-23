@@ -385,6 +385,31 @@ Semantic layout SHALL resolve `w:autoSpaceDE` and `w:autoSpaceDN` through the pa
 - **THEN** line layout draws the same boundary advance that table AutoFit counts
 - **AND** the caret after the boundary sits after the advance
 
+### Requirement: Kinsoku groups wider than their line
+
+The layout engine SHALL move text that kinsoku keeps together to the next line as one unit. When the unit is wider than that whole line, the engine SHALL break it at its last fitting grapheme, also where kinsoku forbids the break. The automatic advance before each fragment SHALL count toward the fit; the advance at the break SHALL not. Grapheme clusters, combining marks, and no-break characters SHALL never break.
+
+#### Scenario: A strict small kana group wider than the line
+
+- **GIVEN** a strict ja-JP paragraph `前文123ヵ月` at 12 pt in Century and MS Mincho, left-aligned, with automatic spacing
+- **WHEN** the measure is 24 to 34.5 pt, narrower than the 35 pt unit `123ヵ`
+- **THEN** the lines are `前文`, `123`, and `ヵ月`
+- **AND** from 35 pt the unit `123ヵ` stays whole on the second line
+
+#### Scenario: A one-character measure
+
+- **GIVEN** `天。地。人。` in a left-aligned paragraph
+- **WHEN** the measure holds one ideograph
+- **THEN** every character takes its own line, the full stops included
+- **AND** with a justified paragraph that allows hanging, each full stop hangs after its ideograph
+
+#### Scenario: A justified line gives back half of its automatic spacing
+
+- **GIVEN** the same `前文123ヵ月` paragraph, justified
+- **WHEN** the measure is 33.5 to 34.5 pt, where `123ヵ` fits only with its 3 pt advance at half width
+- **THEN** `123ヵ` stays whole on the second line
+- **AND** at 33 pt it breaks after `123`
+
 ### Requirement: East Asian punctuation fitting only on justified paragraphs
 
 The layout engine SHALL fit a line by compressing East Asian punctuation against measured glyph bounds only when the paragraph alignment is justified (`w:jc` `both`, `distribute`, `thaiDistribute`, or a kashida value) and the document defaults (`w:rPrDefault`) name an East Asian face. Other paragraphs SHALL wrap instead of fitting. Adjacent full-width punctuation pairs compress at every alignment.

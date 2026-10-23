@@ -78,13 +78,16 @@ const eastAsianLines = (
 ) => textLines(parts, width, pPr, rPr, settings, true);
 
 describe('CJK follow-up: protected groups across every run seam', () => {
+  // A group that fits its line stays whole across the seam. One wider than the whole line
+  // is cut at its last fitting character, the seam included (kinsoku-oversized-group).
   test.each([
-    [['月。', '。盈'], 7, ['月。。', '盈']],
-    [['月、', '」盈'], 7, ['月、」', '盈']],
-    [['（以', '）来'], 7, ['（以）', '来']],
-    [['「方」', '）盈'], 13, ['「方」）', '盈']],
-  ] as const)('%j at %dpt', (parts, width, expected) => {
+    [['月。', '。盈'], 18, ['月。。', '盈'], ['月', '。', '。', '盈']],
+    [['月、', '」盈'], 18, ['月、」', '盈'], ['月', '、', '」', '盈']],
+    [['（以', '）来'], 18, ['（以）', '来'], ['（', '以', '）', '来']],
+    [['「方」', '）盈'], 24, ['「方」）', '盈'], ['「', '方', '」', '）', '盈']],
+  ] as const)('%j at %dpt', (parts, width, expected, oneCharacter) => {
     expect(textLines(parts, width)).toEqual([...expected]);
+    expect(textLines(parts, 7)).toEqual([...oneCharacter]);
   });
 
   test('long Latin words wrap after a protected opening or combining seam', () => {
@@ -198,7 +201,9 @@ describe('CJK follow-up: mixed text and figure groups', () => {
   });
   test('ASCII punctuation beside CJK stays with its carrier', () => {
     expect(textLines(['天地,月'], 13)).toEqual(['天', '地,', '月']);
-    expect(textLines(['天(', '地)月'], 13)).toEqual(['天', '(地)', '月']);
+    expect(textLines(['天(', '地)月'], 18)).toEqual(['天', '(地)', '月']);
+    // Wider than its line, the group is cut where it stops fitting.
+    expect(textLines(['天(', '地)月'], 13)).toEqual(['天', '(地', ')月']);
   });
   test('Korean word wrapping is selectable without dividing a syllable', () => {
     expect(textLines(['가나 다라마'], 25)).toEqual(['가나 ', '다라마']);
@@ -214,9 +219,16 @@ describe('CJK follow-up: document and paragraph policy', () => {
   });
   test('Japanese normal and strict kinsoku use different small-kana rules', () => {
     const lang = '<w:lang w:eastAsia="ja-JP"/>';
-    expect(textLines(['あゃい'], 7, '', lang)).toEqual(['あ', 'ゃ', 'い']);
+    expect(textLines(['あいゃう'], 13, '', lang)).toEqual(['あい', 'ゃう']);
+    expect(textLines(['あいゃう'], 13, '', lang, '<w:strictFirstAndLastChars/>')).toEqual([
+      'あ',
+      'いゃ',
+      'う',
+    ]);
+    // A strict group wider than its line is cut like any other.
     expect(textLines(['あゃい'], 7, '', lang, '<w:strictFirstAndLastChars/>')).toEqual([
-      'あゃ',
+      'あ',
+      'ゃ',
       'い',
     ]);
   });

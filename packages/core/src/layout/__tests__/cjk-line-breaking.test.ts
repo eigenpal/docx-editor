@@ -106,11 +106,11 @@ describe('kinsoku prohibitions', () => {
   });
 
   test('no wrap position violates kinsoku across a punctuated paragraph', () => {
-    // Widths below 36 push clauses through the wider-than-empty-line chop, which must
-    // uphold the same prohibitions as the boundary rules.
+    // Every measure holds the widest group, ０．５％。 at 30 pt. A narrower one cuts the
+    // groups wider than it (kinsoku-oversized-group).
     const text =
       '甲方（以下简称「买方」）应当按照本合同第３条、第４条之约定，向乙方支付全部价款。逾期未付的，每日加收０．５％。';
-    for (const width of [7, 13, 25, 36, 48, 60, 72, 90]) {
+    for (const width of [30, 36, 48, 60, 72, 90]) {
       const lines = linesOf(`<w:p>${run(text)}</w:p>`, width);
       expect(lines.join('')).toBe(text);
       for (const line of lines) {
@@ -185,25 +185,32 @@ describe('kinsoku beside tabs and inside the chop', () => {
     for (const line of lines) expect(line.charCodeAt(0)).not.toBe(0x3099);
   });
 
-  test('the chop upholds kinsoku at a one- and a two-character measure', () => {
-    for (const width of [7, 13]) {
-      expect(linesOf(`<w:p>${run('天。地。人。')}</w:p>`, width)).toEqual(['天。', '地。', '人。']);
-    }
+  test('a kinsoku group holds at a two-character measure and is cut at a one-character one', () => {
+    expect(linesOf(`<w:p>${run('天。地。人。')}</w:p>`, 13)).toEqual(['天。', '地。', '人。']);
+    // Wider than its whole line, the group is cut where it stops fitting.
+    expect(linesOf(`<w:p>${run('天。地。人。')}</w:p>`, 7)).toEqual([
+      '天',
+      '。',
+      '地',
+      '。',
+      '人',
+      '。',
+    ]);
   });
 
   test('a protected group split across runs never breaks at the run seam', () => {
-    // The group is unbreakable and starts the line, so there is nothing to carry down and
-    // nothing legal to chop: it is pushed out past the measure, which is what the same text
-    // in ONE run already did. Before this, the overflow branch closed the line at the seam
-    // and the veto never applied — a line opened on 、 and one ended on （.
-    for (const width of [7, 13]) {
-      // A no-break-before character behind the seam.
-      expect(linesOf(`<w:p>${run('月')}${run('、盈')}</w:p>`, width)).toEqual(['月、', '盈']);
-      // A no-break-after character in front of it.
-      expect(linesOf(`<w:p>${run('（')}${run('以来')}</w:p>`, width)).toEqual(['（以', '来']);
-      // The half-width prolonged-sound mark, reachable only since the range covers ｰ.
-      expect(linesOf(`<w:p>${run('ア')}${run('ｰ月')}</w:p>`, width)).toEqual(['アｰ', '月']);
-    }
+    // The group starts the line and fits it, so it stays whole, as the same text in ONE run
+    // does. Before this, the overflow branch closed the line at the seam and the veto never
+    // applied: a line opened on 、 and one ended on （.
+    // A no-break-before character behind the seam.
+    expect(linesOf(`<w:p>${run('月')}${run('、盈')}</w:p>`, 13)).toEqual(['月、', '盈']);
+    // A no-break-after character in front of it.
+    expect(linesOf(`<w:p>${run('（')}${run('以来')}</w:p>`, 13)).toEqual(['（以', '来']);
+    // The half-width prolonged-sound mark, reachable only since the range covers ｰ.
+    expect(linesOf(`<w:p>${run('ア')}${run('ｰ月')}</w:p>`, 13)).toEqual(['アｰ', '月']);
+    // On a one-character line each group is wider than the line and is cut at the seam.
+    expect(linesOf(`<w:p>${run('月')}${run('、盈')}</w:p>`, 7)).toEqual(['月', '、', '盈']);
+    expect(linesOf(`<w:p>${run('ア')}${run('ｰ月')}</w:p>`, 7)).toEqual(['ア', 'ｰ', '月']);
   });
 
   test('a grapheme cluster split across runs never orphans its combining mark', () => {

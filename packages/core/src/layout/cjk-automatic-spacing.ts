@@ -256,6 +256,20 @@ export function automaticLineTextGap(
   );
 }
 
+/**
+ * The room a justified line can win back to keep a kinsoku group whole: half of every
+ * automatic gap on the line, `pendingGap` (the one before the next candidate) included. Such a
+ * group is cut only when it is wider than its line even with those gaps at half width.
+ */
+export function justifiedGroupGapSlack(
+  spans: readonly StyleSpanRecord[],
+  pendingGap: number
+): number {
+  let total = pendingGap;
+  for (const span of spans) total += automaticTextSpacingBefore(span);
+  return total / 2;
+}
+
 /** Build the same drawn span and keep its original source range and metadata. */
 export function automaticTextSpan(
   piece: FieldAwarePiece,

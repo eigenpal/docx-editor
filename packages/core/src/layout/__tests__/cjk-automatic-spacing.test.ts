@@ -337,6 +337,8 @@ test('line layout draws the advance inside a group that cannot break', () => {
         after: { 'zh-cn': '甲A' },
       },
       spans: ['甲', 'A', '乙'],
+      // 6 + 2.75 + 6 + 2.75 + 6 = 23.5 pt.
+      narrowWidth: 24,
       narrow: ['甲', 'A', '乙'],
     },
     {
@@ -344,11 +346,13 @@ test('line layout draws the advance inside a group that cannot break', () => {
       lang: '<w:lang w:eastAsia="ja-JP"/>',
       typography: { strict: true, compression: 'doNotCompress' as const, before: {}, after: {} },
       spans: ['3', 'ヵ月'],
+      // 6 + 2.75 + 6 = 14.75 pt; a narrower line cuts the group (kinsoku-oversized-group).
+      narrowWidth: 15,
       narrow: ['3', 'ヵ'],
     },
   ];
-  for (const { text, lang, typography, spans, narrow } of cases) {
-    for (const width of [160, 14]) {
+  for (const { text, lang, typography, spans, narrowWidth, narrow } of cases) {
+    for (const width of [160, narrowWidth]) {
       const value = layoutSemanticDocument(doc(run(text, lang)), 0, {
         measurer,
         geometry: geometry(width),
@@ -356,7 +360,7 @@ test('line layout draws the advance inside a group that cannot break', () => {
       });
       const placed = line(value).spans;
       // The group stays on one line, and every script boundary carries its advance.
-      expect(placed.map((span) => span.text)).toEqual(width === 14 ? narrow : spans);
+      expect(placed.map((span) => span.text)).toEqual(width === narrowWidth ? narrow : spans);
       for (let index = 1; index < placed.length; index += 1) {
         const previous = placed[index - 1]!;
         expect(placed[index]!.box.x - previous.box.x - previous.box.width).toBeCloseTo(2.75, 8);

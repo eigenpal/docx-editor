@@ -62,9 +62,10 @@ export function chopOversizedWord(
     /** Keep the leading fragment with the preceding text when their seam is protected. */
     readonly keepWithPrevious?: boolean;
     /**
-     * Whether the cut at a UTF-16 index is allowed on top of grapheme safety — the kinsoku
-     * sets, for CJK text. A rejected cut shrinks to the nearest accepted one; when none is
-     * left inside the measure it GROWS past it instead, which is Word's kinsoku push-out.
+     * Whether the cut at a UTF-16 index is allowed on top of grapheme safety: never before a
+     * combining mark, a stacked consonant, or a zero-width space. The kinsoku sets do not veto
+     * a cut here. A rejected cut shrinks to the nearest accepted one; when none is left inside
+     * the measure it GROWS past it instead, pushing the protected seam out past the margin.
      */
     readonly cutAllowedAt?: (text: string, utf16Index: number) => boolean;
   }
