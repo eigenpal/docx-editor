@@ -22,6 +22,35 @@ export interface DrawingPartThemeFonts {
   readonly minor?: string | null;
 }
 
+/** The typefaces one part names, in order; parts are immutable, so this is kept per root. */
+const PART_TYPEFACES = new WeakMap<OoxmlElement, readonly string[]>();
+
+function partTypefaces(root: OoxmlElement): readonly string[] {
+  const cached = PART_TYPEFACES.get(root);
+  if (cached) return cached;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const stack: OoxmlElement[] = [root];
+  let visited = 0;
+  while (stack.length > 0 && ++visited <= MAX_NODES && out.length < MAX_FAMILIES) {
+    const node = stack.pop()!;
+    if (node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI && FACE_ELEMENTS.has(node.localName)) {
+      const typeface = schemaAttributeValue(node.attributes, 'typeface');
+      if (typeface && !seen.has(typeface)) {
+        seen.add(typeface);
+        out.push(typeface);
+      }
+      continue;
+    }
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      const child = node.children[index]!;
+      if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
+    }
+  }
+  PART_TYPEFACES.set(root, out);
+  return out;
+}
+
 /** Faces named in chart and saved diagram parts, in part order. */
 export function drawingPartFontFamilies(
   pkg: OoxmlPackage,
@@ -30,11 +59,10 @@ export function drawingPartFontFamilies(
   const byFold = new Map<string, string>();
   const add = (raw: string | null | undefined): void => {
     const family = raw ? validFontFamily(raw) : null;
-    if (family === null) return;
+    if (family === null || byFold.size >= MAX_FAMILIES) return;
     const fold = family.toLowerCase();
     if (!byFold.has(fold)) byFold.set(fold, family);
   };
-  let visited = 0;
   for (const part of pkg.parts.values()) {
     const root = part.root;
     if (
@@ -44,21 +72,10 @@ export function drawingPartFontFamilies(
       continue;
     // Text that names no face takes the theme's body face.
     add(theme.minor);
-    const stack: OoxmlElement[] = [root];
-    while (stack.length > 0) {
-      if (++visited > MAX_NODES || byFold.size >= MAX_FAMILIES) return [...byFold.values()];
-      const node = stack.pop()!;
-      if (node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI && FACE_ELEMENTS.has(node.localName)) {
-        const typeface = schemaAttributeValue(node.attributes, 'typeface');
-        if (typeface?.startsWith('+mj')) add(theme.major);
-        else if (typeface?.startsWith('+mn')) add(theme.minor);
-        else add(typeface);
-        continue;
-      }
-      for (let index = node.children.length - 1; index >= 0; index -= 1) {
-        const child = node.children[index]!;
-        if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
-      }
+    for (const typeface of partTypefaces(root)) {
+      if (typeface.startsWith('+mj')) add(theme.major);
+      else if (typeface.startsWith('+mn')) add(theme.minor);
+      else add(typeface);
     }
   }
   return [...byFold.values()];
