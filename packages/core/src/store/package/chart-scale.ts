@@ -28,6 +28,8 @@ export interface ScaleRequest {
   readonly fixedMin: number | null;
   readonly fixedMax: number | null;
   readonly fixedMajor: number | null;
+  /** Radar axes end at the data: no headroom past the far end. */
+  readonly noHeadroom?: boolean;
 }
 
 function niceUnits(rough: number): number[] {
@@ -61,7 +63,7 @@ export function autoValueScale(request: ScaleRequest): ValueScale {
   if (request.fixedMax === null) {
     if (dataMax <= 0) high = dataMax < (5 / 6) * dataMin ? dataMax + (dataMax - dataMin) / 2 : 0;
   }
-  const headroom = 0.05 * (high - low);
+  const headroom = request.noHeadroom ? 0 : 0.05 * (high - low);
   const top = request.fixedMax ?? (high > 0 ? high + headroom : high);
   const bottom = request.fixedMin ?? (low < 0 ? low - headroom : low);
   const span = Math.max(top - bottom, Number.EPSILON);

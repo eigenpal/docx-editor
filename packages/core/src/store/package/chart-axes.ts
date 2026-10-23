@@ -42,7 +42,7 @@ export function plotAxis(
   role: 'category' | 'value' | 'x'
 ): ChartAxis | null {
   const axes = plot.axisIds.map((id) => model.axes.get(id)).filter((axis) => axis !== undefined);
-  if (plot.kind === 'scatter') {
+  if (plot.kind === 'scatter' || plot.kind === 'bubble') {
     const horizontalFirst = (axis: ChartAxis) => axis.position === 'b' || axis.position === 't';
     const x = axes.find(horizontalFirst) ?? axes[0] ?? null;
     const y = axes.find((axis) => axis !== x) ?? null;
@@ -142,7 +142,7 @@ export function categorySlot(info: CategoryInfo, length: number): number {
 /** Widen a value range by the values of one plot, stacked as the plot stacks them. */
 export function extendValueRange(info: ValueInfo, plot: ChartPlot, scatterX = false): void {
   const stacked = plot.grouping === 'stacked' || plot.grouping === 'percentStacked';
-  if (plot.grouping === 'percentStacked' && plot.kind !== 'scatter') {
+  if (plot.grouping === 'percentStacked' && plot.kind !== 'scatter' && plot.kind !== 'bubble') {
     info.percent = true;
     let negative = false;
     for (const series of plot.series)
@@ -151,7 +151,7 @@ export function extendValueRange(info: ValueInfo, plot: ChartPlot, scatterX = fa
     info.dataMax = Math.max(info.dataMax, 1);
     return;
   }
-  if (stacked && plot.kind !== 'scatter') {
+  if (stacked && plot.kind !== 'scatter' && plot.kind !== 'bubble') {
     const count = Math.max(0, ...plot.series.map((series) => series.values.length));
     for (let index = 0; index < count; index += 1) {
       let positive = 0;
@@ -182,6 +182,10 @@ export function extendValueRange(info: ValueInfo, plot: ChartPlot, scatterX = fa
       info.dataMin = Math.min(info.dataMin, value);
       info.dataMax = Math.max(info.dataMax, value);
     }
+  }
+  // Bubbles reach past their centres: the horizontal range leaves a tenth more room.
+  if (plot.kind === 'bubble' && scatterX && info.dataMax > info.dataMin) {
+    info.dataMax += (info.dataMax - info.dataMin) * 0.2;
   }
 }
 

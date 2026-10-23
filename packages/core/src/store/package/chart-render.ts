@@ -8,7 +8,9 @@ import { paintCartesian } from './chart-cartesian.ts';
 import { chartBaseText, elementText, titleParagraphs } from './chart-labels.ts';
 import { legendEntries, paintLegend, placeLegend } from './chart-legend.ts';
 import { child, childVal, readManualLayout, type ChartModel } from './chart-model.ts';
+import { paintOfPie } from './chart-of-pie.ts';
 import { paintPie } from './chart-pie.ts';
+import { paintRadar } from './chart-radar.ts';
 import { ChartScene } from './chart-scene.ts';
 import type { LookContext } from './chart-series.ts';
 import {
@@ -22,6 +24,20 @@ import type { ChartThemeFaces } from './chart-parts.ts';
 import type { ShapeSchemeColorResolver } from './drawing-shape-color.ts';
 
 const MARGIN = 11;
+
+/** A manual layout's box in chart points. */
+function manualBox(
+  layout: { readonly x: number; readonly y: number; readonly w: number; readonly h: number },
+  width: number,
+  height: number
+) {
+  return {
+    l: layout.x * width,
+    t: layout.y * height,
+    r: (layout.x + layout.w) * width,
+    b: (layout.y + layout.h) * height,
+  };
+}
 const DEFAULT_BORDER: ChartStroke = {
   hex: '898989',
   alpha: 1,
@@ -124,9 +140,32 @@ export function renderChart(
   const blanksRaw = childVal(child(model.chartSpace, 'chart'), 'dispBlanksAs');
   const blanks = blanksRaw === 'zero' || blanksRaw === 'span' ? blanksRaw : 'gap';
   const round = model.plots.filter((plot) => plot.kind === 'pie' || plot.kind === 'doughnut');
-  const axial = model.plots.filter((plot) => plot.kind !== 'pie' && plot.kind !== 'doughnut');
-  if (round.length > 0 && axial.length > 0) return null;
-  if (axial.length > 0) {
+  const radar = model.plots.filter((plot) => plot.kind === 'radar');
+  const ofPie = model.plots.filter((plot) => plot.kind === 'ofPie');
+  const axial = model.plots.filter(
+    (plot) => !round.includes(plot) && !radar.includes(plot) && !ofPie.includes(plot)
+  );
+  const groups = [round, radar, ofPie, axial].filter((group) => group.length > 0);
+  if (groups.length !== 1) return null;
+  if (radar.length > 0) {
+    paintRadar(radar, model.plotLayout?.inner ? manualBox(model.plotLayout, width, height) : box, {
+      model,
+      look,
+      scene,
+      labels,
+      baseText,
+    });
+  } else if (ofPie.length > 0) {
+    if (ofPie.length !== 1) return null;
+    paintOfPie(ofPie[0]!, box, {
+      look,
+      scene,
+      labels,
+      baseText,
+      date1904: model.date1904,
+      placed: false,
+    });
+  } else if (axial.length > 0) {
     const painted = paintCartesian(axial, box, {
       model,
       look,

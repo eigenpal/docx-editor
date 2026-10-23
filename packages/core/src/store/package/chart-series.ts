@@ -45,8 +45,13 @@ export interface LookContext {
   readonly seriesCount: number;
 }
 
-function isLineKind(plot: ChartPlot): boolean {
-  return plot.kind === 'line' || plot.kind === 'scatter';
+/** Plots whose series are strokes through points rather than filled shapes. */
+export function isLineKind(plot: ChartPlot): boolean {
+  return (
+    plot.kind === 'line' ||
+    plot.kind === 'scatter' ||
+    (plot.kind === 'radar' && plot.radarStyle !== 'filled')
+  );
 }
 
 /** Whether a plot colours each point of its one series by itself. */
@@ -54,7 +59,10 @@ export function variesByPoint(plot: ChartPlot): boolean {
   return (
     plot.varyColors &&
     plot.series.length === 1 &&
-    (plot.kind === 'pie' || plot.kind === 'doughnut' || plot.kind === 'bar')
+    (plot.kind === 'pie' ||
+      plot.kind === 'doughnut' ||
+      plot.kind === 'bar' ||
+      plot.kind === 'ofPie')
   );
 }
 
@@ -70,7 +78,13 @@ function markerLook(
   const scatterLinesOnly =
     plot.kind === 'scatter' && (plot.scatterStyle === 'line' || plot.scatterStyle === 'smooth');
   if (marker?.symbol === 'none') return null;
-  if (!marker?.symbol && (plot.kind === 'line' ? !plot.markers : scatterLinesOnly)) return null;
+  const automatic =
+    plot.kind === 'line'
+      ? plot.markers
+      : plot.kind === 'radar'
+        ? plot.radarStyle === 'marker'
+        : !scatterLinesOnly;
+  if (!marker?.symbol && !automatic) return null;
   const symbol = marker?.symbol ?? AUTO_MARKERS[styleIndex % AUTO_MARKERS.length]!;
   const authored = readChartShapeProperties(marker?.spPr ?? null, context.resolveSchemeColor);
   const fill = authored.fill === undefined ? color : authored.fill;

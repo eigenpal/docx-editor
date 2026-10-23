@@ -2,7 +2,13 @@
 
 import type { ChartLegend, ChartModel, ChartPlot } from './chart-model.ts';
 import { markerPath, markerStrokes, type ChartScene } from './chart-scene.ts';
-import { seriesLook, variesByPoint, type LookContext, type SeriesLook } from './chart-series.ts';
+import {
+  isLineKind,
+  seriesLook,
+  variesByPoint,
+  type LookContext,
+  type SeriesLook,
+} from './chart-series.ts';
 import {
   estimateTextWidth,
   lineHeight,
@@ -29,7 +35,7 @@ export function legendEntries(
   const vertical = legend.position === 'l' || legend.position === 'r' || legend.position === 'tr';
   for (const plot of model.plots) {
     const plotEntries: LegendEntry[] = [];
-    const line = plot.kind === 'line' || plot.kind === 'scatter';
+    const line = isLineKind(plot);
     // A lone series whose points are coloured one by one lists its categories.
     const lone = model.plots.length === 1 && plot.series.length === 1;
     const varied = variesByPoint(plot);

@@ -4,8 +4,9 @@
 import { categorySlot, type Box, type CategoryInfo, type ValueInfo } from './chart-axes.ts';
 import type { CartesianContext } from './chart-cartesian.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
-import type { ChartPlot } from './chart-model.ts';
+import { child, childVal, type ChartPlot } from './chart-model.ts';
 import {
+  ellipse,
   markerPath,
   markerStrokes,
   smoothPath,
@@ -13,7 +14,12 @@ import {
   type Point,
 } from './chart-scene.ts';
 import { seriesLook, variesByPoint } from './chart-series.ts';
-import type { ChartPaint } from './chart-style.ts';
+import {
+  mergeStroke,
+  readChartShapeProperties,
+  type ChartPaint,
+  type ChartStroke,
+} from './chart-style.ts';
 import { lineHeight, textBlock, type ChartLabel } from './chart-text.ts';
 
 export interface SeriesMapping {
@@ -273,6 +279,35 @@ export function paintSeries(
         });
       }
     }
+    if (plot.kind === 'line') paintStockBars(plot, info, map, context);
+    return;
+  }
+
+  if (plot.kind === 'bubble' && map.xInfo?.scale) {
+    // Bubble areas follow their sizes; the largest is a quarter of the plot's shorter side.
+    let largest = 0;
+    for (const series of plot.series) {
+      for (const size of series.bubbleSizes ?? []) {
+        if (size !== null && Number.isFinite(size)) largest = Math.max(largest, Math.abs(size));
+      }
+    }
+    const shorter = Math.min(map.plot.r - map.plot.l, map.plot.b - map.plot.t);
+    const widest = 0.264 * shorter * (plot.bubbleScale / 100);
+    for (const series of plot.series) {
+      const style = seriesLook(plot, series, look);
+      const bubbles: Point[][] = [];
+      for (let index = 0; index < series.values.length; index += 1) {
+        const y = series.values[index];
+        const x = series.xValues ? series.xValues[index] : index + 1;
+        const size = series.bubbleSizes?.[index];
+        if (y === null || y === undefined || x === null || x === undefined) continue;
+        if (size === null || size === undefined || !(size > 0) || !(largest > 0)) continue;
+        const ratio = plot.bubbleArea ? Math.sqrt(size / largest) : size / largest;
+        const radius = (widest * ratio) / 2;
+        bubbles.push(ellipse(map.valueAt(map.xInfo, x), map.valueAt(info, y), radius, radius, 32));
+      }
+      if (bubbles.length > 0) scene.path(bubbles, true, style.fill, style.line);
+    }
     return;
   }
 
@@ -325,4 +360,94 @@ function paintMarkers(
   }
   if (shapes.length > 0) scene.path(shapes, true, marker.fill, marker.line);
   if (strokes.length > 0) scene.path(strokes, false, null, marker.line);
+}
+
+const DEFAULT_HI_LOW: ChartStroke = {
+  hex: '000000',
+  alpha: 1,
+  widthPt: 0.75,
+  cap: 'butt',
+  dash: null,
+};
+const UP_BAR: ChartPaint = { hex: 'FFFFFF', alpha: 1 };
+const DOWN_BAR: ChartPaint = { hex: '000000', alpha: 1 };
+
+/**
+ * High-low lines from each category's lowest to highest value, and up-down bars from the
+ * first series to the last: white where the last is higher, black where it is lower.
+ */
+function paintStockBars(
+  plot: ChartPlot,
+  info: ValueInfo,
+  map: SeriesMapping,
+  context: CartesianContext
+): void {
+  const categories = map.categories;
+  if (!categories || plot.series.length < 2) return;
+  const resolve = context.look.resolveSchemeColor;
+  const at = (index: number, value: number): Point =>
+    map.horizontal
+      ? { x: map.valueAt(info, value), y: map.categoryAt(index) }
+      : { x: map.categoryAt(index), y: map.valueAt(info, value) };
+  if (plot.hiLowLines) {
+    const stroke = mergeStroke(
+      readChartShapeProperties(child(plot.hiLowLines, 'spPr'), resolve).line,
+      DEFAULT_HI_LOW
+    );
+    const lines: Point[][] = [];
+    for (let index = 0; index < categories.count; index += 1) {
+      const values = plot.series
+        .map((series) => series.values[index])
+        .filter((value): value is number => value !== null && value !== undefined);
+      if (values.length < 2) continue;
+      lines.push([at(index, Math.min(...values)), at(index, Math.max(...values))]);
+    }
+    if (stroke && lines.length > 0) context.scene.path(lines, false, null, stroke);
+  }
+  const bars = plot.upDownBars;
+  if (bars) {
+    const gap = (Number(childVal(bars, 'gapWidth') ?? 150) || 150) / 100;
+    const slot = categorySlot(
+      categories,
+      map.horizontal ? map.plot.b - map.plot.t : map.plot.r - map.plot.l
+    );
+    const width = slot / (1 + gap);
+    const look = (name: string, fill: ChartPaint) => {
+      const own = readChartShapeProperties(child(child(bars, name), 'spPr'), resolve);
+      return {
+        fill: own.fill === undefined ? fill : own.fill,
+        line: mergeStroke(own.line, DEFAULT_HI_LOW),
+      };
+    };
+    const up = look('upBars', UP_BAR);
+    const down = look('downBars', DOWN_BAR);
+    const first = plot.series[0]!;
+    const last = plot.series[plot.series.length - 1]!;
+    for (let index = 0; index < categories.count; index += 1) {
+      const open = first.values[index];
+      const close = last.values[index];
+      if (open === null || open === undefined || close === null || close === undefined) continue;
+      const a = at(index, open);
+      const b = at(index, close);
+      const style = close >= open ? up : down;
+      if (map.horizontal)
+        context.scene.rect(
+          Math.min(a.x, b.x),
+          a.y - width / 2,
+          Math.abs(b.x - a.x),
+          width,
+          style.fill,
+          style.line
+        );
+      else
+        context.scene.rect(
+          a.x - width / 2,
+          Math.min(a.y, b.y),
+          width,
+          Math.abs(b.y - a.y),
+          style.fill,
+          style.line
+        );
+    }
+  }
 }

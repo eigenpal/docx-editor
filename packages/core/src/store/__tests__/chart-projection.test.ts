@@ -105,13 +105,81 @@ describe('chart projection', () => {
 
   test('an unsupported chart type keeps the placeholder', () => {
     const plot =
-      '<c:radarChart><c:radarStyle val="marker"/>' +
+      '<c:surfaceChart><c:wireframe val="0"/>' +
       series(0, 'Alpha', CATEGORIES, [1, 2, 3, 4]) +
-      '<c:axId val="1"/><c:axId val="2"/></c:radarChart>' +
+      '<c:axId val="1"/><c:axId val="2"/></c:surfaceChart>' +
       CATEGORY_VALUE_AXES;
     const projection = project(chartSpace(plot));
     expect(projection.vectorShape).toBeNull();
     expect(unsupported(projection)).toHaveLength(1);
+  });
+
+  test('a radar chart closes each series round its spokes and labels the spokes', () => {
+    const plot =
+      '<c:radarChart><c:radarStyle val="marker"/>' +
+      series(0, 'Plan', CATEGORIES, [4, 3, 5, 2]) +
+      '<c:axId val="1"/><c:axId val="2"/></c:radarChart>' +
+      CATEGORY_VALUE_AXES;
+    const projection = project(chartSpace(plot));
+    expect(unsupported(projection)).toEqual([]);
+    const texts = labels(projection);
+    for (const category of CATEGORIES) expect(texts).toContain(category);
+    // Radar axes end at the data: no headroom past 5.
+    expect(texts).toContain('5');
+    expect(texts).not.toContain('6');
+    const outline = projection.vectorShape!.components.find(
+      (component) => component.strokeHex === '4472C4' && component.subpathsClosed?.[0] === true
+    );
+    expect(outline?.subpathsEmu[0]).toHaveLength(4);
+  });
+
+  test('bubbles grow with the square root of their size', () => {
+    const plot =
+      '<c:bubbleChart><c:varyColors val="0"/><c:ser><c:idx val="0"/><c:order val="0"/>' +
+      `<c:tx>${strCache(['Bubbles'])}</c:tx><c:xVal>${numCache([1, 2])}</c:xVal>` +
+      `<c:yVal>${numCache([1, 2])}</c:yVal><c:bubbleSize>${numCache([1, 4])}</c:bubbleSize></c:ser>` +
+      '<c:bubbleScale val="100"/><c:axId val="1"/><c:axId val="2"/></c:bubbleChart>' +
+      '<c:valAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:valAx>' +
+      '<c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:crossAx val="1"/></c:valAx>';
+    const projection = project(chartSpace(plot));
+    const bubbles = projection.vectorShape!.components.find(
+      (component) => component.fillHex === '4472C4'
+    )!;
+    const widths = bubbles.subpathsEmu.map((path) => {
+      const xs = path.map((point) => point.x);
+      return Math.max(...xs) - Math.min(...xs);
+    });
+    expect(widths[1]! / widths[0]!).toBeCloseTo(2, 1);
+  });
+
+  test('a bar-of-pie moves the last points into a stacked bar', () => {
+    const plot =
+      '<c:ofPieChart><c:ofPieType val="bar"/><c:varyColors val="1"/>' +
+      '<c:ser><c:idx val="0"/><c:order val="0"/>' +
+      `<c:tx>${strCache(['Share'])}</c:tx><c:cat>${strCache(['A', 'B', 'C', 'D', 'E'])}</c:cat>` +
+      `<c:val>${numCache([40, 30, 15, 10, 5])}</c:val></c:ser>` +
+      '<c:gapWidth val="100"/><c:secondPieSize val="75"/><c:serLines/></c:ofPieChart>';
+    const projection = project(chartSpace(plot, { legend: 'b' }));
+    expect(unsupported(projection)).toEqual([]);
+    const rectangles = projection.vectorShape!.components.filter(
+      (component) => component.subpathsEmu[0]!.length === 4 && component.fillHex !== null
+    );
+    // Three bar segments, five legend keys and the chart area.
+    expect(rectangles.length).toBe(9);
+  });
+
+  test('stock charts join each category with a high-low line', () => {
+    const plot =
+      '<c:stockChart>' +
+      series(0, 'High', CATEGORIES, [5, 6, 7, 8], '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>') +
+      series(1, 'Low', CATEGORIES, [1, 2, 3, 4], '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>') +
+      '<c:hiLowLines/><c:axId val="1"/><c:axId val="2"/></c:stockChart>' +
+      CATEGORY_VALUE_AXES;
+    const projection = project(chartSpace(plot));
+    const hiLow = projection.vectorShape!.components.find(
+      (component) => component.subpathsEmu.length === 4 && component.strokeHex === '000000'
+    );
+    expect(hiLow).toBeDefined();
   });
 
   test('an external chart part is never loaded', () => {

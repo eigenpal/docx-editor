@@ -136,8 +136,9 @@ export function paintCartesian(
   context: CartesianContext
 ): boolean {
   const { model } = context;
-  const scatter = plots.filter((plot) => plot.kind === 'scatter');
-  const categorical = plots.filter((plot) => plot.kind !== 'scatter');
+  const xy = (plot: ChartPlot) => plot.kind === 'scatter' || plot.kind === 'bubble';
+  const scatter = plots.filter(xy);
+  const categorical = plots.filter((plot) => !xy(plot));
   if (scatter.length > 0 && categorical.length > 0) return false;
   const horizontal = categorical.some((plot) => plot.kind === 'bar' && plot.horizontal);
   if (horizontal && categorical.some((plot) => plot.kind !== 'bar' || !plot.horizontal))
@@ -170,7 +171,7 @@ export function paintCartesian(
     extendValueRange(info, plot);
     info.formatCode ??= plot.series.find((series) => series.formatCode)?.formatCode ?? null;
     plotValues.set(plot, info);
-    if (plot.kind === 'scatter') {
+    if (xy(plot)) {
       const axis = plotAxis(model, plot, 'x');
       xInfo ??= {
         axis,

@@ -20,7 +20,16 @@ const MAX_POINTS_PER_SERIES = 4_096;
 const MAX_TOTAL_POINTS = 32_768;
 const MAX_TEXT_UNITS = 1_024;
 
-export type ChartPlotKind = 'bar' | 'line' | 'area' | 'pie' | 'doughnut' | 'scatter';
+export type ChartPlotKind =
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'doughnut'
+  | 'scatter'
+  | 'radar'
+  | 'bubble'
+  | 'ofPie';
 
 const PLOT_KINDS: ReadonlyMap<string, { kind: ChartPlotKind; threeD: boolean }> = new Map([
   ['barChart', { kind: 'bar', threeD: false }],
@@ -33,17 +42,15 @@ const PLOT_KINDS: ReadonlyMap<string, { kind: ChartPlotKind; threeD: boolean }> 
   ['pie3DChart', { kind: 'pie', threeD: true }],
   ['doughnutChart', { kind: 'doughnut', threeD: false }],
   ['scatterChart', { kind: 'scatter', threeD: false }],
+  ['radarChart', { kind: 'radar', threeD: false }],
+  ['bubbleChart', { kind: 'bubble', threeD: false }],
+  // A stock chart is line series drawn without lines, joined by high-low lines and bars.
+  ['stockChart', { kind: 'line', threeD: false }],
+  ['ofPieChart', { kind: 'ofPie', threeD: false }],
 ]);
 
 /** Plot types the model refuses: the chart keeps its placeholder. */
-const UNSUPPORTED_PLOTS = new Set([
-  'radarChart',
-  'stockChart',
-  'bubbleChart',
-  'surfaceChart',
-  'surface3DChart',
-  'ofPieChart',
-]);
+const UNSUPPORTED_PLOTS = new Set(['surfaceChart', 'surface3DChart']);
 
 export interface ChartMarker {
   /** `none`, `circle`, `square`, …; null when the series takes the automatic marker. */
@@ -75,6 +82,12 @@ export interface ChartSeries {
   /** Pie slice offset, percent of the radius. */
   readonly explosion: number;
   readonly invertIfNegative: boolean;
+  /** Bubble sizes; null outside bubble plots. */
+  readonly bubbleSizes: readonly (number | null)[] | null;
+  /** `c:trendline` elements, in order. */
+  readonly trendlines: readonly OoxmlElement[];
+  /** `c:errBars` elements, in order. */
+  readonly errorBars: readonly OoxmlElement[];
 }
 
 export interface ChartPlot {
@@ -95,6 +108,24 @@ export interface ChartPlot {
   readonly markers: boolean;
   /** Scatter: `lineMarker`, `line`, `marker`, `smooth`, `smoothMarker`, `none`. */
   readonly scatterStyle: string | null;
+  /** Radar: `standard`, `marker` or `filled`. */
+  readonly radarStyle: string | null;
+  /** Stock and line plots: lines from each category's lowest to highest value. */
+  readonly hiLowLines: OoxmlElement | null;
+  /** Bars from the first series to the last, coloured by direction. */
+  readonly upDownBars: OoxmlElement | null;
+  /** Bubble plots: largest bubble size, percent of the default. */
+  readonly bubbleScale: number;
+  /** Bubble plots: bubble size is its area (true) or its width. */
+  readonly bubbleArea: boolean;
+  /** Of-pie plots: the second plot and how points split into it. */
+  readonly ofPie: {
+    readonly type: 'pie' | 'bar';
+    readonly splitType: string;
+    readonly splitPos: number | null;
+    readonly secondSize: number;
+    readonly serLines: OoxmlElement | null;
+  } | null;
 }
 
 export type ChartAxisKind = 'category' | 'value' | 'date';
@@ -314,7 +345,7 @@ function readMarker(element: OoxmlElement | null): ChartMarker | null {
 
 function readSeries(ser: OoxmlElement, kind: ChartPlotKind, budget: Budget): ChartSeries | null {
   const name = readData(child(ser, 'tx'), budget).text?.[0] ?? null;
-  const scatter = kind === 'scatter';
+  const scatter = kind === 'scatter' || kind === 'bubble';
   const categories = readData(child(ser, scatter ? 'xVal' : 'cat'), budget);
   const values = readData(child(ser, scatter ? 'yVal' : 'val'), budget);
   if (budget.remaining < 0) return null;
@@ -340,6 +371,10 @@ function readSeries(ser: OoxmlElement, kind: ChartPlotKind, budget: Budget): Cha
     smooth: childFlag(ser, 'smooth', false),
     explosion: childNumber(ser, 'explosion', 0, 400) ?? 0,
     invertIfNegative: childFlag(ser, 'invertIfNegative', false),
+    bubbleSizes:
+      kind === 'bubble' ? (readData(child(ser, 'bubbleSize'), budget).numbers ?? null) : null,
+    trendlines: children(ser, 'trendline').slice(0, 8),
+    errorBars: children(ser, 'errBars').slice(0, 2),
   };
 }
 
@@ -381,6 +416,21 @@ function readPlot(element: OoxmlElement, budget: Budget): ChartPlot | null {
     holeSize: childNumber(element, 'holeSize', 1, 90) ?? 50,
     markers: childFlag(element, 'marker', true),
     scatterStyle: childVal(element, 'scatterStyle') ?? null,
+    radarStyle: childVal(element, 'radarStyle') ?? null,
+    hiLowLines: child(element, 'hiLowLines'),
+    upDownBars: child(element, 'upDownBars'),
+    bubbleScale: childNumber(element, 'bubbleScale', 0, 300) ?? 100,
+    bubbleArea: childVal(element, 'sizeRepresents') !== 'w',
+    ofPie:
+      kind === 'ofPie'
+        ? {
+            type: childVal(element, 'ofPieType') === 'bar' ? 'bar' : 'pie',
+            splitType: childVal(element, 'splitType') ?? 'auto',
+            splitPos: childNumber(element, 'splitPos', -1e300, 1e300),
+            secondSize: childNumber(element, 'secondPieSize', 5, 200) ?? 75,
+            serLines: child(element, 'serLines'),
+          }
+        : null,
   };
 }
 

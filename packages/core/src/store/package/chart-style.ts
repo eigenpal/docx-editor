@@ -169,10 +169,10 @@ function generatedColor(xml: string): OoxmlElement | null {
 /** Brightness variations of the accent cycle, one per pass over the six accents. */
 const CYCLE_VARIATIONS = [
   '',
+  '<a:lumMod val="60000"/><a:lumOff val="40000"/>',
   '<a:lumMod val="60000"/>',
   '<a:lumMod val="80000"/><a:lumOff val="20000"/>',
   '<a:lumMod val="80000"/>',
-  '<a:lumMod val="60000"/><a:lumOff val="40000"/>',
   '<a:lumMod val="50000"/>',
   '<a:lumMod val="70000"/><a:lumOff val="30000"/>',
   '<a:lumMod val="70000"/>',
