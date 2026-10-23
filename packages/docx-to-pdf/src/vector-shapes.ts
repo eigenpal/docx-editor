@@ -75,6 +75,11 @@ export function paintVectorShape(
       .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
       .join('\n');
     if (component.shadow) out.push(shadowOps(doc, page, component, geometry, unit));
+    // A shadow silhouette paints only its shadow.
+    if (component.shadowOnly) {
+      out.push('Q');
+      continue;
+    }
     // A gradient fills inside its own clip; the outline then strokes over it unfilled.
     const gradient = component.fillHex !== null ? component.fillGradient : undefined;
     if (gradient) {

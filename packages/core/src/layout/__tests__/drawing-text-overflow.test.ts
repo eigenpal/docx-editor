@@ -46,6 +46,7 @@ describe('DrawingML text overflow', () => {
     expect(layout.flowHeight).toBeGreaterThan(20);
     expect(layout.contentOffset.y).toBeCloseTo((20 - layout.flowHeight) / 2, 6);
     expect(layout.contentHeight).toBeCloseTo(layout.flowHeight, 6);
+    expect(layout.overflowVisible).toBe(true);
   });
 
   test('a bottom-anchored body overflows upward and a top-anchored one downward', () => {
@@ -61,5 +62,6 @@ describe('DrawingML text overflow', () => {
     expect(layout.fragments.length).toBeLessThan(6);
     expect(layout.fallbackReason).toBe('textbox-height-clip');
     expect(layout.contentHeight).toBeCloseTo(20, 6);
+    expect(layout.overflowVisible).toBeUndefined();
   });
 });

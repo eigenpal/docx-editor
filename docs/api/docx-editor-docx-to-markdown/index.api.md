@@ -998,6 +998,7 @@ export interface TextboxStoryLayout {
     readonly flowHeight: number;
     readonly fragments: readonly BlockFragmentRecord[];
     readonly outline?: TextboxOutlineProjection;
+    readonly overflowVisible?: true;
     readonly shadow?: Readonly<{
         alpha: number;
         dx: number;

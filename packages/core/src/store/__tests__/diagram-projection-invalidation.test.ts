@@ -8,6 +8,7 @@ import { projectDrawingsInPackage, type DrawingProjection } from '../package/dra
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { simpleTextBody, smartArtPackage } from './smartart-fixture.ts';
+import { diagramPartsToken } from '../package/diagram-parts.ts';
 
 function projectOf(pkg: OoxmlPackage): DrawingProjection {
   const projections = projectDrawingsInPackage(pkg);
@@ -76,6 +77,34 @@ describe('diagram text the lowering cannot express', () => {
     expect(member!.rotationDegrees).toBe(270);
     // The 400000 x 1200000 box turns about its centre (200000, 600000).
     expect(member!.frameEmu).toEqual({ x: -400000, y: 400000, cx: 1200000, cy: 400000 });
+  });
+});
+
+describe('diagram shape shadows', () => {
+  test('a shadow turns with its shape unless rotWithShape is off', () => {
+    const shadowed = (rotWithShape: string) =>
+      projectOf(
+        smartArtPackage({
+          shapes: [
+            {
+              preset: 'rect',
+              off: [0, 0],
+              ext: [100000, 100000],
+              rot: 5400000,
+              fill: '<a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>',
+              extraSpPr:
+                `<a:effectLst><a:outerShdw dist="127000" dir="0"${rotWithShape}>` +
+                '<a:srgbClr val="000000"/></a:outerShdw></a:effectLst>',
+            },
+          ],
+        })
+      ).vectorShape!.components[0]!.shadow!;
+    const turned = shadowed('');
+    expect(turned.dxEmu).toBeCloseTo(0, 3);
+    expect(turned.dyEmu).toBeCloseTo(127000, 3);
+    const fixed = shadowed(' rotWithShape="0"');
+    expect(fixed.dxEmu).toBeCloseTo(127000, 3);
+    expect(fixed.dyEmu).toBeCloseTo(0, 3);
   });
 });
 
@@ -151,6 +180,32 @@ describe('diagram projection invalidation', () => {
     } finally {
       bundle.dispose();
     }
+  });
+
+  test('the diagram part token follows diagram roots wherever their parts live', () => {
+    const pkg = smartArtPackage({
+      shapes: [
+        {
+          preset: 'rect',
+          off: [0, 0],
+          ext: [1000, 1000],
+          fill: '<a:solidFill><a:srgbClr val="4F81BD"/></a:solidFill>',
+        },
+      ],
+    });
+    const drawing = pkg.parts.get('/word/diagrams/drawing1.xml')!;
+    const parts = new Map(pkg.parts);
+    parts.delete('/word/diagrams/drawing1.xml');
+    parts.set('/word/custom/shapes.xml', { ...drawing, name: '/word/custom/shapes.xml' });
+    const moved = { ...pkg, parts };
+    const before = diagramPartsToken(moved);
+    const recolored = withPart(
+      moved,
+      '/word/custom/shapes.xml',
+      recolor(drawing.root, 'FF0000') as OoxmlElement
+    );
+    expect(diagramPartsToken(recolored)).not.toBe(before);
+    expect(diagramPartsToken({ ...moved, parts: new Map(moved.parts) })).toBe(before);
   });
 
   test('the recolouring helper parses back as the same structure', () => {

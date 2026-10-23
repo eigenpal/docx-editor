@@ -48,6 +48,7 @@ export function vectorShapeLayoutToken(
       // Gradient stops and placement are file-derived numbers and names: JSON is stable.
       component.fillGradient ? JSON.stringify(component.fillGradient) : '',
       component.shadow ? JSON.stringify(component.shadow) : '',
+      component.shadowOnly ? 'shadow-only' : '',
       String(component.subpathsEmu.length)
     );
     const subpaths = component.subpathsEmu;

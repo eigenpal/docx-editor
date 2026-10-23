@@ -7,13 +7,14 @@ import { PDFName, type PDFDocument, type PDFPage } from 'pdf-lib';
 import type { VectorShapeComponent } from '@docx-editor.dev/core/layout';
 import { color, number as n } from './context.ts';
 
-/** Translucent copies that approximate the blur; more add file size, not visible quality. */
-const SHADOW_LAYERS = 4;
+/** Rings grown around the silhouette, at these multiples of the blur's standard deviation. */
+const RING_REACH = [0.5, 1, 1.5];
 
 /**
- * An outer shadow under one component: its silhouette offset, in the shadow colour. PDF has
- * no blur here, so the edge softens with stacked translucent copies, each grown by a wider
- * round stroke, reaching half the blur radius past the silhouette.
+ * An outer shadow under one component: its silhouette offset, in the shadow colour. PDF has no
+ * blur here, so the edge is a stepped Gaussian: the silhouette at half the shadow's opacity,
+ * then rings that each add a sixth, so the edge carries half the opacity and fades out over
+ * one and a half standard deviations (half the blur radius each).
  */
 export function shadowOps(
   doc: PDFDocument,
@@ -24,21 +25,30 @@ export function shadowOps(
 ): string {
   const shadow = component.shadow;
   if (!shadow || (component.fillHex === null && component.strokeHex === null)) return '';
-  const layers = shadow.blurEmu > 0 ? SHADOW_LAYERS : 1;
-  const alpha = Math.max(0, Math.min(1, shadow.alpha)) / layers;
-  const state = doc.context.register(doc.context.obj({ Type: 'ExtGState', ca: alpha, CA: alpha }));
-  const stateName = `ShapeShadow${state.objectNumber}`;
-  page.node.setExtGState(PDFName.of(stateName), state);
-  const paint = `${color(shadow.hex)} rg ${color(shadow.hex)} RG`;
-  const out = [`q /${stateName} gs 1 J 1 j ${paint}`];
+  const opacity = Math.max(0, Math.min(1, shadow.alpha));
+  const blurred = shadow.blurEmu > 0;
+  const state = (alpha: number) => {
+    const ref = doc.context.register(doc.context.obj({ Type: 'ExtGState', ca: alpha, CA: alpha }));
+    const name = `ShapeShadow${ref.objectNumber}`;
+    page.node.setExtGState(PDFName.of(name), ref);
+    return name;
+  };
+  const out = [`q 1 J 1 j ${color(shadow.hex)} rg ${color(shadow.hex)} RG`];
   out.push(`1 0 0 1 ${n(shadow.dxEmu / unit)} ${n(shadow.dyEmu / unit)} cm`);
   const baseWidth = component.strokeHex !== null ? Math.max(1, component.strokeWidthEmu) : 0;
-  for (let layer = 0; layer < layers; layer += 1) {
-    const reach = layers > 1 ? (shadow.blurEmu * layer) / (2 * (layers - 1)) : 0;
+  const filled = component.fillHex !== null;
+  const layer = (alpha: number, reach: number) => {
     const width = baseWidth + 2 * reach;
+    out.push(`/${state(alpha)} gs`);
     if (width > 0) out.push(`${n(width / unit)} w`);
-    const op = component.fillHex !== null ? (width > 0 ? 'B*' : 'f*') : 'S';
-    out.push(geometry, op);
+    out.push(geometry, filled ? (width > 0 ? 'B*' : 'f*') : 'S');
+  };
+  if (!blurred) {
+    layer(opacity, 0);
+  } else {
+    const sigma = shadow.blurEmu / 4;
+    layer(opacity / 2, 0);
+    for (const reach of RING_REACH) layer(opacity / 6, sigma * reach);
   }
   out.push('Q');
   return out.join('\n');

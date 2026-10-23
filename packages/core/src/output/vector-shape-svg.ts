@@ -136,12 +136,32 @@ export function appendShadow(
     const id = `docx-shadow-${++nextShadowId}`;
     const filter = document.createElementNS(SVG_NAMESPACE, 'filter');
     filter.setAttribute('id', id);
-    filter.setAttribute('x', '-50%');
-    filter.setAttribute('y', '-50%');
-    filter.setAttribute('width', '200%');
-    filter.setAttribute('height', '200%');
+    // In user space, from the geometry's own box: a straight line has no box height to scale a
+    // relative region by, and a large blur on a small shape outgrows any fixed percentage.
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const points of component.subpathsEmu) {
+      for (const point of points) {
+        left = Math.min(left, point.x);
+        top = Math.min(top, point.y);
+        right = Math.max(right, point.x);
+        bottom = Math.max(bottom, point.y);
+      }
+    }
+    const reach =
+      (shadow.blurEmu / 4) * 3 +
+      (component.strokeHex !== null ? Math.max(1, component.strokeWidthEmu) / 2 : 0) +
+      1;
+    filter.setAttribute('filterUnits', 'userSpaceOnUse');
+    filter.setAttribute('x', finiteNumber(left - reach));
+    filter.setAttribute('y', finiteNumber(top - reach));
+    filter.setAttribute('width', finiteNumber(right - left + 2 * reach));
+    filter.setAttribute('height', finiteNumber(bottom - top + 2 * reach));
     const blur = document.createElementNS(SVG_NAMESPACE, 'feGaussianBlur');
-    blur.setAttribute('stdDeviation', finiteNumber(shadow.blurEmu / 2));
+    // A quarter of the blur radius as the standard deviation, as the PDF painter steps it.
+    blur.setAttribute('stdDeviation', finiteNumber(shadow.blurEmu / 4));
     filter.append(blur);
     svg.append(filter);
     path.setAttribute('filter', `url(#${id})`);

@@ -127,6 +127,8 @@ export interface TextboxStoryLayout {
   }>;
   /** True when layout hit a named bound and returned a truncated / empty story. */
   readonly fallbackReason?: TextboxStoryFallbackReason;
+  /** DrawingML shape text: lines past the box paint outside it, not clipped at the drawing. */
+  readonly overflowVisible?: true;
   /**
    * Resource identities of the drawings the clip DROPPED, in flow order.
    *
@@ -783,7 +785,7 @@ export function layoutTextboxStory(
     ...chrome,
     // An overflowing DrawingML story reports the box its lines cover, so paint keeps them.
     ...(overflows && fit === undefined
-      ? { contentHeight: Math.max(contentHeight, flowHeight) }
+      ? { contentHeight: Math.max(contentHeight, flowHeight), overflowVisible: true as const }
       : {}),
     contentWidth,
     ...(unwrappedWidth > 0 ? { extentWidth: unwrappedWidth + insetLeft + insetRight } : {}),

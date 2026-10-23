@@ -34,7 +34,7 @@ const reachCache = new WeakMap<VectorShapeProjection, DrawingInsets>();
 
 /**
  * The box a painter clips a vector shape to: `bounds` grown on each side where a stroked
- * outline reaches past the drawing extent.
+ * outline or an outer shadow reaches past the drawing extent.
  *
  * An outline is centred on its geometry and is not cut at the extent, a text column, or a cell
  * edge that meets the extent: a rule at x=0 of a group with `wp:effectExtent l="0"` keeps
@@ -119,6 +119,35 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
   const inside = (point: Point) =>
     point.x >= -t && point.x <= cx + t && point.y >= -t && point.y <= cy + t;
   for (const component of shape.components) {
+    // An outer shadow reaches past the geometry by its offset and its blur. Only geometry
+    // inside the extent casts it: outside parts stay clipped like the shape itself.
+    const shadow = component.shadow;
+    if (shadow) {
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const path of component.subpathsEmu) {
+        for (const point of path) {
+          const x = Math.max(0, Math.min(cx, point.x));
+          const y = Math.max(0, Math.min(cy, point.y));
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
+        }
+      }
+      // Three quarters of the blur radius covers the visible tail in both painters.
+      const spread =
+        finite(shadow.blurEmu) * 0.75 +
+        (component.strokeHex !== null ? Math.max(1, finite(component.strokeWidthEmu)) / 2 : 0);
+      const dx = finite(shadow.dxEmu);
+      const dy = finite(shadow.dyEmu);
+      if (left <= right) {
+        include(left + dx - spread, top + dy - spread);
+        include(right + dx + spread, bottom + dy + spread);
+      }
+    }
     // An inset outline stays inside the geometry, so it keeps the extent clip.
     if (component.strokeHex === null || component.strokeInset === true) continue;
     // Both painters draw at least a 1 EMU stroke.

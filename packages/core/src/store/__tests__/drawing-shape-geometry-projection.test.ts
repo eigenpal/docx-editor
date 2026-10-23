@@ -241,6 +241,43 @@ describe('outer shadows', () => {
     expect(plain.components[0]!.shadow).toBeUndefined();
   });
 
+  test('a shape of several paths casts one silhouette shadow before its paths', () => {
+    const effect =
+      '<a:effectLst><a:outerShdw blurRad="0" dist="12700" dir="5400000">' +
+      '<a:srgbClr val="000000"/></a:outerShdw></a:effectLst>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="cube"/>${FILL}${effect}`))
+    );
+    const [first, ...rest] = vector.components;
+    expect(first!.shadowOnly).toBe(true);
+    expect(first!.shadow!.dyEmu).toBeCloseTo(12700, 6);
+    expect(rest.length).toBeGreaterThan(1);
+    expect(rest.every((component) => component.shadow === undefined)).toBe(true);
+  });
+
+  test('a dark-edged bevel adds an inset rim over the fill', () => {
+    const bevel = '<a:sp3d prstMaterial="dkEdge"><a:bevelT w="8200" h="38100"/></a:sp3d>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}${bevel}`))
+    );
+    const rim = vector.components.at(-1)!;
+    expect(rim.fillHex).toBeNull();
+    expect(rim.strokeHex).toBe('000000');
+    expect(rim.strokeInset).toBe(true);
+    expect(rim.strokeWidthEmu).toBe(8200);
+    const plain = onlyVector(
+      inline(
+        1000000,
+        500000,
+        WPS,
+        shape(
+          `${XFRM}<a:prstGeom prst="rect"/>${FILL}<a:sp3d prstMaterial="matte"><a:bevelT/></a:sp3d>`
+        )
+      )
+    );
+    expect(plain.components).toHaveLength(1);
+  });
+
   test('a hostile shadow distance is clamped', () => {
     const effect =
       '<a:effectLst><a:outerShdw blurRad="9999999999" dist="9999999999" dir="0">' +

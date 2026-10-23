@@ -35,7 +35,10 @@ export function paintGroupTextboxStories(
   layer.style.top = `${(bounds.y - oy) * scale}px`;
   layer.style.width = `${bounds.width * scale}px`;
   layer.style.height = `${bounds.height * scale}px`;
-  layer.style.overflow = 'hidden';
+  // DrawingML shape text overflows its box and the drawing, as the reference shows it.
+  layer.style.overflow = members.some((member) => member.story.overflowVisible)
+    ? 'visible'
+    : 'hidden';
   layer.style.pointerEvents = 'none';
   // Extent origin inside the clipped paint bounds.
   const extentLeft = drawing.x - bounds.x;

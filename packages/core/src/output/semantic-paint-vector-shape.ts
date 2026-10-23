@@ -87,6 +87,8 @@ export function vectorShapeFrame(
       .join('');
     path.setAttribute('d', d);
     if (component.shadow) appendShadow(document, svg, d, component);
+    // A shadow silhouette paints only its shadow.
+    if (component.shadowOnly) continue;
     // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
     path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
     if (component.fillHex !== null && component.fillGradient) {

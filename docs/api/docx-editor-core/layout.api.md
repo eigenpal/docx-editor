@@ -4756,6 +4756,7 @@ export interface TextboxStoryLayout {
     readonly flowHeight: number;
     readonly fragments: readonly BlockFragmentRecord[];
     readonly outline?: TextboxOutlineProjection;
+    readonly overflowVisible?: true;
     readonly shadow?: Readonly<{
         alpha: number;
         dx: number;
@@ -4891,6 +4892,7 @@ export interface VectorShapeComponent {
     // (undocumented)
     readonly fillHex: string | null;
     readonly shadow?: ShapeShadow;
+    readonly shadowOnly?: true;
     // (undocumented)
     readonly strokeAlpha: number;
     readonly strokeCap?: 'butt' | 'round' | 'square';

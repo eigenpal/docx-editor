@@ -129,7 +129,25 @@ describe('vector shape effects paint', () => {
     expect(shadow!.getAttribute('transform')).toBe('translate(0 25400)');
     expect(shadow!.getAttribute('opacity')).toBe('0.4');
     expect(shadow!.getAttribute('filter')).toMatch(/^url\(#docx-shadow-\d+\)$/);
-    expect(svg.querySelector('feGaussianBlur')!.getAttribute('stdDeviation')).toBe('19050');
+    expect(svg.querySelector('feGaussianBlur')!.getAttribute('stdDeviation')).toBe('9525');
+    // The filter region is in user space around the geometry, so lines and large blurs fit.
+    const filter = svg.querySelector('filter')!;
+    expect(filter.getAttribute('filterUnits')).toBe('userSpaceOnUse');
+    expect(Number(filter.getAttribute('x'))).toBeLessThan(-28_000);
+    expect(Number(filter.getAttribute('width'))).toBeGreaterThan(1_270_000 + 56_000);
     expect(shape!.getAttribute('fill')).toBe('#808080');
+  });
+
+  test('a shadow-only silhouette paints its shadow and nothing else', () => {
+    const svg = paint({
+      ...BASE,
+      fillAlpha: 1,
+      shadow: { dxEmu: 12_700, dyEmu: 12_700, blurEmu: 0, hex: '000000', alpha: 0.5 },
+      shadowOnly: true,
+    });
+    const paths = [...svg.querySelectorAll('path')];
+    expect(paths).toHaveLength(1);
+    expect(paths[0]!.hasAttribute('data-docx-shadow')).toBe(true);
+    expect(paths[0]!.hasAttribute('filter')).toBe(false);
   });
 });

@@ -140,13 +140,20 @@ const partIds = new WeakMap<OoxmlElement, number>();
 let nextPartId = 1;
 
 /**
- * The identity of every diagram part in a package. Layout reuses drawing projections while
- * the story part is unchanged; a changed diagram part must invalidate them too.
+ * The identity of every diagram part (data model, layout, style, colors, saved drawing) in a
+ * package. Layout reuses drawing projections while the story part is unchanged; a changed
+ * diagram part must invalidate them too.
  */
 export function diagramPartsToken(pkg: OoxmlPackage): string {
   const ids: number[] = [];
-  for (const [name, part] of pkg.parts) {
-    if (!name.startsWith('/word/diagrams/')) continue;
+  // Diagram parts are recognised by their root, wherever a relationship places them.
+  for (const part of pkg.parts.values()) {
+    const root = part.root;
+    if (
+      root.namespaceUri !== DIAGRAM_NAMESPACE_URI &&
+      root.namespaceUri !== DIAGRAM_DRAWING_NAMESPACE_URI
+    )
+      continue;
     let id = partIds.get(part.root);
     if (id === undefined) {
       id = nextPartId++;

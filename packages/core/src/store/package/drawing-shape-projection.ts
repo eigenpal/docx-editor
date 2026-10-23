@@ -20,7 +20,7 @@ import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
-import { readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
+import { darkEdgeOutline, readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
 import {
   gradientMeanColor,
   placeGradient,
@@ -111,6 +111,11 @@ export interface VectorShapeComponent {
   readonly fillGradient?: VectorGradient;
   /** The outer shadow the shape casts, painted under this component. */
   readonly shadow?: ShapeShadow;
+  /**
+   * The component only casts `shadow`: it is the silhouette of a shape with several paths,
+   * placed before them, and paints no fill or outline of its own.
+   */
+  readonly shadowOnly?: true;
   /** Authored line ends and joins, inherited from the selected theme line when absent. */
   readonly strokeCap?: 'butt' | 'round' | 'square';
   readonly strokeJoin?: 'round' | 'bevel';
@@ -379,7 +384,11 @@ export function projectShapeComponents(
   const flipH = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipH'));
   const flipV = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipV'));
   const place = shapePointTransform(extent, flipH, flipV, rotation);
-  const shadow = readShapeShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const shadow = readShapeShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference, {
+    flipH,
+    flipV,
+    rotationDegrees: rotation,
+  });
   const gradient = fillGradient
     ? placeGradient(
         fillGradient,
@@ -415,7 +424,6 @@ export function projectShapeComponents(
         : {}),
       fillHex: pathFill?.hex ?? null,
       fillAlpha: pathFill?.alpha ?? 1,
-      ...(shadow ? { shadow } : {}),
       ...(gradient && pathFill
         ? {
             fillGradient:
@@ -437,6 +445,47 @@ export function projectShapeComponents(
       polygons.every(enclosesArea)
         ? { strokeInset: true }
         : {}),
+    });
+  }
+  // One shadow for the whole shape, under all of its paths: a single path carries it, and a
+  // shape of several paths gets a silhouette of them all, painted before any of them.
+  if (shadow && components.length === 1) {
+    components[0] = { ...components[0]!, shadow };
+  } else if (shadow && components.length > 1) {
+    const silhouette = components.filter((component) => component.fillHex !== null);
+    const casters = silhouette.length ? silhouette : components;
+    components.unshift({
+      subpathsEmu: casters.flatMap((component) => component.subpathsEmu),
+      subpathsClosed: casters.flatMap((component) =>
+        component.subpathsEmu.map((_, index) => component.subpathsClosed?.[index] !== false)
+      ),
+      fillHex: silhouette.length ? casters[0]!.fillHex : null,
+      fillAlpha: 1,
+      strokeHex: silhouette.length ? null : casters[0]!.strokeHex,
+      strokeAlpha: 1,
+      strokeWidthEmu: silhouette.length ? 0 : casters[0]!.strokeWidthEmu,
+      shadow,
+      shadowOnly: true,
+    });
+  }
+  // A dark-edged bevel shows a rim inside the filled outline; it paints over the fill.
+  const edge = darkEdgeOutline(spPr);
+  const body = components.find(
+    (component) =>
+      component.fillHex !== null &&
+      component.subpathsClosed?.every(Boolean) !== false &&
+      component.subpathsEmu.every(enclosesArea)
+  );
+  if (edge && body) {
+    components.push({
+      subpathsEmu: body.subpathsEmu,
+      subpathsClosed: body.subpathsClosed,
+      fillHex: null,
+      fillAlpha: 1,
+      strokeHex: edge.hex,
+      strokeAlpha: edge.alpha,
+      strokeWidthEmu: edge.widthEmu,
+      strokeInset: true,
     });
   }
   return components;
