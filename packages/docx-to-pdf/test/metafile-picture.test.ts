@@ -96,7 +96,7 @@ test('a WMF picture paints as a vector form XObject', async () => {
   const objects = pdf.getPage(0).node.Resources()!.lookup(PDFName.of('XObject'), PDFDict);
   const name = objects.keys().find((key) => key.asString().startsWith('/Fm'));
   expect(name).toBeTruthy();
-  const form = pdf.context.lookup(objects.get(name!) as PDFRef, PDFRawStream);
+  const form = pdf.context.lookup(objects.get(name!) as PDFRef) as PDFRawStream;
   expect(form.dict.get(PDFName.of('Subtype'))).toBe(PDFName.of('Form'));
   const content = new TextDecoder().decode(decodePDFRawStream(form).decode());
   // The blue triangle, filled in canvas pixels on the flipped unit square.

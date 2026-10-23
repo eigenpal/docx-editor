@@ -124,10 +124,10 @@ describe('metafile replay', () => {
     const fill = replay!.drawing.commands.find((command) => command.kind === 'fill');
     expect(fill).toMatchObject({ paint: { r: 0, g: 0, b: 255, alpha: 1 } });
     const scale = replay!.drawing.width / 200;
-    const points = (fill as Extract<MetafileCommand, { kind: 'fill' }>).path.filter(
-      (command) => command.op !== 'Z'
+    const points = (fill as Extract<MetafileCommand, { kind: 'fill' }>).path.flatMap((command) =>
+      command.op === 'M' || command.op === 'L' ? [[command.x, command.y]] : []
     );
-    expect(points.map((point) => (point.op === 'Z' ? null : [point.x, point.y]))).toEqual([
+    expect(points).toEqual([
       [0, 0],
       [200 * scale, 0],
       [100 * scale, 100 * scale],

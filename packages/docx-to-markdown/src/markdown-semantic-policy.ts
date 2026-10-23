@@ -328,6 +328,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     strokeDashPt: 'explicitly-omitted',
     strokeCap: 'explicitly-omitted',
     shadow: 'explicitly-omitted',
+    overflowVisible: 'explicitly-omitted',
     fallbackReason: 'explicitly-omitted',
     clippedResourceToken: 'layout-only',
   } satisfies Record<keyof TextboxStoryLayout, MarkdownFieldPolicy>,
