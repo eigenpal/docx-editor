@@ -1,5 +1,5 @@
-// What a non-picture drawing paints: a group picture, vector shapes, a text box story, the
-// text of group members, a SmartArt diagram from its saved drawing part, or a drawing canvas.
+// What a drawing paints besides a plain picture: a picture frame, a group picture, vector shapes,
+// a text box story, the text of group members, a SmartArt diagram, or a drawing canvas.
 
 import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
@@ -18,6 +18,7 @@ import {
   type VectorShapeProjection,
 } from './drawing-shape-projection.ts';
 import { groupTextboxesField, type GroupTextboxProjection } from './group-textbox-projection.ts';
+import { projectPictureFrame } from './drawing-picture-frame.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
 export interface DrawingContentContext {
@@ -33,6 +34,8 @@ export interface DrawingContentProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Something paints, so an "unsupported graphic" diagnostic no longer applies. */
   readonly paints: boolean;
+  /** A picture's clip ring in the unit square of its extent; see `projectPictureFrame`. */
+  readonly pictureClipUnit?: readonly Readonly<{ x: number; y: number }>[];
 }
 
 const NOTHING: DrawingContentProjection = Object.freeze({
@@ -42,15 +45,25 @@ const NOTHING: DrawingContentProjection = Object.freeze({
   paints: false,
 });
 
-/** The painted content of a drawing that is not a plain picture. */
+/**
+ * The painted content of a drawing: for a picture, the frame its `pic:spPr` draws around it;
+ * otherwise the group picture, shapes, story, diagram, or canvas it holds.
+ */
 export function projectDrawingContent(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
   compatibilityMode: boolean,
-  hasPicture: boolean,
+  picture: OoxmlElement | null,
   ctx: DrawingContentContext
 ): DrawingContentProjection {
-  if (hasPicture) return NOTHING;
+  if (picture) {
+    const frame = projectPictureFrame(picture, extent, ctx);
+    return {
+      ...NOTHING,
+      vectorShape: frame.vectorShape,
+      ...(frame.clipUnit ? { pictureClipUnit: frame.clipUnit } : {}),
+    };
+  }
   const groupRead = readGroupPicture(
     anchor,
     extent,

@@ -281,6 +281,8 @@ export interface PictureProjection {
   readonly fillMode: 'stretch' | 'tile';
   readonly transform: DrawingTransform;
   readonly presetGeometry: string | null;
+  /** The clip ring of non-rectangular geometry, in the unit square of the extent. */
+  readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[];
 }
 
 export const DEFAULT_DRAWING_PROJECTION_LIMITS: DrawingProjectionLimits = Object.freeze({
@@ -1077,6 +1079,7 @@ function projectPicture(
   readonly relationshipId: string | null;
   readonly effects: DrawingImageEffects;
   readonly diagnostic: DrawingDiagnostic | null;
+  readonly element?: OoxmlElement;
 } {
   if (!visitNode(state, ctx.limits)) {
     return { picture: null, relationshipId: null, effects: EMPTY_EFFECTS, diagnostic: null };
@@ -1202,6 +1205,7 @@ function projectPicture(
     relationshipId,
     effects,
     diagnostic: null,
+    element: picture,
   };
 }
 
@@ -1528,7 +1532,7 @@ export function projectDrawingWithState(
     anchor,
     extent,
     compatibilityMode,
-    pictureResult.picture !== null,
+    pictureResult.picture ? (pictureResult.element ?? null) : null,
     ctx
   );
   if (content.paints && pictureResult.diagnostic) {
@@ -1553,7 +1557,10 @@ export function projectDrawingWithState(
       wrapGeometry,
       position,
       anchor: anchorMeta,
-      picture: pictureResult.picture,
+      picture:
+        pictureResult.picture && content.pictureClipUnit
+          ? { ...pictureResult.picture, clipUnit: content.pictureClipUnit }
+          : pictureResult.picture,
       vectorShape: content.vectorShape,
       groupPicture: content.groupPicture,
       textboxStory: content.textboxStory,

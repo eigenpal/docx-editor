@@ -50,6 +50,8 @@ export function vectorShapeLayoutToken(
       component.shadow ? JSON.stringify(component.shadow) : '',
       component.shadowOnly ? 'shadow-only' : '',
       component.strokeDash ? component.strokeDash.join(' ') : '',
+      component.belowPicture ? 'below-picture' : '',
+      String(component.strokeOutsetEmu ?? ''),
       String(component.subpathsEmu.length)
     );
     const subpaths = component.subpathsEmu;

@@ -91,9 +91,12 @@ function inkGrowth(drawing: Drawing): DrawingInsets {
     const extra = overhangEmu * scale - Math.max(0, room);
     return Number.isFinite(extra) && extra > 0 ? extra : 0;
   };
+  // An inline picture's frame never paints above the picture's top edge; it reaches past the
+  // other edges as a shape's outline does.
+  const inlinePicture = drawing.kind === 'inlineDrawing' && drawing.placeholderGraphicKind === null;
   const growth = {
     left: grow(reachEmu.left, scaleX, content.x - paint.x),
-    top: grow(reachEmu.top, scaleY, content.y - paint.y),
+    top: inlinePicture ? 0 : grow(reachEmu.top, scaleY, content.y - paint.y),
     right: grow(reachEmu.right, scaleX, paint.x + paint.width - (content.x + content.width)),
     bottom: grow(reachEmu.bottom, scaleY, paint.y + paint.height - (content.y + content.height)),
   };
@@ -152,6 +155,10 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
     if (component.strokeHex === null || component.strokeInset === true) continue;
     // Both painters draw at least a 1 EMU stroke.
     const half = Math.max(1, finite(component.strokeWidthEmu)) / 2;
+    // An outset outline lies outside the geometry by design, so the extent test widens by it.
+    const reach = t + Math.max(0, finite(component.strokeOutsetEmu ?? 0));
+    const within = (point: Point) =>
+      point.x >= -reach && point.x <= cx + reach && point.y >= -reach && point.y <= cy + reach;
     component.subpathsEmu.forEach((raw, index) => {
       const closed = component.subpathsClosed?.[index] !== false;
       const points = distinctPoints(raw, closed);
@@ -163,7 +170,7 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
         const length = Math.hypot(b.x - a.x, b.y - a.y);
         const normal = { x: -(b.y - a.y) / length, y: (b.x - a.x) / length };
         normals.push(normal);
-        if (!clipSegment(a, b, -t, cx + t, -t, cy + t)) continue;
+        if (!clipSegment(a, b, -reach, cx + reach, -reach, cy + reach)) continue;
         for (let end = 0; end < 2; end += 1) {
           const along = SPAN[end]!;
           const x = a.x + (b.x - a.x) * along;
@@ -182,7 +189,7 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
           [points[0]!, normals[0]!, -1],
           [points[points.length - 1]!, normals[normals.length - 1]!, 1],
         ] as const) {
-          if (!inside(vertex)) continue;
+          if (!within(vertex)) continue;
           if (component.strokeCap === 'round') {
             include(vertex.x - half, vertex.y - half);
             include(vertex.x + half, vertex.y + half);
@@ -198,7 +205,7 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
       const joins = closed && points.length > 2 ? normals.length : normals.length - 1;
       for (let at = 0; at < joins; at += 1) {
         const vertex = points[(at + 1) % points.length]!;
-        if (!inside(vertex)) continue;
+        if (!within(vertex)) continue;
         if (component.strokeJoin === 'round') {
           include(vertex.x - half, vertex.y - half);
           include(vertex.x + half, vertex.y + half);

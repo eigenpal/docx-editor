@@ -5,6 +5,7 @@ import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import type { ShapeStyleMatrixResolver } from './drawing-shape-projection.ts';
 import { lineDash } from './drawing-line-dash.ts';
+import { lineCompound, type LineCompound } from './drawing-line-compound.ts';
 
 const DEFAULT_LINE_WIDTH_EMU = 12_700;
 
@@ -26,16 +27,20 @@ export function readLineProperties(
   readonly join: 'round' | 'bevel' | undefined;
   /** Dash and gap lengths in line widths; null for a solid line. */
   readonly dash: readonly number[] | null;
+  /** Parallel bands the outline paints as (`@cmpd`). */
+  readonly compound: LineCompound;
 } {
   const directWidth = ln ? parseEmu(schemaAttributeValue(ln.attributes, 'w')) : null;
   const directAlignment = ln ? schemaAttributeValue(ln.attributes, 'algn') : undefined;
   const directCap = ln ? schemaAttributeValue(ln.attributes, 'cap') : undefined;
   const directJoin = lineJoin(ln);
+  const directCompound = ln ? schemaAttributeValue(ln.attributes, 'cmpd') : undefined;
   const theme =
     directWidth === null ||
     directAlignment === undefined ||
     directCap === undefined ||
-    directJoin === undefined
+    directJoin === undefined ||
+    directCompound === undefined
       ? isThemeLine(resolvedThemeLine)
         ? resolvedThemeLine
         : themeLine(wsp, resolveStyleMatrixReference)
@@ -50,6 +55,9 @@ export function readLineProperties(
     cap: lineCap(directCap ?? (theme ? schemaAttributeValue(theme.attributes, 'cap') : undefined)),
     join: supportedJoin(directJoin ?? lineJoin(theme)),
     dash: dashOf(wsp, ln, theme, resolveStyleMatrixReference, resolvedThemeLine),
+    compound: lineCompound(
+      directCompound ?? (theme ? schemaAttributeValue(theme.attributes, 'cmpd') : undefined)
+    ),
   };
 }
 

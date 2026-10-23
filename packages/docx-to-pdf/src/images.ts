@@ -286,6 +286,13 @@ export class ImageWriter {
       return '';
     };
     if (d.groupPicture) return this.paintGroupPicture(visit, page, report);
+    // A picture's own frame: shadow and fill under the picture, the outline over it.
+    if (d.vectorShape && d.placeholderGraphicKind === null) {
+      const under = paintVectorShape(this.doc, page, visit, this.work, (c) => !!c.belowPicture);
+      const picture = await this.paintPicture(visit, page, report);
+      const over = paintVectorShape(this.doc, page, visit, this.work, (c) => !c.belowPicture);
+      return [under, picture, over].filter((commands) => commands !== '').join('\n');
+    }
     if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
     if (d.textboxStory) return report('Textbox story not routed through paintTextbox');
     if (d.kind === 'anchoredDrawing' && d.textArt)

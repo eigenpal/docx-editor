@@ -4,17 +4,26 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { PDFDocument, PDFName, PDFString, type PDFPage } from 'pdf-lib';
-import { vectorShapeInkClip, type SemanticDrawingVisit } from '@docx-editor.dev/core/layout';
+import {
+  vectorShapeInkClip,
+  type SemanticDrawingVisit,
+  type VectorShapeComponent,
+} from '@docx-editor.dev/core/layout';
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { gradientShading } from './vector-gradient.ts';
 import { shadowOps } from './vector-shadow.ts';
 
-/** Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic. */
+/**
+ * Paint only Core's admitted, flattened solid geometry; unsupported shapes stay diagnostic.
+ * `include` picks the components to paint, such as the part of a picture frame under the
+ * picture.
+ */
 export function paintVectorShape(
   doc: PDFDocument,
   page: PDFPage,
   visit: SemanticDrawingVisit,
-  work: Work
+  work: Work,
+  include?: (component: VectorShapeComponent) => boolean
 ): string {
   const d = visit.drawing;
   const shape = d.vectorShape!;
@@ -51,6 +60,7 @@ export function paintVectorShape(
   };
   for (const component of shape.components) {
     work.tick();
+    if (include && !include(component)) continue;
     const state = doc.context.register(
       doc.context.obj({
         Type: 'ExtGState',

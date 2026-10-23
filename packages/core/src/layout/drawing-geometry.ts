@@ -55,6 +55,8 @@ export interface DrawingGeometryInput {
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   readonly presetGeometry: string | null;
+  /** The geometry's clip ring in the unit square of the frame; it overrides the preset. */
+  readonly clipUnit?: readonly DrawingPoint[];
 }
 
 const EMPTY_INSETS: DrawingInsets = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -689,7 +691,13 @@ export function computeDrawingGeometry(input: DrawingGeometryInput): DrawingGeom
     mapping,
   });
 
-  const presetLocal = presetClipPolygonLocal(input.presetGeometry, frame.width, frame.height);
+  const presetLocal = input.clipUnit
+    ? Object.freeze(
+        input.clipUnit.map((point) =>
+          Object.freeze({ x: point.x * frame.width, y: point.y * frame.height })
+        )
+      )
+    : presetClipPolygonLocal(input.presetGeometry, frame.width, frame.height);
   let clipFallback: DrawingClipFallback = 'none';
   let clipSource = presetLocal;
   if (!clipSource) {
@@ -775,6 +783,7 @@ export function drawingGeometryFromProjection(options: {
     crop: picture?.crop ?? { left: 0, top: 0, right: 0, bottom: 0 },
     transform: picture?.transform ?? defaultTransform,
     presetGeometry: picture?.presetGeometry ?? null,
+    ...(picture?.clipUnit ? { clipUnit: picture.clipUnit } : {}),
   });
 }
 

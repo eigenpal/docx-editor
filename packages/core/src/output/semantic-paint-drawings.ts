@@ -29,7 +29,11 @@ import {
 } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
-import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
+import {
+  applyVectorInkReach,
+  isFramedPicture,
+  vectorShapeFrame,
+} from './semantic-paint-vector-shape.ts';
 import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
 import { paintTextArt } from './semantic-paint-text-art.ts';
 import { paintTextboxStory } from './semantic-paint-textbox.ts';
@@ -453,13 +457,15 @@ function paintReadyImage(
   const content = imageFrameBounds(drawing);
   const paint = drawing.paintBounds;
   // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon. A
-  // group clips only its picture there: the vector members share the outer box, which
-  // clips at the paint bounds so strokes can use the effect extent, as a lone shape does.
+  // group, or a picture with its own frame, clips only its picture there: the vector paint
+  // shares the outer box, which clips at the paint bounds so strokes can use the effect
+  // extent, as a lone shape does.
+  const clipsPictureOnly = drawing.groupPicture !== undefined || drawing.vectorShape !== null;
   const clipPath = cssClipPathFromPolygon(
     drawing.geometry.clipPolygon ?? [],
-    drawing.groupPicture ? content : paint
+    clipsPictureOnly ? content : paint
   );
-  if (clipPath) (drawing.groupPicture ? inner : outer).style.clipPath = clipPath;
+  if (clipPath) (clipsPictureOnly ? inner : outer).style.clipPath = clipPath;
   inner.style.left = `${(content.x - paint.x) * ctx.scale}px`;
   inner.style.top = `${(content.y - paint.y) * ctx.scale}px`;
   inner.style.width = `${content.width * ctx.scale}px`;
@@ -510,16 +516,27 @@ function paintReadyImage(
   inner.append(transformStage);
   outer.replaceChildren(inner);
   if (drawing.vectorShape) {
-    const frame = vectorShapeFrame(document, drawing, ctx.scale);
-    const paintBounds = drawing.paintBounds;
-    applyVectorInkReach(
-      outer,
-      frame,
-      paintBounds,
-      vectorShapeInkClip(drawing, paintBounds),
-      ctx.scale
+    const framed = isFramedPicture(drawing);
+    const ink = vectorShapeInkClip(drawing, drawing.paintBounds);
+    // A picture's frame paints its shadow and fill under the picture and its outline over it.
+    const frame = vectorShapeFrame(
+      document,
+      drawing,
+      ctx.scale,
+      framed ? (component) => component.belowPicture !== true : undefined
     );
+    applyVectorInkReach(outer, frame, drawing.paintBounds, ink, ctx.scale);
     outer.append(frame);
+    if (framed && drawing.vectorShape.components.some((component) => component.belowPicture)) {
+      const under = vectorShapeFrame(
+        document,
+        drawing,
+        ctx.scale,
+        (component) => component.belowPicture === true
+      );
+      under.style.pointerEvents = 'none';
+      outer.insertBefore(under, inner);
+    }
   }
   applyDrawingBilevelFilter(document, outer, inner, drawing.effects.bilevel);
 
@@ -694,7 +711,12 @@ function paintDrawingRecordElement(
     return paintPlaceholderCard(document, drawing, ctx, origin);
   }
   const groupImageReady = drawing.groupPicture !== undefined && url !== null;
-  if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0 && !groupImageReady) {
+  if (
+    drawing.vectorShape &&
+    drawing.vectorShape.subpathsEmu.length > 0 &&
+    !groupImageReady &&
+    !isFramedPicture(drawing)
+  ) {
     return paintVectorShape(document, drawing, ctx, painted, origin);
   }
 

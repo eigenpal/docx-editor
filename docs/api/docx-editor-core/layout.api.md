@@ -4886,6 +4886,7 @@ export interface VectorShapeComponent {
         x: number;
         y: number;
     }>[])[];
+    readonly belowPicture?: true;
     // (undocumented)
     readonly fillAlpha: number;
     readonly fillGradient?: VectorGradient;
@@ -4902,6 +4903,7 @@ export interface VectorShapeComponent {
     readonly strokeInset?: boolean;
     // (undocumented)
     readonly strokeJoin?: 'round' | 'bevel';
+    readonly strokeOutsetEmu?: number;
     // (undocumented)
     readonly strokeWidthEmu: number;
     readonly subpathsClosed?: readonly boolean[];

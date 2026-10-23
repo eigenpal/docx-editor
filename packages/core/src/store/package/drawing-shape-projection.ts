@@ -18,6 +18,7 @@ import {
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
+import { compoundBands } from './drawing-line-compound.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
 import { darkEdgeOutline, readShapeShadow, type ShapeShadow } from './drawing-shape-effects.ts';
@@ -121,6 +122,13 @@ export interface VectorShapeComponent {
   readonly strokeJoin?: 'round' | 'bevel';
   /** Dash and gap lengths in multiples of the stroke width; absent for a solid outline. */
   readonly strokeDash?: readonly number[];
+  /** In a picture's frame: paints under the picture (its shadow and fill), not over it. */
+  readonly belowPicture?: true;
+  /**
+   * How far the stroked path lies outside the geometry by design, in EMU: a picture outline
+   * runs half its width outside the picture, so the whole stroke stays off the picture.
+   */
+  readonly strokeOutsetEmu?: number;
   /**
    * The outline sits inside the closed geometry (`a:ln algn="in"`): painters draw it at twice
    * its width clipped to the path, so the authored width stays inside the shape and adds no
@@ -454,6 +462,13 @@ export function projectShapeComponents(
         ? { strokeInset: true }
         : {}),
     });
+  }
+  if (line && line.compound !== 'sng') {
+    components.splice(
+      0,
+      components.length,
+      ...components.flatMap((component) => compoundBands(component, line.compound))
+    );
   }
   // One shadow for the whole shape, under all of its paths: a single path carries it, and a
   // shape of several paths gets a silhouette of them all, painted before any of them.

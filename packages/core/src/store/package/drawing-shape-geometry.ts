@@ -56,7 +56,9 @@ export function readShapeGeometry(
     const definition = customGeometryDefinition(custGeom);
     return definition ? evaluateGeometry(definition, extent.cx, extent.cy) : null;
   }
+  // A picture's `pic:spPr` holds a typed preset; a shape's holds a generic one.
   const prstGeom = findDirectChild(spPr.children, {
+    typedKind: 'picturePresetGeometry',
     namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
     localName: 'prstGeom',
   });

@@ -1,5 +1,5 @@
-// The SVG frame of a drawing's typed vector members, shared by the shape paint and by a
-// group picture, which paints its vector members over the image.
+// The SVG frame of a drawing's typed vector members, shared by the shape paint, by a group
+// picture, which paints its vector members over the image, and by a picture's own frame.
 //
 // Trust boundary: colours are validated 6-digit sRGB and coordinates are finite numbers from
 // the projection; the SVG is built with createElementNS/setAttribute only.
@@ -7,6 +7,7 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { finite } from '../layout/drawing-geometry.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
+import type { VectorShapeComponent } from '../store/package/drawing-shape-projection.ts';
 import {
   appendShadow,
   applyGradientFill,
@@ -44,13 +45,27 @@ export function applyVectorInkReach(
 }
 
 /**
+ * Whether the drawing is a picture whose `vectorShape` is its own frame (outline, shadow,
+ * fill) rather than a shape or a group's other members.
+ */
+export function isFramedPicture(drawing: InlineDrawingRecord | AnchoredDrawingRecord): boolean {
+  return (
+    drawing.vectorShape !== null &&
+    drawing.placeholderGraphicKind === null &&
+    drawing.groupPicture === undefined
+  );
+}
+
+/**
  * The extent frame holding `drawing.vectorShape` as inline SVG, positioned relative to the
- * drawing's paint bounds. The caller guarantees `vectorShape` is non-null.
+ * drawing's paint bounds. The caller guarantees `vectorShape` is non-null. `include` picks
+ * the components to paint, such as the part of a picture frame under the picture.
  */
 export function vectorShapeFrame(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  scale: number
+  scale: number,
+  include?: (component: VectorShapeComponent) => boolean
 ): HTMLElement {
   const shape = drawing.vectorShape!;
   const content = drawing.geometry.contentBounds;
@@ -78,6 +93,7 @@ export function vectorShapeFrame(
   // `components` is the paint authority and is always non-empty; the top-level `fillHex`
   // and `strokeHex` describe a one-component shape only.
   for (const component of shape.components) {
+    if (include && !include(component)) continue;
     const path = document.createElementNS(SVG_NAMESPACE, 'path');
     const d = component.subpathsEmu
       .map(
