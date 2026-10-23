@@ -396,7 +396,7 @@ export function paragraphContentWidthsPt(
       measure,
       line + leading + (onFirstLine ? firstShift : 0),
       nextTabStop,
-      spacing.extraAdvance
+      cjkBreaks?.unwrappedAdvance(piece, spacing.extraAdvance) ?? spacing.extraAdvance
     );
     advance(unwrapped.width, unwrapped.trailing);
     if (cjkBreaks?.opens(piece)) close();

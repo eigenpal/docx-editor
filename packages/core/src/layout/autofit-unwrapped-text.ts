@@ -61,6 +61,21 @@ export function cjkAutofitBreaks(
       }
       return saved;
     },
+    /**
+     * Adds the unwrapped line's punctuation seams to `extra`. Every seam shares the unwrapped
+     * line with its neighbour, so each gives back its whole amount, as line layout draws it.
+     */
+    unwrappedAdvance(
+      piece: FieldAwarePiece,
+      extra: (from: number, to: number) => number
+    ): (from: number, to: number) => number {
+      if (seams.size === 0) return extra;
+      return (from, to) => {
+        let advance = extra(from, to);
+        for (let at = from; at < to; at++) advance -= seams.get(piece.start + at)?.amount ?? 0;
+        return advance;
+      };
+    },
     opens: (piece: FieldAwarePiece) => breaks.decision(piece, 0, '', piece.text) === 'opens',
     boundaries: (piece: FieldAwarePiece) =>
       breaks

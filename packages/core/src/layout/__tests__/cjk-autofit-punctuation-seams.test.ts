@@ -44,7 +44,7 @@ function paragraph(content: string): OoxmlElement {
   };
   return find(body)!;
 }
-function min(content: string, kern = true): number {
+function widths(content: string, kern = true) {
   return paragraphContentWidthsPt(paragraph(content), {
     context: { measurer: createFixedMeasurer(6, 12) },
     view: {
@@ -54,8 +54,10 @@ function min(content: string, kern = true): number {
       readNested: () => null,
     },
     tableCellStyle: undefined,
-  }).min;
+  });
 }
+const min = (content: string, kern = true): number => widths(content, kern).min;
+const max = (content: string, kern = true): number => widths(content, kern).max;
 
 test('a single bracket or period keeps its full advance beside its ideograph', () => {
   expect(min(run('漢「字漢字'))).toBe(12);
@@ -102,4 +104,12 @@ test('with kinsoku off each mark stands alone at its natural advance', () => {
 });
 test('Latin text keeps its word minimum', () => {
   expect(min(run('ABC DEFG'))).toBe(24);
+});
+test('the AutoFit maximum gives up every shared half-em of the unwrapped line', () => {
+  // The unwrapped line holds both marks of each pair, legal break or not.
+  expect(max(run('漢字」「漢字'))).toBe(33);
+  expect(max(run('漢字。」漢字'))).toBe(33);
+  expect(max(run('漢字。') + run('」漢字'))).toBe(33);
+  expect(max(run('漢字。」漢字。」'))).toBe(42);
+  expect(max(run('漢字」「漢字'), false)).toBe(36);
 });
