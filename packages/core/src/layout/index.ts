@@ -769,3 +769,4 @@ export type { DrawingImageEffects } from '../store/package/drawing-image-effects
 export { tabLeaderPattern } from './tab-leader-pattern.ts';
 export { noteSeparatorRuleBox } from './note-separator-rule.ts';
 export type { StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';
+export { shapedRunOutline } from './text-outline.ts';

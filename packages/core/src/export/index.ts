@@ -22,6 +22,18 @@ export {
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
 export {
+  replayMetafile,
+  type MetafileCommand,
+  type MetafileDrawing,
+  type MetafileFont,
+  type MetafileMatrix,
+  type MetafilePaint,
+  type MetafilePathCommand,
+  type MetafileRaster,
+  type MetafileReplay,
+  type MetafileReplayOptions,
+} from './metafile-replay.ts';
+export {
   MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS,
   acquireSharedExportShaping,
   type SharedExportShaping,

@@ -185,6 +185,10 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
+    metafileBytes?(source: InlineDrawingRecord | AnchoredDrawingRecord): {
+        readonly bytes: Uint8Array;
+        readonly mime: 'image/x-emf' | 'image/x-wmf';
+    } | null;
     validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
@@ -242,6 +246,127 @@ export function hasFontBackedExportCapabilities<T extends object>(value: T): val
 
 // @public
 export const MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS = 32;
+
+// @public
+export type MetafileCommand = {
+    readonly kind: 'save';
+} | {
+    readonly kind: 'restore';
+} | {
+    readonly evenOdd: boolean;
+    readonly kind: 'fill';
+    readonly paint: MetafilePaint;
+    readonly path: readonly MetafilePathCommand[];
+} | {
+    readonly dash: readonly number[];
+    readonly kind: 'stroke';
+    readonly paint: MetafilePaint;
+    readonly path: readonly MetafilePathCommand[];
+    readonly width: number;
+} | {
+    readonly evenOdd: boolean;
+    readonly kind: 'clip';
+    readonly path: readonly MetafilePathCommand[];
+} | {
+    readonly kind: 'image';
+    readonly matrix: MetafileMatrix;
+    readonly raster: MetafileRaster;
+} | {
+    readonly align: 'left' | 'center' | 'right';
+    readonly baseline: 'alphabetic' | 'top' | 'bottom' | 'middle';
+    readonly font: MetafileFont;
+    readonly kind: 'text';
+    readonly matrix: MetafileMatrix;
+    readonly paint: MetafilePaint;
+    readonly text: string;
+    readonly x: number;
+    readonly y: number;
+} | {
+    readonly drawing: MetafileDrawing;
+    readonly kind: 'drawing';
+    readonly matrix: MetafileMatrix;
+};
+
+// @public
+export interface MetafileDrawing {
+    // (undocumented)
+    readonly commands: readonly MetafileCommand[];
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export interface MetafileFont {
+    // (undocumented)
+    readonly bold: boolean;
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly italic: boolean;
+    // (undocumented)
+    readonly sizePx: number;
+}
+
+// @public
+export type MetafileMatrix = readonly [number, number, number, number, number, number];
+
+// @public
+export interface MetafilePaint {
+    // (undocumented)
+    readonly alpha: number;
+    // (undocumented)
+    readonly b: number;
+    // (undocumented)
+    readonly g: number;
+    // (undocumented)
+    readonly r: number;
+}
+
+// @public
+export type MetafilePathCommand = {
+    readonly op: 'M' | 'L';
+    readonly x: number;
+    readonly y: number;
+} | {
+    readonly op: 'C';
+    readonly x: number;
+    readonly x1: number;
+    readonly x2: number;
+    readonly y: number;
+    readonly y1: number;
+    readonly y2: number;
+} | {
+    readonly op: 'Z';
+};
+
+// @public
+export type MetafileRaster = {
+    readonly data: Uint8Array;
+    readonly height: number;
+    readonly kind: 'rgba';
+    readonly width: number;
+} | {
+    readonly bytes: Uint8Array;
+    readonly height: number;
+    readonly kind: 'encoded';
+    readonly mime: 'image/png' | 'image/jpeg';
+    readonly width: number;
+};
+
+// @public
+export interface MetafileReplay {
+    // (undocumented)
+    readonly complete: boolean;
+    // (undocumented)
+    readonly drawing: MetafileDrawing;
+}
+
+// @public
+export interface MetafileReplayOptions {
+    readonly measureText: (text: string, font: MetafileFont) => number;
+}
 
 // @public
 export function openDocumentForExport(source: ExportDocumentSource, options?: OpenDocumentForExportOptions): OpenDocumentForExportResult;
@@ -318,6 +443,9 @@ signal?: AbortSignal) => Promise<Readonly<{
     bytes: Uint8Array;
     mime: SupportedImageMime;
 }> | null>;
+
+// @public
+export function replayMetafile(bytes: Uint8Array, mime: 'image/x-emf' | 'image/x-wmf', options: MetafileReplayOptions): Promise<MetafileReplay | null>;
 
 // @public
 export interface SharedExportShaping {

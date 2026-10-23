@@ -349,6 +349,8 @@ export async function openFontBackedDocumentForExport(
         termination === 'active' ? session.layoutFor(displayMode) : Promise.reject(unavailable()),
       validatedImageBytes: (drawing: Parameters<ExportSession['validatedImageBytes']>[0]) =>
         termination === 'active' ? session.validatedImageBytes(drawing) : null,
+      metafileBytes: (drawing: Parameters<NonNullable<ExportSession['metafileBytes']>>[0]) =>
+        termination === 'active' ? (session.metafileBytes?.(drawing) ?? null) : null,
       admittedFontFace: bindSessionAdmittedFont({
         status: () => termination,
         unavailable,

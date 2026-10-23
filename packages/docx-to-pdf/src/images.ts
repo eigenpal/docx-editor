@@ -15,6 +15,7 @@ import { paintVectorShape } from './vector-shapes.ts';
 import { paintTextArt } from './text-art.ts';
 import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
+import { MetafileForms } from './metafile-pdf.ts';
 
 /**
  * The raster formats this writer embeds directly.
@@ -46,11 +47,14 @@ function unpaintableBulletReason(picture: ListMarkerPictureRecord, box: LayoutBo
 
 export class ImageWriter {
   private readonly images = new Map<string, PDFImage>();
+  private readonly metafiles: MetafileForms;
   constructor(
     readonly doc: PDFDocument,
     readonly session: FontBackedExportCapabilities,
     readonly work: Work
-  ) {}
+  ) {
+    this.metafiles = new MetafileForms(doc, session, work);
+  }
   /**
    * Draw a list marker's picture bullet in the box layout published for it.
    *
@@ -396,6 +400,19 @@ export class ImageWriter {
     report: (message: string) => string
   ): Promise<string> {
     const d = visit.drawing;
+    // An EMF or WMF picture with no raster draws from its own vector commands.
+    if (d.resource.kind === 'unrenderable' && d.resource.partName !== null) {
+      const metafile = this.session.metafileBytes?.(d);
+      if (metafile) {
+        const form = await this.metafiles.form(d.resource.partName, metafile, visit.page.index);
+        if (!form) return report('Metafile picture could not be drawn');
+        const opacity = this.opacityCommand(visit, page);
+        if (opacity === null) return report('Invalid image opacity');
+        const key = `Fm${form.objectNumber}`;
+        page.node.setXObject(PDFName.of(key), form);
+        return this.placePicture(visit, page, key, opacity, report);
+      }
+    }
     const bytes = this.session.validatedImageBytes(d);
     if (!bytes || d.resource.kind !== 'ready') return report('Image has no validated raster bytes');
     const mime = d.resource.mime;
@@ -411,20 +428,38 @@ export class ImageWriter {
         visit.page.index
       );
     const image = embedded.image;
-    let opacityCommand = '';
-    if (d.effects.opacity !== undefined && d.effects.opacity !== 1) {
-      const opacity = d.effects.opacity;
-      if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1)
-        return report('Invalid image opacity');
-      const name = `Alpha${Math.round(opacity * 100000)}`;
-      const ref = this.doc.context.register(
-        this.doc.context.obj({ Type: 'ExtGState', ca: opacity, CA: opacity })
-      );
-      page.node.setExtGState(PDFName.of(name), ref);
-      opacityCommand = `/${name} gs `;
-    }
+    const opacityCommand = this.opacityCommand(visit, page);
+    if (opacityCommand === null) return report('Invalid image opacity');
     const key = `Im${image.ref.objectNumber}`;
     page.node.setXObject(PDFName.of(key), image.ref);
+    return this.placePicture(visit, page, key, opacityCommand, report);
+  }
+
+  /** The graphics state command for the picture's opacity; null for an invalid opacity. */
+  private opacityCommand(visit: SemanticDrawingVisit, page: PDFPage): string | null {
+    const opacity = visit.drawing.effects.opacity;
+    if (opacity === undefined || opacity === 1) return '';
+    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
+    const name = `Alpha${Math.round(opacity * 100000)}`;
+    const ref = this.doc.context.register(
+      this.doc.context.obj({ Type: 'ExtGState', ca: opacity, CA: opacity })
+    );
+    page.node.setExtGState(PDFName.of(name), ref);
+    return `/${name} gs `;
+  }
+
+  /**
+   * Draw the XObject `key`, which fills the unit square, as the picture: placed by its
+   * transform and crop, clipped by its geometry, with its link.
+   */
+  private placePicture(
+    visit: SemanticDrawingVisit,
+    page: PDFPage,
+    key: string,
+    opacityCommand: string,
+    report: (message: string) => string
+  ): string {
+    const d = visit.drawing;
     const points = d.geometry.imageTransformCorners ?? d.geometry.transformedCorners;
     if (points.length !== 4) return report('Image has no affine rectangle geometry');
     if (d.geometry.clipFallback !== 'none')

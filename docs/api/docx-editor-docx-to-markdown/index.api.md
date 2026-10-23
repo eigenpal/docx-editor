@@ -250,6 +250,10 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
+    metafileBytes?(source: InlineDrawingRecord | AnchoredDrawingRecord): {
+        readonly bytes: Uint8Array;
+        readonly mime: 'image/x-emf' | 'image/x-wmf';
+    } | null;
     validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 

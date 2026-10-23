@@ -612,7 +612,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The browser rasterizes the metafile and the editor paints it at the authored extent. A metafile that will not convert keeps its extent and shows a labelled placeholder. The original bytes round-trip untouched.',
+      'The browser rasterizes the metafile and the editor paints it at the authored extent. PDF export draws the metafile as vector paths, text, and embedded bitmaps in the picture frame, with its crop and clip. Metafile text uses the named font when the document uses it, and the default font otherwise. A metafile that will not convert keeps its extent and shows a labelled placeholder. The original bytes round-trip untouched.',
   },
   {
     id: 'images.tiff',

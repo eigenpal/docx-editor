@@ -13,7 +13,7 @@ const ARITY: Readonly<Record<string, number>> = { M: 2, L: 2, Q: 4, C: 6, Z: 0 }
  * Engine-generated path data as PDF path operators. Quadratic segments become the equal cubic
  * ones, because PDF paths have no quadratic operator. Null when the data leaves the grammar.
  */
-function pathOperators(path: string, work: Work): string | null {
+export function pathOperators(path: string, work: Work): string | null {
   const out: string[] = [];
   let x = 0,
     y = 0,

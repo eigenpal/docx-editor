@@ -4146,6 +4146,9 @@ export interface ShapedRunComparatorInputs {
 export const shapedRunComparatorInputs: (input: ShapedRun, environment: ShapingEnvironmentInput) => ShapedRunComparatorInputs;
 
 // @public
+export function shapedRunOutline(run: ShapedRun, pointSize: number, fixedPointScale: number): TextOutline | undefined;
+
+// @public
 export interface ShapedVerticalMetrics {
     // (undocumented)
     readonly ascent: FixedPoint;

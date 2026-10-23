@@ -1,0 +1,212 @@
+// Replay an EMF or WMF picture into vector drawing commands, for an exporter that draws the
+// metafile itself rather than a raster of it.
+//
+// The metafile replayer draws on a canvas. Here the canvas is a recording stand-in, put on
+// the global object only while one replay runs, and replays run one at a time.
+
+import {
+  RECORDING_MIME,
+  RecordingCanvas,
+  RecordingImageData,
+  type MetafileBudget,
+  type MetafileDrawing,
+  type MetafileFont,
+  type MetafileRaster,
+  type RecordingBitmap,
+} from './metafile-recording.ts';
+import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
+
+export type {
+  MetafileCommand,
+  MetafileDrawing,
+  MetafileFont,
+  MetafileMatrix,
+  MetafilePaint,
+  MetafilePathCommand,
+  MetafileRaster,
+} from './metafile-recording.ts';
+
+/** Options for {@link replayMetafile}. @public */
+export interface MetafileReplayOptions {
+  /** Advance width of `text` in `font`, in pixels at `font.sizePx`. */
+  readonly measureText: (text: string, font: MetafileFont) => number;
+}
+
+/** A replayed metafile. `complete` is false when a bound stopped recording early. @public */
+export interface MetafileReplay {
+  readonly drawing: MetafileDrawing;
+  readonly complete: boolean;
+}
+
+/** Records the replayer may process per stream; its own default is larger. */
+const MAX_RECORDS = 200_000;
+/** The canvas edge the replayer sizes to; coordinates only, nothing is rasterized. */
+const CANVAS_EDGE = 4096;
+
+const STAND_INS = ['OffscreenCanvas', 'ImageData', 'createImageBitmap', 'FileReader'] as const;
+
+let queue: Promise<unknown> = Promise.resolve();
+
+function encodedSize(
+  bytes: Uint8Array
+): { mime: 'image/png' | 'image/jpeg'; width: number; height: number } | null {
+  if (
+    bytes.length >= 24 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { mime: 'image/png', width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    // Walk segments to the first start-of-frame marker.
+    let at = 2;
+    while (at + 9 < bytes.length) {
+      if (bytes[at] !== 0xff) return null;
+      const marker = bytes[at + 1]!;
+      const length = (bytes[at + 2]! << 8) | bytes[at + 3]!;
+      const isFrame =
+        marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      if (isFrame) {
+        return {
+          mime: 'image/jpeg',
+          height: (bytes[at + 5]! << 8) | bytes[at + 6]!,
+          width: (bytes[at + 7]! << 8) | bytes[at + 8]!,
+        };
+      }
+      if (length < 2) return null;
+      at += 2 + length;
+    }
+  }
+  return null;
+}
+
+function base64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let at = 0; at < bytes.length; at += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function replayAlone(
+  bytes: Uint8Array,
+  mime: 'image/x-emf' | 'image/x-wmf',
+  options: MetafileReplayOptions
+): Promise<MetafileReplay | null> {
+  const budget: MetafileBudget = { commands: 0, points: 0, pixels: 0, exhausted: false };
+  const recordings = new Map<string, RecordingCanvas>();
+  const exportCanvas = (canvas: RecordingCanvas): string => {
+    const token = `recording-${recordings.size}`;
+    recordings.set(token, canvas);
+    return token;
+  };
+  const measure = (text: string, font: MetafileFont): number => {
+    const width = options.measureText(text, font);
+    return Number.isFinite(width) && width >= 0 ? width : 0;
+  };
+  class StandInCanvas extends RecordingCanvas {
+    constructor(width: number, height: number) {
+      super(width, height, budget, measure, exportCanvas);
+    }
+  }
+  class StandInFileReader {
+    result: string | null = null;
+    error: unknown = null;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    readAsDataURL(blob: Blob): void {
+      void blob
+        .arrayBuffer()
+        .then((buffer) => {
+          this.result = `data:${blob.type || 'application/octet-stream'};base64,${base64(new Uint8Array(buffer))}`;
+          this.onload?.();
+        })
+        .catch((error: unknown) => {
+          this.error = error;
+          this.onerror?.();
+        });
+    }
+  }
+  const createImageBitmap = async (blob: Blob): Promise<RecordingBitmap> => {
+    const data = new Uint8Array(await blob.arrayBuffer());
+    if (blob.type === RECORDING_MIME) {
+      const canvas = recordings.get(new TextDecoder().decode(data));
+      if (!canvas) throw new Error('Unknown recording');
+      const drawing = canvas.drawing();
+      return { width: drawing.width, height: drawing.height, drawing, close() {} };
+    }
+    const size = encodedSize(data);
+    if (!size || !(size.width > 0 && size.height > 0)) throw new Error('Unsupported bitmap');
+    budget.pixels += size.width * size.height;
+    const raster: MetafileRaster = { kind: 'encoded', ...size, bytes: data };
+    return { width: size.width, height: size.height, raster, close() {} };
+  };
+
+  const scope = globalThis as Record<string, unknown>;
+  const saved = STAND_INS.map((name) => Object.getOwnPropertyDescriptor(scope, name));
+  const values: Record<(typeof STAND_INS)[number], unknown> = {
+    OffscreenCanvas: StandInCanvas,
+    ImageData: RecordingImageData,
+    createImageBitmap,
+    FileReader: StandInFileReader,
+  };
+  for (const name of STAND_INS) {
+    Object.defineProperty(scope, name, { value: values[name], configurable: true, writable: true });
+  }
+  try {
+    const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
+    const buffer = bytes.slice().buffer;
+    const replayOptions = {
+      dpiScale: 1,
+      maxWidth: CANVAS_EDGE,
+      maxHeight: CANVAS_EDGE,
+      maxCanvasDimension: CANVAS_EDGE,
+      maxRecords: MAX_RECORDS,
+    };
+    const url =
+      mime === 'image/x-emf'
+        ? await convertEmfToDataUrl(buffer, replayOptions)
+        : await convertWmfToDataUrl(buffer, replayOptions);
+    const encoded = url?.startsWith(`data:${RECORDING_MIME};base64,`)
+      ? url.slice(url.indexOf(',') + 1)
+      : null;
+    const canvas = encoded ? recordings.get(atob(encoded)) : undefined;
+    if (!canvas) return null;
+    const drawing = canvas.drawing();
+    // The replayer skips a WMF's bitmaps; they paint first, under its other drawing.
+    const bitmaps =
+      mime === 'image/x-wmf' ? wmfBitmapCommands(bytes, drawing.width, drawing.height, budget) : [];
+    return {
+      drawing: bitmaps.length
+        ? { ...drawing, commands: [...bitmaps, ...drawing.commands] }
+        : drawing,
+      complete: !budget.exhausted,
+    };
+  } catch {
+    return null;
+  } finally {
+    STAND_INS.forEach((name, index) => {
+      const descriptor = saved[index];
+      if (descriptor) Object.defineProperty(scope, name, descriptor);
+      else delete scope[name];
+    });
+  }
+}
+
+/**
+ * Replay an EMF or WMF picture into vector drawing commands in canvas pixels. Null when the
+ * bytes do not replay. Text keeps its face and position; the caller shapes and draws it.
+ * @public
+ */
+export function replayMetafile(
+  bytes: Uint8Array,
+  mime: 'image/x-emf' | 'image/x-wmf',
+  options: MetafileReplayOptions
+): Promise<MetafileReplay | null> {
+  const run = queue.then(() => replayAlone(bytes, mime, options));
+  queue = run.catch(() => undefined);
+  return run;
+}
