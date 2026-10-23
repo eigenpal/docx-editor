@@ -30,8 +30,9 @@ export interface CjkParagraphTypography {
   /** Authored `w:overflowPunct` switch. */
   readonly overflowPunctuation: boolean;
   /**
-   * Line-end punctuation may hang past the margin: the authored switch is on and the paragraph
-   * is justified. Absent (no paragraph properties resolved) means the authored switch decides.
+   * Line-end punctuation may hang past the margin: the authored switch is on, the paragraph is
+   * justified, and the document defaults name an East Asian face (`sourceEastAsianFont`).
+   * Absent (no paragraph properties resolved) means the authored switch decides.
    */
   readonly hangingPunctuation?: boolean;
   readonly characterWrap: boolean;
@@ -119,12 +120,13 @@ export function resolveCjkTypography(
     if (prop.localName === 'jc') justified = JUSTIFIED.has(prop.attributes?.val ?? '');
   }
   // Punctuation hangs only in justified paragraphs, full-width and Latin alike. Left, centered,
-  // and right-aligned lines keep line-end punctuation inside the margin.
+  // and right-aligned lines keep line-end punctuation inside the margin. A document whose
+  // defaults name no East Asian face hangs no punctuation at all.
   return {
     settings,
     kinsoku,
     overflowPunctuation,
-    hangingPunctuation: overflowPunctuation && justified,
+    hangingPunctuation: overflowPunctuation && justified && settings?.sourceEastAsianFont === true,
     characterWrap,
     autoSpaceDN,
     autoSpaceDE,

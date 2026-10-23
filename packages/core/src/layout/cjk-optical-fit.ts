@@ -484,18 +484,17 @@ export function createParagraphCjkOpticalFitter(
   preserveColonAdvances: boolean,
   justified: boolean
 ) {
-  // Compression fits a line only when the paragraph is justified.
+  // Compression fits a line only when the paragraph is justified and the document defaults
+  // name an East Asian face. A document without one compresses no punctuation to fit.
   const opticalPolicy =
     justified &&
-    typography.settings?.compression !== undefined &&
+    typography.settings?.sourceEastAsianFont === true &&
+    typography.settings.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&
     !hasPageExclusions &&
     measurer.inkBounds !== undefined;
   const opticalParagraph = opticalPolicy && canFitCjkOptically(allPieces);
-  const localOpticalParagraph =
-    opticalPolicy &&
-    typography.settings?.punctuationKerning !== false &&
-    typography.settings?.sourceEastAsianFont === true;
+  const localOpticalParagraph = opticalPolicy && typography.settings?.punctuationKerning !== false;
   return {
     opticalParagraph,
     opticalCompression: (opticalParagraph || localOpticalParagraph) && !preserveColonAdvances,

@@ -142,7 +142,8 @@ for (const { kind, text, spacing, compression, punctuation } of [
         text,
         spacing,
         compression,
-        punctuation ? { kern: 2, eastAsianDefault: true, split: 2 } : undefined
+        // Optical fitting needs an East Asian face in the document defaults.
+        punctuation ? { kern: 2, eastAsianDefault: true, split: 2 } : { eastAsianDefault: true }
       ),
       (surface) => {
         const sourceId = surface.session.paragraphIds()[0]!;

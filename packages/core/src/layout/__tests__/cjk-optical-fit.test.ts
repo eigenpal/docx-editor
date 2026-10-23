@@ -49,7 +49,10 @@ function layout(
   split = text.length,
   measure = measurer,
   runProps = '',
-  sourcePolicy?: { readonly eastAsianDefaults?: boolean; readonly kern?: number },
+  // Optical fitting needs an East Asian face in the document defaults; every probe names one.
+  sourcePolicy: { readonly eastAsianDefaults?: boolean; readonly kern?: number } = {
+    eastAsianDefaults: true,
+  },
   jc = 'both'
 ) {
   const run = (value: string) =>
@@ -454,4 +457,13 @@ test('only a justified paragraph compresses punctuation to fit a line', () => {
   expect(text('both')).toEqual(['甲乙（丙丁）戊己']);
   expect(text('distribute')).toEqual(['甲乙（丙丁）戊己']);
   for (const jc of ['left', 'center', 'right']) expect(text(jc)).toEqual(['甲乙（丙丁）戊', '己']);
+});
+
+test('a document whose defaults name no East Asian face compresses no punctuation to fit', () => {
+  const text = (eastAsianDefaults: boolean) =>
+    layout('甲乙（丙丁）戊己', 90, undefined, measurer, '', { eastAsianDefaults }).map((line) =>
+      line.spans.map((span) => span.text).join('')
+    );
+  expect(text(true)).toEqual(['甲乙（丙丁）戊己']);
+  expect(text(false)).toEqual(['甲乙（丙丁）戊', '己']);
 });

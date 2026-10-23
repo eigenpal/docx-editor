@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { linesOf, type LineRecord, type TextMeasurer } from '../semantic-records.ts';
 
 // Only a paragraph-final word the flow kept by borrowing inter-word space compresses a last
@@ -46,6 +47,13 @@ const oneCell = (paragraph: string, width: number) =>
   `</w:tblPr><w:tblGrid><w:gridCol w:w="${width * 20}"/></w:tblGrid><w:tr><w:tc><w:tcPr>` +
   `<w:tcW w:w="${width * 20}" w:type="dxa"/></w:tcPr>${paragraph}</w:tc></w:tr></w:tbl><w:p/>`;
 
+// Punctuation hangs only when the document defaults name an East Asian face.
+const styles = load(
+  '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="MS Mincho"/></w:rPr>' +
+    '</w:rPrDefault></w:docDefaults></w:styles>'
+);
+
 function layout(bodyXml: string, width: number, compatibilityMode: number | undefined) {
   const part = load(
     `<w:document ${NS}><w:body>${bodyXml}<w:sectPr><w:pgSz w:w="${(width + 50) * 20}" ` +
@@ -55,6 +63,7 @@ function layout(bodyXml: string, width: number, compatibilityMode: number | unde
   const result = layoutSemanticDocument(part, 1, {
     measurer,
     compatibilityMode,
+    styleCascade: buildStyleCascadeTable(styles.root),
     inlineDrawingLayout: layoutContext(part),
   });
   return linesOf(result)[0]!;
