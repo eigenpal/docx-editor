@@ -34,6 +34,8 @@ const MAX_SIZE_HUNDREDTHS = 400_000;
 const DEFAULT_INSET_LR_EMU = 91_440;
 const DEFAULT_INSET_TB_EMU = 45_720;
 const EMU_PER_TWIP = 635;
+/** A generous bullet glyph width, in ems, for deciding whether a bullet fits its indent. */
+const BULLET_WIDTH_EM = 0.6;
 
 /** The text a shape's style supplies: `a:fontRef` names a theme font slot and a colour. */
 export interface DrawingTextDefaults {
@@ -346,17 +348,23 @@ export function lowerDrawingTextBody(
     const sizePoints = firstSize ?? endRun.sizePoints;
     const bullet =
       props.bullet && firstRun && isValidXmlText(props.bullet.char) ? props.bullet : null;
+    let bulletTab = false;
     if (bullet && firstRun) {
       const face = bullet.font && isValidXmlText(bullet.font) ? bullet.font : undefined;
-      const bulletRun = runProperties(firstRun.own, props.defaultRun, runContext, {
+      const bulletProps = runProperties(firstRun.own, props.defaultRun, runContext, {
         ...(face ? { face } : {}),
         sizeScale: bullet.sizeScale,
         sizePoints: bullet.sizePoints,
         color: bullet.color,
-      }).xml;
-      // The tab reaches the text indent through the stop the paragraph sets there.
+      });
+      // The text starts at the left margin when the bullet fits in the hanging space, and
+      // right after the bullet when it does not. The fit is judged on a wide bullet glyph,
+      // since the lowering cannot measure: a tab past an overrun bullet would jump to the
+      // next default stop instead.
+      bulletTab = -props.indentEmu / 12_700 >= bulletProps.sizePoints * BULLET_WIDTH_EM;
       runs.unshift(
-        `<w:r>${bulletRun}<w:t xml:space="preserve">${escapeXml(bullet.char)}</w:t></w:r><w:r>${bulletRun}<w:tab/></w:r>`
+        `<w:r>${bulletProps.xml}<w:t xml:space="preserve">${escapeXml(bullet.char)}</w:t></w:r>` +
+          (bulletTab ? `<w:r>${bulletProps.xml}<w:tab/></w:r>` : '')
       );
     }
     const line =
@@ -376,7 +384,7 @@ export function lowerDrawingTextBody(
     const jc = ALIGNMENTS.get(props.align ?? 'l') ?? 'left';
     xml.push(
       `<w:p><w:pPr><w:keepNext w:val="0"/><w:keepLines w:val="0"/><w:widowControl w:val="0"/>` +
-        (bullet ? `<w:tabs><w:tab w:val="left" w:pos="${left}"/></w:tabs>` : '') +
+        (bulletTab ? `<w:tabs><w:tab w:val="left" w:pos="${left}"/></w:tabs>` : '') +
         // Shape text does not snap to the document grid.
         `<w:snapToGrid w:val="0"/>` +
         `<w:spacing w:before="${Math.round(before * 20)}" w:after="${Math.round(after * 20)}" ${line}/>` +
