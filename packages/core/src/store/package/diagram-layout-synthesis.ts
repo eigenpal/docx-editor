@@ -52,7 +52,8 @@ export function synthesizeDiagramDrawing(
   // Hanging, one-sided and assistant branches of organization charts are not modelled.
   const branched = tree.nodes.some(
     (node) =>
-      node.algorithm.type === 'hierRoot' && layoutVariable(model, node.pres, 'hierBranch') !== 'std'
+      node.algorithm.type === 'hierRoot' &&
+      !['std', 'init'].includes(layoutVariable(model, node.pres, 'hierBranch'))
   );
   if (branched) return null;
   const solution = solveWithRules(tree, extent, {

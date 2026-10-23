@@ -8,7 +8,7 @@
 // the scale also applies to the connectors' bend distance.
 
 import type { PlacementContext } from './diagram-layout-algorithms.ts';
-import type { Box, NodeState } from './diagram-layout-solve.ts';
+import { presFactor, type Box, type NodeState } from './diagram-layout-solve.ts';
 
 const HIERARCHY = new Set(['hierRoot', 'hierChild']);
 /** A straight connector narrower than this keeps it as its width, centred on the line. */
@@ -98,6 +98,22 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
     (child) => !HIERARCHY.has(child.node.algorithm.type) && child.node.algorithm.type !== 'conn'
   );
   const size = own ? sizeOf(own) : { w: 0, h: 0 };
+  const base = { ...size };
+  // A box the user widened or heightened takes its room in the tree.
+  if (own) {
+    // The scale of the box itself, else the largest one set inside it.
+    const factor = (name: string) => {
+      let value = presFactor(own, name, NaN);
+      for (const inner of childStates(context, own)) {
+        const inside = presFactor(inner, name, NaN);
+        if (Number.isFinite(inside))
+          value = Number.isFinite(value) ? Math.max(value, inside) : inside;
+      }
+      return Number.isFinite(value) ? Math.min(100, Math.max(0.01, value)) : 1;
+    };
+    size.w *= factor('custScaleX');
+    size.h *= factor('custScaleY');
+  }
   const containers =
     depth > 64 ? [] : children.filter((child) => child.node.algorithm.type === 'hierChild');
   const rows = containers.map((container) => measureRow(context, container, depth));
@@ -107,10 +123,10 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
         state: own,
         x: 0,
         y: 0,
-        w: size.w,
-        h: size.h,
-        anchorX: size.w / 2,
-        anchorY: size.h / 2,
+        w: base.w,
+        h: base.h,
+        anchorX: base.w / 2,
+        anchorY: base.h / 2,
         children: [],
       }
     : null;
@@ -154,8 +170,10 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
   row.x += shiftX;
   row.y += shiftY;
   if (placedOwn) {
-    placedOwn.x = boxX;
-    placedOwn.y = boxY;
+    // The box keeps its solved size in the middle of the room its user scale takes; the
+    // scale itself applies when its parent places it.
+    placedOwn.x = boxX + (size.w - base.w) / 2;
+    placedOwn.y = boxY + (size.h - base.h) / 2;
   }
   for (const other of rows) {
     if (other === row) continue;

@@ -5,7 +5,15 @@
 
 import { describe, expect, test } from 'bun:test';
 import { projectDrawingsInPackage } from '../package/drawing-projection.ts';
-import { loadLayoutFixtures, scoreCase, type CaseScore } from './smartart-layout-harness.ts';
+import { synthesizeDiagramDrawing } from '../package/diagram-layout-synthesis.ts';
+import { isElement } from '../package/drawing-projection-walk.ts';
+import { readOoxmlPart, type OoxmlElement } from '../package/ooxml-tree.ts';
+import {
+  drawingShapes,
+  loadLayoutFixtures,
+  scoreCase,
+  type CaseScore,
+} from './smartart-layout-harness.ts';
 import { smartArtPackage } from './smartart-fixture.ts';
 
 const fixtures = loadLayoutFixtures(
@@ -36,9 +44,9 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   cycle2: { boxes: 24, presets: 24, rotations: 24, fonts: 12, refused: 0 },
   radial5: { boxes: 24, presets: 56, rotations: 56, fonts: 24, refused: 0 },
   default: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
-  hierarchy1: { boxes: 52, presets: 68, rotations: 68, fonts: 20, refused: 0 },
+  hierarchy1: { boxes: 56, presets: 68, rotations: 68, fonts: 20, refused: 0 },
   hierarchy2: { boxes: 44, presets: 44, rotations: 44, fonts: 20, refused: 0 },
-  HalfCircleOrganizationChart: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
+  HalfCircleOrganizationChart: { boxes: 0, presets: 60, rotations: 60, fonts: 0, refused: 0 },
 };
 
 function totals(scores: readonly CaseScore[]) {
@@ -104,5 +112,57 @@ describe('SmartArt without a saved drawing', () => {
     const pkg = smartArtPackage({ drawingRelationship: 'none', dataPartXml: part('data') });
     const [projection] = projectDrawingsInPackage(pkg);
     expect(projection!.vectorShape ?? null).toBeNull();
+  });
+});
+
+describe('SmartArt content formatting', () => {
+  const item = fixtures.cases.find((entry) => entry.id === 'process-short-1-process1')!;
+  const parse = (xml: string, name: string) => {
+    const read = readOoxmlPart(xml, { name, contentType: 'application/xml' });
+    if (!read.ok) throw new Error(read.reason);
+    return read.part.root;
+  };
+  const source = (key: 'data' | 'layout' | 'style' | 'colors') => fixtures.parts[item.parts[key]]!;
+  const FIRST = '<dgm:pt modelId="{5D1BADD1-48C5-464B-B01C-0FB5913DEEC9}">';
+  const lay = (data: string) =>
+    synthesizeDiagramDrawing(
+      {
+        dataModel: parse(data, '/data.xml'),
+        layoutDef: parse(source('layout'), '/layout.xml'),
+        styleDef: parse(source('style'), '/style.xml'),
+        colorsDef: parse(source('colors'), '/colors.xml'),
+      },
+      { cx: item.frame[0], cy: item.frame[1] }
+    )!;
+  const find = (element: OoxmlElement, localName: string): OoxmlElement | null => {
+    if (element.localName === localName) return element;
+    for (const child of element.children) {
+      if (!isElement(child)) continue;
+      const found = find(child, localName);
+      if (found) return found;
+    }
+    return null;
+  };
+  const attribute = (element: OoxmlElement | null, name: string) =>
+    element?.attributes.find((entry) => entry.localName === name)?.value;
+
+  test("a content point's own fill paints the shape that shows it", () => {
+    const data = source('data').replace(
+      `${FIRST}<dgm:prSet phldrT="[Text]"/><dgm:spPr/>`,
+      `${FIRST}<dgm:prSet phldrT="[Text]"/><dgm:spPr><a:solidFill><a:srgbClr val="00B050"/></a:solidFill></dgm:spPr>`
+    );
+    const spPr = find(find(lay(data), 'sp')!, 'spPr')!;
+    expect(attribute(find(find(spPr, 'solidFill')!, 'srgbClr'), 'val')).toBe('00B050');
+  });
+
+  test('custom text keeps its size and the margins follow it', () => {
+    const data = source('data').replace(
+      `${FIRST}<dgm:prSet phldrT="[Text]"/><dgm:spPr/><dgm:t><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/>`,
+      `${FIRST}<dgm:prSet phldrT="[Text]" custT="1"/><dgm:spPr/><dgm:t><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="1100"/>`
+    );
+    const drawing = lay(data);
+    expect(drawingShapes(drawing)[0]!.fontSizes).toEqual([1100]);
+    // 0.3 of 11 pt on each side, not 0.3 of the solved size.
+    expect(attribute(find(find(drawing, 'sp')!, 'bodyPr'), 'lIns')).toBe('41910');
   });
 });

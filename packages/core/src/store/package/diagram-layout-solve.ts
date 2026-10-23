@@ -461,6 +461,39 @@ function constraintsOnChildren(
   }
 }
 
+/** A `dgm:prSet` factor in 1/100000, or `fallback`. */
+export function presFactor(state: NodeState, name: string, fallback: number): number {
+  const raw = state.node.pres.prSet?.attributes.find((a) => a.localName === name)?.value;
+  const value = raw !== undefined && /^-?\d{1,9}$/.test(raw) ? Number(raw) / 100_000 : NaN;
+  return Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Resizes and moves the user made to one shape (`custScaleX/Y` about its centre, then
+ * `custLinFactNeighborX/Y` as a share of its size), applied after its parent places it.
+ */
+function applyUserAdjustments(state: NodeState): void {
+  const box = state.box;
+  if (!box) return;
+  const sx = Math.min(100, Math.max(0, presFactor(state, 'custScaleX', 1)));
+  const sy = Math.min(100, Math.max(0, presFactor(state, 'custScaleY', 1)));
+  // Neighbour moves count in hierarchies only; lists and composites keep their slots.
+  let owner = state.node.parent;
+  while (owner && owner.algorithm.type === 'composite') owner = owner.parent;
+  const moves = owner?.algorithm.type === 'hierRoot' || owner?.algorithm.type === 'hierChild';
+  const fx = moves ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
+  const fy = moves ? presFactor(state, 'custLinFactNeighborY', 0) : 0;
+  if (sx === 1 && sy === 1 && fx === 0 && fy === 0) return;
+  const w = box.w * sx;
+  const h = box.h * sy;
+  state.box = {
+    x: box.x + (box.w - w) / 2 + fx * w,
+    y: box.y + (box.h - h) / 2 + fy * h,
+    w,
+    h,
+  };
+}
+
 function freshState(node: DiagramLayoutNode): NodeState {
   return {
     node,
@@ -534,6 +567,7 @@ export function solveDiagramLayout(
     fitOwnBox(state);
     constraintsOnChildren(context, node, inherited);
     if (!placeChildren(placement, state)) return false;
+    for (const child of node.children) applyUserAdjustments(context.states[child.index]!);
     if (node.algorithm.type === 'conn') constraintsOnChildren(context, node, inherited);
     for (const child of node.children) {
       if (!visit(child, passed)) return false;

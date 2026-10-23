@@ -87,6 +87,25 @@ export function solveWithRules(
       }
     }
   }
+  // Content marked as custom text (`custT`) keeps its own size, and the node's text values
+  // (margins that refer to the size) follow it.
+  const custom = new Set<number>();
+  for (const node of tree.nodes) {
+    const paragraphs = nodeParagraphs(tree.model, solution.states[node.index]!);
+    const point = tree.model.points.get(node.assoc);
+    const flag = point?.prSet?.attributes.find((a) => a.localName === 'custT')?.value;
+    if (flag !== '1' && flag !== 'true') continue;
+    let size = 0;
+    for (const paragraph of paragraphs) size = Math.max(size, paragraph.explicitSize ?? 0);
+    if (!(size > 0)) continue;
+    overrides.set(overrideKey(node.index, 'primFontSz'), size);
+    overrides.set(overrideKey(node.index, 'secFontSz'), size);
+    custom.add(node.index);
+  }
+  if (custom.size > 0) {
+    solution = solveDiagramLayout(tree, frame, overrides);
+    if (!solution) return null;
+  }
   const targets: RuleTarget[] = [];
   for (const node of tree.nodes) {
     const rules = rulesByNode.get(node.index);
@@ -115,8 +134,10 @@ export function solveWithRules(
     if (solves >= MAX_RULE_SOLVES) return null;
     solves++;
     const next = new Map(overrides);
-    for (const member of groupOf(target.node.index, type))
+    for (const member of groupOf(target.node.index, type)) {
+      if (custom.has(member) && isFontType(type)) continue;
       next.set(overrideKey(member, type), value);
+    }
     const candidate = solveDiagramLayout(tree, frame, next);
     return candidate ? { candidate, next } : null;
   };

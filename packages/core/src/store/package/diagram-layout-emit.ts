@@ -41,6 +41,7 @@ const A = DRAWINGML_MAIN_NAMESPACE_URI;
 const DSP_NAMESPACE = 'http://schemas.microsoft.com/office/drawing/2008/diagram';
 /** Shapes one synthesized drawing may hold, as the renderer's own cap. */
 export const MAX_SYNTHESIZED_SHAPES = 512;
+const OPEN_PRESETS = new Set(['arc', 'line', 'lineInv', 'straightConnector1', 'bentConnector3']);
 
 export interface DiagramShape {
   readonly owner: NodeState;
@@ -57,7 +58,11 @@ export function collectShapes(
 ): DiagramShape[] | null {
   const shapes: DiagramShape[] = [];
   for (const state of solution.states) {
-    if (state.hidden || !state.box || !(state.box.w > 0) || !(state.box.h > 0)) continue;
+    if (state.hidden || !state.box || !(state.box.w > 0) || !(state.box.h > 0)) {
+      // Text the layout gives no room must not vanish: the diagram keeps its placeholder.
+      if (!state.hidden && hasVisibleText(nodeParagraphs(model, state))) return null;
+      continue;
+    }
     const preset = nodePreset(state);
     const paragraphs = nodeParagraphs(model, state);
     const shows = state.node.showsText && paragraphs.length > 0;
@@ -73,6 +78,8 @@ export function collectShapes(
       for (let i = shapes.length - 1; i >= 0; i--) {
         const candidate = shapes[i]!;
         if (candidate.textOnly || candidate.owner.node.assoc !== state.node.assoc) continue;
+        // Open outlines (arcs, lines) hold no text; a later text draws on its own.
+        if (candidate.owner.path || OPEN_PRESETS.has(nodePreset(candidate.owner) ?? '')) continue;
         if (!candidate.text) target = candidate;
         break;
       }
@@ -139,17 +146,41 @@ function styleMarkup(context: EmitContext, state: NodeState): string {
 }
 
 /** A presentation point's own shape properties (user formatting), DrawingML only. */
-function overrideMarkup(state: NodeState): string {
-  const spPr = state.node.pres.spPr;
-  if (!spPr) return '';
-  let out = '';
-  for (const child of spPr.children) {
-    if (!isElement(child) || child.namespaceUri !== A) continue;
-    // Geometry and position come from the layout.
-    if (child.localName === 'xfrm' || child.localName === 'prstGeom') continue;
-    if (child.localName === 'custGeom') continue;
-    out += serializeDrawingElement(child) ?? '';
+const FILLS = new Set(['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill']);
+
+/** The paint category an `spPr` child belongs to: one fill, one outline, one effect list. */
+function paintSlot(localName: string): string | null {
+  if (localName === 'xfrm' || localName === 'prstGeom' || localName === 'custGeom') return null;
+  return FILLS.has(localName) ? 'fill' : localName;
+}
+
+/**
+ * User formatting on a shape: the presentation point's own `spPr`, then the shown content
+ * point's (`dgm:spPr` on a data point, such as a step filled in another colour), each slot
+ * taken from the first that sets it. Geometry and position come from the layout.
+ */
+function overrideMarkup(context: EmitContext, shape: DiagramShape): string {
+  const state = shape.owner;
+  const sources = [state.node.pres.spPr];
+  const shown = shape.text ? (context.model.presOf.get(shape.text.node.pres.modelId) ?? []) : [];
+  if (shown.includes(state.node.assoc) || shape.text?.node.assoc === state.node.assoc) {
+    sources.push(context.model.points.get(state.node.assoc)?.spPr ?? null);
   }
+  const slots = new Map<string, string>();
+  for (const spPr of sources) {
+    if (!spPr) continue;
+    for (const child of spPr.children) {
+      if (!isElement(child) || child.namespaceUri !== A) continue;
+      const slot = paintSlot(child.localName);
+      if (slot === null || slots.has(slot)) continue;
+      slots.set(slot, serializeDrawingElement(child) ?? '');
+    }
+  }
+  // Fill, outline, effects: the order `spPr` keeps.
+  const order = ['fill', 'ln', 'effectLst', 'effectDag', 'scene3d', 'sp3d'];
+  let out = '';
+  for (const slot of order) out += slots.get(slot) ?? '';
+  for (const [slot, markup] of slots) if (!order.includes(slot)) out += markup;
   return out;
 }
 
@@ -299,7 +330,9 @@ function shapeMarkup(context: EmitContext, shape: DiagramShape): string | null {
   const rotation = nodeRotation(state);
   const rot = rotation ? ` rot="${angle(rotation)}"` : '';
   const flip = state.flipH ? ' flipH="1"' : '';
-  const paint = shape.textOnly ? '<a:noFill/><a:ln><a:noFill/></a:ln>' : overrideMarkup(state);
+  const paint = shape.textOnly
+    ? '<a:noFill/><a:ln><a:noFill/></a:ln>'
+    : overrideMarkup(context, shape);
   return (
     `<dsp:sp modelId="${escapeXmlAttribute(state.node.pres.modelId)}">` +
     '<dsp:nvSpPr><dsp:cNvPr id="0" name=""/><dsp:cNvSpPr/></dsp:nvSpPr>' +
