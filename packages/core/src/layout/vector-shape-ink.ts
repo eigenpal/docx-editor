@@ -221,8 +221,8 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
         );
       }
     });
-    // A line-end triangle is painted in the stroke colour wherever its line ends in the extent.
-    // Its first point is the line end (see `projectLineArrowheads`).
+    // A line end is painted in the stroke colour wherever its line ends in the extent.
+    // Its outline's first point is the line end (see `projectLineArrowheads`).
     for (const triangle of component.arrowheadsEmu ?? []) {
       if (!triangle[0] || !inside(triangle[0])) continue;
       for (const point of triangle) include(point.x, point.y);

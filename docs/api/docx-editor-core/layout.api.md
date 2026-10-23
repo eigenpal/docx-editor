@@ -4896,6 +4896,7 @@ export interface VectorShapeComponent {
     // (undocumented)
     readonly strokeAlpha: number;
     readonly strokeCap?: 'butt' | 'round' | 'square';
+    readonly strokeDash?: readonly number[];
     // (undocumented)
     readonly strokeHex: string | null;
     readonly strokeInset?: boolean;

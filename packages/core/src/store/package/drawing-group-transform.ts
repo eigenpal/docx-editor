@@ -69,10 +69,14 @@ export function transformComponent(
 }
 
 /**
- * A line-end triangle under a group that collapses one axis. The line now runs along the
- * other axis, so the triangle is rebuilt pointing along it: the tip follows the line end, and
- * the length and width keep their size at the other axis's scale, as the stroke width does.
- * A line perpendicular to the collapsed axis shrinks to a point and loses its triangle.
+ * A line end under a group that collapses one axis. The line now runs along the other axis,
+ * so the outline is turned to point along it: the line end follows the line, and the length
+ * and width keep their size at the other axis's scale, as the stroke width does. A line
+ * perpendicular to the collapsed axis shrinks to a point and loses its line end.
+ *
+ * The outline's first point is the line end (see `projectLineArrowheads`). The line direction
+ * runs from the outline's centroid to that end, or for a centred outline from the end to the
+ * second point.
  */
 function collapsedArrowhead(
   path: readonly Readonly<{ x: number; y: number }>[],
@@ -80,32 +84,35 @@ function collapsedArrowhead(
   scaleX: number,
   scaleY: number
 ): { x: number; y: number }[] {
-  const [tip, wingA, wingB] = path;
-  if (!tip || !wingA || !wingB) return [];
+  const end = path[0];
+  if (!end || path.length < 3) return [];
+  let centroidX = 0;
+  let centroidY = 0;
+  for (const point of path) {
+    centroidX += point.x / path.length;
+    centroidY += point.y / path.length;
+  }
+  let ux = end.x - centroidX;
+  let uy = end.y - centroidY;
+  if (Math.hypot(ux, uy) < 1e-6 * Math.max(1, Math.abs(end.x), Math.abs(end.y))) {
+    ux = path[1]!.x - end.x;
+    uy = path[1]!.y - end.y;
+  }
+  const norm = Math.hypot(ux, uy);
+  if (!(norm > 0)) return [];
+  ux /= norm;
+  uy /= norm;
   const alongY = scaleX === 0;
   const scale = Math.abs(alongY ? scaleY : scaleX);
-  const baseX = (wingA.x + wingB.x) / 2;
-  const baseY = (wingA.y + wingB.y) / 2;
-  // The triangle's reach along the surviving axis gives its direction there.
-  const reach = alongY ? (tip.y - baseY) * scaleY : (tip.x - baseX) * scaleX;
-  if (reach === 0) return [];
-  const length = Math.hypot(tip.x - baseX, tip.y - baseY) * scale;
-  const halfWidth = (Math.hypot(wingA.x - wingB.x, wingA.y - wingB.y) / 2) * scale;
-  const direction = Math.sign(reach);
-  const tipX = offset.x + tip.x * scaleX;
-  const tipY = offset.y + tip.y * scaleY;
-  if (alongY) {
-    const base = tipY - direction * length;
-    return [
-      { x: tipX, y: tipY },
-      { x: tipX - halfWidth, y: base },
-      { x: tipX + halfWidth, y: base },
-    ];
-  }
-  const base = tipX - direction * length;
-  return [
-    { x: tipX, y: tipY },
-    { x: base, y: tipY - halfWidth },
-    { x: base, y: tipY + halfWidth },
-  ];
+  // The direction's reach along the surviving axis gives the turned direction there.
+  const direction = Math.sign(alongY ? uy * scaleY : ux * scaleX);
+  if (direction === 0) return [];
+  const [newUx, newUy] = alongY ? [0, direction] : [direction, 0];
+  const endX = offset.x + end.x * scaleX;
+  const endY = offset.y + end.y * scaleY;
+  return path.map((point) => {
+    const along = ((point.x - end.x) * ux + (point.y - end.y) * uy) * scale;
+    const across = (-(point.x - end.x) * uy + (point.y - end.y) * ux) * scale;
+    return { x: endX + along * newUx - across * newUy, y: endY + along * newUy + across * newUx };
+  });
 }

@@ -119,6 +119,8 @@ export interface VectorShapeComponent {
   /** Authored line ends and joins, inherited from the selected theme line when absent. */
   readonly strokeCap?: 'butt' | 'round' | 'square';
   readonly strokeJoin?: 'round' | 'bevel';
+  /** Dash and gap lengths in multiples of the stroke width; absent for a solid outline. */
+  readonly strokeDash?: readonly number[];
   /**
    * The outline sits inside the closed geometry (`a:ln algn="in"`): painters draw it at twice
    * its width clipped to the path, so the authored width stays inside the shape and adds no
@@ -411,13 +413,18 @@ export function projectShapeComponents(
     const subpathsClosed = path.subpaths.flatMap((subpath) =>
       polygons.includes(subpath.points) ? [subpath.closed] : []
     );
-    const arrowheads = pathStroke
+    const lineEnds = pathStroke
       ? projectLineArrowheads(polygons, subpathsClosed, ln, strokeWidthEmu)
-      : [];
-    if (arrowheads === null || arrowheads.length * 3 > pointBudget.remaining) return null;
-    pointBudget.remaining -= arrowheads.length * 3;
+      : { arrows: [], paths: polygons };
+    if (lineEnds === null) return null;
+    const arrowheads = lineEnds.arrows;
+    // A filled path keeps its outline; only a stroke-only path stops short of its line ends.
+    const outlines = pathFill === null ? lineEnds.paths : polygons;
+    const arrowPoints = arrowheads.reduce((sum, outline) => sum + outline.length, 0);
+    if (arrowPoints > pointBudget.remaining) return null;
+    pointBudget.remaining -= arrowPoints;
     components.push({
-      subpathsEmu: polygons.map((points) => points.map(place)),
+      subpathsEmu: outlines.map((points) => points.map(place)),
       subpathsClosed,
       ...(arrowheads.length
         ? { arrowheadsEmu: arrowheads.map((points) => points.map(place)) }
@@ -437,6 +444,7 @@ export function projectShapeComponents(
       strokeWidthEmu: pathStroke ? strokeWidthEmu : 0,
       ...(pathStroke && line?.cap ? { strokeCap: line.cap } : {}),
       ...(pathStroke && line?.join ? { strokeJoin: line.join } : {}),
+      ...(pathStroke && line?.dash ? { strokeDash: line.dash } : {}),
       // Only a closed outline with area can sit inside its geometry: a line, or a closed path
       // collapsed onto a line, stays centred, or the clip to its own path would remove it.
       ...(pathStroke &&
@@ -873,10 +881,11 @@ export function projectWspTextboxStory(
       : readStyleReference(wsp, 'lnRef', resolveSchemeColor, resolveStyleMatrixReference);
   const strokeHex =
     (authoredStroke?.present === true ? authoredStroke.color?.hex : styleStroke?.color.hex) ?? null;
-  const strokeWidthEmu =
+  const outline =
     strokeHex !== null
-      ? readLineProperties(wsp, ln, resolveStyleMatrixReference, styleStroke?.matrix).widthEmu
-      : 0;
+      ? readLineProperties(wsp, ln, resolveStyleMatrixReference, styleStroke?.matrix)
+      : null;
+  const strokeWidthEmu = outline?.widthEmu ?? 0;
 
   return {
     contentNodeId: content.id,
@@ -893,5 +902,6 @@ export function projectWspTextboxStory(
     fillHex,
     strokeHex,
     strokeWidthEmu,
+    ...(outline?.dash ? { strokeDash: outline.dash } : {}),
   };
 }

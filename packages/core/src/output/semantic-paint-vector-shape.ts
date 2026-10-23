@@ -104,6 +104,13 @@ export function vectorShapeFrame(
       path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
       if (component.strokeCap) path.setAttribute('stroke-linecap', component.strokeCap);
       if (component.strokeJoin) path.setAttribute('stroke-linejoin', component.strokeJoin);
+      if (component.strokeDash?.length) {
+        const unit = Math.max(1, component.strokeWidthEmu);
+        path.setAttribute(
+          'stroke-dasharray',
+          component.strokeDash.map((length) => finiteStyle(length * unit)).join(' ')
+        );
+      }
       if (component.strokeInset) {
         applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
       }

@@ -150,4 +150,20 @@ describe('vector shape effects paint', () => {
     expect(paths[0]!.hasAttribute('data-docx-shadow')).toBe(true);
     expect(paths[0]!.hasAttribute('filter')).toBe(false);
   });
+
+  test('a dashed outline scales its pattern by the stroke width', () => {
+    const svg = paint({
+      ...BASE,
+      strokeHex: '1F3864',
+      strokeWidthEmu: 12_700,
+      strokeDash: [3, 1, 1, 1],
+    });
+    const path = svg.querySelector('path')!;
+    expect(path.getAttribute('stroke-dasharray')).toBe('38100 12700 12700 12700');
+  });
+
+  test('a solid outline has no dash pattern', () => {
+    const svg = paint({ ...BASE, strokeHex: '1F3864', strokeWidthEmu: 12_700 });
+    expect(svg.querySelector('path')!.hasAttribute('stroke-dasharray')).toBe(false);
+  });
 });

@@ -23,7 +23,7 @@ function input(open = false, unsupported = false) {
     <wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>${geometry}
     ${open ? '<a:noFill/>' : '<a:solidFill><a:srgbClr val="FF0000"><a:alpha val="50000"/></a:srgbClr></a:solidFill>'}
     <a:ln w="12700"><a:solidFill><a:srgbClr val="0000FF"><a:alpha val="25000"/></a:srgbClr></a:solidFill>
-    ${open ? `<a:tailEnd type="${unsupported ? 'stealth' : 'triangle'}" w="med" len="med"/>` : ''}
+    ${open ? `<a:tailEnd type="${unsupported ? 'spiral' : 'triangle'}" w="med" len="med"/>` : ''}
     </a:ln></wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline>
     </w:drawing></w:r></w:p>`);
 }
@@ -58,8 +58,9 @@ test('solid shape holes use even-odd fill with independent fill and stroke opaci
 
 test('open connectors remain open and arrowheads inherit stroke opacity', async () => {
   const { commands, states } = await inspect(true);
-  expect(commands).toContain('0 0 m 100 50 l\nS');
-  expect(commands).not.toContain('0 0 m 100 50 l h');
+  // The line stops at the triangle's base, less half its width, and stays open.
+  expect(commands).toMatch(/0 0 m 95\.08\d* 47\.54\d* l\nS/);
+  expect(commands).not.toMatch(/0 0 m [\d.]+ [\d.]+ l h/);
   expect(commands).toContain('h f');
   expect(states.at(-1)!.get(PDFName.of('ca'))!.toString()).toBe('0.25');
 });

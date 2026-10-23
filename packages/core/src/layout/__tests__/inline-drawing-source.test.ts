@@ -366,8 +366,8 @@ describe('vector shape layout token', () => {
     expect(vectorShapeLayoutToken(two)).not.toBe(vectorShapeLayoutToken(one));
   });
 
-  // Projected from markup rather than hand-built: `a:close` and `a:tailEnd` move no vertex
-  // of the authored path, so only the close flags and the generated triangle can tell the
+  // Projected from markup rather than hand-built: `a:close` and a centred `a:tailEnd` move no vertex
+  // of the authored path, so only the close flags and the generated end can tell the
   // shapes apart. A token blind to either reuses a stale record across the edit.
   test('projections that differ only by a close command or a line end differ', () => {
     const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -382,7 +382,7 @@ describe('vector shape layout token', () => {
         '<a:lnTo><a:pt x="1000" y="1000"/></a:lnTo><a:lnTo><a:pt x="0" y="1000"/></a:lnTo>' +
         `${options.close ? '<a:close/>' : ''}</a:path></a:pathLst></a:custGeom>` +
         '<a:noFill/><a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>' +
-        `${options.tailEnd ? '<a:tailEnd type="triangle"/>' : ''}</a:ln>` +
+        `${options.tailEnd ? '<a:tailEnd type="oval"/>' : ''}</a:ln>` +
         '</wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>' +
         '</w:r></w:p></w:body></w:document>';
       const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });

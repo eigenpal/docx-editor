@@ -71,6 +71,11 @@ export function paintVectorShape(
     if (component.fillHex !== null) out.push(`${color(component.fillHex)} rg`);
     if (component.strokeHex !== null)
       out.push(`${color(component.strokeHex)} RG ${n(width / unit)} w`);
+    // Dashes scale with the authored width, also under an inset outline's doubled stroke.
+    if (component.strokeHex !== null && component.strokeDash?.length) {
+      const dashUnit = Math.max(1, component.strokeWidthEmu) / unit;
+      out.push(`[${component.strokeDash.map((length) => n(length * dashUnit)).join(' ')}] 0 d`);
+    }
     const geometry = component.subpathsEmu
       .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
       .join('\n');

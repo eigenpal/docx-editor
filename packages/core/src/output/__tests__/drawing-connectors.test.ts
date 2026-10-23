@@ -38,12 +38,11 @@ function fixture(
 test('a flipped MC two-point connector and its triangle share projected coordinates', () => {
   const { projection, part } = fixture({ flip: 'flipH="1"', wrap: true });
   const component = projection.vectorShape!.components[0]!;
-  expect(component.subpathsEmu).toEqual([
-    [
-      { x: 1270000, y: 0 },
-      { x: 0, y: 635000 },
-    ],
-  ]);
+  // The line stops at the triangle's base, less half the line width: a 1 pt line sizes its
+  // end as a 2 pt line does, so the large triangle is 10 pt long.
+  const [start, end] = component.subpathsEmu[0]!;
+  expect(start).toEqual({ x: 1270000, y: 0 });
+  expect(Math.hypot(end!.x, end!.y - 635000)).toBeCloseTo(127000 - 6350, 6);
   expect(component.subpathsClosed).toEqual([false]);
   expect(component.arrowheadsEmu).toHaveLength(1);
   expect(component.arrowheadsEmu![0]![0]).toEqual({ x: 0, y: 635000 });
@@ -78,7 +77,7 @@ test('unsupported visible ends, invalid flips and unknown presets remain refused
   for (const options of [
     { flip: 'flipH="yes"' },
     { geom: 'notAPreset' },
-    { ends: '<a:tailEnd type="stealth"/>' },
+    { ends: '<a:tailEnd type="spiral"/>' },
     { ends: '<a:tailEnd type="triangle" w="url(x)"/>' },
   ]) {
     expect(fixture(options).projection.vectorShape).toBeNull();
@@ -119,7 +118,7 @@ test('semantic painter leaves an open path open and fills its separate arrowhead
     { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
     null
   )!;
-  expect(element.querySelector('path')!.getAttribute('d')).toBe('M1270000 0L0 635000');
+  expect(element.querySelector('path')!.getAttribute('d')).toMatch(/^M1270000 0L[\d.]+ [\d.]+$/);
   const arrow = element.querySelector('[data-docx-line-end]')!;
   expect(arrow.getAttribute('fill')).toBe('#FF0000');
   expect(element.querySelectorAll('path')).toHaveLength(2);

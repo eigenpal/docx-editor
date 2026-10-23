@@ -68,3 +68,12 @@ test('an outer shadow paints offset translucent copies before the shape', async 
   // Downward offset of 2 pt, in the user space of the shape (y grows downward there).
   expect(commands).toContain('1 0 0 1 0 2 cm');
 });
+
+test('a dashed outline sets a dash pattern scaled by the line width', async () => {
+  const { commands } = await commandsOf(
+    '<a:ln w="25400"><a:solidFill><a:srgbClr val="1F3864"/></a:solidFill>' +
+      '<a:prstDash val="sysDash"/></a:ln>'
+  );
+  // A 2 pt line: three widths of dash, one of gap.
+  expect(commands).toContain('[6 2] 0 d');
+});

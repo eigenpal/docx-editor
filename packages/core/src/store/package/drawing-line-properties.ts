@@ -4,6 +4,7 @@ import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import type { ShapeStyleMatrixResolver } from './drawing-shape-projection.ts';
+import { lineDash } from './drawing-line-dash.ts';
 
 const DEFAULT_LINE_WIDTH_EMU = 12_700;
 
@@ -23,6 +24,8 @@ export function readLineProperties(
   readonly alignment: string | undefined;
   readonly cap: 'butt' | 'round' | 'square' | undefined;
   readonly join: 'round' | 'bevel' | undefined;
+  /** Dash and gap lengths in line widths; null for a solid line. */
+  readonly dash: readonly number[] | null;
 } {
   const directWidth = ln ? parseEmu(schemaAttributeValue(ln.attributes, 'w')) : null;
   const directAlignment = ln ? schemaAttributeValue(ln.attributes, 'algn') : undefined;
@@ -46,7 +49,26 @@ export function readLineProperties(
       directAlignment ?? (theme ? schemaAttributeValue(theme.attributes, 'algn') : undefined),
     cap: lineCap(directCap ?? (theme ? schemaAttributeValue(theme.attributes, 'cap') : undefined)),
     join: supportedJoin(directJoin ?? lineJoin(theme)),
+    dash: dashOf(wsp, ln, theme, resolveStyleMatrixReference, resolvedThemeLine),
   };
+}
+
+/** The direct line's dash, else the theme line's, else solid. */
+function dashOf(
+  wsp: OoxmlElement,
+  ln: OoxmlElement | null,
+  theme: OoxmlElement | null,
+  resolveStyleMatrixReference: ShapeStyleMatrixResolver | undefined,
+  resolvedThemeLine: OoxmlElement | undefined
+): readonly number[] | null {
+  const direct = lineDash(ln);
+  if (direct !== undefined) return direct;
+  const inherited =
+    theme ??
+    (isThemeLine(resolvedThemeLine)
+      ? resolvedThemeLine
+      : themeLine(wsp, resolveStyleMatrixReference));
+  return lineDash(inherited) ?? null;
 }
 
 function lineCap(value: string | undefined): 'butt' | 'round' | 'square' | undefined {
