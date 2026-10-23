@@ -82,3 +82,9 @@ node \
 ```
 
 This development command uses the checkout's TypeScript dependency and source configuration.
+
+## Runtime compilation cache
+
+The Node loader stores compiled TypeScript between processes in a private user cache directory. Cache keys include source content, file location, compiler version, and compiler options. The cache contains source code only.
+
+Set `DOCX_EVAL_TRANSPILE_CACHE` to use another private directory. The directory must belong to the current user and exclude access for other users. Missing or invalid entries compile again. Unavailable cache storage preserves compilation. Simultaneous processes publish complete entries through atomic replacement.
