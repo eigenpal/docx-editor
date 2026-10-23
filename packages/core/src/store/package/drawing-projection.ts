@@ -58,7 +58,7 @@ import {
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
 import type { GroupPictureProjection } from './drawing-group-picture.ts';
 import { createDiagramPartResolver, type DiagramPartResolver } from './diagram-parts.ts';
-import { projectDrawingContent } from './drawing-content-projection.ts';
+import { projectDrawingContent, withPictureClip } from './drawing-content-projection.ts';
 import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
@@ -1564,10 +1564,7 @@ export function projectDrawingWithState(
       wrapGeometry,
       position,
       anchor: anchorMeta,
-      picture:
-        pictureResult.picture && content.pictureClipUnit
-          ? { ...pictureResult.picture, clipUnit: content.pictureClipUnit }
-          : pictureResult.picture,
+      picture: withPictureClip(pictureResult.picture, content),
       vectorShape: content.vectorShape,
       groupPicture: content.groupPicture,
       textboxStory: content.textboxStory,

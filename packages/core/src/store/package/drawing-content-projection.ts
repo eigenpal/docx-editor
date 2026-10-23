@@ -120,3 +120,13 @@ export function projectDrawingContent(
     paints: groupPicture !== null || vectorShape !== null,
   };
 }
+
+/** The picture with the clip ring its frame gives it, when its geometry is not a rectangle. */
+export function withPictureClip<P extends object>(
+  picture: P | null,
+  content: DrawingContentProjection
+): (P & { readonly clipUnit?: readonly Readonly<{ x: number; y: number }>[] }) | null {
+  return picture && content.pictureClipUnit
+    ? { ...picture, clipUnit: content.pictureClipUnit }
+    : picture;
+}
