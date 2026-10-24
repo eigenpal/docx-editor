@@ -122,12 +122,11 @@ function candidate(
   );
 }
 
-// A captured reference charges a collapsed horizontal band ENTIRELY to the row below it:
-// that row reserves the rule its own top resolves to, at full width, and the row above
-// reserves nothing. Every column's stroke then starts at the shared boundary and runs
-// downward by its own width. Controls: `.cache/pdf/claude-row-clearance/FINDING.md` and
-// `.cache/pdf/claude-band-mixed/`. One boundary carries one content band, so the widest
-// reserve in the receiving row sets it for every cell in that row.
+// A collapsed horizontal band is charged ENTIRELY to the row below it, and the row above
+// reserves nothing. Below a repeated header, a body row reserves the rule its own top
+// resolves to, at full width. Every column's stroke starts at the shared boundary and runs
+// downward by its own width. One boundary carries one content band, so the widest reserve
+// in the receiving row sets it for every cell in that row.
 const bandSplit = (ownTopPt: number) => ({ bottom: 0, top: ownTopPt });
 
 describe('repeated-header shared horizontal border measurement', () => {
@@ -213,11 +212,11 @@ describe('repeated-header shared horizontal border measurement', () => {
   });
 
   test('the shared winner follows table fallback and explicit nil provenance', () => {
-    // An omitted body top inherits the rule the grid resolves for it, the cell's own `nil`
-    // above suppresses the band, and an authored body top reserves its own width.
+    // An omitted body top inherits the rule the grid resolves for it, even under a header's
+    // own `nil` bottom, and an authored body top reserves its own width.
     for (const [headerBottom, bodyTop, expected] of [
       ['omit', 'omit', 2],
-      ['nil', 'omit', 0],
+      ['nil', 'omit', 2],
       ['nil', 1, 1],
     ] as const) {
       const result = layout(
@@ -549,10 +548,12 @@ describe('repeated-header shared horizontal border measurement', () => {
     ).toBeUndefined();
   });
 
-  test('first authored headers reserve the same band as a repeat', () => {
+  test('first authored headers reserve the painted band, unlike a repeat', () => {
+    // Beside the header it was authored under, the body row reserves the header's wider 2pt
+    // bottom; beside a repeat it reserves only its own 0.5pt top.
     const original = fragments(layout(fixture()))[0]!;
     expect(original.rows[0]!.isHeaderRepeat).toBe(false);
-    expect(band(original.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(0.5).top, 6);
+    expect(band(original.rows[1]!.cells[0]!).top).toBeCloseTo(bandSplit(2).top, 6);
     for (const fragment of fragments(layout(fixture({ header: '' })))) {
       expect(band(fragment.rows[0]!.cells[0]!).top).toBeCloseTo(0.5, 6);
     }

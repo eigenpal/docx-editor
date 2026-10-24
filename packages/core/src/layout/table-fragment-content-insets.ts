@@ -1,6 +1,6 @@
 // A new fragment has no preceding cell. Do not carry a shared border from the previous page.
 import { effectiveBorderSide } from './table-border-cascade.ts';
-import { borderContentInset, cellContentInsets } from './table-cell-geometry.ts';
+import { borderContentInset, cellContentInsets, simpleBandWidthPt } from './table-cell-geometry.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 
@@ -65,5 +65,45 @@ export function lastRowContentDeps(
         cellContentInsets: insets,
         ...(minimumInsets.size ? { cellMinimumContentInsets: minimumInsets } : {}),
       }
+    : deps;
+}
+
+/**
+ * A split row continued below a repeated header reserves its own authored top rule, as a
+ * body row does beside a repeat, rather than the band of the row it was authored under.
+ */
+export function repeatedHeaderContinuationDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps
+): TableFlowDeps {
+  if (structure.cellSpacingPt > 0) return deps;
+  const reserve = row.cells.reduce(
+    (widest, cell) =>
+      cell.borders.top.state === 'edge'
+        ? Math.max(widest, simpleBandWidthPt(cell.borders.top))
+        : widest,
+    -1
+  );
+  if (reserve < 0) return deps;
+  const insets = new Map(deps.cellContentInsets);
+  for (const cell of row.cells) {
+    const before = insets.get(cell.id) ?? cellContentInsets(cell, true);
+    insets.set(cell.id, { ...before, top: cell.margins.top + reserve });
+  }
+  return { ...deps, cellContentInsets: insets };
+}
+
+/** Content deps for a row about to open, continue in, or follow rows of one fragment. */
+export function fragmentRowContentDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  placed: readonly { readonly isHeaderRepeat?: boolean }[],
+  isContinuation: boolean
+): TableFlowDeps {
+  if (placed.length === 0) return firstRowContentDeps(structure, row, deps);
+  return isContinuation && placed.every((item) => item.isHeaderRepeat)
+    ? repeatedHeaderContinuationDeps(structure, row, deps)
     : deps;
 }

@@ -90,32 +90,26 @@ export function cellContentInsets(
 /**
  * Clearance a receiving cell reserves for the collapsed horizontal band above it, in points.
  *
- * A captured reference charges the whole band here, at full width, and charges the row above
- * nothing. What "full width" means follows OOXML's three states, which the controls separate:
+ * The receiving row reserves the band and the row above reserves nothing. Inside one table
+ * fragment the reserve is the band's full painted width, the conflict winner, whichever side
+ * authored it: a narrower authored top under a wider bottom reserves the wider rule, and a
+ * `w:val="nil"` on either side does not suppress a rule the other side still paints.
  *
- * - the CELL's own `w:val="nil"` is direct formatting, and the cell reserves NOTHING, even
- *   under a 4pt rule that paints across its margin (`.cache/pdf/claude-row-clearance/`, and
- *   `m2` and `m5` in `.cache/pdf/claude-band-mixed/`);
- * - an authored edge is direct formatting too — the cell reserves its OWN width, whatever the
- *   wider neighbour above paints (`m4`, a 4pt bottom over a 1pt top, keeps the 1pt pitch);
- * - anything a TABLE STYLE supplies, including its `nil`, is not direct formatting: the cell
- *   reserves the rule the collapsed grid resolves for it, so a banded row under a style's
- *   header rule is still pushed down by it.
+ * A repeated header row is not the row the body row was authored under, so there
+ * (`ownEdgeWins`) a body row's own authored top reserves its own width, whatever the
+ * header's bottom paints.
  *
  * `bandPt` is the resolved band's painted width and `tableSide` what an inherited edge falls
  * back to. A vMerge seam paints nothing yet still reserves its inherited rule, which is why
- * the inherited case takes the larger of the two.
+ * the result takes the larger of the two.
  */
 export function ownTopBandWidthPt(
   own: TableBorderSide,
-  aboveBottom: TableBorderSide,
   tableSide: TableBorderSide,
   bandPt = 0,
-  suppressedByCell = false
+  ownEdgeWins = false
 ): number {
-  if (suppressedByCell) return 0;
-  if (own.state === 'edge') return simpleBandWidthPt(own);
-  if (aboveBottom.state === 'none') return 0;
+  if (ownEdgeWins && own.state === 'edge') return simpleBandWidthPt(own);
   return Math.max(simpleBandWidthPt(effectiveBorderSide(own, tableSide)), bandPt);
 }
 

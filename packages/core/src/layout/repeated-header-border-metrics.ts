@@ -99,7 +99,7 @@ export function prepareRepeatedHeaderBorderPlan(
     insets.set(cell.id, { ...cellContentInsets(cell, true), bottom: inset });
   }
   // `canProbeBorderRows` already refused sparse ownership, so one header cell covers each
-  // body column and an explicit `nil` on either side suppresses the whole band.
+  // body column.
   let intervalIndex = 0;
   // One boundary carries one content band: the widest reserve in the body row sets it.
   let widestOwnPt = 0;
@@ -117,10 +117,9 @@ export function prepareRepeatedHeaderBorderPlan(
         widestOwnPt,
         ownTopBandWidthPt(
           cell.borders.top,
-          above.borders.bottom,
           (cell.rowTableBorders ?? structure.tableBorders).insideH,
           band,
-          cell.suppressesTopBand
+          true
         )
       );
     }

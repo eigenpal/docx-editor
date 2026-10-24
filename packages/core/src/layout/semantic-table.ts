@@ -238,8 +238,6 @@ export interface SemanticTableCell {
   readonly contentBottomIsOuter?: boolean;
   /** Clearance this AUTHORED ROW reserves above its content for its own top rule, in points. */
   readonly topBandClearancePt?: number;
-  /** The CELL declares `w:tcBorders/w:top` as `nil`, rather than a table style doing so. */
-  readonly suppressesTopBand?: true;
   /** Row-local clearance in points for authored minima, before vMerge combines content boxes. */
   readonly minimumContentInsets?: { readonly top: number; readonly bottom: number };
   /** Validated 6-hex shading fill, absent for none/auto. */
@@ -783,7 +781,6 @@ function readTableStructureUncached(
         margins: cellMargins,
         borders: mergeCellBorders(conditionalBorders, ownBorders),
         ...(rowTableBorders ? { rowTableBorders } : {}),
-        ...(ownBorders.top.state === 'none' ? { suppressesTopBand: true as const } : {}),
         ...(shading === undefined ? {} : { shading }),
         preferredWidth,
         styleFormatting: styleFormattingFor(conditions),

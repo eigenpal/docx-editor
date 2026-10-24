@@ -33,7 +33,7 @@ import {
   terminalBorderPlanAt,
   type TerminalRowAt,
 } from './table-terminal-border-plan.ts';
-import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { fragmentRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import {
@@ -370,7 +370,7 @@ export function* paginateTableInFlowSteps(
       return;
 
     const headerDeps = candidate
-      ? firstRowContentDeps(structure, headerRows[0]!, candidate.deps)
+      ? fragmentRowContentDeps(structure, headerRows[0]!, candidate.deps, [], false)
       : headers.headerDeps();
 
     for (const [index, headerRow] of headerRows.entries()) {
@@ -503,7 +503,7 @@ export function* paginateTableInFlowSteps(
       rowHeightOf(
         row,
         flow.cursorY,
-        rows.length === 0 ? firstRowContentDeps(structure, row, tableDeps) : tableDeps
+        fragmentRowContentDeps(structure, row, tableDeps, rows, false)
       );
     naturalHeight =
       vMerge?.heightFloorPt ??
@@ -525,7 +525,9 @@ export function* paginateTableInFlowSteps(
     forceNextFragment = false;
     if (floats) {
       const firstDeps =
-        rows.length === 0 ? firstRowContentDeps(structure, row, tableDeps) : undefined;
+        rows.length === 0
+          ? fragmentRowContentDeps(structure, row, tableDeps, rows, false)
+          : undefined;
       const heightAt = (y: number) => rowHeightOf(row, y, firstDeps);
       flow.cursorY = floats.clear(flow.cursorY, heightAt, [row], contentHeight());
       // A table pushed before its first row starts where that row now does.
@@ -541,9 +543,7 @@ export function* paginateTableInFlowSteps(
       ...(terminalDeps ??
         (repeatedPlan?.bodyRowId === row.id
           ? repeatedPlan.deps
-          : rows.length === 0
-            ? firstRowContentDeps(structure, row, tableDeps)
-            : tableDeps)),
+          : fragmentRowContentDeps(structure, row, tableDeps, rows, isContinuation))),
       rowAtPageStart:
         movedToFreshPage ||
         flow.cursorY <= 0.001 ||
