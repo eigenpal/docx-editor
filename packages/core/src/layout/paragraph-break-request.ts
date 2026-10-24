@@ -253,6 +253,7 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
       equationCacheToken: request.producer,
       ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
       markRunProperties: formatting.markRunProperties,
+      ...(styleCascade?.pageBreakMarkOnNextPage ? { pageBreakMarkOnNextPage: true } : {}),
     }
   );
 }

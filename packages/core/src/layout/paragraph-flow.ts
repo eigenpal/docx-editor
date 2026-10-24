@@ -1145,7 +1145,7 @@ export function breakParagraph(
       // NOT `trailingLineBreak`: an empty remainder publishes no line on the page the break
       // opened, so the following block sits at its top (`paragraph-spacing-borders` and
       // `section-aware-pagination` pin it). A click beside the mark resolves BEFORE it.
-      trailingLineBreak = false;
+      trailingLineBreak = flow?.pageBreakMarkOnNextPage === true;
       continue;
     }
     if (piece.text === '\n') {

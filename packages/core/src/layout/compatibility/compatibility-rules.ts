@@ -187,6 +187,12 @@ export const PROFILE_RULES = {
       return declared === 'ambiguous' ? false : (declared ?? p.modeClass === 'modern');
     },
   },
+  pageBreakMarkOnNextPage: {
+    behavior:
+      'A paragraph mark after a page break takes a line at the top of the next page. Only legacy modes read the option',
+    source: 'ECMA-376 Part 4 §14.8.3 splitPgBreakAndParaMark',
+    applies: (p) => p.legacy.splitPgBreakAndParaMark === true && p.modeClass === 'legacy',
+  },
   preserveExactLineBaseline: {
     behavior:
       'With `w:noExtraLineSpacing`, an exact-height line keeps the face baseline in every compatibility mode, also a refused one',

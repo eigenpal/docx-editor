@@ -4410,6 +4410,7 @@ export interface StyleCascadeTable {
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly noColumnBalance?: true;
     readonly pageBreakLinesStretch?: true;
+    readonly pageBreakMarkOnNextPage?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)

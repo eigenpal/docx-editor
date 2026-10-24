@@ -17,6 +17,8 @@ export interface ParagraphFlowOptions {
   readonly justifySpaceShrink?: boolean;
   /** A body paragraph, where a column break ends its column. */
   readonly columnBreaksEndColumns?: boolean;
+  /** The paragraph mark after a closing page break takes a line on the next page. */
+  readonly pageBreakMarkOnNextPage?: boolean;
   /** Justified paragraphs may compress East Asian punctuation to fit a line; others keep natural widths. */
   readonly cjkPunctuationFit?: boolean;
   readonly typography?: CjkParagraphTypography;

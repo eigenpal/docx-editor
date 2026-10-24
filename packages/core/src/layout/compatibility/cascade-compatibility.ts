@@ -13,6 +13,7 @@ export interface CascadeCompatibility {
   readonly fixedParagraphSpacing?: true;
   readonly unstretchedManualBreakLines?: true;
   readonly pageBreakLinesStretch?: true;
+  readonly pageBreakMarkOnNextPage?: true;
 }
 
 const CASCADE_RULES = [
@@ -24,6 +25,7 @@ const CASCADE_RULES = [
   'fixedParagraphSpacing',
   'unstretchedManualBreakLines',
   'pageBreakLinesStretch',
+  'pageBreakMarkOnNextPage',
 ] as const satisfies readonly (keyof CascadeCompatibility)[];
 
 /** The cascade options a profile turns on, in a fixed key order. */

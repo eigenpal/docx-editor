@@ -39,6 +39,7 @@ const LEGACY_OPTIONS = {
   doNotUseIndentAsNumberingTabStop: ['on-or-missing', 'first'],
   noColumnBalance: ['on-or-missing', 'last'],
   noExtraLineSpacing: ['on-or-missing', 'last'],
+  splitPgBreakAndParaMark: ['on-or-missing', 'last'],
 } as const satisfies Record<string, Reading>;
 
 /** Word `w:compatSetting`s ([MS-DOCX] 2.3) that rules read. */
