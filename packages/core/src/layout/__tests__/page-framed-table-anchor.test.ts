@@ -136,3 +136,87 @@ describe('a page-framed table over earlier body lines', () => {
     expect(warm.pages).toHaveLength(cold.pages.length);
   });
 });
+
+describe('a page-framed table that fits on its anchor sheet', () => {
+  // Lines 22.6pt tall; the table band starts at content y 51.5, inside the third line.
+  const LINE = '<w:pPr><w:spacing w:line="452" w:lineRule="exact"/></w:pPr>';
+  const para = (text = '') =>
+    text ? `<w:p>${LINE}<w:r><w:t>${text}</w:t></w:r></w:p>` : `<w:p>${LINE}</w:p>`;
+  const rows = (name: string, twips: number) =>
+    Array.from(
+      { length: 4 },
+      (_, row) =>
+        `<w:tr><w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/></w:tcPr>` +
+        `<w:p><w:r><w:t>${name}${row}</w:t></w:r></w:p></w:tc></w:tr>`
+    ).join('');
+  const floating = (name: string, tblpPr: string, twips: number) =>
+    `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:w="${twips}" w:type="dxa"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="${twips}"/></w:tblGrid>${rows(name, twips)}</w:tbl>`;
+  // Wider than the column and offset left of it, so the band spans the column.
+  const spanning = floating(
+    'pagecell',
+    '<w:tblpPr w:leftFromText="180" w:rightFromText="180" w:vertAnchor="page" ' +
+      'w:horzAnchor="margin" w:tblpX="-719" w:tblpY="2470"/>',
+    10499
+  );
+  const following = floating(
+    'textcell',
+    '<w:tblpPr w:leftFromText="180" w:rightFromText="180" w:vertAnchor="text" ' +
+      'w:horzAnchor="margin" w:tblpY="159"/>',
+    9321
+  );
+  const tableNamed = (layout: SemanticLayout, text: string) =>
+    layout.pages[0]!.fragments.find(
+      (item): item is TableFragmentRecord =>
+        item.kind === 'table' &&
+        item.rows.some((row) =>
+          row.cells.some((cell) =>
+            cell.blocks.some(
+              (block) =>
+                block.kind === 'paragraph' &&
+                block.lines.some((line) => line.spans.some((span) => span.text.includes(text)))
+            )
+          )
+        )
+    )!;
+  const lineTops = (layout: SemanticLayout) =>
+    layout.pages[0]!.fragments.flatMap((item) =>
+      item.kind === 'paragraph' ? item.lines.map((line) => line.box.y) : []
+    );
+
+  test('moves an earlier line that crosses its band below it', () => {
+    const layout = layoutOf(
+      para('opening') + para() + para() + spanning + para() + para() + para('closing')
+    );
+    const table = tableNamed(layout, 'pagecell');
+    expect(isOutOfFlowTableFragment(table)).toBe(true);
+    const bottom = table.box.y + table.box.height;
+    const tops = lineTops(layout);
+    // The two lines above the band keep their places; the third clears it with the rest.
+    expect(tops[0]).toBeCloseTo(0, 3);
+    expect(tops[1]).toBeCloseTo(22.6, 3);
+    expect(tops[2]).toBeCloseTo(bottom, 3);
+    expect(paragraphNamed(layout, 'closing').fragment.lines[0]!.box.y).toBeCloseTo(
+      bottom + 3 * 22.6,
+      3
+    );
+  });
+
+  test('a text-anchored table after it follows its moved anchor', () => {
+    const layout = layoutOf(
+      para('opening') + para() + para() + spanning + following + para() + para() + para('closing')
+    );
+    const pageTable = tableNamed(layout, 'pagecell');
+    const bottom = pageTable.box.y + pageTable.box.height;
+    // The anchor of both tables is the first paragraph after them, below the page table.
+    const anchorTop = bottom + 22.6;
+    // Authored offsets carry the one-twip storage bias.
+    expect(tableNamed(layout, 'textcell').box.y).toBeCloseTo(anchorTop + 159 / 20, 1);
+  });
+
+  test('a narrower page-framed table leaves the earlier lines in place', () => {
+    const narrow = floating('pagecell', '<w:tblpPr w:vertAnchor="page" w:tblpY="2470"/>', 2880);
+    const layout = layoutOf(para('opening') + para() + para() + narrow + para('closing'));
+    expect(lineTops(layout).slice(0, 3)).toEqual([0, 22.6, 45.2].map((y) => expect.closeTo(y, 3)));
+  });
+});

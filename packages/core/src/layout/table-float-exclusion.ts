@@ -149,11 +149,19 @@ export function addFloatingTableExclusions(
       const column = metadata.columnIndex;
       const left = columns.columnLefts?.[column] ?? 0;
       const width = columns.columnWidths?.[column] ?? columns.contentWidth;
+      const spans =
+        box.x - distances.left <= left && box.x + box.width + distances.right >= left + width;
+      // A page- or margin-framed table does not move with the flow, so its band also clears
+      // the lines before its anchor on the page. Only a column-spanning table in single-column
+      // flow reaches back, the case `pageFramedAnchorBand` prices.
+      const pageFramed =
+        spans && metadata.float.vertAnchor !== 'text' && Math.max(1, columns.columnCount) === 1;
       const zone: ExclusionZone = {
         sourceKind: 'table',
         drawingNodeId: `table:${block.tableId}`,
         anchorParagraphId: metadata.anchorId,
         anchorModelStart: 0,
+        ...(pageFramed ? { pageFramedBand: true } : {}),
         sourceOrder: metadata.sourceOrder,
         paintLayer: 'inFront',
         relativeHeight: 0,
@@ -167,10 +175,7 @@ export function addFloatingTableExclusions(
           height: box.height + distances.top + distances.bottom,
         },
         input: {
-          mode:
-            box.x - distances.left <= left && box.x + box.width + distances.right >= left + width
-              ? 'topAndBottom'
-              : 'square',
+          mode: spans ? 'topAndBottom' : 'square',
           contentBounds: box,
           polygon: null,
           clipPolygon: null,
