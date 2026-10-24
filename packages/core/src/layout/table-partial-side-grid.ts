@@ -1,6 +1,10 @@
 import type { SemanticTableRow } from './semantic-table.ts';
 
 const cache = new WeakMap<readonly SemanticTableRow[], { columns: number; value: boolean }>();
+const mixedCache = new WeakMap<
+  readonly SemanticTableRow[],
+  { columns: number; value: number | undefined }
+>();
 
 /**
  * A complete grid with omitted side rules and one width for every visible simple rule.
@@ -53,4 +57,58 @@ export function carryPartialSimpleSideGrid(
 ): void {
   const known = cache.get(source);
   if (known) cache.set(copy, known);
+  const mixed = mixedCache.get(source);
+  if (mixed) mixedCache.set(copy, mixed);
+}
+
+/**
+ * The leading rule width of a complete grid whose every side is a visible simple rule, in
+ * points, when those rules do not all share one width; else `undefined`.
+ *
+ * Every row must open with a leading rule of that same width, so the grid has one outer
+ * offset, and no rule may be narrower than it. Wider rules inside the grid, or on the
+ * trailing edge, are allowed.
+ */
+export function mixedSimpleSideGridLeadPt(
+  rows: readonly SemanticTableRow[],
+  columns: number
+): number | undefined {
+  const known = mixedCache.get(rows);
+  if (known?.columns === columns) return known.value;
+  const read = (): number | undefined => {
+    let lead: number | undefined;
+    let first: number | undefined;
+    let mixed = false;
+    let narrowest = Number.POSITIVE_INFINITY;
+    for (const row of rows) {
+      let next = 0;
+      for (const cell of row.cells) {
+        if (cell.gridColumn !== next) return undefined;
+        next += cell.gridSpan;
+        if (cell.vMergeContinue) continue;
+        const borders = cell.contentBorders ?? cell.borders;
+        for (const side of [borders.left, borders.right]) {
+          if (
+            side.state !== 'edge' ||
+            (side.style !== 'single' && side.style !== 'thick') ||
+            side.widthPt <= 0
+          )
+            return undefined;
+          if (first === undefined) first = side.widthPt;
+          else if (side.widthPt !== first) mixed = true;
+          narrowest = Math.min(narrowest, side.widthPt);
+        }
+        if (cell.gridColumn === 0 && borders.left.state === 'edge') {
+          if (lead !== undefined && borders.left.widthPt !== lead) return undefined;
+          lead = borders.left.widthPt;
+        }
+      }
+      if (next !== columns) return undefined;
+    }
+    // The controls cover a leading frame no wider than any rule inside it.
+    return mixed && lead !== undefined && lead <= narrowest ? lead : undefined;
+  };
+  const value = read();
+  mixedCache.set(rows, { columns, value });
+  return value;
 }

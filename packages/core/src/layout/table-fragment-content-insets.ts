@@ -12,11 +12,18 @@ export function firstRowContentDeps(
   if (structure.cellSpacingPt > 0) return deps;
   const insets = new Map(deps.cellContentInsets);
   const minimumInsets = new Map(deps.cellMinimumContentInsets);
-  for (const cell of row.cells) {
-    const top = borderContentInset(
+  const own = row.cells.map((cell) =>
+    borderContentInset(
       cell.margins.top,
       effectiveBorderSide(cell.borders.top, (cell.rowTableBorders ?? structure.tableBorders).top)
-    );
+    )
+  );
+  // One boundary carries one content band: the row's widest top rule moves every cell down.
+  let band = 0;
+  for (const [index, cell] of row.cells.entries())
+    band = Math.max(band, own[index]! - cell.margins.top);
+  for (const [index, cell] of row.cells.entries()) {
+    const top = Math.max(own[index]!, cell.margins.top + band);
     insets.set(cell.id, {
       ...(insets.get(cell.id) ?? cellContentInsets(cell, true)),
       // There is no cell above a fragment's first row to share this stroke.

@@ -3,7 +3,11 @@ import type { PreferredWidthType } from './table-widths.ts';
 import type { TableBorderSide } from './table-borders.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { shareRowFacts } from './table-row-facts.ts';
-import { carryPartialSimpleSideGrid, hasPartialSimpleSideGrid } from './table-partial-side-grid.ts';
+import {
+  carryPartialSimpleSideGrid,
+  hasPartialSimpleSideGrid,
+  mixedSimpleSideGridLeadPt,
+} from './table-partial-side-grid.ts';
 import { carryWidenedCellContentInsets } from './cell-content-insets-memo.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
@@ -43,21 +47,26 @@ const MODERN_GRID_WIDTH_TYPES: readonly PreferredWidthType[] = ['dxa', 'auto'];
  * Both sides still have to agree when both are present; a cell whose two edges differ in
  * width is not the shared-line shape this describes.
  */
-function sharesSideRuleGridLine(cell: SemanticTableCell, simpleSidesOnly = false): boolean {
+function sharesSideRuleGridLine(
+  cell: SemanticTableCell,
+  simpleSidesOnly = false,
+  unequalSides = false
+): boolean {
   const { left, right } = cell.contentBorders ?? cell.borders;
   // Modern admission does not extend the simple-rule controls to an opposite compound rule.
   if (simpleSidesOnly && (compoundSideRule(left) || compoundSideRule(right))) return false;
   const leftRule = left.state === 'edge' && SIMPLE_SIDE_STYLES.includes(left.style);
   const rightRule = right.state === 'edge' && SIMPLE_SIDE_STYLES.includes(right.style);
   if (!leftRule && !rightRule) return false;
-  if (leftRule && rightRule && left.widthPt !== right.widthPt) return false;
+  if (!unequalSides && leftRule && rightRule && left.widthPt !== right.widthPt) return false;
   return true;
 }
 
 function mapCells(
   rows: readonly SemanticTableRow[],
   extend: (cell: SemanticTableCell) => SemanticTableCell,
-  simpleSidesOnly = false
+  simpleSidesOnly = false,
+  unequalSides = false
 ): readonly SemanticTableRow[] {
   const mapped = rows.map((row) =>
     shareRowFacts(
@@ -65,7 +74,7 @@ function mapCells(
       carryUniformRow(row, {
         ...row,
         cells: row.cells.map((cell) =>
-          sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
+          sharesSideRuleGridLine(cell, simpleSidesOnly, unequalSides) ? extend(cell) : cell
         ),
       })
     )
@@ -85,17 +94,29 @@ function mapCells(
  */
 export function withCentredSideRulePaint(
   rows: readonly SemanticTableRow[],
-  simpleSidesOnly = false
+  simpleSidesOnly = false,
+  unequalSides = false
 ): readonly SemanticTableRow[] {
-  return mapCells(rows, (cell) => ({ ...cell, centeredSidePaint: true as const }), simpleSidesOnly);
+  return mapCells(
+    rows,
+    (cell) => ({ ...cell, centeredSidePaint: true as const }),
+    simpleSidesOnly,
+    unequalSides
+  );
 }
 
 /** Legacy simple side rules share the grid line with padding, rather than adding to it. */
 export function withLegacyTableSideRules(
   rows: readonly SemanticTableRow[],
-  simpleSidesOnly = false
+  simpleSidesOnly = false,
+  unequalSides = false
 ): readonly SemanticTableRow[] {
-  return mapCells(rows, (cell) => ({ ...cell, centeredSideRules: true as const }), simpleSidesOnly);
+  return mapCells(
+    rows,
+    (cell) => ({ ...cell, centeredSideRules: true as const }),
+    simpleSidesOnly,
+    unequalSides
+  );
 }
 
 /** The table-level facts that decide whether its side rules share the grid line. */
@@ -267,6 +288,34 @@ export function autoWidthOuterRulePt(
 }
 
 /**
+ * The leading rule width of a mode-15 left-aligned table whose simple side rules differ in
+ * width, when captured controls cover it; else `undefined`.
+ *
+ * Fixed and autofit controls with a 0.5pt frame and 1.5, 3 and 6pt rules on one cell, at
+ * 0 and 5.4pt margins, centre every rule on its grid line, wide or narrow, and measure each
+ * margin from that centre. The grid moves inward by half the leading rule, as in the
+ * uniform shape.
+ */
+function modernMixedLeadPt(
+  rows: readonly SemanticTableRow[],
+  table: SideRuleTableShape
+): number | undefined {
+  if (
+    !hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules') ||
+    !MODERN_GRID_WIDTH_TYPES.includes(table.widthType) ||
+    table.alignment !== 'left' ||
+    uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length) !== undefined
+  )
+    return undefined;
+  const lead = mixedSimpleSideGridLeadPt(rows, table.columnWidthsPt.length);
+  if (lead === undefined) return undefined;
+  let gridWidth = 0;
+  for (const column of table.columnWidthsPt) gridWidth += column;
+  const fits = table.indentPt + gridWidth + lead <= table.containerWidthPt + 1e-6;
+  return fits || table.layoutFixed ? lead : undefined;
+}
+
+/**
  * Admit simple collapsed side rules to the shared-grid-line geometry.
  *
  * Modes 11, 12 and 14 (and an absent mode) take it for every top-level, collapsed, unpositioned
@@ -281,13 +330,20 @@ export function autoWidthOuterRulePt(
  *   (`modernEdgeAlignedOffsetPt`). The two go together: the inset alone would move the text
  *   outward by half a rule.
  *
- * Other mode-15 shapes (`pct` width, unequal or compound rules) and mode 16 keep
- * the full-stroke inset until controls cover them.
+ * - a left-aligned table whose simple rules differ in width (`modernMixedLeadPt`).
+ *
+ * Other mode-15 shapes (`pct` width, compound rules, right-aligned unequal rules) and mode 16
+ * keep the full-stroke inset until controls cover them.
  */
 function sharedGridLineDecision(
   rows: readonly SemanticTableRow[],
   table: SideRuleTableShape
-): { legacyMode: boolean; modernGridWidth: boolean; outerRuleOffsetPt?: number } | null {
+): {
+  legacyMode: boolean;
+  modernGridWidth: boolean;
+  outerRuleOffsetPt?: number;
+  unequalSides?: true;
+} | null {
   const { compatibilityMode: mode } = table;
   if (table.depth !== 0 || table.floating || table.cellSpacingPt !== 0) return null;
   if (table.bidiVisual) {
@@ -316,7 +372,12 @@ function sharedGridLineDecision(
     outerRuleOffsetPt === undefined &&
     uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length) === undefined &&
     hasPartialSimpleSideGrid(rows, table.columnWidthsPt.length);
-  if (!legacyMode && !modernCentred && !partialGrid && outerRuleOffsetPt === undefined) return null;
+  if (!legacyMode && !modernCentred && !partialGrid && outerRuleOffsetPt === undefined) {
+    const lead = modernMixedLeadPt(rows, table);
+    return lead === undefined
+      ? null
+      : { legacyMode, modernGridWidth, outerRuleOffsetPt: lead / 2, unequalSides: true };
+  }
   return { legacyMode, modernGridWidth, outerRuleOffsetPt };
 }
 
@@ -379,7 +440,8 @@ export function retargetSharedGridLineSideRules(
       next &&
       old.legacyMode === next.legacyMode &&
       old.modernGridWidth === next.modernGridWidth &&
-      old.outerRuleOffsetPt === next.outerRuleOffsetPt)
+      old.outerRuleOffsetPt === next.outerRuleOffsetPt &&
+      old.unequalSides === next.unequalSides)
   )
     return {
       rows,
@@ -396,11 +458,11 @@ export function withSharedGridLineSideRules(
 ): SharedGridLineSideRules {
   const decision = sharedGridLineDecision(rows, table);
   if (!decision) return { rows };
-  const { legacyMode, modernGridWidth, outerRuleOffsetPt } = decision;
-  const painted = withCentredSideRulePaint(rows, !legacyMode);
+  const { legacyMode, modernGridWidth, outerRuleOffsetPt, unequalSides = false } = decision;
+  const painted = withCentredSideRulePaint(rows, !legacyMode, unequalSides);
   const shared =
     table.widthType === 'dxa' || modernGridWidth
-      ? withLegacyTableSideRules(painted, !legacyMode)
+      ? withLegacyTableSideRules(painted, !legacyMode, unequalSides)
       : painted;
   return outerRuleOffsetPt === undefined ? { rows: shared } : { rows: shared, outerRuleOffsetPt };
 }

@@ -290,7 +290,8 @@ test('side-rule reuse respects changed borders and grid coverage', () => {
       ],
     },
   ];
-  expect(withSharedGridLineSideRules(changedRows, shape).outerRuleOffsetPt).toBeUndefined();
+  // A narrower leading rule makes the grid mixed: it moves by half that leading rule.
+  expect(withSharedGridLineSideRules(changedRows, shape).outerRuleOffsetPt).toBe(0.5);
   expect(
     withSharedGridLineSideRules(structure.rows, {
       ...shape,
