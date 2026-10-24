@@ -1342,6 +1342,23 @@ export interface DocumentViewSettings {
 }
 
 // @public
+export interface DrawingEffectsRenderer {
+    readonly picture: (input: ShapeEffectsInput & {
+        readonly outlineEmu: readonly (readonly Readonly<{
+            x: number;
+            y: number;
+        }>[])[] | null;
+    }) => PictureEffectsProjection | null;
+    readonly shape: (input: ShapeEffectsInput & {
+        readonly components: readonly VectorShapeComponent[];
+        readonly extent: Readonly<{
+            cx: number;
+            cy: number;
+        }>;
+    }) => readonly VectorShapeComponent[];
+}
+
+// @public
 export interface DrawingGraphicProjection {
     // (undocumented)
     readonly groupTextboxes: readonly GroupTextboxProjection[] | null;
@@ -1415,6 +1432,9 @@ export interface DrawingRenderers {
         cx: number;
         cy: number;
     }>, options: DiagramLayoutOptions) => OoxmlElement | null;
+    readonly effects?: DrawingEffectsRenderer;
+    readonly legacyTextArt?: (shape: OoxmlElement) => LegacyTextArtProjection | null;
+    readonly metafile?: MetafileRenderer;
 }
 
 // @public
@@ -2507,6 +2527,31 @@ export interface LegacyCheckboxFieldRange {
 export function legacyCheckboxFieldsOf(paragraph: OoxmlParagraphNode): readonly LegacyCheckboxFieldRange[];
 
 // @public
+export function legacyRotationDegrees(raw: string | undefined): number;
+
+// @public
+export interface LegacyTextArtProjection {
+    // (undocumented)
+    readonly bold: boolean;
+    // (undocumented)
+    readonly fillAlpha: number;
+    readonly fillHex: string | null;
+    // (undocumented)
+    readonly fontFamily: string;
+    // (undocumented)
+    readonly italic: boolean;
+    readonly rotationDegrees: number;
+    // (undocumented)
+    readonly strokeAlpha: number;
+    readonly strokeHex: string | null;
+    // (undocumented)
+    readonly strokeWidthPt: number;
+    // (undocumented)
+    readonly text: string;
+    readonly trim?: true;
+}
+
+// @public
 export const LIMIT_KEYS: (keyof ResourceLimits)[];
 
 // @public
@@ -2675,6 +2720,146 @@ export function mergedProperties(existing: readonly OoxmlProperty[], incoming: O
 
 // @public
 export function mergeFragmentIntoPackage(target: OoxmlPackage, fragment: OoxmlPackage, ownerPartName: string): FragmentMergeResult;
+
+// @public
+export type MetafileCommand = {
+    readonly kind: 'save';
+} | {
+    readonly kind: 'restore';
+} | {
+    readonly evenOdd: boolean;
+    readonly kind: 'fill';
+    readonly paint: MetafilePaint;
+    readonly path: readonly MetafilePathCommand[];
+} | {
+    readonly dash: readonly number[];
+    readonly kind: 'stroke';
+    readonly paint: MetafilePaint;
+    readonly path: readonly MetafilePathCommand[];
+    readonly width: number;
+} | {
+    readonly evenOdd: boolean;
+    readonly kind: 'clip';
+    readonly path: readonly MetafilePathCommand[];
+} | {
+    readonly kind: 'image';
+    readonly matrix: MetafileMatrix;
+    readonly raster: MetafileRaster;
+} | {
+    readonly align: 'left' | 'center' | 'right';
+    readonly baseline: 'alphabetic' | 'top' | 'bottom' | 'middle';
+    readonly font: MetafileFont;
+    readonly kind: 'text';
+    readonly matrix: MetafileMatrix;
+    readonly paint: MetafilePaint;
+    readonly text: string;
+    readonly x: number;
+    readonly y: number;
+} | {
+    readonly drawing: MetafileDrawing;
+    readonly kind: 'drawing';
+    readonly matrix: MetafileMatrix;
+};
+
+// @public
+export interface MetafileDrawing {
+    // (undocumented)
+    readonly commands: readonly MetafileCommand[];
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export interface MetafileFont {
+    // (undocumented)
+    readonly bold: boolean;
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly italic: boolean;
+    // (undocumented)
+    readonly sizePx: number;
+}
+
+// @public (undocumented)
+export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
+
+// @public
+export type MetafileMatrix = readonly [number, number, number, number, number, number];
+
+// @public
+export interface MetafilePaint {
+    // (undocumented)
+    readonly alpha: number;
+    // (undocumented)
+    readonly b: number;
+    // (undocumented)
+    readonly g: number;
+    // (undocumented)
+    readonly r: number;
+}
+
+// @public
+export type MetafilePathCommand = {
+    readonly op: 'M' | 'L';
+    readonly x: number;
+    readonly y: number;
+} | {
+    readonly op: 'C';
+    readonly x: number;
+    readonly x1: number;
+    readonly x2: number;
+    readonly y: number;
+    readonly y1: number;
+    readonly y2: number;
+} | {
+    readonly op: 'Z';
+};
+
+// @public
+export type MetafileRaster = {
+    readonly data: Uint8Array;
+    readonly height: number;
+    readonly kind: 'rgba';
+    readonly width: number;
+} | {
+    readonly bytes: Uint8Array;
+    readonly height: number;
+    readonly kind: 'encoded';
+    readonly mime: 'image/png' | 'image/jpeg';
+    readonly width: number;
+};
+
+// @public
+export interface MetafileRasterImage {
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly mime: 'image/png';
+}
+
+// @public
+export interface MetafileRenderer {
+    readonly rasterize?: (bytes: Uint8Array, mime: MetafileImageMime, options: Readonly<{
+        maxEdge: number;
+    }>) => Promise<MetafileRasterImage | null>;
+    readonly replay: (bytes: Uint8Array, mime: MetafileImageMime, options: MetafileReplayOptions) => Promise<MetafileReplay | null>;
+}
+
+// @public
+export interface MetafileReplay {
+    // (undocumented)
+    readonly complete: boolean;
+    // (undocumented)
+    readonly drawing: MetafileDrawing;
+}
+
+// @public
+export interface MetafileReplayOptions {
+    readonly measureText: (text: string, font: MetafileFont) => number;
+}
 
 // @public
 export function mintedParagraphIdentityAttributes(prefix: string, value: string): readonly OoxmlAttribute[];
@@ -3746,6 +3931,19 @@ export interface PersistencePort {
     readonly kind: 'persistence';
 }
 
+// @public
+export interface PictureEffectsProjection {
+    // (undocumented)
+    readonly effects?: PictureFrameEffects;
+    readonly underComponents?: readonly VectorShapeComponent[];
+}
+
+// @public
+export interface PictureFrameEffects {
+    readonly reflection?: ShapeReflection;
+    readonly softEdgeEmu?: number;
+}
+
 // @internal
 export function planRevisionAuthorChange(part: OoxmlPart, revision: RevisionAttributionInput, keys?: readonly string[], scopeRoot?: OoxmlNode, authors?: readonly string[]): RevisionAuthorPlan;
 
@@ -4561,6 +4759,32 @@ export interface ShapeColor {
     readonly alpha: number;
     // (undocumented)
     readonly hex: string;
+}
+
+// @public
+export interface ShapeEffectList {
+    readonly effectLst: OoxmlElement;
+    readonly fromTheme: boolean;
+    readonly placeholder?: ShapeColor;
+}
+
+// @public
+export interface ShapeEffectsInput {
+    readonly effectList: ShapeEffectList | null;
+    // (undocumented)
+    readonly resolveSchemeColor?: ShapeSchemeColorResolver;
+    readonly shape: OoxmlElement;
+    readonly spPr: OoxmlElement;
+}
+
+// @public
+export interface ShapeReflection {
+    // (undocumented)
+    readonly blurEmu: number;
+    readonly distanceEmu: number;
+    readonly endAlpha: number;
+    readonly endPosition: number;
+    readonly startAlpha: number;
 }
 
 // @public (undocumented)
@@ -5876,6 +6100,39 @@ export interface VectorShapeProjection {
         y: number;
     }>[])[];
 }
+
+// @public
+export const VML_NAMESPACE_URI = "urn:schemas-microsoft-com:vml";
+
+// @public
+export const VML_OFFICE_NAMESPACE_URI = "urn:schemas-microsoft-com:office:office";
+
+// @public
+export const VML_WORD_NAMESPACE_URI = "urn:schemas-microsoft-com:office:word";
+
+// @public
+export const vmlAttribute: (node: OoxmlElement, name: string, ns?: string) => string | undefined;
+
+// @public
+export function vmlChildren(node: OoxmlElement): OoxmlElement[];
+
+// @public
+export function vmlColor(value: string | undefined, fallback: string): string | null;
+
+// @public
+export const vmlNamed: (node: OoxmlNode, ns: string, name: string) => boolean;
+
+// @public
+export function vmlNumber(value: string | undefined): number;
+
+// @public
+export const vmlOff: (value: string | undefined) => boolean;
+
+// @public
+export function vmlPoints(value: string | undefined): number;
+
+// @public
+export function vmlStyle(node: OoxmlElement): ReadonlyMap<string, string> | null;
 
 // @public
 export function w14RootPrefix(root: OoxmlElement): string | null;

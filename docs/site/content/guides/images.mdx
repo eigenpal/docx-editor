@@ -18,7 +18,7 @@ Pass an `ImageDecodePort` through `imageDecodePort` on `DocxEditor` to use a cus
 | PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Original media preserved unless replaced |
 | BMP, WebP | No insert | Full decode at authored `wp:extent` | Original media preserved |
 | SVG | No insert | Painted at authored `wp:extent` | Original media preserved |
-| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch |
+| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise. EMF and WMF need the drawing module. | Preserved; no zero-click fetch |
 | External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
@@ -33,7 +33,7 @@ JPEG validation accepts large EXIF and ICC metadata segments before the frame he
 
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
 
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. EMF and WMF conversion requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
@@ -266,6 +266,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
 | Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. Without the module, preserve the extent and show a labeled placeholder |
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
+| Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |
 | Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, and a floating one with a wrapping mode still reserves its wrap area |
 | Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
@@ -335,7 +336,7 @@ Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/rea
 
 ## Legacy VML previews
 
-Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles, rounded rectangles, and ellipses, straight line segments with arrows, and straight fit-to-box WordArt (`_x0000_t136`). A floating `v:line` spans its `from` and `to` points and also renders in PDF export. Group-local coordinates, picture crops, supported text wrapping, aligned positions, and source order are retained. A shape without `position:absolute` in its style is inline. WordArt uses the authored font when available on the host; curved or rotated WordArt is not supported.
+Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles, rounded rectangles, and ellipses, straight line segments with arrows, and, with the drawing module, straight fit-to-box WordArt (`_x0000_t136`). A floating `v:line` spans its `from` and `to` points and also renders in PDF export. Group-local coordinates, picture crops, supported text wrapping, aligned positions, and source order are retained. A shape without `position:absolute` in its style is inline. Without the drawing module, inline WordArt keeps its extent with a placeholder, and floating WordArt does not render. WordArt uses the authored font when available on the host; curved WordArt is not supported.
 
 Floating `v:shape` paths with two explicit points can have one zero extent. They paint as native vector lines. A zero coordinate axis requires both corresponding coordinates to match its origin. Curves, multiple subpaths, and invalid coordinate axes remain opaque.
 

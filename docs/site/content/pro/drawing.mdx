@@ -1,13 +1,25 @@
 ---
-title: 'Charts and SmartArt layout'
-description: 'Render charts and lay out SmartArt diagrams with the drawing module.'
+title: 'Advanced drawing rendering'
+description: 'Render charts, SmartArt layout, drawing effects, WordArt, and EMF and WMF pictures with the drawing module.'
 category: 'Pro'
 order: 68
 ---
 
-The drawing module renders charts and lays out SmartArt diagrams that a document saved without their drawing. It requires the EigenPal Pro License.
+The drawing module adds advanced drawing rendering to the editor and to PDF export. It requires the EigenPal Pro License.
 
-Without the module, the editor still renders pictures, shapes, text boxes, shape groups, drawing canvases, and SmartArt diagrams saved with their drawing. Charts, and diagrams saved without a drawing, show a labeled placeholder.
+Without the module, the editor renders pictures, shapes with fills, gradients, patterns, outlines, and outer shadows, text boxes, shape groups, drawing canvases, text watermarks, and SmartArt diagrams saved with their drawing.
+
+## What the module adds
+
+| Drawing | With the module | Without the module |
+| --- | --- | --- |
+| Charts | Render read-only from the values cached in the chart part. | Labeled placeholder |
+| SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
+| Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
+| WordArt (straight VML text paths) | Renders its text fitted to the shape, with its fill, outline, and rotation. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
+| EMF and WMF pictures | Rasterized in the editor. Drawn as vector paths, text, and bitmaps in PDF export. | Labeled placeholder |
+
+Text watermarks are a page feature, so they render without the module.
 
 ## Register the module
 
@@ -34,6 +46,8 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read.
 
+The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture. Documents without one do not load them.
+
 ## Use the module without an editor
 
 For headless conversion, call `installDrawing()` once before you open documents:
@@ -44,11 +58,14 @@ import { installDrawing } from '@docx-editor.dev/pro/drawing';
 installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
 ```
 
-`@docx-editor.dev/docx-to-pdf` installs the module for you, so PDF export renders charts and SmartArt layout without extra setup.
+`@docx-editor.dev/docx-to-pdf` installs the module for you, so PDF export renders everything in this page without extra setup.
 
 ## What renders
 
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
+- Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself. Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint.
+- WordArt renders plain, straight text fitted to the shape box. Curved WordArt, gradients, and shown shadows keep the drawing refused.
+- EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
 
-For the chart types, labels, and layouts that render, see [Word feature support](/docs/2.x/word-fidelity).
+For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).

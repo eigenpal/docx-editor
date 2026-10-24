@@ -1,0 +1,18 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Glow, inner shadow, reflection, soft edge and dark-edged bevel rims, VML text paths outside a watermark, and EMF and WMF pictures render in the free engine.",
+  "after": "These render only when the Pro drawing module is installed. Without it, shapes paint without those effects, an inline text path keeps its box as a read-only placeholder atom, a floating text path is refused, and a metafile picture keeps its image placeholder. Text watermarks render as before. No source XML or package part changes.",
+  "reason": "Only graphic projection and paint change. The change adds no shared state, operations, snapshot fields or protocol messages, and writes nothing to the document. Effects and metafile pictures keep the same drawing atoms with or without the module. A floating text path is a drawing atom only where the module is installed, so a published selection after one can differ by one offset between a participant with the module and one without, as between versions for other projection subset changes. Joining peers render the same drawings from the shared package.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-text-art.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-placeholder.test.ts",
+    "packages/core/src/store/__tests__/drawing-shape-geometry-projection.test.ts",
+    "packages/core/src/store/__tests__/drawing-picture-frame.test.ts",
+    "packages/core/src/editor/__tests__/browser-metafile-convert.test.ts",
+    "packages/pro/src/drawing/__tests__/text-art.test.ts",
+    "packages/pro/src/collaboration/__tests__/legacy-drawings.test.ts"
+  ],
+  "changeset": "pro-drawing-effects",
+  "migration": null
+}

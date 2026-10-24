@@ -64,8 +64,9 @@ import {
  * `reviewModule()` enables markup rendering, suggesting mode, and the review pane;
  * `customNodesModule` shows `defineCustomNode`: an inline content control tagged
  * `docx:citation?...` is recognized as a typed node carrying the payload above (open
- * e2e/fixtures/sdt-custom-tag-original.docx to see one). `drawingModule()` paints charts and
- * lays out SmartArt saved without its drawing. Each accepts `{ licenseKey }` — optional while
+ * e2e/fixtures/sdt-custom-tag-original.docx to see one). `drawingModule()` paints charts,
+ * SmartArt saved without its drawing, glow and reflection effects, WordArt, and EMF and WMF
+ * pictures. Each accepts `{ licenseKey }` — optional while
  * licensing is honor-system.
  */
 const PRO_MODULES = [

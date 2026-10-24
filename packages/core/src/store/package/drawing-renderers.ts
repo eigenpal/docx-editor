@@ -28,8 +28,6 @@ import type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
 import type { MetafileImageMime } from './image-resources.ts';
 import type { MetafileReplay, MetafileReplayOptions } from './metafile-drawing.ts';
 
-type PointEmu = Readonly<{ x: number; y: number }>;
-
 /**
  * What a shape effects renderer reads for one shape: its properties, the effect list the
  * engine resolved for the outer shadow, and the components the engine painted.
@@ -81,7 +79,9 @@ export interface DrawingEffectsRenderer {
    * budget). Null when the picture has no effect the renderer paints.
    */
   readonly picture: (
-    input: ShapeEffectsInput & { readonly outlineEmu: readonly (readonly PointEmu[])[] | null }
+    input: ShapeEffectsInput & {
+      readonly outlineEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[] | null;
+    }
   ) => PictureEffectsProjection | null;
 }
 
