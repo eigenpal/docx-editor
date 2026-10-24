@@ -119,10 +119,7 @@ import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 import { rebreakForEarlierOwnBands } from './top-and-bottom-earlier-lines.ts';
 
-/**
- * Ignore subpixel rounding from absolute tab positions converted to line-local widths.
- * A tab ending exactly at the margin must not wrap because of floating-point error.
- */
+// Ignore subpixel rounding: a tab that ends exactly at the margin must not wrap.
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
@@ -1616,6 +1613,8 @@ export function breakParagraph(
           faceStyle,
           lineBandText(piece, displayText(remaining, faceStyle))
         );
+        if (consumed > 0 && line.spans.length > 0 && line.end === remainingStart)
+          line.width += lineEndSpaces.spaceKern(lastEmitted, remaining, faceStyle, measureFace);
         const gap = automaticGap(remaining, remainingStart);
         line.width += gap;
         const span: StyleSpanRecord = automaticTextSpan(

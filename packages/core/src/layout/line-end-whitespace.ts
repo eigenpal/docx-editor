@@ -4,6 +4,8 @@ import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 import { measuredWidth } from './optional-hyphen-joining.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { FontSlot } from './script-itemization.ts';
+import { isRunKerningEnabled } from './run-kerning.ts';
+import type { ResolvedRunStyle } from './run-style.ts';
 
 /**
  * Spaces that may hang/clip at a line end instead of wrapping onto a new line. Zero-width
@@ -164,3 +166,21 @@ interface EndSpaces {
 
 const TAKES_ROOM = { takesRoom: true, room: 0 } as const;
 const NO_END_SPACES = { takesRoom: false, room: 0 } as const;
+
+/**
+ * The kerning pair between a word's trailing space and the first letter of the next word of
+ * the same run, in points (negative tightens). Words are measured one at a time, so a pair
+ * whose first glyph is a space never reaches the shaper. Measured in the reference with a
+ * `w:kern` run at 48pt bold: the space before an "A" advanced by the font's space-A pair.
+ * Zero when the run does not kern.
+ */
+export function spaceKern(
+  previous: string,
+  next: string,
+  style: ResolvedRunStyle,
+  measure: (text: string) => number
+): number {
+  if (!previous.endsWith(' ') || next.length === 0 || !isRunKerningEnabled(style)) return 0;
+  const first = String.fromCodePoint(next.codePointAt(0)!);
+  return measure(` ${first}`) - measure(' ') - measure(first);
+}
