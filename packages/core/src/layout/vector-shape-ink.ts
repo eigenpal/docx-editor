@@ -118,10 +118,13 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
   };
-  const t = EXTENT_TOLERANCE_EMU;
+  // A shape that paints outside its extent reaches as far as its geometry and ink go.
+  const open = shape.overflowVisible === true;
+  const t = open ? Infinity : EXTENT_TOLERANCE_EMU;
   const inside = (point: Point) =>
     point.x >= -t && point.x <= cx + t && point.y >= -t && point.y <= cy + t;
   for (const component of shape.components) {
+    if (open) for (const path of component.subpathsEmu) for (const p of path) include(p.x, p.y);
     // An outer shadow reaches past the geometry by its offset and its blur. Only geometry
     // inside the extent casts it: outside parts stay clipped like the shape itself.
     // An inner shadow stays inside its shape; it adds no ink outside it.
@@ -133,8 +136,8 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
       let bottom = -Infinity;
       for (const path of component.subpathsEmu) {
         for (const point of path) {
-          const x = Math.max(0, Math.min(cx, point.x));
-          const y = Math.max(0, Math.min(cy, point.y));
+          const x = open ? point.x : Math.max(0, Math.min(cx, point.x));
+          const y = open ? point.y : Math.max(0, Math.min(cy, point.y));
           left = Math.min(left, x);
           top = Math.min(top, y);
           right = Math.max(right, x);

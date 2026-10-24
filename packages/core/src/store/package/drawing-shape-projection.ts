@@ -106,6 +106,11 @@ export interface VectorShapeProjection {
   readonly strokeWidthEmu: number;
   /** Independently styled paths, always non-empty. A direct shape has one component. */
   readonly components: readonly VectorShapeComponent[];
+  /**
+   * Geometry outside the extent paints too. A drawing canvas does not cut its members at
+   * its frame: a member placed past an edge shows whole.
+   */
+  readonly overflowVisible?: true;
 }
 
 export interface VectorShapeComponent {

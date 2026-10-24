@@ -294,4 +294,24 @@ describe('vectorShapeInkClip', () => {
     ];
     expect(growth(record([point]))).toEqual(NONE);
   });
+
+  test('a shape that paints outside its extent grows by its whole geometry', () => {
+    const box: Path = [
+      { x: -20 * EMU_PER_POINT, y: 10 * EMU_PER_POINT },
+      { x: 50 * EMU_PER_POINT, y: 10 * EMU_PER_POINT },
+      { x: 50 * EMU_PER_POINT, y: EXTENT + 30 * EMU_PER_POINT },
+      { x: -20 * EMU_PER_POINT, y: EXTENT + 30 * EMU_PER_POINT },
+    ];
+    const clipped = record([box], { closed: true, stroke: false });
+    expect(growth(clipped)).toEqual(NONE);
+    const open = {
+      ...clipped,
+      vectorShape: { ...clipped.vectorShape!, overflowVisible: true },
+    } as InlineDrawingRecord;
+    const grown = growth(open);
+    expect(grown.left).toBeCloseTo(20, 9);
+    expect(grown.bottom).toBeCloseTo(30, 9);
+    expect(grown.top).toBe(0);
+    expect(grown.right).toBe(0);
+  });
 });

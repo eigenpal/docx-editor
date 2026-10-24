@@ -256,6 +256,7 @@ export function projectCanvas(
           strokeAlpha: 1,
           strokeWidthEmu: 0,
           components: out.components,
+          overflowVisible: true,
         }
       : null,
     groupTextboxes: out.texts.length ? Object.freeze(out.texts) : null,
