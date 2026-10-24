@@ -91,6 +91,9 @@ export interface AutofitFieldContext {
     readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
+// @public
+export function automaticTextColor(background: string | null | undefined): 'FFFFFF' | null;
+
 // @public (undocumented)
 export type AutonumFieldKind = 'AUTONUM' | 'AUTONUMLGL' | 'AUTONUMOUT';
 

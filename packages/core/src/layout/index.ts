@@ -324,6 +324,7 @@ export {
   type ParagraphLineSpacing,
 } from './paragraph-style.ts';
 export {
+  automaticTextColor,
   paragraphShading,
   paragraphShadingBox,
   resolveOoxmlShadingFill,

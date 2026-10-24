@@ -50,6 +50,7 @@ import {
 import { fallbackStackForFamily } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
+import { automaticTextColor } from '../layout/ooxml-shading.ts';
 import {
   reviewAuthorSlotColor,
   revisionStyleContextKey,
@@ -695,6 +696,8 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   } else if (style.shading && HEX.test(style.shading)) {
     // Highlight overrides character shading; only paint `w:shd` when no recognised highlight.
     css.backgroundColor = `#${style.shading}`;
+    // Automatic text takes white on dark shading and black on light, over any paragraph's.
+    if (!css.color) css.color = automaticTextColor(style.shading) ? '#FFFFFF' : '#000000';
   }
   if (style.caps) css.textTransform = 'uppercase';
   css.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
@@ -1427,6 +1430,8 @@ function paintFragment(
   // shading paints from the published line-area box — never the outer fragment background.
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
     element.append(paintParagraphShading(document, fragment, scale));
+    // Automatic text inherits white on dark paragraph shading.
+    if (automaticTextColor(fragment.shading)) element.style.color = '#FFFFFF';
   }
   // List markers are layout furniture inside the hanging indent — never model text.
   if (fragment.marker) {

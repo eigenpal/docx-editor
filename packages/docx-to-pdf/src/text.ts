@@ -11,6 +11,7 @@ import type {
   ExportAdmittedFontIdentity,
 } from '@docx-editor.dev/core/export';
 import {
+  automaticTextColor,
   baselineShiftPtOf,
   noteSeparatorRuleBox,
   glyphSizeFactorOf,
@@ -362,7 +363,9 @@ export class TextWriter {
     // to the grid first. The tolerance is far under any real geometry and far over the error.
     const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
     const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
-    let foreground = style.color;
+    // Automatic text takes white on dark run shading, else on dark paragraph shading.
+    let foreground =
+      style.color ?? automaticTextColor(style.shading ?? visit.paragraph.shading ?? null);
     const row = marker ? undefined : this.rowRevisions.get(visit.paragraph);
     const revisions = this.showRevisionMarkup ? spanRevisions(visit, row) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
