@@ -1,6 +1,7 @@
 // Body paragraph flow inputs that come from the layout options alone, and the placement inputs
 // a body paragraph's break reads from the region it lands in.
 
+import type { ParagraphIndent } from './semantic-records.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -89,4 +90,22 @@ export function bodyParagraphCacheKey(
     ...placement,
     ...ownBandKeyInputs(entry.paragraph, drawings),
   });
+}
+
+/**
+ * The horizontal bounds a body paragraph breaks within, from the column's left edge. A
+ * negative left indent, or a first line that hangs left of it, starts the text left of the
+ * column; a negative right indent ends it past the column. Wrap passages are cut from these
+ * bounds, so they must reach as far as the paragraph's own text does.
+ */
+export function bodyContentBounds(
+  indent: ParagraphIndent,
+  available: number,
+  columnRight: number | undefined
+): { readonly contentLeft: number; readonly contentRight: number } {
+  const textRight = indent.left + available;
+  return {
+    contentLeft: Math.min(0, indent.left, indent.left + indent.firstLine - indent.hanging),
+    contentRight: Math.max(columnRight ?? textRight + indent.right, textRight),
+  };
 }
