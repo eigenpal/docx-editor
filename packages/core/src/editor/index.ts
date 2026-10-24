@@ -109,6 +109,8 @@ export {
 export {
   dragIndent,
   handlePosition,
+  rulerMarginTicks,
+  rulerTabPosition,
   snapTwips,
   SNAP_TWIPS_CM,
   SNAP_TWIPS_INCH,
@@ -117,6 +119,7 @@ export {
   type RulerDragOptions,
   type RulerIndent,
   type RulerIndentHandle,
+  type RulerMarginTick,
   type RulerPageMetrics,
 } from './ruler-indent.ts';
 export {

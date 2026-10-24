@@ -14,7 +14,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { RulerPageSetup } from './HorizontalRuler';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
-import { useTranslation } from '../../i18n';
+import { useChromeDir, useTranslation } from '../../i18n';
 import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 
 // ============================================================================
@@ -55,7 +55,7 @@ const TWIPS_PER_CM = 567;
 
 // Ruler styling - Google Docs style
 // Exported so the outline toggle/panel can inset past the vertical ruler
-// (it overlays the editor's left edge) instead of rendering on top of it.
+// (it overlays the editor's inline-start edge) instead of rendering on top of it.
 export const RULER_WIDTH = 20;
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
@@ -79,6 +79,8 @@ export function VerticalRuler({
   style,
 }: VerticalRulerProps): React.ReactElement {
   const { t } = useTranslation();
+  // Ticks and margin markers face the page from the inline end of the chrome direction.
+  const dir = useChromeDir();
   const [dragging, setDragging] = useState<MarkerType | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<MarkerType | null>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -194,6 +196,7 @@ export function VerticalRuler({
       ref={rulerRef}
       className={`docx-vertical-ruler ${className}`}
       style={rulerStyle}
+      dir={dir}
       role="group"
       aria-label={t('ruler.vertical')}
     >
@@ -202,8 +205,8 @@ export function VerticalRuler({
         style={{
           position: 'absolute',
           top: 0,
-          left: 0,
-          right: 0,
+          insetInlineStart: 0,
+          insetInlineEnd: 0,
           bottom: 0,
           pointerEvents: 'none',
         }}
@@ -264,7 +267,7 @@ function VerticalTick({ tick }: { tick: VerticalTickData }): React.ReactElement 
   const tickStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(tick.position),
-    right: 0,
+    insetInlineEnd: 0,
     height: 1,
     width: tick.width,
     backgroundColor: RULER_TICK_COLOR,
@@ -273,7 +276,7 @@ function VerticalTick({ tick }: { tick: VerticalTickData }): React.ReactElement 
   const labelStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(tick.position),
-    left: 2,
+    insetInlineStart: 2,
     transform: 'translateY(-50%)',
     fontSize: '9px',
     color: RULER_TEXT_COLOR,
@@ -326,24 +329,24 @@ function VerticalMarginMarker({
   const markerStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(position - 5),
-    right: 0,
+    insetInlineEnd: 0,
     width: RULER_WIDTH,
     height: 10,
     cursor: editable ? 'ns-resize' : 'default',
     zIndex: isDragging ? 10 : 1,
   };
 
-  // Triangle pointing left (for top) or right (for bottom)
+  // Triangle pointing toward the page edge it sits beside
   const triangleStyle: CSSProperties = {
     position: 'absolute',
     top: 0,
-    right: 2,
+    insetInlineEnd: 2,
     width: 0,
     height: 0,
     borderTop: '5px solid transparent',
     borderBottom: '5px solid transparent',
-    borderRight: `8px solid ${color}`,
-    transition: 'border-right-color 0.1s',
+    borderInlineEnd: `8px solid ${color}`,
+    transition: 'border-inline-end-color 0.1s',
   };
 
   return (

@@ -115,7 +115,8 @@ const RULER_ROW_STYLE: CSSProperties = {
 const VERTICAL_RULER_STYLE: CSSProperties = {
   position: 'absolute',
   top: '40px',
-  left: 0,
+  // The inline start of the wrapper's own `dir`: the right edge in a right-to-left interface.
+  insetInlineStart: 0,
   zIndex: 10,
   pointerEvents: 'none',
 };
@@ -441,7 +442,14 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
             rulers.value && chrome.value
-              ? h('div', { style: VERTICAL_RULER_STYLE }, [h(DocxEditorVerticalRuler)])
+              ? h(
+                  'div',
+                  {
+                    style: VERTICAL_RULER_STYLE,
+                    dir: translation.dir === 'rtl' ? 'rtl' : undefined,
+                  },
+                  [h(DocxEditorVerticalRuler)]
+                )
               : null,
             slots.default?.(),
           ],

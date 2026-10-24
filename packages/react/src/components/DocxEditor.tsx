@@ -141,7 +141,8 @@ const RULER_ROW_STYLE: CSSProperties = {
 const VERTICAL_RULER_STYLE: CSSProperties = {
   position: 'absolute',
   top: 40,
-  left: 0,
+  // The inline start of the wrapper's own `dir`: the right edge in a right-to-left interface.
+  insetInlineStart: 0,
   zIndex: 10,
   pointerEvents: 'none',
 };
@@ -340,7 +341,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
           twin it belongs inside the scroller. Its margin handles remain accessible. */}
         {rulers && chrome ? (
-          <div style={VERTICAL_RULER_STYLE}>
+          <div style={VERTICAL_RULER_STYLE} dir={chromeDirection}>
             <DocxEditorVerticalRuler />
           </div>
         ) : null}

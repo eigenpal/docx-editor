@@ -3398,6 +3398,16 @@ export interface RulerIndent {
 export type RulerIndentHandle = 'firstLine' | 'hanging' | 'left' | 'right';
 
 // @public
+export interface RulerMarginTick {
+    readonly height: number;
+    readonly label?: string;
+    readonly position: number;
+}
+
+// @public
+export function rulerMarginTicks(page: RulerPageMetrics, indent: Pick<RulerIndent, 'rtl'>, unit: RulerUnit): RulerMarginTick[];
+
+// @public
 export function rulerPageBox(pages: readonly {
     readonly box: {
         height: number;
@@ -3418,6 +3428,9 @@ export interface RulerPageMetrics {
     // (undocumented)
     readonly rightMargin: number;
 }
+
+// @public
+export function rulerTabPosition(tabTwips: number, page: RulerPageMetrics, indent: Pick<RulerIndent, 'rtl'>): number;
 
 // @public
 export interface RulerTick {
