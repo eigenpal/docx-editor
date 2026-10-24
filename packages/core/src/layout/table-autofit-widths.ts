@@ -312,7 +312,7 @@ export function paragraphContentWidthsPt(
   let onFirstLine = true;
   const endLine = (): void => {
     previousText = undefined;
-    const width = Math.max(0, line - hung + left + right + (onFirstLine ? firstShift : 0));
+    const width = line - hung + Math.max(0, left + right + (onFirstLine ? firstShift : 0));
     if (line > 0 && width > longest) longest = width;
     line = 0;
     hung = 0;
@@ -325,8 +325,7 @@ export function paragraphContentWidthsPt(
   const close = (): void => {
     if (segment > 0) {
       // Indents are physical sides; the first-line shift moves whichever one leads.
-      // A negative indent moves the text into the cell margin, so it lowers the minimum.
-      const width = Math.max(0, segment + left + right + (first ? firstShift : 0));
+      const width = segment + Math.max(0, left + right + (first ? firstShift : 0));
       if (width > widest) widest = width;
       first = false;
     }
