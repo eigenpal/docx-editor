@@ -184,7 +184,6 @@ export function readParagraphFrame(properties: readonly OoxmlProperty[]): Paragr
   const y = effectiveYAlign ? 0 : coordinate(attributes.y ?? '0');
   const width = attributes.w === undefined ? 0 : coordinate(attributes.w);
   if (x === null || y === null || width === null || width < 0) return null;
-  if (verticalAnchor === 'text' && y < 0) return null;
   const autoWidth = attributes.w === undefined;
   if (!autoWidth && width <= 0) return null;
 
@@ -284,7 +283,9 @@ export function paragraphFrameOrigin(
   const vertical = origins[frame.verticalAnchor];
   const slackY = vertical.height - frameSize.height;
   let y: number;
-  if (frame.verticalAnchor === 'text' || !frame.yAlign) y = vertical.y + frame.y;
+  // A negative text offset raises the frame above its anchor, but never past the page top.
+  if (frame.verticalAnchor === 'text') y = Math.max(origins.page.y, vertical.y + frame.y);
+  else if (!frame.yAlign) y = vertical.y + frame.y;
   else if (frame.yAlign === 'center') y = vertical.y + slackY / 2;
   else if (frame.yAlign === 'bottom' || frame.yAlign === 'outside') y = vertical.y + slackY;
   else if (frame.yAlign === 'inline') y = origins.text.y;
