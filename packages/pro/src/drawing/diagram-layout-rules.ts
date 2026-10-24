@@ -277,9 +277,13 @@ export function solveWithRules(
     solution: LayoutSolution,
     target: RuleTarget,
     sizes: ReadonlyMap<string, number>,
-    overrides: Map<string, number>
+    overrides: Map<string, number>,
+    unbounded: boolean
   ) => {
-    for (const [type, value] of sizes) {
+    const state = solution.states[target.node.index]!;
+    for (const [type, grown] of sizes) {
+      // An unbounded box its line scaled down grows its solved size by as much more.
+      const value = unbounded ? grown / (state.flowScale.get(type) ?? 1) : grown;
       for (const member of groupOf(solution, target.node.index, type)) {
         const key = overrideKey(member, type);
         overrides.set(key, Math.max(overrides.get(key) ?? 0, value));
@@ -302,7 +306,7 @@ export function solveWithRules(
       if (shrinks(target) && !lookahead.has(target.node.index)) continue;
       const sizes = growAll(solution, target, target.rules.filter(isUnbounded));
       if (sizes.size === 0) continue;
-      record(solution, target, sizes, next);
+      record(solution, target, sizes, next, true);
       grown = true;
     }
     if (!grown) return { solution, fixed: overrides };
@@ -324,7 +328,7 @@ export function solveWithRules(
         const value = grow(current.solution, target, rule, new Map());
         if (value === null) return;
         const next = new Map(current.fixed);
-        record(current.solution, target, new Map([[rule.type, value]]), next);
+        record(current.solution, target, new Map([[rule.type, value]]), next, isUnbounded(rule));
         current = settle(next, none) ?? current;
         return;
       }

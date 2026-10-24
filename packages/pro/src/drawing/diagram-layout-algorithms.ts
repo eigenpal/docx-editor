@@ -173,6 +173,11 @@ function placeLinear(context: PlacementContext, state: NodeState): void {
     sizes = sizes.map((size) => ({ primary: size.primary * shrink, cross: size.cross * shrink }));
     spacing *= shrink;
   }
+  const across = sizes.length > 0 && maxCross > crossBox && maxCross > 0 ? crossBox / maxCross : 1;
+  for (const child of children) {
+    if (scale * across !== 1) child.flowScale.set(primaryKey, scale * across);
+    if (across !== 1) child.flowScale.set(crossKey, across);
+  }
   const used = sizes.reduce((sum, size) => sum + size.primary, 0) + spacing * (children.length - 1);
   const groupAlign = horizontal ? params.get('horzAlign') : params.get('vertAlign');
   let cursor = (primaryBox - used) / 2;

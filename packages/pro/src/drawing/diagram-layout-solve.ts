@@ -55,6 +55,12 @@ export interface NodeState {
   hidden: boolean;
   /** How far an enclosing layout scaled its solved sizes down (hierarchies). */
   scale: number;
+  /**
+   * How far the parent's line scaled each of the node's sizes (`w`, `h`) to fit: the box
+   * over the solved value. A size grown for text grows the value by the box's growth over
+   * this.
+   */
+  readonly flowScale: Map<string, number>;
   /** A line connector's path, relative to its box, drawn instead of a preset. */
   path: readonly { readonly x: number; readonly y: number }[] | null;
   /**
@@ -563,6 +569,7 @@ function freshState(node: DiagramLayoutNode, overrides: ReadonlyMap<string, numb
     flipH: false,
     hidden: false,
     scale: 1,
+    flowScale: new Map(),
     path: null,
     customFontSize: overrides.get(overrideKey(node.index, CUSTOM_FONT_SIZE)) ?? null,
   };

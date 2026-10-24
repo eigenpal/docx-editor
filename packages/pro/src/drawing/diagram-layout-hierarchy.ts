@@ -30,6 +30,43 @@ interface Placed {
   readonly anchorX: number;
   readonly anchorY: number;
   readonly children: Placed[];
+  /** The boxes the subtree draws, relative to this element: its outline for packing. */
+  readonly contour: readonly Rect[];
+}
+
+interface Rect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+function shifted(rects: readonly Rect[], dx: number, dy: number): Rect[] {
+  return rects.map((rect) => ({ ...rect, x: rect.x + dx, y: rect.y + dy }));
+}
+
+/**
+ * How far along the row `next` must start so none of its boxes comes within `gap` of a box
+ * already placed that it overlaps across the row: subtrees nest into each other's free
+ * corners rather than stack by their bounding boxes.
+ */
+function packedOffset(
+  placed: readonly Rect[],
+  next: readonly Rect[],
+  vertical: boolean,
+  gap: number
+): number {
+  let offset = -Infinity;
+  for (const a of placed) {
+    for (const b of next) {
+      const overlap = vertical
+        ? Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+        : Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (!(overlap > 0)) continue;
+      offset = Math.max(offset, vertical ? a.y + a.h + gap - b.y : a.x + a.w + gap - b.x);
+    }
+  }
+  return offset;
 }
 
 function childStates(context: PlacementContext, state: NodeState): NodeState[] {
@@ -57,25 +94,29 @@ function measureRow(context: PlacementContext, container: NodeState, depth: numb
   const align = params.get('chAlign') ?? (vertical ? 'l' : 't');
   const gap = container.values.get('sibSp') ?? 0;
   const items = roots.map((root) => measureRoot(context, root, depth + 1));
-  let cursor = 0;
   let extent = 0;
   for (const item of items) extent = Math.max(extent, vertical ? item.w : item.h);
   const order = direction === 'fromR' || direction === 'fromB' ? [...items].reverse() : items;
-  for (const item of order) {
+  let contour: Rect[] = [];
+  let start = 0;
+  let length = 0;
+  for (const [index, item] of order.entries()) {
     const size = vertical ? item.w : item.h;
     const across =
       align === 'r' || align === 'b' ? extent - size : align === 'ctr' ? (extent - size) / 2 : 0;
+    const local = shifted(item.contour, vertical ? across : 0, vertical ? 0 : across);
+    const at = index === 0 ? 0 : Math.max(start, packedOffset(contour, local, vertical, gap));
+    start = at;
     if (vertical) {
       item.x = across;
-      item.y = cursor;
-      cursor += item.h + gap;
+      item.y = at;
     } else {
-      item.x = cursor;
+      item.x = at;
       item.y = across;
-      cursor += item.w + gap;
     }
+    contour = contour.concat(shifted(local, vertical ? 0 : at, vertical ? at : 0));
+    length = Math.max(length, at + (vertical ? item.h : item.w));
   }
-  const length = Math.max(0, cursor - gap);
   const first = items[0];
   const last = items[items.length - 1];
   const mid = (key: 'x' | 'y', anchor: 'anchorX' | 'anchorY') =>
@@ -89,6 +130,7 @@ function measureRow(context: PlacementContext, container: NodeState, depth: numb
     anchorX: mid('x', 'anchorX'),
     anchorY: mid('y', 'anchorY'),
     children: items,
+    contour,
   };
 }
 
@@ -133,6 +175,7 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
         anchorX: base.w / 2,
         anchorY: base.h / 2,
         children: [],
+        contour: [],
       }
     : null;
   const parts = (): Placed[] => (placedOwn ? [placedOwn, ...rows] : rows);
@@ -154,6 +197,7 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
       anchorX: size.w / 2,
       anchorY: size.h / 2,
       children: parts(),
+      contour: own ? [{ x: 0, y: 0, w: size.w, h: size.h }] : [],
     };
   }
   const gap = root.values.get('sp') ?? 0;
@@ -198,6 +242,10 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
     anchorX: boxX + size.w / 2,
     anchorY: boxY + size.h / 2,
     children: parts(),
+    contour: [
+      ...(own ? [{ x: boxX, y: boxY, w: size.w, h: size.h }] : []),
+      ...shifted(row.contour, row.x, row.y),
+    ],
   };
 }
 
