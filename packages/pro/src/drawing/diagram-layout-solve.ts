@@ -556,11 +556,11 @@ function applyUserAdjustments(state: NodeState): { dx: number; dy: number } | nu
   // A pyramid sizes and moves its levels itself.
   if (owner?.algorithm.type === 'pyra') return null;
   const moves = owner?.algorithm.type === 'hierRoot' || owner?.algorithm.type === 'hierChild';
-  // A move counts along the row of siblings only: across in a row, down in a column.
+  // A sideways move always counts; a vertical one only down a column of siblings.
   const row = owner?.algorithm.type === 'hierChild' ? owner : owner?.parent;
   const direction = row?.algorithm.params.get('linDir') ?? 'fromL';
   const column = direction === 'fromT' || direction === 'fromB';
-  const fx = moves && !column ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
+  const fx = moves ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
   const fy = moves && column ? presFactor(state, 'custLinFactNeighborY', 0) : 0;
   if (sx === 1 && sy === 1 && fx === 0 && fy === 0) return null;
   const w = box.w * sx;

@@ -53,13 +53,13 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   cycle2: { boxes: 32, presets: 32, rotations: 32, fonts: 16, refused: 0 },
   radial5: { boxes: 24, presets: 56, rotations: 56, fonts: 26, refused: 0 },
   default: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
-  hierarchy1: { boxes: 102, presets: 102, rotations: 102, fonts: 36, refused: 0 },
+  hierarchy1: { boxes: 131, presets: 131, rotations: 131, fonts: 46, refused: 0 },
   hierarchy2: { boxes: 44, presets: 44, rotations: 44, fonts: 24, refused: 0 },
   HalfCircleOrganizationChart: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
-  HorizontalOrganizationChart: { boxes: 43, presets: 43, rotations: 43, fonts: 23, refused: 0 },
-  NameandTitleOrganizationalChart: { boxes: 3, presets: 17, rotations: 17, fonts: 0, refused: 0 },
+  HorizontalOrganizationChart: { boxes: 58, presets: 58, rotations: 58, fonts: 31, refused: 0 },
+  NameandTitleOrganizationalChart: { boxes: 4, presets: 33, rotations: 33, fonts: 2, refused: 0 },
   vList2: { boxes: 50, presets: 51, rotations: 51, fonts: 51, refused: 0 },
-  orgChart1: { boxes: 15, presets: 15, rotations: 15, fonts: 8, refused: 0 },
+  orgChart1: { boxes: 71, presets: 71, rotations: 71, fonts: 38, refused: 0 },
 };
 
 function totals(scores: readonly CaseScore[]) {
