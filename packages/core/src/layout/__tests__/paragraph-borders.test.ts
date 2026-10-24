@@ -218,10 +218,10 @@ describe('a box publishes four strokes around the unchanged text column', () => 
     expect(top.box.y + top.box.height).toBe(line.box.y - 4);
     expect(bottom.box.y).toBe(line.box.y + line.box.height + 4);
 
-    // Word draws the side rules beyond the text and never re-breaks the lines for them, so
-    // the left rule ends 4pt left of the text and the right one starts 4pt right of it.
-    expect(left.box.x + left.box.width).toBe(line.box.x - 4);
-    expect(right.box.x).toBe(line.box.x + line.box.width + 4);
+    // Side rules sit beyond the text and never re-break the lines. Each sits its 4pt space
+    // plus a constant 1.4pt from the text.
+    expect(left.box.x + left.box.width).toBeCloseTo(line.box.x - 4 - 1.4, 9);
+    expect(right.box.x).toBeCloseTo(line.box.x + line.box.width + 4 + 1.4, 9);
 
     // THE FOUR EDGES CLOSE. The horizontals reach the side rules rather than stopping at
     // the text column, or the frame paints as two rules with two detached bars beside it —
@@ -372,8 +372,8 @@ describe('paint draws every published stroke and invents no geometry', () => {
       const published = stroke(fragment, side);
       expect(Number.parseFloat(rule.style.left)).toBe(published.box.x - fragment.box.x);
       expect(Number.parseFloat(rule.style.top)).toBe(published.box.y - fragment.box.y);
-      expect(rule.style.width).toBe(`${published.box.width}px`);
-      expect(rule.style.height).toBe(`${published.box.height}px`);
+      expect(Number.parseFloat(rule.style.width)).toBeCloseTo(published.box.width, 6);
+      expect(Number.parseFloat(rule.style.height)).toBeCloseTo(published.box.height, 6);
       expect(rule.style.backgroundColor.toLowerCase()).toBe('#c00000');
     }
   });
@@ -439,11 +439,11 @@ describe('paint draws every published stroke and invents no geometry', () => {
     const left = rect(container, '.docx-paragraph-border-left');
     const right = rect(container, '.docx-paragraph-border-right');
 
-    expect(top.left).toBe(left.left);
-    expect(top.right).toBe(right.right);
-    expect(bottom.left).toBe(left.left);
-    expect(bottom.right).toBe(right.right);
-    expect(left.top).toBe(top.top);
+    expect(top.left).toBeCloseTo(left.left, 6);
+    expect(top.right).toBeCloseTo(right.right, 6);
+    expect(bottom.left).toBeCloseTo(left.left, 6);
+    expect(bottom.right).toBeCloseTo(right.right, 6);
+    expect(left.top).toBeCloseTo(top.top, 6);
     expect(right.top).toBe(top.top);
     expect(left.bottom).toBe(bottom.bottom);
     expect(right.bottom).toBe(bottom.bottom);
@@ -485,10 +485,10 @@ describe('paint draws every published stroke and invents no geometry', () => {
     const bottom = rect(container, '.docx-paragraph-border-bottom');
     const left = rect(container, '.docx-paragraph-border-left');
     const right = rect(container, '.docx-paragraph-border-right');
-    expect(band.left).toBe(left.left);
-    expect(band.right).toBe(right.right);
-    expect(band.top).toBe(top.top);
-    expect(band.bottom).toBe(bottom.bottom);
+    expect(band.left).toBeCloseTo(left.left, 6);
+    expect(band.right).toBeCloseTo(right.right, 6);
+    expect(band.top).toBeCloseTo(top.top, 6);
+    expect(band.bottom).toBeCloseTo(bottom.bottom, 6);
 
     const siblings = [...band.element.parentElement!.children];
     const bandIndex = siblings.indexOf(band.element);

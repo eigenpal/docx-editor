@@ -50,6 +50,12 @@ export interface ParagraphFragmentBorders {
   readonly height: number;
 }
 
+/**
+ * How much further than `w:space` a left or right rule sits from the text, in points: a
+ * constant 28 twips, whatever the rule width, the space, the indent or the font size.
+ */
+const SIDE_RULE_OFFSET_PT = 1.4;
+
 /** A solid band of a shadowed edge's colour and width; it carries no shadow itself. */
 function shadowBand(edge: ParagraphBorderEdge): ParagraphBorderEdge {
   const { shadow: _shadow, ...rest } = edge;
@@ -79,8 +85,12 @@ export function paragraphFragmentBorders(
   const rightStroke = frame.right ? paragraphBorderStrokeWidthPt(frame.right) : 0;
   const columnLeft = regionX + indentLeft - (input.outdent?.left ?? 0);
   const columnRight = regionX + indentLeft + available + (input.outdent?.right ?? 0);
-  const boxLeft = frame.left ? columnLeft - frame.left.spacePt - leftStroke : columnLeft;
-  const boxRight = frame.right ? columnRight + frame.right.spacePt + rightStroke : columnRight;
+  const boxLeft = frame.left
+    ? columnLeft - frame.left.spacePt - SIDE_RULE_OFFSET_PT - leftStroke
+    : columnLeft;
+  const boxRight = frame.right
+    ? columnRight + frame.right.spacePt + SIDE_RULE_OFFSET_PT + rightStroke
+    : columnRight;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   let topDrawn = false;
   let contentTopRule = 0;
@@ -149,7 +159,7 @@ export function paragraphFragmentBorders(
     strokes.push({ side: 'left', edge: borders.left, box: sideBox(boxLeft, leftStroke) });
   }
   if (borders.right) {
-    const x = columnRight + borders.right.spacePt;
+    const x = columnRight + borders.right.spacePt + SIDE_RULE_OFFSET_PT;
     strokes.push({ side: 'right', edge: borders.right, box: sideBox(x, rightStroke) });
     // The right shadow band runs outside the rule, from under the top rule to the bottom band.
     if (borders.right.shadow) {
