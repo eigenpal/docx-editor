@@ -132,6 +132,9 @@ export function boundedVml(node: OoxmlNode, stories?: ReadonlySet<OoxmlNode>): b
       )
         return false;
       for (const attr of current.node.attributes) {
+        // A packed copy of the drawing (`o:gfxdata`) is opaque and never read here or
+        // anywhere else, so it spends no part of the budget.
+        if (attr.localName === 'gfxdata' && attr.namespaceUri === OFFICE) continue;
         // Equation Editor stores opaque source metadata beside its preview.
         // Never parse or emit that metadata into SVG. It still counts against
         // the complete 64 KiB input budget below.

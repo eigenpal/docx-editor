@@ -360,10 +360,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(groupPicture.crop.top),
           String(groupPicture.crop.right),
           String(groupPicture.crop.bottom),
-          String(groupPicture.frameEmu.x),
-          String(groupPicture.frameEmu.y),
-          String(groupPicture.frameEmu.cx),
-          String(groupPicture.frameEmu.cy),
+          `${groupPicture.frameEmu.x},${groupPicture.frameEmu.y}`,
+          `${groupPicture.frameEmu.cx},${groupPicture.frameEmu.cy}`,
           groupPicture.embeddedRelationshipId ?? '',
           groupPicture.linkedRelationshipId ?? '',
           groupPicture.memberNodeId,
@@ -373,6 +371,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
       : '',
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
     textArt: JSON.stringify(projection.textArt) ?? '',
+    horizontalRule: JSON.stringify(projection.horizontalRule) ?? '',
     vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
     wrapGeometry: wrap
       ? framedTokenJoin([

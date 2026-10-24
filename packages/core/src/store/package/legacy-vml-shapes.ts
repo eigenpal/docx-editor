@@ -2,7 +2,9 @@ import type { SourceCrop } from './drawing-projection.ts';
 import { RELATIONSHIPS_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { legacyChromaKeyFilter } from './legacy-vml-chromakey.ts';
 import { LEGACY_IMAGE_EFFECT_ATTRIBUTES, legacyImageEffects } from './legacy-vml-image-effects.ts';
-import type { VectorShapeProjection } from './drawing-shape-projection.ts';
+import type { VectorShapeComponent, VectorShapeProjection } from './drawing-shape-projection.ts';
+import { compoundBands, type LineCompound } from './drawing-line-compound.ts';
+import { legacyDashPattern } from './legacy-vml-textbox-stroke.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { evaluateGeometry, presetGeometryDefinition } from './drawing-geometry-engine.ts';
 import {
@@ -42,10 +44,26 @@ export interface LegacyBox {
   readonly height: number;
 }
 
-function paint(
-  node: OoxmlElement,
-  line = false
-): { fill: string; stroke: string; weight: number; strokeNode?: OoxmlElement } | null {
+/** VML `v:stroke/@linestyle` as a compound outline. */
+const LINE_STYLES: ReadonlyMap<string, LineCompound> = new Map([
+  ['single', 'sng'],
+  ['thinthin', 'dbl'],
+  ['thinthick', 'thinThick'],
+  ['thickthin', 'thickThin'],
+  ['thickbetweenthin', 'tri'],
+]);
+
+interface LegacyInk {
+  readonly fill: string;
+  readonly stroke: string;
+  readonly weight: number;
+  readonly strokeNode?: OoxmlElement;
+  /** Dash and gap lengths in outline widths; absent for solid. */
+  readonly dash?: readonly number[];
+  readonly compound: LineCompound;
+}
+
+function paint(node: OoxmlElement, line = false): LegacyInk | null {
   const list = children(node);
   if (['fill', 'stroke', 'path'].some((name) => list.filter((n) => named(n, VML, name)).length > 1))
     return null;
@@ -73,6 +91,8 @@ function paint(
           'endarrowlength',
           'startarrowwidth',
           'startarrowlength',
+          'dashstyle',
+          'linestyle',
         ].includes(attr.localName) || attr.namespaceUri
     )
   )
@@ -95,9 +115,31 @@ function paint(
   const weight = points(
     (strokeNode ? a(strokeNode, 'weight') : undefined) ?? a(node, 'strokeweight') ?? '0.75pt'
   );
+  // A dash or line style outside the known set refuses the shape rather than paint it solid.
+  const dashStyle = strokeNode ? a(strokeNode, 'dashstyle')?.trim().toLowerCase() : undefined;
+  const dash = legacyDashPattern(strokeNode);
+  if (dashStyle && dashStyle !== 'solid' && !dash) return null;
+  const compound = LINE_STYLES.get(
+    (strokeNode ? a(strokeNode, 'linestyle') : undefined)?.trim().toLowerCase() ?? 'single'
+  );
+  if (!compound) return null;
   return fill && stroke && Number.isFinite(weight) && weight >= 0 && weight <= 100
-    ? { fill, stroke, weight, strokeNode }
+    ? { fill, stroke, weight, strokeNode, ...(dash ? { dash } : {}), compound }
     : null;
+}
+
+/** The SVG dash attribute of `ink`, empty for a solid outline. */
+function dashArray(ink: LegacyInk): string {
+  return ink.dash ? ` stroke-dasharray="${ink.dash.map((d) => d * ink.weight).join(' ')}"` : '';
+}
+
+/** A vector shape's components with the ink's dash, split into its compound bands. */
+function inkComponents(
+  component: VectorShapeComponent,
+  ink: LegacyInk
+): readonly VectorShapeComponent[] {
+  const dashed = ink.dash ? { ...component, strokeDash: ink.dash } : component;
+  return ink.compound === 'sng' ? [dashed] : compoundBands(dashed, ink.compound);
 }
 
 function wordArt(node: OoxmlElement, box: LegacyBox): string | null {
@@ -373,7 +415,7 @@ export function legacyLineShape(
     strokeHex,
     strokeAlpha: 1,
     strokeWidthEmu: component.strokeWidthEmu,
-    components: Object.freeze([component]),
+    components: Object.freeze(inkComponents(component, ink)),
   });
 }
 
@@ -434,7 +476,7 @@ export function legacyBoxShape(
     strokeHex,
     strokeAlpha: 1,
     strokeWidthEmu: component.strokeWidthEmu,
-    components: Object.freeze([component]),
+    components: Object.freeze(inkComponents(component, ink)),
   });
 }
 
@@ -614,6 +656,8 @@ export function legacyShapeFragment(
   }
   const ink = paint(node);
   if (!ink) return null;
+  // The preview draws one outline; only a line painted as a vector shape draws bands.
+  if (ink.compound !== 'sng' && !ends) return null;
   const padding = ink.stroke === 'none' ? 0 : ink.weight / 2;
   if (
     ['rect', 'roundrect', 'oval'].includes(node.localName) &&
@@ -621,14 +665,14 @@ export function legacyShapeFragment(
   )
     return null;
   if (node.localName === 'rect')
-    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
+    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"${dashArray(ink)}/>`;
   if (node.localName === 'roundrect') {
     const radius = cornerRadius(node, box);
     if (radius === null) return null;
-    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="${radius}" ry="${radius}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
+    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="${radius}" ry="${radius}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"${dashArray(ink)}/>`;
   }
   if (node.localName === 'oval')
-    return `<ellipse cx="${box.x + box.width / 2}" cy="${box.y + box.height / 2}" rx="${box.width / 2}" ry="${box.height / 2}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
+    return `<ellipse cx="${box.x + box.width / 2}" cy="${box.y + box.height / 2}" rx="${box.width / 2}" ry="${box.height / 2}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"${dashArray(ink)}/>`;
   if (node.localName !== 'line' && type !== '#_x0000_t32' && !a(node, 'path')) return null;
   const path = pathPoints(node, box, ends);
   if (!path || path.some((p) => p.some((v) => !Number.isFinite(v) || Math.abs(v) > 1_000_000)))
@@ -652,5 +696,5 @@ export function legacyShapeFragment(
   const start = arrow(path, true, ink.strokeNode, ink.stroke, ink.weight),
     end = arrow(path, false, ink.strokeNode, ink.stroke, ink.weight);
   if (start === null || end === null) return null;
-  return `<polyline points="${path.map((p) => p.join(',')).join(' ')}" fill="none" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>${start}${end}`;
+  return `<polyline points="${path.map((p) => p.join(',')).join(' ')}" fill="none" stroke="${ink.stroke}" stroke-width="${ink.weight}"${dashArray(ink)}/>${start}${end}`;
 }

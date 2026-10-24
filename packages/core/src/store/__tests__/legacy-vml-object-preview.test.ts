@@ -238,6 +238,16 @@ describe('embedded object cached previews', () => {
     }
   });
 
+  test('show an ActiveX control by its preview picture and never read the control', () => {
+    const control = '<w:control r:id="rOle" w:name="CheckBox1" w:shapeid="_x0000_i1025"/>';
+    const part = parse(embeddedObject({ ole: control }));
+    const [projection] = projectDrawingsInPart(part);
+    expect(projection?.legacyGraphic?.soleImageRelationshipId).toBe('rPreview');
+    // A control that names another shape keeps the object opaque.
+    const other = parse(embeddedObject({ ole: control.replace('_x0000_i1025', '_x0000_i9') }));
+    expect(isLegacyVmlAtom(objectIn(other.root)!)).toBe(false);
+  });
+
   test('resolve only the preview image and report a metafile preview as unrenderable', async () => {
     for (const format of ['png', 'wmf'] as const) {
       const pkg = packageOf(embeddedObject(), format);

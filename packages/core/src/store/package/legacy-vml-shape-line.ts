@@ -19,7 +19,10 @@ export function shapeLineGeometry(
   if (node.localName !== 'shape' || !floating) return undefined;
   const width = points(style.get('width')),
     height = points(style.get('height'));
-  if (width !== 0 && height !== 0) return undefined;
+  // A connector that draws its template line is a line at any size; another shape is a line
+  // only when one side has no extent.
+  const connector = attribute(node, 'type') === '#_x0000_t32' && !attribute(node, 'path');
+  if (width !== 0 && height !== 0 && !connector) return undefined;
   if (![width, height].every((value) => Number.isFinite(value) && value >= 0 && value <= 10_000))
     return null;
   if (width + height === 0) return null;

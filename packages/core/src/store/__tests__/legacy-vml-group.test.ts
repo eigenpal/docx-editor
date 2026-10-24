@@ -104,4 +104,31 @@ describe('floating straight connectors', () => {
     expect(component.subpathsEmu[0]!.map((point) => point.x / EMU)).toEqual([100, 0]);
     expect(component.arrowheadsEmu![0]![0]!.x).toBe(0);
   });
+
+  test('a diagonal connector is a vector line from corner to corner', () => {
+    const [projection] = project(connector('width:2.5pt;height:295.3pt'));
+    const line = projection!.vectorShape!.components[0]!.subpathsEmu[0]!;
+    expect(line.map((point) => [point.x / EMU, point.y / EMU])).toEqual([
+      [0, 0],
+      [2.5, 295.3],
+    ]);
+    expect(projection!.legacyGraphic).toBeUndefined();
+  });
+
+  test('a packed copy of the drawing spends none of the input budget', () => {
+    const packed = connector('width:100pt;height:0').replace(
+      'o:connectortype="straight"',
+      `o:connectortype="straight" o:gfxdata="${'A'.repeat(20_000)}"`
+    );
+    expect(project(packed)[0]!.vectorShape).not.toBeNull();
+  });
+
+  test('a dashed or double outline paints as its dashes or two bands', () => {
+    const [dashed] = project(connector('width:100pt;height:0', '<v:stroke dashstyle="1 1"/>'));
+    expect(dashed!.vectorShape!.components[0]!.strokeDash).toEqual([1, 1]);
+    const [double] = project(connector('width:100pt;height:0', '<v:stroke linestyle="thinThin"/>'));
+    expect(double!.vectorShape!.components.length).toBeGreaterThan(1);
+    // A style outside the known set refuses the shape rather than paint it solid.
+    expect(project(connector('width:100pt;height:0', '<v:stroke dashstyle="1 2 3"/>'))).toEqual([]);
+  });
 });

@@ -35,6 +35,30 @@ export function legacyPlaceholderProjection(
     height = points(style.get('height'));
   const size = (n: number) => Number.isFinite(n) && n > 0 && n <= MAX_POINTS;
   if (!size(width) || !size(height)) return null;
+  return inlineLegacyProjection(node, root, width, height, {
+    hidden: style.get('visibility') === 'hidden',
+    diagnostics: Object.freeze([
+      Object.freeze({
+        code: 'unsupported-graphic' as const,
+        nodeId: root.id,
+        detail: LEGACY_PLACEHOLDER_DETAIL,
+      }),
+    ]),
+  });
+}
+
+/**
+ * A read-only projection of a legacy drawing on the line, `width`×`height` points, that paints
+ * only what `fields` give it.
+ */
+export function inlineLegacyProjection(
+  node: OoxmlElement,
+  root: OoxmlElement,
+  width: number,
+  height: number,
+  fields: Pick<DrawingProjection, 'hidden' | 'diagnostics'> &
+    Partial<Pick<DrawingProjection, 'horizontalRule'>>
+): DrawingProjection {
   return Object.freeze({
     drawingNodeId: node.id,
     ownerPartName: '',
@@ -45,7 +69,6 @@ export function legacyPlaceholderProjection(
     title: a(root, 'title') ?? '',
     description: a(root, 'alt') ?? '',
     hyperlinkHref: null,
-    hidden: style.get('visibility') === 'hidden',
     extentEmu: Object.freeze({ cx: Math.round(width * 12700), cy: Math.round(height * 12700) }),
     effectExtentEmu: EMPTY_EDGES,
     inlineDistancesEmu: EMPTY_EDGES,
@@ -60,12 +83,6 @@ export function legacyPlaceholderProjection(
     locks: Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
     effects: Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
     compatibilityBranchNodeId: null,
-    diagnostics: Object.freeze([
-      Object.freeze({
-        code: 'unsupported-graphic' as const,
-        nodeId: root.id,
-        detail: LEGACY_PLACEHOLDER_DETAIL,
-      }),
-    ]),
+    ...fields,
   });
 }

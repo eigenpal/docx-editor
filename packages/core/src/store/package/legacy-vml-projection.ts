@@ -10,7 +10,8 @@ import type {
 } from './drawing-projection.ts';
 import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
 import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
-import { legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
+import { inlineLegacyProjection, legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
+import { legacyHorizontalRule } from './legacy-vml-rule.ts';
 import {
   legacyLineReach,
   legacyPictureBorder,
@@ -361,6 +362,15 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // The text box story is ordinary WML content, bounded by story layout rather than here.
   // Everything else is bounded before the text box is read.
   if (!boundedVml(preview ?? node, preview ? undefined : storyCandidates(root))) return null;
+  // A horizontal rule takes the width of its line, which layout gives it.
+  const ruled = readOnly ? undefined : legacyHorizontalRule(root);
+  if (ruled === null) return null;
+  if (ruled)
+    return inlineLegacyProjection(node, root, 0, ruled.heightPt, {
+      hidden: styleOf(root)?.get('visibility') === 'hidden',
+      diagnostics: Object.freeze([]),
+      horizontalRule: ruled.rule,
+    });
   const textbox = readOnly ? undefined : legacyTextbox(root);
   if (textbox === null) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
@@ -396,9 +406,13 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // box as a modern line's does. The other shapes are a graphic preview, which grows by the
   // outline's reach on every side to keep the outline inside its image.
   const vector = !!line;
+  // A connector drawn corner to corner is a line too, with the reach of its ends.
+  const connector = root.localName === 'shape' && a(root, 'type') === '#_x0000_t32';
   const strokeReach =
-    !textbox && !border && (line || ['rect', 'roundrect', 'oval'].includes(root.localName))
-      ? legacyLineReach(root, !line)
+    !textbox &&
+    !border &&
+    (line || connector || ['rect', 'roundrect', 'oval'].includes(root.localName))
+      ? legacyLineReach(root, !line && !connector)
       : 0;
   if (strokeReach === null) return null;
   const inset = border?.weight ?? strokeReach,

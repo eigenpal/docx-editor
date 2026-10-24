@@ -126,6 +126,7 @@ import { rebreakForEarlierOwnBands } from './top-and-bottom-earlier-lines.ts';
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
+import { withRuleWidths } from './horizontal-rule.ts';
 export type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 
 export { propertiesOf };
@@ -239,7 +240,10 @@ export function breakParagraph(
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
   const visiblePieces = splitAtAutomaticSpacing(
-    paragraphContinuationPieces(allPieces, startOffset, flow?.showFieldCodes),
+    withRuleWidths(
+      paragraphContinuationPieces(allPieces, startOffset, flow?.showFieldCodes),
+      available
+    ),
     typography,
     measurer
   );

@@ -34,9 +34,10 @@ function inertFieldCodes(node: OoxmlElement): boolean {
  * The cached preview of an embedded OLE object: the `v:shape` of a `w:object` that holds one
  * standard picture frame, an optional built-in template, and an optional `o:OLEObject`.
  *
- * The preview is the only rendered content. The `o:OLEObject` relationship is never read here,
- * so the embedded part is never resolved, loaded, or run. Linked objects, controls, extra
- * children and unknown attributes keep the whole object opaque. Null when unsupported.
+ * The preview is the only rendered content. The `o:OLEObject` or `w:control` relationship is
+ * never read here, so the embedded part is never resolved, loaded, or run. Linked objects,
+ * controls that name another shape, extra children and unknown attributes keep the whole
+ * object opaque. Null when unsupported.
  */
 export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
   if (node.children.length > 16 || node.attributes.length > OBJECT_ATTRIBUTES.length) return null;
@@ -57,11 +58,13 @@ export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
   const templates = list.filter((n) => named(n, VML, 'shapetype'));
   const shapes = list.filter((n) => named(n, VML, 'shape'));
   const objects = list.filter((n) => named(n, OFFICE, 'OLEObject'));
+  const controls = list.filter((n) => named(n, WML_NAMESPACE_URI, 'control'));
   if (
     templates.length > 1 ||
     shapes.length !== 1 ||
-    objects.length > 1 ||
-    templates.length + shapes.length + objects.length !== list.length ||
+    objects.length + controls.length > 1 ||
+    templates.length + shapes.length + objects.length + controls.length !== list.length ||
+    (controls[0] && !inertControl(controls[0], shapes[0]!)) ||
     templates.some((template) => !boundedVml(template) || !isStandardVmlTemplate(template))
   )
     return null;
@@ -69,6 +72,25 @@ export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
   return previewPicture(shape) && (!objects[0] || inertOleObject(objects[0], shape, false))
     ? shape
     : null;
+}
+
+/**
+ * Whether `control` is the inert `w:control` of the preview `shape`: an ActiveX control shown by
+ * its cached picture. Only its attributes are read; its relationship is never resolved, and the
+ * control is never loaded or run. It must name the preview shape.
+ */
+function inertControl(control: OoxmlElement, shape: OoxmlElement): boolean {
+  return (
+    control.children.length === 0 &&
+    control.attributes.every(
+      (attr) =>
+        attr.value.length <= 256 &&
+        (attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
+          ? attr.localName === 'id'
+          : attr.namespaceUri === WML_NAMESPACE_URI && ['name', 'shapeid'].includes(attr.localName))
+    ) &&
+    a(control, 'shapeid', WML_NAMESPACE_URI) === a(shape, 'id')
+  );
 }
 
 /** A standard picture frame (`#_x0000_t75`) that shows exactly one picture. */
