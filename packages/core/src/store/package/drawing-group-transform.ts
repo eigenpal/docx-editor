@@ -55,14 +55,9 @@ export function transformComponent(
         y: offset.y + point.y * scaleY,
       }))
     ),
-    // A collapsed axis (scale 0) says nothing about the stroke; the other axis scales it.
-    strokeWidthEmu:
-      component.strokeWidthEmu *
-      (scaleX === 0
-        ? Math.abs(scaleY)
-        : scaleY === 0
-          ? Math.abs(scaleX)
-          : (Math.abs(scaleX) + Math.abs(scaleY)) / 2),
+    // A line width is an absolute length: the group's child-to-extent scale moves and sizes
+    // the geometry, never the width of its outlines.
+    strokeWidthEmu: component.strokeWidthEmu,
     ...(component.arrowheadsEmu
       ? {
           arrowheadsEmu: component.arrowheadsEmu.map((path) =>
