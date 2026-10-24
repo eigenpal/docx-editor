@@ -554,6 +554,18 @@ describe('placement on document pages', () => {
     expect(withFrame.contentBox.y).toBe(withoutFrame.contentBox.y);
     expect(withFrame.header!.box.height).toBe(2 * LINE);
   });
+
+  test('the default wrap is around, so an auto frame also leaves the flow', () => {
+    const auto = body.replace('w:wrap="around"', 'w:wrap="auto"');
+    expect(auto).not.toBe(body);
+    const layoutWith = (content: string) =>
+      layoutSemanticDocument(documentPart(text('body') + sectPr()), 1, {
+        measurer,
+        sectionFurniture: [furniture(content)],
+      }).pages[0]!;
+    expect(layoutWith(auto).contentBox.y).toBe(layoutWith(body).contentBox.y);
+    expect(layoutWith(auto).header!.box.height).toBe(2 * LINE);
+  });
 });
 
 describe('structures that keep the ordinary flow', () => {

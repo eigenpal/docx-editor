@@ -116,7 +116,7 @@ function readFrameProperties(frame: OoxmlElement): Pick<HeaderPageFrame, 'align'
   const align = attr(frame, 'xAlign') as FrameAlignment | undefined;
   const y = readTwipsMeasure(attr(frame, 'y') ?? '0');
   if (
-    (wrap !== 'around' && wrap !== 'none') ||
+    (wrap !== 'around' && wrap !== 'auto' && wrap !== 'none') ||
     attr(frame, 'vAnchor') !== 'text' ||
     attr(frame, 'hAnchor') !== 'margin' ||
     !align ||
@@ -126,7 +126,8 @@ function readFrameProperties(frame: OoxmlElement): Pick<HeaderPageFrame, 'align'
     y > MAX_FRAME_Y_TWIPS
   )
     return null;
-  // `around` and `none` place the frame the same way; neither moves the text in its band.
+  // `auto` is the default wrap, around the frame (17.18.104). `around` and `none` place the
+  // frame the same way; neither moves the text in its band.
   return { align, y: y / 20 };
 }
 
