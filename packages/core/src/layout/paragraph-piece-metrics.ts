@@ -6,6 +6,7 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
+import { measureInlineDrawing } from './drawing-layout.ts';
 import { displayText, runStylesEqual, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
@@ -126,8 +127,14 @@ export function measureFollowingTabSegment(
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     const style = styleForFontSlot(piece.style, piece.fontSlot);
-    if (piece.unsupported) {
-      width += piece.unsupported.width;
+    // An inline picture or placeholder advances the segment by its own width.
+    const atomWidth = piece.unsupported
+      ? piece.unsupported.width
+      : piece.inlineDrawing
+        ? measureInlineDrawing(piece.inlineDrawing.projection).totalWidth
+        : undefined;
+    if (atomWidth !== undefined) {
+      width += atomWidth;
       if (!sawDecimal) decimalOffset = width;
       continue;
     }
