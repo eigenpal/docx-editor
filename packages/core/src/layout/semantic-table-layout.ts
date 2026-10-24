@@ -1428,8 +1428,9 @@ export function layoutRowFragmentBounded(
           ? undefined
           : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
         cell.hideEndMark,
-        // Fixed cell boxes clip; their bottom is not a paragraph page break.
-        !vertical && ((isDetached && !clipsSpan) || exactHeightPt === undefined),
+        // Fixed cell boxes clip; their bottom is not a paragraph page break. A detached head
+        // answers to its span, not to its own row's rule.
+        !vertical && (isDetached ? !clipsSpan : exactHeightPt === undefined),
         clipsSpan ||
           clipsExactCellRow(
             vertical,
@@ -1489,7 +1490,8 @@ export function layoutRowFragmentBounded(
       physicalBottom: cellBottom,
       insets: { ...insets, top: topInset },
       nextCursor,
-      complete: cell.vMergeContinue ? true : complete,
+      // A head its fixed span clips owes nothing: what the span cannot hold is not carried.
+      complete: cell.vMergeContinue || clipsSpan ? true : complete,
       fitted,
       nestedSplitBlocked,
       ...(waits(cell) ? { flowTo } : {}),

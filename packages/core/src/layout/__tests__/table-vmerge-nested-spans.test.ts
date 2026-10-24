@@ -152,9 +152,9 @@ describe('a merge that contains another merge in a different column', () => {
     }
   });
 
-  test('a merge that only partly overlaps the outer one still declines the outer plan', () => {
-    // Column 1 merges rows 2-6, past the outer merge's last row. That shape stays refused,
-    // so the outer head keeps sizing its own row as before.
+  test('a merge that only partly overlaps the outer one is planned with it', () => {
+    // Column 1 merges rows 2-6, past the outer merge's last row. The two are decided
+    // together, so the outer head no longer sizes its own row.
     const partial =
       `<w:tbl>${TABLE_PR}` +
       tr(`${tc(lines('M', 6), RESTART)}${tc(p('b0'))}${tc(p('c0'))}`) +
@@ -166,7 +166,7 @@ describe('a merge that contains another merge in a different column', () => {
       tr(`${tc(p('a6'))}${tc(p(''), CONTINUE)}${tc(p('c6'))}`) +
       '</w:tbl>';
     const table = tablesOn(layoutOn(`${p('Lead')}${partial}`), 0)[0]!;
-    expect(table.rows[0]!.box.height).toBe(6 * LINE_PT);
+    expect(rowHeights(table)).toEqual(Array.from({ length: 7 }, () => LINE_PT));
     expectContentInsideItsTable(table);
   });
 

@@ -424,35 +424,78 @@ describe('a merge that contains merges in other columns', () => {
     expect(floorsOf(plan, 6)).toEqual([10, 10, 10, 25, 10, 25]);
   });
 
-  test('a merge ending past the outer one keeps the outer one declined', () => {
+  test('a merge ending past the outer one joins its decision, which runs to its end', () => {
+    // A staircase: the inner merge starts inside the outer one and ends after it.
     const rows = mergeRows(7, 3, [
       { column: 0, headRow: 0, endRow: 5, id: 'outer' },
       { column: 1, headRow: 2, endRow: 6, id: 'inner' },
     ]);
-    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 60, inner: 20 }))!;
-    expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(Number.POSITIVE_INFINITY);
-    for (const span of plan.spansAt(0)) plan.accept(span);
-    expect(plan.rowOptions(0)).toBeUndefined();
+    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 90, inner: 100 }))!;
+    // Outer: 90 over 50 puts 40 on row 5. Inner: 100 over rows 2-5 (70) puts 30 on row 6.
+    expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(120);
+    acceptTopDown(plan, 7);
+    expect(floorsOf(plan, 7)).toEqual([10, 10, 10, 10, 10, 40, 30]);
+    expect(plan.rowOptions(0)!.detachedSpanHeightPtByCellId?.get('outer')).toBe(90);
+    expect(plan.rowOptions(2)!.detachedSpanHeightPtByCellId?.get('inner')).toBe(100);
+    for (const rowIndex of [1, 2, 3, 4, 5, 6]) {
+      expect(plan.rowOptions(rowIndex)!.coveredFromAbove).toBe(true);
+    }
+    // Withdrawing the outer head row takes back every row the decision covered.
+    plan.withdrawAt(0);
+    for (const rowIndex of [0, 1, 2, 3, 4, 5, 6]) {
+      expect(plan.rowOptions(rowIndex)).toBeUndefined();
+    }
   });
 
-  test('two nested merges that partly overlap each other keep the outer one declined', () => {
+  test('two nested merges that partly overlap each other are decided with the outer one', () => {
     const rows = mergeRows(8, 4, [
       { column: 0, headRow: 0, endRow: 7, id: 'outer' },
       { column: 1, headRow: 1, endRow: 4, id: 'first' },
       { column: 2, headRow: 3, endRow: 6, id: 'second' },
     ]);
+    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 60, first: 50, second: 50 }))!;
+    // First: 50 over 40 puts 10 on row 4. Second then finds rows 3-6 at 50 already.
+    expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(90);
+    acceptTopDown(plan, 8);
+    expect(floorsOf(plan, 8)).toEqual([10, 10, 10, 10, 20, 10, 10, 10]);
+    expect(plan.rowOptions(3)!.detachedSpanHeightPtByCellId?.get('second')).toBe(50);
+  });
+
+  test('a head row with merges of two lengths below the outer head keeps it declined', () => {
+    const rows = mergeRows(6, 4, [
+      { column: 0, headRow: 0, endRow: 5, id: 'outer' },
+      { column: 1, headRow: 2, endRow: 3, id: 'short' },
+      { column: 2, headRow: 2, endRow: 4, id: 'long' },
+    ]);
     const plan = planVMergeRowHeights(rows, probeFrom({ outer: 60 }))!;
     expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(Number.POSITIVE_INFINITY);
   });
 
-  test('a nested merge over fixed rows only keeps the outer one declined', () => {
+  test('a nested merge over fixed rows is clipped inside the outer decision', () => {
     const rows = mergeRows(6, 3, NESTED).map((entry, rowIndex) =>
       rowIndex === 2 || rowIndex === 3
         ? ({ ...entry, height: { rule: 'exact', valuePt: 10 } } as SemanticTableRow)
         : entry
     );
-    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 60, inner: 20 }))!;
-    expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(Number.POSITIVE_INFINITY);
+    const plan = planVMergeRowHeights(rows, probeFrom({ outer: 60, inner: 30 }))!;
+    expect(plan.heightOf(plan.spansAt(0)[0]!)).toBe(60);
+    acceptTopDown(plan, 6);
+    expect(floorsOf(plan, 6)).toEqual([10, 10, 10, 10, 10, 10]);
+    expect([...(plan.rowOptions(2)!.clippedSpanCellIds ?? [])]).toEqual(['inner']);
+    expect(plan.rowOptions(0)!.clippedSpanCellIds).toBeUndefined();
+  });
+
+  test('an exact last row takes no surplus: the row above it does not grow instead', () => {
+    const rows = mergeRows(3, 2, [{ column: 0, headRow: 0, endRow: 2, id: 'head' }]).map(
+      (entry, rowIndex) =>
+        rowIndex === 2
+          ? ({ ...entry, height: { rule: 'exact', valuePt: 10 } } as SemanticTableRow)
+          : entry
+    );
+    const plan = planVMergeRowHeights(rows, probeFrom({ head: 60 }))!;
+    acceptTopDown(plan, 3);
+    expect(floorsOf(plan, 3)).toEqual([10, 10, 10]);
+    expect([...(plan.rowOptions(0)!.clippedSpanCellIds ?? [])]).toEqual(['head']);
   });
 
   test('a nest deeper than the bound is declined, and one level less is planned', () => {

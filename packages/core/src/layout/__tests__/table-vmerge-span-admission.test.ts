@@ -152,27 +152,32 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     }
   });
 
-  test('the surplus skips a row Word clips: it goes to the last row that can grow', () => {
+  test('an exact last row takes no surplus, and the head is clipped at the span bottom', () => {
     // The span's last row is `hRule="exact"`, which fixes it at its authored box (17.18.37).
-    // Handing it the surplus drops the surplus, and the merged content then runs past the
-    // table it lives in. The head row is the last row of this span that can grow.
-    const layout = layoutTiny(
+    // The surplus does not move up to the head row: every row keeps the height its own cells
+    // give it, and the merged content is clipped at the bottom of the exact row.
+    const table2 = (head: string) =>
       loadPart(
         `<w:tbl>${GRID}` +
-          `<w:tr>${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
+          `<w:tr>${tc(head, RESTART)}${tc(p('side'))}</w:tr>` +
           `<w:tr>${exactRow(400)}${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
           '</w:tbl>' +
           p('AFTER')
-      )
-    );
+      );
+    const layout = layoutTiny(table2(MERGED_CONTENT));
     const table = tablesOf(layout, 0)[0]!;
     const head = table.rows[0]!.cells[0]!;
     expect(head.rowSpan).toBe(2);
-    // The exact row keeps its 20pt; the head row took the whole surplus.
+    // The exact row keeps its 20pt, and the head row is as tall as with a one-line head.
+    const short = tablesOf(layoutTiny(table2(p('T0'))), 0)[0]!;
     expect(table.rows[1]!.box.height).toBe(20);
-    expect(table.rows[0]!.box.height).toBe(table.box.height - 20);
+    expect(table.rows[0]!.box.height).toBe(short.rows[0]!.box.height);
     expect(head.box.height).toBe(table.box.height);
-    // Every line of the merged content is inside the merged cell, and so inside the table.
+    // The merged text runs through both rows and is clipped at the bottom of the second.
+    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + head.box.height + 0.001);
+    const cut = head.blocks.at(-1)!;
+    expect(cut.kind === 'paragraph' && cut.clipToBox).toBe(true);
+    expect(layout.pages).toHaveLength(1);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
