@@ -3,6 +3,7 @@
  * how a cell spanning several columns widens them. Pure arithmetic over points; the cell
  * measuring lives in `table-autofit-widths.ts`.
  */
+import type { PreferredWidth } from './table-widths.ts';
 
 const EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
@@ -219,4 +220,45 @@ export function sameOrComputed(
   )
     ? structure.columnWidthsPt
     : computed;
+}
+
+/** The total an autofit table settles at once a column has to widen, in points. */
+export function autofitTargetPt(
+  tableWidth: PreferredWidth,
+  totalPt: number,
+  availablePt: number,
+  legacyContentAlignment = false,
+  /** What a percentage is a share of: the text column, as the width resolver reads it. */
+  percentBasisPt = availablePt
+): number {
+  // A legacy content-aligned table already spans the text column plus its outer margins.
+  if (legacyContentAlignment) return totalPt;
+  if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
+  if (tableWidth.type === 'pct' && tableWidth.value > 0)
+    // Never below the resolved total, so a column widening by a little never narrows the table.
+    return Math.max(totalPt, Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100));
+  return availablePt;
+}
+
+/**
+ * The room an autofit table may widen into for content no break can split, in points.
+ *
+ * A table whose stated `dxa` width already runs past the text column widens as far as such
+ * content asks, even past the page edge; one that fits the column stops at the column
+ * (78 to 95 unbreakable characters in a 553pt table on a 475pt column, measured).
+ */
+export function autofitRoomPt(
+  tableWidth: PreferredWidth,
+  totalPt: number,
+  availablePt: number,
+  legacyContentAlignment = false
+): number {
+  if (
+    !legacyContentAlignment &&
+    tableWidth.type === 'dxa' &&
+    tableWidth.value > 0 &&
+    totalPt > availablePt + 0.001
+  )
+    return Number.POSITIVE_INFINITY;
+  return Math.max(0, availablePt);
 }

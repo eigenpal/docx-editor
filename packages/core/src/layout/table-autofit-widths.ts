@@ -11,6 +11,8 @@ import {
 } from './table-cell-spacing.ts';
 import {
   MIN_COLUMN_PT,
+  autofitRoomPt,
+  autofitTargetPt,
   contentSizedWidths,
   sameOrComputed,
   spanAdjustedMinimums,
@@ -61,7 +63,6 @@ import {
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { preferredSpreadWidths } from './table-autofit-spread.ts';
-import type { PreferredWidth } from './table-widths.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -815,24 +816,6 @@ export function widenAutofitColumns(
   return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
 }
 
-/** The total an autofit table settles at once a column has to widen, in points. */
-export function autofitTargetPt(
-  tableWidth: PreferredWidth,
-  totalPt: number,
-  availablePt: number,
-  legacyContentAlignment = false,
-  /** What a percentage is a share of: the text column, as the width resolver reads it. */
-  percentBasisPt = availablePt
-): number {
-  // A legacy content-aligned table already spans the text column plus its outer margins.
-  if (legacyContentAlignment) return totalPt;
-  if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
-  if (tableWidth.type === 'pct' && tableWidth.value > 0)
-    // Never below the resolved total, so a column widening by a little never narrows the table.
-    return Math.max(totalPt, Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100));
-  return availablePt;
-}
-
 /**
  * Widths per context and structure. A context belongs to one pass of one flow, during which
  * no token can change, so the memo is exact; it dies with the pass.
@@ -962,7 +945,10 @@ export function autofitColumnWidthsPt(
   const availablePt = legacy ? Math.max(totalPt, contentWidthPt) : availableFor(roomWidthPt);
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
-  const roomPt = Math.max(0, availablePt - gaps);
+  const roomPt = Math.max(
+    0,
+    autofitRoomPt(structure.tableWidth, totalPt, availablePt, legacy) - gaps
+  );
   const ownWidth = structure.tableWidth.value > 0 && structure.tableWidth.type !== 'auto';
   const settle = (): readonly number[] =>
     sizedByContent
