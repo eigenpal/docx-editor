@@ -122,6 +122,17 @@ test('a flipped line member mirrors inside its box, and an edit flag is ignored'
   ]);
 });
 
+test('a member text wrap style is ignored; a member placement key still refuses', () => {
+  const group = (style: string) =>
+    '<w:pict><v:group style="position:absolute;width:100pt;height:50pt" coordsize="100,50">' +
+    `<v:line style="position:absolute;visibility:visible;${style}" from="0,0" to="0,50"/>` +
+    '</v:group></w:pict>';
+  const [kept] = project(group('mso-wrap-style:square'));
+  expect(kept!.vectorShape!.components).toHaveLength(1);
+  const [refused] = project(group('mso-position-horizontal:center'));
+  expect(refused?.vectorShape ?? null).toBeNull();
+});
+
 describe('floating straight connectors', () => {
   const connector = (style: string, children = '') =>
     `<w:pict>${LINE_TEMPLATE}<v:shape type="#_x0000_t32" style="position:absolute;margin-left:126.75pt;margin-top:14.5pt;${style};z-index:251658240" o:connectortype="straight">${children}</v:shape></w:pict>`;

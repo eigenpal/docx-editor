@@ -152,9 +152,11 @@ function supportedStyle(
       styles.has('rotation') ||
       styles.has('margin-left') ||
       styles.has('margin-top') ||
-      // A member's `mso-wrap-edited` only records an editing step; other `mso-` keys place
-      // or size it and stay outside the subset.
-      Array.from(styles.keys()).some((k) => k.startsWith('mso-') && k !== 'mso-wrap-edited'))
+      // A member's `mso-wrap-edited` only records an editing step, and `mso-wrap-style` only
+      // wraps its own text; other `mso-` keys place or size it and stay outside the subset.
+      Array.from(styles.keys()).some(
+        (k) => k.startsWith('mso-') && k !== 'mso-wrap-edited' && k !== 'mso-wrap-style'
+      ))
   )
     return null;
   // A text box reads its flip with its geometry; its text stays unmirrored.
