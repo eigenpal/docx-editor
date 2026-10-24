@@ -385,18 +385,39 @@ export function createLineExclusionProbe(context: {
 }) {
   let candidate = context.initialMetrics;
   let candidateWidth = Infinity;
+  let candidatePicture = false;
   const y = () => context.top() + (context.line().exclusionSkipBefore ?? 0) + 0.001;
   const height = () => {
     const line = context.line();
     const baseline = Math.max(line.baseline, candidate.baseline);
     const extent =
       baseline + Math.max(line.height - line.baseline, candidate.height - candidate.baseline);
-    return applyLineSpacing(context.lineSpacing, extent, baseline).height;
+    const spacing = context.lineSpacing;
+    // An auto multiple above single spacing scales the text band of a picture line, not the
+    // picture: the line keeps the picture's box plus the multiple's extra text band.
+    if (
+      spacing.rule === 'auto' &&
+      spacing.value > 240 &&
+      spacing.gridPitch === undefined &&
+      (candidatePicture || line.drawings.length > 0)
+    ) {
+      const band = context.initialMetrics.height;
+      return Math.max(
+        applyLineSpacing(spacing, band, context.initialMetrics.baseline).height,
+        extent + band * (spacing.value / 240 - 1)
+      );
+    }
+    return applyLineSpacing(spacing, extent, baseline).height;
   };
   return {
-    setMetrics: (metrics: ReturnType<TextMeasurer['lineMetrics']>, width = Infinity) => {
+    setMetrics: (
+      metrics: ReturnType<TextMeasurer['lineMetrics']>,
+      width = Infinity,
+      picture = false
+    ) => {
       candidate = metrics;
       candidateWidth = width;
+      candidatePicture = picture;
     },
     setWidth: (width: number) => {
       candidateWidth = width;

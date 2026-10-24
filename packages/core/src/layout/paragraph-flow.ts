@@ -1082,7 +1082,8 @@ export function breakParagraph(
       }
       exclusionProbe.setMetrics(
         { height: measure.lineContribution, baseline: measure.lineContribution },
-        atomWidth
+        atomWidth,
+        true
       );
       const jumpedLine = line;
       // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
