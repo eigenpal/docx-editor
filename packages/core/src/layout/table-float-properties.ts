@@ -100,7 +100,8 @@ export function readTableFloatPosition(
       : undefined;
   return {
     horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
-    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
+    // An omitted vertical anchor measures `w:tblpY` from the top margin, not from the text.
+    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'margin',
     ...(xSpec ? { xSpec } : {}),
     xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX'), true) ?? 0,
     ...(ySpec ? { ySpec } : {}),

@@ -102,7 +102,7 @@ describe('w:tblpPr is read off the table', () => {
 
   test('numeric offsets remove the one-twip storage bias', () => {
     const float = structureOf(floatingTable('<w:tblpPr w:tblpX="720" w:tblpY="200"/>')).float;
-    expect(float).toEqual({ horzAnchor: 'text', vertAnchor: 'text', xPt: 35.95, yPt: 9.95 });
+    expect(float).toEqual({ horzAnchor: 'text', vertAnchor: 'margin', xPt: 35.95, yPt: 9.95 });
   });
 
   test('encoded zero positions differ from absent or malformed offsets; clearances are unbiased', () => {
@@ -231,8 +231,18 @@ describe('a floated table lays out at its anchored position', () => {
 
   test('tblpY against the text anchor moves the table down the flow', () => {
     const inFlow = firstTable(paragraph + floatingTable('')).box.y;
-    const floated = firstTable(paragraph + floatingTable('<w:tblpPr w:tblpY="201"/>')).box.y;
+    const floated = firstTable(
+      paragraph + floatingTable('<w:tblpPr w:vertAnchor="text" w:tblpY="201"/>')
+    ).box.y;
     expect(floated - inFlow).toBeCloseTo(10, 3);
+  });
+
+  test('an omitted vertical anchor measures tblpY from the top margin', () => {
+    const omitted = firstTable(paragraph + floatingTable('<w:tblpPr w:tblpY="201"/>')).box.y;
+    const margin = firstTable(
+      paragraph + floatingTable('<w:tblpPr w:vertAnchor="margin" w:tblpY="201"/>')
+    ).box.y;
+    expect(omitted).toBeCloseTo(margin, 6);
   });
 
   test('the comprehensive fixture §16 callout table centres on the margin', () => {
