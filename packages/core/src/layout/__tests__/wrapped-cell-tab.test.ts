@@ -88,8 +88,8 @@ test('trailing tabs do not create a line', () => {
   expect(linesOf(result)).toHaveLength(1);
   expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
 });
-test('ordinary body and positional tabs retain their prior placement', () => {
-  expect(textX(layout(document({ body: true })))).toBe(0);
+test('a body tab past the edge replays like a cell tab; a positional tab keeps its placement', () => {
+  expect(textX(layout(document({ body: true })))).toBe(10);
   expect(textX(layout(document({ positional: true })))).toBe(0);
 });
 test('aligned destinations beyond the cell edge do not use left-tab replay', () => {
@@ -127,7 +127,7 @@ test('retained sessions reflow source edits without losing tab ranges', () => {
   expect(layout(part, session, 1).pages[0]).toBe(warm.pages[0]);
 });
 
-test('an active exclusion retains the earlier cell-tab policy', () => {
+test('an exclusion past the right edge leaves the tab replay in place', () => {
   const part = document({ body: true });
   const body = part.root.children.find((node) => node.kind === 'body') as OoxmlElement;
   const paragraph = body.children.find((node) => node.kind === 'paragraph')!;
@@ -151,8 +151,8 @@ test('an active exclusion retains the earlier cell-tab policy', () => {
       ],
     }
   );
-  expect(lines[0]!.spans.at(-1)!.text).toBe('\t');
-  expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(0);
+  expect(lines[0]!.spans.map((span) => span.text).join('')).toBe('ABCDEFGHI');
+  expect(lines[1]!.spans.find((span) => span.text.startsWith('J'))!.box.x).toBe(10);
 });
 
 test('consecutive tabs retain the prior policy across run boundaries', () => {
@@ -169,9 +169,7 @@ test('consecutive tabs retain the prior policy across run boundaries', () => {
   for (const repeatedSplit of [false, true]) {
     const part = document({ repeated: true, repeatedSplit });
     const result = layout(part);
-    expect(projection(result)).toEqual(
-      projection(layout(document({ repeated: true, repeatedSplit, body: true })))
-    );
+    expect(projection(result)).toEqual(projection(layout(document({ repeated: true }))));
     expect(linesOf(result)[0]!.spans.at(-1)!.text).toBe('\t');
     const session = createLayoutSession();
     const before = layout(document(), session, 0);

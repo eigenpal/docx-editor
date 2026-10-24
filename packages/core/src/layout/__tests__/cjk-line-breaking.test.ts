@@ -138,7 +138,22 @@ describe('kinsoku beside tabs and inside the chop', () => {
     // an overflow at ー took the mid-word carry, re-laid the tab with a stale advance
     // that no longer reached its stop, and closed the first line seven characters early.
     const body = `<w:p>${run('AA BBBB')}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:tab/></w:r>${run('ー天地玄黄宇宙洪')}</w:p>`;
-    const lines = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null);
+    // The stop at the edge keeps the tab on the first line.
+    const edgeStop = {
+      stops: [{ positionPt: 60, alignment: 'left' as const }],
+      defaultIntervalPt: 36,
+    };
+    const lines = breakParagraph(
+      paragraph(body),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null,
+      [],
+      edgeStop
+    );
     expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
       'AA BBBB\t',
       'ー天地玄黄宇宙洪',

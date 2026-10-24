@@ -1,11 +1,7 @@
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { paragraphContinuationPieces } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
-import {
-  cellTabReplayScope,
-  shouldReplayCellTab,
-  tabDestinationForFlow,
-} from './paragraph-tab-flow.ts';
+import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import {
   clipLineDrawingsAtTop,
@@ -1210,19 +1206,21 @@ export function breakParagraph(
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
-        const pastCellEdge = shouldReplayCellTab(
-          replayScope,
-          paragraphRtl,
-          Boolean(piece.positionalTab),
-          activeExclusionZones().length,
-          tabStops,
-          lineOrigin() + line.width,
-          rightEdge
-        );
         if (
           holdsContent() &&
-          (line.width >= lineAvailable() || pastCellEdge) &&
-          placeableSuffixes[pieceIndex]![boundary] === 1
+          tabClosesLine(
+            replayScope,
+            pageBreaksIgnored,
+            !paragraphRtl &&
+              !piece.positionalTab &&
+              (activeExclusionZones().length === 0 ||
+                lineOrigin() + lineAvailable() >= contentOriginX + rightEdge - 0.5),
+            tabStops,
+            lineOrigin() + line.width,
+            rightEdge,
+            line.width >= lineAvailable(),
+            placeableSuffixes[pieceIndex]![boundary] === 1
+          )
         )
           closeLine();
         const currentX = lineOrigin() + line.width;
