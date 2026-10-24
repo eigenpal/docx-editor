@@ -583,9 +583,43 @@ export {
   type ChartRenderContext,
   type DiagramLayoutOptions,
   type DiagramLayoutParts,
+  type DrawingEffectsRenderer,
   type DrawingGraphicProjection,
   type DrawingRenderers,
+  type MetafileRasterImage,
+  type MetafileRenderer,
+  type PictureEffectsProjection,
+  type ShapeEffectsInput,
 } from './drawing-renderers.ts';
+export type {
+  MetafileCommand,
+  MetafileDrawing,
+  MetafileFont,
+  MetafileMatrix,
+  MetafilePaint,
+  MetafilePathCommand,
+  MetafileRaster,
+  MetafileReplay,
+  MetafileReplayOptions,
+} from './metafile-drawing.ts';
+export type { PictureFrameEffects } from './drawing-picture-frame.ts';
+export type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
+// VML value readers: generic primitives for capability packages that read legacy drawings.
+export {
+  attribute as vmlAttribute,
+  children as vmlChildren,
+  color as vmlColor,
+  legacyRotationDegrees,
+  named as vmlNamed,
+  numeric as vmlNumber,
+  off as vmlOff,
+  OFFICE as VML_OFFICE_NAMESPACE_URI,
+  points as vmlPoints,
+  styleOf as vmlStyle,
+  VML as VML_NAMESPACE_URI,
+  WORD_VML as VML_WORD_NAMESPACE_URI,
+} from './legacy-vml-values.ts';
+export type { MetafileImageMime } from './image-resources.ts';
 export { CHART_GRAPHIC_DATA_URI, CHART_NAMESPACE_URI } from './chart-parts.ts';
 export { DIAGRAM_NAMESPACE_URI } from './diagram-parts.ts';
 export { DRAWINGML_MAIN_NAMESPACE_URI } from './ooxml-tree.ts';
@@ -596,7 +630,7 @@ export type {
   VectorShapeProjection,
 } from './drawing-shape-projection.ts';
 export type { ShapeColor } from './drawing-shape-color.ts';
-export type { ShapeShadow } from './drawing-shape-effects.ts';
+export type { ShapeEffectList, ShapeReflection, ShapeShadow } from './drawing-shape-effects.ts';
 export type { VectorGradient } from './drawing-gradient.ts';
 export type { VectorPattern } from './drawing-pattern-fill.ts';
 export type { EvaluatedGeometry, GeometryDefinition } from './drawing-geometry-engine.ts';
