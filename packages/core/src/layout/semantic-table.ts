@@ -92,6 +92,7 @@ import {
   DEFAULT_CELL_MARGINS,
   MAX_CELL_MARGIN_PT,
   mergeMargins,
+  raiseRowTopMargins,
   readMarginSides,
   type CellMarginsPt,
 } from './table-cell-margins.ts';
@@ -787,6 +788,7 @@ function readTableStructureUncached(
         blocks,
       });
     }
+    raiseRowTopMargins(cells);
     mergedAbove = mergedHere;
     cellsAbove = cells;
     const rowRevision = plan.revision;
