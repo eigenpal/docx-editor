@@ -160,15 +160,18 @@ describe('empty anchor paragraph pagination', () => {
       summary(render(body('Changed heading')))
     );
   });
+  // These rectangles start 20pt below the top margin, so the first paragraph's mark stays
+  // above them and only the second paragraph clears them.
   test('a paragraph with multiple anchors clears a preceding full-width rectangle', () => {
     const layout = render(
-      `<w:p>${anchor(72, 100)}</w:p><w:p>${anchor(300, 100)}${anchor(450, 100)}</w:p>`
+      `<w:p>${anchor(92, 100)}</w:p><w:p>${anchor(300, 100)}${anchor(450, 100)}</w:p>`
     );
-    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(100);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.box.y).toBe(0);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(120);
   });
   test('paragraph-relative anchors follow inherited rectangular clearance', () => {
     const layout = render(
-      `<w:p>${anchor(72, 100)}</w:p><w:p>${anchor(0, 80, 'paragraph')}${anchor(380, 80)}</w:p>`
+      `<w:p>${anchor(92, 100)}</w:p><w:p>${anchor(0, 80, 'paragraph')}${anchor(380, 80)}</w:p>`
     );
     const paragraph = paragraphFragmentsOf(layout.pages[0]!)[1]!;
     const following = layout.pages[0]!.anchoredDrawings!.find(
@@ -177,22 +180,48 @@ describe('empty anchor paragraph pagination', () => {
         drawing.height === 80 &&
         drawing.y < 300
     )!;
-    expect(paragraph.box.y).toBe(100);
+    expect(paragraph.box.y).toBe(120);
     expect(following.y).toBe(paragraph.box.y);
   });
   test('a plain empty paragraph moves below a rectangle that leaves no passage', () => {
-    const layout = render(`<w:p>${anchor(72, 100)}</w:p><w:p/>`);
-    // The 550pt rectangle covers the whole column from the top margin, 100pt down.
-    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(100);
+    const layout = render(`<w:p>${anchor(92, 100)}</w:p><w:p/>`);
+    // The 550pt rectangle covers the whole column from 20pt below the top margin, 100pt down.
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.box.y).toBe(0);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(120);
   });
   test('an empty paragraph can stay beside a narrow rectangle', () => {
     const layout = render(`<w:p>${anchor(72, 100, 'page', 100)}</w:p><w:p/>`);
     const first = paragraphFragmentsOf(layout.pages[0]!)[0]!;
     expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(first.box.height);
   });
-  test('a paragraph mark does not move its own square-wrapped anchor', () => {
+  test('a paragraph mark moves below its own square-wrapped anchor without moving it', () => {
     const layout = render(`<w:p>${anchor(0, 100, 'paragraph')}</w:p>`);
-    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.box.y).toBe(0);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.box.y).toBe(100);
     expect(layout.pages[0]!.anchoredDrawings![0]!.y).toBe(0);
+  });
+  for (const mode of [15, undefined]) {
+    test(`an anchor-only mark clears its own blocking rectangle in mode ${mode}`, () => {
+      // A paragraph-framed rectangle 3pt below the paragraph top, 17pt tall and wider than the
+      // column leaves the mark no passage, so the mark and the next paragraph move below it.
+      const layout = render(
+        `<w:p>${anchor(3, 17, 'paragraph')}</w:p>${text('Next')}`,
+        undefined,
+        1,
+        mode
+      );
+      const [own, next] = paragraphFragmentsOf(layout.pages[0]!);
+      expect(layout.pages[0]!.anchoredDrawings!.map((d) => [d.y, d.height])).toEqual([[3, 17]]);
+      expect(own!.box.y).toBe(20);
+      expect(next!.box.y).toBeCloseTo(20 + own!.box.height);
+    });
+  }
+  test('one and two own rectangles clear an anchor-only mark alike', () => {
+    const one = render(`<w:p>${anchor(0, 100, 'paragraph')}</w:p>${text('Next')}`);
+    const two = render(
+      `<w:p>${anchor(0, 100, 'paragraph')}${anchor(300, 100)}</w:p>${text('Next')}`
+    );
+    const ys = (layout: ReturnType<typeof render>) =>
+      paragraphFragmentsOf(layout.pages[0]!).map((p) => p.box.y);
+    expect(ys(one)).toEqual(ys(two));
   });
 });
