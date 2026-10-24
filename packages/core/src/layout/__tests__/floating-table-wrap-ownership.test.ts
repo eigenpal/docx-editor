@@ -86,7 +86,9 @@ test('a floating table retains its own drawing and clears following body text', 
     ).toBe(true);
 });
 
-test('a page-positioned table keeps own drawing wrapping in later cells', () => {
+// Row one grows to hold its square-wrapped picture, so the next row starts below it and its text
+// runs the full cell width; without the wrap the row keeps its text height.
+test('a page-positioned table grows the row that holds its own wrapped drawing', () => {
   const xml = squareAnchorInCell({ text: 'Cell', layoutInCell: '1' })
     .replace('<w:tblPr>', `<w:tblPr>${position}`)
     .replace('</w:tbl>', `<w:tr><w:tc>${p('Later '.repeat(30))}</w:tc></w:tr></w:tbl>`)
@@ -111,8 +113,8 @@ test('a page-positioned table keeps own drawing wrapping in later cells', () => 
     if (paragraph?.kind !== 'paragraph') throw new Error('Missing later paragraph');
     return paragraph;
   };
-  expect(later(wrapped).lines[0]!.spans[0]!.box.x).toBeGreaterThan(
-    later(unwrapped).lines[0]!.spans[0]!.box.x
-  );
-  expect(later(wrapped).lines.length).toBeGreaterThan(later(unwrapped).lines.length);
+  expect(later(wrapped).lines[0]!.spans[0]!.box.x).toBe(later(unwrapped).lines[0]!.spans[0]!.box.x);
+  expect(later(wrapped).lines.length).toBe(later(unwrapped).lines.length);
+  // The 72pt picture holds row one open; the unwrapped row is one line tall.
+  expect(later(wrapped).box.y - later(unwrapped).box.y).toBeGreaterThan(50);
 });

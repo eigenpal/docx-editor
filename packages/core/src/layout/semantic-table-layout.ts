@@ -35,7 +35,6 @@ import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { measuringFlowDeps, withoutAnchorSinks } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
-  publishAnchoredDrawingsForParagraph,
   shiftInlineDrawingRecord,
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
@@ -141,6 +140,7 @@ import {
 } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
+import { cellBottomWithAnchors, publishCellParagraphAnchors } from './cell-paragraph-anchors.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
@@ -953,50 +953,17 @@ function placeCellParagraph(
     },
   };
 
-  if (deps.inlineDrawingLayout && deps.anchorFrameBase && deps.pageContentClip) {
-    const cellBox = Object.freeze({
-      x: originX,
-      y: top,
-      width: cellContentWidth,
-      height: Math.max(0, maxBottom - top),
-    });
-    const paragraphBox = fragment.box;
-    const publication = {
-      paragraph,
-      paragraphId,
-      paragraphBox,
-      lines: records,
-    };
-    if (deps.deferAnchoredDrawings) {
-      deps.deferAnchoredDrawings({
-        ...publication,
-        cellOriginX: originX,
-        cellContentWidth,
-      });
-    } else if (deps.collectAnchoredDrawings) {
-      deps.collectAnchoredDrawings(
-        publishAnchoredDrawingsForParagraph({
-          paragraph,
-          paragraphId,
-          paragraphBox,
-          lines: records,
-          drawingLayout: deps.inlineDrawingLayout,
-          frameBase: deps.anchorFrameBase(),
-          columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
-          cellBox,
-          cellContentBox: cellBox,
-          pageClip: deps.pageContentClip(),
-          cellAnchorScope: anchorScope,
-          measurer: deps.measurer,
-          ...(deps.hostedStory
-            ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor }
-            : {}),
-          ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
-          ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
-        })
-      );
-    }
-  }
+  publishCellParagraphAnchors(deps, {
+    paragraph,
+    paragraphId,
+    paragraphBox: fragment.box,
+    lines: records,
+    originX,
+    top,
+    maxBottom,
+    cellContentWidth,
+    anchorScope,
+  });
 
   if (complete && startsParagraph && !collapseHeight && !pageZones.length && !rtl && !listItem)
     rememberCellLine(
@@ -1209,7 +1176,7 @@ function flowBlocksInBoxBounded(
 
   return {
     blocks: fragments,
-    bottom: y,
+    bottom: cellBottomWithAnchors(y, blocks, fragments, deps, inTableCell),
     cursor: {
       blockIndex,
       lineIndex,

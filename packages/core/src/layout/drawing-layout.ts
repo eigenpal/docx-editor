@@ -489,6 +489,8 @@ export interface DrawingAnchorFrameContext {
   /** Cell text column, excluding padding; the physical cell still owns clipping. */
   readonly cellContentBox?: LayoutBox;
   readonly layoutInCell: boolean;
+  /** The cell box is a real table cell, not a header, footer or text-box story box. */
+  readonly inTableCell?: boolean;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
   /**
@@ -1219,6 +1221,7 @@ export function publishAnchoredDrawingsForParagraph(
       cellBox: options.cellBox,
       cellContentBox: options.cellContentBox,
       layoutInCell,
+      inTableCell: options.cellAnchorScope?.inTableCell === true,
     });
     // An unwrapped text box sizes its own width, so its story lays out before placement.
     const textboxStory =
