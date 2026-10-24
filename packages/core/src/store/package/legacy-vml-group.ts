@@ -33,7 +33,8 @@ import {
 } from './legacy-vml-values.ts';
 
 const EMU_PER_POINT = 12_700;
-const MAX_MEMBERS = 128;
+// Diagrams drawn as one group reach a few hundred members; each paints a component or two.
+const MAX_MEMBERS = 512;
 const MAX_DEPTH = 8;
 const PICTURE_TEMPLATE = '#_x0000_t75';
 const LINE_TEMPLATE = '#_x0000_t32';
