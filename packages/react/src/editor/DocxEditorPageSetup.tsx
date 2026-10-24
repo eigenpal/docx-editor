@@ -198,7 +198,7 @@ function PageSetupDialogRoot({
         onChange={(event) => set(Math.max(0, inchesToTwips(Number(event.target.value) || 0)))}
         aria-label={t(`dialogs.pageSetup.${labelKey}`)}
       />
-      <span className="docx-dialog__unit">in</span>
+      <span className="docx-dialog__unit">{t('dialogs.paragraph.unitInches')}</span>
     </div>
   );
 
