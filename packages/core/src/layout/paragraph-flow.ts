@@ -40,7 +40,6 @@ import {
   propertiesOfRunContainer as propertiesOf,
   type FieldAwarePiece,
   type FieldPageContext,
-  type ModelRange,
   type RunPropertyCascader,
 } from './field-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE, revisionsVisible } from './revision-projection.ts';
@@ -82,7 +81,7 @@ import {
   exclusionZoneAppliesToLine,
 } from './line-exclusion-clearance.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
-import type { MutableChangeSite } from './field-pieces.ts';
+import { rangesWithin, type MutableChangeSite } from './field-pieces.ts';
 import {
   buildInlineDrawingRecord,
   inlineDrawingVerticalLayout,
@@ -717,12 +716,6 @@ export function breakParagraph(
     return true;
   };
 
-  /** The deleted ranges overlapping one line, clipped to it. */
-  const deletedWithin = (start: number, end: number): ModelRange[] =>
-    deletedRanges
-      .filter((range) => range.start < end && range.end > start)
-      .map((range) => ({ start: Math.max(range.start, start), end: Math.min(range.end, end) }));
-
   const { changeSitesOn, claimTrailingChangeSites } = collectLineChangeSites(changeSites);
 
   /**
@@ -887,7 +880,7 @@ export function breakParagraph(
     // Mark wrap advances after merging, using the shape paint receives.
     coalesceIdeographicSpans(line);
     markPendingLineWrapAdvances(line);
-    const deleted = deletedWithin(line.start, line.end);
+    const deleted = rangesWithin(deletedRanges, line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
     const sites = changeSitesOn(line, line.spans, line.changeSites);
     if (sites.length > 0) line.changeSites = sites;
@@ -1087,8 +1080,10 @@ export function breakParagraph(
         atomWidth
       );
       const jumpedLine = line;
-      if (!jumps) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
-      if (!ensurePlacementWidth(atomWidth)) continue;
+      // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
+      const rule = !!piece.inlineDrawing.projection.horizontalRule;
+      if (!jumps && !rule) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+      if (!rule && !ensurePlacementWidth(atomWidth)) continue;
       if (jumps && line !== jumpedLine) {
         // Placement refused the jump at the picture's own height and closed the line.
         applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);

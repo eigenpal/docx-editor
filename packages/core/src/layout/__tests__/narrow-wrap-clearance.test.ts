@@ -27,12 +27,42 @@ const tight: ExclusionZone = {
   },
 };
 
-test('square and rectangular tight contours clear the full prospective line box', () => {
-  for (const zone of [square, tight]) {
-    expect(narrowRectangularWrapSkip(30, 14, [zone], 0, 100, 14)).toBe(90);
-    expect(narrowRectangularWrapSkip(10, 14, [zone], 0, 100, 14)).toBe(110);
+const through: ExclusionZone = { ...tight, input: { ...tight.input, mode: 'through' } };
+
+test('square and rectangular contours clear the full prospective line box', () => {
+  // Square moves the line to the rectangle's bottom. A tight or through contour moves it in
+  // steps of the line height, to the first step clear of the contour.
+  for (const [zone, fromInside, fromAbove] of [
+    [square, 90, 110],
+    [tight, 98, 112],
+    [through, 98, 112],
+  ] as const) {
+    expect(narrowRectangularWrapSkip(30, 14, [zone], 0, 100, 14)).toBe(fromInside);
+    expect(narrowRectangularWrapSkip(10, 14, [zone], 0, 100, 14)).toBe(fromAbove);
     expect(narrowRectangularWrapSkip(0, 14, [zone], 0, 100, 14)).toBe(0);
     expect(narrowRectangularWrapSkip(120, 14, [zone], 0, 100, 14)).toBe(0);
+  }
+});
+
+test('a curved contour that leaves no glyph-wide passage steps the line by its height', () => {
+  // The left edge leans from x 3 to x 2, so a 2pt-3pt passage is left in front of it.
+  for (const mode of ['tight', 'through'] as const) {
+    const leaning: ExclusionZone = {
+      ...tight,
+      input: {
+        ...tight.input,
+        mode,
+        polygon: [
+          { x: 3, y: 20 },
+          { x: 100, y: 20 },
+          { x: 100, y: 120 },
+          { x: 2, y: 120 },
+        ],
+      },
+    };
+    expect(narrowRectangularWrapSkip(30, 14, [leaning], 0, 100, 6)).toBe(98);
+    // A glyph that fits the passage keeps the line in place.
+    expect(narrowRectangularWrapSkip(30, 14, [leaning], 0, 100, 1)).toBe(0);
   }
 });
 
@@ -278,7 +308,7 @@ test('clearing a table does not resume text inside a remaining curved exclusion'
   }
 });
 
-test('an off-column table retains the curved-only clearance policy', () => {
+test('an off-column table leaves a blocking curve to step the line by its height', () => {
   const [, curved] = combinedTableAndCurve(40, [
     { x: 0, y: 0 },
     { x: 200, y: 0 },
@@ -296,8 +326,9 @@ test('an off-column table retains the curved-only clearance policy', () => {
     }),
     sourceKind: 'table',
   };
-  expect(narrowRectangularWrapSkip(0, 14, [curved], 0, 180, 6)).toBe(0);
-  expect(narrowRectangularWrapSkip(0, 14, [table, curved], 0, 180, 6)).toBe(0);
+  // The curve covers the whole column down to 70pt: five 14pt steps clear it.
+  expect(narrowRectangularWrapSkip(0, 14, [curved], 0, 180, 6)).toBe(70);
+  expect(narrowRectangularWrapSkip(0, 14, [table, curved], 0, 180, 6)).toBe(70);
 });
 
 test('combined clearance exhausts its scan budget below every blocking zone', () => {

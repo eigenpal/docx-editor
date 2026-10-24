@@ -79,6 +79,11 @@ function isRectangularContour(polygon: readonly DrawingPoint[] | null): boolean 
   });
 }
 
+/** Tight and through wraps follow a contour; a blocked line steps down past them. */
+function steppedMode(zone: ExclusionZone): boolean {
+  return zone.input.mode === 'tight' || zone.input.mode === 'through';
+}
+
 /** Return a bounded vertical skip for an empty line, in page-content coordinates. */
 export function narrowRectangularWrapSkip(
   y: number,
@@ -100,7 +105,10 @@ export function narrowRectangularWrapSkip(
     (zone) =>
       zone.input.mode === 'square' ||
       zone.input.mode === 'topAndBottom' ||
-      (zone.input.mode === 'tight' && isRectangularContour(zone.input.polygon))
+      (steppedMode(zone) && isRectangularContour(zone.input.polygon))
+  );
+  const contour = zones.filter(
+    (zone) => steppedMode(zone) && !rectangular.includes(zone) && crossesContent(zone, left, right)
   );
   let relevant: readonly ExclusionZone[] | undefined;
   const relevantZones = () =>
@@ -116,6 +124,8 @@ export function narrowRectangularWrapSkip(
   };
   let scanlines = 0;
   let combinedBlocked = false;
+  /** A floating table took part, so contour events, not line steps, pace the scan. */
+  let besideTable = false;
   let current = y;
   for (let attempt = 0; attempt < MAX_CLEARANCE_STEPS; attempt++) {
     const active = rectangular.filter(
@@ -123,7 +133,14 @@ export function narrowRectangularWrapSkip(
         zone.verticalBand.y < current + height - EPSILON &&
         zone.verticalBand.y + zone.verticalBand.height > current + EPSILON
     );
-    if (active.length === 0 && !combinedBlocked) return current - y;
+    // A contour that the rectangles cannot stand for also blocks the line when it leaves no
+    // passage as wide as the glyph. Without this check the glyph was put into a narrower gap.
+    const contourActive = contour.some(
+      (zone) =>
+        zone.verticalBand.y < current + height - EPSILON &&
+        zone.verticalBand.y + zone.verticalBand.height > current + EPSILON
+    );
+    if (active.length === 0 && !combinedBlocked && !contourActive) return current - y;
     const wrapsTable = active.some(
       (zone) => zone.sourceKind === 'table' && crossesContent(zone, left, right)
     );
@@ -144,12 +161,14 @@ export function narrowRectangularWrapSkip(
       if (available.length === 0) break;
     }
     if (available.length > 0) {
-      // Preserve the existing curved-only path. This fallback is needed when a
-      // table's minimum passage removes the last space beside a curved drawing.
-      if (!combinedBlocked && (!wrapsTable || rectangular.length === zones.length))
-        return current - y;
+      // Probe the full contours when one crosses the line, or when a table's minimum
+      // passage can remove the last space beside a curved drawing.
+      const tableCombined = wrapsTable && rectangular.length !== zones.length;
+      besideTable ||= tableCombined;
+      if (!combinedBlocked && !tableCombined && !contourActive) return current - y;
       const events = contourEvents(relevantZones(), current, current + height);
-      if (!events) return clearBlockingBands(current);
+      if (!events)
+        return combinedBlocked || tableCombined ? clearBlockingBands(current) : current - y;
       let combined: readonly ScanlineInterval[] = [{ start: left, end: right }];
       const probes = [current + EPSILON, current + height - EPSILON];
       for (const event of events) {
@@ -168,19 +187,28 @@ export function narrowRectangularWrapSkip(
       }
       if (combined.length > 0) return current - y;
       combinedBlocked = true;
-      // Recheck at the next contour event or line-height step. Unlike rectangles,
-      // a curved exclusion can release a passage before its vertical band ends.
+      // Beside a table, recheck at the next contour event or line-height step: unlike
+      // rectangles, a curved exclusion can release a passage before its vertical band ends.
+      // A line blocked by a contour wrap alone steps down by its own height.
       current = Math.min(
         current + height,
-        events.find((event) => event > current + EPSILON) ?? Infinity
+        besideTable ? (events.find((event) => event > current + EPSILON) ?? Infinity) : Infinity
       );
       continue;
     }
-    if (wrapsTable && rectangular.length !== zones.length) combinedBlocked = true;
+    if (wrapsTable && rectangular.length !== zones.length) combinedBlocked = besideTable = true;
     let next = Infinity;
     for (const zone of active) {
       const bottom = zone.verticalBand.y + zone.verticalBand.height;
-      if (bottom > current + EPSILON) next = Math.min(next, bottom);
+      if (!(bottom > current + EPSILON)) continue;
+      // A line blocked by a contour wrap moves down in steps of its own height, to the first
+      // step clear of the contour. A square or full-width band moves it to the band's bottom.
+      next = Math.min(
+        next,
+        steppedMode(zone)
+          ? current + Math.max(1, Math.ceil((bottom - current - EPSILON) / height)) * height
+          : bottom
+      );
     }
     if (!Number.isFinite(next) || next <= current || next - y > 100_000)
       return combinedBlocked ? clearBlockingBands(current) : current - y;
