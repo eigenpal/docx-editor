@@ -35,6 +35,12 @@ import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
 import { sfntStrikeoutStrokeEm, type StrikeoutStrokeEm } from './sfnt-strikeout-metrics.ts';
 import type { OperationSnapshot } from './resolved-cache.ts';
 import {
+  SYNTHETIC_BOLD_ADVANCE_EM,
+  isSyntheticBold,
+  syntheticBoldGlyphCount,
+  withSyntheticBoldCaretAdvances,
+} from './synthetic-bold.ts';
+import {
   layoutFaceHasSmallCaps,
   layoutRunHalfPointsOf,
   shapeLayoutStyleRun,
@@ -321,7 +327,8 @@ export function createShapedMeasurer(
               : [style.shaping.script, style.shaping.direction, text]
           )}`
         : `0:${text}`;
-      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
+      const syntheticBold = isSyntheticBold(style, font);
+      const widthKey = `${isRunKerningEnabled(style) ? 1 : 0}:${syntheticBold ? 1 : 0}:${runLigatureFeatureKey(style)}:${shapingKey}`;
       let advance = byText.get(widthKey);
       if (advance === undefined) {
         let total = 0;
@@ -337,6 +344,13 @@ export function createShapedMeasurer(
           // Missing-glyph advances do not describe the browser's fallback ink.
           if (shaped.glyphs.some((glyph) => glyph.id === 0)) return fallbackWidth(text, style);
           for (const glyph of shaped.glyphs) total += glyph.advanceX;
+          // A face without bold widens each inked glyph when it draws the bold itself.
+          if (syntheticBold)
+            total +=
+              syntheticBoldGlyphCount(shaped) *
+              (layoutRunHalfPointsOf(style) / 2) *
+              SYNTHETIC_BOLD_ADVANCE_EM *
+              baseEnvironment.fixedPointScale;
         } catch {
           // Shaping refuses malformed or oversized input by design. Falling back keeps a
           // hostile font from taking the document down with it.
@@ -409,7 +423,7 @@ export function createShapedMeasurer(
           return fallbackAdvances(text, style);
         const run = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
         if (run.glyphs.some((glyph) => glyph.id === 0)) return fallbackAdvances(text, style);
-        return (
+        const advances =
           shapedCaretAdvances(
             text,
             run,
@@ -426,8 +440,14 @@ export function createShapedMeasurer(
               baseEnvironment.fixedPointScale +
               text.length * style.characterSpacingPt +
               wordSpacingAdvance(text, style)
-          )
-        );
+          );
+        if (!advances || !isSyntheticBold(style, font)) return advances;
+        const extraPt =
+          (layoutRunHalfPointsOf(style) / 2) *
+          SYNTHETIC_BOLD_ADVANCE_EM *
+          glyphSizeFactorOf(style) *
+          (style.horizontalScalePercent / 100);
+        return withSyntheticBoldCaretAdvances(advances, run, extraPt);
       } catch {
         return fallbackAdvances(text, style);
       }

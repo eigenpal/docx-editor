@@ -13,6 +13,7 @@ import {
   type PendingFormat,
 } from './caret-format-state.ts';
 import { CaretFormatHistory } from './caret-format-history.ts';
+import { createTypedDirectionOps } from './surface-typed-direction.ts';
 import {
   createSurfaceRevisionMarkup,
   revisionFacingPages,
@@ -990,6 +991,7 @@ export function mountPaginatedSurface(
     revisionDisplayMode,
     revisionFilter
   );
+  const typedDirectionOps = createTypedDirectionOps(session, revisionDisplayMode, revisionFilter);
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
     return revisionParagraphMarkVisible(part, paragraphId, revisionDisplayMode(), revisionFilter());
@@ -4540,10 +4542,12 @@ export function mountPaginatedSurface(
         text.length
       );
       const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
+      // Letters in a right-to-left script start a `w:rtl` run; other letters leave one.
+      const directionOps = plan.ops.length ? [] : typedDirectionOps(target, landing, text);
       commit(
         () =>
           withoutPendingOnRejection(
-            [...insertOps, ...pendingOps],
+            [...insertOps, ...pendingOps, ...directionOps],
             insertOps,
             selectionMark(),
             redoMark

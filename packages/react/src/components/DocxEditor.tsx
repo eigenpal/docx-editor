@@ -46,7 +46,7 @@ import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { ContextMenu as DocxEditorContextMenuCompound } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
-import { LocaleProvider, useTranslation } from '../i18n';
+import { LocaleProvider, useChromeDir, useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { ScopedByAncestorContext } from '../editor/scope-context';
@@ -312,6 +312,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     // union derived from `en.json`, while the prop takes a plain `string` so a host can
     // supply any resolver. Every key this component passes is a real catalogue key.
     const { t: catalogT } = useTranslation();
+    // A right-to-left catalog mirrors the chrome. Otherwise the chrome inherits the host
+    // page direction; the viewport keeps a left-to-right base either way.
+    const chromeDirection = useChromeDir();
     const translate = useCallback(
       (key: string, params?: Record<string, string | number>) =>
         t ? t(key, params) : catalogT(key as TranslationKey, params),
@@ -351,6 +354,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       <div
         className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
         style={CONTAINER_STYLE}
+        dir={chromeDirection}
       >
         {/* Title bar and toolbar share one surface, closed by the seam under the
           toolbar — see CHROME_BAND_STYLE. */}

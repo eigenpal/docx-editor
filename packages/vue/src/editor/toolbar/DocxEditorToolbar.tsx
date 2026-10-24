@@ -19,6 +19,7 @@ import {
 import { docxSlotOf, unwrapFragment } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
+import { useTranslation } from '../../i18n';
 import { useScopeClassName } from '../scope-context';
 import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
@@ -197,8 +198,11 @@ function iconPart(slot: ChromeSlotId): PartLike {
   return part;
 }
 
-function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image).map((group) => {
+function buildDefaultGroups(
+  image: EditorSnapshot['image'],
+  direction: boolean
+): readonly DefaultGroup[] {
+  return formattingBarChromeGroups(image, { direction }).map((group) => {
     if (group.id === 'alignment') {
       return {
         id: group.id,
@@ -359,7 +363,11 @@ const DocxEditorToolbarRoot = defineComponent({
     const image = useEditorState(selectToolbarImage);
     const toolbarDisabled = useEditorState(selectToolbarDisabled);
     const tableChromeVisible = useEditorState(selectTableChromeVisible);
-    const defaultGroups = computed(() => buildDefaultGroups(image.value));
+    // A right-to-left interface language puts the paragraph direction buttons in the bar.
+    const translation = useTranslation();
+    const defaultGroups = computed(() =>
+      buildDefaultGroups(image.value, translation.dir === 'rtl')
+    );
     const defaultSlots = computed(
       () =>
         new Set(defaultGroups.value.flatMap((group) => group.entries.map((entry) => entry.slot)))
@@ -554,6 +562,7 @@ const DocxEditorToolbarRoot = defineComponent({
           'aria-label': props.t?.('formattingBar.label') ?? label('formattingBar.label'),
           'data-testid': 'docx-toolbar',
           class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
+          dir: translation.dir === 'rtl' ? 'rtl' : undefined,
           ...(measuring.value ? { 'data-overflow': '' } : {}),
           onMousedown: guardToolbarMousedown,
         },

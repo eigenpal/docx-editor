@@ -83,6 +83,7 @@ import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
 import { usePopupEscape } from '../toolbar/usePopupEscape';
+import { useChromeDir } from '../../i18n';
 
 const MENU_PARTS: Record<ChromeMenuId, Component> = {
   file: MenuFile,
@@ -202,6 +203,7 @@ const DocxEditorMenuRoot = defineComponent({
     const dialogs = useDialogHost();
     const popups = usePopupConfig();
     const scopeClassName = useScopeClassName();
+    const chromeDir = useChromeDir();
     const editorRef = useDocxEditor();
     const { t: catalogT } = useTranslation();
     const openMenu = ref<MenuId | null>(null);
@@ -538,6 +540,7 @@ const DocxEditorMenuRoot = defineComponent({
             // One line when the bar measures itself; the stylesheet reads this.
             {...(props.overflow ? { 'data-overflow': '' } : {})}
             class={`${scopeClassName}docx-menubar${props.className ? ` ${props.className}` : ''}`}
+            dir={chromeDir()}
             onMousedown={guardToolbarMousedown}
             onKeydown={(event: KeyboardEvent) => {
               if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

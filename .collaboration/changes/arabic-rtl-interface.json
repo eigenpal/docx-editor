@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Typed Arabic and Hebrew letters joined the run at the caret, and setRunProperties refused w:rtl. Right-to-left sections placed columns from left to right.",
+  "after": "Typed right-to-left letters add w:rtl to the typed range in the insert transaction. setRunProperties may add or replace w:rtl and keeps it when a write leaves it out. Right-to-left sections place the first column at the right.",
+  "reason": "Peers replicate the resulting w:rtl run property through the canonical primitive journal, which released participants already apply for loaded documents. Column order, bidi resolution, and interface direction are local layout and chrome behavior. Shared nodes, offsets, and the format are unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-typed-rtl-direction.test.ts",
+    "packages/core/src/editor/__tests__/typed-text-direction.test.ts",
+    "packages/core/src/store/__tests__/additive-run-direction.test.ts",
+    "packages/core/src/layout/__tests__/section-column-geometry.test.ts",
+    "packages/core/src/layout/__tests__/rtl-opaque-atoms.test.ts"
+  ],
+  "changeset": "arabic-rtl-interface",
+  "migration": null
+}

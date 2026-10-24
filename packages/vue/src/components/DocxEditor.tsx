@@ -456,6 +456,9 @@ const DocxEditorFrame = defineComponent({
             {
               class: `docx-editor${isDark.value ? ' dark' : ''}${props.class ? ` ${props.class}` : ''}`,
               style: CONTAINER_STYLE,
+              // A right-to-left catalog mirrors the chrome. Otherwise the chrome inherits the
+              // host page direction; the viewport keeps a left-to-right base either way.
+              dir: translation.dir === 'rtl' ? 'rtl' : undefined,
             },
             [
               h('div', { style: CHROME_BAND_STYLE }, [

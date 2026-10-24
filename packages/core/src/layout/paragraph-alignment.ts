@@ -409,7 +409,10 @@ export function alignSpans(
   lastLineShrinks = false,
   passages?: readonly LinePassage[]
 ): readonly StyleSpanRecord[] {
-  const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
+  // A right-to-left last line aligns to the right, unless the flow kept its last word by
+  // borrowing inter-word space: then it compresses as justified text does.
+  const effective =
+    alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks ? 'right' : alignment;
   const split = splitBidiTrailingWhitespace(spans, measurer);
   if (passages && passages.length > 1 && !paragraphRtl && !split.some(isRightToLeft)) {
     const aligned = alignPassageSpans(split, passages, (part, passage, isLastPart) =>

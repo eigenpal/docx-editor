@@ -55,11 +55,23 @@ function rows(result: ReturnType<typeof run>) {
   );
 }
 
-test('a cell marker sets a row minimum without adding height to its final printable line', () => {
+// Measured: a 20pt mark under 5pt text and a 10pt mark under 1pt text leave each row as tall
+// as its text line, in left-to-right and right-to-left paragraphs. An empty end paragraph
+// takes the mark's own line.
+const emptyMark = (mark = 20) =>
+  `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr></w:p>`;
+
+test('a cell end mark sets no row minimum under text', () => {
   const result = run(table(paragraph('Short')));
-  expect(rows(result)[0]!.box.height).toBe(20);
+  expect(rows(result)[0]!.box.height).toBe(5);
   expect(linesOf(result)[0]!.box.height).toBe(5);
   expect(linesOf(result)[0]!.baseline).toBe(4);
+  const rtl = run(table(paragraph('Short').replace('<w:pPr>', '<w:pPr><w:bidi/>')));
+  expect(rows(rtl)[0]!.box.height).toBe(5);
+});
+
+test('an empty end paragraph takes the mark line', () => {
+  expect(rows(run(table(emptyMark())))[0]!.box.height).toBe(20);
 });
 
 test('wrapped small text grows beyond the cell marker without enlarging its last line', () => {
@@ -70,11 +82,11 @@ test('wrapped small text grows beyond the cell marker without enlarging its last
   expect(rows(result)[0]!.box.height).toBe(lines.length * 5);
 });
 
-test('no text line grows from its mark, and the row floor is the final mark', () => {
+test('no text line grows from its mark, and the row holds its text lines', () => {
   const result = run(table(paragraph('First') + paragraph('Last'), '<w:vAlign w:val="bottom"/>'));
   const lines = linesOf(result);
   expect(lines.map((line) => line.box.height)).toEqual([5, 5]);
-  expect(rows(result)[0]!.box.height).toBe(20);
+  expect(rows(result)[0]!.box.height).toBe(10);
   expect(lines[1]!.box.y + lines[1]!.box.height).toBe(rows(result)[0]!.box.height);
   const single = run(table(paragraph('Last'), '<w:vAlign w:val="bottom"/>'));
   const row = rows(single)[0]!;
@@ -84,7 +96,7 @@ test('no text line grows from its mark, and the row floor is the final mark', ()
 
 for (const [rule, expected] of [
   ['exact', 8],
-  ['atLeast', 20],
+  ['atLeast', 8],
 ] as const) {
   test(`an ${rule} row retains its authored height constraint`, () => {
     const result = run(
@@ -95,19 +107,18 @@ for (const [rule, expected] of [
   });
 }
 
-test('a row moves when the printable text fits but its marker minimum does not', () => {
+test('a row moves when its empty end paragraph mark does not fit', () => {
   const prefix = '<w:p><w:r><w:rPr><w:sz w:val="30"/></w:rPr><w:t>Prefix</w:t></w:r></w:p>';
-  const result = run(prefix + table(paragraph('Cell')), 30);
+  const result = run(prefix + table(emptyMark()), 30);
   expect(result.pages).toHaveLength(2);
   expect(result.pages[0]!.fragments.every((f) => f.kind !== 'table')).toBe(true);
   expect(rows(result)[0]!.box.height).toBe(20);
 });
 
-test('split rows reserve the marker minimum in their final fragment without losing text', () => {
+test('split rows keep all their text', () => {
   const text = 'Small text '.repeat(35);
   const result = run(table(paragraph(text)), 30);
   expect(result.pages.length).toBeGreaterThan(1);
-  expect(rows(result).at(-1)!.box.height).toBeGreaterThanOrEqual(20);
   expect(rows(result).every((row) => row.box.height <= 30)).toBe(true);
   expect(
     linesOf(result)
@@ -154,7 +165,7 @@ test('a script line keeps its full-size height in either cell-end role', () => {
 });
 
 test('reused mark styles still read current font availability and metrics', () => {
-  const part = load(table(paragraph('Content')));
+  const part = load(table(emptyMark()));
   const body = part.root.children[0]!;
   if (body.kind === 'textValue') throw Error('Missing body');
   const node = body.children.find((child) => child.kind === 'table')!;

@@ -5867,6 +5867,10 @@ export { LOADING_SNAPSHOT }
 
 // @public (undocumented)
 export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
+    dir: {
+        default: undefined;
+        type: PropType<'ltr' | 'rtl'>;
+    };
     i18n: {
         default: undefined;
         type: PropType<Translations>;
@@ -5874,11 +5878,16 @@ export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    dir: {
+        default: undefined;
+        type: PropType<'ltr' | 'rtl'>;
+    };
     i18n: {
         default: undefined;
         type: PropType<Translations>;
     };
 }>> & Readonly<{}>, {
+    dir: "ltr" | "rtl";
     i18n: _docx_editor_dev_i18n.PartialLocaleStrings;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -5886,6 +5895,7 @@ export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
 export interface LocaleProviderProps {
     // (undocumented)
     children?: DocxEditorChildren;
+    dir?: 'ltr' | 'rtl';
     // (undocumented)
     i18n?: Translations;
 }
@@ -8014,6 +8024,7 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 // @public
 export function useTranslation(): {
     catalogue: ShallowRef<LocaleStrings>;
+    dir: 'ltr' | 'rtl';
     lang: string;
     t: TFunction;
 };

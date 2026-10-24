@@ -1,6 +1,9 @@
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
+import { measuredWidth } from './optional-hyphen-joining.ts';
+import type { TextMeasurer } from './semantic-records.ts';
+import type { FontSlot } from './script-itemization.ts';
 
 /**
  * Spaces that may hang/clip at a line end instead of wrapping onto a new line. Zero-width
@@ -94,3 +97,69 @@ export function appendWordEnd(
     }
   );
 }
+
+/**
+ * Whether the spaces that end a paragraph take room on its last line instead of hanging. They
+ * hang only when their run has the paragraph's direction, which is also where alignment puts
+ * them (`bidi-trailing-spaces.ts`).
+ */
+function endSpacesTakeRoom(style: StyleSpanRecord['style'], paragraphRtl: boolean): boolean {
+  const direction = style.shaping?.runDirection;
+  return direction !== undefined && (direction === 'rtl') !== paragraphRtl;
+}
+
+/**
+ * The paragraph-end spaces after a candidate that ends at `offset` in `pieces[index]`.
+ * `takesRoom`: only spaces follow, and the candidate's own run keeps them on the line, so they
+ * neither hang nor clip. `room`: the advance of the following spaces that take room, which the
+ * last word must fit together with, or the line keeps a word that wraps. Both are off when
+ * anything else follows the candidate.
+ */
+export function paragraphEndSpacesOf<
+  P extends {
+    readonly text: string;
+    readonly style: StyleSpanRecord['style'];
+    readonly fontSlot?: FontSlot;
+  },
+>(
+  pieces: readonly P[],
+  paragraphRtl: boolean,
+  measurer: TextMeasurer
+): (index: number, offset: number, candidate: string) => EndSpaces {
+  // The paragraph's last visible character, found once: only spaces follow a position at or
+  // past it, so each candidate's test is a comparison and a long space run stays linear.
+  let lastIndex = -1;
+  let lastOffset = -1;
+  for (let at = pieces.length - 1; at >= 0 && lastIndex < 0; at--) {
+    const text = pieces[at]!.text;
+    for (let i = text.length - 1; i >= 0; i--) {
+      const char = text[i];
+      if (char !== ' ' && char !== '\u3000' && char !== '\u200b') {
+        lastIndex = at;
+        lastOffset = i;
+        break;
+      }
+    }
+  }
+  return (index, offset, candidate) => {
+    if (index < lastIndex || (index === lastIndex && offset <= lastOffset)) return NO_END_SPACES;
+    const takesRoom = endSpacesTakeRoom(pieces[index]!.style, paragraphRtl);
+    // Only the last word needs the room; a space candidate is itself one of the spaces.
+    if (isCollapsibleLineEndWhitespace(candidate)) return takesRoom ? TAKES_ROOM : NO_END_SPACES;
+    let room = 0;
+    for (let at = index; at < pieces.length; at++) {
+      const text = at === index ? pieces[at]!.text.slice(offset) : pieces[at]!.text;
+      if (text.length > 0 && endSpacesTakeRoom(pieces[at]!.style, paragraphRtl))
+        room += measuredWidth(text, pieces[at]!.style, pieces[at]!.fontSlot, measurer);
+    }
+    return { takesRoom, room };
+  };
+}
+
+interface EndSpaces {
+  readonly takesRoom: boolean;
+  readonly room: number;
+}
+
+const TAKES_ROOM = { takesRoom: true, room: 0 } as const;
+const NO_END_SPACES = { takesRoom: false, room: 0 } as const;

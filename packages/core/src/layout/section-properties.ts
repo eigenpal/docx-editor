@@ -71,6 +71,8 @@ export interface SectionColumns {
   readonly separator?: boolean;
   /** Authored `w:col` geometry when `equalWidth` is false. */
   readonly definitions?: readonly SectionColumnDefinition[];
+  /** A right-to-left section (`w:bidi`): the first column is the rightmost. */
+  readonly rightToLeft?: true;
 }
 
 /**
@@ -411,6 +413,7 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
       equalWidth,
       separator: cols ? onOffAttribute(cols, 'sep', false) : false,
       definitions: equalWidth ? [] : columnDefinitions(cols, count, contentWidthTwips),
+      ...(count > 1 && readOnOffChild(sectPr, 'bidi') ? { rightToLeft: true as const } : {}),
     },
     // Render-truthful: Word writes swapped dimensions AND the attribute, but a file may
     // carry only one. Width exceeding height IS a landscape page whatever the attribute

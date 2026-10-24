@@ -62,10 +62,13 @@ export function isCompoundBorderVal(val: string): boolean {
 
 /**
  * Visual thickness of one border edge in points — the stroke box height/width layout
- * publishes. Double borders include both strokes and their gap. Other compound styles
- * retain their existing double-band approximation; everything else uses `w:sz`.
+ * publishes. Double borders include both strokes and their gap, triple borders all three
+ * strokes and both gaps. Other compound styles retain their existing double-band
+ * approximation; everything else uses `w:sz`.
  */
 export function borderStrokeWidthPt(val: string, widthPt: number): number {
+  // A triple rule is three strokes of the authored width with equal gaps: five widths.
+  if (val === 'triple') return Math.max(widthPt, COMPOUND_BORDER_MIN_STROKE_PT) * 5;
   if (isCompoundBorderVal(val)) return computeDoubleBorderMetricsPt(widthPt).extentPt;
   return widthPt;
 }

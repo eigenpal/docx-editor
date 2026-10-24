@@ -195,7 +195,7 @@ function ReviewRoot({
   const review = useReview(railQuery);
   const setReviewPaneOpen = review.setPaneOpen;
   // The root provides the context `useReviewLabel` reads, so it resolves from the prop.
-  const { t: bundled } = useTranslation();
+  const { t: bundled, dir: chromeDir } = useTranslation();
   const t = useCallback((key: TranslationKey) => hostT?.(key) ?? bundled(key), [hostT, bundled]);
   const railRef = useRef<HTMLElement | null>(null);
   // Claim the gutter. Without this the viewport reserved it for every consumer, mounted
@@ -518,6 +518,7 @@ function ReviewRoot({
   const shared = {
     ref: railRef as React.Ref<HTMLElement>,
     className: `docx-review${className ? ` ${className}` : ''}`,
+    dir: chromeDir === 'rtl' ? 'rtl' : undefined,
     'data-testid': 'review-rail',
     'data-count': items.length,
     // The COLUMN presentation, not the engine's pane state: compact keeps the strip

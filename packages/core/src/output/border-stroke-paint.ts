@@ -55,9 +55,25 @@ export function applyParagraphBorderStyle(
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
       return;
     }
+    case 'triple': {
+      // Three equal strokes with equal gaps fill the five-stroke band layout published.
+      const line = thicknessPx / 5;
+      const ink = `#${color}`;
+      const band = (from: number, to: number, fill: string) =>
+        `${fill} ${from * line}px, ${fill} ${to * line}px`;
+      const stops = [
+        band(0, 1, ink),
+        band(1, 2, 'transparent'),
+        band(2, 3, ink),
+        band(3, 4, 'transparent'),
+        band(4, 5, ink),
+      ];
+      rule.style.backgroundColor = 'transparent';
+      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'right' : 'bottom'}, ${stops.join(', ')})`;
+      return;
+    }
     case 'double':
     case 'doubleWave':
-    case 'triple':
     case 'thinThickSmallGap':
     case 'thickThinSmallGap':
     case 'thinThickThinSmallGap':

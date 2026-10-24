@@ -17,6 +17,11 @@
       "import": "./dist/en.mjs",
       "require": "./dist/en.js"
     },
+    "./ar": {
+      "types": "./dist/ar.d.ts",
+      "import": "./dist/ar.mjs",
+      "require": "./dist/ar.js"
+    },
     "./de": {
       "types": "./dist/de.d.ts",
       "import": "./dist/de.mjs",

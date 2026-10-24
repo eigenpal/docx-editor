@@ -473,7 +473,12 @@ export function applyLineSpacing(
   }
   const delta = height - naturalHeight;
   if (delta < 0) {
-    return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
+    // A multiple below single scales the baseline with the line instead of keeping the
+    // natural baseline and cutting the descent: measured against reference renders of
+    // documents under 0.8x spacing, every body line then lands within 0.3pt.
+    const baseline =
+      spacing.rule === 'auto' ? naturalBaseline * (spacing.value / 240) : naturalBaseline;
+    return { height, baseline: Math.max(0, Math.min(baseline, height)) };
   }
   // atLeast: grow the box UPWARD, so the glyph band keeps its depth below the baseline. The
   // growth is above the band, so none of it may hang below the bottom text margin.

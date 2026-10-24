@@ -96,6 +96,9 @@ export function lastCodePointOf(text: string): number | undefined {
  */
 export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–', '—']);
 
+/** Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and their presentation forms. */
+const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
+
 /**
  * Characters that normally join adjacent text. Run-boundary whitespace tests exclude
  * these characters. Ordinary spaces and oversized groups keep their existing behavior.
@@ -231,7 +234,10 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
     } else if (
       BREAK_AFTER_DASH.has(ch) &&
       index > 0 &&
-      text[index - 1] !== ' ' &&
+      // A dash after a space opens its word ("-word") and stays with it, except before a
+      // right-to-left letter: there the dash may end the line alone, as the reference
+      // renders "... -word" in Arabic.
+      (text[index - 1] !== ' ' || RIGHT_TO_LEFT_LETTER.test(text[index + 1] ?? '')) &&
       index + 1 < text.length &&
       text[index + 1] !== ' ' &&
       text[index + 1] !== ZERO_WIDTH_SPACE &&

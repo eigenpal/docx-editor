@@ -60,17 +60,13 @@ function markerSlotX(item: ResolvedListItem, markerWidth: number): number {
   // The hanging spelling wins when a hostile file states both (Word's collapse); a
   // NEGATIVE firstLine is the hang spelled the other way and stays on the hanging model.
   const firstLineOffset = hanging > 0 ? -hanging : item.indent.firstLine;
-  // Markers stop at the content origin — except for a paragraph the author pulled INTO the
-  // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
-  // the number to the RIGHT of the text it numbers.
-  const floor = Math.min(0, textLeft);
-  const slotLeft = Math.max(floor, textLeft + firstLineOffset);
+  // A hanging marker may pass the margin, on either side and from any indent: measured
+  // with `w:left` 0 and -284 under hangs of 720 and 426, in both directions.
   // lvlJc aligns the marker around the first-line position, not within the gap
   // between that position and the paragraph's text indent.
-  let x = slotLeft;
+  let x = textLeft + firstLineOffset;
   if (item.markerAlign === 'right') x -= markerWidth;
   else if (item.markerAlign === 'center') x -= markerWidth / 2;
-  if (x < floor) x = floor;
   return x;
 }
 

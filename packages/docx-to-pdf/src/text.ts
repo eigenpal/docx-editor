@@ -15,6 +15,7 @@ import {
   noteSeparatorRuleBox,
   glyphSizeFactorOf,
   styleForFontSlot,
+  SYNTHETIC_BOLD_ADVANCE_EM,
   TAB_LEADER_GLYPH,
   tabLeaderPattern,
   type BlockFragmentRecord,
@@ -553,9 +554,17 @@ export class TextWriter {
           });
         }
       }
+      // A face without bold widens each inked glyph it emboldens, as layout measured it.
+      let emboldened = 0;
+      if (style.bold && !activeFace.bold)
+        for (let i = cluster.glyphStart; i < cluster.glyphEnd; i++) {
+          const glyph = shaped.run.glyphs[i]!;
+          if (glyph.advanceX > 0 && glyph.outline.path.length > 0) emboldened++;
+        }
       extra +=
         text.length * style.characterSpacingPt +
-        (text.match(/ /g)?.length ?? 0) * (style.shaping?.wordSpacingPt ?? 0);
+        (text.match(/ /g)?.length ?? 0) * (style.shaping?.wordSpacingPt ?? 0) +
+        emboldened * activeSize * SYNTHETIC_BOLD_ADVANCE_EM * horizontal;
     }
     batch.flush();
     // The render mode outlives `ET`; every other stroke in this writer sets its own colour

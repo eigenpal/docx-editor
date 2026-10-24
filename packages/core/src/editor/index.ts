@@ -198,6 +198,7 @@ export {
   chromeSlotId,
   defaultChromeGroups,
   formattingBarChromeGroups,
+  type FormattingBarOptions,
   type ChromeControl,
   type ChromeControlId,
   type ChromeControlState,

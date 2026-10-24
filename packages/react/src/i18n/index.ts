@@ -1,4 +1,4 @@
-export { LocaleProvider, useTranslation } from './LocaleContext';
+export { LocaleProvider, useChromeDir, useTranslation } from './LocaleContext';
 export type { LocaleProviderProps } from './LocaleContext';
 export { useChromeTranslate, type ChromeTranslate } from './useChromeTranslate';
 

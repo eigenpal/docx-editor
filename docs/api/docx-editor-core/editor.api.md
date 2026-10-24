@@ -1819,7 +1819,12 @@ export interface FontUrlSource {
 export const formatInches: (twips: number) => string;
 
 // @public
-export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[];
+export function formattingBarChromeGroups(image: ImageContext | null, options?: FormattingBarOptions): readonly ChromeGroup[];
+
+// @public
+export interface FormattingBarOptions {
+    readonly direction?: boolean;
+}
 
 // @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];

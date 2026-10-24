@@ -96,6 +96,16 @@ export const ACCEPTED_RUN_PROPERTIES = [
   'w', // horizontal scaling
   'kern',
 ] as const;
+
+/**
+ * Run properties an op may ADD or replace, but that a write which leaves them out keeps.
+ *
+ * `w:rtl` marks text typed in a right-to-left script. It is a property of the text, not of
+ * its formatting: Clear Formatting keeps it, the format painter does not carry it, and a
+ * bold toggle that rewrites a run's formatting does not drop it. So it stays outside
+ * {@link ACCEPTED_RUN_PROPERTIES}, whose members a write replaces as a set.
+ */
+export const ADDITIVE_RUN_PROPERTIES = ['rtl'] as const;
 // `w:rStyle` is deliberately ABSENT. It is preserved, not accepted: this list is the set a
 // property write REPLACES, so admitting the character style would make a bold toggle delete
 // it. `insertHyperlink` writes `w:rStyle` itself, as part of making the run a link, which is
