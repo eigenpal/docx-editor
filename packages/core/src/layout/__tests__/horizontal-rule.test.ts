@@ -31,7 +31,12 @@ describe('horizontal rules', () => {
     const [rule] = project(RULE);
     expect(rule!.kind).toBe('inline');
     expect(rule!.extentEmu).toEqual({ cx: 0, cy: 1.5 * EMU });
-    expect(rule!.horizontalRule).toEqual({ fillHex: 'A0A0A0', shaded: true });
+    expect(rule!.horizontalRule).toEqual({
+      fillHex: 'A0A0A0',
+      shaded: true,
+      widthFraction: 1,
+      align: 'center',
+    });
     expect(rule!.vectorShape).toBeNull();
   });
 
@@ -52,12 +57,18 @@ describe('horizontal rules', () => {
     expect(widenedRule(input as never, 100).projection.vectorShape!.components).toHaveLength(1);
   });
 
-  test('a rule with its own width or percentage stays outside the subset', () => {
-    for (const shape of [
-      RULE.replace('width:0pt', 'width:100pt'),
-      RULE.replace('o:hr="t"', 'o:hr="t" o:hrpct="500"'),
-    ]) {
-      for (const projection of project(shape)) expect(isLegacyPlaceholder(projection)).toBe(true);
-    }
+  test('a rule with a share of its line draws the bar at its alignment', () => {
+    const [rule] = project(RULE.replace('o:hr="t"', 'o:hr="t" o:hrpct="500"'));
+    const input = { drawingNodeId: 'd', ownerPartName: '', projection: rule!, resource: {} };
+    const wide = widenedRule(input as never, 400);
+    // The drawing keeps the whole line; the bar is its middle half.
+    expect(wide.projection.extentEmu.cx).toBe(400 * EMU);
+    const xs = wide.projection.vectorShape!.components[0]!.subpathsEmu[0]!.map((p) => p.x / EMU);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([100, 300]);
+  });
+
+  test('a rule with its own width and no share stays outside the subset', () => {
+    for (const projection of project(RULE.replace('width:0pt', 'width:100pt')))
+      expect(isLegacyPlaceholder(projection)).toBe(true);
   });
 });

@@ -14,14 +14,14 @@ import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 const EMU_PER_POINT = 12_700;
 const widened = new WeakMap<InlineDrawingLayoutInput, Map<number, InlineDrawingLayoutInput>>();
 
-function band(cx: number, top: number, bottom: number, fillHex: string) {
+function band(left: number, right: number, top: number, bottom: number, fillHex: string) {
   return Object.freeze({
     subpathsEmu: Object.freeze([
       Object.freeze([
-        Object.freeze({ x: 0, y: top }),
-        Object.freeze({ x: cx, y: top }),
-        Object.freeze({ x: cx, y: bottom }),
-        Object.freeze({ x: 0, y: bottom }),
+        Object.freeze({ x: left, y: top }),
+        Object.freeze({ x: right, y: top }),
+        Object.freeze({ x: right, y: bottom }),
+        Object.freeze({ x: left, y: bottom }),
       ]),
     ]),
     subpathsClosed: Object.freeze([true]),
@@ -37,11 +37,15 @@ function ruleShape(projection: DrawingProjection, cx: number): VectorShapeProjec
   const rule = projection.horizontalRule;
   const cy = projection.extentEmu.cy;
   if (!rule || cx <= 0) return null;
+  // The bar takes its share of the line at its alignment; the drawing keeps the whole line.
+  const width = Math.round(cx * rule.widthFraction);
+  const left = Math.round((cx - width) * { left: 0, center: 0.5, right: 1 }[rule.align]);
+  const right = left + width;
   // A shaded rule is a groove: the fill colour above, a light band below.
   const middle = Math.round(cy / 2);
   const components = rule.shaded
-    ? [band(cx, 0, middle, rule.fillHex), band(cx, middle, cy, RULE_SHADE_HEX)]
-    : [band(cx, 0, cy, rule.fillHex)];
+    ? [band(left, right, 0, middle, rule.fillHex), band(left, right, middle, cy, RULE_SHADE_HEX)]
+    : [band(left, right, 0, cy, rule.fillHex)];
   const subpathsEmu = components.map((component) => component.subpathsEmu[0]!);
   return Object.freeze({
     extentEmu: Object.freeze({ cx, cy }),

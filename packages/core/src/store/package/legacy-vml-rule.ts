@@ -13,6 +13,10 @@ export interface HorizontalRuleProjection {
   readonly fillHex: string;
   /** The lower band is light grey, as a groove. */
   readonly shaded: boolean;
+  /** The bar's share of its line, in (0, 1]. */
+  readonly widthFraction: number;
+  /** Where a bar shorter than its line sits on it. */
+  readonly align: 'left' | 'center' | 'right';
 }
 
 /** The light lower band of a shaded rule. */
@@ -21,7 +25,7 @@ const MAX_HEIGHT_POINTS = 100;
 
 /**
  * The rule of a `v:rect` marked `o:hr`, with its height in points; undefined for any other
- * shape, null for a rule outside this subset (a set width or percentage, or a floating one).
+ * shape, null for a rule outside this subset (a set width with no percentage, or a floating one).
  */
 export function legacyHorizontalRule(
   root: OoxmlElement
@@ -31,11 +35,15 @@ export function legacyHorizontalRule(
   if (marked === undefined || off(marked)) return undefined;
   const style = styleOf(root);
   if (!style || style.get('position') === 'absolute') return null;
-  // The full column: no width, and no percentage other than the whole (in tenths of a percent).
-  const width = points(style.get('width') ?? '0');
-  const percent = a(root, 'hrpct', OFFICE);
-  if (width !== 0 || (percent !== undefined && !['0', '1000'].includes(percent.trim())))
+  // A share of the line in tenths of a percent; 0 or none is the whole line, which writers
+  // save with no width. A width saved beside a share is the share at save time.
+  const percent = a(root, 'hrpct', OFFICE)?.trim();
+  const share = percent === undefined || percent === '0' ? 1000 : Number(percent);
+  if (!/^\d{1,4}$/.test(String(share)) || share <= 0 || share > 1000) return null;
+  if (share === 1000 && percent === undefined && points(style.get('width') ?? '0') !== 0)
     return null;
+  const align = (a(root, 'hralign', OFFICE) ?? 'left').trim();
+  if (align !== 'left' && align !== 'center' && align !== 'right') return null;
   const heightPt = points(style.get('height') ?? '1.5pt');
   if (!(heightPt > 0 && heightPt <= MAX_HEIGHT_POINTS)) return null;
   const fill = color(a(root, 'fillcolor'), '#a0a0a0');
@@ -44,6 +52,8 @@ export function legacyHorizontalRule(
     rule: Object.freeze({
       fillHex: fill.slice(1).toUpperCase(),
       shaded: off(a(root, 'hrnoshade', OFFICE) ?? 'f'),
+      widthFraction: share / 1000,
+      align,
     }),
     heightPt,
   });
