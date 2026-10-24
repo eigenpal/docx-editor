@@ -292,9 +292,9 @@ export function autoWidthOuterRulePt(
  * width, when captured controls cover it; else `undefined`.
  *
  * Fixed and autofit controls with a 0.5pt frame and 1.5, 3 and 6pt rules on one cell, at
- * 0 and 5.4pt margins, centre every rule on its grid line, wide or narrow, and measure each
- * margin from that centre. The grid moves inward by half the leading rule, as in the
- * uniform shape.
+ * 0 and 5.4pt margins, and with 1.5, 3 and 6pt frames around 0.5pt rules, centre every rule
+ * on its grid line, wide or narrow, and measure each margin from that centre. The grid moves
+ * inward by half the leading rule, as in the uniform shape.
  */
 function modernMixedLeadPt(
   rows: readonly SemanticTableRow[],

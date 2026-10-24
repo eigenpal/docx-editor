@@ -66,8 +66,7 @@ export function carryPartialSimpleSideGrid(
  * points, when those rules do not all share one width; else `undefined`.
  *
  * Every row must open with a leading rule of that same width, so the grid has one outer
- * offset, and no rule may be narrower than it. Wider rules inside the grid, or on the
- * trailing edge, are allowed.
+ * offset. Rules of other widths inside the grid, or on the trailing edge, are allowed.
  */
 export function mixedSimpleSideGridLeadPt(
   rows: readonly SemanticTableRow[],
@@ -79,7 +78,6 @@ export function mixedSimpleSideGridLeadPt(
     let lead: number | undefined;
     let first: number | undefined;
     let mixed = false;
-    let narrowest = Number.POSITIVE_INFINITY;
     for (const row of rows) {
       let next = 0;
       for (const cell of row.cells) {
@@ -96,7 +94,6 @@ export function mixedSimpleSideGridLeadPt(
             return undefined;
           if (first === undefined) first = side.widthPt;
           else if (side.widthPt !== first) mixed = true;
-          narrowest = Math.min(narrowest, side.widthPt);
         }
         if (cell.gridColumn === 0 && borders.left.state === 'edge') {
           if (lead !== undefined && borders.left.widthPt !== lead) return undefined;
@@ -105,8 +102,7 @@ export function mixedSimpleSideGridLeadPt(
       }
       if (next !== columns) return undefined;
     }
-    // The controls cover a leading frame no wider than any rule inside it.
-    return mixed && lead !== undefined && lead <= narrowest ? lead : undefined;
+    return mixed ? lead : undefined;
   };
   const value = read();
   mixedCache.set(rows, { columns, value });

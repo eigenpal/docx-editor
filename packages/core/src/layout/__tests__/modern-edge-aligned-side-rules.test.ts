@@ -199,7 +199,6 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
     '<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1440" w:type="dxa"/></w:tcPr><w:p/></w:tc></w:tr>';
   for (const shape of [
     { style: 'double', sz: 6 },
-    { cols: [1440, 1440], outerSz: 48 },
     { cols: [1440, 1440], rows: gridBefore },
     { widthType: 'pct' },
     { jc: 'right', cols: [6000] },
@@ -257,6 +256,15 @@ test('a retained session relays an edge-aligned table when the mode or width cha
   expect(firstTable(layout(part, 15, session, 146.9)).box.x).toBe(0);
   expect(read(table, 16).outerRuleOffsetPt).toBe(1.5);
   expect(read(table, 15).outerRuleOffsetPt).toBe(1.5);
+});
+
+test('mode 15 centres a wider outer frame and moves the grid by half of it', () => {
+  // A 6pt frame around 3pt inside rules: the grid moves in by 3pt and every rule, wide or
+  // narrow, is centred on its grid line.
+  const structure = read(source({ cols: [1440, 1440], outerSz: 48 }).table, 15);
+  expect(structure.outerRuleOffsetPt).toBe(3);
+  expect(structure.rows[0]!.cells[0]!.centeredSideRules).toBe(true);
+  expect(structure.rows[0]!.cells[1]!.centeredSideRules).toBe(true);
 });
 
 test('side-rule reuse respects changed borders and grid coverage', () => {
