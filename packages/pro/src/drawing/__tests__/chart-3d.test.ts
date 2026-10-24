@@ -19,7 +19,10 @@ import {
   series,
   strCache,
 } from '../../../../core/src/store/__tests__/chart-fixture.ts';
+import { boxHeight } from '../chart-3d-cartesian.ts';
 import { FaceList, fitProjection, signedArea, type View3D } from '../chart-3d.ts';
+import { scaleValues, type ValueInfo } from '../chart-axes.ts';
+import { DEFAULT_CHART_TEXT } from '../chart-labels.ts';
 import { autoValueScale } from '../chart-scale.ts';
 import type { ChartScene } from '../chart-scene.ts';
 import { installDrawing } from '../index.ts';
@@ -202,6 +205,48 @@ describe('3-D axis scale', () => {
       });
     expect(scale(150)).toMatchObject({ min: 0, max: 5, major: 0.5 });
     expect(scale(100)).toMatchObject({ min: 0, max: 5, major: 1 });
+    // Room for twenty ticks still takes ten.
+    expect(scale(1_000)).toMatchObject({ min: 0, max: 5, major: 0.5 });
+  });
+
+  test('an upright 3-D value axis keeps ticks 1.4 sizes apart, a flat one 1.6', () => {
+    const info = (): ValueInfo => ({
+      axis: null,
+      id: '',
+      dataMin: 0,
+      dataMax: 5,
+      percent: false,
+      scale: null,
+      formatCode: null,
+    });
+    const style = { ...DEFAULT_CHART_TEXT, sizePt: 10 };
+    // 150 points hold ten intervals of 14 but only nine of 16.
+    expect(scaleValues(info(), 150, true, style, false, true).major).toBe(0.5);
+    expect(scaleValues(info(), 150, true, style, false, false).major).toBe(1);
+  });
+});
+
+describe('3-D box', () => {
+  test('a box with a series axis is as tall, for its width or depth if less, as its room', () => {
+    expect(boxHeight(400, 300, 200, true)).toBeCloseTo(150, 6);
+    expect(boxHeight(400, 600, 200, true)).toBeCloseTo(200, 6);
+    expect(boxHeight(400, 300, 200, false)).toBeCloseTo(200, 6);
+  });
+
+  test('an eye distance on the page keeps the same perspective for any box size', () => {
+    const near = (w: number) => {
+      const projection = fitProjection(
+        view({ rightAngles: false, perspective: 30 }),
+        { w, h: w / 2, d: w },
+        BOX,
+        { eyePoints: 730 }
+      );
+      const edge = (z: number) =>
+        projection.point({ x: 0, y: w / 2, z }).y - projection.point({ x: 0, y: 0, z }).y;
+      return edge(0) / edge(w);
+    };
+    expect(near(1)).toBeCloseTo(near(1_000), 6);
+    expect(near(1)).toBeGreaterThan(1.1);
   });
 });
 

@@ -14,6 +14,8 @@ import { seriesErrorBars, seriesTrendlines } from './chart-trendline.ts';
 
 /** Room between the labels of a horizontal value axis, in sizes. */
 const HORIZONTAL_GAP = 1;
+/** Least distance between the ticks of an upright 3-D value axis, in sizes. */
+const VERTICAL_GAP_3D = 1.4;
 
 export interface Box {
   l: number;
@@ -245,7 +247,9 @@ export function scaleValues(
   // A vertical axis keeps more than a label's height between ticks; a horizontal one keeps
   // its widest label clear of the next by one size. A fixed percent range
   // takes one tick more.
-  const minInterval = vertical ? 1.6 * style.sizePt : labelWidth + HORIZONTAL_GAP * style.sizePt;
+  const minInterval = vertical
+    ? (threeD ? VERTICAL_GAP_3D : 1.6) * style.sizePt
+    : labelWidth + HORIZONTAL_GAP * style.sizePt;
   const fitting = Math.floor(length / minInterval) + (percentFixed ? 1 : 0);
   return autoValueScale({
     dataMin,

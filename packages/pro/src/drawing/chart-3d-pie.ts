@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // perspective, its slices clockwise from rotY. Tops keep the slice colour; the rim darkens
 // towards the right. The disc is scaled to fit the plot area.
 
-import { FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
+import { CHART_EYE, FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
 import type { Box } from './chart-axes.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { childVal, type ChartModel, type ChartPlot } from './chart-model.ts';
@@ -105,10 +105,15 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
       });
     }
   }
-  const projection = fitProjection(view, { w: 2 * R, h: t, d: 2 * R }, box, {
-    eyeBase: PIE_EYE * R,
-    corners,
-  });
+  const bounds = context.bounds;
+  const projection = fitProjection(
+    view,
+    { w: 2 * R, h: t, d: 2 * R },
+    box,
+    bounds
+      ? { eyePoints: CHART_EYE * Math.max(bounds.r - bounds.l, bounds.b - bounds.t), corners }
+      : { eyeBase: PIE_EYE * R, corners }
+  );
 
   const faces = new FaceList();
   for (const slice of slices) {

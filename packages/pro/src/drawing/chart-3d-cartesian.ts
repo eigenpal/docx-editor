@@ -23,6 +23,7 @@ import {
   type ValueInfo,
 } from './chart-axes.ts';
 import {
+  CHART_EYE,
   FaceList,
   litFace,
   fitProjection,
@@ -132,6 +133,15 @@ interface Row {
   readonly row: number;
 }
 
+/**
+ * The height of a 3-D box `width` wide and `depth` deep in a room `room` tall and `width`
+ * wide: the room's height, or, with a series axis, the room's shape applied to the width or
+ * the depth, whichever is less.
+ */
+export function boxHeight(width: number, depth: number, room: number, byRow: boolean): number {
+  return byRow ? (Math.min(width, depth) * room) / width : room;
+}
+
 /** Paint 3-D plots inside `outer`. False when the combination is unsupported. */
 export function paint3DCartesian(
   plots: readonly ChartPlot[],
@@ -187,14 +197,22 @@ export function paint3DCartesian(
     clustered.reduce((sum, plot) => sum + plot.series.length, 0)
   );
   const gapDepth = (plots[0]!.gapDepth ?? 150) / 100;
+  // The front face takes the room's shape. With a series axis the box is as tall, for its
+  // width or its depth if that is less, as the room is for its width.
   const world = (box: Box) => {
     const w = Math.max(1, box.r - box.l);
-    const h = view.hPercent !== null ? (w * view.hPercent) / 100 : Math.max(1, box.b - box.t);
-    const slot = (horizontal ? h : w) / categories.count;
+    const room = Math.max(1, box.b - box.t);
+    const along = horizontal ? (view.hPercent !== null ? (w * view.hPercent) / 100 : room) : w;
+    const slot = along / categories.count;
     const barWidth = slot / ((clustered.length > 0 ? clusterSize : 1) + gap);
     const barDepth = (barWidth * view.depthPercent) / 100;
     const rowDepth = barDepth * (1 + gapDepth);
-    return { w, h, d: rowCount * rowDepth, slot, barWidth, barDepth, rowDepth };
+    const d = rowCount * rowDepth;
+    const h =
+      view.hPercent !== null
+        ? (w * view.hPercent) / 100
+        : boxHeight(w, d, room, byRow && !horizontal);
+    return { w, h, d, slot, barWidth, barDepth, rowDepth };
   };
 
   const valueTexts = (scale: ValueScale) =>
@@ -288,8 +306,7 @@ export function paint3DCartesian(
     return out;
   };
   // Tick labels take bands round the plot area as in two dimensions, and the box fits what is
-  // left, a little in from its edges. Series labels take a band too, except in perspective,
-  // where they sit within the room the receding box leaves.
+  // left, a little in from its edges.
   const widest = (texts: readonly string[], style: ChartTextStyle) =>
     texts.reduce((max, text) => Math.max(max, estimateTextWidth(text, style)), 0);
   let valueScale = scaleFor((horizontal ? outer.r - outer.l : outer.b - outer.t) * 0.75);
@@ -305,12 +322,15 @@ export function paint3DCartesian(
     if (labelled(categoryAxis) && horizontal) {
       box.l += widest(categories.labels, categoryStyle) + 0.417 * categoryStyle.sizePt;
     }
-    if (byRow && labelled(seriesAxis) && (view.rightAngles || view.perspective === 0)) {
+    if (byRow && labelled(seriesAxis)) {
       box.r -= widest(seriesNames, seriesStyle) + 0.417 * seriesStyle.sizePt;
     }
     if (!(box.r - box.l > 1) || !(box.b - box.t > 1)) break;
     extents = world(box);
-    projection = fitProjection(view, extents, insetBox(box, view.rightAngles), { exact: true });
+    projection = fitProjection(view, extents, insetBox(box, view.rightAngles), {
+      exact: true,
+      eyePoints: CHART_EYE * Math.max(context.chartWidth, context.chartHeight),
+    });
     if (bandScale) break;
     const from = projection.point({ x: 0, y: 0, z: 0 });
     const to = horizontal

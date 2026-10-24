@@ -244,6 +244,7 @@ export function renderChart(
           baseText,
           date1904: model.date1904,
           placed: model.plotLayout?.inner === true,
+          bounds: { l: 0, t: 0, r: width, b: height },
         });
         continue;
       }

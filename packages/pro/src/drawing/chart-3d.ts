@@ -70,6 +70,11 @@ const RIGHT_ANGLE_INSET = 2;
 const PERSPECTIVE_FILL = 0.974;
 /** Eye distance at perspective 30, as a multiple of the box's largest side. */
 const BOX_EYE = 3.8;
+/**
+ * Eye distance at perspective 30, as a multiple of the chart's larger side: measured on
+ * charts 432 points wide, where boxes and pies alike put the eye about 730 points away.
+ */
+export const CHART_EYE = 1.69;
 const MAX_FACES = 50_000;
 
 function numberVal(
@@ -154,8 +159,9 @@ function rawProjection(view: View3D, world: Extents3D, eye: number): RawProjecti
 
 /**
  * Fit the projection of a box of `world` extents into `box`. `corners` are extra world points
- * the fit must hold, beyond the box's own corners; `eyeBase` is the eye distance at
- * perspective 30 in world units (0 for the box rule).
+ * the fit must hold, beyond the box's own corners. The eye distance at perspective 30 is
+ * `eyePoints` on the page, or `eyeBase` in world units, or by default a multiple of the box's
+ * largest side.
  */
 export function fitProjection(
   view: View3D,
@@ -163,29 +169,16 @@ export function fitProjection(
   box: FitBox,
   options: {
     readonly eyeBase?: number;
+    readonly eyePoints?: number;
     readonly corners?: readonly Vec3[];
     /** Fill `box` exactly, with no inset. */
     readonly exact?: boolean;
   } = {}
 ): Projection3D {
-  const base = options.eyeBase ?? BOX_EYE * Math.max(world.w, world.h, world.d, 1e-6);
-  const eye = view.rightAngles ? 0 : eyeDistance(view.perspective, base);
-  const raw = rawProjection(view, world, eye);
   const corners: Vec3[] = [...(options.corners ?? [])];
   if (!options.corners) {
     for (const x of [0, world.w])
       for (const y of [0, world.h]) for (const z of [0, world.d]) corners.push({ x, y, z });
-  }
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const corner of corners) {
-    const p = raw.point(corner);
-    minX = Math.min(minX, p.x);
-    maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y);
-    maxY = Math.max(maxY, p.y);
   }
   const width = box.r - box.l;
   const height = box.b - box.t;
@@ -199,21 +192,46 @@ export function fitProjection(
     : view.rightAngles
       ? height - 2 * RIGHT_ANGLE_INSET
       : height * PERSPECTIVE_FILL;
-  const spanX = Math.max(maxX - minX, 1e-9);
-  const spanY = Math.max(maxY - minY, 1e-9);
-  const scale = Math.max(1e-9, Math.min(availableW / spanX, availableH / spanY));
-  const cx = (box.l + box.r) / 2;
-  const cy = (box.t + box.b) / 2;
-  const mx = (minX + maxX) / 2;
-  const my = (minY + maxY) / 2;
-  return {
-    point: (p) => {
-      const q = raw.point(p);
-      return { x: cx + (q.x - mx) * scale, y: cy + (q.y - my) * scale };
-    },
-    depth: raw.depth,
-    scale,
+  const fit = (eye: number): Projection3D => {
+    const raw = rawProjection(view, world, eye);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const corner of corners) {
+      const p = raw.point(corner);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const spanX = Math.max(maxX - minX, 1e-9);
+    const spanY = Math.max(maxY - minY, 1e-9);
+    const scale = Math.max(1e-9, Math.min(availableW / spanX, availableH / spanY));
+    const cx = (box.l + box.r) / 2;
+    const cy = (box.t + box.b) / 2;
+    const mx = (minX + maxX) / 2;
+    const my = (minY + maxY) / 2;
+    return {
+      point: (p) => {
+        const q = raw.point(p);
+        return { x: cx + (q.x - mx) * scale, y: cy + (q.y - my) * scale };
+      },
+      depth: raw.depth,
+      scale,
+    };
   };
+  if (view.rightAngles || !(view.perspective > 0)) return fit(0);
+  if (options.eyePoints === undefined) {
+    const base = options.eyeBase ?? BOX_EYE * Math.max(world.w, world.h, world.d, 1e-6);
+    return fit(eyeDistance(view.perspective, base));
+  }
+  // An eye distance on the page depends on the scale it gives: settle the two together.
+  let projection = fit(0);
+  for (let pass = 0; pass < 4; pass += 1) {
+    projection = fit(eyeDistance(view.perspective, options.eyePoints / projection.scale));
+  }
+  return projection;
 }
 
 /** Twice the signed area of a screen polygon; positive when its outward side faces the viewer. */

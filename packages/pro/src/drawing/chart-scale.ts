@@ -86,7 +86,9 @@ export function autoValueScale(request: ScaleRequest): ValueScale {
     const dataSpan = (request.fixedMax ?? high) - (request.fixedMin ?? low);
     for (const unit of niceUnits(span / MAX_INTERVALS)) {
       const count = Math.ceil(top / unit - 1e-9) - Math.floor(bottom / unit + 1e-9);
-      if (count <= intervals && (fixedEnds || dataSpan / unit <= MAX_DATA_UNITS)) {
+      // Axes limited by room alone still take at most ten intervals.
+      const limit = request.roomOnly ? Math.min(intervals, MAX_INTERVALS) : intervals;
+      if (count <= limit && (fixedEnds || dataSpan / unit <= MAX_DATA_UNITS)) {
         major = unit;
         break;
       }
