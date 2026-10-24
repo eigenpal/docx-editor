@@ -171,12 +171,15 @@ function alignLogicalSpans(
     lastContentSpan !== undefined &&
     Math.abs(lastContentSpan.box.x + lastContentSpan.box.width - indentLeft - lineUsedWidth) <=
       OVERFLOW_TOLERANCE_PT;
+  const visible = visibleTextEnd(spans, trailingEnd, indentLeft, lineUsedWidth, measurer);
   if (
     trailingStart < trailingEnd &&
     spansReachLineEnd &&
     (alignment === 'center' || alignment === 'right')
   ) {
-    const slack = available - hangingStart!;
+    const slack =
+      available -
+      (paragraphRtl || visible === undefined ? hangingStart! : Math.min(hangingStart!, visible));
     if (slack <= 0) return spans;
     const offset = alignment === 'center' ? slack / 2 : slack;
     const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
@@ -287,6 +290,10 @@ function alignLogicalSpans(
     // their advance, so right/center alignment still anchors the visible glyphs.
     if (paragraphRtl) rtlTrailingAdvance = trailing;
   }
+  // Every trailing U+0020 hangs past a centred or right-aligned line, also the spaces that
+  // still fit before the measure and the one that closes the last word's span.
+  if ((alignment === 'center' || alignment === 'right') && !paragraphRtl && visible !== undefined)
+    used = Math.min(used, visible);
   const slack = available - used;
   // A last line compresses only when the flow kept the paragraph's last word by borrowing
   // inter-word space. Hanging punctuation also overflows a line, and keeps its spacing.
@@ -534,4 +541,34 @@ export function lineAlignmentMeasure(
         ? segment.contentEnd - segment.start
         : lineIndent - columnX + line.width - segment.start,
   };
+}
+
+/**
+ * Where a line's visible text ends, relative to `indentLeft`: the last span holding more than
+ * U+0020 spaces, without its own trailing spaces. Undefined when the line holds no such span,
+ * or when something past the text spans (an inline picture) reaches further than they do.
+ */
+function visibleTextEnd(
+  spans: readonly StyleSpanRecord[],
+  trailingEnd: number,
+  indentLeft: number,
+  lineUsedWidth: number | undefined,
+  measurer: TextMeasurer
+): number | undefined {
+  let spansEnd = -Infinity;
+  for (let index = 0; index < trailingEnd; index += 1) {
+    const span = spans[index]!;
+    spansEnd = Math.max(spansEnd, span.box.x + span.box.width);
+  }
+  if (lineUsedWidth !== undefined && lineUsedWidth > spansEnd - indentLeft + OVERFLOW_TOLERANCE_PT)
+    return undefined;
+  for (let index = trailingEnd - 1; index >= 0; index -= 1) {
+    const span = spans[index]!;
+    const visible = withoutTrailingSpaces(span.text);
+    if (visible === '') continue;
+    if (visible === span.text) return span.box.x - indentLeft + span.box.width;
+    const style = styleForFontSlot(span.style, span.fontSlot);
+    return span.box.x - indentLeft + measureDisplayText(visible, style, measurer);
+  }
+  return undefined;
 }
