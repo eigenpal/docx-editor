@@ -64,19 +64,24 @@ interface RowMergePlan {
 
 const rowMergePlans = new WeakMap<OoxmlNode, RowMergePlan>();
 
+function elementNamed(nodes: readonly OoxmlNode[], localName: string): OoxmlElement | undefined {
+  for (const node of nodes) {
+    if (node.kind !== 'textValue' && node.localName === localName) return node;
+  }
+  return undefined;
+}
+
 function rowMergePlan(row: OoxmlElement): RowMergePlan {
   const known = rowMergePlans.get(row);
   if (known) return known;
   const children = flattenContentControls(row.children);
-  const rowProperties = children.find((child) => child.localName === 'trPr');
+  const rowProperties = elementNamed(children, 'trPr');
   let column = readGridSkip(rowProperties, 'gridBefore');
   const cells: { cell: OoxmlElement; column: number; continues: boolean }[] = [];
   const merged = new Set<number>();
   for (const cell of children) {
     if (cell.kind !== 'tableCell') continue;
-    const cellProperties = cell.children.find(
-      (child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === 'tcPr'
-    );
+    const cellProperties = elementNamed(cell.children, 'tcPr');
     const vMerge = readVMerge(cellProperties);
     if (vMerge !== 'none') merged.add(column);
     cells.push({ cell, column, continues: vMerge === 'continue' });
