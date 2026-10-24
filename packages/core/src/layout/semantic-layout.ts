@@ -106,6 +106,7 @@ import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
 import {
   bodyAnchorFrameBase,
+  publishableAnchors,
   atKeptBreakY,
   holdsOnlyColumnBreak,
   opensWithPageBreak,
@@ -2428,9 +2429,11 @@ function* layoutBlocksPass(
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
       else pageFragments.push(publishedFragment);
-      if (options.inlineDrawingLayout && paragraphHasAnchors && !paragraphAnchorsPublished) {
+      const publish =
+        options.inlineDrawingLayout && paragraphHasAnchors && !paragraphAnchorsPublished;
+      const anchorOffsets = publish ? publishableAnchors(entry.paragraph, lines, pending) : null;
+      if (publish && anchorOffsets) {
         paragraphAnchorsPublished = true;
-        const anchorOffsets = [...drawingModelOffsetsInParagraph(entry.paragraph).values()];
         const pendingCoversAnchors =
           anchorOffsets.length > 0 &&
           anchorOffsets.every((offset) =>
