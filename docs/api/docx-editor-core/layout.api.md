@@ -1631,6 +1631,7 @@ export interface InlineDrawingRecord {
     readonly revisions?: readonly RevisionAttribution[];
     // (undocumented)
     readonly start: number;
+    readonly textArt?: DrawingTextArtRecord;
     readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly transform: DrawingTransform;

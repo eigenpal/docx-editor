@@ -309,8 +309,7 @@ export class ImageWriter {
     }
     if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
     if (d.textboxStory) return report('Textbox story not routed through paintTextbox');
-    if (d.kind === 'anchoredDrawing' && d.textArt)
-      return paintTextArt(this.doc, page, visit, this.work);
+    if (d.textArt) return paintTextArt(this.doc, page, visit, this.work);
     if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
     return this.paintPicture(visit, page, report);
   }

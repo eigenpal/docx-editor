@@ -97,8 +97,12 @@ function group(extra = '', width = '200pt'): string {
   return `<w:pict><v:group id="annotation" style="width:${width};height:100pt" coordorigin="100,200" coordsize="1000,500">${photo('left:200;top:250;width:500;height:250')}<v:shape type="#_x0000_t32" style="left:200;top:250;width:500;height:250" strokecolor="#ff0000" strokeweight="2pt"><v:stroke endarrow="block" endarrowwidth="wide" endarrowlength="long"/></v:shape>${extra}</v:group></w:pict>`;
 }
 
+/**
+ * WordArt inside a group, which paints through the graphic preview. A WordArt shape on its
+ * own projects as text art instead (`legacy-vml-text-art.test.ts`).
+ */
 function wordArt(text = 'A &amp; B &lt;tag&gt; &quot;quoted&quot;', width = '120pt'): string {
-  return `<w:pict><v:shape id="title" type="#_x0000_t136" style="width:${width};height:30pt" fillcolor="#112233" stroked="f"><v:textpath on="t" fitshape="t" style="font-family:Times New Roman;font-size:24pt;font-weight:bold" string="${text}"/></v:shape></w:pict>`;
+  return `<w:pict><v:group id="art" style="width:${width};height:30pt" coordsize="1000,1000"><v:shape id="title" type="#_x0000_t136" style="left:0;top:0;width:1000;height:1000" fillcolor="#112233" stroked="f"><v:textpath on="t" fitshape="t" style="font-family:Times New Roman;font-size:24pt;font-weight:bold" string="${text}"/></v:shape></v:group></w:pict>`;
 }
 
 function onlyProjection(part: OoxmlPart): DrawingProjection {

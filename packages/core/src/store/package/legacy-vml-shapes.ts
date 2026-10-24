@@ -201,8 +201,9 @@ function pathPoints(
 ): [number, number][] | null {
   const style = styleOf(node)!;
   if (ends) {
-    // Explicit ends already carry the direction; a flip on top of them has no single meaning.
-    if (style.has('flip')) return null;
+    // Explicit ends already carry the direction. A shape line's ends have its flip applied; a
+    // flip on top of a `v:line`'s own points has no single meaning.
+    if (style.has('flip') && node.localName !== 'shape') return null;
     return ends.map(([x, y]) => [box.x + x, box.y + y]);
   }
   let coords: [number, number][];

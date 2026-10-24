@@ -1110,6 +1110,7 @@ export function breakParagraph(
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
           ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
           layoutTextboxStory: flow?.layoutTextboxStory,
+          measurer,
         })
       );
       // A picture a resolved view kept has no span to carry its site; the line takes it.

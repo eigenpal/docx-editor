@@ -105,6 +105,24 @@ describe('VML text art', () => {
     for (const run of refused) expect(projected(run)).toEqual([]);
   });
 
+  test('text art on the line reads its trim, kerning and a switched-off shadow', () => {
+    const inline =
+      `<w:pict>${TEMPLATE}<v:shape id="title" type="#_x0000_t136" style="width:238.8pt;height:27.6pt" ` +
+      'fillcolor="black" strokecolor="#c90"><v:shadow color="#868686"/>' +
+      '<v:textpath style="font-family:&quot;Cambria&quot;;font-size:24pt;font-weight:bold;' +
+      'v-text-kern:t" trim="t" fitpath="t" string="Title"/></v:shape></w:pict>';
+    const [art] = projected(inline);
+    expect(art?.kind).toBe('inline');
+    expect(art?.textArt).toMatchObject({
+      text: 'Title',
+      fontFamily: 'Cambria',
+      bold: true,
+      fillHex: '000000',
+      strokeHex: 'CC9900',
+      trim: true,
+    });
+  });
+
   test('rotation stays outside the subset for every other shape', () => {
     const rect =
       '<w:pict><v:rect style="position:absolute;width:72pt;height:36pt;rotation:30" fillcolor="red"/></w:pict>';

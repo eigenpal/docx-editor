@@ -80,3 +80,27 @@ describe('legacy VML groups as vector members', () => {
     expect(projection!.groupTextboxes).toBeUndefined();
   });
 });
+
+describe('floating straight connectors', () => {
+  const connector = (style: string, children = '') =>
+    `<w:pict>${LINE_TEMPLATE}<v:shape type="#_x0000_t32" style="position:absolute;margin-left:126.75pt;margin-top:14.5pt;${style};z-index:251658240" o:connectortype="straight">${children}</v:shape></w:pict>`;
+
+  test('a connector with no path of its own draws its template line', () => {
+    const [projection] = project(connector('width:197.25pt;height:0'));
+    expect(projection!.kind).toBe('anchored');
+    const line = projection!.vectorShape!.components[0]!.subpathsEmu[0]!;
+    expect(line.map((point) => [point.x / EMU, point.y / EMU])).toEqual([
+      [0, 0],
+      [197.25, 0],
+    ]);
+  });
+
+  test('a flip turns the connector, so its arrowhead moves to the other end', () => {
+    const [projection] = project(
+      connector('width:100pt;height:0;flip:x', '<v:stroke endarrow="block"/>')
+    );
+    const component = projection!.vectorShape!.components[0]!;
+    expect(component.subpathsEmu[0]!.map((point) => point.x / EMU)).toEqual([100, 0]);
+    expect(component.arrowheadsEmu![0]![0]!.x).toBe(0);
+  });
+});

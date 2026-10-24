@@ -55,7 +55,7 @@ export function pathOperators(path: string, work: Work): string | null {
 }
 
 /**
- * Floating text art (a text watermark): the outlines layout fitted to the box, turned about
+ * Text art (a text watermark, or WordArt on the line): the outlines layout fitted to the box, turned about
  * the box centre and filled with the shape's colour and opacity, as the screen draws them.
  */
 export function paintTextArt(
@@ -65,7 +65,7 @@ export function paintTextArt(
   work: Work
 ): string {
   const d = visit.drawing;
-  const art = d.kind === 'anchoredDrawing' ? d.textArt : undefined;
+  const art = d.textArt;
   if (!art) return '';
   if (art.path === null) {
     work.report('drawing', 'Text art has no glyph outlines in its face', visit.page.index);

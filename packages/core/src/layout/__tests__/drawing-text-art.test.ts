@@ -80,6 +80,17 @@ describe('text art layout', () => {
     expect(art).toMatchObject({ fillHex: 'C0C0C0', fillAlpha: 0.5, rotationDegrees: 315 });
   });
 
+  test('trimmed text fills the whole box with no inset', () => {
+    const art = layoutTextArt({ ...ART, trim: true }, 240, 40, shaped);
+    const points = pairs(art.path!);
+    const xs = points.map(([x]) => x),
+      ys = points.map(([, y]) => y);
+    expect(Math.min(...xs)).toBeCloseTo(0, 2);
+    expect(Math.max(...xs)).toBeCloseTo(240, 2);
+    expect(Math.min(...ys)).toBeCloseTo(0, 2);
+    expect(Math.max(...ys)).toBeCloseTo(40, 2);
+  });
+
   test('every page of a repeated header reuses one fitted record', () => {
     let shaped = 0;
     const counting: TextMeasurer = {

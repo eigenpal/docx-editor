@@ -258,6 +258,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     bidiLevel: 'layout-only',
     textboxStory: 'explicitly-omitted',
     groupTextboxStories: 'explicitly-omitted',
+    textArt: 'explicitly-omitted',
   } satisfies Record<keyof InlineDrawingRecord, MarkdownFieldPolicy>,
   anchoredDrawing: {
     kind: 'represented',

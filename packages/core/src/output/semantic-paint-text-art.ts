@@ -1,4 +1,4 @@
-// Floating VML text art (a text watermark) as inline SVG.
+// VML text art (a text watermark, or WordArt on the line) as inline SVG.
 //
 // Layout fitted the glyph outlines into the unrotated box; paint draws that path and turns
 // the box about its centre. Without outlines it draws the text through the same fit.
@@ -6,7 +6,7 @@
 // Trust boundary: colours are validated 6-digit sRGB, the path is engine-generated M/L/Q/C/Z
 // data, the font family was validated at projection, and every node is built with
 // createElementNS/setAttribute/textContent only.
-import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { DrawingTextArtRecord } from '../layout/drawing-text-art.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
 
@@ -26,12 +26,14 @@ function ink(target: SVGElement, art: DrawingTextArtRecord): void {
 }
 
 /**
- * The painted element for an anchored drawing that carries `textArt`, positioned in its
- * paint bounds. It is a picture: no selection binding, no pointer target.
+ * The painted element for a drawing that carries `textArt`, floating or on the line,
+ * positioned in its paint bounds. It is a picture: no selection binding, no pointer target.
  */
 export function paintTextArt(
   document: Document,
-  drawing: AnchoredDrawingRecord & { readonly textArt: DrawingTextArtRecord },
+  drawing: (AnchoredDrawingRecord | InlineDrawingRecord) & {
+    readonly textArt: DrawingTextArtRecord;
+  },
   scale: number,
   unbound: boolean,
   origin?: LayoutBox

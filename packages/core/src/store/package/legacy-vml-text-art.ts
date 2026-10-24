@@ -32,6 +32,8 @@ export interface LegacyTextArtProjection {
   readonly strokeWidthPt: number;
   /** Clockwise rotation about the box centre, in [0, 360). */
   readonly rotationDegrees: number;
+  /** `trim`: the ink fills the whole box, with no text inset. */
+  readonly trim?: true;
 }
 
 /** The longest text this subset fits; a watermark is a short phrase. */
@@ -92,9 +94,9 @@ const hex = (value: string) => value.slice(1).toUpperCase();
  * The text art of a `#_x0000_t136` shape, or null outside the bounded subset.
  *
  * Accepts the markup a text watermark is written with: one `v:textpath` with `fitshape`, a
- * fill colour with an optional `v:fill` opacity, and an optional plain outline. Custom paths,
- * adjustment handles, gradients, shadows and multi-line text stay outside the subset, and the
- * caller keeps refusing them.
+ * fill colour with an optional `v:fill` opacity, an optional plain outline, and a shadow that
+ * is switched off. Custom paths, adjustment handles, gradients, shown shadows and multi-line
+ * text stay outside the subset, and the caller keeps refusing them.
  */
 export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | null {
   if (node.namespaceUri !== VML || node.localName !== 'shape') return null;
@@ -104,6 +106,8 @@ export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | nul
   const allowed = list.every(
     (n) =>
       (n.namespaceUri === VML && ['textpath', 'fill', 'stroke', 'path'].includes(n.localName)) ||
+      // A shadow is off unless it says `on`; a switched-off one paints nothing.
+      (named(n, VML, 'shadow') && (a(n, 'on') === undefined || off(a(n, 'on')))) ||
       named(n, OFFICE, 'lock') ||
       named(n, WORD_VML, 'wrap') ||
       (named(n, WORD_VML, 'anchorlock') && n.attributes.length === 0)
@@ -140,7 +144,9 @@ export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | nul
   for (const [key, value] of style) {
     if (!TEXTPATH_STYLES.has(key)) return null;
     if (key === 'v-text-align' && value !== 'center') return null;
-    if (key.startsWith('v-') && key !== 'v-text-align' && !off(value)) return null;
+    // Kerning only tightens letter pairs; the fit to the box still holds.
+    if (key.startsWith('v-') && !['v-text-align', 'v-text-kern'].includes(key) && !off(value))
+      return null;
   }
   const face = family(style.get('font-family'));
   const size = style.has('font-size') ? points(style.get('font-size')) : 36;
@@ -205,5 +211,6 @@ export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | nul
     strokeAlpha: stroked ? strokeAlpha : 1,
     strokeWidthPt: stroked ? strokeWidth : 0,
     rotationDegrees: rotation,
+    ...(a(path, 'trim') !== undefined && !off(a(path, 'trim')) ? { trim: true as const } : {}),
   });
 }

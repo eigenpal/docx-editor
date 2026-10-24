@@ -280,7 +280,7 @@ test('direct vanish suppresses VML anchors and preserves existing DrawingML beha
   }
 });
 
-test('model-only WordArt text and geometry edits invalidate the drawing cache and preview', async () => {
+test('model-only WordArt text and geometry edits invalidate the drawing cache and projection', () => {
   const { reader, bundle, replace } = setup();
   try {
     const token = () => bundle.drawingTokenForParagraph(paragraphOf(reader.part()), metadata.name);
@@ -290,27 +290,16 @@ test('model-only WordArt text and geometry edits invalidate the drawing cache an
       if (!value) throw new Error('Expected drawing projection');
       return value;
     };
-    const preview = async () => {
-      let state = bundle.bodyContext.resourceOf(projection());
-      for (let attempt = 0; attempt < 20 && state.kind === 'pending'; attempt++) {
-        await Promise.resolve();
-        state = bundle.bodyContext.resourceOf(projection());
-      }
-      expect(state.kind).toBe('ready');
-      if (state.kind !== 'ready') throw new Error('Expected ready preview');
-      return new TextDecoder().decode(
-        bundle.mintValidatedBytes(state.validatedHandle, state.contentId)!
-      );
-    };
-    expect(await preview()).toContain('>Old</text>');
+    // WordArt on the line projects its text for layout to fit, as floating WordArt does.
+    expect(projection().textArt?.text).toBe('Old');
     const before = token();
     replace(xml('New'));
     expect(token()).not.toBe(before);
-    expect(await preview()).toContain('>New</text>');
+    expect(projection().textArt?.text).toBe('New');
     const afterText = token();
     replace(xml('New', 240));
     expect(token()).not.toBe(afterText);
-    expect(await preview()).toContain('viewBox="0 0 240 30"');
+    expect(projection().extentEmu.cx).toBe(240 * 12_700);
     const result = layoutSemanticDocument(reader.part(), 3, {
       measurer: createFixedMeasurer(6, 14),
       inlineDrawingLayout: bundle.bodyContext,

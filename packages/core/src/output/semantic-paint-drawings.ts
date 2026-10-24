@@ -686,7 +686,7 @@ function paintDrawingRecordElement(
   if (drawing.textboxStory !== undefined && ctx.paintStoryFragment !== undefined) {
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
-  if (drawing.kind === 'anchoredDrawing' && drawing.textArt) {
+  if (drawing.textArt) {
     return paintTextArt(
       document,
       { ...drawing, textArt: drawing.textArt },

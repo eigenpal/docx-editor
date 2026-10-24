@@ -373,9 +373,9 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const style = supportedStyle(root, true, !!textbox);
   if (!style) return null;
   const floating = style.get('position') === 'absolute';
-  // A floating text path projects its text for layout to fit; every other shape keeps the
-  // preview subset, which has no rotation. A text box story carries its own turn.
-  const textArt = !readOnly && floating ? legacyTextArt(root) : null;
+  // A text path projects its text for layout to fit, floating or on the line; every other
+  // shape keeps the preview subset, which has no rotation. A text box story carries its own turn.
+  const textArt = !readOnly ? legacyTextArt(root) : null;
   if (style.has('rotation') && !textArt && !textbox) return null;
   // A line spans its `from` and `to` points.
   const line =

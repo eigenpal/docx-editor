@@ -1,7 +1,8 @@
-// Floating VML text art (a text watermark) laid out for paint.
+// VML text art (a text watermark, or WordArt on the line) laid out for paint.
 //
 // The text path stretches the string's glyph ink to fill the shape box inside the VML default
-// text inset: 0.1in left and right, 0.05in top and bottom. Layout fits the outlines once, so
+// text inset: 0.1in left and right, 0.05in top and bottom. A trimmed text path (`trim`) fills
+// the whole box. Layout fits the outlines once, so
 // the screen and every exporter paint the same ink. The box is the unrotated shape; paint
 // turns it about its centre.
 import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
@@ -142,9 +143,9 @@ function fitTextArt(
     (style.fontFamily === null ? null : outlineOf({ ...style, fontFamily: null }));
   const ink = outline?.ink;
   if (!outline || !ink) return Object.freeze({ ...base, path: null, fit: null });
-  // A box too small for the inset keeps its whole area for the ink.
-  const insetX = width > 4 * INSET_X_PT ? INSET_X_PT : 0;
-  const insetY = height > 4 * INSET_Y_PT ? INSET_Y_PT : 0;
+  // A box too small for the inset keeps its whole area for the ink, and trimmed text fills it.
+  const insetX = !textArt.trim && width > 4 * INSET_X_PT ? INSET_X_PT : 0;
+  const insetY = !textArt.trim && height > 4 * INSET_Y_PT ? INSET_Y_PT : 0;
   const scaleX = (width - 2 * insetX) / (ink.right - ink.left);
   const scaleY = (height - 2 * insetY) / (ink.bottom - ink.top);
   const fit: TextArtFit = Object.freeze({
