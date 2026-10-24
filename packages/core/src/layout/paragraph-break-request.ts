@@ -23,6 +23,7 @@ import {
 } from './style-cascade.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { holdsOnlyColumnBreak } from './body-flow-helpers.ts';
 
 /**
  * External values can change while the source paragraph retains its identity.
@@ -205,7 +206,25 @@ export function breakPreparedParagraphLazily(
   return lines;
 }
 
+/**
+ * Legacy modes: a column break that opens a body paragraph leaves no line in the column it
+ * ends. The line that holds only the break stays, for the caret, but takes no height there.
+ */
+function withOpeningColumnBreakCollapsed(lines: readonly PendingLine[]): readonly PendingLine[] {
+  const first = lines[0];
+  if (!first || first.start !== 0 || !holdsOnlyColumnBreak(first)) return lines;
+  return [{ ...first, height: 0, baseline: 0, leading: 0, trailingSpacing: 0 }, ...lines.slice(1)];
+}
+
 export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly PendingLine[] {
+  const lines = breakPreparedParagraphLines(request);
+  return request.flow.columnBreaksEndColumns &&
+    hasCompatibilityRule(request.compatibilityMode, 'openingColumnBreakTakesNoLine')
+    ? withOpeningColumnBreakCollapsed(lines)
+    : lines;
+}
+
+function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly PendingLine[] {
   const { formatting, styleCascade } = request;
   return breakParagraph(
     request.paragraph,

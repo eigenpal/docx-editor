@@ -17,6 +17,7 @@ export function bodyParagraphOptionFlow(
   options: SemanticLayoutOptions
 ): Partial<ParagraphFlowOptions> {
   return {
+    columnBreaksEndColumns: true,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     showFieldCodes: options.showFieldCodes,

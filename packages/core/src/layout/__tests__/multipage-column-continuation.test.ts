@@ -29,8 +29,14 @@ const part = (count = 10, columns = 2, followHeight = 30, type = 'continuous') =
 const lay = (
   value: ReturnType<typeof load>,
   session?: ReturnType<typeof createLayoutSession>,
-  revision = 1
-) => layoutSemanticDocument(value, revision, { measurer, ...(session ? { session } : {}) });
+  revision = 1,
+  compatibilityMode?: number
+) =>
+  layoutSemanticDocument(value, revision, {
+    measurer,
+    ...(session ? { session } : {}),
+    ...(compatibilityMode === undefined ? {} : { compatibilityMode }),
+  });
 const rows = (layout: ReturnType<typeof lay>, name: string) =>
   layout.pages.flatMap((page, pageIndex) =>
     page.fragments.flatMap((f) =>
@@ -186,6 +192,7 @@ test('a paragraph continuation balances only its final-page lines', () => {
 });
 
 for (const preceding of [0, 9]) {
+  // Mode 15: legacy modes leave no line for a break that opens its paragraph.
   test(`balancing retains explicit column-break lines after ${preceding} paragraphs`, () => {
     const value = load(
       Array.from({ length: preceding }, (_, i) => p(`BEFORE${i}`)).join('') +
@@ -198,11 +205,11 @@ for (const preceding of [0, 9]) {
         p('FOLLOW', 8) +
         sect()
     );
-    const layout = lay(value);
+    const layout = lay(value, undefined, 1, 15);
     expect(only(layout, 'FOLLOW').fragment.box.y).toBe(60);
     expect(layout.pages).toHaveLength(preceding === 0 ? 1 : 2);
     const session = createLayoutSession();
-    lay(value, session);
-    expect(lay(value, session, 2).pages).toEqual(layout.pages);
+    lay(value, session, 1, 15);
+    expect(lay(value, session, 2, 15).pages).toEqual(layout.pages);
   });
 }
