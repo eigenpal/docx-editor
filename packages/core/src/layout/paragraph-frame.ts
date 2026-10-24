@@ -345,17 +345,32 @@ export function translateParagraphFragment(
   };
 }
 
-/** A continuous section clears frames whose wrapping bands intersect the body area. */
+/**
+ * A continuous section clears the drop caps whose bands intersect the body area. Other frames
+ * stay on the sheet as wrap obstacles for the continued section.
+ */
 export function positionedFrameBottom(
   blocks: readonly BlockFragmentRecord[],
   contentHeight: number
 ): number {
   let bottom = 0;
   for (const block of blocks) {
-    if (block.kind !== 'paragraph' || !block.positionedFrame) continue;
+    if (
+      block.kind !== 'paragraph' ||
+      !block.positionedFrame ||
+      block.positionedFrame.dropCapLines === undefined
+    )
+      continue;
     const { box, vSpace } = block.positionedFrame;
     if (box.y - vSpace >= contentHeight || box.y + box.height + vSpace <= 0) continue;
     bottom = Math.max(bottom, box.y + box.height + vSpace);
   }
   return bottom;
+}
+
+/** Whether `previous` is a positioned frame (not a drop cap) that the next paragraph anchors. */
+export function anchorsFrames(
+  previous: { readonly kind: string; readonly frame?: ParagraphFrame } | undefined
+): boolean {
+  return previous?.kind === 'paragraph' && !!previous.frame && !previous.frame.dropCapLines;
 }

@@ -40,7 +40,7 @@ export function hasParagraphFrames(
 
 /** Each shared frame contributes one exclusion, regardless of its paragraph count. */
 export function addParagraphFrameExclusions(
-  pages: readonly PageRecord[],
+  pages: readonly Pick<PageRecord, 'fragments'>[],
   existing: ReadonlyMap<number, readonly ExclusionZone[]>,
   columns: ExclusionColumnLayout
 ): ReadonlyMap<number, readonly ExclusionZone[]> {

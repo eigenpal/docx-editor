@@ -17,6 +17,7 @@ import {
 } from './furniture-drawing-exclusion.ts';
 import type { PageRecord } from './semantic-records.ts';
 import { addFloatingTableExclusions } from './table-float-exclusion.ts';
+import { addParagraphFrameExclusions } from './paragraph-frame-exclusion.ts';
 
 /** The host sheet a continued section lays its first page onto. */
 export type ContinuedPageHost = ContinuedPageFurniture &
@@ -82,10 +83,17 @@ function collectEarlierSectionZones(
           layout
         )
       : [];
+  // Text frames are obstacles too; a drop cap stays with its own anchor paragraph.
+  const frames = host.fragments.filter(
+    (block) =>
+      block.kind === 'paragraph' &&
+      block.positionedFrame &&
+      block.positionedFrame.dropCapLines === undefined
+  );
   const zones =
-    addFloatingTableExclusions(
-      [{ fragments: host.fragments }],
-      new Map([[0, drawings]]),
+    addParagraphFrameExclusions(
+      [{ fragments: frames }],
+      addFloatingTableExclusions([{ fragments: host.fragments }], new Map([[0, drawings]]), layout),
       layout
     ).get(0) ?? [];
   if (zones.length === 0) return Object.freeze([]);

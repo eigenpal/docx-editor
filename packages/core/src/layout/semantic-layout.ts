@@ -32,7 +32,7 @@ import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields, markStyleOf } from './empty-paragraph-style.ts';
-import { frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
+import { anchorsFrames, frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
 import { ParagraphFrameFlow } from './paragraph-frame-flow.ts';
 // Semantic paragraph layout over the canonical tree (tasks 7.1, 7.3).
 //
@@ -1850,12 +1850,12 @@ function* layoutBlocksPass(
   };
   /** The mark a trailing page break kept on its own sheet (`markJoinsBreakSheet`). */
   let markOnBreakSheet = -1;
-  // Before a continuous section, the empty mark that ends this one is out of flow: no line,
-  // no spacing. Its fragment stays for caret and selection, but it moves nothing.
+  // Before a continuous section, the empty closing mark is out of flow; its fragment stays.
   const collapsesSectionMark = (at: number, lines?: readonly PendingLine[]): boolean => {
     if (at === markOnBreakSheet) return true;
-    // A mark that is its section's only block IS the section's content: it keeps its line.
-    if (options.sectionMarkCollapses !== true || at === 0) return false;
+    // A mark that is its section's only block, or anchors the frames before it, keeps its line.
+    if (options.sectionMarkCollapses !== true || at === 0 || anchorsFrames(prepared[at - 1]))
+      return false;
     const mark = emptySectionMarkAt(at, lines);
     return mark !== undefined && !breaksBeforeAt(at, mark);
   };

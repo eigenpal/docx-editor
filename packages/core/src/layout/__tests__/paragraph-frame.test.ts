@@ -403,7 +403,7 @@ test('keep-next measures the next ordinary paragraph across positioned frames', 
   expect(heading.box.y).toBe(140);
 });
 
-test('a continuous section clears preceding frame groups and their vertical text distance', () => {
+test('a continuous section wraps beside earlier frames, after the mark that anchors them', () => {
   const geometry =
     '<w:pgSz w:w="4000" w:h="4000"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/>';
   const source = document(
@@ -417,11 +417,15 @@ test('a continuous section clears preceding frame groups and their vertical text
   );
   const layout = layoutSemanticDocument(source, 0, { measurer });
   expect(layout.pages).toHaveLength(1);
-  const positioned = framesOf(layout)[0]!;
-  const following = layout.pages[0]!.fragments.at(-1)!;
-  expect(following.box.y).toBeGreaterThanOrEqual(
-    positioned.positionedFrame!.box.y + positioned.positionedFrame!.box.height + 5
-  );
+  const frame = framesOf(layout)[0]!.positionedFrame!.box;
+  const fragments = layout.pages[0]!.fragments;
+  const mark = fragments.at(-2)! as ParagraphFragmentRecord;
+  const following = fragments.at(-1)! as ParagraphFragmentRecord;
+  // The anchoring mark keeps its line, and the next section starts below it, beside the frame.
+  expect(mark.outOfFlow).toBeFalsy();
+  expect(following.box.y).toBeGreaterThanOrEqual(mark.box.y + mark.box.height);
+  expect(following.box.y).toBeLessThan(frame.y + frame.height);
+  expect(following.lines[0]!.contentX).toBeGreaterThanOrEqual(frame.x + frame.width);
 });
 
 test('frames below the body do not add a page for an empty continuous section', () => {
@@ -442,7 +446,8 @@ test('frames below the body do not add a page for an empty continuous section', 
     expect(layout.pages).toHaveLength(1);
     const positioned = framesOf(layout)[0]!;
     expect(positioned.positionedFrame!.box.y).toBe(y / 20 - 10);
-    if (y === 3400) expect(layout.pages[0]!.fragments.at(-1)!.box.y).toBe(0);
+    // The mark anchoring the frame keeps its line; the next section starts below it.
+    if (y === 3400) expect(layout.pages[0]!.fragments.at(-1)!.box.y).toBe(10);
     expect(serializeOoxmlPart(source)).toBe(saved);
   }
 });
