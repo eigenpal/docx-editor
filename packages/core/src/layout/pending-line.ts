@@ -146,6 +146,23 @@ export function admittedToNarrowPassage(
   return continuesCutSegment;
 }
 
+/**
+ * Whether page or column breaks, and nothing else, precede `offset` among a paragraph's
+ * pieces: the text from `offset` is then the paragraph's first line, with its indent.
+ */
+export function onlyLeadingBreaksBefore(
+  pieces: readonly { readonly start: number; readonly text: string; readonly breakKind?: string }[],
+  offset: number
+): boolean {
+  let seen = false;
+  for (const piece of pieces) {
+    if (piece.start >= offset) continue;
+    if (piece.text !== PAGE_BREAK_CHAR && piece.breakKind !== 'column') return false;
+    seen = true;
+  }
+  return seen;
+}
+
 /** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */
 export function onlyPageBreaksBefore(
   pieces: readonly { readonly start: number; readonly text: string }[],

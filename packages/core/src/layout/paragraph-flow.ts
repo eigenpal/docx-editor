@@ -143,6 +143,7 @@ import {
   holdsOnlyPageBreak,
   lineBandText,
   isHeightlessWhitespace,
+  onlyLeadingBreaksBefore,
   onlyPageBreaksBefore,
   pendingLineFlowExtent,
   pendingLineFlowExtentAtPlacement,
@@ -230,7 +231,9 @@ export function breakParagraph(
   // The first line starts `firstLineOffset` from the paragraph's left indent — right for
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent. A
   // continuation from `startOffset` is no first line, unless only leading breaks precede it.
-  const firstLineOffset = slotOpen ? (flow?.firstLineOffset ?? 0) : 0;
+  // Text after page or column breaks that open the paragraph keeps the first-line indent.
+  const indentOpen = slotOpen || onlyLeadingBreaksBefore(allPieces, startOffset);
+  const firstLineOffset = indentOpen ? (flow?.firstLineOffset ?? 0) : 0;
   const markerBaselineFloor = slotOpen ? (flow?.firstLineMinimumBaseline ?? 0) : 0;
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
@@ -958,6 +961,7 @@ export function breakParagraph(
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
     if (piece.breakKind === 'column') {
+      const opensParagraph: boolean = firstLineOpen && !line.spans.length && !line.drawings.length;
       const breakMetrics = measurer.lineMetrics(piece.style);
       line.spans.push({
         range: { paragraphId, start: piece.start, end: piece.end },
@@ -972,6 +976,7 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
+      firstLineOpen = opensParagraph;
       // Like a trailing hard break, NOT like a page break: Word still lays out the
       // paragraph's remainder after the column advance. The common authoring form
       // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
@@ -1136,7 +1141,7 @@ export function breakParagraph(
       closeLine();
       const closed = lines[lines.length - 1]!;
       closed.pageBreakAfter = true;
-      firstLineOpen = carriesSlot && slotLine && holdsOnlyPageBreak(closed);
+      firstLineOpen = slotLine && holdsOnlyPageBreak(closed);
       // NOT `trailingLineBreak`: an empty remainder publishes no line on the page the break
       // opened, so the following block sits at its top (`paragraph-spacing-borders` and
       // `section-aware-pagination` pin it). A click beside the mark resolves BEFORE it.

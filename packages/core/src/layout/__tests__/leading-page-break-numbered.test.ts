@@ -257,20 +257,43 @@ describe('the first-line slot after leading page breaks', () => {
     const lines = breakAt(3, 0, true);
     expect(lines.map((line) => line.firstLineOffset)).toEqual([24, 24, 24, 24]);
     expect(lines[3]!.baseline).toBe(30);
-    // Without the carry only the break line takes it.
-    expect(breakAt(3, 0, false).map((line) => line.firstLineOffset)).toEqual([
-      24,
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    // An unnumbered paragraph passes the first-line indent on as well.
+    expect(breakAt(3, 0, false).map((line) => line.firstLineOffset)).toEqual([24, 24, 24, 24]);
   });
 
   test('stays with a continuation that only leading breaks precede', () => {
     expect(breakAt(1, 1, true)[0]!.firstLineOffset).toBe(24);
-    expect(breakAt(1, 1, false)[0]!.firstLineOffset).toBeUndefined();
+    expect(breakAt(1, 1, false)[0]!.firstLineOffset).toBe(24);
     // A continuation inside the text is never a first line.
     expect(breakAt(1, 3, true)[0]!.firstLineOffset).toBeUndefined();
+  });
+
+  test('passes after a leading column break too, also when the text resumes in a column', () => {
+    const columnBreak = '<w:r><w:br w:type="column"/></w:r>';
+    const source = load(`<w:p>${columnBreak}<w:r><w:t>text</w:t></w:r></w:p>`);
+    const paragraph = source.root.children[0]!.children.find(
+      (child) => child.kind === 'paragraph'
+    )!;
+    const lines = (startOffset: number) =>
+      breakParagraph(
+        paragraph,
+        'p',
+        0,
+        180,
+        measurer,
+        undefined,
+        null,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        {
+          firstLineOffset: 24,
+          startOffset,
+        }
+      );
+    expect(lines(0).map((line) => line.firstLineOffset)).toEqual([24, 24]);
+    expect(lines(1)[0]!.firstLineOffset).toBe(24);
   });
 
   test('handles many leading breaks in one pass', () => {
@@ -279,13 +302,13 @@ describe('the first-line slot after leading page breaks', () => {
     expect(lines[2000]!.firstLineOffset).toBe(24);
   });
 
-  test('keeps an unnumbered first-line indent on the break line', () => {
+  test('moves an unnumbered first-line indent to the text after the break', () => {
     const indented = `<w:ind w:firstLine="480"/>${exact}`;
     const layout = lay(
       load(fill(3) + `<w:p><w:pPr>${indented}</w:pPr>${br}<w:r><w:t>after</w:t></w:r></w:p>` + sect)
     );
     const [breakLine, text] = fragmentsAt(layout, 3);
     expect(breakLine!.fragment.lines[0]!.contentX).toBe(24);
-    expect(firstTextX(text!.fragment)).toBe(0);
+    expect(firstTextX(text!.fragment)).toBe(24);
   });
 });
