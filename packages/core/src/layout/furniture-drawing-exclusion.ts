@@ -104,6 +104,33 @@ export function refusalYieldsHiddenFurniture(
 }
 
 /** Wrapping furniture affects body flow without changing the header/footer story's own height. */
+/** Header and footer wrap zones of the body page being filled, before its record exists. */
+export function furnitureZonesOnPage(
+  box: PageRecord['box'],
+  insets: { readonly top: number; readonly height: number },
+  marginLeft: number,
+  options: {
+    readonly width: number;
+    readonly story: (kind: 'header' | 'footer') => PageRecord['header'];
+    readonly omitHidden?: boolean;
+  }
+): readonly ExclusionZone[] {
+  return furnitureDrawingExclusionsForPage(
+    {
+      box,
+      contentBox: {
+        x: box.x + marginLeft,
+        y: box.y + insets.top,
+        width: options.width,
+        height: insets.height,
+      },
+      header: options.story('header'),
+      footer: options.story('footer'),
+    },
+    options.omitHidden
+  );
+}
+
 export function furnitureDrawingExclusionsForPage(
   page: Pick<PageRecord, 'header' | 'footer' | 'box' | 'contentBox'>,
   /** Leave out hidden records: the bounded retry of {@link refusalYieldsHiddenFurniture}. */

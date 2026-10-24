@@ -22,7 +22,7 @@ import {
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
 import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
 import {
-  furnitureDrawingExclusionsForPage,
+  furnitureZonesOnPage,
   hasFurnitureDrawingExclusions,
 } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
@@ -660,25 +660,15 @@ function* layoutBlocksPass(
     if (hostZones) {
       if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
     } else if (furnitureHoldsTables) {
-      const box = pageBox(index);
-      const insets = insetsFor(index);
       // Resolve furniture on the page being filled, including newly minted pages.
       // Waiting for the previous reflow's page list would leave each new tail page
       // unwrapped and make long documents exceed the drawing convergence budget.
-      const zones = furnitureDrawingExclusionsForPage(
-        {
-          box,
-          contentBox: {
-            x: box.x + geometry.margin.left,
-            y: box.y + insets.top,
-            width: contentWidthForReflow,
-            height: insets.height,
-          },
-          header: furnitureFor('header', index, box),
-          footer: furnitureFor('footer', index, box),
-        },
-        options.yieldHiddenFurnitureZones
-      );
+      const box = pageBox(index);
+      const zones = furnitureZonesOnPage(box, insetsFor(index), geometry.margin.left, {
+        width: contentWidthForReflow,
+        story: (kind) => furnitureFor(kind, index, box),
+        omitHidden: options.yieldHiddenFurnitureZones,
+      });
       if (zones.length) currentPageZones = Object.freeze([...bodyZones, ...zones]);
     }
     return currentPageZones;
@@ -2019,6 +2009,14 @@ function* layoutBlocksPass(
         positionedFlow.add(pendingFloatIds, entry.table.id);
         continue;
       }
+      cursorY = positionedFlow.noteTable(
+        floatSignals,
+        entry.table.id,
+        flowColumnIndex,
+        pageFragments.length,
+        cursorY,
+        pageExclusionZones()
+      );
       collectingCellBreakKeys.begin();
       try {
         const outOfFlow = yield* layoutTableInFlowSteps(entry.table, cursorY, false, index + 1);

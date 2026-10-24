@@ -10,6 +10,7 @@ import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-proje
 import type { BlockFragmentRecord, TableFragmentRecord } from './semantic-records.ts';
 import { readTableStructure, type TableFloatPosition } from './semantic-table.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
+import type { ExclusionZone } from './drawing-exclusion.ts';
 
 type PositionedTableFragment = TableFragmentRecord & { readonly outOfFlow: true };
 
@@ -85,7 +86,11 @@ export function positionedTableAnchors(
       authorFilter,
       compatibilityMode
     )?.float;
-    if (!float || float.ySpec === 'inline') continue;
+    if (!float || float.ySpec === 'inline') {
+      // A following in-flow table anchors the floats before it, at its own top.
+      nextParagraphId = block.table.id;
+      continue;
+    }
     if (!nextParagraphId) continue;
     result.push({
       table: block.table,
@@ -181,6 +186,28 @@ export function positionedTableFlow(
       if (!token) return;
       ids.add(id);
       append(token);
+    },
+    /**
+     * Note an in-flow table as the anchor of the floating tables before it, and return where
+     * the table itself starts: below those floats when their bands cross its top.
+     */
+    noteTable(
+      signals: PositionedTableAnchorSignal[],
+      tableId: string,
+      column: number,
+      fragmentIndex: number,
+      top: number,
+      zones: readonly ExclusionZone[]
+    ): number {
+      if (!anchorIds.has(tableId)) return top;
+      signals.push({ anchorId: tableId, column, fragmentIndex, anchorY: top });
+      let start = top;
+      for (const zone of zones) {
+        const band = zone.verticalBand;
+        if (zone.sourceKind !== 'table' || zone.anchorParagraphId !== tableId) continue;
+        if (band.y <= start + 0.001 && band.y + band.height > start) start = band.y + band.height;
+      }
+      return start;
     },
     note(
       signals: PositionedTableAnchorSignal[],
