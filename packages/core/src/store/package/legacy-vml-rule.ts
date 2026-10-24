@@ -15,6 +15,8 @@ export interface HorizontalRuleProjection {
   readonly shaded: boolean;
   /** The bar's share of its line, in (0, 1]. */
   readonly widthFraction: number;
+  /** A set width in points, which the line caps; absent for a share of the line. */
+  readonly widthPt?: number;
   /** Where a bar shorter than its line sits on it. */
   readonly align: 'left' | 'center' | 'right';
 }
@@ -25,7 +27,7 @@ const MAX_HEIGHT_POINTS = 100;
 
 /**
  * The rule of a `v:rect` marked `o:hr`, with its height in points; undefined for any other
- * shape, null for a rule outside this subset (a set width with no percentage, or a floating one).
+ * shape, null for a rule outside this subset (a floating one, or an unreadable size).
  */
 export function legacyHorizontalRule(
   root: OoxmlElement
@@ -40,8 +42,9 @@ export function legacyHorizontalRule(
   const percent = a(root, 'hrpct', OFFICE)?.trim();
   const share = percent === undefined || percent === '0' ? 1000 : Number(percent);
   if (!/^\d{1,4}$/.test(String(share)) || share <= 0 || share > 1000) return null;
-  if (share === 1000 && percent === undefined && points(style.get('width') ?? '0') !== 0)
-    return null;
+  // With no share, a saved width is the bar's own width.
+  const setWidth = percent === undefined ? points(style.get('width') ?? '0') : 0;
+  if (!(setWidth >= 0 && setWidth <= 100_000)) return null;
   const align = (a(root, 'hralign', OFFICE) ?? 'left').trim();
   if (align !== 'left' && align !== 'center' && align !== 'right') return null;
   const heightPt = points(style.get('height') ?? '1.5pt');
@@ -53,6 +56,7 @@ export function legacyHorizontalRule(
       fillHex: fill.slice(1).toUpperCase(),
       shaded: off(a(root, 'hrnoshade', OFFICE) ?? 'f'),
       widthFraction: share / 1000,
+      ...(setWidth > 0 ? { widthPt: setWidth } : {}),
       align,
     }),
     heightPt,

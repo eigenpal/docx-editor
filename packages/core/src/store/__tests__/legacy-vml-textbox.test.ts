@@ -387,13 +387,33 @@ describe('VML lines and rectangles', () => {
     expect(component.arrowheadsEmu).toBeUndefined();
   });
 
-  test('a line without both points, inline, or flipped stays refused', () => {
+  test('a line without both points, or inline, stays refused', () => {
     for (const content of [
       '<w:pict><v:line style="position:absolute" from="0,0"/></w:pict>',
       '<w:pict><v:line style="width:10pt;height:10pt" from="0,0" to="10pt,10pt"/></w:pict>',
-      '<w:pict><v:line style="position:absolute;flip:x" from="0,0" to="10pt,10pt"/></w:pict>',
     ])
       expectRefused(projectDrawingsInPart(parse(content)));
+  });
+
+  test('a flip mirrors a line inside the box its points span', () => {
+    const ends = (flip: string) =>
+      only(
+        parse(
+          `<w:pict><v:line style="position:absolute;${flip}" from="0,0" to="100pt,50pt"/></w:pict>`
+        )
+      ).vectorShape!.components[0]!.subpathsEmu[0]!.map((p) => [p.x / 12_700, p.y / 12_700]);
+    expect(ends('')).toEqual([
+      [0, 0],
+      [100, 50],
+    ]);
+    expect(ends('flip:x')).toEqual([
+      [100, 0],
+      [0, 50],
+    ]);
+    expect(ends('flip:y')).toEqual([
+      [0, 50],
+      [100, 0],
+    ]);
   });
 
   test('a rectangle with short hex and named colors paints', () => {

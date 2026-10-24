@@ -38,7 +38,10 @@ function ruleShape(projection: DrawingProjection, cx: number): VectorShapeProjec
   const cy = projection.extentEmu.cy;
   if (!rule || cx <= 0) return null;
   // The bar takes its share of the line at its alignment; the drawing keeps the whole line.
-  const width = Math.round(cx * rule.widthFraction);
+  const width =
+    rule.widthPt !== undefined
+      ? Math.min(cx, Math.round(rule.widthPt * EMU_PER_POINT))
+      : Math.round(cx * rule.widthFraction);
   const left = Math.round((cx - width) * { left: 0, center: 0.5, right: 1 }[rule.align]);
   const right = left + width;
   // A shaded rule is a groove: the fill colour above, a light band below.

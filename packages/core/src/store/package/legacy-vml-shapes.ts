@@ -243,9 +243,7 @@ function pathPoints(
 ): [number, number][] | null {
   const style = styleOf(node)!;
   if (ends) {
-    // Explicit ends already carry the direction. A shape line's ends have its flip applied; a
-    // flip on top of a `v:line`'s own points has no single meaning.
-    if (style.has('flip') && node.localName !== 'shape') return null;
+    // Explicit ends already carry the direction, with the line's flip applied.
     return ends.map(([x, y]) => [box.x + x, box.y + y]);
   }
   let coords: [number, number][];
@@ -544,11 +542,13 @@ export function legacyShapeFragment(
   bordered = false,
   ends?: LegacyLineEnds
 ): LegacyGraphicFragment | null {
+  // A point exactly on the edge stays inside despite floating-point error in the sums.
+  const tolerance = 1e-9;
   const inside = (x: number, y: number, padding = 0) =>
-    x - padding >= canvas.x &&
-    y - padding >= canvas.y &&
-    x + padding <= canvas.x + canvas.width &&
-    y + padding <= canvas.y + canvas.height;
+    x - padding >= canvas.x - tolerance &&
+    y - padding >= canvas.y - tolerance &&
+    x + padding <= canvas.x + canvas.width + tolerance &&
+    y + padding <= canvas.y + canvas.height + tolerance;
   if (!inside(box.x, box.y) || !inside(box.x + box.width, box.y + box.height)) return null;
   const list = children(node);
   if (
@@ -559,6 +559,8 @@ export function legacyShapeFragment(
           ['imagedata', 'textpath', 'fill', 'stroke', 'path'].includes(n.localName)
         ) &&
         !named(n, OFFICE, 'lock') &&
+        // A signature line's signing details are metadata; the picture is what shows.
+        !(named(n, OFFICE, 'signatureline') && children(n).length === 0) &&
         !named(n, WORD_VML, 'wrap') &&
         !(named(n, WORD_VML, 'anchorlock') && n.attributes.length === 0) &&
         !(bordered && isBorderSide(n))

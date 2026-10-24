@@ -4,7 +4,6 @@ import { describe, expect, test } from 'bun:test';
 import { projectDrawingsInPart } from '../../store/package/drawing-projection.ts';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { widenedRule } from '../horizontal-rule.ts';
-import { isLegacyPlaceholder } from '../../store/__tests__/legacy-vml-refusal.ts';
 
 const NS =
   'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
@@ -67,8 +66,15 @@ describe('horizontal rules', () => {
     expect([Math.min(...xs), Math.max(...xs)]).toEqual([100, 300]);
   });
 
-  test('a rule with its own width and no share stays outside the subset', () => {
-    for (const projection of project(RULE.replace('width:0pt', 'width:100pt')))
-      expect(isLegacyPlaceholder(projection)).toBe(true);
+  test('a rule with its own width and no share draws that width, capped by its line', () => {
+    const [rule] = project(RULE.replace('width:0pt', 'width:100pt'));
+    const input = { drawingNodeId: 'd', ownerPartName: '', projection: rule!, resource: {} };
+    const xs = (width: number) =>
+      widenedRule(input as never, width).projection.vectorShape!.components[0]!.subpathsEmu[0]!.map(
+        (p) => p.x / EMU
+      );
+    // Centred: a 100pt bar in a 400pt line, and the whole of a 60pt line.
+    expect([Math.min(...xs(400)), Math.max(...xs(400))]).toEqual([150, 250]);
+    expect([Math.min(...xs(60)), Math.max(...xs(60))]).toEqual([0, 60]);
   });
 });

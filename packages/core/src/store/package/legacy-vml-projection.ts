@@ -328,15 +328,20 @@ function lineGeometry(root: OoxmlElement, floating: boolean): LineGeometry | nul
   const width = Math.abs(to[0] - from[0]),
     height = Math.abs(to[1] - from[1]);
   if (width + height <= 0) return null;
+  // A flip mirrors the line inside the box its points span, as the reference draws it.
+  const flip = (styleOf(root)?.get('flip') ?? '').trim().split(/\s+/).filter(Boolean);
+  if (flip.some((axis) => axis !== 'x' && axis !== 'y')) return null;
+  const end = ([px, py]: readonly [number, number]) =>
+    Object.freeze([
+      flip.includes('x') ? width - (px - x) : px - x,
+      flip.includes('y') ? height - (py - y) : py - y,
+    ] as const);
   return Object.freeze({
     x,
     y,
     width,
     height,
-    ends: Object.freeze([
-      Object.freeze([from[0] - x, from[1] - y] as const),
-      Object.freeze([to[0] - x, to[1] - y] as const),
-    ] as const),
+    ends: Object.freeze([end(from), end(to)] as const),
   });
 }
 

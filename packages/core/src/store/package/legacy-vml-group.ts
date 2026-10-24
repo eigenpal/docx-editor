@@ -123,6 +123,47 @@ function projectMember(
   return true;
 }
 
+/**
+ * A `v:line` member: its `from` and `to` points are in the group's coordinate space, and its
+ * box is the one they span.
+ */
+function projectLine(
+  line: OoxmlElement,
+  box: LegacyBox,
+  origin: readonly [number, number],
+  size: readonly [number, number],
+  out: Output
+): boolean {
+  const from = pair(a(line, 'from') ?? ''),
+    to = pair(a(line, 'to') ?? '');
+  if (!from || !to) return false;
+  const place = ([x, y]: readonly [number, number]) =>
+    [
+      box.x + ((x - origin[0]) * box.width) / size[0],
+      box.y + ((y - origin[1]) * box.height) / size[1],
+    ] as const;
+  const [start, end] = [place(from), place(to)];
+  if (![...start, ...end].every((v) => Number.isFinite(v) && Math.abs(v) <= 100_000)) return false;
+  if (start[0] === end[0] && start[1] === end[1]) return false;
+  const left = Math.min(start[0], end[0]),
+    top = Math.min(start[1], end[1]);
+  const ends = Object.freeze([
+    Object.freeze([start[0] - left, start[1] - top]),
+    Object.freeze([end[0] - left, end[1] - top]),
+  ]) as LegacyLineEnds;
+  const shape = legacyLineShape(
+    line,
+    Math.abs(end[0] - start[0]),
+    Math.abs(end[1] - start[1]),
+    ends
+  );
+  if (!shape) return false;
+  const offset = { x: left * EMU_PER_POINT, y: top * EMU_PER_POINT };
+  for (const component of shape.components)
+    out.components.push(transformComponent(component, offset, 1, 1));
+  return true;
+}
+
 function projectMembers(
   group: OoxmlElement,
   box: LegacyBox,
@@ -136,6 +177,9 @@ function projectMembers(
   if (!origin || !size || size.some((v) => v <= 0)) return false;
   for (const child of children(group)) {
     if (named(child, OFFICE, 'lock') || (depth === 0 && named(child, WORD_VML, 'wrap'))) continue;
+    // An anchor lock only keeps the drawing on its paragraph while editing.
+    if (depth === 0 && named(child, WORD_VML, 'anchorlock') && child.attributes.length === 0)
+      continue;
     if (named(child, VML, 'shapetype')) {
       if (!isStandardVmlTemplate(child)) return false;
       continue;
@@ -143,12 +187,16 @@ function projectMembers(
     if (++out.members > MAX_MEMBERS) return false;
     if (
       child.namespaceUri !== VML ||
-      !['shape', 'rect', 'roundrect', 'oval', 'group'].includes(child.localName)
+      !['shape', 'rect', 'roundrect', 'oval', 'line', 'group'].includes(child.localName)
     )
       return false;
     if (emptyFrame(child)) continue;
     const style = memberStyle(child);
     if (!style) return false;
+    if (child.localName === 'line') {
+      if (!projectLine(child, box, origin, size, out)) return false;
+      continue;
+    }
     const left = numeric(style.get('left') ?? '0'),
       top = numeric(style.get('top') ?? '0'),
       width = numeric(style.get('width')),
