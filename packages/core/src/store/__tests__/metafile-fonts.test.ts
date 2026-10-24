@@ -50,11 +50,13 @@ function wmf(face: string): Uint8Array {
   return Uint8Array.from([...header, ...record, ...end]);
 }
 
-test('EMF and WMF font records name faces; the stock System font is left out', () => {
+test('EMF and WMF story pictures name faces; System, the thumbnail and the glossary do not', () => {
   const partBytes = new Map<string, Uint8Array>([
     ['/word/media/image1.emf', emf(['Tahoma', 'System', 'tahoma'])],
     ['/word/media/image2.wmf', wmf('Arial Narrow')],
     ['/word/media/image3.png', emf(['Ignored'])],
+    ['/docProps/thumbnail.emf', emf(['Thumbnail Face'])],
+    ['/word/glossary/media/image1.emf', emf(['Glossary Face'])],
   ]);
   expect(metafileFontFamilies({ partBytes }, validFontFamily)).toEqual(['Tahoma', 'Arial Narrow']);
 });

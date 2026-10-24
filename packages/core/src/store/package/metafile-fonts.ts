@@ -88,6 +88,8 @@ export function metafileFontFamilies(
   let parts = 0;
   for (const [name, bytes] of pkg.partBytes) {
     const lower = name.toLowerCase();
+    // Only pictures a story can show: not the package thumbnail or the glossary's own media.
+    if (!lower.startsWith('/word/') || lower.startsWith('/word/glossary/')) continue;
     const emf = lower.endsWith('.emf'),
       wmf = lower.endsWith('.wmf');
     if (!emf && !wmf) continue;
