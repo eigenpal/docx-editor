@@ -135,6 +135,19 @@ function measureRow(context: PlacementContext, container: NodeState, depth: numb
 }
 
 /**
+ * The row offset a node declares (`alignOff`). The outermost hierarchy lays out before the
+ * inner nodes resolve their own constraints, so a constant is read from the definition.
+ */
+function alignOffset(root: NodeState): number {
+  const solved = root.values.get('alignOff');
+  if (solved !== undefined) return solved;
+  const constraint = root.node.constraints.find(
+    (entry) => entry.type === 'alignOff' && entry.for === 'self' && entry.refType === null
+  );
+  return constraint && Number.isFinite(constraint.val) ? constraint.val : 0;
+}
+
+/**
  * A `hierRoot`: its own box and the row of its children, placed by `hierAlign`: above
  * (`t...`, the default), below (`b...`), left (`l...`) or right (`r...`) of the row,
  * centred over the first and last child (`...CtrCh`) or flush with the row's start.
@@ -204,14 +217,24 @@ function measureRoot(context: PlacementContext, root: NodeState, depth: number):
   const align = root.node.algorithm.params.get('hierAlign') ?? 'tCtrCh';
   const side = align[0];
   const centred = align.endsWith('CtrCh') || align.endsWith('CtrD');
+  // A row flush with one edge of the box starts `alignOff` of the box in from that edge.
+  const offset = centred ? 0 : Math.min(1, Math.max(0, alignOffset(root)));
   let boxX = 0;
   let boxY = 0;
   if (side === 'l' || side === 'r') {
-    boxY = centred ? row.anchorY - size.h / 2 : align.endsWith('B') ? row.h - size.h : 0;
+    boxY = centred
+      ? row.anchorY - size.h / 2
+      : align.endsWith('B')
+        ? row.h - size.h + offset * size.h
+        : -offset * size.h;
     if (side === 'l') row.x = size.w + gap;
     else boxX = row.w + gap;
   } else {
-    boxX = centred ? row.anchorX - size.w / 2 : align.endsWith('R') ? row.w - size.w : 0;
+    boxX = centred
+      ? row.anchorX - size.w / 2
+      : align.endsWith('R')
+        ? row.w - size.w + offset * size.w
+        : -offset * size.w;
     if (side === 'b') boxY = row.h + gap;
     else row.y = size.h + gap;
   }
@@ -379,7 +402,8 @@ export function placeLineConnector(context: PlacementContext, state: NodeState):
     maxY = Math.max(maxY, point.y);
   }
   if (maxX - minX < MIN_CONNECTOR_EXTENT) {
-    const mid = (minX + maxX) / 2;
+    // A nearly straight drop keeps the narrow box centred on where it leaves its source.
+    const mid = start.x;
     minX = mid - MIN_CONNECTOR_EXTENT / 2;
     maxX = mid + MIN_CONNECTOR_EXTENT / 2;
   }

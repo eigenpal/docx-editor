@@ -525,16 +525,16 @@ export function presFactor(state: NodeState, name: string, fallback: number): nu
  * Resizes and moves the user made to one shape (`custScaleX/Y` about its centre, then
  * `custLinFactNeighborX/Y` as a share of its size), applied after its parent places it.
  */
-function applyUserAdjustments(state: NodeState): void {
+function applyUserAdjustments(state: NodeState): { dx: number; dy: number } | null {
   const box = state.box;
-  if (!box) return;
+  if (!box) return null;
   const sx = Math.min(100, Math.max(0, presFactor(state, 'custScaleX', 1)));
   const sy = Math.min(100, Math.max(0, presFactor(state, 'custScaleY', 1)));
   // Neighbour moves count in hierarchies only; lists and composites keep their slots.
   let owner = state.node.parent;
   while (owner && owner.algorithm.type === 'composite') owner = owner.parent;
   // A pyramid sizes and moves its levels itself.
-  if (owner?.algorithm.type === 'pyra') return;
+  if (owner?.algorithm.type === 'pyra') return null;
   const moves = owner?.algorithm.type === 'hierRoot' || owner?.algorithm.type === 'hierChild';
   // A move counts along the row of siblings only: across in a row, down in a column.
   const row = owner?.algorithm.type === 'hierChild' ? owner : owner?.parent;
@@ -542,7 +542,7 @@ function applyUserAdjustments(state: NodeState): void {
   const column = direction === 'fromT' || direction === 'fromB';
   const fx = moves && !column ? presFactor(state, 'custLinFactNeighborX', 0) : 0;
   const fy = moves && column ? presFactor(state, 'custLinFactNeighborY', 0) : 0;
-  if (sx === 1 && sy === 1 && fx === 0 && fy === 0) return;
+  if (sx === 1 && sy === 1 && fx === 0 && fy === 0) return null;
   const w = box.w * sx;
   const h = box.h * sy;
   state.box = {
@@ -551,6 +551,31 @@ function applyUserAdjustments(state: NodeState): void {
     w,
     h,
   };
+  return { dx: fx * w, dy: fy * h };
+}
+
+/**
+ * Apply each child's own resize and move; a child that moves with a sibling (`moveWith`)
+ * and has no move of its own follows that sibling's move.
+ */
+function applyChildAdjustments(states: readonly NodeState[], node: DiagramLayoutNode): void {
+  const moves = new Map<string, { dx: number; dy: number }>();
+  const own = new Set<NodeState>();
+  for (const child of node.children) {
+    const state = states[child.index]!;
+    const move = applyUserAdjustments(state);
+    if (!move) continue;
+    own.add(state);
+    if (move.dx !== 0 || move.dy !== 0) moves.set(child.name, move);
+  }
+  if (moves.size === 0) return;
+  for (const child of node.children) {
+    const state = states[child.index]!;
+    const leader = child.definition.attributes.find((a) => a.localName === 'moveWith')?.value;
+    const move = leader === undefined ? undefined : moves.get(leader);
+    if (!move || own.has(state) || !state.box) continue;
+    state.box = { ...state.box, x: state.box.x + move.dx, y: state.box.y + move.dy };
+  }
 }
 
 /** Override key of a node's custom text size. */
@@ -639,7 +664,7 @@ export function solveDiagramLayout(
     fitOwnBox(state);
     constraintsOnChildren(context, node, inherited);
     if (!placeChildren(placement, state)) return false;
-    for (const child of node.children) applyUserAdjustments(context.states[child.index]!);
+    applyChildAdjustments(context.states, node);
     if (node.algorithm.type === 'conn') constraintsOnChildren(context, node, inherited);
     for (const child of node.children) {
       if (!visit(child, passed)) return false;

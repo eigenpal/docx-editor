@@ -30,6 +30,20 @@ describe('SmartArt hierarchy packing', () => {
   }
 });
 
+describe('SmartArt hierarchy offsets', () => {
+  test('a column of leaves hangs `alignOff` of its parent in from the left edge', () => {
+    // The leaves of a branch with no grandchildren stack under the left quarter of it.
+    expect(score('probe-p6-org1-nest-1').misses).toEqual([]);
+  });
+
+  test('a shape that moves with a moved sibling follows it, and so does its connector', () => {
+    // The text of one branch is moved by the user; its background moves with it.
+    for (const id of ['mixed-short-4-hierarchy1', 'mixed-long-4-hierarchy1']) {
+      expect(score(id).misses).toEqual([]);
+    }
+  });
+});
+
 describe('SmartArt list growth', () => {
   // Custom text sizes: the unbounded heights grow in the units the line scales down.
   for (const id of ['probe-p6-vlist2-cust-1', 'probe-p6-vlist2-cust2-1']) {
