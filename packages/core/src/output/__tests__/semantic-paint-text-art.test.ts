@@ -77,6 +77,32 @@ describe('text art paint', () => {
     expect(text.getAttribute('stroke')).toBe('#000000');
   });
 
+  test('components an installed layout drew paint in box EMU in place of the path', () => {
+    const wall = {
+      subpathsEmu: [
+        [
+          { x: 0, y: 0 },
+          { x: 12700, y: 0 },
+          { x: 12700, y: 12700 },
+        ],
+      ],
+      fillHex: '0066CC',
+      fillAlpha: 1,
+      strokeHex: null,
+      strokeAlpha: 1,
+      strokeWidthEmu: 0,
+      fillRule: 'nonzero' as const,
+    };
+    const element = paintTextArt(document, record({ ...ART, components: [wall] }), 1, false);
+    const svg = element.querySelector('svg')!;
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${214.4 * 12700} ${100 * 12700}`);
+    const paths = svg.querySelectorAll('path');
+    expect(paths).toHaveLength(1);
+    expect(paths[0]!.getAttribute('d')).toBe('M0 0L12700 0L12700 12700Z');
+    expect(paths[0]!.getAttribute('fill')).toBe('#0066CC');
+    expect(paths[0]!.getAttribute('fill-rule')).toBe('nonzero');
+  });
+
   test('an unmeasured record paints an empty, labelled frame', () => {
     const element = paintTextArt(document, record({ ...ART, path: null, fit: null }), 1, false);
     expect(element.querySelector('path, text')).toBeNull();

@@ -16,7 +16,7 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 | Charts | Render read-only from the values cached in the chart part. | Labeled placeholder |
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
-| WordArt (straight VML text paths) | Renders its text fitted to the shape, with its fill, outline, and rotation. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
+| WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
 | EMF and WMF pictures | Rasterized in the editor. Drawn as vector paths, text, and bitmaps in PDF export. | Labeled placeholder |
 
 Text watermarks are a page feature, so they render without the module.
@@ -65,7 +65,7 @@ installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
 - Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself. Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint.
-- WordArt renders plain, straight text fitted to the shape box. Curved WordArt, gradients, and shown shadows keep the drawing refused.
+- WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion. Gradients at other angles, perspective extrusion, and shape types whose definition the drawing does not include, other than plain text, triangle, and arch, keep the drawing refused.
 - EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
 
 For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).

@@ -1433,8 +1433,9 @@ export interface DrawingRenderers {
         cy: number;
     }>, options: DiagramLayoutOptions) => OoxmlElement | null;
     readonly effects?: DrawingEffectsRenderer;
-    readonly legacyTextArt?: (shape: OoxmlElement) => LegacyTextArtProjection | null;
+    readonly legacyTextArt?: (shape: OoxmlElement, context?: LegacyTextArtContext) => LegacyTextArtProjection | null;
     readonly metafile?: MetafileRenderer;
+    readonly textArtLayout?: TextArtLayoutRenderer;
 }
 
 // @public
@@ -2530,6 +2531,11 @@ export function legacyCheckboxFieldsOf(paragraph: OoxmlParagraphNode): readonly 
 export function legacyRotationDegrees(raw: string | undefined): number;
 
 // @public
+export interface LegacyTextArtContext {
+    readonly template?: OoxmlElement;
+}
+
+// @public
 export interface LegacyTextArtProjection {
     // (undocumented)
     readonly bold: boolean;
@@ -2540,6 +2546,7 @@ export interface LegacyTextArtProjection {
     readonly fontFamily: string;
     // (undocumented)
     readonly italic: boolean;
+    readonly renderData?: unknown;
     readonly rotationDegrees: number;
     // (undocumented)
     readonly strokeAlpha: number;
@@ -4913,6 +4920,43 @@ export type TabStopWrite = ParagraphTabStop;
 export type TargetMode = 'Internal' | 'External';
 
 // @public
+export interface TextArtLayout {
+    readonly components: readonly VectorShapeComponent[];
+    readonly inkBounds?: Readonly<{
+        bottom: number;
+        left: number;
+        right: number;
+        top: number;
+    }>;
+}
+
+// @public
+export interface TextArtLayoutInput {
+    // (undocumented)
+    readonly heightPt: number;
+    readonly outline: (text: string, fontSizePt: number) => TextArtOutline | null;
+    // (undocumented)
+    readonly textArt: LegacyTextArtProjection;
+    readonly widthPt: number;
+}
+
+// @public
+export type TextArtLayoutRenderer = (input: TextArtLayoutInput) => TextArtLayout | null;
+
+// @public
+export interface TextArtOutline {
+    // (undocumented)
+    readonly ink: {
+        readonly bottom: number;
+        readonly left: number;
+        readonly right: number;
+        readonly top: number;
+    };
+    // (undocumented)
+    readonly path: string;
+}
+
+// @public
 export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
 
 // @public
@@ -6058,6 +6102,7 @@ export interface VectorShapeComponent {
     // (undocumented)
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
+    readonly fillRule?: 'nonzero';
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)
@@ -6118,6 +6163,19 @@ export function vmlChildren(node: OoxmlElement): OoxmlElement[];
 
 // @public
 export function vmlColor(value: string | undefined, fallback: string): string | null;
+
+// @public
+export interface VmlFormulaContext {
+    // (undocumented)
+    readonly adjust: readonly number[];
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export function vmlFormulaValues(eqns: readonly string[], context: VmlFormulaContext): readonly number[] | null;
 
 // @public
 export const vmlNamed: (node: OoxmlNode, ns: string, name: string) => boolean;

@@ -95,66 +95,78 @@ export function vectorShapeFrame(
   // and `strokeHex` describe a one-component shape only.
   for (const component of shape.components) {
     if (include && !include(component)) continue;
-    const path = document.createElementNS(SVG_NAMESPACE, 'path');
-    const d = component.subpathsEmu
-      .map(
-        (points, index) =>
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}${component.subpathsClosed?.[index] === false ? '' : 'Z'}`
-      )
-      .join('');
-    path.setAttribute('d', d);
-    if (component.shadow) appendShadow(document, svg, d, component);
-    // A shadow silhouette paints only its shadow.
-    if (component.shadowOnly) continue;
-    // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
-    path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
-    if (component.fillHex !== null && component.fillGradient) {
-      applyGradientFill(document, svg, path, component.fillGradient);
-    } else if (component.fillHex !== null && component.fillPattern) {
-      applyPatternFill(document, svg, path, component.fillPattern);
-    }
-    path.setAttribute('fill-rule', 'evenodd');
-    // Gradient stops and pattern colours carry their own opacity; the mean would apply it twice.
-    if (component.fillAlpha < 1 && !component.fillGradient && !component.fillPattern) {
-      path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
-    }
-    if (component.strokeHex !== null) {
-      path.setAttribute('stroke', `#${component.strokeHex}`);
-      path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
-      if (component.strokeCap) path.setAttribute('stroke-linecap', component.strokeCap);
-      if (component.strokeJoin) path.setAttribute('stroke-linejoin', component.strokeJoin);
-      if (component.strokeDash?.length) {
-        const unit = Math.max(1, component.strokeWidthEmu);
-        path.setAttribute(
-          'stroke-dasharray',
-          component.strokeDash.map((length) => finiteStyle(length * unit)).join(' ')
-        );
-      }
-      if (component.strokeInset) {
-        applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
-      }
-      if (component.strokeAlpha < 1) {
-        path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
-      }
-    }
-    svg.append(path);
-    if (component.strokeHex !== null) {
-      for (const points of component.arrowheadsEmu ?? []) {
-        const arrow = document.createElementNS(SVG_NAMESPACE, 'path');
-        arrow.setAttribute(
-          'd',
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
-        );
-        arrow.setAttribute('fill', `#${component.strokeHex}`);
-        arrow.setAttribute(
-          'fill-opacity',
-          finiteStyle(Math.max(0, Math.min(1, component.strokeAlpha)))
-        );
-        arrow.setAttribute('data-docx-line-end', 'triangle');
-        svg.append(arrow);
-      }
-    }
+    appendVectorComponent(document, svg, component);
   }
   frame.append(svg);
   return frame;
+}
+
+/**
+ * One vector component as SVG paths in `svg`, whose user space is the component's EMU space:
+ * its shadow, its fill (solid, gradient or pattern) and outline, and its line ends.
+ */
+export function appendVectorComponent(
+  document: Document,
+  svg: SVGSVGElement,
+  component: VectorShapeComponent
+): void {
+  const path = document.createElementNS(SVG_NAMESPACE, 'path');
+  const d = component.subpathsEmu
+    .map(
+      (points, index) =>
+        `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}${component.subpathsClosed?.[index] === false ? '' : 'Z'}`
+    )
+    .join('');
+  path.setAttribute('d', d);
+  if (component.shadow) appendShadow(document, svg, d, component);
+  // A shadow silhouette paints only its shadow.
+  if (component.shadowOnly) return;
+  // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
+  path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
+  if (component.fillHex !== null && component.fillGradient) {
+    applyGradientFill(document, svg, path, component.fillGradient);
+  } else if (component.fillHex !== null && component.fillPattern) {
+    applyPatternFill(document, svg, path, component.fillPattern);
+  }
+  path.setAttribute('fill-rule', component.fillRule ?? 'evenodd');
+  // Gradient stops and pattern colours carry their own opacity; the mean would apply it twice.
+  if (component.fillAlpha < 1 && !component.fillGradient && !component.fillPattern) {
+    path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
+  }
+  if (component.strokeHex !== null) {
+    path.setAttribute('stroke', `#${component.strokeHex}`);
+    path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
+    if (component.strokeCap) path.setAttribute('stroke-linecap', component.strokeCap);
+    if (component.strokeJoin) path.setAttribute('stroke-linejoin', component.strokeJoin);
+    if (component.strokeDash?.length) {
+      const unit = Math.max(1, component.strokeWidthEmu);
+      path.setAttribute(
+        'stroke-dasharray',
+        component.strokeDash.map((length) => finiteStyle(length * unit)).join(' ')
+      );
+    }
+    if (component.strokeInset) {
+      applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
+    }
+    if (component.strokeAlpha < 1) {
+      path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
+    }
+  }
+  svg.append(path);
+  if (component.strokeHex !== null) {
+    for (const points of component.arrowheadsEmu ?? []) {
+      const arrow = document.createElementNS(SVG_NAMESPACE, 'path');
+      arrow.setAttribute(
+        'd',
+        `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
+      );
+      arrow.setAttribute('fill', `#${component.strokeHex}`);
+      arrow.setAttribute(
+        'fill-opacity',
+        finiteStyle(Math.max(0, Math.min(1, component.strokeAlpha)))
+      );
+      arrow.setAttribute('data-docx-line-end', 'triangle');
+      svg.append(arrow);
+    }
+  }
 }

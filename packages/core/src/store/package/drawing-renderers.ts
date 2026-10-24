@@ -25,6 +25,7 @@ import type { ShapeEffectList } from './drawing-shape-effects.ts';
 import type { PictureFrameEffects } from './drawing-picture-frame.ts';
 import type { VectorShapeComponent } from './drawing-shape-projection.ts';
 import type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
+import type { TextArtLayoutRenderer } from './text-art-layout-hook.ts';
 import type { MetafileImageMime } from './image-resources.ts';
 import type { MetafileRenderOptions, MetafileReplay } from './metafile-drawing.ts';
 
@@ -160,6 +161,19 @@ export interface DiagramLayoutOptions {
 }
 
 /**
+ * What a text art renderer reads beside the shape.
+ *
+ * @public
+ */
+export interface LegacyTextArtContext {
+  /**
+   * The `v:shapetype` the shape names with its `type`, when the same drawing holds it. A
+   * renderer that reads its geometry accepts it; the engine refuses any other custom template.
+   */
+  readonly template?: OoxmlElement;
+}
+
+/**
  * Renderers a capability package installs.
  *
  * @public
@@ -186,11 +200,20 @@ export interface DrawingRenderers {
   /** Glow, inner shadow, reflection, soft edge and bevel rim. The outer shadow is the engine's. */
   readonly effects?: DrawingEffectsRenderer;
   /**
-   * The text art of a VML text path (`v:shape` of type `#_x0000_t136`) outside a watermark,
-   * or null when the shape is outside what the renderer projects. A watermark's text art is
-   * the engine's.
+   * The text art of a VML text path (`v:shape` of a text path type, `#_x0000_t136` to
+   * `#_x0000_t175`) outside a watermark, or null when the shape is outside what the renderer
+   * projects. A watermark's text art is the engine's.
    */
-  readonly legacyTextArt?: (shape: OoxmlElement) => LegacyTextArtProjection | null;
+  readonly legacyTextArt?: (
+    shape: OoxmlElement,
+    context?: LegacyTextArtContext
+  ) => LegacyTextArtProjection | null;
+  /**
+   * The painted geometry of text art whose projection carries `renderData`: glyph outlines
+   * warped to the text path, with fills, outlines, shadows and extrusion. Without it, or
+   * when it returns null, the engine fits the plain text to the box.
+   */
+  readonly textArtLayout?: TextArtLayoutRenderer;
   /** EMF and WMF pictures. */
   readonly metafile?: MetafileRenderer;
 }

@@ -561,12 +561,15 @@ export function growPendingLineDrawingExtent(line: PendingLine): void {
     line.height = Math.max(line.height, drawing.y + drawing.height + drawing.distB);
 }
 
-/** Clip each inline drawing that reaches above its line's top to paint from that top down. */
+/**
+ * Clip each inline drawing that reaches above its line's top to paint from that top down. Text
+ * art whose ink reaches past its box keeps it, as text drawn along an arch rises over the box.
+ */
 export function clipLineDrawingsAtTop(line: PendingLine): void {
   for (let index = 0; index < line.drawings.length; index += 1) {
     const drawing = line.drawings[index]!;
     const bounds = drawing.paintBounds;
-    if (bounds.y >= -0.001) continue;
+    if (bounds.y >= -0.001 || drawing.textArt?.inkBounds) continue;
     line.drawings[index] = clipInlineDrawingRecordVertically(drawing, 0, bounds.y + bounds.height);
   }
 }

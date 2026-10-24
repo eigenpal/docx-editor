@@ -586,6 +586,7 @@ export {
   type DrawingEffectsRenderer,
   type DrawingGraphicProjection,
   type DrawingRenderers,
+  type LegacyTextArtContext,
   type MetafileRasterImage,
   type MetafileRenderer,
   type PictureEffectsProjection,
@@ -604,6 +605,14 @@ export type {
 } from './metafile-drawing.ts';
 export type { PictureFrameEffects } from './drawing-picture-frame.ts';
 export type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
+export type {
+  TextArtLayout,
+  TextArtLayoutInput,
+  TextArtLayoutRenderer,
+  TextArtOutline,
+} from './text-art-layout-hook.ts';
+export { vmlFormulaValues } from './legacy-vml-formulas.ts';
+export type { VmlFormulaContext } from './legacy-vml-formulas.ts';
 // VML value readers: generic primitives for capability packages that read legacy drawings.
 export {
   attribute as vmlAttribute,

@@ -151,6 +151,11 @@ export interface VectorShapeComponent {
    * reach past the extent. Set only for a closed outline with area.
    */
   readonly strokeInset?: boolean;
+  /**
+   * The subpaths fill by the nonzero winding rule rather than even-odd, so overlapping
+   * subpaths of one direction stay filled where they cross.
+   */
+  readonly fillRule?: 'nonzero';
 }
 
 /**

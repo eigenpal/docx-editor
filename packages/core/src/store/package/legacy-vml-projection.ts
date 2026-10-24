@@ -9,6 +9,7 @@ import type {
   DrawingWrapProjection,
 } from './drawing-projection.ts';
 import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
+import { legacyTemplateOf } from './legacy-vml-textbox-geometry.ts';
 import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
 import { inlineLegacyProjection, legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
 import { legacyHorizontalRule } from './legacy-vml-rule.ts';
@@ -384,23 +385,30 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     });
   const textbox = readOnly ? undefined : legacyTextbox(root);
   if (textbox === null) return null;
-  // Built-in templates are metadata, not a second drawing. Unknown custom
-  // templates may redefine geometry and are outside this bounded subset. A text box reads the
-  // template it names with its geometry, which refuses what it cannot trace.
-  if (
-    !textbox &&
-    children(node).some((child) => named(child, VML, 'shapetype') && !isStandardVmlTemplate(child))
-  )
-    return null;
-  const style = supportedStyle(root, true, !!textbox);
-  if (!style) return null;
-  const floating = style.get('position') === 'absolute';
   // A text path projects its text for layout to fit, floating or on the line; every other
   // shape keeps the preview subset, which has no rotation. A text box story carries its own turn.
   // Text art outside a watermark needs an installed text art renderer; without one the text
   // path is refused, as a drawing outside the subset is, rather than drawn as its preview.
   const textArtRenderer = drawingRenderers().legacyTextArt;
-  const textArt = !readOnly ? drawingTextArt(root, textArtRenderer) : null;
+  const template = textbox ? undefined : legacyTemplateOf(node, root);
+  const textArt = !readOnly && !textbox ? drawingTextArt(root, textArtRenderer, template) : null;
+  // Built-in templates are metadata, not a second drawing. Unknown custom
+  // templates may redefine geometry and are outside this bounded subset. A text box reads the
+  // template it names with its geometry, which refuses what it cannot trace, and so does a
+  // text art renderer that projected the shape.
+  if (
+    !textbox &&
+    children(node).some(
+      (child) =>
+        named(child, VML, 'shapetype') &&
+        !isStandardVmlTemplate(child) &&
+        !(textArt && child === template)
+    )
+  )
+    return null;
+  const style = supportedStyle(root, true, !!textbox);
+  if (!style) return null;
+  const floating = style.get('position') === 'absolute';
   if (style.has('rotation') && !textArt && !textbox) return null;
   if (!readOnly && !textArt && !textArtRenderer && isUnrenderedTextArt(root)) return null;
   // A line spans its `from` and `to` points.

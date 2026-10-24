@@ -14,7 +14,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * - the layout of a SmartArt diagram saved without its drawing;
  * - shape and picture effects: glow, inner shadow, reflection, soft edge, and the rim of a
  *   dark-edged bevel;
- * - WordArt: VML text paths outside a watermark;
+ * - WordArt: VML text paths outside a watermark, laid along arches, triangles and the other
+ *   text path shapes, with gradient fills, shadows and 3-D extrusion;
  * - EMF and WMF pictures: a vector replay for PDF export and a raster in the browser editor.
  *
  * Without it, a chart, an unlaid diagram, a WordArt drawing and a metafile picture keep their
@@ -49,6 +50,7 @@ import { projectChart } from './chart-projection.ts';
 import { synthesizeDiagramDrawing } from './diagram-layout-synthesis.ts';
 import { drawingEffectsRenderer } from './effects-projection.ts';
 import { metafileRenderer } from './metafile-renderer.ts';
+import { textArtLayout } from './text-art-layout.ts';
 import { legacyTextArtRenderer } from './text-art-projection.ts';
 
 /**
@@ -65,6 +67,7 @@ export function installDrawing(options: ProLicenseOptions = {}): void {
     diagramLayout: synthesizeDiagramDrawing,
     effects: drawingEffectsRenderer,
     legacyTextArt: legacyTextArtRenderer,
+    textArtLayout,
     metafile: metafileRenderer,
   });
 }

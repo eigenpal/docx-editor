@@ -6,6 +6,7 @@
 // The engine projects the text art of a watermark itself, because a watermark is a page
 // feature with its own dialog and API. Text art in any other drawing projects only through an
 // installed text art renderer (`drawing-renderers.ts`); without one it stays refused.
+import type { DrawingRenderers } from './drawing-renderers.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 import {
   attribute as a,
@@ -46,6 +47,11 @@ export interface LegacyTextArtProjection {
   readonly rotationDegrees: number;
   /** `trim`: the ink fills the whole box, with no text inset. */
   readonly trim?: true;
+  /**
+   * Data an installed text art layout (`DrawingRenderers.textArtLayout`) reads: plain JSON
+   * values, so equal projections stay equal. The engine never reads it.
+   */
+  readonly renderData?: unknown;
 }
 
 /** The longest text this subset fits; a watermark is a short phrase. */
@@ -223,10 +229,21 @@ export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | nul
  */
 export function drawingTextArt(
   node: OoxmlElement,
-  renderer: ((shape: OoxmlElement) => LegacyTextArtProjection | null) | undefined
+  renderer: DrawingRenderers['legacyTextArt'],
+  template?: OoxmlElement
 ): LegacyTextArtProjection | null {
   if ((a(node, 'id') ?? '').startsWith(TEXT_WATERMARK_ID_PREFIX)) return legacyTextArt(node);
-  return renderer ? renderer(node) : null;
+  return renderer ? renderer(node, template ? { template } : {}) : null;
+}
+
+/** The text path shape types: plain text (`136`) through the can shapes (`175`). */
+const TEXT_PATH_TYPE = /^#_x0000_t(\d{3})$/;
+
+/** Whether `type` names one of the text path shape types. */
+export function isTextPathType(type: string | undefined): boolean {
+  const match = TEXT_PATH_TYPE.exec(type ?? '');
+  const spt = match ? Number(match[1]) : NaN;
+  return spt >= 136 && spt <= 175;
 }
 
 /** A text path outside a watermark, which only an installed text art renderer projects. */
@@ -234,7 +251,7 @@ export function isUnrenderedTextArt(node: OoxmlElement): boolean {
   return (
     node.namespaceUri === VML &&
     node.localName === 'shape' &&
-    a(node, 'type') === '#_x0000_t136' &&
+    isTextPathType(a(node, 'type')) &&
     !(a(node, 'id') ?? '').startsWith(TEXT_WATERMARK_ID_PREFIX)
   );
 }

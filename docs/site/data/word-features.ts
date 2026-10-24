@@ -720,7 +720,7 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'images.wordart',
-    name: 'WordArt (straight VML text paths)',
+    name: 'WordArt (VML text paths)',
     category: 'images',
     editing: 'none',
     rendering: 'partial',
@@ -728,7 +728,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'premium',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'WordArt requires the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, inline WordArt keeps its extent with a placeholder, and floating WordArt does not render. Straight fit-to-box WordArt renders its text as glyph outlines fitted to the shape, with its fill, outline, and rotation. Curved WordArt and WordArt with gradients or shown shadows do not render. Text watermarks render without the module.',
+      'WordArt requires the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, inline WordArt keeps its extent with a placeholder, and floating WordArt does not render. WordArt renders its text as glyph outlines fitted to the shape: straight, between the two guides of a shape such as a triangle, or along an arch. It paints its fill (solid or vertical gradient), outline, shown shadow, rotation, and a parallel 3-D extrusion with lit sides. Gradients at other angles, perspective extrusion, and shape types whose drawing does not include their definition (other than plain text, triangle, and arch) do not render. Text watermarks render without the module.',
   },
   {
     id: 'images.charts',

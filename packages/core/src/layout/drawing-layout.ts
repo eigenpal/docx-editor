@@ -2,7 +2,7 @@ import { inlinePictureExtent } from './inline-picture-extent.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
 
-import { layoutTextArt, rotatedBounds, turnedTextboxBounds } from './drawing-text-art.ts';
+import { layoutTextArt, textArtPaintBounds, turnedTextboxBounds } from './drawing-text-art.ts';
 import type { DrawingTextArtRecord } from './drawing-text-art.ts';
 import { clipBoxToRegion, hitBoundsOf } from './drawing-clip-box.ts';
 export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
@@ -430,6 +430,24 @@ export function clipInlineDrawingRecordToRegion(
     paintBounds,
     hitBounds,
     geometry: clipGeometryToRegion(shiftedGeometry, region),
+  });
+}
+
+/**
+ * Clip an inline drawing to the paper sideways and the body band vertically. Text art whose ink
+ * rises over its box (an arch) keeps that ink past the band.
+ */
+export function clipInlineDrawingToBodyBand(
+  drawing: InlineDrawingRecord,
+  paper: LayoutBox,
+  bandHeight: number
+): InlineDrawingRecord {
+  const art = drawing.textArt?.inkBounds !== undefined;
+  return clipInlineDrawingRecordToRegion(drawing, {
+    x: paper.x,
+    y: art ? -1e5 : 0,
+    width: paper.width,
+    height: art ? 2e5 : bandHeight,
   });
 }
 
@@ -986,7 +1004,7 @@ export function buildAnchoredDrawingRecord(options: {
   });
   // Turned text or a turned text box reaches past its box; the painted area holds the turn.
   const turned = textArt
-    ? rotatedBounds(geometry.paintBounds, textArt.rotationDegrees)
+    ? textArtPaintBounds(geometry.paintBounds, textArt)
     : turnedTextboxBounds(geometry.paintBounds, options.textboxStory);
   const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
   const hitBounds = hitBoundsOf(paintBounds);
@@ -1326,13 +1344,15 @@ export function buildInlineDrawingRecord(options: {
   // A turned, shadowed or outlined text box, or turned text art, reaches past its extent; the
   // clip keeps that reach.
   const reach = textArt
-    ? rotatedBounds(geometry.paintBounds, textArt.rotationDegrees)
+    ? textArtPaintBounds(geometry.paintBounds, textArt)
     : turnedTextboxBounds(geometry.paintBounds, textboxStory);
   const horizontalClip = options.deferHorizontalClip
     ? { x: reach.x, width: reach.width }
     : { x: options.contentLeft, width: Math.max(0, options.contentRight - options.contentLeft) };
+  // Text art draws its whole ink, as a floating shape does, even where it reaches over the
+  // content top or bottom.
   const clipRegion =
-    options.contentTop !== undefined && options.contentBottom !== undefined
+    options.contentTop !== undefined && options.contentBottom !== undefined && !textArt
       ? Object.freeze({
           ...horizontalClip,
           y: options.contentTop,

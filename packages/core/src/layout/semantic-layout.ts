@@ -126,7 +126,7 @@ import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.t
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
 import {
-  clipInlineDrawingRecordToRegion,
+  clipInlineDrawingToBodyBand,
   columnPaperClip,
   publishAnchoredDrawingsForParagraph,
   anchoredDrawingAtomsInParagraph,
@@ -2693,9 +2693,8 @@ function* layoutBlocksPass(
       let alignedDrawings = content.drawings;
       if (alignedDrawings.length > 0) {
         const paperClip = columnPaperClip(pageContentClip(), columns, columnIndex);
-        const pageClip = { x: paperClip.x, y: 0, width: paperClip.width, height: contentHeight() };
         alignedDrawings = alignedDrawings.map((drawing) =>
-          clipInlineDrawingRecordToRegion(drawing, pageClip)
+          clipInlineDrawingToBodyBand(drawing, paperClip, contentHeight())
         );
       }
       const record: LineRecord = {

@@ -1,7 +1,8 @@
 // VML text art (a text watermark, or WordArt on the line) as inline SVG.
 //
 // Layout fitted the glyph outlines into the unrotated box; paint draws that path and turns
-// the box about its centre. Without outlines it draws the text through the same fit.
+// the box about its centre. Without outlines it draws the text through the same fit. Text art
+// an installed layout drew paints its vector components instead.
 //
 // Trust boundary: colours are validated 6-digit sRGB, the path is engine-generated M/L/Q/C/Z
 // data, the font family was validated at projection, and every node is built with
@@ -9,8 +10,10 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { DrawingTextArtRecord } from '../layout/drawing-text-art.ts';
 import type { LayoutBox } from '../layout/semantic-records.ts';
+import { appendVectorComponent } from './semantic-paint-vector-shape.ts';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const EMU_PER_POINT = 12_700;
 
 const num = (value: number) => (Number.isFinite(value) ? String(value) : '0');
 
@@ -68,7 +71,14 @@ export function paintTextArt(
     svg.style.transform = `rotate(${num(art.rotationDegrees)}deg)`;
   }
 
-  if (art.path !== null) {
+  if (art.components) {
+    // An installed text art layout drew the text as vector components in box EMU.
+    svg.setAttribute(
+      'viewBox',
+      `0 0 ${num(drawing.width * EMU_PER_POINT)} ${num(drawing.height * EMU_PER_POINT)}`
+    );
+    for (const component of art.components) appendVectorComponent(document, svg, component);
+  } else if (art.path !== null) {
     const path = document.createElementNS(SVG_NAMESPACE, 'path');
     path.setAttribute('d', art.path);
     ink(path, art);

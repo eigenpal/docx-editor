@@ -109,8 +109,9 @@ describe('WordArt', () => {
 
   test('markup outside the subset is refused rather than approximated', () => {
     const refused = [
-      wordArt({ children: '<v:fill type="gradient" color2="red"/>' }),
-      wordArt({ children: '<v:shadow on="t"/>' }),
+      wordArt({ children: '<v:fill type="gradient" color2="red" angle="45"/>' }),
+      wordArt({ children: '<v:fill type="gradientRadial" color2="red"/>' }),
+      wordArt({ children: '<v:shadow on="t" type="perspective"/>' }),
       wordArt({ path: '<v:textpath style="font-family:Calibri;v-rotate-letters:t" string="X"/>' }),
       wordArt({ path: '<v:textpath style="font-family:Calibri" string="two&#10;lines"/>' }),
       wordArt({ path: '<v:textpath style="font-family:Calibri" string="   "/>' }),
@@ -128,8 +129,6 @@ describe('WordArt', () => {
       wordArt({
         path: '<v:textpath style="font-family:Arial;font-style:italic" string="Copy" trim="t"/>',
       }),
-      wordArt({ children: '<v:fill type="gradient"/>' }),
-      wordArt({ attributes: 'adj="9000"' }),
     ];
     for (const run of runs) {
       const shape = shapeOf(run);

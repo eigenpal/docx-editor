@@ -59,92 +59,11 @@ export function paintVectorShape(
     if (closed && points.length) commands.push('h');
     return commands.join(' ');
   };
+  const states = new Map<string, string>();
   for (const component of shape.components) {
     work.tick();
     if (include && !include(component)) continue;
-    const state = doc.context.register(
-      doc.context.obj({
-        Type: 'ExtGState',
-        ca: component.fillAlpha,
-        CA: component.strokeAlpha,
-      })
-    );
-    const stateName = `ShapeAlpha${state.objectNumber}`;
-    page.node.setExtGState(PDFName.of(stateName), state);
-    out.push(`q /${stateName} gs`);
-    const cap = component.strokeCap === 'round' ? 1 : component.strokeCap === 'square' ? 2 : 0;
-    const join = component.strokeJoin === 'round' ? 1 : component.strokeJoin === 'bevel' ? 2 : 0;
-    out.push(`${cap} J ${join} j`);
-    const inset = component.strokeInset === true && component.strokeHex !== null;
-    // An inset outline strokes at twice its width, clipped to the closed path, so the
-    // authored width stays inside the shape.
-    const width = Math.max(1, component.strokeWidthEmu) * (inset ? 2 : 1);
-    if (component.fillHex !== null) {
-      out.push(
-        component.fillPattern
-          ? patternFillOperator(doc, page, component.fillPattern)
-          : `${color(component.fillHex)} rg`
-      );
-    }
-    if (component.strokeHex !== null)
-      out.push(`${color(component.strokeHex)} RG ${n(width / unit)} w`);
-    // Dashes scale with the authored width, also under an inset outline's doubled stroke.
-    if (component.strokeHex !== null && component.strokeDash?.length) {
-      const dashUnit = Math.max(1, component.strokeWidthEmu) / unit;
-      out.push(`[${component.strokeDash.map((length) => n(length * dashUnit)).join(' ')}] 0 d`);
-    }
-    const geometry = component.subpathsEmu
-      .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
-      .join('\n');
-    if (component.shadow) {
-      // An inner shadow paints inside its shape only.
-      const clip = component.clipEmu?.map((points) => path(points, true)).join('\n');
-      out.push(
-        clip
-          ? `q ${clip} W* n\n${shadowOps(doc, page, component, geometry, unit)}\nQ`
-          : shadowOps(doc, page, component, geometry, unit)
-      );
-    }
-    // A shadow silhouette paints only its shadow.
-    if (component.shadowOnly) {
-      out.push('Q');
-      continue;
-    }
-    // A gradient fills inside its own clip; the outline then strokes over it unfilled.
-    const gradient = component.fillHex !== null ? component.fillGradient : undefined;
-    if (gradient) {
-      out.push(`q ${geometry} W* n ${gradientShading(doc, page, gradient, unit)} Q`);
-      if (component.strokeHex !== null) {
-        out.push(inset ? `q ${geometry} W* n ${geometry} S Q` : `${geometry} S`);
-      }
-    } else if (inset) {
-      // The fill lies inside the clip already, so one clipped pass fills and strokes.
-      out.push(`q ${geometry} W* n`, geometry, component.fillHex !== null ? 'B* Q' : 'S Q');
-    } else {
-      out.push(geometry);
-      out.push(
-        component.fillHex !== null
-          ? component.strokeHex !== null
-            ? 'B*'
-            : 'f*'
-          : component.strokeHex !== null
-            ? 'S'
-            : 'n'
-      );
-    }
-    if (component.strokeHex !== null && component.arrowheadsEmu?.length) {
-      const arrowState = doc.context.register(
-        doc.context.obj({
-          Type: 'ExtGState',
-          ca: component.strokeAlpha,
-        })
-      );
-      const arrowName = `ShapeAlpha${arrowState.objectNumber}`;
-      page.node.setExtGState(PDFName.of(arrowName), arrowState);
-      out.push(`/${arrowName} gs ${color(component.strokeHex)} rg`);
-      for (const points of component.arrowheadsEmu) out.push(`${path(points, true)} f`);
-    }
-    out.push('Q');
+    out.push(vectorComponentOps(doc, page, component, path, states));
   }
   out.push('Q');
   // A byte string, escaped: `PDFString.of` writes its value verbatim, and a `)` in the href
@@ -170,5 +89,108 @@ export function paintVectorShape(
       )
     );
   }
+  return out.join('\n');
+}
+
+/** A page graphics state for these opacities, registered once per painted drawing. */
+function alphaState(
+  doc: PDFDocument,
+  page: PDFPage,
+  fill: number,
+  stroke: number,
+  states: Map<string, string>
+): string {
+  const key = `${fill} ${stroke}`;
+  const known = states.get(key);
+  if (known) return known;
+  const state = doc.context.register(doc.context.obj({ Type: 'ExtGState', ca: fill, CA: stroke }));
+  const name = `ShapeAlpha${state.objectNumber}`;
+  page.node.setExtGState(PDFName.of(name), state);
+  states.set(key, name);
+  return name;
+}
+
+/**
+ * One component's operators in a user space of `unit` EMU per unit: its shadow, its fill
+ * (solid, pattern or gradient) and outline, and its line ends. `path` writes one subpath.
+ */
+export function vectorComponentOps(
+  doc: PDFDocument,
+  page: PDFPage,
+  component: VectorShapeComponent,
+  path: (points: readonly Readonly<{ x: number; y: number }>[], closed: boolean) => string,
+  states: Map<string, string>,
+  unit = 12700
+): string {
+  const stateName = alphaState(doc, page, component.fillAlpha, component.strokeAlpha, states);
+  const out: string[] = [`q /${stateName} gs`];
+  const cap = component.strokeCap === 'round' ? 1 : component.strokeCap === 'square' ? 2 : 0;
+  const join = component.strokeJoin === 'round' ? 1 : component.strokeJoin === 'bevel' ? 2 : 0;
+  out.push(`${cap} J ${join} j`);
+  const inset = component.strokeInset === true && component.strokeHex !== null;
+  // An inset outline strokes at twice its width, clipped to the closed path, so the
+  // authored width stays inside the shape.
+  const width = Math.max(1, component.strokeWidthEmu) * (inset ? 2 : 1);
+  if (component.fillHex !== null) {
+    out.push(
+      component.fillPattern
+        ? patternFillOperator(doc, page, component.fillPattern)
+        : `${color(component.fillHex)} rg`
+    );
+  }
+  if (component.strokeHex !== null)
+    out.push(`${color(component.strokeHex)} RG ${n(width / unit)} w`);
+  // Dashes scale with the authored width, also under an inset outline's doubled stroke.
+  if (component.strokeHex !== null && component.strokeDash?.length) {
+    const dashUnit = Math.max(1, component.strokeWidthEmu) / unit;
+    out.push(`[${component.strokeDash.map((length) => n(length * dashUnit)).join(' ')}] 0 d`);
+  }
+  const nonzero = component.fillRule === 'nonzero';
+  const [clipOp, fillOnly, fillStroke] = nonzero ? ['W', 'f', 'B'] : ['W*', 'f*', 'B*'];
+  const geometry = component.subpathsEmu
+    .map((points, index) => path(points, component.subpathsClosed?.[index] !== false))
+    .join('\n');
+  if (component.shadow) {
+    // An inner shadow paints inside its shape only.
+    const clip = component.clipEmu?.map((points) => path(points, true)).join('\n');
+    out.push(
+      clip
+        ? `q ${clip} W* n\n${shadowOps(doc, page, component, geometry, unit)}\nQ`
+        : shadowOps(doc, page, component, geometry, unit)
+    );
+  }
+  // A shadow silhouette paints only its shadow.
+  if (component.shadowOnly) {
+    out.push('Q');
+    return out.join('\n');
+  }
+  // A gradient fills inside its own clip; the outline then strokes over it unfilled.
+  const gradient = component.fillHex !== null ? component.fillGradient : undefined;
+  if (gradient) {
+    out.push(`q ${geometry} ${clipOp} n ${gradientShading(doc, page, gradient, unit)} Q`);
+    if (component.strokeHex !== null) {
+      out.push(inset ? `q ${geometry} W* n ${geometry} S Q` : `${geometry} S`);
+    }
+  } else if (inset) {
+    // The fill lies inside the clip already, so one clipped pass fills and strokes.
+    out.push(`q ${geometry} W* n`, geometry, component.fillHex !== null ? 'B* Q' : 'S Q');
+  } else {
+    out.push(geometry);
+    out.push(
+      component.fillHex !== null
+        ? component.strokeHex !== null
+          ? fillStroke
+          : fillOnly
+        : component.strokeHex !== null
+          ? 'S'
+          : 'n'
+    );
+  }
+  if (component.strokeHex !== null && component.arrowheadsEmu?.length) {
+    const arrowName = alphaState(doc, page, component.strokeAlpha, 1, states);
+    out.push(`/${arrowName} gs ${color(component.strokeHex)} rg`);
+    for (const points of component.arrowheadsEmu) out.push(`${path(points, true)} f`);
+  }
+  out.push('Q');
   return out.join('\n');
 }

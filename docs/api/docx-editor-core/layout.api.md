@@ -916,6 +916,7 @@ export interface DrawingPoint {
 export interface DrawingTextArtRecord {
     // (undocumented)
     readonly bold: boolean;
+    readonly components?: readonly VectorShapeComponent[];
     // (undocumented)
     readonly fillAlpha: number;
     readonly fillHex: string | null;
@@ -923,6 +924,12 @@ export interface DrawingTextArtRecord {
     // (undocumented)
     readonly fontFamily: string;
     readonly fontSizePt: number;
+    readonly inkBounds?: Readonly<{
+        bottom: number;
+        left: number;
+        right: number;
+        top: number;
+    }>;
     // (undocumented)
     readonly italic: boolean;
     readonly path: string | null;
@@ -4958,6 +4965,7 @@ export interface VectorShapeComponent {
     // (undocumented)
     readonly fillHex: string | null;
     readonly fillPattern?: VectorPattern;
+    readonly fillRule?: 'nonzero';
     readonly shadow?: ShapeShadow;
     readonly shadowOnly?: true;
     // (undocumented)
