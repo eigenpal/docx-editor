@@ -541,7 +541,8 @@ function createPartDrawingContextSlot(options: {
     const cached = resourceByKey.get(key);
     if (cached) return cached;
 
-    const linked = (projection.picture ?? projection.groupPicture)?.linkedRelationshipId;
+    const shown = projection.picture ?? projection.groupPicture;
+    const linked = shown?.embeddedRelationshipId ? null : shown?.linkedRelationshipId;
     if (linked) {
       const linkedState = lookup.resolveLinked(ownerPartName, linked);
       resourceByKey.set(key, linkedState);
@@ -568,7 +569,7 @@ function createPartDrawingContextSlot(options: {
   const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
     const projection = atomProjections.get(atomNodeId) ?? null;
     if (!projection?.groupPicture?.alternateContent) return projection;
-    const state = projection.groupPicture.linkedRelationshipId
+    const state = !projection.groupPicture.embeddedRelationshipId
       ? resourceOf(projection)
       : resourceByKey.get(pendingResourceKey(projection));
     return state && state.kind !== 'ready' && state.kind !== 'pending'

@@ -926,8 +926,9 @@ export function validateDrawingNode(
   if (kind === 'pictureBlip') {
     const embed = relationshipAttributeValue(attributes, 'embed');
     const link = relationshipAttributeValue(attributes, 'link');
+    // CT_Blip makes both optional. With both, the embedded copy is the picture shown and the
+    // link only names its source, which is never loaded.
     if (embed === undefined && link === undefined) return false;
-    if (embed !== undefined && link !== undefined) return false;
     return localName === 'blip' && children.every((child) => child.kind === 'generic');
   }
 

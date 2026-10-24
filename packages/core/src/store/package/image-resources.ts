@@ -1384,11 +1384,12 @@ function createImageResourceCacheInternal(
     if (!picture) {
       return unrenderable(null, 'unknown', 'non-picture-graphic');
     }
+    // An embedded copy is the picture shown; a link beside it only names the source.
+    const embedded = picture.embeddedRelationshipId;
+    if (embedded) return resolveEmbedded(projection.ownerPartName, embedded);
     const linked = picture.linkedRelationshipId;
     if (linked) return resolveLinked(projection.ownerPartName, linked);
-    const embedded = picture.embeddedRelationshipId;
-    if (!embedded) return unrenderable(null, 'unknown', 'unsupported-format');
-    return resolveEmbedded(projection.ownerPartName, embedded);
+    return unrenderable(null, 'unknown', 'unsupported-format');
   };
 
   const lookup = Object.freeze({
