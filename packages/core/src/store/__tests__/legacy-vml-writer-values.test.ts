@@ -64,3 +64,12 @@ test('a line placed against the paragraph by name follows its paragraph', () => 
   expect(paints(projection)).toBe(true);
   expect(projection!.position?.vertical.relativeFrom).toBe('paragraph');
 });
+
+test('a through-wrapped shape wraps through its own coordinates', () => {
+  const projection = project(
+    `<v:rect style="${FLOAT};width:6in;height:134pt" wrapcoords="-38 -360 -38 21240 21638 21240 21638 -360 -38 -360" filled="f"><w10:wrap type="through"/></v:rect>`
+  );
+  expect(paints(projection)).toBe(true);
+  expect(projection!.wrap).toBe('through');
+  expect(projection!.wrapGeometry?.polygon).toHaveLength(5);
+});

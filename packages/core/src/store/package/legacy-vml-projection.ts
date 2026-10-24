@@ -522,7 +522,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     return null;
   const wrap = wrapNode ? (a(wrapNode, 'type') ?? 'none') : 'none';
   if (
-    !['none', 'square', 'topAndBottom', 'tight'].includes(wrap) ||
+    !['none', 'square', 'topAndBottom', 'tight', 'through'].includes(wrap) ||
     (wrapNode &&
       wrapNode.attributes.some(
         (attr) =>
@@ -539,7 +539,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   ]).get(side);
   if (!textSide) return null;
   const polygon: { x: number; y: number }[] = [];
-  if (wrap === 'tight') {
+  if (wrap === 'tight' || wrap === 'through') {
     const raw = (a(root, 'wrapcoords') ?? '').trim().split(/[\s,]+/);
     if (raw.length < 6 || raw.length > 256 || raw.length % 2) return null;
     const coords = raw.map(numeric);
@@ -592,8 +592,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         ? z < 0
           ? 'behind'
           : 'inFront'
-        : wrap === 'tight'
-          ? 'tight'
+        : wrap === 'tight' || wrap === 'through'
+          ? wrap
           : wrap === 'topAndBottom'
             ? 'topAndBottom'
             : textSide === 'left'
