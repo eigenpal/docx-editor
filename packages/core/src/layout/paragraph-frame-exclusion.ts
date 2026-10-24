@@ -85,6 +85,8 @@ export function addParagraphFrameExclusions(
         drawingNodeId: `frame:${frame.groupId}`,
         anchorParagraphId: frame.anchorId,
         anchorModelStart: 0,
+        // A page- or margin-positioned frame keeps its band when earlier text reflows.
+        ...(frame.pageFramed ? { pageFramedBand: true } : {}),
         paintLayer: 'inFront',
         relativeHeight: 0,
         allowOverlap: true,

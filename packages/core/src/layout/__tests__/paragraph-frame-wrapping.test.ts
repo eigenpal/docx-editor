@@ -54,3 +54,33 @@ test('applies horizontal text distance and wraps around the complete shared fram
   );
   expect(anchor.lines.find((line) => line.box.y >= 40)!.contentX).toBe(0);
 });
+
+test('a page-positioned frame wraps the earlier text on its page; a text-positioned one does not', () => {
+  const lines = Array.from(
+    { length: 10 },
+    (_, index) =>
+      `<w:p><w:pPr><w:spacing w:line="200" w:lineRule="exact" w:after="0"/></w:pPr><w:r><w:t>Line ${index}</w:t></w:r></w:p>`
+  ).join('');
+  const layoutWith = (vertical: string) => {
+    const frame = `<w:p><w:pPr><w:framePr w:w="1600" w:hAnchor="page" w:x="0" ${vertical}/><w:spacing w:line="400" w:lineRule="exact" w:after="0"/></w:pPr><w:r><w:t>Frame</w:t></w:r></w:p>`;
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${lines}${frame}<w:p><w:r><w:t>Anchor</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="4000" w:h="6000"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0"/></w:sectPr></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const layout = layoutSemanticDocument(parsed.part, 0, {
+      measurer: createFixedMeasurer(10, 10),
+    });
+    return layout.pages[0]!.fragments.filter(
+      (block): block is ParagraphFragmentRecord => block.kind === 'paragraph'
+    );
+  };
+  // The frame covers y 42.5..62.5, which "Line 4" to "Line 6" cross.
+  const paged = layoutWith('w:vAnchor="page" w:y="850"');
+  for (const index of [4, 5, 6])
+    expect(paged[index]!.lines[0]!.contentX).toBeGreaterThanOrEqual(80);
+  expect(paged[3]!.lines[0]!.contentX).toBe(0);
+  expect(paged[7]!.lines[0]!.contentX).toBe(0);
+  const flowing = layoutWith('w:vAnchor="text" w:y="0"');
+  expect(flowing.slice(0, 10).every((block) => block.lines[0]!.contentX === 0)).toBe(true);
+});

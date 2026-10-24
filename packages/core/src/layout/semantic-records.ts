@@ -458,6 +458,8 @@ export interface ParagraphFragmentRecord {
     readonly hSpace: number;
     readonly vSpace: number;
     readonly box: LayoutBox;
+    /** The frame's vertical position comes from the page or margin, not from the text flow. */
+    readonly pageFramed?: true;
   };
   readonly range: SourceRange;
   readonly props: readonly OoxmlProperty[];

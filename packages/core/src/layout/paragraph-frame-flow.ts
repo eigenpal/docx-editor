@@ -246,6 +246,7 @@ export class ParagraphFrameFlow {
         hSpace: item.frame.hSpace,
         vSpace: item.frame.vSpace,
         box: groups.get(item.groupId)!,
+        ...(item.frame.verticalAnchor === 'text' ? {} : { pageFramed: true as const }),
       };
       if (item.frame.heightRule !== 'exact') return { ...fragment, positionedFrame };
       // Every paragraph clips to the shared frame, including ink outside its line box.

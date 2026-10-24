@@ -2683,6 +2683,7 @@ export interface ParagraphFragmentRecord {
         readonly dropCapLines?: number;
         readonly groupId: string;
         readonly hSpace: number;
+        readonly pageFramed?: true;
         readonly sourceOrder: number;
         readonly vSpace: number;
         readonly wrap: 'auto' | 'around' | 'tight' | 'through' | 'none' | 'notBeside';
