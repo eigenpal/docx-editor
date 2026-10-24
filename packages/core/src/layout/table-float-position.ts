@@ -67,6 +67,9 @@ export function positionedTableAnchors(
 ): PositionedTableAnchor[] {
   const result: PositionedTableAnchor[] = [];
   let nextParagraphId: string | undefined;
+  // A text-positioned float follows the next block in flow, an in-flow table included; a
+  // page- or margin-positioned one keeps the next paragraph, which prices its earlier text.
+  let nextFlowId: string | undefined;
   for (let sourceIndex = blocks.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
     const block = blocks[sourceIndex]!;
     if (
@@ -74,6 +77,7 @@ export function positionedTableAnchors(
       !block.props.some((property) => property.localName === 'framePr')
     ) {
       nextParagraphId = block.paragraph.id;
+      nextFlowId = block.paragraph.id;
       continue;
     }
     if (block.kind !== 'table') continue;
@@ -87,15 +91,15 @@ export function positionedTableAnchors(
       compatibilityMode
     )?.float;
     if (!float || float.ySpec === 'inline') {
-      // A following in-flow table anchors the floats before it, at its own top.
-      nextParagraphId = block.table.id;
+      nextFlowId = block.table.id;
       continue;
     }
-    if (!nextParagraphId) continue;
+    const anchorId = float.vertAnchor === 'text' ? nextFlowId : nextParagraphId;
+    if (!anchorId) continue;
     result.push({
       table: block.table,
       sourceIndex,
-      anchorId: nextParagraphId,
+      anchorId,
       float,
     });
   }

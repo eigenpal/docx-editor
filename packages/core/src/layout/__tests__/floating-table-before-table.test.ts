@@ -43,6 +43,24 @@ test('a text-positioned floating table before an in-flow table sits at that tabl
   expect(after.box.y).toBeCloseTo(inFlow.box.y + inFlow.box.height, 6);
 });
 
+test('a page-positioned float before an in-flow table still clears the earlier lines on its page', () => {
+  const float = '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpY="400"/>';
+  const result = layout(p('Lead') + p('Second') + table(2, float) + table(1) + p('After'));
+  const page = result.pages[0]!.fragments;
+  const floating = page.find(
+    (fragment): fragment is TableFragmentRecord =>
+      fragment.kind === 'table' && isOutOfFlowTableFragment(fragment)
+  )!;
+  const bottom = floating.box.y + floating.box.height;
+  // The float covers 20..100: the second line and the in-flow table both start below it.
+  expect(page[1]!.box.y).toBeGreaterThanOrEqual(bottom - 0.001);
+  const inFlow = page.find(
+    (fragment): fragment is TableFragmentRecord =>
+      fragment.kind === 'table' && !isOutOfFlowTableFragment(fragment)
+  )!;
+  expect(inFlow.box.y).toBeGreaterThanOrEqual(bottom - 0.001);
+});
+
 test('an earlier in-flow table moves below a page-positioned float that spans the column', () => {
   const float = '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpY="200"/>';
   // The float's band (10..90) crosses the lead line and the top of the table after it.
