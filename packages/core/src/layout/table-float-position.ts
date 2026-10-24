@@ -189,7 +189,8 @@ export function positionedTableFlow(
     },
     /**
      * Note an in-flow table as the anchor of the floating tables before it, and return where
-     * the table itself starts: below those floats when their bands cross its top.
+     * the table itself starts: below those floats, or below a page-positioned float spanning
+     * the column, when their bands cross its top.
      */
     noteTable(
       signals: PositionedTableAnchorSignal[],
@@ -199,12 +200,13 @@ export function positionedTableFlow(
       top: number,
       zones: readonly ExclusionZone[]
     ): number {
-      if (!anchorIds.has(tableId)) return top;
-      signals.push({ anchorId: tableId, column, fragmentIndex, anchorY: top });
+      if (anchorIds.has(tableId))
+        signals.push({ anchorId: tableId, column, fragmentIndex, anchorY: top });
       let start = top;
       for (const zone of zones) {
         const band = zone.verticalBand;
-        if (zone.sourceKind !== 'table' || zone.anchorParagraphId !== tableId) continue;
+        if (zone.sourceKind !== 'table') continue;
+        if (zone.anchorParagraphId !== tableId && zone.pageFramedBand !== true) continue;
         if (band.y <= start + 0.001 && band.y + band.height > start) start = band.y + band.height;
       }
       return start;

@@ -42,3 +42,24 @@ test('a text-positioned floating table before an in-flow table sits at that tabl
   const after = result.pages[0]!.fragments.at(-1)!;
   expect(after.box.y).toBeCloseTo(inFlow.box.y + inFlow.box.height, 6);
 });
+
+test('an earlier in-flow table moves below a page-positioned float that spans the column', () => {
+  const float = '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpY="200"/>';
+  // The float's band (10..90) crosses the lead line and the top of the table after it.
+  const result = layout(p('Lead') + table(1) + table(2, float) + p('After'));
+  const tables = result.pages[0]!.fragments.filter(
+    (fragment): fragment is TableFragmentRecord => fragment.kind === 'table'
+  );
+  const floating = tables.find(isOutOfFlowTableFragment)!;
+  const inFlow = tables.find((fragment) => !isOutOfFlowTableFragment(fragment))!;
+  expect(floating.box.y).toBeCloseTo(10, 0);
+  expect(inFlow.box.y).toBeGreaterThanOrEqual(floating.box.y + floating.box.height - 0.001);
+  // A text-positioned float after the table leaves the earlier table in place.
+  const textFloat = '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpY="200"/>';
+  const flowing = layout(p('Lead') + table(1) + table(2, textFloat) + p('After'));
+  const first = flowing.pages[0]!.fragments.find(
+    (fragment): fragment is TableFragmentRecord =>
+      fragment.kind === 'table' && !isOutOfFlowTableFragment(fragment)
+  )!;
+  expect(first.box.y).toBe(20);
+});
