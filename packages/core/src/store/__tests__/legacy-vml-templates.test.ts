@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { strFromU8, unzipSync } from 'fflate';
 import {
@@ -10,6 +10,14 @@ import {
 import { projectDrawingsInPart } from '../package/drawing-projection.ts';
 import { VML, OFFICE } from '../package/legacy-vml-values.ts';
 import { isLegacyPlaceholder } from './legacy-vml-refusal.ts';
+import { drawingRenderers, installDrawingRenderers } from '../package/drawing-renderers.ts';
+import { legacyTextArt } from '../package/legacy-vml-text-art.ts';
+
+// The WordArt fixture projects through an installed text art renderer; the engine's watermark
+// reader stands in for it.
+const installed = drawingRenderers().legacyTextArt;
+beforeAll(() => installDrawingRenderers({ legacyTextArt }));
+afterAll(() => installDrawingRenderers({ legacyTextArt: installed }));
 
 function template(file: string, part: string, type: number): string {
   const fixture = new URL(`../../../../../e2e/fixtures/${file}`, import.meta.url);
