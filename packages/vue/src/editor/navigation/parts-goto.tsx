@@ -169,7 +169,9 @@ export const NavigationGoTo = defineComponent({
             <span class="docx-nav__goto-icon" aria-hidden="true">
               {row.empty ? pointIcon() : <MaterialSymbol name="bookmark" size={16} />}
             </span>
-            <span class="docx-nav__result-text">{matchedName(row.name, query)}</span>
+            <span class="docx-nav__result-text">
+              <bdi>{matchedName(row.name, query)}</bdi>
+            </span>
             {row.atSelection && (
               <span class="docx-nav__goto-here" title={t('navigation.goTo.atCaret')}>
                 <span class="docx-editor-sr-only">{t('navigation.goTo.atCaret')}</span>

@@ -33,7 +33,7 @@ import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import {
   COMPOSE_KEY,
-  REVIEW_DATE_FORMAT,
+  reviewDateFormat,
   guardMousedown,
   markPart,
   partOverrides,
@@ -152,6 +152,7 @@ export const ReviewTime = markPart(
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
       const entryRef = useReviewItem();
+      const translation = useTranslation();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
@@ -165,7 +166,11 @@ export const ReviewTime = markPart(
           datetime: raw,
         };
         if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
-        return <time {...shared}>{slots.default?.() ?? REVIEW_DATE_FORMAT.format(when)}</time>;
+        return (
+          <time {...shared}>
+            {slots.default?.() ?? reviewDateFormat(translation.lang).format(when)}
+          </time>
+        );
       };
     },
   }),

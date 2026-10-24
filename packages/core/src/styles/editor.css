@@ -6610,6 +6610,9 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__text {
   overflow-wrap: anywhere;
+  /* Quoted and written text keeps its own direction: a left-to-right remark in a
+     right-to-left interface keeps its closing punctuation at its end. */
+  unicode-bidi: plaintext;
 }
 
 /* A REVISION's quote is clamped, not scrolled: it quotes text that is already on the page the
@@ -6646,6 +6649,8 @@ a.docx-hyperlink:focus-visible {
 .docx-review__input {
   min-width: 0;
   flex: 1 1 auto;
+  /* What is typed takes its direction from its first letter, as the posted text does. */
+  unicode-bidi: plaintext;
   padding: 7px 14px;
   border: 1px solid var(--doc-border, #e3e5e8);
   border-radius: 999px;

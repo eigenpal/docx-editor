@@ -114,7 +114,8 @@ const HyperLinkUrl = defineComponent({
         onMousedown: guardMousedown,
         ...(inert ? {} : { onClick: () => popup.openTarget(), type: 'button' as const }),
       };
-      const content = slots.default?.() ?? text;
+      // An address reads left to right in any interface; a bookmark name keeps its own direction.
+      const content = slots.default?.() ?? <bdi dir={internal ? undefined : 'ltr'}>{text}</bdi>;
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
@@ -302,6 +303,7 @@ const HyperLinkFields = defineComponent({
             data-testid="hyperlink-popup-text"
             class="docx-hyperlink-popup__input"
             value={state.text}
+            dir={state.text ? 'auto' : undefined}
             placeholder={t('hyperlinkPopup.displayTextPlaceholder')}
             onInput={(event) => popup.setText((event.target as HTMLInputElement).value)}
             onKeydown={onKeyDown}
@@ -315,6 +317,7 @@ const HyperLinkFields = defineComponent({
             data-testid="hyperlink-popup-url-input"
             class="docx-hyperlink-popup__input"
             value={state.url}
+            dir={state.url ? 'auto' : undefined}
             placeholder={t('hyperlinkPopup.urlPlaceholder')}
             onInput={(event) => popup.setUrl((event.target as HTMLInputElement).value)}
             onKeydown={onKeyDown}

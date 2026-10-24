@@ -310,6 +310,8 @@ function HyperLinkUrl({ className, asChild, hidden, children }: HyperLinkPartPro
   const inert = !state.link.href;
   const internal = state.link.kind === 'internal';
   const text = internal ? `#${state.link.anchor ?? ''}` : state.link.authored;
+  // An address reads left to right in any interface; a bookmark name keeps its own direction.
+  const target = <bdi dir={internal ? undefined : 'ltr'}>{text}</bdi>;
   const hint = inert
     ? t('hyperlinkPopup.inertTarget')
     : internal
@@ -333,14 +335,14 @@ function HyperLinkUrl({ className, asChild, hidden, children }: HyperLinkPartPro
   if (inert) {
     return (
       <span {...shared}>
-        {children ?? text}
+        {children ?? target}
         <span className="docx-editor-sr-only">{hint}</span>
       </span>
     );
   }
   return (
     <button {...shared}>
-      {children ?? text}
+      {children ?? target}
       {icon(OPEN_ICON)}
     </button>
   );
@@ -489,6 +491,7 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
         data-testid="hyperlink-popup-text"
         className="docx-hyperlink-popup__input"
         value={state.text}
+        dir={state.text ? 'auto' : undefined}
         placeholder={t('hyperlinkPopup.displayTextPlaceholder')}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={onKeyDown}
@@ -502,6 +505,7 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
         data-testid="hyperlink-popup-url-input"
         className="docx-hyperlink-popup__input"
         value={state.url}
+        dir={state.url ? 'auto' : undefined}
         placeholder={t('hyperlinkPopup.urlPlaceholder')}
         onChange={(event) => setUrl(event.target.value)}
         onKeyDown={onKeyDown}
