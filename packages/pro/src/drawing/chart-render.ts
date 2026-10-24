@@ -88,6 +88,8 @@ export function renderChart(
   );
 
   const box = { l: MARGIN, t: MARGIN, r: width - MARGIN, b: height - MARGIN };
+  // Pie labels keep clear of the title's text, by a little more than a character either side.
+  const avoid: { l: number; t: number; r: number; b: number }[] = [];
 
   // Title: authored, or the single series' name when the chart names none.
   const singleSeries =
@@ -129,6 +131,8 @@ export function renderChart(
         rotation: bodyRotation(rich) ?? 0,
       });
       if (!manual && !overlay) box.t = top + total + 12.5;
+      const reach = (wraps ? wrapWidth : textWidth) / 2 + style.sizePt * 0.66;
+      avoid.push({ l: center - reach, r: center + reach, t: top, b: top + total });
     }
   }
 
@@ -250,6 +254,8 @@ export function renderChart(
         baseText,
         date1904: model.date1904,
         placed: model.plotLayout?.inner === true,
+        avoid,
+        bounds: { l: 0, t: 0, r: width, b: height },
       });
     }
   }

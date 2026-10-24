@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { isElement, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import type { ChartPlot } from './chart-model.ts';
-import { slice, type ChartScene } from './chart-scene.ts';
+import { slice, type ChartScene, type Point } from './chart-scene.ts';
 import { seriesLook, variesByPoint, type LookContext } from './chart-series.ts';
 import { lineHeight, textBlock, type ChartLabel, type ChartTextStyle } from './chart-text.ts';
 import type { Box } from './chart-axes.ts';
@@ -24,6 +24,10 @@ export interface PieContext {
   readonly date1904: boolean;
   /** The plot area has a manual inner layout. */
   readonly placed: boolean;
+  /** Boxes outside labels keep clear of, such as the chart title. */
+  readonly avoid?: readonly Box[];
+  /** The chart's own box, which outside labels stay inside. */
+  readonly bounds?: Box;
 }
 
 function explosionOf(plot: ChartPlot, seriesIndex: number, pointIndex: number): number {
@@ -40,14 +44,36 @@ interface PieLabel {
   readonly anchor: { readonly x: number; readonly y: number };
   readonly outside: boolean;
   readonly right: boolean;
-  /** Label box centre as placed before collisions. */
-  readonly cx: number;
+  /** Label box centre, moved as collisions resolve. */
+  cx: number;
   cy: number;
+  /** Where the label sat before it moved. */
+  readonly naturalX: number;
+  readonly naturalY: number;
+  /** Clockwise angle from twelve o'clock the label sits at, moved as collisions resolve. */
+  angle: number;
+  readonly middle: number;
+  /** The slice centre, and the distance from it to the label's nearest side. */
+  readonly origin: { readonly x: number; readonly y: number };
+  readonly reach: number;
+  /** The way the label last moved round the pie: 1 clockwise, -1 back, 0 not yet. */
+  drift: number;
+  readonly lineHeight: number;
+  readonly size: number;
   readonly width: number;
   readonly height: number;
 }
 
-const FIT_SLACK = 0.75;
+/**
+ * The fit test shrinks a label by this much before it checks the label lies in its slice:
+ * measured best-fit labels classify alike for any value from 0.75 to 0.9.
+ */
+const FIT_SLACK = 0.85;
+/** A leader line ends in a level run this long, this far from the text. */
+const LEADER_RUN = 0.5;
+const LEADER_GAP = 0.16;
+/** Labels further than this from their slice edge, in sizes, take a leader line. */
+const LEADER_REACH = 0.75;
 /** How far outside labels may reach past the plot area, in points. */
 const LABEL_REACH = 10;
 const DEFAULT_LEADER: ChartStroke = {
@@ -104,27 +130,6 @@ function fitsInSlice(
     if (!inSweep(angle, geometry.from, geometry.sweep)) return false;
   }
   return true;
-}
-
-/** Spread outside labels on each side so none overlaps the next, away from the centre line. */
-function separate(labels: PieLabel[], cy: number): void {
-  for (const right of [true, false]) {
-    const side = labels.filter((item) => item.outside && item.right === right);
-    const upper = side.filter((item) => item.cy < cy).sort((a, b) => b.cy - a.cy);
-    const lower = side.filter((item) => item.cy >= cy).sort((a, b) => a.cy - b.cy);
-    for (let index = 1; index < upper.length; index += 1) {
-      const below = upper[index - 1]!;
-      const item = upper[index]!;
-      const limit = below.cy - (below.height + item.height) / 2;
-      if (item.cy > limit) item.cy = limit;
-    }
-    for (let index = 1; index < lower.length; index += 1) {
-      const above = lower[index - 1]!;
-      const item = lower[index]!;
-      const limit = above.cy + (above.height + item.height) / 2;
-      if (item.cy < limit) item.cy = limit;
-    }
-  }
 }
 
 /** Paint a pie or doughnut plot inside `box`. */
@@ -231,6 +236,15 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
             right: sin >= 0,
             cx: lx,
             cy: ly,
+            naturalX: lx,
+            naturalY: ly,
+            angle: middle,
+            middle,
+            origin: { x: ox, y: oy },
+            reach: outer + (position === 'outEnd' ? 6 : 0),
+            drift: 0,
+            lineHeight: lineHeight(style),
+            size: style.sizePt,
             width,
             height,
           });
@@ -259,22 +273,135 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
     radius = Math.max(diameter / 4, radius - overflow);
   }
   const pending = run(radius, true);
-  separate(pending, cy);
+  relax(pending, context.avoid ?? [], context.bounds ?? null);
   const leader = leaderStroke(rings[0]?.dLbls ?? plot.dLbls, context);
   for (const item of pending) {
-    const moved = Math.abs(item.cy - (item.label.y + item.height / 2));
-    const label = { ...item.label, y: item.cy - item.height / 2 };
+    const label = {
+      ...item.label,
+      x: item.label.x + (item.cx - item.naturalX),
+      y: item.cy - item.height / 2,
+    };
     context.labels.push(label);
-    // A label pushed away from its slice keeps a leader line back to the slice edge.
-    if (item.outside && moved > 1) {
-      const edgeX = item.right ? item.cx - item.width / 2 : item.cx + item.width / 2;
-      context.scene.line(
-        [
-          { x: item.anchor.x, y: item.anchor.y },
-          { x: edgeX, y: item.cy },
-        ],
-        leader
-      );
+    // A label moved away from its slice keeps a leader line back to the slice edge: to a
+    // point beside the line of text nearest the pie, then level into the text. A label still
+    // within three quarters of its size of the slice edge needs none.
+    const box = labelBox(item);
+    const gapX = Math.max(box.l - item.anchor.x, 0, item.anchor.x - box.r);
+    const gapY = Math.max(box.t - item.anchor.y, 0, item.anchor.y - box.b);
+    const moved = Math.hypot(item.cx - item.naturalX, item.cy - item.naturalY);
+    if (item.outside && moved > 1 && Math.hypot(gapX, gapY) > LEADER_REACH * item.size) {
+      context.scene.line(leaderPath(item, cy), leader);
     }
+  }
+}
+
+/** The leader of a moved label: from the slice edge to a bend, then level to the text. */
+function leaderPath(item: PieLabel, pieY: number): Point[] {
+  const top = item.cy - item.height / 2;
+  const lines = Math.max(1, Math.round(item.height / item.lineHeight));
+  const line = item.cy < pieY ? lines - 1 : 0;
+  const y = top + (line + 1) * item.lineHeight - 0.35 * item.size;
+  const left = item.cx - item.width / 2;
+  const right = item.cx + item.width / 2;
+  const fromLeft = item.anchor.x < item.cx;
+  const end = fromLeft ? left - LEADER_GAP * item.size : right + LEADER_GAP * item.size;
+  const bend = fromLeft ? end - LEADER_RUN * item.size : end + LEADER_RUN * item.size;
+  return [
+    { x: item.anchor.x, y: item.anchor.y },
+    { x: bend, y },
+    { x: end, y },
+  ];
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+}
+
+/** A label's text box, widened by `pad` sizes either side for the collision test. */
+function labelBox(item: PieLabel, pad = 0): Box {
+  const extra = pad * item.size;
+  return {
+    l: item.cx - item.width / 2 - extra,
+    r: item.cx + item.width / 2 + extra,
+    t: item.cy - item.height / 2,
+    b: item.cy + item.height / 2,
+  };
+}
+
+/** Room kept beside each outside label when labels crowd, in sizes. */
+const LABEL_PAD = 0.25;
+
+/** Degrees a label moves round the pie per step, and the most it may move in all. */
+const STEP = 0.5;
+const MAX_TURN = 150;
+const MAX_STEPS = 1_000;
+
+/** Place an outside label at its angle: its nearest side touches the circle it sits on. */
+function placeAt(item: PieLabel): void {
+  const radians = (item.angle * Math.PI) / 180;
+  const sin = Math.sin(radians);
+  const cos = Math.cos(radians);
+  const extent = (item.width / 2) * Math.abs(sin) + (item.height / 2) * Math.abs(cos);
+  item.cx = item.origin.x + (item.reach + extent) * sin;
+  item.cy = item.origin.y - (item.reach + extent) * cos;
+}
+
+/** The way round the pie that takes a label away from a box it hits. */
+function awayFrom(item: PieLabel, box: Box, pieX: number, pieY: number): number {
+  const angle =
+    (Math.atan2((box.l + box.r) / 2 - pieX, pieY - (box.t + box.b) / 2) * 180) / Math.PI;
+  const difference = ((((item.angle - angle) % 360) + 540) % 360) - 180;
+  return difference >= 0 ? 1 : -1;
+}
+
+/**
+ * Spread outside labels round the pie so none overlaps another, the title or the inside
+ * labels, and none leaves the chart: overlapping neighbours step apart round the pie, and a
+ * label that hits something else keeps stepping the way it was going.
+ */
+function relax(labels: PieLabel[], avoid: readonly Box[], bounds: Box | null): void {
+  const outside = labels.filter((item) => item.outside);
+  if (outside.length === 0) return;
+  const fixed: Box[] = [...avoid];
+  for (const item of labels) if (!item.outside) fixed.push(labelBox(item));
+  const pieX = outside[0]!.origin.x;
+  const pieY = outside[0]!.origin.y;
+  const escapes = (box: Box) =>
+    bounds !== null &&
+    (box.l < bounds.l || box.r > bounds.r || box.t < bounds.t || box.b > bounds.b);
+  const turn = (item: PieLabel, way: number) => {
+    const next = item.angle + way * STEP;
+    if (Math.abs(next - item.middle) > MAX_TURN) return false;
+    item.angle = next;
+    item.drift = way;
+    placeAt(item);
+    return true;
+  };
+  for (let step = 0; step < MAX_STEPS; step += 1) {
+    let moved = false;
+    const order = [...outside].sort(
+      (a, b) => (((a.angle % 360) + 360) % 360) - (((b.angle % 360) + 360) % 360)
+    );
+    // Neighbours round the pie, the last and first too when three or more go round it.
+    const pairs = order.length > 2 ? order.length : order.length - 1;
+    for (let index = 0; index < pairs; index += 1) {
+      const a = order[index]!;
+      const b = order[(index + 1) % order.length]!;
+      if (!overlaps(labelBox(a, LABEL_PAD), labelBox(b, LABEL_PAD))) continue;
+      moved = turn(a, -1) || moved;
+      moved = turn(b, 1) || moved;
+    }
+    for (const item of outside) {
+      const box = labelBox(item, LABEL_PAD);
+      const hit = fixed.find((other) => overlaps(box, other));
+      if (hit) {
+        moved = turn(item, item.drift || awayFrom(item, hit, pieX, pieY)) || moved;
+      } else if (escapes(box)) {
+        const edge = box.t < bounds!.t ? 0 : box.b > bounds!.b ? 180 : box.l < bounds!.l ? 270 : 90;
+        const difference = ((((item.angle - edge) % 360) + 540) % 360) - 180;
+        moved = turn(item, item.drift || (difference >= 0 ? 1 : -1)) || moved;
+      }
+    }
+    if (!moved) break;
   }
 }
