@@ -23,6 +23,18 @@ export function identityPictureStretch(stretch: OoxmlElement | null): boolean {
   return true;
 }
 
+/** Outline children a picture member's stroke can carry. */
+const PICTURE_OUTLINE_PARTS = new Set([
+  'noFill',
+  'solidFill',
+  'prstDash',
+  'round',
+  'miter',
+  'bevel',
+  'headEnd',
+  'tailEnd',
+]);
+
 /** Preserve identity properties, but refuse paint that the group picture cannot represent. */
 export function supportedPictureProperties(properties: OoxmlElement): boolean {
   const mode = schemaAttributeValue(properties.attributes, 'bwMode');
@@ -32,12 +44,15 @@ export function supportedPictureProperties(properties: OoxmlElement): boolean {
     if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
     if (['xfrm', 'prstGeom', 'extLst', 'noFill'].includes(child.localName)) continue;
     if (child.localName === 'effectLst' && !child.children.some(isElement)) continue;
+    // A no-fill or solid outline: the group's vector members stroke it over the picture.
     if (child.localName === 'ln') {
       const contents = child.children.filter(isElement);
       if (
-        contents.length === 1 &&
-        contents[0]!.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
-        contents[0]!.localName === 'noFill'
+        contents.every(
+          (part) =>
+            part.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+            PICTURE_OUTLINE_PARTS.has(part.localName)
+        )
       )
         continue;
     }

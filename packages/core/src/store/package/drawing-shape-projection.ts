@@ -45,6 +45,7 @@ import {
   shapeRotationDegrees,
 } from './drawing-shape-geometry.ts';
 import { transformComponent } from './drawing-group-transform.ts';
+import { groupPictureOutline } from './drawing-group-picture-outline.ts';
 import { readLineProperties, readStyleReferenceIndex } from './drawing-line-properties.ts';
 import {
   directFill,
@@ -764,7 +765,23 @@ export function projectVectorShape(
       if (!isElement(child) || isGroupPropertyChild(child)) continue;
       childCount += 1;
       if (childCount > MAX_GROUP_SHAPE_CHILDREN) return null;
-      if (groupPictureNodeIds?.has(child.id)) continue;
+      if (groupPictureNodeIds?.has(child.id)) {
+        // The group picture paints the raster; its outline, if any, strokes above it here.
+        const outline = groupPictureOutline(child, pointBudget, resolveSchemeColor, {
+          project: projectShapeComponents,
+          childTransform,
+          place: (component, offset) =>
+            transformComponent(
+              component,
+              { x: (offset.x - chOffX) * scaleX, y: (offset.y - chOffY) * scaleY },
+              scaleX,
+              scaleY
+            ),
+        });
+        if (outline === null) return null;
+        components.push(...outline);
+        continue;
+      }
       // One group level is the enforced nesting cap. Do not paint a partial nested group.
       if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
       const properties = findDirectChild(child.children, {
