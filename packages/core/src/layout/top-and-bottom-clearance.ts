@@ -3,6 +3,10 @@
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { emuToPointsSafe } from './drawing-layout.ts';
+import { wrappedParagraphAnchorTop } from './anchor-content-top.ts';
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
+import type { DrawingProjection } from '../store/package/drawing-projection.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
 /** Maximum rechecks when clearing a line below overlapping topAndBottom bands. */
 export const MAX_TOP_AND_BOTTOM_CLEARANCE_ATTEMPTS = 8;
@@ -159,4 +163,25 @@ export function travellingTopAndBottomSkip(
   const withOwn = topAndBottomSkipBeforeLine(lineTopY, lineHeight, zones.withOwn, spaceAbove);
   const inherited = topAndBottomSkipBeforeLine(lineTopY, lineHeight, zones.inherited, spaceAbove);
   return Math.max(0, withOwn - inherited);
+}
+
+/**
+ * The band top of a paragraph-positioned body drawing after the content box top limit, the
+ * same limit `resolveAnchoredDrawingPosition` applies to its painted box. Without a body
+ * frame base, or inside a table cell, the band keeps its own top.
+ */
+export function paragraphBandTop(
+  bandTop: number,
+  projection: Pick<DrawingProjection, 'wrap' | 'position'>,
+  options: {
+    readonly frameBase?: BodyAnchorFrameBase;
+    readonly anchorCellBox?: LayoutBox | null;
+  }
+): number {
+  const frame = projection.position?.vertical;
+  if (!options.frameBase || !frame || frame.align !== null) return bandTop;
+  return wrappedParagraphAnchorTop(bandTop, frame.relativeFrom, projection.wrap, {
+    ...options.frameBase,
+    cellBox: options.anchorCellBox ?? null,
+  });
 }

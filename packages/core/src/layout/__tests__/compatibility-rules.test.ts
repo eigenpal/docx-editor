@@ -43,6 +43,7 @@ const MODE_MATRIX = {
   rowPageBreakYieldsToKeep: 'modern',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',
+  wrappedAnchorsStayBelowTopMargin: 'modern',
 } as const satisfies Record<ModeRuleName, 'legacy' | 'modern'>;
 
 test('each mode rule applies in exactly its class', () => {

@@ -139,6 +139,10 @@ export const MODE_RULES = {
     'Merged cell text moves whole into the next row when the head row cannot hold it',
     'ECMA-376 Part 1 §17.4.84 vMerge'
   ),
+  wrappedAnchorsStayBelowTopMargin: modern(
+    'A wrapping object positioned from its paragraph never starts above the top margin',
+    'ECMA-376 Part 1 §20.4.2.11 positionV'
+  ),
 } as const satisfies Record<string, ModeRule>;
 
 /** Rules that read compatibility options, so they need the parsed settings. */

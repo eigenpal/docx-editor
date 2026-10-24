@@ -18,7 +18,7 @@ import {
 import { anchoredOutOfCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import { compareDrawingCollisionOrder } from './drawing-overlap.ts';
-import { topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
+import { paragraphBandTop, topAndBottomBandAnchorY } from './top-and-bottom-clearance.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   revisionsVisible,
@@ -640,10 +640,14 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     const pageFramed = pageFramedBandY(atom.projection, options);
     const anchorY =
       pageFramed ??
-      topAndBottomBandAnchorY(
-        options.paragraphStartY + lineTop,
-        atom.projection.position?.vertical ?? null,
-        options.paragraphStartY
+      paragraphBandTop(
+        topAndBottomBandAnchorY(
+          options.paragraphStartY + lineTop,
+          atom.projection.position?.vertical ?? null,
+          options.paragraphStartY
+        ),
+        atom.projection,
+        options
       );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({

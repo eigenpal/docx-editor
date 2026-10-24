@@ -1282,6 +1282,7 @@ function* layoutBlocksPass(
       contentWidth,
       contentHeight: contentHeight(),
       ownerPartName: options.inlineDrawingLayout?.ownerPartName ?? WML_MAIN_DOCUMENT_PART,
+      compatibilityMode: options.compatibilityMode,
     });
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());

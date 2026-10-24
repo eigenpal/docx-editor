@@ -43,6 +43,7 @@ import type { LayoutBox } from './semantic-records.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { withGroupTextboxStories } from './group-textbox-layout.ts';
 import { drawingPaintFields } from './drawing-paint-fields.ts';
+import { wrappedParagraphAnchorTop } from './anchor-content-top.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -491,6 +492,11 @@ export interface DrawingAnchorFrameContext {
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
   /**
+   * A wrapping body object positioned from its paragraph never starts above the content box
+   * top (`wrappedAnchorsStayBelowTopMargin`). Set by the body frame base in modern modes.
+   */
+  readonly wrappedParagraphAnchorsBelowContentTop?: boolean;
+  /**
    * Called whenever a frame or alignment resolution reads the parity of
    * {@link pageNumber}. Incremental layout listens so it knows a section's
    * geometry depends on where in the document its pages start.
@@ -912,7 +918,7 @@ export function resolveAnchoredDrawingPosition(
 
   return Object.freeze({
     x,
-    y,
+    y: wrappedParagraphAnchorTop(y, verticalFrame, projection.wrap, ctx),
     horizontalFrame,
     verticalFrame,
     horizontalFrameOrigin,

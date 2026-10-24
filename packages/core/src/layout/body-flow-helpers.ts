@@ -9,6 +9,7 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { holdsOnlyPageBreak } from './pending-line.ts';
 import { marginInset } from './page-body-margins.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
@@ -30,6 +31,7 @@ interface BodyAnchorFrameInput {
   readonly contentWidth: number;
   readonly contentHeight: number;
   readonly ownerPartName: string;
+  readonly compatibilityMode?: number;
 }
 
 /** Build the drawing/table anchor facts for the current body sheet. */
@@ -51,6 +53,9 @@ export function bodyAnchorFrameBase(input: BodyAnchorFrameInput): BodyAnchorFram
     contentBandHeight: insets.height,
     ownerPartName: input.ownerPartName,
     storyKind: 'body',
+    ...(hasCompatibilityRule(input.compatibilityMode, 'wrappedAnchorsStayBelowTopMargin')
+      ? { wrappedParagraphAnchorsBelowContentTop: true }
+      : {}),
   });
 }
 

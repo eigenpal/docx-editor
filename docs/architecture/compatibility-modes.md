@@ -59,6 +59,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |
+| `wrappedAnchorsStayBelowTopMargin` | `modern` | A wrapping object positioned from its paragraph never starts above the top margin |
 | `adjustLineHeightInTable` | `w:adjustLineHeightInTable` | Cell paragraphs snap to the line grid |
 | `noColumnBalance` | `w:noColumnBalance` in `legacy` modes | Columns fill in order without balancing |
 | `doNotBreakWrappedTables` | `w:doNotBreakWrappedTables` | A floating table that fits a page does not break |
