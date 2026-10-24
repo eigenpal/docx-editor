@@ -10,6 +10,8 @@ type SpacingBlock =
       readonly kind: 'paragraph';
       readonly props: readonly OoxmlProperty[];
       readonly spacing: ParagraphSpacing;
+      /** The prepared spacing before this resolver changed it; reused entries keep it. */
+      readonly rawSpacing?: ParagraphSpacing;
       readonly contextualSpacing: boolean;
       readonly styleId: string | null;
       readonly listItem?: { readonly numId: string };
@@ -28,7 +30,7 @@ export function resolveListAutoSpacing<T extends SpacingBlock>(
   lineUnitPt = 12,
   styles?: StyleCascadeTable
 ): T[] {
-  return blocks.map((block, index) => {
+  const resolved = blocks.map((block, index) => {
     if (block.kind !== 'paragraph' || (!block.listItem && !block.contextualSpacing)) return block;
     const sameStyle = (side: -1 | 1): boolean => {
       const adjacent = blocks[index + side];
@@ -91,15 +93,59 @@ export function resolveListAutoSpacing<T extends SpacingBlock>(
       if (sameStyle(1)) after = 0;
     }
     if (before === block.spacing.before && after === block.spacing.after) return block;
-    return { ...block, spacing: { before, after } };
+    return { ...block, spacing: { before, after }, rawSpacing: block.rawSpacing ?? block.spacing };
+  });
+  return resolved.map((block, index) => {
+    const input = blocks[index]!;
+    if (block.kind !== 'paragraph' || input.kind !== 'paragraph') return block;
+    const removed = contextualAfterAbove(blocks, index, styles);
+    // A list or contextual paragraph was resolved again above; any other keeps its raw value.
+    const resolvedAbove = block !== input || !!input.listItem || input.contextualSpacing;
+    const own = resolvedAbove ? block.spacing.before : (input.rawSpacing ?? input.spacing).before;
+    // The space before still collapses against the space after that contextual spacing
+    // removed above, so it keeps only what exceeds that space after.
+    const before = Math.max(0, own - removed);
+    if (before === block.spacing.before) return block;
+    return {
+      ...block,
+      spacing: { before, after: block.spacing.after },
+      rawSpacing: input.rawSpacing ?? input.spacing,
+    };
   });
 }
 
-/** Neighbor changes must invalidate placement before keep-next folds consume the keys. */
+/** The space after that the block above drops by its own contextual spacing, or 0. */
+function contextualAfterAbove(
+  blocks: readonly SpacingBlock[],
+  index: number,
+  styles: StyleCascadeTable | undefined
+): number {
+  const above = blocks[index - 1];
+  const block = blocks[index];
+  if (above?.kind !== 'paragraph' || !above.contextualSpacing || block?.kind !== 'paragraph') {
+    return 0;
+  }
+  const style = above.paragraph
+    ? flowNeighbourStyle(above.paragraph, 1, block, styles)
+    : block.styleId;
+  return style !== undefined && style === above.styleId
+    ? (above.rawSpacing ?? above.spacing).after
+    : 0;
+}
+
+/**
+ * Neighbor changes must invalidate placement before keep-next folds consume the keys.
+ *
+ * A paragraph under a contextual-spacing paragraph also folds its spacing: its space before
+ * depends on the space after above, see {@link resolveListAutoSpacing}.
+ */
 export function listAutoSpacingFlowKeys(keys: string[], blocks: readonly SpacingBlock[]): string[] {
   let flow = keys;
   blocks.forEach((block, index) => {
-    if (block.kind !== 'paragraph' || block.listItem === undefined) return;
+    if (block.kind !== 'paragraph') return;
+    const above = blocks[index - 1];
+    const underContextual = above?.kind === 'paragraph' && above.contextualSpacing;
+    if (block.listItem === undefined && !underContextual) return;
     if (flow === keys) flow = [...keys];
     flow[index] = extendedFlowKey(
       flow[index]!,
