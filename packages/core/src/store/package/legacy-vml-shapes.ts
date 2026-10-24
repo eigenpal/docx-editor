@@ -53,7 +53,7 @@ const LINE_STYLES: ReadonlyMap<string, LineCompound> = new Map([
   ['thickbetweenthin', 'tri'],
 ]);
 
-interface LegacyInk {
+export interface LegacyInk {
   readonly fill: string;
   readonly stroke: string;
   readonly weight: number;
@@ -61,6 +61,11 @@ interface LegacyInk {
   /** Dash and gap lengths in outline widths; absent for solid. */
   readonly dash?: readonly number[];
   readonly compound: LineCompound;
+}
+
+/** The fill and outline of a legacy shape, or null outside the subset. */
+export function legacyInk(node: OoxmlElement, line = false): LegacyInk | null {
+  return paint(node, line);
 }
 
 function paint(node: OoxmlElement, line = false): LegacyInk | null {
@@ -134,7 +139,7 @@ function dashArray(ink: LegacyInk): string {
 }
 
 /** A vector shape's components with the ink's dash, split into its compound bands. */
-function inkComponents(
+export function inkComponents(
   component: VectorShapeComponent,
   ink: LegacyInk
 ): readonly VectorShapeComponent[] {

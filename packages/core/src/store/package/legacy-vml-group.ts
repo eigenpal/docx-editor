@@ -16,6 +16,7 @@ import {
   type LegacyLineEnds,
 } from './legacy-vml-shapes.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { legacyPathShape } from './legacy-vml-path-shape.ts';
 import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
 import {
   attribute as a,
@@ -24,6 +25,7 @@ import {
   numeric,
   OFFICE,
   pair,
+  styleOf,
   VML,
   WORD_VML,
 } from './legacy-vml-values.ts';
@@ -95,7 +97,7 @@ function projectMember(
     shape = ends ? legacyLineShape(member, box.width, box.height, ends) : null;
   } else {
     if (style.has('flip')) return false;
-    shape = legacyBoxShape(member, local, local);
+    shape = legacyBoxShape(member, local, local) ?? legacyPathShape(member, local, local);
   }
   if (!shape) return false;
   const origin = { x: box.x * EMU_PER_POINT, y: box.y * EMU_PER_POINT };
@@ -147,16 +149,18 @@ function projectLine(
   if (start[0] === end[0] && start[1] === end[1]) return false;
   const left = Math.min(start[0], end[0]),
     top = Math.min(start[1], end[1]);
-  const ends = Object.freeze([
-    Object.freeze([start[0] - left, start[1] - top]),
-    Object.freeze([end[0] - left, end[1] - top]),
-  ]) as LegacyLineEnds;
-  const shape = legacyLineShape(
-    line,
-    Math.abs(end[0] - start[0]),
-    Math.abs(end[1] - start[1]),
-    ends
-  );
+  const width = Math.abs(end[0] - start[0]),
+    height = Math.abs(end[1] - start[1]);
+  // A flip mirrors the line inside the box its points span.
+  const flip = (styleOf(line)?.get('flip') ?? '').trim().split(/\s+/).filter(Boolean);
+  if (flip.some((axis) => axis !== 'x' && axis !== 'y')) return false;
+  const local = ([x, y]: readonly [number, number]) =>
+    Object.freeze([
+      flip.includes('x') ? width - (x - left) : x - left,
+      flip.includes('y') ? height - (y - top) : y - top,
+    ]);
+  const ends = Object.freeze([local(start), local(end)]) as LegacyLineEnds;
+  const shape = legacyLineShape(line, width, height, ends);
   if (!shape) return false;
   const offset = { x: left * EMU_PER_POINT, y: top * EMU_PER_POINT };
   for (const component of shape.components)
@@ -201,7 +205,10 @@ function projectMembers(
       top = numeric(style.get('top') ?? '0'),
       width = numeric(style.get('width')),
       height = numeric(style.get('height'));
-    const line = child.localName === 'shape' && a(child, 'type') === LINE_TEMPLATE;
+    // A connector, or a shape drawn by its own path, may have no extent on one side.
+    const line =
+      child.localName === 'shape' &&
+      (a(child, 'type') === LINE_TEMPLATE || (!a(child, 'type') && !!a(child, 'path')));
     if (
       ![left, top, width, height].every(Number.isFinite) ||
       (line ? width < 0 || height < 0 || width + height <= 0 : width <= 0 || height <= 0)

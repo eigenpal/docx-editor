@@ -95,6 +95,33 @@ test('a line member spans its points in the group space', () => {
   ]);
 });
 
+test('a shape drawn by its own straight path paints as a line in the group', () => {
+  const [projection] = project(
+    '<w:pict><v:group style="position:absolute;width:488.45pt;height:.1pt" coordorigin="955,285" coordsize="9769,2">' +
+      '<v:shape style="position:absolute;left:955;top:285;width:9769;height:2" coordorigin="955,285" coordsize="9769,0" path="m955,285r9769,e" filled="f" strokeweight="1pt"><v:path arrowok="t"/></v:shape>' +
+      '</v:group></w:pict>'
+  );
+  const component = projection!.vectorShape!.components[0]!;
+  expect(component.subpathsEmu[0]!.map((point) => [point.x / EMU, point.y / EMU])).toEqual([
+    [0, 0],
+    [488.45, 0],
+  ]);
+  expect(component.fillHex).toBeNull();
+});
+
+test('a flipped line member mirrors inside its box, and an edit flag is ignored', () => {
+  const [projection] = project(
+    '<w:pict><v:group style="position:absolute;width:100pt;height:50pt" coordsize="100,50">' +
+      '<v:line style="position:absolute;flip:y;mso-wrap-edited:f" from="0,0" to="100,50"/>' +
+      '</v:group></w:pict>'
+  );
+  const line = projection!.vectorShape!.components[0]!.subpathsEmu[0]!;
+  expect(line.map((point) => [point.x / EMU, point.y / EMU])).toEqual([
+    [0, 50],
+    [100, 0],
+  ]);
+});
+
 describe('floating straight connectors', () => {
   const connector = (style: string, children = '') =>
     `<w:pict>${LINE_TEMPLATE}<v:shape type="#_x0000_t32" style="position:absolute;margin-left:126.75pt;margin-top:14.5pt;${style};z-index:251658240" o:connectortype="straight">${children}</v:shape></w:pict>`;

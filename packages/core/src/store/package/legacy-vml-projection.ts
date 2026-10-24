@@ -12,6 +12,7 @@ import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
 import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
 import { inlineLegacyProjection, legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
 import { legacyHorizontalRule } from './legacy-vml-rule.ts';
+import { legacyPathShape } from './legacy-vml-path-shape.ts';
 import {
   legacyLineReach,
   legacyPictureBorder,
@@ -151,7 +152,9 @@ function supportedStyle(
       styles.has('rotation') ||
       styles.has('margin-left') ||
       styles.has('margin-top') ||
-      Array.from(styles.keys()).some((k) => k.startsWith('mso-')))
+      // A member's `mso-wrap-edited` only records an editing step; other `mso-` keys place
+      // or size it and stay outside the subset.
+      Array.from(styles.keys()).some((k) => k.startsWith('mso-') && k !== 'mso-wrap-edited'))
   )
     return null;
   // A text box reads its flip with its geometry; its text stays unmirrored.
@@ -412,7 +415,9 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // outline's reach on every side to keep the outline inside its image.
   const vector = !!line;
   // A connector drawn corner to corner is a line too, with the reach of its ends.
-  const connector = root.localName === 'shape' && a(root, 'type') === '#_x0000_t32';
+  const connector =
+    root.localName === 'shape' &&
+    (a(root, 'type') === '#_x0000_t32' || (!a(root, 'type') && !!a(root, 'path')));
   const strokeReach =
     !textbox &&
     !border &&
@@ -455,11 +460,17 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     if (!vector) fragments.push(fragment);
     // A plain rectangle or oval is a vector shape too, over the same box as its preview.
     if (!readOnly && typeof fragment === 'string')
-      boxShape = legacyBoxShape(
-        root,
-        { x: inset, y: inset, width, height },
-        { x: 0, y: 0, width: outerWidth, height: outerHeight }
-      );
+      boxShape =
+        legacyBoxShape(
+          root,
+          { x: inset, y: inset, width, height },
+          { x: 0, y: 0, width: outerWidth, height: outerHeight }
+        ) ??
+        legacyPathShape(
+          root,
+          { x: inset, y: inset, width, height },
+          { x: 0, y: 0, width: outerWidth, height: outerHeight }
+        );
   }
   const vectorShape = line
     ? legacyLineShape(root, width, height, line.ends)
