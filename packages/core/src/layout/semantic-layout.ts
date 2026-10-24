@@ -711,9 +711,8 @@ function* layoutBlocksPass(
   // disagree about which context minted a key — including a caller that supplies tokens
   // while toggling the context, which a fallback-only namespace could not separate.
   const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
-  // Body textbox stories flow without a page-field context: body PAGE projection stays
-  // deferred, so a PAGE field inside a body text box contributes only its cached result,
-  // consistent with direct body fields today.
+  // Body textbox stories flow without a page-field context: a PAGE field inside a body text
+  // box contributes only its cached result, like a direct body field.
   const layoutTextboxStoryForBody = (
     projection: import('../store/package/drawing-projection.ts').DrawingProjection
   ) =>
@@ -724,6 +723,7 @@ function* layoutBlocksPass(
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
       compatibilityMode: options.compatibilityMode,
+      maxUnwrappedBoxWidthPt: contentWidthForReflow,
       ...(displayMode ? { displayMode } : {}),
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),

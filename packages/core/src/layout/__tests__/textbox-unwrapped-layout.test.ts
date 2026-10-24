@@ -126,6 +126,16 @@ const lineText = (line: ReturnType<typeof storyLines>[number]) =>
   line.spans.map((span) => span.text).join('');
 
 describe('unwrapped text box text', () => {
+  test('a line longer than the column wraps at the column, and the box takes its width', () => {
+    // 120 characters of 5.45pt run past the 468pt column.
+    const words = Array.from({ length: 30 }, () => 'word').join(' ');
+    const record = boxRecord(textbox(para(words)));
+    const story = record.textboxStory!;
+    expect(storyLines(record).length).toBeGreaterThan(1);
+    expect(story.extentWidth).toBeLessThanOrEqual(PAGE_WIDTH - 2 * MARGIN + 0.01);
+    expect(story.contentWidth).toBeCloseTo(PAGE_WIDTH - 2 * MARGIN - 14.4, 1);
+  });
+
   test('each paragraph stays on one line and the box takes the widest line', () => {
     const record = boxRecord(textbox(para('label text') + para('second label line')));
     const story = record.textboxStory!;

@@ -155,6 +155,11 @@ export interface TextboxStoryLayoutOptions {
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
   readonly compatibilityMode?: number;
+  /**
+   * Widest box, in points, that unwrapped text may grow to: the host column. A longer line
+   * wraps at this width less the insets. Absent, unwrapped text grows to its widest line.
+   */
+  readonly maxUnwrappedBoxWidthPt?: number;
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
@@ -697,7 +702,14 @@ export function layoutTextboxStory(
     !(legacy && legacy.rotationDegrees !== 0);
   let contentWidth = extentContentWidth;
   let flow = flowAt(noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
-  const unwrappedWidth = noWrap ? widestLineWidth(flow.blocks) : 0;
+  const widestUnwrapped = noWrap ? widestLineWidth(flow.blocks) : 0;
+  const unwrappedWidth =
+    options.maxUnwrappedBoxWidthPt === undefined
+      ? widestUnwrapped
+      : Math.min(
+          widestUnwrapped,
+          Math.max(1, options.maxUnwrappedBoxWidthPt - insetLeft - insetRight)
+        );
   if (unwrappedWidth > 0) {
     contentWidth = unwrappedWidth;
     flow = flowAt(contentWidth);
