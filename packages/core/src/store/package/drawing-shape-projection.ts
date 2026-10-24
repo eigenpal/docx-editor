@@ -27,15 +27,8 @@ import {
 } from './drawing-pattern-fill.ts';
 import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import type { GeometryFill } from './drawing-geometry-engine.ts';
-import {
-  darkEdgeOutline,
-  glowComponent,
-  innerShadowComponent,
-  readShapeGlow,
-  readShapeInnerShadow,
-  readShapeShadow,
-  type ShapeShadow,
-} from './drawing-shape-effects.ts';
+import { readShapeShadow, shapeEffectList, type ShapeShadow } from './drawing-shape-effects.ts';
+import { drawingRenderers } from './drawing-renderers.ts';
 import {
   gradientMeanColor,
   placeGradient,
@@ -425,7 +418,8 @@ export function projectShapeComponents(
   const flipH = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipH'));
   const flipV = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipV'));
   const place = shapePointTransform(extent, flipH, flipV, rotation);
-  const shadow = readShapeShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference, {
+  const effectList = shapeEffectList(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  const shadow = readShapeShadow(effectList, resolveSchemeColor, {
     flipH,
     flipV,
     rotationDegrees: rotation,
@@ -523,56 +517,17 @@ export function projectShapeComponents(
       shadowOnly: true,
     });
   }
-  // An inner shadow paints over the fill, inside the filled paths.
-  const inner = readShapeInnerShadow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  const filled = components.find(
-    (component) => !component.shadowOnly && component.fillHex !== null
-  );
-  if (inner && filled) {
-    const shade = innerShadowComponent(inner, filled.subpathsEmu, extent);
-    components.splice(components.indexOf(filled) + 1, 0, shade);
-  }
-  // A glow paints under everything else: around the filled paths, or around a line.
-  const glow = readShapeGlow(wsp, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  const painted = components.filter((component) => !component.shadowOnly);
-  if (glow && painted.length) {
-    const filled = painted.filter((component) => component.fillHex !== null);
-    const casters = filled.length ? filled : painted;
-    components.unshift(
-      glowComponent(
-        glow,
-        casters.flatMap((component) => component.subpathsEmu),
-        casters.flatMap((component) =>
-          component.subpathsEmu.map((_, index) => component.subpathsClosed?.[index] !== false)
-        ),
-        filled.length > 0,
-        filled.length
-          ? 0
-          : casters.reduce((widest, component) => Math.max(widest, component.strokeWidthEmu), 0)
-      )
-    );
-  }
-  // A dark-edged bevel shows a rim inside the filled outline; it paints over the fill.
-  const edge = darkEdgeOutline(spPr);
-  const body = components.find(
-    (component) =>
-      component.fillHex !== null &&
-      component.subpathsClosed?.every(Boolean) !== false &&
-      component.subpathsEmu.every(enclosesArea)
-  );
-  if (edge && body) {
-    components.push({
-      subpathsEmu: body.subpathsEmu,
-      subpathsClosed: body.subpathsClosed,
-      fillHex: null,
-      fillAlpha: 1,
-      strokeHex: edge.hex,
-      strokeAlpha: edge.alpha,
-      strokeWidthEmu: edge.widthEmu,
-      strokeInset: true,
-    });
-  }
-  return components;
+  // Effects beyond the outer shadow paint only through an installed effects renderer.
+  const effects = drawingRenderers().effects;
+  if (!effects) return components;
+  return effects.shape({
+    shape: wsp,
+    spPr,
+    effectList,
+    components,
+    extent,
+    ...(resolveSchemeColor ? { resolveSchemeColor } : {}),
+  });
 }
 
 interface ShapePath {

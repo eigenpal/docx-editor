@@ -4,7 +4,11 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  drawingRenderers,
+  installDrawingRenderers,
+} from '../../store/package/drawing-renderers.ts';
 import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   projectDrawing,
@@ -101,6 +105,9 @@ const SHADOW =
   '<a:effectLst><a:outerShdw blurRad="0" dist="38100" dir="2700000" algn="tl">' +
   '<a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw></a:effectLst>';
 
+const installed = drawingRenderers();
+afterEach(() => installDrawingRenderers({ effects: installed.effects }));
+
 describe('picture frame paint', () => {
   test('the shadow paints under the image and the outline over it', () => {
     const element = paint(
@@ -136,6 +143,24 @@ describe('picture frame paint', () => {
   });
 
   test('soft edges mask the image and a reflection mirrors it below', () => {
+    // Paint draws what the projection carries; a stand-in effects renderer supplies it.
+    installDrawingRenderers({
+      effects: {
+        shape: ({ components }) => components,
+        picture: () => ({
+          effects: {
+            softEdgeEmu: 76200,
+            reflection: {
+              startAlpha: 0.5,
+              endAlpha: 0,
+              endPosition: 0.4,
+              distanceEmu: 0,
+              blurEmu: 0,
+            },
+          },
+        }),
+      },
+    });
     const element = paint(
       record(
         '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:effectLst><a:softEdge rad="76200"/>' +

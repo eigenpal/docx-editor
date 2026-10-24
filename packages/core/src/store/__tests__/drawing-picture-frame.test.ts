@@ -50,6 +50,16 @@ const RECT = '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
 const RED = '<a:solidFill><a:srgbClr val="C00000"/></a:solidFill>';
 
 describe('picture frames', () => {
+  test('without an effects renderer, a glow, reflection and soft edge paint nothing', () => {
+    const projection = picture(
+      `${RECT}<a:effectLst><a:glow rad="50800"><a:srgbClr val="4472C4"/></a:glow>` +
+        '<a:softEdge rad="76200"/><a:reflection stA="52000" endPos="35000" dir="5400000" ' +
+        'sy="-100000" algn="bl"/></a:effectLst>'
+    );
+    expect(projection.picture!.frameEffects).toBeUndefined();
+    expect(projection.vectorShape).toBeNull();
+  });
+
   test('a plain picture has no frame and no clip ring', () => {
     const projection = picture(RECT);
     expect(projection.picture).toBeTruthy();
@@ -100,31 +110,6 @@ describe('picture frames', () => {
     expect(shadow!.shadow!.dxEmu).toBeCloseTo(76_200 / Math.SQRT2, 3);
     expect(fill!.fillHex).toBe('FFFFFF');
     expect(fill!.belowPicture).toBe(true);
-  });
-
-  test('a glow paints under the picture', () => {
-    const projection = picture(
-      `${RECT}<a:effectLst><a:glow rad="50800"><a:srgbClr val="4472C4"/></a:glow></a:effectLst>`
-    );
-    const [halo] = projection.vectorShape!.components;
-    expect(halo).toMatchObject({ belowPicture: true, shadowOnly: true, strokeWidthEmu: 50800 });
-  });
-
-  test('a reflection and soft edges reach the picture projection', () => {
-    const reflected = picture(
-      `${RECT}` +
-        '<a:effectLst><a:reflection blurRad="6350" stA="52000" endA="300" endPos="35000" ' +
-        'dir="5400000" sy="-100000" algn="bl" rotWithShape="0"/></a:effectLst>'
-    );
-    expect(reflected.picture!.frameEffects?.reflection).toEqual({
-      startAlpha: 0.52,
-      endAlpha: 0.003,
-      endPosition: 0.35,
-      distanceEmu: 0,
-      blurEmu: 6350,
-    });
-    const soft = picture(`${RECT}<a:effectLst><a:softEdge rad="76200"/></a:effectLst>`);
-    expect(soft.picture!.frameEffects?.softEdgeEmu).toBe(76200);
   });
 
   test('a skewed or sideways reflection is left out', () => {

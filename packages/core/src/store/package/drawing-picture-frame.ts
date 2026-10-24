@@ -1,14 +1,9 @@
 // The frame a picture draws from its `pic:spPr`: the geometry that clips the picture, the
-// outline over it, and the outer shadow and fill under it.
+// outline over it, and the outer shadow and fill under it. Other effects (glow, reflection,
+// soft edge) come from an installed effects renderer.
 
-import {
-  glowComponent,
-  readShapeGlow,
-  readShapeReflection,
-  readShapeShadow,
-  readShapeSoftEdge,
-  type ShapeReflection,
-} from './drawing-shape-effects.ts';
+import { readShapeShadow, shapeEffectList, type ShapeReflection } from './drawing-shape-effects.ts';
+import { drawingRenderers } from './drawing-renderers.ts';
 import { directFill, type ShapeColor } from './drawing-shape-color.ts';
 import { gradientMeanColor, readGradientFill } from './drawing-gradient.ts';
 import { readShapeGeometry, shapePointTransform } from './drawing-shape-geometry.ts';
@@ -101,40 +96,41 @@ export function projectPictureFrame(
   const rotation = xfrm ? parseEmu(schemaAttributeValue(xfrm.attributes, 'rot'), false) : null;
   const flag = (name: string) =>
     xfrm ? (parseSchemaBoolean(schemaAttributeValue(xfrm.attributes, name)) ?? false) : false;
-  const reflection = readShapeReflection(
-    picture,
-    spPr,
-    ctx.resolveSchemeColor,
-    ctx.resolveStyleMatrixReference
-  );
-  const softEdgeEmu = readShapeSoftEdge(
-    picture,
-    spPr,
-    ctx.resolveSchemeColor,
-    ctx.resolveStyleMatrixReference
-  );
-  const effects: PictureFrameEffects | null =
-    reflection || softEdgeEmu > 0
-      ? { ...(reflection ? { reflection } : {}), ...(softEdgeEmu > 0 ? { softEdgeEmu } : {}) }
-      : null;
-  const clip = { ...(clipUnit ? { clipUnit } : {}), ...(effects ? { effects } : {}) };
-  if (rotation !== null && rotation % 21_600_000 !== 0) {
-    return { ...(clipUnit ? { clipUnit } : {}), vectorShape: null };
-  }
-
+  const turned = rotation !== null && rotation % 21_600_000 !== 0;
   const place = shapePointTransform(extent, flag('flipH'), flag('flipV'), 0);
   const budget = { remaining: MAX_FRAME_POINTS };
-  const filled = framePaths(spPr, extent, 0, place, budget, (path) => path.fill !== 'none');
+  const filled = turned
+    ? null
+    : framePaths(spPr, extent, 0, place, budget, (path) => path.fill !== 'none');
+  const effectList = shapeEffectList(
+    picture,
+    spPr,
+    ctx.resolveSchemeColor,
+    ctx.resolveStyleMatrixReference
+  );
+  const effectsRenderer = drawingRenderers().effects;
+  // A turned picture paints no frame and no effects.
+  const projected =
+    effectsRenderer && !turned
+      ? effectsRenderer.picture({
+          shape: picture,
+          spPr,
+          effectList,
+          outlineEmu: filled?.length ? filled.map((subpath) => subpath.points) : null,
+          ...(ctx.resolveSchemeColor ? { resolveSchemeColor: ctx.resolveSchemeColor } : {}),
+        })
+      : null;
+  const effects = projected?.effects ?? null;
+  const clip = { ...(clipUnit ? { clipUnit } : {}), ...(effects ? { effects } : {}) };
+  if (turned) return { ...(clipUnit ? { clipUnit } : {}), vectorShape: null };
   if (!filled) return { ...clip, vectorShape: null };
 
   const components: VectorShapeComponent[] = [];
-  const shadow = readShapeShadow(
-    picture,
-    spPr,
-    ctx.resolveSchemeColor,
-    ctx.resolveStyleMatrixReference,
-    { flipH: flag('flipH'), flipV: flag('flipV'), rotationDegrees: 0 }
-  );
+  const shadow = readShapeShadow(effectList, ctx.resolveSchemeColor, {
+    flipH: flag('flipH'),
+    flipV: flag('flipV'),
+    rotationDegrees: 0,
+  });
   if (shadow && filled.length) {
     components.push({
       subpathsEmu: filled.map((subpath) => subpath.points),
@@ -149,23 +145,11 @@ export function projectPictureFrame(
       belowPicture: true,
     });
   }
-  // A glow is a halo around the picture, under it and under its shadow.
-  const glow = readShapeGlow(
-    picture,
-    spPr,
-    ctx.resolveSchemeColor,
-    ctx.resolveStyleMatrixReference
-  );
-  if (glow && filled.length) {
-    components.unshift({
-      ...glowComponent(
-        glow,
-        filled.map((subpath) => subpath.points),
-        filled.map(() => true),
-        true
-      ),
-      belowPicture: true,
-    });
+  // Effects under the picture (a glow) paint first, under its shadow too.
+  const under = projected?.underComponents ?? [];
+  if (under.length) {
+    const marked = under.map((component) => ({ ...component, belowPicture: true as const }));
+    components.splice(0, components.length, ...marked, ...components);
   }
   // A fill shows where the picture is transparent, so it paints under the picture.
   const fill = fillColor(spPr, ctx);

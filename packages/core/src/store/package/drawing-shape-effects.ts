@@ -1,6 +1,9 @@
-// Shape effects painters can draw: the outer shadow (`a:outerShdw`) and the glow (`a:glow`).
-// They come from the shape's own `a:effectLst`, which replaces the theme effects, or from the
-// theme effect style its `effectRef` names. Reflection, soft edges, and 3-D are not painted.
+// The effect list a shape paints with, and the outer shadow (`a:outerShdw`) in it.
+//
+// Effects come from the shape's own `a:effectLst`, which replaces the theme effects, or from
+// the theme effect style its `effectRef` names. The engine paints the outer shadow. Other
+// effects (glow, inner shadow, reflection, soft edge, a dark-edged bevel) paint only through
+// the effects renderer a capability package installs (`drawing-renderers.ts`).
 
 import { themeEffectStyle } from './drawing-group-theme-effects.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
@@ -10,7 +13,7 @@ import {
   type ShapeColor,
   type ShapeSchemeColorResolver,
 } from './drawing-shape-color.ts';
-import type { ShapeStyleMatrixResolver, VectorShapeComponent } from './drawing-shape-projection.ts';
+import type { ShapeStyleMatrixResolver } from './drawing-shape-projection.ts';
 import { collapseSchemaWhitespace, schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
@@ -49,10 +52,9 @@ function shadowOf(
   effectLst: OoxmlElement,
   resolveSchemeColor: ShapeSchemeColorResolver | undefined,
   placeholder: ShapeColor | undefined,
-  turn: ShapeTurn | undefined,
-  localName: 'outerShdw' | 'innerShdw' = 'outerShdw'
+  turn: ShapeTurn | undefined
 ): ShapeShadow | null {
-  const outer = findDirectChild(effectLst.children, { namespaceUri: A, localName });
+  const outer = findDirectChild(effectLst.children, { namespaceUri: A, localName: 'outerShdw' });
   if (!outer) return null;
   let colorNode: OoxmlElement | null = null;
   for (const node of outer.children) {
@@ -95,17 +97,32 @@ function shadowOf(
 }
 
 /**
- * The effect list a shape paints with: its own `a:effectLst`, or the theme effect style its
- * `effectRef` names, with that reference's colour as the placeholder colour.
+ * The effect list a shape paints with, and the colour `phClr` stands for in it.
+ *
+ * @public
  */
-function effectList(
+export interface ShapeEffectList {
+  /** The shape's own `a:effectLst`, or the one in the theme effect style it references. */
+  readonly effectLst: OoxmlElement;
+  /** True when `effectLst` comes from the theme through the shape's `effectRef`. */
+  readonly fromTheme: boolean;
+  /** The colour of the `effectRef`, which `phClr` in a theme effect list stands for. */
+  readonly placeholder?: ShapeColor;
+}
+
+/**
+ * The effect list a shape paints with: its own `a:effectLst`, or the theme effect style its
+ * `effectRef` names, with that reference's colour as the placeholder colour. Null when it has
+ * none.
+ */
+export function shapeEffectList(
   shape: OoxmlElement,
   spPr: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): { readonly effectLst: OoxmlElement; readonly placeholder?: ShapeColor } | null {
+): ShapeEffectList | null {
   const direct = findDirectChild(spPr.children, { namespaceUri: A, localName: 'effectLst' });
-  if (direct) return { effectLst: direct };
+  if (direct) return { effectLst: direct, fromTheme: false };
   const style = findDirectChild(shape.children, {
     namespaceUri: shape.namespaceUri,
     localName: 'style',
@@ -131,97 +148,24 @@ function effectList(
   const placeholder = placeholderNode
     ? (resolveColorNode(placeholderNode, resolveSchemeColor) ?? undefined)
     : undefined;
-  return { effectLst, ...(placeholder ? { placeholder } : {}) };
+  return { effectLst, fromTheme: true, ...(placeholder ? { placeholder } : {}) };
 }
 
-/** The outer shadow a shape paints, or null when it has none the painters can draw. */
+/** The outer shadow in a shape's effect list, or null when it has none the painters can draw. */
 export function readShapeShadow(
-  shape: OoxmlElement,
-  spPr: OoxmlElement,
+  list: ShapeEffectList | null,
   resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
   turn?: ShapeTurn
 ): ShapeShadow | null {
-  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
   return list ? shadowOf(list.effectLst, resolveSchemeColor, list.placeholder, turn) : null;
 }
 
-/** The inner shadow a shape paints (`a:innerShdw`), or null when it has none. */
-export function readShapeInnerShadow(
-  shape: OoxmlElement,
-  spPr: OoxmlElement,
-  resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  turn?: ShapeTurn
-): ShapeShadow | null {
-  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  return list
-    ? shadowOf(list.effectLst, resolveSchemeColor, list.placeholder, turn, 'innerShdw')
-    : null;
-}
-
 /**
- * An inner shadow as a component that paints only its shadow, clipped to the shape: the
- * shadow of a frame around the shape, so it falls inside along the edges its direction
- * points to.
+ * A mirror image below a picture that fades out downward (`a:reflection`), as the effects
+ * renderer projects it for paint.
+ *
+ * @public
  */
-export function innerShadowComponent(
-  shadow: ShapeShadow,
-  subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[],
-  extent: Readonly<{ cx: number; cy: number }>
-): VectorShapeComponent {
-  const margin = Math.abs(shadow.dxEmu) + Math.abs(shadow.dyEmu) + shadow.blurEmu * 2 + 1;
-  const frame = [
-    { x: -margin, y: -margin },
-    { x: extent.cx + margin, y: -margin },
-    { x: extent.cx + margin, y: extent.cy + margin },
-    { x: -margin, y: extent.cy + margin },
-  ];
-  return {
-    subpathsEmu: [frame, ...subpathsEmu],
-    subpathsClosed: [true, ...subpathsEmu.map(() => true)],
-    fillHex: shadow.hex,
-    fillAlpha: 1,
-    strokeHex: null,
-    strokeAlpha: 1,
-    strokeWidthEmu: 0,
-    // The shadow falls on the side its direction points to: the frame moves the other way.
-    // An inner shadow's blur spreads twice as far as an outer one's.
-    shadow: { ...shadow, dxEmu: -shadow.dxEmu, dyEmu: -shadow.dyEmu, blurEmu: shadow.blurEmu * 2 },
-    shadowOnly: true,
-    clipEmu: subpathsEmu,
-  };
-}
-
-/** A glow (`a:glow`): a soft halo of its colour around the shape. */
-export interface ShapeGlow {
-  readonly radiusEmu: number;
-  readonly hex: string;
-  readonly alpha: number;
-}
-
-/** The glow a shape paints, or null when it has none. */
-export function readShapeGlow(
-  shape: OoxmlElement,
-  spPr: OoxmlElement,
-  resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): ShapeGlow | null {
-  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  const glow = list
-    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'glow' })
-    : null;
-  if (!list || !glow) return null;
-  const radiusEmu = nonNegative(glow, 'rad');
-  const colorNode = glow.children.find(isElement);
-  const color = colorNode
-    ? resolveColorNode(colorNode, resolveSchemeColor, list.placeholder)
-    : null;
-  if (!color || color.alpha <= 0 || radiusEmu <= 0) return null;
-  return { radiusEmu, hex: color.hex, alpha: color.alpha };
-}
-
-/** A mirror image below the shape that fades out downward (`a:reflection`). @public */
 export interface ShapeReflection {
   /** Opacity where the mirror image meets the shape. */
   readonly startAlpha: number;
@@ -232,139 +176,4 @@ export interface ShapeReflection {
   /** Gap between the shape and its mirror image. */
   readonly distanceEmu: number;
   readonly blurEmu: number;
-}
-
-/** A positive fixed percentage: thousandths of a percent, or a `%` value. */
-function share(element: OoxmlElement, name: string, fallback: number): number | null {
-  const raw = schemaAttributeValue(element.attributes, name);
-  if (raw === undefined) return fallback;
-  const text = collapseSchemaWhitespace(raw);
-  const value = /^-?\d{1,7}$/.test(text)
-    ? Number(text) / 100_000
-    : /^-?\d{1,4}(\.\d{1,3})?%$/.test(text)
-      ? Number(text.slice(0, -1)) / 100
-      : null;
-  return value === null ? null : value;
-}
-
-/**
- * The reflection a shape paints, or null when it has none or uses a form outside the painted
- * subset: a straight mirror image below the shape (`sy` -100%, no skew or horizontal scale),
- * fading downward.
- */
-export function readShapeReflection(
-  shape: OoxmlElement,
-  spPr: OoxmlElement,
-  resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): ShapeReflection | null {
-  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  const reflection = list
-    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'reflection' })
-    : null;
-  if (!reflection) return null;
-  const angle = (name: string, fallback: number) => {
-    const raw = collapseSchemaWhitespace(schemaAttributeValue(reflection.attributes, name) ?? '');
-    return raw === '' ? fallback : /^-?\d{1,9}$/.test(raw) ? Number(raw) : null;
-  };
-  const sx = share(reflection, 'sx', 1);
-  const sy = share(reflection, 'sy', 1);
-  const startAlpha = share(reflection, 'stA', 1);
-  const startPosition = share(reflection, 'stPos', 0);
-  const endAlpha = share(reflection, 'endA', 0);
-  const endPosition = share(reflection, 'endPos', 1);
-  const algn = schemaAttributeValue(reflection.attributes, 'algn') ?? 'b';
-  if (
-    sx !== 1 ||
-    sy !== -1 ||
-    angle('kx', 0) !== 0 ||
-    angle('ky', 0) !== 0 ||
-    angle('dir', 0) !== 5_400_000 ||
-    angle('fadeDir', 5_400_000) !== 5_400_000 ||
-    startPosition !== 0 ||
-    (algn !== 'b' && algn !== 'bl' && algn !== 'br') ||
-    startAlpha === null ||
-    endAlpha === null ||
-    endPosition === null ||
-    endPosition <= 0
-  ) {
-    return null;
-  }
-  return {
-    startAlpha: Math.max(0, Math.min(1, startAlpha)),
-    endAlpha: Math.max(0, Math.min(1, endAlpha)),
-    endPosition: Math.min(1, endPosition),
-    distanceEmu: nonNegative(reflection, 'dist'),
-    blurEmu: nonNegative(reflection, 'blurRad'),
-  };
-}
-
-/** The soft edge radius of a shape (`a:softEdge`): its edge fades out over it. 0 for none. */
-export function readShapeSoftEdge(
-  shape: OoxmlElement,
-  spPr: OoxmlElement,
-  resolveSchemeColor?: ShapeSchemeColorResolver,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): number {
-  const list = effectList(shape, spPr, resolveSchemeColor, resolveStyleMatrixReference);
-  const softEdge = list
-    ? findDirectChild(list.effectLst.children, { namespaceUri: A, localName: 'softEdge' })
-    : null;
-  return softEdge ? nonNegative(softEdge, 'rad') : 0;
-}
-
-/**
- * A glow as a component that paints only its shadow: the outline of `subpathsEmu` widened by
- * half the glow radius and blurred with a standard deviation of a sixth of it, which puts the
- * halo's half-strength edge half the radius out and its last trace at the radius.
- */
-export function glowComponent(
-  glow: ShapeGlow,
-  subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[],
-  subpathsClosed: readonly boolean[],
-  filled: boolean,
-  /** The width of the outline the glow surrounds, for an unfilled shape such as a line. */
-  baseWidthEmu = 0
-): VectorShapeComponent {
-  return {
-    subpathsEmu,
-    subpathsClosed,
-    fillHex: filled ? glow.hex : null,
-    fillAlpha: 1,
-    strokeHex: glow.hex,
-    strokeAlpha: 1,
-    strokeWidthEmu: glow.radiusEmu + baseWidthEmu,
-    strokeJoin: 'round',
-    strokeCap: 'round',
-    shadow: {
-      dxEmu: 0,
-      dyEmu: 0,
-      blurEmu: (glow.radiusEmu * 2) / 3,
-      hex: glow.hex,
-      alpha: glow.alpha,
-    },
-    shadowOnly: true,
-  };
-}
-
-/** The rim a dark-edged bevel shows, as an outline inside the shape. */
-const DARK_EDGE = Object.freeze({ hex: '000000', alpha: 0.55 });
-const DEFAULT_BEVEL_WIDTH_EMU = 76_200;
-
-/**
- * The dark rim of a `dkEdge` bevel (`a:sp3d prstMaterial="dkEdge"` with `a:bevelT` or
- * `a:bevelB`): an inset outline as wide as the bevel, between 0.25 pt and 2 pt. Lit bevel
- * faces and other materials are not drawn. Null when the shape has no such bevel.
- */
-export function darkEdgeOutline(
-  spPr: OoxmlElement
-): { readonly widthEmu: number; readonly hex: string; readonly alpha: number } | null {
-  const sp3d = findDirectChild(spPr.children, { namespaceUri: A, localName: 'sp3d' });
-  if (!sp3d || schemaAttributeValue(sp3d.attributes, 'prstMaterial') !== 'dkEdge') return null;
-  const bevel =
-    findDirectChild(sp3d.children, { namespaceUri: A, localName: 'bevelT' }) ??
-    findDirectChild(sp3d.children, { namespaceUri: A, localName: 'bevelB' });
-  if (!bevel) return null;
-  const width = nonNegative(bevel, 'w') || DEFAULT_BEVEL_WIDTH_EMU;
-  return { widthEmu: Math.max(3_175, Math.min(25_400, width)), ...DARK_EDGE };
 }

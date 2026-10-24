@@ -215,6 +215,20 @@ describe('gradient fills', () => {
 });
 
 describe('outer shadows', () => {
+  test('without an effects renderer, other effects paint as an empty effect list', () => {
+    const effects =
+      '<a:effectLst><a:glow rad="127000"><a:srgbClr val="FFC000"/></a:glow>' +
+      '<a:innerShdw blurRad="63500" dist="50800" dir="13500000"><a:prstClr val="black"/>' +
+      '</a:innerShdw></a:effectLst><a:sp3d prstMaterial="dkEdge"><a:bevelT w="8200"/></a:sp3d>';
+    const vector = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}${effects}`))
+    );
+    const plain = onlyVector(
+      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}`))
+    );
+    expect(vector.components).toEqual(plain.components);
+  });
+
   test('a direct outer shadow offsets along its direction in its colour', () => {
     const effect =
       '<a:effectLst><a:outerShdw blurRad="40000" dist="20000" dir="5400000">' +
@@ -255,29 +269,6 @@ describe('outer shadows', () => {
     expect(rest.every((component) => component.shadow === undefined)).toBe(true);
   });
 
-  test('a dark-edged bevel adds an inset rim over the fill', () => {
-    const bevel = '<a:sp3d prstMaterial="dkEdge"><a:bevelT w="8200" h="38100"/></a:sp3d>';
-    const vector = onlyVector(
-      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="rect"/>${FILL}${bevel}`))
-    );
-    const rim = vector.components.at(-1)!;
-    expect(rim.fillHex).toBeNull();
-    expect(rim.strokeHex).toBe('000000');
-    expect(rim.strokeInset).toBe(true);
-    expect(rim.strokeWidthEmu).toBe(8200);
-    const plain = onlyVector(
-      inline(
-        1000000,
-        500000,
-        WPS,
-        shape(
-          `${XFRM}<a:prstGeom prst="rect"/>${FILL}<a:sp3d prstMaterial="matte"><a:bevelT/></a:sp3d>`
-        )
-      )
-    );
-    expect(plain.components).toHaveLength(1);
-  });
-
   test('a hostile shadow distance is clamped', () => {
     const effect =
       '<a:effectLst><a:outerShdw blurRad="9999999999" dist="9999999999" dir="0">' +
@@ -291,65 +282,7 @@ describe('outer shadows', () => {
   });
 });
 
-describe('glows', () => {
-  const glow =
-    '<a:effectLst><a:glow rad="127000"><a:srgbClr val="FFC000"><a:alpha val="60000"/>' +
-    '</a:srgbClr></a:glow></a:effectLst>';
-
-  test('a glow is a halo under the shape: the outline widened and blurred in its colour', () => {
-    const vector = onlyVector(
-      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="ellipse"/>${FILL}${glow}`))
-    );
-    const [halo, body] = vector.components;
-    expect(halo).toMatchObject({
-      shadowOnly: true,
-      fillHex: 'FFC000',
-      strokeHex: 'FFC000',
-      strokeWidthEmu: 127000,
-      shadow: { dxEmu: 0, dyEmu: 0, hex: 'FFC000' },
-    });
-    expect(halo!.shadow!.blurEmu).toBeCloseTo((127000 * 2) / 3, 6);
-    expect(halo!.shadow!.alpha).toBeCloseTo(0.6, 6);
-    expect(body!.fillHex).toBe('336699');
-  });
-
-  test('a line glows around its stroke', () => {
-    const line = '<a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>';
-    const vector = onlyVector(
-      inline(
-        1000000,
-        0,
-        WPS,
-        shape(`${XFRM.replace('cy="500000"', 'cy="0"')}<a:prstGeom prst="line"/>${line}${glow}`)
-      )
-    );
-    expect(vector.components[0]).toMatchObject({
-      shadowOnly: true,
-      fillHex: null,
-      strokeWidthEmu: 127000 + 25400,
-    });
-  });
-});
-
 describe('inner shadows', () => {
-  test('an inner shadow paints over the fill, clipped to the shape, on its own side', () => {
-    const effect =
-      '<a:effectLst><a:innerShdw blurRad="63500" dist="50800" dir="13500000">' +
-      '<a:prstClr val="black"><a:alpha val="50000"/></a:prstClr></a:innerShdw></a:effectLst>';
-    const vector = onlyVector(
-      inline(1000000, 500000, WPS, shape(`${XFRM}<a:prstGeom prst="ellipse"/>${FILL}${effect}`))
-    );
-    const [body, inner] = vector.components;
-    expect(body!.fillHex).toBe('336699');
-    expect(inner).toMatchObject({ shadowOnly: true, fillHex: '000000' });
-    expect(inner!.clipEmu).toEqual(body!.subpathsEmu);
-    // A frame around the shape casts it: the frame moves away from the shadow's direction.
-    expect(inner!.subpathsEmu).toHaveLength(body!.subpathsEmu.length + 1);
-    expect(inner!.shadow!.dxEmu).toBeGreaterThan(0);
-    expect(inner!.shadow!.dyEmu).toBeGreaterThan(0);
-    expect(inner!.shadow!.alpha).toBeCloseTo(0.5, 6);
-  });
-
   test('preset colours resolve by name and short form', () => {
     const vector = onlyVector(
       inline(
