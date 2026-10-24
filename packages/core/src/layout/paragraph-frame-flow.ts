@@ -48,6 +48,35 @@ function shiftFragmentX(
   };
 }
 
+/**
+ * The width of a one-line frame paragraph's content, its indents included, with the line moved
+ * to the left indent. Undefined for several lines or no measurable content.
+ */
+function shrinkSingleLineFrame(
+  fragment: ParagraphFragmentRecord
+): { readonly width: number; readonly fragment: ParagraphFragmentRecord } | undefined {
+  const line = fragment.lines.length === 1 ? fragment.lines[0]! : undefined;
+  if (!line) return undefined;
+  let right = Number.NEGATIVE_INFINITY;
+  for (const span of line.spans) right = Math.max(right, span.box.x + span.box.width);
+  for (const drawing of line.drawings ?? []) right = Math.max(right, drawing.advanceEnd);
+  const content = right - line.contentX;
+  if (!Number.isFinite(content) || content <= 0) return undefined;
+  const leftIndent = line.box.x - fragment.box.x;
+  const rightIndent = fragment.box.x + fragment.box.width - (line.box.x + line.box.width);
+  const width = leftIndent + content + Math.max(0, rightIndent);
+  if (width >= fragment.box.width) return undefined;
+  const dx = line.box.x - line.contentX;
+  const shifted = shiftFragmentX(fragment, dx, width);
+  return {
+    width,
+    fragment: {
+      ...shifted,
+      lines: shifted.lines.map((moved) => ({ ...moved, box: { ...moved.box, width: content } })),
+    },
+  };
+}
+
 export interface PendingParagraphFrame {
   readonly frame: ParagraphFrame;
   readonly fragment: ParagraphFragmentRecord;
@@ -181,12 +210,29 @@ export class ParagraphFrameFlow {
     if (pending.some(({ frame }) => frame.xAlign === 'inside' || frame.xAlign === 'outside')) {
       onPageParityRead?.();
     }
-    const locals = pending.map((item) => ({
-      item,
-      fragment: item.frame.dropCapLines
-        ? alignDropCap(item.fragment, item.frame.dropCapLines, anchorLines, origins.text.y).fragment
-        : item.fragment,
-    }));
+    const members = new Map<string, number>();
+    for (const item of pending) members.set(item.groupId, (members.get(item.groupId) ?? 0) + 1);
+    const locals = pending.map((item) => {
+      if (item.frame.dropCapLines)
+        return {
+          item,
+          width: item.frame.width,
+          fragment: alignDropCap(
+            item.fragment,
+            item.frame.dropCapLines,
+            anchorLines,
+            origins.text.y
+          ).fragment,
+        };
+      // An auto-width frame of one single-line paragraph shrinks to that line.
+      const fitted =
+        item.frame.autoWidth && members.get(item.groupId) === 1
+          ? shrinkSingleLineFrame(item.fragment)
+          : undefined;
+      return fitted
+        ? { item, width: fitted.width, fragment: fitted.fragment }
+        : { item, width: item.frame.width, fragment: item.fragment };
+    });
     const localGroups = new Map<
       string,
       {
@@ -196,16 +242,16 @@ export class ParagraphFrameFlow {
         height: number;
       }
     >();
-    for (const { item, fragment } of locals) {
+    for (const { item, fragment, width } of locals) {
       const group = localGroups.get(item.groupId);
       const bottom = fragment.box.y + fragment.box.height;
       if (group) {
-        group.width = Math.max(group.width, item.frame.width);
+        group.width = Math.max(group.width, width);
         group.contentHeight = Math.max(group.contentHeight, bottom);
       } else {
         localGroups.set(item.groupId, {
           frame: item.frame,
-          width: item.frame.width,
+          width,
           contentHeight: bottom,
           height: 0,
         });
@@ -225,8 +271,9 @@ export class ParagraphFrameFlow {
     const positioned = locals.map(({ item, fragment: source }) => {
       const group = localGroups.get(item.groupId)!;
       let local = source;
-      if (item.frame.autoWidth && group.width > item.frame.width) {
-        const extra = group.width - item.frame.width;
+      const ownWidth = locals.find((local) => local.item === item)!.width;
+      if (item.frame.autoWidth && group.width > ownWidth) {
+        const extra = group.width - ownWidth;
         const dx =
           local.alignment === 'right' ? extra : local.alignment === 'center' ? extra / 2 : 0;
         local = shiftFragmentX(local, dx, local.box.width + extra);
