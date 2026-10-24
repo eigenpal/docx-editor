@@ -15,6 +15,7 @@ import {
   type RecordingBitmap,
 } from './metafile-recording.ts';
 import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
+import { withWmfText, wmfTextRecords } from './metafile-wmf-text.ts';
 
 export type {
   MetafileCommand,
@@ -175,10 +176,15 @@ async function replayAlone(
       : null;
     const canvas = encoded ? recordings.get(atob(encoded)) : undefined;
     if (!canvas) return null;
-    const drawing = canvas.drawing();
+    const replayed = canvas.drawing();
+    const wmf = mime === 'image/x-wmf';
+    // The replayer reads a WMF's text bytes as Latin-1; its font records name their own.
+    const commands = wmf
+      ? withWmfText(replayed.commands, wmfTextRecords(bytes))
+      : replayed.commands;
+    const drawing = commands === replayed.commands ? replayed : { ...replayed, commands };
     // The replayer skips a WMF's bitmaps; they paint first, under its other drawing.
-    const bitmaps =
-      mime === 'image/x-wmf' ? wmfBitmapCommands(bytes, drawing.width, drawing.height, budget) : [];
+    const bitmaps = wmf ? wmfBitmapCommands(bytes, drawing.width, drawing.height, budget) : [];
     return {
       drawing: bitmaps.length
         ? { ...drawing, commands: [...bitmaps, ...drawing.commands] }
