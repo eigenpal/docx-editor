@@ -2124,6 +2124,7 @@ function* layoutBlocksPass(
       flowNeighbourStyle(paragraph, -1, previousEntry, styleCascade),
       flowNeighbourStyle(paragraph, 1, nextEntry, styleCascade)
     );
+    let keepTailAt = -1; // Where a kept paragraph that splits early breaks; a rebreak clears it.
     const rebreakInCurrentColumn = (startOffset: number, placedParagraphStartY?: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
       if (next.kind !== 'paragraph') return;
@@ -2136,6 +2137,7 @@ function* layoutBlocksPass(
       // every page it crosses, even after those lines have been published.
       releasePlacedBreaks(paragraphId);
       lines = [...breakBlock(next, index, startOffset, placedParagraphStartY)];
+      keepTailAt = -1;
       measureBackwardWrap(startOffset, placedParagraphStartY);
     };
 
@@ -2239,8 +2241,7 @@ function* layoutBlocksPass(
     // overhangs the bottom margin by the height of its own frame.
     if (topExtent > 0 && !breakLinesOnly) cursorY += topExtent;
     firstParagraphOfSection = false;
-    // A kept paragraph that splits early breaks before this line; any other break clears it.
-    let keepTailAt = keepChains.tailBreak(index, lines.length, cursorY, contentHeight());
+    keepTailAt = keepChains.tailBreak(index, lines.length, cursorY, contentHeight());
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
