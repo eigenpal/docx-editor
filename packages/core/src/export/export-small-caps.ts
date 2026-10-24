@@ -9,6 +9,15 @@ import type {
   ShapedCluster,
 } from '../layout/shaped-run.ts';
 
+/**
+ * The scale of a synthesized small capital: 0.8 of the run size, rounded to a whole
+ * half-point. An 11pt run draws its small capitals at 9pt, and so does an 11.5pt run.
+ */
+export function syntheticSmallCapsScale(fontSizeHalfPoints: number): number {
+  if (!Number.isFinite(fontSizeHalfPoints) || fontSizeHalfPoints <= 0) return 0.8;
+  return Math.max(1, Math.round(fontSizeHalfPoints * 0.8)) / fontSizeHalfPoints;
+}
+
 export function synthesizeExportSmallCaps(
   shaper: TextShaper,
   input: ShapeInput,
@@ -39,9 +48,10 @@ export function synthesizeExportSmallCaps(
     exactAdvancesX: number[] = [];
   let exact = true;
   let pen = 0;
+  const lowerScale = syntheticSmallCapsScale(input.fontSizeHalfPoints);
   // Small caps apply to cased scripts. The surrounding bidi direction remains unchanged.
   for (const group of input.environment.direction === 'rtl' ? groups.reverse() : groups) {
-    const scale = group.lower ? 0.8 : 1;
+    const scale = group.lower ? lowerScale : 1;
     const starts: number[] = [],
       ends: number[] = [];
     let text = '',
