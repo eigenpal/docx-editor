@@ -30,7 +30,7 @@ import {
 } from './drawing-package-edit.ts';
 import type { SupportedImageMime } from './image-resources.ts';
 import { legacyImageEffects } from './legacy-vml-image-effects.ts';
-import { legacyTextArt } from './legacy-vml-text-art.ts';
+import { legacyTextArt, TEXT_WATERMARK_ID_PREFIX } from './legacy-vml-text-art.ts';
 import {
   attribute as a,
   children,
@@ -44,7 +44,7 @@ import {
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const O_NS = 'urn:schemas-microsoft-com:office:office';
 const W10_NS = 'urn:schemas-microsoft-com:office:word';
-const TEXT_PREFIX = 'PowerPlusWaterMarkObject';
+const TEXT_PREFIX = TEXT_WATERMARK_ID_PREFIX;
 const PICTURE_PREFIX = 'WordPictureWatermark';
 /** Cap on header parts a write visits; a document has a handful per section. */
 const MAX_HEADER_PARTS = 512;

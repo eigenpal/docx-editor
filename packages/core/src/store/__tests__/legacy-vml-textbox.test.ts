@@ -300,7 +300,7 @@ describe('VML text box refusals', () => {
     expect(textOf(stories[0]!.root)).toBe('Modern');
   });
 
-  test('pictures and word art keep their existing projections', () => {
+  test('pictures keep their projection and word art needs its renderer', () => {
     const picture = only(
       parse(
         '<w:pict><v:shape style="width:72pt;height:36pt" type="#_x0000_t75"><v:imagedata r:id="rPhoto"/></v:shape></w:pict>'
@@ -308,27 +308,14 @@ describe('VML text box refusals', () => {
     );
     expect(picture.textboxStory).toBeNull();
     expect(picture.picture?.embeddedRelationshipId).toBe('rPhoto');
-    const art = only(
-      parse(
-        '<w:pict><v:shape type="#_x0000_t136" style="position:absolute;width:300pt;height:60pt;z-index:-1;' +
-          'mso-position-horizontal:center;mso-position-horizontal-relative:margin;' +
-          'mso-position-vertical:center;mso-position-vertical-relative:margin" fillcolor="silver" stroked="f">' +
-          '<v:textpath style="font-family:serif;font-size:1pt" string="Draft"/></v:shape></w:pict>'
-      )
+    // A floating text path outside a watermark needs the text art renderer; without it the
+    // drawing is refused (the renderer's own tests cover its projection).
+    const art = parse(
+      '<w:pict><v:shape type="#_x0000_t136" style="position:absolute;width:300pt;height:60pt" ' +
+        'fillcolor="silver" stroked="f"><v:textpath style="font-family:serif;font-size:1pt" ' +
+        'string="Draft"/></v:shape></w:pict>'
     );
-    expect(art.textboxStory).toBeNull();
-    // A floating text path projects its text for layout to fit, not a preview graphic.
-    expect(art.legacyGraphic).toBeUndefined();
-    expect(art.textArt).toMatchObject({ text: 'Draft', fontFamily: 'serif', fillHex: 'C0C0C0' });
-    expect(art.wrap).toBe('behind');
-    // A translucent watermark fill is part of the text art subset.
-    const translucent = only(
-      parse(
-        '<w:pict><v:shape type="#_x0000_t136" style="position:absolute;width:300pt;height:60pt" fillcolor="silver" stroked="f">' +
-          '<v:fill opacity=".5"/><v:textpath style="font-family:serif;font-size:1pt" string="Draft"/></v:shape></w:pict>'
-      )
-    );
-    expect(translucent.textArt?.fillAlpha).toBe(0.5);
+    expect(projectDrawingsInPart(art)).toEqual([]);
   });
 });
 

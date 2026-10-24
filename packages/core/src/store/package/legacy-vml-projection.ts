@@ -27,7 +27,8 @@ import {
 import type { VectorShapeProjection } from './drawing-shape-projection.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { legacyImageEffects } from './legacy-vml-image-effects.ts';
-import { legacyTextArt } from './legacy-vml-text-art.ts';
+import { drawingTextArt, isUnrenderedTextArt } from './legacy-vml-text-art.ts';
+import { drawingRenderers } from './drawing-renderers.ts';
 import {
   attribute as a,
   boundedVml,
@@ -396,8 +397,12 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const floating = style.get('position') === 'absolute';
   // A text path projects its text for layout to fit, floating or on the line; every other
   // shape keeps the preview subset, which has no rotation. A text box story carries its own turn.
-  const textArt = !readOnly ? legacyTextArt(root) : null;
+  // Text art outside a watermark needs an installed text art renderer; without one the text
+  // path is refused, as a drawing outside the subset is, rather than drawn as its preview.
+  const textArtRenderer = drawingRenderers().legacyTextArt;
+  const textArt = !readOnly ? drawingTextArt(root, textArtRenderer) : null;
   if (style.has('rotation') && !textArt && !textbox) return null;
+  if (!readOnly && !textArt && !textArtRenderer && isUnrenderedTextArt(root)) return null;
   // A line spans its `from` and `to` points.
   const line =
     root.localName === 'line'

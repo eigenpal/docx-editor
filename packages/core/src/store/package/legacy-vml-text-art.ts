@@ -2,6 +2,10 @@
 // watermark is written as. Unlike the preview subset in `legacy-vml-shapes.ts`, this projects
 // the text itself, so layout can fit real glyph outlines into the box and every output paints
 // the same ink. The canonical XML is never rewritten here.
+//
+// The engine projects the text art of a watermark itself, because a watermark is a page
+// feature with its own dialog and API. Text art in any other drawing projects only through an
+// installed text art renderer (`drawing-renderers.ts`); without one it stays refused.
 import type { OoxmlElement } from './ooxml-tree.ts';
 import {
   attribute as a,
@@ -15,9 +19,17 @@ import {
   styleOf,
   VML,
   WORD_VML,
+  legacyRotationDegrees,
 } from './legacy-vml-values.ts';
 
-/** Plain text fitted to a floating shape box, painted with one fill and an optional outline. */
+/** The `id` prefix of a text watermark shape; only such a shape is a watermark. */
+export const TEXT_WATERMARK_ID_PREFIX = 'PowerPlusWaterMarkObject';
+
+/**
+ * Plain text fitted to a floating shape box, painted with one fill and an optional outline.
+ *
+ * @public
+ */
 export interface LegacyTextArtProjection {
   readonly text: string;
   readonly fontFamily: string;
@@ -59,18 +71,6 @@ function opacity(raw: string | undefined): number {
   return numeric(value);
 }
 
-/** VML rotation in degrees (`315`, `-45`, or `fd` sixty-five-thousandths). NaN when malformed. */
-export function legacyRotationDegrees(raw: string | undefined): number {
-  if (raw === undefined) return 0;
-  const value = raw.trim();
-  // `fd` is sixty-five-thousandths of a degree, so whole turns exceed the plain number bound.
-  // A bare `f` suffix is read the same way.
-  const fixed = /^(-?\d{1,10})fd?$/.exec(value);
-  const degrees = fixed ? Number(fixed[1]) / 65536 : numeric(value);
-  if (!Number.isFinite(degrees) || Math.abs(degrees) > 100_000) return NaN;
-  return ((degrees % 360) + 360) % 360;
-}
-
 /** A CSS-style font family with its quotes removed; null when it cannot name a face. */
 function family(raw: string | undefined): string | null {
   const value = (raw ?? '')
@@ -97,6 +97,8 @@ const hex = (value: string) => value.slice(1).toUpperCase();
  * fill colour with an optional `v:fill` opacity, an optional plain outline, and a shadow that
  * is switched off. Custom paths, adjustment handles, gradients, shown shadows and multi-line
  * text stay outside the subset, and the caller keeps refusing them.
+ *
+ * @public
  */
 export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | null {
   if (node.namespaceUri !== VML || node.localName !== 'shape') return null;
@@ -213,4 +215,26 @@ export function legacyTextArt(node: OoxmlElement): LegacyTextArtProjection | nul
     rotationDegrees: rotation,
     ...(a(path, 'trim') !== undefined && !off(a(path, 'trim')) ? { trim: true as const } : {}),
   });
+}
+
+/**
+ * The text art a drawing paints: the engine's for a text watermark, the installed text art
+ * renderer's for any other text path, and null without one.
+ */
+export function drawingTextArt(
+  node: OoxmlElement,
+  renderer: ((shape: OoxmlElement) => LegacyTextArtProjection | null) | undefined
+): LegacyTextArtProjection | null {
+  if ((a(node, 'id') ?? '').startsWith(TEXT_WATERMARK_ID_PREFIX)) return legacyTextArt(node);
+  return renderer ? renderer(node) : null;
+}
+
+/** A text path outside a watermark, which only an installed text art renderer projects. */
+export function isUnrenderedTextArt(node: OoxmlElement): boolean {
+  return (
+    node.namespaceUri === VML &&
+    node.localName === 'shape' &&
+    a(node, 'type') === '#_x0000_t136' &&
+    !(a(node, 'id') ?? '').startsWith(TEXT_WATERMARK_ID_PREFIX)
+  );
 }

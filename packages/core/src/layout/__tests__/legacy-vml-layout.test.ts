@@ -1,5 +1,5 @@
 import { isLegacyPlaceholder } from '../../store/__tests__/legacy-vml-refusal.ts';
-import { expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import {
@@ -20,6 +20,11 @@ import {
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
+import {
+  drawingRenderers,
+  installDrawingRenderers,
+} from '../../store/package/drawing-renderers.ts';
+import { legacyTextArt } from '../../store/package/legacy-vml-text-art.ts';
 import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/package/ooxml-shared.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -31,6 +36,12 @@ const metadata = {
   name: '/word/document.xml',
   contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
 };
+
+// The fixture drawing is WordArt, which projects through an installed text art renderer; the
+// engine's watermark reader stands in for it.
+const installed = drawingRenderers().legacyTextArt;
+beforeAll(() => installDrawingRenderers({ legacyTextArt }));
+afterAll(() => installDrawingRenderers({ legacyTextArt: installed }));
 
 function xml(text = 'Old', width = 120, floating = false): string {
   return `<w:document xmlns:w="${W}" xmlns:v="${V}"><w:body><w:p><w:r><w:t>A</w:t><w:pict><v:shape type="#_x0000_t136" style="width:${width}pt;height:30pt;${floating ? 'position:absolute;left:20pt;top:10pt;' : ''}" stroked="f"><v:textpath on="t" style="font-family:serif;font-size:24pt" string="${text}"/></v:shape></w:pict><w:t>Z</w:t></w:r></w:p></w:body></w:document>`;

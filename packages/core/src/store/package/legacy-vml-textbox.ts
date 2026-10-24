@@ -8,7 +8,6 @@
 import type { TextboxLegacyFrame, TextboxStoryProjection } from './drawing-shape-projection.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import { legacyTemplateOf, legacyTextboxGeometry } from './legacy-vml-textbox-geometry.ts';
-import { legacyRotationDegrees } from './legacy-vml-text-art.ts';
 import {
   legacyDashPattern,
   legacyStrokeCap,
@@ -18,6 +17,7 @@ import {
   attribute as a,
   children,
   color,
+  legacyRotationDegrees,
   named,
   numeric,
   off,
