@@ -161,25 +161,33 @@ function paintSlot(localName: string): string | null {
   return FILLS.has(localName) ? 'fill' : localName;
 }
 
+/** Content points whose formatting one shape reads. */
+const MAX_PAINT_SOURCES = 64;
+
 /**
- * User formatting on a shape: the presentation point's own `spPr`, then the shown content
- * point's (`dgm:spPr` on a data point, such as a step filled in another colour), each slot
- * taken from the first that sets it. Geometry and position come from the layout.
+ * User formatting on a shape: the presentation point's own `spPr`, then the content points
+ * the shape and the text merged into it show (`presOf`), in order: a step filled in another
+ * colour, a connector line recoloured, child text shown in a box of its own takes its
+ * first child's fill. Each slot comes from the first source that sets it. Geometry and
+ * position come from the layout; a line connector keeps its own empty fill.
  */
 function overrideMarkup(context: EmitContext, shape: DiagramShape): string {
   const state = shape.owner;
   const sources = [state.node.pres.spPr];
-  const shown = shape.text ? (context.model.presOf.get(shape.text.node.pres.modelId) ?? []) : [];
-  if (shown.includes(state.node.assoc) || shape.text?.node.assoc === state.node.assoc) {
-    sources.push(context.model.points.get(state.node.assoc)?.spPr ?? null);
+  const shown: string[] = [];
+  for (const node of shape.text && shape.text !== state ? [state, shape.text] : [state]) {
+    for (const id of context.model.presOf.get(node.node.pres.modelId) ?? []) {
+      if (shown.length < MAX_PAINT_SOURCES && !shown.includes(id)) shown.push(id);
+    }
   }
+  for (const id of shown) sources.push(context.model.points.get(id)?.spPr ?? null);
   const slots = new Map<string, string>();
   for (const spPr of sources) {
     if (!spPr) continue;
     for (const child of spPr.children) {
       if (!isElement(child) || child.namespaceUri !== A) continue;
       const slot = paintSlot(child.localName);
-      if (slot === null || slots.has(slot)) continue;
+      if (slot === null || slots.has(slot) || (slot === 'fill' && state.path)) continue;
       slots.set(slot, serializeDrawingElement(child) ?? '');
     }
   }
