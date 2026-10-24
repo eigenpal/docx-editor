@@ -77,7 +77,12 @@ function paint(node: OoxmlElement, line = false): LegacyInk | null {
   if (
     fillNode &&
     fillNode.attributes.some(
-      (attr) => !['on', 'color', 'focussize'].includes(attr.localName) || attr.namespaceUri
+      (attr) =>
+        attr.namespaceUri ||
+        // A solid fill is the default; other fill types paint gradients or pictures.
+        (attr.localName === 'type'
+          ? attr.value !== 'solid'
+          : !['on', 'color', 'focussize'].includes(attr.localName))
     )
   )
     return null;
@@ -252,7 +257,19 @@ function pathPoints(
     return ends.map(([x, y]) => [box.x + x, box.y + y]);
   }
   let coords: [number, number][];
-  const source = a(node, 'path');
+  const authored = a(node, 'path');
+  // An omitted operand is 0: `m,l1811,e` moves to 0,0 and draws to 1811,0.
+  const source = authored?.replace(
+    /([a-z])([^a-z]*)/gi,
+    (_, command: string, operands: string) =>
+      command +
+      (operands.includes(',')
+        ? operands
+            .split(',')
+            .map((operand) => operand.trim() || '0')
+            .join(',')
+        : operands)
+  );
   if (source) {
     // One move followed by explicit line segments. Curves, formulas, relative
     // commands and multiple subpaths remain opaque rather than an incomplete chart.
@@ -283,11 +300,16 @@ function pathPoints(
     }
     const size = pair(a(node, 'coordsize') ?? '21600,21600'),
       origin = pair(a(node, 'coordorigin') ?? '0,0');
-    if (!size || !origin || size.some((v) => v <= 0) || coords.length < 2) return null;
-    coords = coords.map(([x, y]) => [
-      ((x - origin[0]) * box.width) / size[0],
-      ((y - origin[1]) * box.height) / size[1],
-    ]);
+    if (!size || !origin || size.some((v) => v < 0) || coords.length < 2) return null;
+    // A zero coordinate extent is a flat axis: every point on it must sit at the origin.
+    const scale = (value: number, axis: 0 | 1, extent: number) =>
+      size[axis] > 0
+        ? ((value - origin[axis]) * extent) / size[axis]
+        : value === origin[axis]
+          ? 0
+          : NaN;
+    coords = coords.map(([x, y]) => [scale(x, 0, box.width), scale(y, 1, box.height)]);
+    if (coords.some((point) => !point.every(Number.isFinite))) return null;
   } else {
     if (a(node, 'from') || a(node, 'to')) return null;
     coords = [

@@ -2,13 +2,15 @@
 // drawing canvas paints: every member is a vector component in the group extent, and each
 // member text box lays out as a group member story over its shape.
 //
-// A group renders whole or not at all here. A member outside this subset (a picture, a
-// custom path, an unknown template) leaves the group to the graphic preview reader.
+// A group renders whole or not at all here. Beside member text, one member may be a picture,
+// which paints as the group's picture. A member outside this subset (a second picture, a cropped one, an unknown
+// template) leaves the group to the graphic preview reader.
 
 import { transformComponent } from './drawing-group-transform.ts';
 import type { VectorShapeComponent, VectorShapeProjection } from './drawing-shape-projection.ts';
+import type { GroupPictureProjection } from './drawing-group-picture.ts';
 import type { GroupTextboxProjection } from './group-textbox-projection.ts';
-import type { OoxmlElement } from './ooxml-tree.ts';
+import { RELATIONSHIPS_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import {
   legacyBoxShape,
   legacyLineShape,
@@ -40,6 +42,7 @@ const LINE_TEMPLATE = '#_x0000_t32';
 export interface LegacyVectorGroup {
   readonly vectorShape: VectorShapeProjection | null;
   readonly groupTextboxes: readonly GroupTextboxProjection[] | null;
+  readonly groupPicture: GroupPictureProjection | null;
 }
 
 /** The validated style of a group member, or null when it is outside the subset. */
@@ -48,7 +51,46 @@ export type LegacyMemberStyle = (node: OoxmlElement) => ReadonlyMap<string, stri
 interface Output {
   readonly components: VectorShapeComponent[];
   readonly texts: GroupTextboxProjection[];
+  picture: GroupPictureProjection | null;
   members: number;
+}
+
+/**
+ * A picture member: a picture-template shape whose only content is its embedded image, or
+ * `undefined` for any other member. Null refuses the group: a second picture, a crop, a link,
+ * or anything else on the image.
+ */
+function pictureMember(
+  member: OoxmlElement,
+  box: LegacyBox,
+  out: Output
+): GroupPictureProjection | null | undefined {
+  if (member.localName !== 'shape' || a(member, 'type') !== PICTURE_TEMPLATE) return undefined;
+  const content = children(member).filter((n) => !named(n, OFFICE, 'lock'));
+  const image = content.find((n) => named(n, VML, 'imagedata'));
+  if (!image) return undefined;
+  const id = image.attributes.find(
+    (attr) => attr.localName === 'id' && attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
+  )?.value;
+  const plain = image.attributes.every(
+    (attr) =>
+      (attr.localName === 'id' && attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI) ||
+      (attr.localName === 'title' && attr.namespaceUri === OFFICE)
+  );
+  if (out.picture || !id || !plain || content.length !== 1) return null;
+  return Object.freeze({
+    embeddedRelationshipId: id,
+    linkedRelationshipId: null,
+    crop: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
+    frameEmu: Object.freeze({
+      x: Math.round(box.x * EMU_PER_POINT),
+      y: Math.round(box.y * EMU_PER_POINT),
+      cx: Math.round(box.width * EMU_PER_POINT),
+      cy: Math.round(box.height * EMU_PER_POINT),
+    }),
+    memberNodeId: image.id,
+    alternateContent: false,
+  });
 }
 
 /**
@@ -226,6 +268,12 @@ function projectMembers(
         return false;
       continue;
     }
+    const picture = pictureMember(child, next, out);
+    if (picture === null) return false;
+    if (picture) {
+      out.picture = picture;
+      continue;
+    }
     if (!projectMember(child, style, next, host, out)) return false;
   }
   return true;
@@ -243,9 +291,12 @@ export function legacyVectorGroup(
   height: number,
   memberStyle: LegacyMemberStyle
 ): LegacyVectorGroup | null {
-  const out: Output = { components: [], texts: [], members: 0 };
+  const out: Output = { components: [], texts: [], picture: null, members: 0 };
   if (!projectMembers(root, { x: 0, y: 0, width, height }, 0, host, memberStyle, out)) return null;
-  if (!out.components.length && !out.texts.length) return null;
+  if (!out.components.length && !out.texts.length && !out.picture) return null;
+  // The graphic preview draws pictures with any number of others; only member text needs
+  // the vector path, so a picture rides along only beside it.
+  if (out.picture && !out.texts.length) return null;
   const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
   for (const component of out.components) {
     for (const path of component.subpathsEmu) subpathsEmu.push(path);
@@ -269,5 +320,6 @@ export function legacyVectorGroup(
         })
       : null,
     groupTextboxes: out.texts.length ? Object.freeze(out.texts) : null,
+    groupPicture: out.picture,
   });
 }

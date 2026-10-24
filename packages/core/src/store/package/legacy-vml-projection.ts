@@ -496,6 +496,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   ]).get(style.get('mso-position-horizontal-relative') ?? anchorX ?? 'text');
   const vertical = new Map<string, DrawingVerticalReferenceFrame>([
     ['text', 'paragraph'],
+    // Some writers name the anchor paragraph directly.
+    ['paragraph', 'paragraph'],
     ['line', 'line'],
     ['page', 'page'],
     ['margin', 'margin'],
@@ -670,7 +672,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
             memberNodeId: children(root).find((n) => named(n, VML, 'imagedata'))!.id,
             alternateContent: false,
           })
-        : null,
+        : (vectorGroup?.groupPicture ?? null),
     textboxStory,
     // The graphic covers the whole drawing, outline reach included.
     ...(textArt ? { textArt } : {}),

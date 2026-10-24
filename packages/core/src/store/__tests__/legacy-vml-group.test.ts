@@ -9,6 +9,7 @@ import { expectRefused } from './legacy-vml-refusal.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
 const O = 'urn:schemas-microsoft-com:office:office';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const EMU = 12_700;
 
 const PICTURE_TEMPLATE =
@@ -30,7 +31,7 @@ function canvasGroup(members: string): string {
 }
 
 function project(content: string): DrawingProjection[] {
-  const xml = `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}"><w:body><w:p><w:r>${content}</w:r></w:p></w:body></w:document>`;
+  const xml = `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:r="${R}"><w:body><w:p><w:r>${content}</w:r></w:p></w:body></w:document>`;
   const loaded = readOoxmlPart(xml, {
     name: '/word/document.xml',
     contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
@@ -131,6 +132,23 @@ test('a member text wrap style is ignored; a member placement key still refuses'
   expect(kept!.vectorShape!.components).toHaveLength(1);
   const [refused] = project(group('mso-position-horizontal:center'));
   expect(refused?.vectorShape ?? null).toBeNull();
+});
+
+test('beside member text, one picture member paints as the group picture', () => {
+  const picture = (id: string, left: number) =>
+    `<v:shape style="position:absolute;left:${left};top:0;width:500;height:500" type="#_x0000_t75" stroked="false"><v:imagedata r:id="${id}" o:title=""/></v:shape>`;
+  const group = (members: string) =>
+    `<w:pict><v:group style="position:absolute;margin-left:36pt;margin-top:52pt;width:200pt;height:50pt" coordsize="2000,500">${members}</v:group></w:pict>`;
+  const line =
+    '<v:line style="position:absolute" from="0,450" to="2000,450" strokeweight=".5pt"/>' +
+    '<v:shape style="position:absolute;left:1500;top:200;width:500;height:100" type="#_x0000_t202" filled="false" stroked="false"><v:textbox inset="0,0,0,0"><w:txbxContent><w:p><w:r><w:t>Date</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape>';
+  const [projection] = project(group(line + picture('rId7', 500)));
+  expect(projection!.groupTextboxes).toHaveLength(1);
+  expect(projection!.groupPicture).toMatchObject({
+    embeddedRelationshipId: 'rId7',
+    frameEmu: { x: 50 * EMU, y: 0, cx: 50 * EMU, cy: 50 * EMU },
+  });
+  expectRefused(project(group(line + picture('rId7', 0) + picture('rId8', 1000))));
 });
 
 describe('floating straight connectors', () => {
