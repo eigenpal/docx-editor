@@ -52,7 +52,7 @@ function shiftFragmentX(
  * The width of a one-line frame paragraph's content, its indents included, with the line moved
  * to the left indent. Undefined for several lines or no measurable content.
  */
-function shrinkSingleLineFrame(
+export function shrinkSingleLineFrame(
   fragment: ParagraphFragmentRecord
 ): { readonly width: number; readonly fragment: ParagraphFragmentRecord } | undefined {
   const line = fragment.lines.length === 1 ? fragment.lines[0]! : undefined;

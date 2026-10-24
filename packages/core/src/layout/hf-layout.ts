@@ -75,6 +75,8 @@ import {
 } from './hf-floating-tables.ts';
 import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
+import { layoutStoryWithTextFrames } from './story-text-frames.ts';
+import { createBoundedContextCache } from './bounded-context-cache.ts';
 
 /**
  * How many times a footer grows upward when text wrapped beside a page-framed table runs past
@@ -191,41 +193,6 @@ export function headerFooterContentKey(part: OoxmlPart): string {
   return key;
 }
 
-function createBoundedContextCache(maxEntries: number): {
-  get(key: string): HeaderFooterStoryLayout | undefined;
-  set(key: string, value: HeaderFooterStoryLayout): void;
-  /** Raise the bound; it never shrinks, so entries already held are never dropped by it. */
-  growTo(size: number): void;
-  readonly size: number;
-} {
-  let capacity = Math.max(1, Math.floor(maxEntries));
-  const entries = new Map<string, HeaderFooterStoryLayout>();
-  return {
-    growTo(size) {
-      if (Number.isFinite(size) && size > capacity) capacity = Math.floor(size);
-    },
-    get(key) {
-      const value = entries.get(key);
-      if (value === undefined) return undefined;
-      entries.delete(key);
-      entries.set(key, value);
-      return value;
-    },
-    set(key, value) {
-      if (entries.has(key)) entries.delete(key);
-      entries.set(key, value);
-      while (entries.size > capacity) {
-        const oldest = entries.keys().next();
-        if (oldest.done) break;
-        entries.delete(oldest.value);
-      }
-    },
-    get size() {
-      return entries.size;
-    },
-  };
-}
-
 /**
  * Story-level inputs the body path has always had and furniture never did.
  *
@@ -305,7 +272,7 @@ export function layoutHeaderFooterStory(
   // An `inside`/`outside` frame moves with the sheet's parity, so the story needs a page
   // context even when no page field is detected in it.
   const needs = pageFrame?.parity ? { ...detected, hasPageParity: true } : detected;
-  const contextCache = createBoundedContextCache(
+  const contextCache = createBoundedContextCache<HeaderFooterStoryLayout>(
     maxPageContextEntries ?? DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
   );
   // WITH the display mode, like every other consumer of this list. The inline flow already
@@ -477,6 +444,7 @@ export function layoutHeaderFooterStory(
     // The zones of the story's own floating tables, which every flow pass wraps around.
     let tableZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
+    let plainStory = false;
     // A floating table needs the page geometry to find its anchor. Without it, it stays in flow.
     const floatingGeometry =
       floatingSplit.floating.length > 0 &&
@@ -645,7 +613,10 @@ export function layoutHeaderFooterStory(
       }
       if (placed) flow = placed;
       else flowStory(flowBlocks, 0);
-    } else flowStory(flowBlocks, 0);
+    } else {
+      flowStory(flowBlocks, 0);
+      plainStory = !floatingGeometry;
+    }
 
     if (floatingGeometry) {
       const anchors = flow;
@@ -719,6 +690,7 @@ export function layoutHeaderFooterStory(
         bottom: framedFooter ? footerBottom - storyTop : flow.bottom,
       };
     }
+    const unframed = flow;
     flow = positionLegacyFooterPageFrame(
       part,
       flow,
@@ -726,6 +698,15 @@ export function layoutHeaderFooterStory(
       hfPageContext,
       styleCascade?.fixedParagraphSpacing
     );
+    // Text-anchored frames that no fixed lane describes take their place beside the story.
+    if (plainStory && flow === unframed)
+      layoutStoryWithTextFrames(
+        flowBlocks,
+        (source) => (flowStory(source, 0), flow),
+        (paragraphs, width) => flowBlocksInBox(paragraphs, 0, width, 0, 0, plainDeps()),
+        { contentWidth, ...hfPageContext },
+        (framed) => (flow = framed)
+      );
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,

@@ -150,7 +150,6 @@ describe('page-anchored header frame groups', () => {
     ['off-page frame', frame().replace('x="6400"', 'x="11900"')],
     ['exact height', frame('w:hRule="exact"')],
     ['unknown attribute', frame('w:xAlign="right"')],
-    ['mixed anchors', frame().replace('w:vAnchor="page"', 'w:vAnchor="text"')],
   ])
     test(`${name} retains complete ordinary flow`, () => {
       const result = lay(framed('FRAME', properties) + ordinary);

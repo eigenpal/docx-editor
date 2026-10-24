@@ -202,7 +202,10 @@ type Flow = { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
 const overlaps = (a: LayoutBox, b: LayoutBox): boolean =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-function meetsOrdinaryContent(frame: LayoutBox, blocks: readonly BlockFragmentRecord[]): boolean {
+export function meetsOrdinaryContent(
+  frame: LayoutBox,
+  blocks: readonly BlockFragmentRecord[]
+): boolean {
   for (const block of blocks) {
     if (block.kind !== 'paragraph') {
       if (overlaps(frame, block.box)) return true;
