@@ -325,7 +325,9 @@ function applyWidthClaims(
   seed: readonly (number | undefined)[],
   claims: readonly CellWidthClaim[],
   columnCount: number,
-  tableWidthPt: number
+  tableWidthPt: number,
+  /** What a `pct` cell width is a share of when the table states no width of its own. */
+  percentBasisPt = tableWidthPt
 ): (number | undefined)[] {
   // A stated total is what makes the authored grid a settled layout rather than a seed.
   const gridIsSettled = tableWidthPt > 0;
@@ -338,17 +340,20 @@ function applyWidthClaims(
     .filter(
       (claim) =>
         claim.start < columnCount &&
-        (claim.preferred.type === 'dxa' || (claim.preferred.type === 'pct' && tableWidthPt > 0))
+        (claim.preferred.type === 'dxa' || (claim.preferred.type === 'pct' && percentBasisPt > 0))
     )
     .sort((a, b) => a.span - b.span);
 
+  const textShares = new Set<number>();
   for (const claim of ordered) {
     const last = Math.min(claim.start + claim.span, columnCount);
     if (last <= claim.start) continue;
-    // 17.4.71: a `pct` cell width is relative to the overall width of the TABLE.
+    // 17.4.71: a `pct` cell width is relative to the overall width of the TABLE. A table
+    // that states no width of its own takes the text column as that width (8/92 and 25/75
+    // splits of an automatic-width table measured against the text column).
     const stated =
       claim.preferred.type === 'pct'
-        ? (tableWidthPt * claim.preferred.value) / 100
+        ? (percentBasisPt * claim.preferred.value) / 100
         : claim.preferred.value;
     if (!Number.isFinite(stated) || stated <= 0) continue;
 
@@ -357,7 +362,12 @@ function applyWidthClaims(
       // not get to restate a column an already-reconciled grid settled.
       if (gridIsSettled && claim.preferred.type === 'dxa' && seed[claim.start] !== undefined)
         continue;
-      const current = settled[claim.start];
+      // A share of the text column replaces the initial grid of a table with no width.
+      const current =
+        claim.preferred.type === 'pct' && tableWidthPt <= 0 && !textShares.has(claim.start)
+          ? undefined
+          : settled[claim.start];
+      if (claim.preferred.type === 'pct') textShares.add(claim.start);
       settled[claim.start] = current === undefined ? stated : Math.max(current, stated);
       continue;
     }
@@ -427,7 +437,13 @@ export function resolveColumnWidthsPt(input: {
     input.layoutFixed && !input.hasOmittedRows && statedTableWidth <= 0
       ? fixedCellWidthSeed(grid, input.claims)
       : grid;
-  const settled = applyWidthClaims(seed, input.claims, columnCount, statedTableWidth);
+  const settled = applyWidthClaims(
+    seed,
+    input.claims,
+    columnCount,
+    statedTableWidth,
+    statedTableWidth > 0 ? statedTableWidth : hasPage && !input.layoutFixed ? available : 0
+  );
 
   let stated = 0;
   let unsettled = 0;
