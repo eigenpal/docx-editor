@@ -10,12 +10,11 @@ import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
 import { PDFDocument, PDFName, PDFDict } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
 
-/** A 1x1 GIF89a: a format PDF has no filter for, so the writer cannot embed it. */
-const GIF: Uint8Array<ArrayBuffer> = new Uint8Array([
-  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xff, 0xff, 0xff,
-  0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44,
-  0x01, 0x00, 0x3b,
-]);
+/** A 1x1 BMP: a format the PDF writer does not embed. */
+const BMP: Uint8Array<ArrayBuffer> = Uint8Array.from(
+  atob('Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAATCwAAEwsAAAAAAAAAAAAA////AA=='),
+  (c) => c.charCodeAt(0)
+);
 
 /** A 1x1 opaque PNG: a format the writer does embed. */
 function png(): Uint8Array<ArrayBuffer> {
@@ -68,7 +67,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
  * minimal one: only `numbering.xml`, its rels, the media part and the content types move,
  * plus one paragraph's `w:numId` so a marker is actually published.
  */
-function withPictureBullet(media: Uint8Array<ArrayBuffer>, extension: 'gif' | 'png'): Uint8Array {
+function withPictureBullet(media: Uint8Array<ArrayBuffer>, extension: 'bmp' | 'png'): Uint8Array {
   const source = new Uint8Array(
     readFileSync(new URL('../../../e2e/fixtures/issue-483-firstline-marker.docx', import.meta.url))
   );
@@ -106,19 +105,19 @@ function withPictureBullet(media: Uint8Array<ArrayBuffer>, extension: 'gif' | 'p
   return zipSync(files);
 }
 
-test('a GIF picture bullet still exports under the strict fidelity policy', async () => {
+test('a BMP picture bullet still exports under the strict fidelity policy', async () => {
   // The regression this pins: drawing the bullet at all made the writer report an
   // `unsupported` format, and strict fidelity then refused the WHOLE document — much worse
-  // than the text marker it replaced. PDF has no GIF filter, so the level's own `w:lvlText`
+  // than the text marker it replaced. The writer does not embed BMP, so the level's own `w:lvlText`
   // is drawn and the fact is reported at `information`, which strict accepts.
-  const result = await exportPdf(withPictureBullet(GIF, 'gif'), { useSystemFonts: false });
+  const result = await exportPdf(withPictureBullet(BMP, 'bmp'), { useSystemFonts: false });
   expect(result.pageCount).toBeGreaterThan(0);
   expect(result.diagnostics.length).toBeGreaterThan(0);
   for (const diagnostic of result.diagnostics) {
     expect(diagnostic.code).toBe('list-picture-bullet');
     expect(diagnostic.severity).toBe('information');
     expect(diagnostic.message).toBe(
-      'Picture bullet drawn as its level text (format not embeddable: image/gif)'
+      'Picture bullet drawn as its level text (format not embeddable: image/bmp)'
     );
   }
 });
@@ -132,7 +131,7 @@ test('an embeddable picture bullet is drawn, and reports nothing', async () => {
 });
 
 test('a picture bullet whose relationship is missing falls back without refusing', async () => {
-  const files = unzipSync(withPictureBullet(GIF, 'gif'));
+  const files = unzipSync(withPictureBullet(BMP, 'bmp'));
   delete files['word/_rels/numbering.xml.rels'];
   const result = await exportPdf(zipSync(files), { useSystemFonts: false });
   expect(result.pageCount).toBeGreaterThan(0);

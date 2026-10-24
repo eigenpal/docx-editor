@@ -15,8 +15,8 @@ const PNG_1X1 = Uint8Array.from(
   ),
   (c) => c.charCodeAt(0)
 );
-const GIF_1X1 = Uint8Array.from(
-  atob('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'),
+const BMP_1X1 = Uint8Array.from(
+  atob('Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAATCwAAEwsAAAAAAAAAAAAA////AA=='),
   (c) => c.charCodeAt(0)
 );
 const IMAGE_RELATIONSHIP =
@@ -49,16 +49,16 @@ interface GroupInput {
   readonly bodyLines?: number;
 }
 
-/** Move the picture to a valid GIF part: ready in the editor, but not embeddable in PDF. */
-function withGifPicture(bytes: Uint8Array): Uint8Array {
+/** Move the picture to a valid BMP part: ready in the editor, but not embeddable in PDF. */
+function withBmpPicture(bytes: Uint8Array): Uint8Array {
   const files = unzipSync(bytes);
   delete files['word/media/image1.png'];
-  files['word/media/image1.gif'] = GIF_1X1;
+  files['word/media/image1.bmp'] = BMP_1X1;
   const rels = strFromU8(files['word/_rels/document.xml.rels']!);
-  files['word/_rels/document.xml.rels'] = strToU8(rels.replace('image1.png', 'image1.gif'));
+  files['word/_rels/document.xml.rels'] = strToU8(rels.replace('image1.png', 'image1.bmp'));
   const types = strFromU8(files['[Content_Types].xml']!);
   files['[Content_Types].xml'] = strToU8(
-    types.replace('<Default', '<Default Extension="gif" ContentType="image/gif"/><Default')
+    types.replace('<Default', '<Default Extension="bmp" ContentType="image/bmp"/><Default')
   );
   return zipSync(files);
 }
@@ -178,10 +178,10 @@ test('an MC-wrapped group with a picture PDF cannot embed is left out with a not
   const notice = {
     code: 'drawing',
     severity: 'information' as const,
-    message: 'Shape group left out: picture format not embeddable: image/gif',
+    message: 'Shape group left out: picture format not embeddable: image/bmp',
   };
   for (const members of [pictureMember(0), pictureMember(0) + BAR_MEMBER]) {
-    const { imageCount, commands } = await pageCommands(withGifPicture(input(members)), 'strict', [
+    const { imageCount, commands } = await pageCommands(withBmpPicture(input(members)), 'strict', [
       notice,
     ]);
     expect(imageCount).toBe(0);
@@ -194,7 +194,7 @@ test('a bare group whose picture cannot paint is refused as a whole', async () =
     input(pictureMember(0) + BAR_MEMBER, { alternateContent: false, media });
   for (const [bare, message] of [
     [bareGroup(null), 'Image has no validated raster bytes'],
-    [withGifPicture(bareGroup()), 'Unsupported PDF image format: image/gif'],
+    [withBmpPicture(bareGroup()), 'Unsupported PDF image format: image/bmp'],
   ] as const) {
     const error = await exportPdf(bare, { useSystemFonts: false }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PdfFidelityError);
