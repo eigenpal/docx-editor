@@ -221,3 +221,21 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
     expect(Object.isFrozen(footprint)).toBe(true);
   });
 });
+
+test('an MC-wrapped anchor keeps its authored tight wrap polygon', () => {
+  const wrap =
+    '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0"><wp:start x="5000" y="500"/>' +
+    '<wp:lineTo x="5000" y="21000"/><wp:lineTo x="17000" y="21000"/>' +
+    '<wp:lineTo x="17000" y="500"/><wp:lineTo x="5000" y="500"/></wp:wrapPolygon></wp:wrapTight>';
+  const [[, projection]] = [
+    ...indexInlineDrawingProjectionsInPart(partWith(mcWrapped(groupAnchor({ wrap })))),
+  ];
+  expect(projection!.wrapGeometry?.element).toBe('tight');
+  expect(projection!.wrapGeometry?.polygon).toEqual([
+    { x: 5000, y: 500 },
+    { x: 5000, y: 21000 },
+    { x: 17000, y: 21000 },
+    { x: 17000, y: 500 },
+    { x: 5000, y: 500 },
+  ]);
+});

@@ -17,7 +17,6 @@ import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
-  DRAWING_WRAP_POLYGON_MAX_POINTS,
   MAX_XML_DEPTH,
   ST_COORDINATE_MAX,
   ST_COORDINATE_MIN,
@@ -39,6 +38,7 @@ import {
   type DrawingProjectionLimits,
   type WalkState,
 } from './drawing-projection-walk.ts';
+import { readWrapPolygon as readPolygon } from './drawing-wrap-polygon.ts';
 import {
   MC_NAMESPACE_URI,
   RELATIONSHIPS_NAMESPACE_URI,
@@ -850,63 +850,6 @@ function readPosition(
     horizontal,
     vertical,
   });
-}
-
-/** Signed ST_Coordinate for wp:wrapPolygon x/y — full schema range. */
-function parseWrapPolygonCoordinate(value: string | undefined): number | null {
-  if (value === undefined || !/^-?\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) return null;
-  if (parsed < ST_COORDINATE_MIN || parsed > ST_COORDINATE_MAX) return null;
-  return parsed;
-}
-
-function readPolygon(
-  wrap: OoxmlElement,
-  state: WalkState,
-  nodeId: string
-): readonly Readonly<{ x: number; y: number }>[] {
-  const polygon = findDirectKind(wrap.children, 'drawingWrapPolygon');
-  if (!polygon) return Object.freeze([]);
-  let pointCount = 0;
-  for (const child of polygon.children) {
-    if (!isElement(child)) continue;
-    if (child.kind !== 'drawingWrapPolygonStart' && child.kind !== 'drawingWrapPolygonLineTo')
-      continue;
-    pointCount += 1;
-  }
-  if (pointCount > DRAWING_WRAP_POLYGON_MAX_POINTS) {
-    state.diagnostics.push({
-      code: 'wrap-polygon-over-limit',
-      nodeId,
-      detail: String(pointCount),
-    });
-    return Object.freeze([]);
-  }
-  const points: Readonly<{ x: number; y: number }>[] = [];
-  let malformed = false;
-  for (const child of polygon.children) {
-    if (!isElement(child)) continue;
-    if (child.kind !== 'drawingWrapPolygonStart' && child.kind !== 'drawingWrapPolygonLineTo') {
-      continue;
-    }
-    const x = parseWrapPolygonCoordinate(schemaAttributeValue(child.attributes, 'x'));
-    const y = parseWrapPolygonCoordinate(schemaAttributeValue(child.attributes, 'y'));
-    if (x === null || y === null) {
-      malformed = true;
-      continue;
-    }
-    points.push(Object.freeze({ x, y }));
-  }
-  if (malformed || points.length < 3) {
-    state.diagnostics.push({
-      code: 'wrap-polygon-malformed',
-      nodeId,
-      detail: malformed ? 'invalid-coordinate' : 'insufficient-points',
-    });
-    return Object.freeze([]);
-  }
-  return Object.freeze(points);
 }
 
 function wrapElementKind(wrap: OoxmlElement | null): DrawingWrapElement {
