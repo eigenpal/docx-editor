@@ -39,6 +39,7 @@ import {
   rect,
 } from './context.ts';
 import { cellDiagonalCommands } from './table-cell-diagonals.ts';
+import { withMarkerOnlyVisits } from './marker-only-visits.ts';
 import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
@@ -398,7 +399,7 @@ export async function paint(
         );
     }
   }
-  const spans: SemanticSpanVisit[] = [];
+  let spans: SemanticSpanVisit[] = [];
   const drawings: SemanticDrawingVisit[] = [];
   for (const warning of layout.contentWarnings ?? [])
     work.report(`core-${warning.code}`, warning.code);
@@ -406,6 +407,8 @@ export async function paint(
     work.tick();
     spans.push(visit);
   });
+  // An empty numbered paragraph has no span to carry its marker.
+  spans = withMarkerOnlyVisits(layout, spans);
   forEachSemanticDrawing(layout, (visit) => {
     work.tick();
     drawings.push(visit);
