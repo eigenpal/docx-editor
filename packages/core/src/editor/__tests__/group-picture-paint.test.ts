@@ -208,13 +208,6 @@ describe('a drawing group with a picture member', () => {
       expect(container.querySelector('.docx-drawing-ready img')).not.toBeNull();
     });
   });
-
-  test('a group with two pictures still paints nothing', async () => {
-    await withMounted(docx(pictureMember(0) + pictureMember(2_540_000)), (surface, container) => {
-      expect(groupRecord(surface)).toBeUndefined();
-      expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
-    });
-  });
 });
 
 describe('a drawing group whose picture cannot render', () => {

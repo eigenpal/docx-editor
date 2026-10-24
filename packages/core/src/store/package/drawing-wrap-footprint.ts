@@ -46,6 +46,7 @@ export function wrapFootprintProjection(projection: DrawingProjection): DrawingP
           picture: null,
           vectorShape: null,
           groupPicture: null,
+          groupPictureLayers: undefined,
           textboxStory: null,
           groupTextboxes: undefined,
           legacyGraphic: undefined,

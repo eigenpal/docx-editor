@@ -33,6 +33,8 @@ export interface DrawingContentContext {
 
 export interface DrawingContentProjection {
   readonly groupPicture: GroupPictureProjection | null;
+  /** The group's other picture members, above `groupPicture` in paint order. */
+  readonly groupPictureLayers?: readonly GroupPictureProjection[];
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
@@ -99,7 +101,7 @@ export function projectDrawingContent(
     compatibilityMode,
     ctx.resolveSchemeColor,
     ctx.resolveStyleMatrixReference,
-    groupRead?.picture.memberNodeId
+    groupRead ? new Set(groupRead.pictures.map((picture) => picture.memberNodeId)) : undefined
   );
   // A group paints whole or not at all: the picture needs every other member to paint too,
   // inside the same bounds as the picture frame.
@@ -109,6 +111,7 @@ export function projectDrawingContent(
       ? groupVectorMembersAreBounded(vectorMembers, extent)
       : !groupRead.hasOtherMembers);
   const groupPicture = groupAdmitted ? groupRead.picture : null;
+  const groupPictureLayers = groupAdmitted ? groupRead.pictures.slice(1) : [];
   const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
   if (!groupPicture && !vectorShape) {
     const diagram =
@@ -147,6 +150,9 @@ export function projectDrawingContent(
       : null;
   return {
     groupPicture,
+    ...(groupPictureLayers.length > 0
+      ? { groupPictureLayers: Object.freeze(groupPictureLayers) }
+      : {}),
     vectorShape: vectorShape ?? chrome,
     textboxStory: chrome && textboxStory ? { ...textboxStory, chromeByVector: true } : textboxStory,
     ...groupTextboxesField(anchor, extent, { picture: null, groupPicture, vectorShape }, ctx),

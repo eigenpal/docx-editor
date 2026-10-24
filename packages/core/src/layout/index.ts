@@ -233,6 +233,10 @@ export {
 } from './export-traversal.ts';
 export { lineSegments, type LineSegment } from './line-segments.ts';
 export { vectorShapeInkClip } from './vector-shape-ink.ts';
+export {
+  groupPictureLayerDrawing,
+  type DrawingGroupPictureLayerRecord,
+} from './drawing-group-picture-layers.ts';
 export type {
   AnchoredDrawingLayoutFallback,
   AnchoredDrawingRecord,

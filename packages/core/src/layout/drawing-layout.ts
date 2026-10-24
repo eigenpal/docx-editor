@@ -43,6 +43,10 @@ import type { LayoutBox } from './semantic-records.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { withGroupTextboxStories } from './group-textbox-layout.ts';
 import { drawingPaintFields } from './drawing-paint-fields.ts';
+import {
+  groupPictureLayerFields,
+  groupPictureLayerResources,
+} from './drawing-group-picture-layers.ts';
 import { wrappedParagraphAnchorTop } from './anchor-content-top.ts';
 import {
   anchoredDrawingAtomsInParagraph,
@@ -286,6 +290,11 @@ export interface InlineDrawingRecord {
   readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
   /**
+   * The group's other picture members, in document order. Each paints above the record's
+   * own image and the layers before it, and below `vectorShape`. Absent for one picture.
+   */
+  readonly groupPictureLayers?: readonly import('./drawing-group-picture-layers.ts').DrawingGroupPictureLayerRecord[];
+  /**
    * The revision wrappers enclosing the owning run, outermost first — the same stack spans
    * carry, so paint and review chrome give a tracked picture the same cues as tracked text.
    * Absent when the drawing is untracked.
@@ -364,6 +373,8 @@ export interface InlineDrawingLayoutInput {
   readonly ownerPartName: string;
   readonly projection: DrawingProjection;
   readonly resource: ImageResourceState;
+  /** The resources of the projection's `groupPictureLayers`, in the same order. */
+  readonly groupPictureLayerResources?: readonly ImageResourceState[];
 }
 
 export interface InlineDrawingLayoutContext {
@@ -1009,6 +1020,7 @@ export function buildAnchoredDrawingRecord(options: {
     resource: options.input.resource,
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
+    ...groupPictureLayerFields(projection, options.input.groupPictureLayerResources),
     ...(textArt ? { textArt } : {}),
   });
 }
@@ -1250,6 +1262,10 @@ export function publishAnchoredDrawingsForParagraph(
         ownerPartName: options.drawingLayout.ownerPartName,
         projection: placed,
         resource: options.drawingLayout.resourceOf(projection),
+        groupPictureLayerResources: groupPictureLayerResources(
+          projection,
+          options.drawingLayout.resourceOf
+        ),
       }),
       anchorParagraphId: options.paragraphId,
       start: characterFrameOffset,
@@ -1352,6 +1368,7 @@ export function buildInlineDrawingRecord(options: {
     resource: options.input.resource,
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
+    ...groupPictureLayerFields(options.input.projection, options.input.groupPictureLayerResources),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
     ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
     ...(textboxStory ? { textboxStory } : {}),

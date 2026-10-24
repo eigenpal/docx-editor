@@ -8,6 +8,7 @@ import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
+import { groupPictureLayerResources } from './drawing-group-picture-layers.ts';
 import {
   revisionsAreDeletion,
   revisionsVisible,
@@ -76,6 +77,7 @@ export function runDrawingAtomPlan(options: {
         ownerPartName: layout.ownerPartName,
         projection,
         resource: layout.resourceOf(projection),
+        groupPictureLayerResources: groupPictureLayerResources(projection, layout.resourceOf),
       }),
     },
   };

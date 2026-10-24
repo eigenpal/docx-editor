@@ -718,8 +718,8 @@ export function childTransform(wsp: OoxmlElement): {
 /**
  * Renderable-subset projection of direct `wps:wsp` and one bounded `wpg:wgp` group.
  *
- * `groupPictureNodeId` names the one group member the group picture projection paints; it is
- * skipped here. Every other member must be a supported `wps:wsp`, or the group refuses.
+ * `groupPictureNodeIds` names the group members the group picture projection paints; they
+ * are skipped here. Every other member must be a supported `wps:wsp`, or the group refuses.
  */
 export function projectVectorShape(
   anchor: OoxmlElement,
@@ -727,7 +727,7 @@ export function projectVectorShape(
   compatibilityMode: boolean,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
-  groupPictureNodeId?: string
+  groupPictureNodeIds?: ReadonlySet<string>
 ): VectorShapeProjection | null {
   void compatibilityMode;
   // A straight vertical or horizontal line has a zero width or height; both zero is empty.
@@ -759,7 +759,7 @@ export function projectVectorShape(
       if (!isElement(child) || isGroupPropertyChild(child)) continue;
       childCount += 1;
       if (childCount > MAX_GROUP_SHAPE_CHILDREN) return null;
-      if (child.id === groupPictureNodeId) continue;
+      if (groupPictureNodeIds?.has(child.id)) continue;
       // One group level is the enforced nesting cap. Do not paint a partial nested group.
       if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
       const properties = findDirectChild(child.children, {

@@ -411,7 +411,17 @@ describe('group picture projection', () => {
       'a hidden picture member',
       groupDrawing(pictureMember().replace('name="Picture"', 'name="Picture" hidden="1"')),
     ],
-    ['two picture members', groupDrawing(pictureMember() + pictureMember({ y: 1500 }))],
+    [
+      'a second picture above a vector member',
+      groupDrawing(pictureMember() + barMember(2100) + pictureMember({ y: 1500 })),
+    ],
+    [
+      'a second picture member that is hidden',
+      groupDrawing(
+        pictureMember() +
+          pictureMember({ y: 1500 }).replace('name="Picture"', 'name="Picture" hidden="1"')
+      ),
+    ],
     ['a picture above a vector member', groupDrawing(barMember(2100) + pictureMember())],
     ['a rotated picture', groupDrawing(pictureMember({ xfrmAttributes: ' rot="5400000"' }))],
     ['a flipped picture', groupDrawing(pictureMember({ xfrmAttributes: ' flipH="1"' }))],

@@ -10,7 +10,10 @@ export function countDrawingImageReferences(pkg: OoxmlPackage, partName: string)
       ? projection.legacyGraphic.fragments.flatMap((fragment) =>
           typeof fragment === 'string' ? [] : [fragment.relationshipId]
         )
-      : [(projection.picture ?? projection.groupPicture)?.embeddedRelationshipId];
+      : [
+          (projection.picture ?? projection.groupPicture)?.embeddedRelationshipId,
+          ...(projection.groupPictureLayers ?? []).map((layer) => layer.embeddedRelationshipId),
+        ];
     for (const id of references) {
       if (!id) continue;
       const resolved = resolveImageRelationship(

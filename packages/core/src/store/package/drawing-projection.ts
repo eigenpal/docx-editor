@@ -56,7 +56,10 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
-import type { GroupPictureProjection } from './drawing-group-picture.ts';
+import {
+  withAlternateContentGroupPictures,
+  type GroupPictureProjection,
+} from './drawing-group-picture.ts';
 import { createDiagramPartResolver, type DiagramPartResolver } from './diagram-parts.ts';
 import { projectDrawingContent, withPictureClip } from './drawing-content-projection.ts';
 import { parseCropPercent } from './drawing-shape-readers.ts';
@@ -228,6 +231,11 @@ export interface DrawingProjection {
   readonly vectorShape: VectorShapeProjection | null;
   /** The picture member of a `wpg:wgp` group; `picture` stays null for a group. */
   readonly groupPicture: GroupPictureProjection | null;
+  /**
+   * The group's other picture members, in document order. Each paints above `groupPicture`
+   * and the ones before it, and below `vectorShape`. Absent when the group has one picture.
+   */
+  readonly groupPictureLayers?: readonly GroupPictureProjection[];
   readonly textboxStory: TextboxStoryProjection | null;
   /** Text box members of a `wpg:wgp` group, laid out read-only; absent when none has text. */
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
@@ -1558,6 +1566,7 @@ export function projectDrawingWithState(
       picture: withPictureClip(pictureResult.picture, content),
       vectorShape: content.vectorShape,
       groupPicture: content.groupPicture,
+      ...(content.groupPictureLayers ? { groupPictureLayers: content.groupPictureLayers } : {}),
       textboxStory: content.textboxStory,
       ...(content.groupTextboxes ? { groupTextboxes: content.groupTextboxes } : {}),
       locks,
@@ -1611,11 +1620,7 @@ export function projectRunLevelMcDrawing(
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
   // Layout applies the same rule to a group picture whose resource fails.
-  if (projection.groupPicture) {
-    const groupPicture = Object.freeze({ ...projection.groupPicture, alternateContent: true });
-    return Object.freeze({ ...projection, groupPicture });
-  }
-  return projection;
+  return withAlternateContentGroupPictures(projection);
 }
 
 /**

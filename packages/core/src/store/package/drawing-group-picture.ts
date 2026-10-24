@@ -104,9 +104,33 @@ export function groupVectorMembersAreBounded(
 }
 
 export interface GroupPictureRead {
+  /** The first picture member, which paints lowest. */
   readonly picture: GroupPictureProjection;
-  /** Whether the group has members other than the picture that paint. */
+  /** Every picture member in document order, `picture` first. */
+  readonly pictures: readonly GroupPictureProjection[];
+  /** Whether the group has members other than the pictures that paint. */
   readonly hasOtherMembers: boolean;
+}
+
+/**
+ * The projection with every group picture marked as the chosen branch of a run-level
+ * `mc:AlternateContent`. Layout then drops the whole group when any picture fails.
+ */
+export function withAlternateContentGroupPictures<
+  P extends {
+    readonly groupPicture: GroupPictureProjection | null;
+    readonly groupPictureLayers?: readonly GroupPictureProjection[];
+  },
+>(projection: P): P {
+  if (!projection.groupPicture) return projection;
+  const mark = (picture: GroupPictureProjection): GroupPictureProjection =>
+    Object.freeze({ ...picture, alternateContent: true });
+  const layers = projection.groupPictureLayers?.map(mark);
+  return Object.freeze({
+    ...projection,
+    groupPicture: mark(projection.groupPicture),
+    ...(layers ? { groupPictureLayers: Object.freeze(layers) } : {}),
+  });
 }
 
 function relationshipId(blip: OoxmlElement, localName: 'embed' | 'link'): string | null {
@@ -129,15 +153,13 @@ function drawingMl(parent: OoxmlElement, localName: string): OoxmlElement | null
 }
 
 /**
- * Read the one `pic:pic` member of a drawing group, or null to leave the group unpainted.
+ * Read the `pic:pic` members of a drawing group, or null to leave the group unpainted.
  *
- * The read accepts only what paint reproduces exactly. The group holds one picture, and the
- * picture comes before every other member, so it paints below them. The picture is not
- * rotated or flipped. It has a rectangle geometry, a fill that is not tiled, and no blip
- * effects. Its frame has a visible part inside the group extent and stays within the
- * bounds of {@link memberFrameIsBounded}. Anything else returns null, and the group keeps
- * its earlier unpainted result. A text box member without fill or outline paints nothing, so
- * it neither counts as another member nor orders the picture.
+ * The read accepts only what paint reproduces exactly. Every picture comes before every
+ * other painted member, so the pictures paint in document order below them. Each picture
+ * passes {@link readPictureMember}. Anything else returns null, and the group keeps its
+ * earlier unpainted result. A text box member without fill or outline paints nothing, so it
+ * neither counts as another member nor orders the pictures.
  */
 export function readGroupPicture(
   anchor: OoxmlElement,
@@ -149,22 +171,45 @@ export function readGroupPicture(
   const frame = readDrawingGroupFrame(anchor);
   // A picture cannot keep a visible size in a group whose child space is zero on an axis.
   if (!frame || frame.childExtentEmu.cx <= 0 || frame.childExtentEmu.cy <= 0) return null;
-  let picture: OoxmlElement | null = null;
+  const members: OoxmlElement[] = [];
   let hasOtherMembers = false;
-  let members = 0;
+  let count = 0;
   for (const child of frame.group.children) {
     if (!isElement(child) || isGroupPropertyChild(child)) continue;
-    members += 1;
-    if (members > MAX_GROUP_SHAPE_CHILDREN) return null;
+    count += 1;
+    if (count > MAX_GROUP_SHAPE_CHILDREN) return null;
     if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
     if (child.namespaceUri === PIC_NAMESPACE_URI && child.localName === 'pic') {
-      if (picture !== null || hasOtherMembers) return null;
-      picture = child;
+      if (hasOtherMembers) return null;
+      members.push(child);
     } else {
       hasOtherMembers = true;
     }
   }
-  if (!picture || !identityGroupThemeEffect(picture, resolveStyleMatrixReference)) return null;
+  if (members.length === 0) return null;
+  const pictures: GroupPictureProjection[] = [];
+  for (const member of members) {
+    const picture = readPictureMember(member, frame, extent, resolveStyleMatrixReference);
+    if (!picture) return null;
+    pictures.push(picture);
+  }
+  return { picture: pictures[0]!, pictures: Object.freeze(pictures), hasOtherMembers };
+}
+
+/**
+ * One `pic:pic` member, or null when paint cannot reproduce it exactly.
+ *
+ * The picture is not rotated or flipped. It has a rectangle geometry, a fill that is not
+ * tiled, and no blip effects. Its frame has a visible part inside the group extent and stays
+ * within the bounds of {@link memberFrameIsBounded}.
+ */
+function readPictureMember(
+  picture: OoxmlElement,
+  frame: NonNullable<ReturnType<typeof readDrawingGroupFrame>>,
+  extent: Readonly<{ cx: number; cy: number }>,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): GroupPictureProjection | null {
+  if (!identityGroupThemeEffect(picture, resolveStyleMatrixReference)) return null;
   const nonVisual = findDirectChild(picture.children, {
     namespaceUri: PIC_NAMESPACE_URI,
     localName: 'nvPicPr',
@@ -223,20 +268,17 @@ export function readGroupPicture(
   const srcRect = drawingMl(blipFill, 'srcRect');
   const cropEdge = (name: string): number =>
     srcRect ? parseCropPercent(schemaAttributeValue(srcRect.attributes, name)) : 0;
-  return {
-    picture: Object.freeze({
-      embeddedRelationshipId,
-      linkedRelationshipId,
-      crop: Object.freeze({
-        left: cropEdge('l'),
-        top: cropEdge('t'),
-        right: cropEdge('r'),
-        bottom: cropEdge('b'),
-      }),
-      frameEmu: Object.freeze(frameEmu),
-      memberNodeId: picture.id,
-      alternateContent: false,
+  return Object.freeze({
+    embeddedRelationshipId,
+    linkedRelationshipId,
+    crop: Object.freeze({
+      left: cropEdge('l'),
+      top: cropEdge('t'),
+      right: cropEdge('r'),
+      bottom: cropEdge('b'),
     }),
-    hasOtherMembers,
-  };
+    frameEmu: Object.freeze(frameEmu),
+    memberNodeId: picture.id,
+    alternateContent: false,
+  });
 }

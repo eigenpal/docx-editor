@@ -49,6 +49,10 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
 import { framedTokenJoin } from './framed-token.ts';
 import {
+  groupPictureLayerResources,
+  groupPictureLayoutToken,
+} from './drawing-group-picture-layers.ts';
+import {
   aggregateParagraphTokensForTableBlock,
   createTableRowTokenStore,
 } from './table-paragraph-tokens.ts';
@@ -354,21 +358,10 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.fillMode,
         ])
       : '',
-    groupPicture: groupPicture
-      ? framedTokenJoin([
-          String(groupPicture.crop.left),
-          String(groupPicture.crop.top),
-          String(groupPicture.crop.right),
-          String(groupPicture.crop.bottom),
-          `${groupPicture.frameEmu.x},${groupPicture.frameEmu.y}`,
-          `${groupPicture.frameEmu.cx},${groupPicture.frameEmu.cy}`,
-          groupPicture.embeddedRelationshipId ?? '',
-          groupPicture.linkedRelationshipId ?? '',
-          groupPicture.memberNodeId,
-          groupPicture.alternateContent ? 'mc' : '',
-          groupPicture.clipUnit?.map((point) => `${point.x},${point.y}`).join(' ') ?? '',
-        ])
-      : '',
+    groupPicture: groupPicture ? groupPictureLayoutToken(groupPicture) : '',
+    groupPictureLayers: framedTokenJoin(
+      (projection.groupPictureLayers ?? []).map(groupPictureLayoutToken)
+    ),
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
     textArt: JSON.stringify(projection.textArt) ?? '',
     horizontalRule: JSON.stringify(projection.horizontalRule) ?? '',
@@ -562,19 +555,22 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  // An MC-wrapped group whose picture cannot render paints nothing, the same as an MC
+  // An MC-wrapped group with a picture that cannot render paints nothing, as an MC
   // payload the projection cannot draw (`projectRunLevelMcDrawing`), and keeps only its wrap
   // footprint. A linked picture settles at once; an embedded one counts only after its decode
   // settles, so a pending group keeps its frame and paints its vector members.
   const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
     const projection = atomProjections.get(atomNodeId) ?? null;
     if (!projection?.groupPicture?.alternateContent) return projection;
-    const state = !projection.groupPicture.embeddedRelationshipId
-      ? resourceOf(projection)
-      : resourceByKey.get(pendingResourceKey(projection));
-    return state && state.kind !== 'ready' && state.kind !== 'pending'
-      ? wrapFootprintProjection(projection)
-      : projection;
+    const pictures = [projection.groupPicture, ...(projection.groupPictureLayers ?? [])];
+    const failed = pictures.some((picture) => {
+      const shown = { ...projection, groupPicture: picture };
+      const state = !picture.embeddedRelationshipId
+        ? resourceOf(shown)
+        : resourceByKey.get(pendingResourceKey(shown));
+      return state && state.kind !== 'ready' && state.kind !== 'pending';
+    });
+    return failed ? wrapFootprintProjection(projection) : projection;
   };
 
   const context: InlineDrawingLayoutContext = Object.freeze({
@@ -941,6 +937,7 @@ function framedAtomToken(
     atomId,
     drawingProjectionLayoutToken(projection),
     drawingResourceLayoutToken(resourceOf(projection)),
+    ...(groupPictureLayerResources(projection, resourceOf) ?? []).map(drawingResourceLayoutToken),
   ];
   if (epochOf) parts.push(String(epochOf(projection)));
   return framedTokenJoin(parts);

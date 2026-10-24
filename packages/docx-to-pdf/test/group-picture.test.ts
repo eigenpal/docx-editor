@@ -146,9 +146,48 @@ test('a group with only a picture paints it at its offset inside the group', asy
   expect(commands).toMatch(/100 0 0 50 72 620 cm \/Im\d+ Do Q/);
 });
 
-test('a group with two pictures still exports no image', async () => {
-  const { imageCount } = await pageCommands(input(pictureMember(0) + pictureMember(635000)));
+const PLAIN_TEXTBOX_MEMBER =
+  '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="1905000"/>' +
+  '<a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+  '<a:noFill/><a:ln><a:noFill/></a:ln></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r>' +
+  '<w:t>Label</w:t></w:r></w:p></w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
+
+test('a group with two pictures paints both in order, with their crops, under the vector members', async () => {
+  const cropped = pictureMember(
+    635000,
+    0,
+    '<a:blip r:embed="rIdImg2"/><a:srcRect t="20000" b="5000"/>'
+  );
+  const bytes = input(PLAIN_TEXTBOX_MEMBER + pictureMember(0) + cropped + BAR_MEMBER, {
+    relationships:
+      `<Relationship Id="rIdImg" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>` +
+      `<Relationship Id="rIdImg2" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>`,
+  });
+  const { imageCount, commands } = await pageCommands(bytes);
+  expect(imageCount).toBe(1);
+  // The first picture fills its 100pt x 50pt member at the top of the group.
+  const first = commands.search(/100 0 0 50 72 670 cm \/Im\d+ Do Q/);
+  // The second sits 50pt lower. Its 20% top and 5% bottom crop stretch the image to
+  // 50 / 0.75 points and move it down by 5% of that height.
+  const second = commands.search(/100 0 0 66\.66\d* 72 616\.66\d* cm \/Im\d+ Do Q/);
+  const bar = commands.indexOf('1 0 0 rg');
+  expect(first).toBeGreaterThan(-1);
+  expect(second).toBeGreaterThan(first);
+  expect(bar).toBeGreaterThan(second);
+  // The text box member keeps its text.
+  expect(commands).toContain('/ActualText <FEFF004c006100620065006c>');
+});
+
+test('an MC-wrapped group whose second picture is missing exports without the group', async () => {
+  const second = pictureMember(635000, 0, '<a:blip r:embed="rIdMissing"/>');
+  const bytes = input(pictureMember(0) + second + BAR_MEMBER, {
+    relationships:
+      `<Relationship Id="rIdImg" Type="${IMAGE_RELATIONSHIP}" Target="media/image1.png"/>` +
+      `<Relationship Id="rIdMissing" Type="${IMAGE_RELATIONSHIP}" Target="media/none.png"/>`,
+  });
+  const { imageCount, commands } = await pageCommands(bytes);
   expect(imageCount).toBe(0);
+  expect(commands).not.toContain('1 0 0 rg');
 });
 
 const LINKED = {

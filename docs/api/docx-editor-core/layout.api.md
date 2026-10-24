@@ -845,6 +845,18 @@ export interface DrawingGeometry {
 }
 
 // @public
+export interface DrawingGroupPictureLayerRecord {
+    readonly crop: SourceCrop;
+    readonly frameUnit: Readonly<{
+        height: number;
+        width: number;
+        x: number;
+        y: number;
+    }>;
+    readonly resource: ImageResourceState;
+}
+
+// @public
 export interface DrawingGroupPictureRecord {
     readonly alternateContent: boolean;
 }
@@ -1394,6 +1406,9 @@ export interface GraphemeWordSegmentRecord {
 }
 
 // @public
+export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(drawing: D, layer: DrawingGroupPictureLayerRecord): D;
+
+// @public
 export interface GroupTextboxStoryRecord {
     readonly box: LayoutBox;
     readonly memberNodeId: string;
@@ -1614,6 +1629,7 @@ export interface InlineDrawingRecord {
     readonly geometry: DrawingGeometry;
     // (undocumented)
     readonly groupPicture?: DrawingGroupPictureRecord;
+    readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
     readonly height: number;

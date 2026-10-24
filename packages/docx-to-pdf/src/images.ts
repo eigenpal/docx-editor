@@ -5,10 +5,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { PDFDocument, PDFName, PDFStream, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
-import type {
-  LayoutBox,
-  ListMarkerPictureRecord,
-  SemanticDrawingVisit,
+import {
+  groupPictureLayerDrawing,
+  type LayoutBox,
+  type ListMarkerPictureRecord,
+  type SemanticDrawingVisit,
 } from '@docx-editor.dev/core/layout';
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
@@ -324,7 +325,8 @@ export class ImageWriter {
   }
 
   /**
-   * A shape group with a picture member: the picture, then the group's vector members over it.
+   * A shape group with picture members: the pictures in document order, then the group's
+   * vector members over them.
    *
    * The group paints whole or not at all, as it does on screen. Layout already drops an
    * `mc:AlternateContent` group whose picture resource fails, following the rule for MC
@@ -339,28 +341,42 @@ export class ImageWriter {
     report: (message: string) => string
   ): Promise<string> {
     const d = visit.drawing;
-    const { resource } = d;
-    if (
-      d.groupPicture?.alternateContent &&
-      resource.kind === 'ready' &&
-      !EMBEDDABLE_MIMES.has(resource.mime)
-    ) {
-      this.work.report(
-        'drawing',
-        `Shape group left out: picture format not embeddable: ${resource.mime}`,
-        visit.page.index,
-        'information'
-      );
-      return '';
+    // The first picture is the record's own image; each later one paints above it, in order.
+    const pictures = [
+      visit,
+      ...(d.groupPictureLayers ?? []).map((layer) => ({
+        ...visit,
+        drawing: groupPictureLayerDrawing(d, layer),
+      })),
+    ];
+    for (const { drawing } of pictures) {
+      const { resource } = drawing;
+      if (
+        d.groupPicture?.alternateContent &&
+        resource.kind === 'ready' &&
+        !EMBEDDABLE_MIMES.has(resource.mime)
+      ) {
+        this.work.report(
+          'drawing',
+          `Shape group left out: picture format not embeddable: ${resource.mime}`,
+          visit.page.index,
+          'information'
+        );
+        return '';
+      }
     }
-    let refused = false;
-    const picture = await this.paintPicture(visit, page, (message) => {
-      refused = true;
-      return report(message);
-    });
-    if (refused) return '';
+    const painted: string[] = [];
+    for (const picture of pictures) {
+      let refused = false;
+      const commands = await this.paintPicture(picture, page, (message) => {
+        refused = true;
+        return report(message);
+      });
+      if (refused) return '';
+      painted.push(commands);
+    }
     const vector = d.vectorShape ? paintVectorShape(this.doc, page, visit, this.work) : '';
-    return [picture, vector].filter((commands) => commands !== '').join('\n');
+    return [...painted, vector].filter((commands) => commands !== '').join('\n');
   }
 
   /**
