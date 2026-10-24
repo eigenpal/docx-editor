@@ -504,7 +504,9 @@ function paintExtras(
   const color = seriesLook(plot, series, context.look);
   const tint =
     color.line ??
-    (color.fill ? { ...color.fill, widthPt: 1.5, cap: 'round' as const, dash: null } : null);
+    ((color.fill ?? color.marker?.fill)
+      ? { ...(color.fill ?? color.marker!.fill!), widthPt: 1.5, cap: 'round' as const, dash: null }
+      : null);
   for (const trend of seriesTrendlines(plot, series)) {
     const own = readChartShapeProperties(child(trend.element, 'spPr'), resolve);
     const stroke = mergeStroke(own.line, tint ? { ...tint, widthPt: 1.5, dash: [1, 1] } : null);
@@ -520,9 +522,9 @@ function paintExtras(
       labels.push({
         paragraphs: [[{ text: trend.label.join('\n'), style }]],
         align: 'ctr',
-        // The label sits just above and left of the curve's last point.
+        // The label ends a little left of the curve's last point, centred on it.
         x: end.x - width / 2 - 8 - frame / 2,
-        y: end.y - height + 4,
+        y: end.y - height / 2,
         width: frame,
         height,
         rotation: 0,

@@ -104,9 +104,15 @@ export class ChartScene {
     stroke: ChartStroke,
     join?: 'round' | 'bevel'
   ): void {
-    const pattern = stroke.dash!.map((length) =>
-      Math.max(0.1, length * Math.max(stroke.widthPt, 0.5))
-    );
+    // Round and square caps reach half the width past each dash, inside the pattern: dashes
+    // draw a width shorter and gaps a width longer, so a dot pattern paints separate dots.
+    const width = Math.max(stroke.widthPt, 0.5);
+    const capped = stroke.cap !== 'butt';
+    const pattern = stroke.dash!.map((length, index) => {
+      const base = length * width;
+      if (!capped) return Math.max(0.1, base);
+      return index % 2 === 0 ? Math.max(0.01, base - width) : base + width;
+    });
     const dashes: Point[][] = [];
     for (const path of subpaths) {
       let index = 0;

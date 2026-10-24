@@ -9,7 +9,7 @@ import type { SurfaceBand } from './chart-3d-surface.ts';
 import { child, type ChartLegend, type ChartModel, type ChartPlot } from './chart-model.ts';
 import { mergeStroke, readChartShapeProperties } from './chart-style.ts';
 import { seriesTrendlines } from './chart-trendline.ts';
-import { markerPath, markerStrokes, type ChartScene } from './chart-scene.ts';
+import { ellipse, markerPath, markerStrokes, type ChartScene } from './chart-scene.ts';
 import {
   isLineKind,
   seriesLook,
@@ -31,6 +31,8 @@ export interface LegendEntry {
   readonly look: SeriesLook;
   /** Line plots show a stroke with the marker; the others a filled square. */
   readonly line: boolean;
+  /** Bubble plots fill a circle in the square's place. */
+  readonly round?: boolean;
 }
 
 /** Legend entries in the order the legend lists them, deleted entries removed. */
@@ -76,6 +78,7 @@ export function legendEntries(
           text: series.name ?? `Series${series.index + 1}`,
           look: seriesLook(plot, series, context),
           line,
+          round: plot.kind === 'bubble',
         });
       }
       if (reversesInLegend(plot, vertical)) plotEntries.reverse();
@@ -90,7 +93,14 @@ export function legendEntries(
           const base = seriesLook(plot, series, context);
           const tint =
             base.line ??
-            (base.fill ? { ...base.fill, widthPt: 1.5, cap: 'round' as const, dash: null } : null);
+            ((base.fill ?? base.marker?.fill)
+              ? {
+                  ...(base.fill ?? base.marker!.fill!),
+                  widthPt: 1.5,
+                  cap: 'round' as const,
+                  dash: null,
+                }
+              : null);
           const line = mergeStroke(own.line, tint ? { ...tint, widthPt: 1.5, dash: [1, 1] } : null);
           plotEntries.push({
             text: trend.name,
@@ -263,6 +273,14 @@ export function paintLegend(
           scene.line(stroke, marker.line);
         }
       }
+    } else if (entry.round) {
+      const half = metrics.key / 2;
+      scene.path(
+        [ellipse(item.x + half, centerY, half, half)],
+        true,
+        entry.look.fill,
+        entry.look.line
+      );
     } else {
       const half = metrics.key / 2;
       scene.rect(

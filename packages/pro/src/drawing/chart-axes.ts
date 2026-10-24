@@ -12,6 +12,9 @@ import { autoValueScale, type ValueScale } from './chart-scale.ts';
 import { estimateTextWidth, type ChartTextStyle } from './chart-text.ts';
 import { seriesErrorBars, seriesTrendlines } from './chart-trendline.ts';
 
+/** Room between the labels of a horizontal value axis, in sizes. */
+const HORIZONTAL_GAP = 1;
+
 export interface Box {
   l: number;
   t: number;
@@ -240,9 +243,9 @@ export function scaleValues(
   );
   const labelWidth = estimateTextWidth(estimateLabel, style);
   // A vertical axis keeps more than a label's height between ticks; a horizontal one keeps
-  // its widest label clear of the next by three and a half sizes. A fixed percent range
+  // its widest label clear of the next by one size. A fixed percent range
   // takes one tick more.
-  const minInterval = vertical ? 1.6 * style.sizePt : labelWidth + 3.5 * style.sizePt;
+  const minInterval = vertical ? 1.6 * style.sizePt : labelWidth + HORIZONTAL_GAP * style.sizePt;
   const fitting = Math.floor(length / minInterval) + (percentFixed ? 1 : 0);
   return autoValueScale({
     dataMin,

@@ -39,6 +39,8 @@ import {
 
 const MAX_CATEGORIES = 4_096;
 const TICK_LENGTH = 3.1;
+/** Labels beside a vertical axis sit this many sizes above their tick's centre line. */
+export const LABEL_LIFT = 0.08;
 const DEFAULT_AXIS_LINE: ChartStroke = {
   hex: '000000',
   alpha: 1,
@@ -579,7 +581,7 @@ export function paintCartesian(
             paragraphs: [[{ text, style: view.style }]],
             align: left ? 'r' : 'l',
             x: left ? plot.l - offset - frame : plot.r + offset,
-            y: at - height / 2,
+            y: at - height / 2 - LABEL_LIFT * size,
             width: frame,
             height,
             rotation: 0,
@@ -617,7 +619,7 @@ export function paintCartesian(
           paragraphs: [[{ text, style: view.style }]],
           align: left ? 'r' : 'l',
           x: left ? edge - offset - frame : edge + offset,
-          y: at - height / 2,
+          y: at - height / 2 - LABEL_LIFT * size,
           width: frame,
           height,
           rotation: 0,
