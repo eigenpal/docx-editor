@@ -158,7 +158,7 @@ A page- or margin-anchored table that overlaps the text column and reaches below
 
 Negative offsets remain in place when they clear preceding text. A table that intersects preceding text moves below that text.
 
-If a text-anchored table does not fit the space left on the page, it breaks across pages when that space holds its opening. The opening is the header rows and the first line of each cell in the first body row. If that row has a minimum height, the opening includes that height. If that row has an exact height, the opening is the whole row. A text-anchored table taller than a page also breaks. If the opening does not fit, the table moves to the next page and keeps its offset there.
+If a text-anchored table does not fit the space left on the page, it breaks across pages when that space holds its opening. The opening is the header rows and the first line of each cell in the first body row. If that row has a minimum height, the opening includes that height. If that row has an exact height, the opening is the whole row. A text-anchored table taller than a page also breaks. If the opening does not fit, the table moves to the next page and keeps its offset there. A table with a negative vertical offset that does not fit the space left also starts on the next page.
 
 The first part of a breaking table keeps its offset below the preceding text. The rest continues at the top of the next page, below repeated header rows. Rows break as they do in a table without a position. A row splits between lines at the bottom of the page. It moves to the next page only when the space left cannot hold its minimum height or the first line of each cell. Rows split even when they are set not to break across pages.
 

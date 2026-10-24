@@ -18,7 +18,8 @@
 // first occurrence as for every later one. The admission probe that decides whether headers
 // repeat above a continuation is run again and must agree.
 
-import { firstRowContentDeps, cutRowContentDeps } from './table-fragment-content-insets.ts';
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { cutPart } from './table-row-minimum-fit.ts';
 import {
   initialCellCursors,
   layoutRowFragmentBounded,
@@ -212,10 +213,11 @@ function placeChain(
     )
       return null;
     const opening = index === 0 ? firstRowContentDeps(structure, source, base) : base;
-    // The first occurrence ends its fragment, so it keeps room for the inside rule at the cut.
-    const rowDeps = k === 0 ? cutRowContentDeps(structure, source, opening) : opening;
+    // Every occurrence ends its page, so it takes the paginator's split-part deps and band. The
+    // width lane only serves tables without `w:tblpPr`, never a page-positioned break.
+    const part = cutPart(structure, source, opening, bottom, k > 0, undefined);
     const placementDeps: TableFlowDeps = {
-      ...rowDeps,
+      ...part.deps,
       rowAtPageStart:
         top <= 0.001 ||
         (index > 0 && fragment.rows.slice(0, index).every((row) => row.isHeaderRepeat)),
@@ -225,7 +227,7 @@ function placeChain(
       cols,
       left,
       top,
-      bottom,
+      part.bottom,
       false,
       k > 0,
       0,

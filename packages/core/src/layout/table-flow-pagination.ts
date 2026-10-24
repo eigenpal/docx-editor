@@ -42,7 +42,7 @@ import {
   rowStartsPage,
   tableKeptRowSource,
 } from './table-row-keeps.ts';
-import { rowMinimumFits, rowMinimumMoves, splitPartDeps } from './table-row-minimum-fit.ts';
+import { rowMinimumFits, rowMinimumMoves, cutPart } from './table-row-minimum-fit.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
@@ -739,7 +739,7 @@ export function* paginateTableInFlowSteps(
         pinnedBreak !== undefined ||
         (textFlow && bodyRowIndex !== firstBodyRowIndex)) &&
         !heldByOpenSpan &&
-        rowMinimumMoves(row, rowDeps(), structure, naturalHeight, !pinnedBreak, {
+        rowMinimumMoves(row, rowDeps(), structure, naturalHeight + closingEdge, !pinnedBreak, {
           top: flow.cursorY,
           columnTop: flow.columnTop?.() ?? 0,
           bottom: contentHeight(),
@@ -912,13 +912,14 @@ export function* paginateTableInFlowSteps(
         if (!splitsAnyway) throw overheightRowError(row);
       }
 
-      const placementDeps = splitPartDeps(structure, row, rowDeps(), isContinuation, !!pinnedBreak);
+      const part = cutPart(structure, row, rowDeps(), contentHeight(), isContinuation, pinnedBreak);
+      const placementDeps = part.deps;
       let placed = layoutRowFragmentBounded(
         row,
         structure.columnWidthsPt,
         tableLeft,
         flow.cursorY,
-        contentHeight(),
+        part.bottom,
         false,
         isContinuation,
         0,
@@ -927,7 +928,7 @@ export function* paginateTableInFlowSteps(
         structure.cellSpacingPt,
         vMerge
       );
-      placed = fragmentCarry.current.adjustPlacement(bodyRowIndex, placed, contentHeight());
+      placed = fragmentCarry.current.adjustPlacement(bodyRowIndex, placed, part.bottom);
 
       // First attempt on a non-empty page placed nothing useful → move to next page.
       if (!placed.fitted && flow.cursorY > 0 && !movedToFreshPage) {

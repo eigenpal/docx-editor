@@ -321,6 +321,14 @@ describe('a text-relative table narrower than its column that misses the page bo
     expect(lineAt(layout, 0, 'Tail').spans[0]!.box.x).toBeGreaterThanOrEqual(80);
   });
 
+  test('a table taller than the room with a negative offset below text opens the next page', () => {
+    const tall = table({ width: 80, offset: -6, body: textRow(0, 20) });
+    const layout = render(lead(100) + tall + p('Anchor'));
+    expect(tablesOn(layout, 0)).toHaveLength(0);
+    // The offset would reach above the page top, so the table starts there.
+    expect(tablesOn(layout, 1)[0]!.box.y).toBe(0);
+  });
+
   test('opening rows that fit only a fresh page move the table there with its offset', () => {
     const rows = minimumRow(0, 150) + minimumRow(1, 150);
     const layout = render(lead(100) + table({ width: 80, offset: 20, body: rows }) + p('Anchor'));

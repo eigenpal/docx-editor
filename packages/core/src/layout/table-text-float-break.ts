@@ -13,8 +13,9 @@
 // - The opening is the header rows and the first line of every cell of the first body row, or
 //   that row's minimum height when larger, or the whole row when its height is exact.
 // - The first fragment keeps the `w:tblpY` offset below the body cursor. When the opening fits
-//   only a fresh page below content already in the column, the table moves there first and
-//   keeps its offset, as a whole table moves with its anchor (`openTextTable`).
+//   only a fresh page below content already in the column, or a negative offset would break the
+//   table below that content, the table moves there first and keeps its offset, as a whole table
+//   moves with its anchor (`openTextTable`).
 // - Rows paginate as in an unpositioned table: a row splits between lines at the page bottom
 //   and moves to the next page only when the room left cannot hold its minimum height or the
 //   first line of every cell. The first body row is the opening's and never moves alone.
@@ -79,10 +80,11 @@ export function openingRowsBottom(
 }
 
 /**
- * Opens an in-flow text-anchored table `w:tblpY` below the body cursor. When its opening does not
- * fit there below content already in the column, but does fit a fresh one, the table first moves
- * to the next column or page and keeps its offset there. Returns the table's left edge in the
- * column it opens in.
+ * Opens an in-flow text-anchored table `w:tblpY` below the body cursor. Below content already in
+ * the column, when its opening does not fit there, or a negative offset leaves the whole table
+ * short of the room, but the opening fits a fresh column, the table first moves to the next
+ * column or page and keeps its offset there (clamped to the top). Returns the table's left edge
+ * in the column it opens in.
  */
 export function openTextTable(
   table: OoxmlElement,
@@ -95,9 +97,15 @@ export function openTextTable(
   const fits = (top: number) =>
     (openingRowsBottom(table, structure, flow.columnWidth(), top + offset, flow.deps) ?? 0) <=
     flow.contentHeight() + EPSILON;
+  // A negative offset that does not let the whole table fit the room left would cover the text
+  // above the break, so such a table opens the next region too. Only then is it measured whole.
+  const breaksBelowText =
+    offset < 0 &&
+    flow.cursorY + offset + probeTable(table, structure, flow.columnWidth(), flow.deps).box.height >
+      flow.contentHeight() + EPSILON;
   if (
     flow.regionHoldsContent(flow.cursorY) &&
-    !fits(flow.cursorY) &&
+    (breaksBelowText || !fits(flow.cursorY)) &&
     fits(flow.columnTop?.() ?? 0)
   ) {
     flow.advanceColumn();
