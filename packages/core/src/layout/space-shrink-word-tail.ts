@@ -34,7 +34,7 @@ export function spaceShrinkWordTail(pieces: readonly FieldAwarePiece[], measurer
       const word = space < 0 ? current.text : current.text.slice(0, space);
       if (
         !isSpaceShrinkWordPiece(current) ||
-        !/^[\p{Script=Latin}\p{N}\p{P}]+$/u.test(word) ||
+        !/^[\p{Script=Latin}\p{Script=Cyrillic}\p{N}\p{P}]+$/u.test(word) ||
         wordBoundaries(word, true).length !== 1
       ) {
         cache.set(index, undefined);

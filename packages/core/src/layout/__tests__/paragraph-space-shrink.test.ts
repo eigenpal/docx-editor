@@ -40,6 +40,15 @@ test('modern justified flow compresses spaces, preserving letters and measurable
   expect(linesOf(result)[1]!.spans.every((s) => !s.style.shaping?.wordSpacingPt)).toBe(true);
 });
 
+test('Cyrillic justified text compresses its spaces like Latin text', () => {
+  const result = layoutSemanticDocument(source('both', 'аа бб вв гг'), 1, {
+    measurer,
+    compatibilityMode: 15,
+  });
+  expect(content(result)).toEqual(['аа бб вв', 'гг']);
+  expect(linesOf(result)[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+});
+
 test('a space before a zero-width space lends its shrink like a plain space', () => {
   // U+200B takes no width, as in a shaped font.
   const zeroWidth: TextMeasurer = {
