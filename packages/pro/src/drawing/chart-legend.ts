@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The chart legend: its entries, the room it takes from the plot, and its painting.
 
+import type { SurfaceBand } from './chart-3d-surface.ts';
 import { child, type ChartLegend, type ChartModel, type ChartPlot } from './chart-model.ts';
 import { mergeStroke, readChartShapeProperties } from './chart-style.ts';
 import { seriesTrendlines } from './chart-trendline.ts';
@@ -36,12 +37,26 @@ export interface LegendEntry {
 export function legendEntries(
   model: ChartModel,
   legend: ChartLegend,
-  context: LookContext
+  context: LookContext,
+  bands?: readonly SurfaceBand[]
 ): LegendEntry[] {
   const entries: LegendEntry[] = [];
   const vertical = legend.position === 'l' || legend.position === 'r' || legend.position === 'tr';
   for (const plot of model.plots) {
     const plotEntries: LegendEntry[] = [];
+    // A surface lists its value bands, the highest first.
+    if (plot.kind === 'surface') {
+      for (const band of [...(bands ?? [])].reverse()) {
+        if (plotEntries.length >= MAX_ENTRIES) break;
+        plotEntries.push({
+          text: band.text,
+          look: { fill: plot.wireframe ? null : band.fill, line: band.line, marker: null },
+          line: false,
+        });
+      }
+      for (const entry of plotEntries) entries.push(entry);
+      continue;
+    }
     const line = isLineKind(plot);
     // A lone series whose points are coloured one by one lists its categories.
     const lone = model.plots.length === 1 && plot.series.length === 1;

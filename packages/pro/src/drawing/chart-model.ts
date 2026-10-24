@@ -7,8 +7,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // Values come only from the caches in the chart part (`c:numCache`, `c:strCache`, and the
 // literal `c:numLit`/`c:strLit`); formulas and workbooks are never evaluated. Every count is
-// file-derived and bounded. A chart type outside the supported set makes the whole model
-// null, so the drawing keeps its labelled placeholder rather than painting part of a chart.
+// file-derived and bounded. A chart past the bounds makes the whole model null, so the drawing
+// keeps its labelled placeholder rather than painting part of a chart.
 
 import {
   CHART_NAMESPACE_URI,
@@ -36,7 +36,8 @@ export type ChartPlotKind =
   | 'scatter'
   | 'radar'
   | 'bubble'
-  | 'ofPie';
+  | 'ofPie'
+  | 'surface';
 
 const PLOT_KINDS: ReadonlyMap<string, { kind: ChartPlotKind; threeD: boolean }> = new Map([
   ['barChart', { kind: 'bar', threeD: false }],
@@ -54,10 +55,10 @@ const PLOT_KINDS: ReadonlyMap<string, { kind: ChartPlotKind; threeD: boolean }> 
   // A stock chart is line series drawn without lines, joined by high-low lines and bars.
   ['stockChart', { kind: 'line', threeD: false }],
   ['ofPieChart', { kind: 'ofPie', threeD: false }],
+  // A surface chart without depth is the contour chart: the surface seen from above.
+  ['surfaceChart', { kind: 'surface', threeD: false }],
+  ['surface3DChart', { kind: 'surface', threeD: true }],
 ]);
-
-/** Plot types the model refuses: the chart keeps its placeholder. */
-const UNSUPPORTED_PLOTS = new Set(['surfaceChart', 'surface3DChart']);
 
 export interface ChartMarker {
   /** `none`, `circle`, `square`, …; null when the series takes the automatic marker. */
@@ -106,6 +107,8 @@ export interface ChartPlot {
   readonly varyColors: boolean;
   readonly gapWidth: number;
   readonly overlap: number;
+  /** 3-D plots: the gap between series rows, percent of the bar depth. */
+  readonly gapDepth: number;
   readonly series: readonly ChartSeries[];
   readonly axisIds: readonly string[];
   readonly dLbls: OoxmlElement | null;
@@ -133,9 +136,13 @@ export interface ChartPlot {
     readonly secondSize: number;
     readonly serLines: OoxmlElement | null;
   } | null;
+  /** Surface plots: lines only, no filled bands. */
+  readonly wireframe: boolean;
+  /** Surface plots: `c:bandFmt` shape properties by band index. */
+  readonly bandFormats: ReadonlyMap<number, OoxmlElement>;
 }
 
-export type ChartAxisKind = 'category' | 'value' | 'date';
+export type ChartAxisKind = 'category' | 'value' | 'date' | 'series';
 
 export interface ChartAxis {
   readonly id: string;
@@ -199,7 +206,11 @@ export interface ChartModel {
   readonly plots: readonly ChartPlot[];
   readonly axes: ReadonlyMap<string, ChartAxis>;
   readonly legend: ChartLegend | null;
-  readonly view3D: boolean;
+  /** `c:view3D`, the floor and the walls; null elements when the chart names none. */
+  readonly view3D: OoxmlElement | null;
+  readonly floor: OoxmlElement | null;
+  readonly sideWall: OoxmlElement | null;
+  readonly backWall: OoxmlElement | null;
 }
 
 export function child(
@@ -414,6 +425,7 @@ function readPlot(element: OoxmlElement, budget: Budget): ChartPlot | null {
     varyColors: childFlag(element, 'varyColors', kind === 'pie' || kind === 'doughnut'),
     gapWidth: childNumber(element, 'gapWidth', 0, 500) ?? 150,
     overlap: childNumber(element, 'overlap', -100, 100) ?? 0,
+    gapDepth: childNumber(element, 'gapDepth', 0, 500) ?? 150,
     series,
     axisIds: children(element, 'axId').map(
       (axis) => schemaAttributeValue(axis.attributes, 'val') ?? ''
@@ -438,7 +450,20 @@ function readPlot(element: OoxmlElement, budget: Budget): ChartPlot | null {
             serLines: child(element, 'serLines'),
           }
         : null,
+    wireframe: kind === 'surface' && childFlag(element, 'wireframe', false),
+    bandFormats: kind === 'surface' ? readBandFormats(element) : new Map(),
   };
+}
+
+/** `c:bandFmts/c:bandFmt` shape properties by band index. */
+function readBandFormats(element: OoxmlElement): Map<number, OoxmlElement> {
+  const out = new Map<number, OoxmlElement>();
+  for (const format of children(child(element, 'bandFmts'), 'bandFmt').slice(0, MAX_SERIES)) {
+    const index = childNumber(format, 'idx', 0, MAX_SERIES);
+    const spPr = child(format, 'spPr');
+    if (index !== null && spPr) out.set(index, spPr);
+  }
+  return out;
 }
 
 const POSITIONS = new Set(['b', 't', 'l', 'r']);
@@ -451,7 +476,9 @@ function readAxis(element: OoxmlElement): ChartAxis | null {
         ? 'value'
         : element.localName === 'dateAx'
           ? 'date'
-          : null;
+          : element.localName === 'serAx'
+            ? 'series'
+            : null;
   if (!kind) return null;
   const id = childVal(element, 'axId');
   if (!id) return null;
@@ -569,8 +596,6 @@ export function readChartModel(chartSpace: OoxmlElement): ChartModel | null {
   const axes = new Map<string, ChartAxis>();
   for (const node of plotArea.children) {
     if (!isElement(node) || node.namespaceUri !== C) continue;
-    if (UNSUPPORTED_PLOTS.has(node.localName)) return null;
-    if (node.localName === 'serAx') return null;
     if (PLOT_KINDS.has(node.localName)) {
       if (plots.length >= MAX_PLOTS) return null;
       const plot = readPlot(node, budget);
@@ -596,6 +621,9 @@ export function readChartModel(chartSpace: OoxmlElement): ChartModel | null {
     plots,
     axes,
     legend: readLegend(child(chart, 'legend')),
-    view3D: child(chart, 'view3D') !== null,
+    view3D: child(chart, 'view3D'),
+    floor: child(chart, 'floor'),
+    sideWall: child(chart, 'sideWall'),
+    backWall: child(chart, 'backWall'),
   };
 }

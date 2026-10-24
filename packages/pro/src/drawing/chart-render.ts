@@ -10,6 +10,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // plot area taking the rest. Elements with a manual layout keep their authored place.
 
 import { type ChartThemeFaces, type ShapeSchemeColorResolver } from '@docx-editor.dev/core/store';
+import { is3DCartesian, paint3DCartesian, surfaceScale } from './chart-3d-cartesian.ts';
+import { surfaceBands, type SurfaceBand } from './chart-3d-surface.ts';
+import { paintPie3D } from './chart-3d-pie.ts';
 import { paintCartesian } from './chart-cartesian.ts';
 import { chartBaseText, elementText, titleParagraphs } from './chart-labels.ts';
 import { legendEntries, paintLegend, placeLegend } from './chart-legend.ts';
@@ -129,13 +132,21 @@ export function renderChart(
     }
   }
 
+  // Surface bands follow the value scale, which the legend lists: fix it first.
+  const surfacePlots = model.plots.filter((plot) => plot.kind === 'surface');
+  let bands: SurfaceBand[] | undefined;
+  if (surfacePlots.length > 0) {
+    const { scale, formatCode } = surfaceScale({ model, look, baseText }, surfacePlots, box);
+    bands = surfaceBands(surfacePlots[0]!, scale, formatCode, { model, look });
+  }
+
   // Legend.
   const legendStyle = model.legend
     ? elementText(baseText, model.legend.txPr, resolveSchemeColor)
     : null;
   let legendLayout = null;
   if (model.legend && legendStyle) {
-    const entries = legendEntries(model, model.legend, look);
+    const entries = legendEntries(model, model.legend, look, bands);
     const placed = placeLegend(model.legend, entries, legendStyle, width, height, box);
     legendLayout = placed.layout;
     Object.assign(box, placed.plot);
@@ -169,6 +180,24 @@ export function renderChart(
       date1904: model.date1904,
       placed: false,
     });
+  } else if (axial.length > 0 && axial.some((plot) => plot.threeD || plot.kind === 'surface')) {
+    if (!is3DCartesian(axial)) return null;
+    const painted = paint3DCartesian(
+      axial,
+      box,
+      {
+        model,
+        look,
+        scene,
+        labels,
+        baseText,
+        blanks,
+        chartWidth: width,
+        chartHeight: height,
+      },
+      bands
+    );
+    if (!painted) return null;
   } else if (axial.length > 0) {
     const painted = paintCartesian(axial, box, {
       model,
@@ -202,6 +231,18 @@ export function renderChart(
       );
     }
     for (const plot of round) {
+      if (plot.kind === 'pie' && plot.threeD) {
+        paintPie3D(plot, plotBox, {
+          model,
+          look,
+          scene,
+          labels,
+          baseText,
+          date1904: model.date1904,
+          placed: model.plotLayout?.inner === true,
+        });
+        continue;
+      }
       paintPie(plot, plotBox, {
         look,
         scene,

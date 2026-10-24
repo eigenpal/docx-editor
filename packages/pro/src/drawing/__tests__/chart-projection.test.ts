@@ -114,11 +114,13 @@ describe('chart projection', () => {
     expect(strokes[0]!.subpathsEmu[0]).toHaveLength(4);
   });
 
-  test('an unsupported chart type keeps the placeholder', () => {
+  test('an unsupported plot combination keeps the placeholder', () => {
     const plot =
-      '<c:surfaceChart><c:wireframe val="0"/>' +
-      series(0, 'Alpha', CATEGORIES, [1, 2, 3, 4]) +
-      '<c:axId val="1"/><c:axId val="2"/></c:surfaceChart>' +
+      '<c:pieChart><c:varyColors val="1"/>' +
+      series(0, 'Share', CATEGORIES, [1, 2, 3, 4]) +
+      '</c:pieChart><c:barChart><c:barDir val="col"/>' +
+      series(1, 'Alpha', CATEGORIES, [1, 2, 3, 4]) +
+      '<c:axId val="1"/><c:axId val="2"/></c:barChart>' +
       CATEGORY_VALUE_AXES;
     const projection = project(chartSpace(plot));
     expect(projection.vectorShape).toBeNull();

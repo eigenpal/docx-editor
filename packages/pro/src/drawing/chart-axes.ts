@@ -225,7 +225,8 @@ export function scaleValues(
   length: number,
   vertical: boolean,
   style: ChartTextStyle,
-  date1904: boolean
+  date1904: boolean,
+  threeD = false
 ): ValueScale {
   const empty = info.dataMin > info.dataMax;
   const dataMin = empty ? 0 : info.dataMin;
@@ -251,6 +252,8 @@ export function scaleValues(
     fixedMin: axis?.min ?? (percentFixed ? (dataMin < 0 ? -1 : 0) : null),
     fixedMax: axis?.max ?? (percentFixed ? 1 : null),
     fixedMajor: axis?.majorUnit ?? null,
+    noHeadroom: threeD,
+    roomOnly: threeD,
   });
 }
 
