@@ -1,4 +1,5 @@
 import { cachedTableStructure } from './table-structure-cache.ts';
+import { hiddenRowCollapses } from './table-hidden-row.ts';
 import { tableHasHidableRevisions } from './table-revision-markup.ts';
 import { readConditionalCellBorders } from './conditional-cell-borders.ts';
 import {
@@ -599,7 +600,8 @@ function readTableStructureUncached(
         : displayMode;
     if (
       (projectedMode === 'proposed' && revisionKind === 'del') ||
-      (projectedMode === 'original' && revisionKind === 'ins')
+      (projectedMode === 'original' && revisionKind === 'ins') ||
+      hiddenRowCollapses(rowNode, properties, projectedMode, authorFilter)
     ) {
       hasOmittedRows = true;
       continue;
