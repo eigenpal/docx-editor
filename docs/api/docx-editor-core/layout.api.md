@@ -3974,7 +3974,6 @@ export interface SemanticTableCell {
     readonly rowTableBorders?: TableBorderBox;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;
-    readonly suppressesTopBand?: true;
     readonly textDirection: 'horizontal' | 'btLr';
     readonly topBandClearancePt?: number;
     readonly vAlign: CellVerticalAlign;
