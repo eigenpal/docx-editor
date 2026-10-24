@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // nothing of their own; their children take the node's box.
 
 import type { DiagramModel } from './diagram-layout-model.ts';
-import { placeCycle, placeSnake } from './diagram-layout-flow.ts';
+import { placeCycle, placePyramid, placeSnake } from './diagram-layout-flow.ts';
 import {
   isHierarchyAlgorithm,
   placeHierarchy,
@@ -39,6 +39,7 @@ const SUPPORTED = new Set([
   'cycle',
   'hierRoot',
   'hierChild',
+  'pyra',
 ]);
 
 export function isSupportedAlgorithm(type: string): boolean {
@@ -379,6 +380,7 @@ export function placeChildren(context: PlacementContext, state: NodeState): bool
   else if (type === 'lin') placeLinear(context, state);
   else if (type === 'snake') placeSnake(context, state);
   else if (type === 'cycle') placeCycle(context, state);
+  else if (type === 'pyra') return placePyramid(context, state);
   else if (isHierarchyAlgorithm(type)) placeHierarchy(context, state);
   else {
     for (const child of childStates(context, state)) child.box = { ...box };

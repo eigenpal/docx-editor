@@ -39,26 +39,26 @@ interface Floor {
 /** Shapes within tolerance per family, summed over its cases. */
 const FLOORS: Readonly<Record<string, Floor>> = {
   hProcess9: { boxes: 21, presets: 21, rotations: 21, fonts: 16, refused: 0 },
-  process1: { boxes: 20, presets: 20, rotations: 20, fonts: 12, refused: 0 },
+  process1: { boxes: 25, presets: 25, rotations: 25, fonts: 15, refused: 0 },
   target3: { boxes: 36, presets: 36, rotations: 36, fonts: 24, refused: 0 },
   target2: { boxes: 36, presets: 36, rotations: 36, fonts: 24, refused: 0 },
   venn2: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
   lProcess2: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
-  vList5: { boxes: 32, presets: 32, rotations: 32, fonts: 32, refused: 0 },
+  vList5: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
   equation1: { boxes: 40, presets: 40, rotations: 40, fonts: 24, refused: 0 },
   list1: { boxes: 24, presets: 24, rotations: 24, fonts: 12, refused: 0 },
   // One child-text size off: the composite's child box is 3 pt wider than saved.
   hList2: { boxes: 24, presets: 36, rotations: 36, fonts: 20, refused: 0 },
-  pyramid1: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
-  cycle2: { boxes: 24, presets: 24, rotations: 24, fonts: 12, refused: 0 },
+  pyramid1: { boxes: 28, presets: 28, rotations: 28, fonts: 28, refused: 0 },
+  cycle2: { boxes: 32, presets: 32, rotations: 32, fonts: 16, refused: 0 },
   radial5: { boxes: 24, presets: 56, rotations: 56, fonts: 26, refused: 0 },
   default: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
-  hierarchy1: { boxes: 56, presets: 68, rotations: 68, fonts: 24, refused: 0 },
+  hierarchy1: { boxes: 67, presets: 79, rotations: 79, fonts: 28, refused: 0 },
   hierarchy2: { boxes: 44, presets: 44, rotations: 44, fonts: 24, refused: 0 },
   HalfCircleOrganizationChart: { boxes: 0, presets: 0, rotations: 0, fonts: 0, refused: 4 },
   HorizontalOrganizationChart: { boxes: 13, presets: 13, rotations: 13, fonts: 7, refused: 0 },
   NameandTitleOrganizationalChart: { boxes: 3, presets: 17, rotations: 17, fonts: 0, refused: 0 },
-  vList2: { boxes: 36, presets: 37, rotations: 37, fonts: 37, refused: 0 },
+  vList2: { boxes: 40, presets: 41, rotations: 41, fonts: 41, refused: 0 },
 };
 
 function totals(scores: readonly CaseScore[]) {

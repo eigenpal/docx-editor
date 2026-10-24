@@ -527,6 +527,8 @@ function applyUserAdjustments(state: NodeState): void {
   // Neighbour moves count in hierarchies only; lists and composites keep their slots.
   let owner = state.node.parent;
   while (owner && owner.algorithm.type === 'composite') owner = owner.parent;
+  // A pyramid sizes and moves its levels itself.
+  if (owner?.algorithm.type === 'pyra') return;
   const moves = owner?.algorithm.type === 'hierRoot' || owner?.algorithm.type === 'hierChild';
   // A move counts along the row of siblings only: across in a row, down in a column.
   const row = owner?.algorithm.type === 'hierChild' ? owner : owner?.parent;

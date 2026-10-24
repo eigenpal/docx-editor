@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // (a circle) and `pyra` (stacked levels).
 
 import type { PlacementContext } from './diagram-layout-algorithms.ts';
-import type { Box, NodeState } from './diagram-layout-solve.ts';
+import { presFactor, type Box, type NodeState } from './diagram-layout-solve.ts';
 
 function childStates(context: PlacementContext, state: NodeState): NodeState[] {
   return state.node.children.map((child) => context.states[child.index]!);
@@ -176,4 +176,111 @@ export function placeCycle(context: PlacementContext, state: NodeState): void {
     if (!isTransition(child)) continue;
     put(child, 0, 0, sizeOf(child, 0));
   }
+}
+
+/** Share of the width the accent text beside a pyramid may take, at the most. */
+const MAX_ACCENT_RATIO = 0.9;
+
+/**
+ * `pyra`: one level per content child, top to bottom, each as high as the box over the
+ * level count. Levels widen by one step each, down to the widest at the base, and are
+ * centred on the pyramid; a level's sides slope by half a step (`adj` of its trapezoid).
+ * With accent text (`pyraAcctRatio`), the pyramid keeps the rest of the width and each
+ * level's accent fills the row to the right: its background from the level's top corner,
+ * its text from the level's bottom corner, both turned half a turn so the slope follows
+ * the pyramid. Each level's composite places these from the values set here.
+ *
+ * Only the measured form is placed: the base at the bottom (`linDir="fromB"`) and accents
+ * after the levels (`pyraAcctPos="aft"`). Any other returns false and the diagram keeps
+ * its placeholder.
+ */
+export function placePyramid(context: PlacementContext, state: NodeState): boolean {
+  const box = state.box!;
+  const params = state.node.algorithm.params;
+  if ((params.get('linDir') ?? 'fromB') !== 'fromB') return false;
+  const children = childStates(context, state);
+  const levels = children.filter((child) => !isTransition(child));
+  for (const child of children) {
+    if (isTransition(child)) child.box = { x: box.x, y: box.y, w: 0, h: 0 };
+  }
+  const n = levels.length;
+  if (n === 0) return true;
+  const levelName = params.get('pyraLvlNode') ?? 'level';
+  const backgroundName = params.get('pyraAcctBkgdNode') ?? 'acctBkgd';
+  const textName = params.get('pyraAcctTxNode') ?? 'acctTx';
+  const named = (level: NodeState, name: string) =>
+    childStates(context, level).filter((child) => child.node.name === name);
+  const accented = levels.some((level) => named(level, backgroundName).length > 0);
+  if (accented && (params.get('pyraAcctPos') ?? 'aft') !== 'aft') return false;
+  const ratio = accented
+    ? Math.min(MAX_ACCENT_RATIO, Math.max(0, state.values.get('pyraAcctRatio') ?? 0))
+    : 0;
+  const width = box.w * (1 - ratio);
+  if (!(width > 0) || !(box.h > 0)) return true;
+  // Full width per unit of height: the pyramid's base over its height.
+  const spread = width / box.h;
+  // A user's resize of a level (`custScaleX/Y`) and move (`custLinFactNeighborX/Y`).
+  const user = levels.map((level) => {
+    const shape = named(level, levelName)[0];
+    const factor = (name: string, fallback: number, low: number, high: number) =>
+      shape ? Math.min(high, Math.max(low, presFactor(shape, name, fallback))) : fallback;
+    return {
+      sx: factor('custScaleX', 1, 0, 100),
+      sy: factor('custScaleY', 1, 0, 100),
+      fx: factor('custLinFactNeighborX', 0, -100, 100),
+      fy: factor('custLinFactNeighborY', 0, -100, 100),
+    };
+  });
+  // Levels stack at their own heights; each is as wide as the slope at its foot. A stack
+  // taller than the box shrinks as a whole to fit.
+  const heights = user.map(({ sy }) => (box.h / n) * sy);
+  const total = heights.reduce((sum, h) => sum + h, 0);
+  const fit = total > box.h && total > 0 ? box.h / total : 1;
+  const centre = width / 2;
+  // Each level's sides slope as the unscaled pyramid's do.
+  const adj = Math.round((spread / 2) * 100_000);
+  /** Pin a child to a band of its level's row, `left` from the row's start and `w` wide. */
+  const place = (child: NodeState, left: number, w: number, h: number) => {
+    child.values.set('ctrX', left + w / 2);
+    child.values.set('ctrY', h / 2);
+    child.values.set('w', Math.max(0, w));
+    child.values.set('h', h);
+    for (const type of ['ctrX', 'ctrY', 'w', 'h']) context.pin(child, type);
+  };
+  let foot = 0;
+  levels.forEach((level, index) => {
+    const head = foot;
+    foot += heights[index]!;
+    const { sx, fx, fy } = user[index]!;
+    const h = heights[index]! * fit;
+    const levelWidth = foot * spread * sx * fit;
+    // A moved level stays inside the box.
+    const y = Math.min(Math.max(head * fit + fy * h, 0), Math.max(0, box.h - h));
+    const left = Math.min(
+      Math.max(centre - levelWidth / 2 + fx * levelWidth, 0),
+      Math.max(0, box.w - levelWidth)
+    );
+    level.box = { x: box.x, y: box.y + y, w: box.w, h };
+    for (const shape of named(level, levelName)) {
+      place(shape, left, levelWidth, h);
+      shape.adjust = new Map([['adj', adj]]);
+    }
+    const top = centre + (head * spread * fit) / 2;
+    for (const background of named(level, backgroundName)) {
+      place(background, top, box.w - top, h);
+      background.rotation = 180;
+      background.adjust = new Map([
+        ['adj1', 0],
+        ['adj2', adj],
+      ]);
+    }
+    const bottom = centre + (foot * spread * fit) / 2;
+    for (const text of named(level, textName)) {
+      place(text, bottom, box.w - bottom, h);
+      text.rotation = 180;
+      // The text box is the band itself; its geometry is never drawn.
+      text.preset = 'rect';
+    }
+  });
+  return true;
 }
