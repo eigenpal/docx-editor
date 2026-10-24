@@ -423,11 +423,11 @@ export function planVMergeRowHeights(
    * at a time left every head but the first sizing the head row, and the first span's rows
    * then carried that head's height a second time below it.
    *
-   * Fixed-row spans are measured per head. Admission detaches all heads that fit those
-   * rows together, while heads that do not fit keep their original clipping.
+   * A span whose last row is fixed is measured the same way: a head left in the head row
+   * would size that row by its whole content, which none of the rows can then give back.
+   * Each head the fixed rows cannot hold is clipped at the span bottom.
    */
-  const groupOf = (span: VMergeSpan): readonly VMergeSpan[] =>
-    lastGrowableRow(span) === undefined ? [span] : (coextensive.get(span) ?? [span]);
+  const groupOf = (span: VMergeSpan): readonly VMergeSpan[] => coextensive.get(span) ?? [span];
 
   const pendingOf = (span: VMergeSpan): ReadonlySet<string> =>
     new Set(groupOf(span).map((member) => member.headCellId));
@@ -658,8 +658,8 @@ export function planVMergeRowHeights(
       // For growable spans, the whole group joins: the floors were measured with each of its
       // heads out of the head row, so admitting only some would leave the rest sizing a row
       // those floors do not describe.
-      // Fixed rows keep their heights whichever heads detach, so every head of the same
-      // rows joins. One the rows cannot hold is clipped at the span bottom.
+      // Over a fixed last row every head of the same rows joins too, and for the same reason.
+      // A head the rows cannot hold is clipped at the span bottom.
       const group =
         growable === undefined
           ? (coextensive.get(span) ?? [span]).filter(
@@ -669,7 +669,8 @@ export function planVMergeRowHeights(
       for (const member of group) {
         acceptedSpans.add(member);
         acceptedHeadIds.add(member.headCellId);
-        const content = member === span ? contentHeightPt : contentOf(member, atYPt);
+        // Each head's own content: the group's tallest head says nothing about a short one.
+        const content = contentOf(member, atYPt);
         if (growable === undefined && content > covered + EPSILON_PT) clippedSpans.add(member);
       }
       acceptedHeadRows.add(span.headRow);

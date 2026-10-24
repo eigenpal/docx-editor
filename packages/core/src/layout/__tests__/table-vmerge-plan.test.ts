@@ -276,6 +276,32 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect([...(plan.rowOptions(0)!.clippedSpanCellIds ?? [])]).toEqual(['tooTall']);
   });
 
+  test('merges over a fixed last row leave the head row to the cells that stay in it', () => {
+    // Only the last row is exact. The tall head is clipped at the span bottom, so it must not
+    // size the head row either: both heads leave it, and every row keeps its own height.
+    const rows = [
+      row('r0', [filled('tall', 0), filled('short', 1), filled('side0', 2)]),
+      {
+        ...row('r1', [cell('c0', 0, true), cell('c1', 1, true), filled('side1', 2)]),
+        height: { rule: 'exact', valuePt: 20 },
+      } as SemanticTableRow,
+    ];
+    const probe = (probed: SemanticTableRow, detached?: ReadonlySet<string>): number =>
+      probed.height.rule === 'exact'
+        ? 20
+        : probeFrom({ tall: 110, short: 25, side0: 10 })(probed, detached);
+    const plan = planVMergeRowHeights(rows, probe)!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    const head = plan.rowOptions(0)!;
+    expect(head.heightFloorPt).toBe(10);
+    expect([...(head.detachedSpanHeightPtByCellId ?? [])]).toEqual([
+      ['tall', 30],
+      ['short', 30],
+    ]);
+    expect([...(head.clippedSpanCellIds ?? [])]).toEqual(['tall']);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(20);
+  });
+
   test('every fitting head shares the same fixed-row span', () => {
     const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
       ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;

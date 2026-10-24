@@ -146,6 +146,23 @@ describe('a merge that starts inside another merge and ends after it', () => {
     expect(layoutOn(staircase(6, 1, ['atLeast', 'exact', 'atLeast'])).pages).toHaveLength(1);
   });
 
+  test('two merges over the same rows and a fixed last row keep every row compact', () => {
+    // Both merges cover rows 0-2, and row 2 is exact. The first merge is taller than the
+    // rows and is clipped; the second fits. Neither one sizes the head row.
+    const body =
+      `<w:tbl>${TABLE_PR}` +
+      tr(`${tc(lines('A', 9), RESTART)}${tc(lines('B', 4), RESTART)}${UNMERGED('c0')}`) +
+      tr(`${tc(ONE, CONTINUE)}${tc(ONE, CONTINUE)}${UNMERGED('c1')}`) +
+      tr(`${tc(ONE, CONTINUE)}${tc(ONE, CONTINUE)}${UNMERGED('c2')}`, 2, 'exact') +
+      '</w:tbl>';
+    const table = tablesOn(layoutOn(body), 0)[0]!;
+    expect(rowLines(table)).toEqual([2, 2, 2]);
+    const [tall, short] = table.rows[0]!.cells;
+    expect(tall!.blocks).toHaveLength(6);
+    expect(short!.blocks).toHaveLength(4);
+    expectContentInsideItsTable(table);
+  });
+
   test('a three-step staircase resolves each merge in turn', () => {
     // Column 0 merges rows 0-1 and rows 2-3, column 1 merges rows 1-2. Each merge holds six
     // lines over rows of two.
