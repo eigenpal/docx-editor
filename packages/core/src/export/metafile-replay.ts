@@ -15,7 +15,8 @@ import {
   type RecordingBitmap,
 } from './metafile-recording.ts';
 import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
-import { withWmfText, wmfTextRecords } from './metafile-wmf-text.ts';
+import { withWmfText } from './metafile-wmf-text.ts';
+import { wmfTextRecords } from '../store/package/metafile-wmf-text.ts';
 
 export type {
   MetafileCommand,

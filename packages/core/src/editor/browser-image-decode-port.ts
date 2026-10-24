@@ -9,6 +9,7 @@ import type {
   SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import type { ImageResourceLimits } from '../store/runtime/limits.ts';
+import { withWmfTextCanvas } from './browser-metafile-text.ts';
 
 /** Output bounds handed to the metafile rasterizer — well under every resource pixel cap. */
 const MAX_METAFILE_RASTER_EDGE = 4096;
@@ -84,7 +85,7 @@ export async function convertBrowserMetafile(
   const dataUrl =
     mime === 'image/x-emf'
       ? await convertEmfToDataUrl(buffer, options)
-      : await convertWmfToDataUrl(buffer, options);
+      : await withWmfTextCanvas(copy, () => convertWmfToDataUrl(buffer, options));
   if (!dataUrl) return null;
   const prefix = 'data:image/png;base64,';
   if (!dataUrl.startsWith(prefix)) return null;
