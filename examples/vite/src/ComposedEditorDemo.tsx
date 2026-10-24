@@ -27,6 +27,7 @@ import {
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
+import { drawingModule } from '@docx-editor.dev/pro/drawing';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
@@ -63,10 +64,12 @@ import {
  * `reviewModule()` enables markup rendering, suggesting mode, and the review pane;
  * `customNodesModule` shows `defineCustomNode`: an inline content control tagged
  * `docx:citation?...` is recognized as a typed node carrying the payload above (open
- * e2e/fixtures/sdt-custom-tag-original.docx to see one). Both accept `{ licenseKey }` —
- * optional while licensing is honor-system.
+ * e2e/fixtures/sdt-custom-tag-original.docx to see one). `drawingModule()` paints charts and
+ * lays out SmartArt saved without its drawing. Each accepts `{ licenseKey }` — optional while
+ * licensing is honor-system.
  */
 const PRO_MODULES = [
+  drawingModule(),
   // The example starts with the pane closed, so comments show as margin miniatures; the
   // header's settings panel saves other choices over that.
   reviewModule({ pane: storedReviewPane() }),

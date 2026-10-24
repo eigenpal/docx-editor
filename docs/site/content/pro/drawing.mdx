@@ -1,0 +1,54 @@
+---
+title: 'Charts and SmartArt layout'
+description: 'Render charts and lay out SmartArt diagrams with the drawing module.'
+category: 'Pro'
+order: 68
+---
+
+The drawing module renders charts and lays out SmartArt diagrams that a document saved without their drawing. It requires the EigenPal Pro License.
+
+Without the module, the editor still renders pictures, shapes, text boxes, shape groups, drawing canvases, and SmartArt diagrams saved with their drawing. Charts, and diagrams saved without a drawing, show a labeled placeholder.
+
+## Register the module
+
+Pass `drawingModule()` to the editor through `modules`:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { drawingModule } from '@docx-editor.dev/pro/drawing';
+
+// Module array built once, outside render.
+const modules = [drawingModule()];
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={modules}>
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read.
+
+## Use the module without an editor
+
+For headless conversion, call `installDrawing()` once before you open documents:
+
+```ts
+import { installDrawing } from '@docx-editor.dev/pro/drawing';
+
+installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
+```
+
+`@docx-editor.dev/docx-to-pdf` installs the module for you, so PDF export renders charts and SmartArt layout without extra setup.
+
+## What renders
+
+- Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
+- SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
+
+For the chart types, labels, and layouts that render, see [Word feature support](/docs/2.x/word-fidelity).

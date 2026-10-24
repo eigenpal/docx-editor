@@ -714,10 +714,10 @@ export const wordFeatures: WordFeature[] = [
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'preserved',
-    tier: 'community',
+    tier: 'premium',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Charts render read-only from the values cached in the chart part, in the editor and in PDF export: column and bar charts (clustered, stacked, and percent stacked), line, area, scatter, bubble, radar, stock, pie, doughnut, pie-of-pie, and bar-of-pie charts. Axes, tick label number and date formats, gridlines, chart and axis titles, legends, data labels (with best-fit pie labels that move outside small slices on leader lines), trendlines with their equations, error bars, series colors, markers, smoothed lines, exploded slices, and manual plot layouts render. 3-D charts render flat. The embedded workbook is never read, and external data is never loaded. Surface charts, and charts that combine a pie or radar plot with other plot types, keep a labelled placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The chart parts are preserved on save.',
+      'Charts require the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, a chart keeps a labelled placeholder. Charts render read-only from the values cached in the chart part, in the editor and in PDF export: column and bar charts (clustered, stacked, and percent stacked), line, area, scatter, bubble, radar, stock, pie, doughnut, pie-of-pie, and bar-of-pie charts. Axes, tick label number and date formats, gridlines, chart and axis titles, legends, data labels (with best-fit pie labels that move outside small slices on leader lines), trendlines with their equations, error bars, series colors, markers, smoothed lines, exploded slices, and manual plot layouts render. 3-D charts render flat. The embedded workbook is never read, and external data is never loaded. Surface charts, and charts that combine a pie or radar plot with other plot types, keep a labelled placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The chart parts are preserved on save.',
   },
   {
     id: 'images.smartart',
@@ -729,7 +729,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'SmartArt diagrams render read-only from the drawing saved with the document, in the editor, in headers and footers, and in PDF export. Shapes, solid and gradient fills, outlines, the diagram background, text, bullets, and quarter-turned vertical text render. The diagram data, layout, colors, styles, and drawing parts are preserved on save. A diagram without a saved drawing, with picture fills, or with a text mode that cannot render keeps its labelled placeholder, and application components can replace that fallback as for charts. Outer shadows render; other effects and 3-D bevels do not. A changed diagram layout is not recalculated: the saved drawing is shown as stored.',
+      'SmartArt diagrams render read-only from the drawing saved with the document, in the editor, in headers and footers, and in PDF export. Shapes, solid and gradient fills, outlines, the diagram background, text, bullets, and quarter-turned vertical text render. The diagram data, layout, colors, styles, and drawing parts are preserved on save. A diagram saved without its drawing is laid out from its data, layout, style, and color parts by the drawingModule from @docx-editor.dev/pro/drawing, which requires the EigenPal Pro License. PDF export includes it. Without the module, such a diagram keeps its labelled placeholder. A diagram with picture fills, or with a text mode that cannot render, keeps its labelled placeholder, and application components can replace that fallback as for charts. Outer shadows render; other effects and 3-D bevels do not. A changed diagram layout is not recalculated: the saved drawing is shown as stored.',
   },
   {
     id: 'images.ink',

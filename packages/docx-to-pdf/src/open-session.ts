@@ -10,6 +10,7 @@ import {
   type OpenFontBackedDocumentForExportResult,
 } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
+import { installDrawing } from '@docx-editor.dev/pro/drawing';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   cjkFonts,
@@ -57,6 +58,8 @@ export function openExportSession(
   options: SessionOptions,
   signal?: AbortSignal
 ): Promise<OpenFontBackedDocumentForExportResult> {
+  // Charts and SmartArt layout paint in every export.
+  installDrawing();
   const { fonts, fallbackFonts, lastResortFonts, useSystemFonts = true, ...core } = options;
   const origins: OpenFontBackedDocumentForExportOptions['fonts'] = [
     ...(fonts ? (Array.isArray(fonts) ? fonts : [fonts]) : []),

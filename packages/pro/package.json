@@ -55,6 +55,11 @@
       "import": "./dist/collaboration/hocuspocus.js",
       "require": "./dist/collaboration/hocuspocus.cjs"
     },
+    "./drawing": {
+      "types": "./dist/drawing/index.d.ts",
+      "import": "./dist/drawing/index.js",
+      "require": "./dist/drawing/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [

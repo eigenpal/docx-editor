@@ -402,6 +402,12 @@ export interface CascadeDeletedNoteReferencesOptions {
 // @public
 export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
+// @public (undocumented)
+export const CHART_GRAPHIC_DATA_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+// @public (undocumented)
+export const CHART_NAMESPACE_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
 // @public
 export interface ChartPart {
     readonly chartSpace: OoxmlElement;
@@ -411,6 +417,14 @@ export interface ChartPart {
 
 // @public
 export type ChartPartResolver = (chart: OoxmlElement) => ChartPart | null;
+
+// @public
+export interface ChartRenderContext {
+    // (undocumented)
+    readonly resolveChartPart?: ChartPartResolver;
+    // (undocumented)
+    readonly resolveSchemeColor?: ShapeSchemeColorResolver;
+}
 
 // @public (undocumented)
 export interface ChartThemeFaces {
@@ -1219,6 +1233,28 @@ export class DeterministicMemoryMeter {
 // @public
 export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnostic[];
 
+// @public (undocumented)
+export const DIAGRAM_NAMESPACE_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
+// @public
+export interface DiagramLayoutOptions {
+    readonly fontFamily?: string;
+    // (undocumented)
+    readonly resolveSchemeColor?: ShapeSchemeColorResolver;
+}
+
+// @public
+export interface DiagramLayoutParts {
+    // (undocumented)
+    readonly colorsDef: OoxmlElement | null;
+    // (undocumented)
+    readonly dataModel: OoxmlElement;
+    // (undocumented)
+    readonly layoutDef: OoxmlElement;
+    // (undocumented)
+    readonly styleDef: OoxmlElement | null;
+}
+
 // @public
 export interface DiagramPartResolver {
     (relIds: OoxmlElement): DiagramParts | null;
@@ -1249,6 +1285,12 @@ export type DigestDifference = {
 
 // @public
 export function digestPart(part: OoxmlPart): StoryDigest | null;
+
+// @public (undocumented)
+export function directFill(parent: OoxmlElement, resolveSchemeColor?: ShapeSchemeColorResolver, placeholder?: ShapeColor): {
+    readonly color: ShapeColor | null;
+    readonly present: boolean;
+};
 
 // @public
 export function directParagraphMarkProperties(part: OoxmlPart, paragraphId: string): readonly OoxmlProperty[];
@@ -1300,6 +1342,14 @@ export interface DocumentViewSettings {
 }
 
 // @public
+export interface DrawingGraphicProjection {
+    // (undocumented)
+    readonly groupTextboxes: readonly GroupTextboxProjection[] | null;
+    // (undocumented)
+    readonly vectorShape: VectorShapeProjection | null;
+}
+
+// @public
 export interface DrawingImageEffects {
     // (undocumented)
     readonly bilevel?: number;
@@ -1328,6 +1378,9 @@ export interface DrawingLocks {
 }
 
 // @public (undocumented)
+export const DRAWINGML_MAIN_NAMESPACE_URI = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+// @public (undocumented)
 export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass;
 
 // @public
@@ -1351,6 +1404,26 @@ export type DrawingPropertyIdResult = {
     readonly ok: false;
     readonly reason: 'invalidArgs';
 };
+
+// @public
+export interface DrawingRenderers {
+    readonly chart?: (anchor: OoxmlElement, extent: Readonly<{
+        cx: number;
+        cy: number;
+    }>, context: ChartRenderContext) => DrawingGraphicProjection | null;
+    readonly diagramLayout?: (parts: DiagramLayoutParts, extent: Readonly<{
+        cx: number;
+        cy: number;
+    }>, options: DiagramLayoutOptions) => OoxmlElement | null;
+}
+
+// @public
+export interface DrawingTextDefaults {
+    // (undocumented)
+    readonly color: ShapeColor | null;
+    // (undocumented)
+    readonly fontSlot: 'major' | 'minor' | null;
+}
 
 // @public
 export type DrawingTreeDocOp = Extract<TreeDocOp, {
@@ -1481,6 +1554,25 @@ export function escapeCssString(value: string): string;
 export function escapeXml(value: string): string;
 
 // @public
+export function escapeXmlAttribute(value: string): string;
+
+// @public (undocumented)
+export interface EvaluatedGeometry {
+    // (undocumented)
+    readonly paths: readonly EvaluatedPath[];
+    // (undocumented)
+    readonly textRect: Readonly<{
+        bottom: number;
+        left: number;
+        right: number;
+        top: number;
+    }>;
+}
+
+// @public
+export function evaluateGeometry(definition: GeometryDefinition, widthEmu: number, heightEmu: number, adjust?: ReadonlyMap<string, number>): EvaluatedGeometry | null;
+
+// @public
 export function extensionKey(extension: string): string;
 
 // @public
@@ -1531,10 +1623,20 @@ export function findCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, 
 // @public
 export function findDetectedToc(tocs: readonly DetectedToc[], tocId: string): DetectedToc | null;
 
+// @public (undocumented)
+export function findDirectChild(nodes: readonly OoxmlNode[], options: {
+    readonly localName?: string;
+    readonly namespaceUri?: string;
+    readonly typedKind?: string;
+}): OoxmlElement | null;
+
 // @public
 export function findElement(nodes: readonly XmlNode[], name: string): Extract<XmlNode, {
     type: 'element';
 }> | undefined;
+
+// @public (undocumented)
+export function findGraphicData(anchor: OoxmlElement): OoxmlElement | null;
 
 // @public
 export function findNode(part: OoxmlPart, nodeId: string): OoxmlNode | null;
@@ -1710,8 +1812,32 @@ export type FragmentPasteResult = (Extract<PackageTransactResult, {
     ok: false;
 }>;
 
+// @public (undocumented)
+export interface GeometryDefinition {
+    // (undocumented)
+    readonly avLst: readonly GeometryGuide[];
+    // (undocumented)
+    readonly gdLst: readonly GeometryGuide[];
+    // (undocumented)
+    readonly paths: readonly GeometryPath[];
+    readonly textRect: readonly [string, string, string, string] | null;
+}
+
 // @public
 export function glossaryPartOf(pkg: OoxmlPackage): OoxmlPart | null;
+
+// @public
+export interface GroupTextboxProjection {
+    readonly frameEmu: Readonly<{
+        cx: number;
+        cy: number;
+        x: number;
+        y: number;
+    }>;
+    readonly memberNodeId: string;
+    readonly rotationDegrees: number;
+    readonly story: TextboxStoryProjection;
+}
 
 // @public
 export const HARD_CEILINGS: ResourceLimits;
@@ -2204,6 +2330,9 @@ export type InsertTextOp = {
 };
 
 // @public
+export function installDrawingRenderers(renderers: DrawingRenderers): void;
+
+// @public
 export function instrTextValue(node: OoxmlNode): string;
 
 // @public
@@ -2235,6 +2364,9 @@ export function isDangerousKey(key: string): boolean;
 
 // @public
 export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp;
+
+// @public (undocumented)
+export function isElement(node: OoxmlNode): node is OoxmlElement;
 
 // @public
 export function isEndnotesNode(node: OoxmlNode): node is OoxmlEndnotesNode;
@@ -2347,6 +2479,9 @@ export function isValidParaId(value: string): boolean;
 
 // @public
 export function isValidQName(name: string): boolean;
+
+// @public
+export function isValidXmlText(value: string): boolean;
 
 // @public
 export function isWholeWord(text: string, start: number, end: number): boolean;
@@ -2465,6 +2600,27 @@ export function lockForbidsEdit(lock: ContentControlLock): boolean;
 
 // @public
 export function lockForbidsRemoval(lock: ContentControlLock): boolean;
+
+// @public
+export function lowerDrawingTextBody(txBody: OoxmlElement, partName: string, defaults: DrawingTextDefaults, resolveSchemeColor?: ShapeSchemeColorResolver): TextBodyLowering;
+
+// @public (undocumented)
+export interface LoweredDrawingText {
+    readonly content: OoxmlElement;
+    // (undocumented)
+    readonly insetsEmu: Readonly<{
+        bottom: number;
+        left: number;
+        right: number;
+        top: number;
+    }>;
+    // (undocumented)
+    readonly noWrap: boolean;
+    readonly quarterTurn: 0 | 90 | 270;
+    readonly rotationDegrees: number;
+    // (undocumented)
+    readonly verticalAnchor: 'top' | 'center' | 'bottom';
+}
 
 // @public
 export function makeLimitCounter(limits: ResourceLimits, key: keyof ResourceLimits): BoundedCounter;
@@ -3560,6 +3716,9 @@ export function parseAuthoredNoteProperties(propsNode: OoxmlNode | null | undefi
 // @public
 export function parseContentControlId(raw: string | undefined): number | undefined;
 
+// @public (undocumented)
+export function parseEmu(value: string | undefined, clamp?: boolean): number | null;
+
 // @public
 export function parseLinearMath(input: string, limits?: OmmlLimits): LinearMathParseResult;
 
@@ -3655,6 +3814,9 @@ export class PrefixAllocator {
 
 // @public
 export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
+
+// @public
+export function presetGeometryDefinition(name: string): GeometryDefinition | null;
 
 // @public
 export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
@@ -3861,6 +4023,9 @@ export interface Reservation {
 
 // @public
 export function resolve(bundles: readonly FeatureBundle[], options?: ResolveOptions): ResolvedRegistry;
+
+// @public (undocumented)
+export function resolveColorNode(color: OoxmlNode, resolveSchemeColor?: ShapeSchemeColorResolver, placeholder?: ShapeColor): ShapeColor | null;
 
 // @public
 export function resolveContentControlLock(chain: readonly ContentControlLock[]): ContentControlLock;
@@ -4242,6 +4407,9 @@ export interface SchedulingPort {
 }
 
 // @public
+export function schemaAttributeValue(attributes: readonly OoxmlAttribute[], localName: string): string | undefined;
+
+// @public
 export function scrubExport(items: readonly ContentItem[]): ScrubResult;
 
 // @public
@@ -4387,6 +4555,31 @@ export interface SetTextFormFieldDefaultOp {
 // @public
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;
 
+// @public (undocumented)
+export interface ShapeColor {
+    // (undocumented)
+    readonly alpha: number;
+    // (undocumented)
+    readonly hex: string;
+}
+
+// @public (undocumented)
+export type ShapeSchemeColorResolver = (scheme: string) => string | null;
+
+// @public
+export interface ShapeShadow {
+    // (undocumented)
+    readonly alpha: number;
+    readonly blurEmu: number;
+    readonly dxEmu: number;
+    // (undocumented)
+    readonly dyEmu: number;
+    readonly hex: string;
+}
+
+// @public
+export function shapeThemeCacheToken(resolveSchemeColor: (token: string) => string | null): string | undefined;
+
 // @public
 export interface ShapingPort {
     // (undocumented)
@@ -4496,7 +4689,37 @@ export type TabStopWrite = ParagraphTabStop;
 export type TargetMode = 'Internal' | 'External';
 
 // @public
+export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
+
+// @public
 export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
+
+// @public
+export interface TextboxStoryProjection {
+    readonly autofit: 'none' | 'shape' | 'normal';
+    readonly chromeByVector?: true;
+    readonly content: OoxmlElement;
+    readonly contentNodeId: string;
+    readonly drawingText?: true;
+    readonly fillHex: string | null;
+    readonly fitHeightToText?: true;
+    readonly insetsEmu: Readonly<{
+        bottom: number;
+        left: number;
+        right: number;
+        top: number;
+    }>;
+    readonly legacyFrame?: TextboxLegacyFrame;
+    readonly noWrap?: true;
+    readonly shadow?: LegacyTextboxShadow;
+    readonly strokeCap?: 'round' | 'square';
+    readonly strokeCentered?: true;
+    readonly strokeDash?: readonly number[];
+    readonly strokeHex: string | null;
+    readonly strokeInset?: true;
+    readonly strokeWidthEmu: number;
+    readonly verticalAnchor: 'top' | 'center' | 'bottom';
+}
 
 // @public
 export interface TextboxStoryRoot {
@@ -5574,6 +5797,84 @@ export interface ValidationResult {
     readonly errors: readonly string[];
     // (undocumented)
     readonly valid: boolean;
+}
+
+// @public
+export interface VectorGradient {
+    readonly coords: readonly number[];
+    // (undocumented)
+    readonly kind: 'linear' | 'radial';
+    readonly matrix: AffineMatrix;
+    readonly stops: readonly GradientStop[];
+}
+
+// @public
+export interface VectorPattern {
+    // (undocumented)
+    readonly background: ShapeColor;
+    // (undocumented)
+    readonly foreground: ShapeColor;
+    readonly rows: readonly number[];
+}
+
+// @public (undocumented)
+export interface VectorShapeComponent {
+    readonly arrowheadsEmu?: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+    readonly belowPicture?: true;
+    readonly clipEmu?: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+    // (undocumented)
+    readonly fillAlpha: number;
+    readonly fillGradient?: VectorGradient;
+    // (undocumented)
+    readonly fillHex: string | null;
+    readonly fillPattern?: VectorPattern;
+    readonly shadow?: ShapeShadow;
+    readonly shadowOnly?: true;
+    // (undocumented)
+    readonly strokeAlpha: number;
+    readonly strokeCap?: 'butt' | 'round' | 'square';
+    readonly strokeDash?: readonly number[];
+    // (undocumented)
+    readonly strokeHex: string | null;
+    readonly strokeInset?: boolean;
+    // (undocumented)
+    readonly strokeJoin?: 'round' | 'bevel';
+    readonly strokeOutsetEmu?: number;
+    // (undocumented)
+    readonly strokeWidthEmu: number;
+    readonly subpathsClosed?: readonly boolean[];
+    // (undocumented)
+    readonly subpathsEmu: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+}
+
+// @public
+export interface VectorShapeProjection {
+    readonly components: readonly VectorShapeComponent[];
+    readonly extentEmu: Readonly<{
+        cx: number;
+        cy: number;
+    }>;
+    // (undocumented)
+    readonly fillAlpha?: number;
+    readonly fillHex: string | null;
+    readonly overflowVisible?: true;
+    // (undocumented)
+    readonly strokeAlpha?: number;
+    readonly strokeHex: string | null;
+    readonly strokeWidthEmu: number;
+    readonly subpathsEmu: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
 }
 
 // @public

@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Exercise packed artifacts outside workspace aliases. Build PDF and Markdown first.
+// Exercise packed artifacts outside workspace aliases. Build PDF, Pro, and Markdown first.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,7 +25,7 @@ function run(command, args, cwd = consumer) {
 try {
   mkdirSync(packs);
   mkdirSync(consumer);
-  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'docx-to-pdf'].map((name) => {
+  const tarballs = ['i18n', 'core', 'fonts', 'docx-to-markdown', 'pro', 'docx-to-pdf'].map((name) => {
     const [packed] = JSON.parse(
       run('npm', ['pack', path.join(root, 'packages', name), '--json', '--pack-destination', packs])
     );

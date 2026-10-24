@@ -17,8 +17,8 @@ import {
 } from './diagram-parts.ts';
 import { findGraphicData, schemaFlagIsUnset } from './drawing-group-frame.ts';
 import { transformComponent } from './drawing-group-transform.ts';
-import { synthesizeDiagramDrawing } from './diagram-layout-synthesis.ts';
 import { readLineProperties } from './drawing-line-properties.ts';
+import { drawingRenderers, type DrawingRenderers } from './drawing-renderers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { directFill, resolveColorNode } from './drawing-shape-color.ts';
 import { shapeRotationDegrees } from './drawing-shape-geometry.ts';
@@ -340,6 +340,7 @@ interface DiagramMemo {
   readonly styleDef: OoxmlElement | null;
   readonly colorsDef: OoxmlElement | null;
   readonly theme: string;
+  readonly engine: DrawingRenderers['diagramLayout'];
   readonly result: DiagramProjection | null;
 }
 
@@ -369,6 +370,8 @@ export function projectDiagram(
   const source = parts.drawing ?? parts.layoutDef;
   if (!source) return null;
   const theme = themeKey(context);
+  // Without a saved drawing, the diagram needs an installed layout engine.
+  const engine = parts.drawing ? undefined : drawingRenderers().diagramLayout;
   const memo = PROJECTIONS.get(anchor);
   if (
     memo &&
@@ -378,7 +381,8 @@ export function projectDiagram(
     memo.dataModel === parts.dataModel &&
     memo.styleDef === parts.styleDef &&
     memo.colorsDef === parts.colorsDef &&
-    memo.theme === theme
+    memo.theme === theme &&
+    memo.engine === engine
   ) {
     return memo.result;
   }
@@ -391,8 +395,8 @@ export function projectDiagram(
       extent,
       context
     );
-  } else if (parts.layoutDef) {
-    const drawing = synthesizeDiagramDrawing(
+  } else if (parts.layoutDef && engine) {
+    const drawing = engine(
       {
         dataModel: parts.dataModel,
         layoutDef: parts.layoutDef,
@@ -420,6 +424,7 @@ export function projectDiagram(
     styleDef: parts.styleDef,
     colorsDef: parts.colorsDef,
     theme,
+    engine,
     result,
   });
   return result;

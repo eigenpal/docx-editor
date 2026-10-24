@@ -2,10 +2,10 @@
 // a text box story, the text of group members, a SmartArt diagram, a chart from its chart part,
 // or a drawing canvas.
 
-import { projectChart } from './chart-projection.ts';
 import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
 import { projectCanvas } from './drawing-canvas-projection.ts';
+import { drawingRenderers } from './drawing-renderers.ts';
 import {
   groupVectorMembersAreBounded,
   readGroupPicture,
@@ -113,7 +113,8 @@ export function projectDrawingContent(
   if (!groupPicture && !vectorShape) {
     const diagram =
       projectDiagram(anchor, extent, ctx) ??
-      projectChart(anchor, extent, {
+      // A chart paints through an installed renderer; without one it keeps its placeholder.
+      drawingRenderers().chart?.(anchor, extent, {
         resolveChartPart: ctx.resolveDiagramParts?.chart,
         resolveSchemeColor: ctx.resolveSchemeColor,
       }) ??

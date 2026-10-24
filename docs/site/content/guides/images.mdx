@@ -264,7 +264,10 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
-| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), charts, SmartArt, and unsupported groups are not shown, and a floating one with a wrapping mode still reserves its wrap area. A canvas in alternative content uses the fallback content instead |
+| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. Without the module, preserve the extent and show a labeled placeholder |
+| SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
+| Drawing canvases | Render shapes, connectors, and text read-only |
+| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, and a floating one with a wrapping mode still reserves its wrap area |
 | Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes | Render clipped stories on the line and edit supported body text boxes. They move with their line, so they cannot be dragged or resized |

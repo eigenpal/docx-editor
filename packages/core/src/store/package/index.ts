@@ -577,3 +577,41 @@ export {
   type CustomNodeExportResult,
 } from './custom-node-export.ts';
 export type { DrawingImageEffects } from './drawing-image-effects.ts';
+// Drawing renderers a capability package installs, and the drawing readers they build on.
+export {
+  installDrawingRenderers,
+  type ChartRenderContext,
+  type DiagramLayoutOptions,
+  type DiagramLayoutParts,
+  type DrawingGraphicProjection,
+  type DrawingRenderers,
+} from './drawing-renderers.ts';
+export { CHART_GRAPHIC_DATA_URI, CHART_NAMESPACE_URI } from './chart-parts.ts';
+export { DIAGRAM_NAMESPACE_URI } from './diagram-parts.ts';
+export { DRAWINGML_MAIN_NAMESPACE_URI } from './ooxml-tree.ts';
+export type {
+  ShapeSchemeColorResolver,
+  TextboxStoryProjection,
+  VectorShapeComponent,
+  VectorShapeProjection,
+} from './drawing-shape-projection.ts';
+export type { ShapeColor } from './drawing-shape-color.ts';
+export type { ShapeShadow } from './drawing-shape-effects.ts';
+export type { VectorGradient } from './drawing-gradient.ts';
+export type { VectorPattern } from './drawing-pattern-fill.ts';
+export type { EvaluatedGeometry, GeometryDefinition } from './drawing-geometry-engine.ts';
+export type {
+  DrawingTextDefaults,
+  LoweredDrawingText,
+  TextBodyLowering,
+} from './drawingml-text-lowering.ts';
+export type { GroupTextboxProjection } from './group-textbox-projection.ts';
+export { directFill, resolveColorNode } from './drawing-shape-color.ts';
+export { escapeXmlAttribute, isValidXmlText } from './sinks.ts';
+export { evaluateGeometry, presetGeometryDefinition } from './drawing-geometry-engine.ts';
+export { findDirectChild, parseEmu } from './drawing-shape-readers.ts';
+export { findGraphicData } from './drawing-group-frame.ts';
+export { isElement } from './drawing-projection-walk.ts';
+export { lowerDrawingTextBody } from './drawingml-text-lowering.ts';
+export { schemaAttributeValue } from './ooxml-drawing-rules.ts';
+export { shapeThemeCacheToken } from './theme-color-resolution.ts';

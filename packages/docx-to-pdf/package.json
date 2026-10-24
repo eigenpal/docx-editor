@@ -52,17 +52,19 @@
   },
   "dependencies": {
     "@docx-editor.dev/fonts": "~2.32.0",
+    "@docx-editor.dev/pro": "~2.32.0",
     "fontkit": "2.0.4",
     "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/fonts-cjk": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
     "dejavu-fonts-ttf": "^2.37.3",
+    "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
     "pdfjs-dist": "5.4.624",
-    "typescript7": "npm:typescript@^7.0.2",
-    "fflate": "^0.8.2"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

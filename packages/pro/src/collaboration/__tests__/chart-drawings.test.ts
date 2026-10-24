@@ -14,6 +14,10 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { readOoxmlPackage, canonicalOoxmlFingerprint } from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
+import { installDrawing } from '../../drawing/index.ts';
+
+// Charts paint through the drawing module.
+installDrawing();
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

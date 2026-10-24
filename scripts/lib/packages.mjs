@@ -214,6 +214,8 @@ export const PACKAGES = [
           'EditorModule',
           'ProLicenseOptions',
         ],
+        // The drawing module is an editor module; the contract is core's.
+        drawing: ['EditorModule'],
         'collaboration-webrtc': [
           'CollaborationIdentity',
           'CollaborationBootstrap',
