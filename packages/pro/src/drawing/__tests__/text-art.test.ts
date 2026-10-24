@@ -46,7 +46,7 @@ function part(run: string): OoxmlPart {
   return loaded.part;
 }
 
-const projected = (run: string): DrawingProjection[] => projectDrawingsInPart(part(run));
+const projected = (run: string): readonly DrawingProjection[] => projectDrawingsInPart(part(run));
 
 function wordArt(
   options: { style?: string; attributes?: string; children?: string; path?: string } = {}

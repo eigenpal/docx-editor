@@ -2845,7 +2845,12 @@ export interface MetafileRenderer {
     readonly rasterize?: (bytes: Uint8Array, mime: MetafileImageMime, options: Readonly<{
         maxEdge: number;
     }>) => Promise<MetafileRasterImage | null>;
-    readonly replay: (bytes: Uint8Array, mime: MetafileImageMime, options: MetafileReplayOptions) => Promise<MetafileReplay | null>;
+    readonly replay: (bytes: Uint8Array, mime: MetafileImageMime, options: MetafileRenderOptions) => Promise<MetafileReplay | null>;
+}
+
+// @public
+export interface MetafileRenderOptions {
+    readonly textAdvance: (text: string, font: MetafileFont) => number;
 }
 
 // @public
@@ -2854,11 +2859,6 @@ export interface MetafileReplay {
     readonly complete: boolean;
     // (undocumented)
     readonly drawing: MetafileDrawing;
-}
-
-// @public
-export interface MetafileReplayOptions {
-    readonly measureText: (text: string, font: MetafileFont) => number;
 }
 
 // @public

@@ -5,7 +5,7 @@
 // Without one, every metafile declines, and the exporter keeps its placeholder.
 
 import { drawingRenderers } from '../store/package/drawing-renderers.ts';
-import type { MetafileReplay, MetafileReplayOptions } from '../store/package/metafile-drawing.ts';
+import type { MetafileFont, MetafileReplay } from '../store/package/metafile-drawing.ts';
 
 export type {
   MetafileCommand,
@@ -16,8 +16,13 @@ export type {
   MetafilePathCommand,
   MetafileRaster,
   MetafileReplay,
-  MetafileReplayOptions,
 } from '../store/package/metafile-drawing.ts';
+
+/** Options for {@link replayMetafile}. @public */
+export interface MetafileReplayOptions {
+  /** Advance width of `text` in `font`, in pixels at `font.sizePx`. */
+  readonly measureText: (text: string, font: MetafileFont) => number;
+}
 
 /**
  * Replay an EMF or WMF picture into vector drawing commands in canvas pixels, through the
@@ -31,5 +36,7 @@ export function replayMetafile(
   options: MetafileReplayOptions
 ): Promise<MetafileReplay | null> {
   const renderer = drawingRenderers().metafile;
-  return renderer ? renderer.replay(bytes, mime, options) : Promise.resolve(null);
+  return renderer
+    ? renderer.replay(bytes, mime, { textAdvance: options.measureText })
+    : Promise.resolve(null);
 }

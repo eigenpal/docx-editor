@@ -600,7 +600,7 @@ export type {
   MetafilePathCommand,
   MetafileRaster,
   MetafileReplay,
-  MetafileReplayOptions,
+  MetafileRenderOptions,
 } from './metafile-drawing.ts';
 export type { PictureFrameEffects } from './drawing-picture-frame.ts';
 export type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';

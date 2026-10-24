@@ -39,7 +39,7 @@ function textOut(bytes: readonly number[]): WmfRecord {
 
 async function texts(records: readonly WmfRecord[]) {
   const replay = await replayMetafile(wmf(200, 100, records), 'image/x-wmf', {
-    measureText: (text, face) => text.length * face.sizePx * 0.5,
+    textAdvance: (text, face) => text.length * face.sizePx * 0.5,
   });
   return replay!.drawing.commands.flatMap((command) =>
     command.kind === 'text' ? [{ text: command.text, family: command.font.family }] : []
@@ -78,7 +78,7 @@ test('text sits by the alignment in force: top left by default, then as set', as
       textOut([0x42]),
     ]),
     'image/x-wmf',
-    { measureText: (text, face) => text.length * face.sizePx * 0.5 }
+    { textAdvance: (text, face) => text.length * face.sizePx * 0.5 }
   );
   const placed = replay!.drawing.commands.flatMap((command) =>
     command.kind === 'text' ? [[command.text, command.baseline, command.align]] : []

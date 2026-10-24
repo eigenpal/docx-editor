@@ -22,7 +22,7 @@ import {
 import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
 import { withWmfText } from './metafile-wmf-text-commands.ts';
 import { wmfTextRecords } from './metafile-wmf-text.ts';
-import type { MetafileReplay, MetafileReplayOptions } from '@docx-editor.dev/core/store';
+import type { MetafileRenderOptions, MetafileReplay } from '@docx-editor.dev/core/store';
 
 /** Records the replayer may process per stream; its own default is larger. */
 const MAX_RECORDS = 200_000;
@@ -80,7 +80,7 @@ function base64(bytes: Uint8Array): string {
 async function replayAlone(
   bytes: Uint8Array,
   mime: 'image/x-emf' | 'image/x-wmf',
-  options: MetafileReplayOptions
+  options: MetafileRenderOptions
 ): Promise<MetafileReplay | null> {
   const budget: MetafileBudget = { commands: 0, points: 0, pixels: 0, exhausted: false };
   const recordings = new Map<string, RecordingCanvas>();
@@ -90,7 +90,7 @@ async function replayAlone(
     return token;
   };
   const measure = (text: string, font: MetafileFont): number => {
-    const width = options.measureText(text, font);
+    const width = options.textAdvance(text, font);
     return Number.isFinite(width) && width >= 0 ? width : 0;
   };
   class StandInCanvas extends RecordingCanvas {
@@ -194,7 +194,7 @@ async function replayAlone(
 export function replayMetafile(
   bytes: Uint8Array,
   mime: 'image/x-emf' | 'image/x-wmf',
-  options: MetafileReplayOptions
+  options: MetafileRenderOptions
 ): Promise<MetafileReplay | null> {
   const run = queue.then(() => replayAlone(bytes, mime, options));
   queue = run.catch(() => undefined);

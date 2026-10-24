@@ -57,12 +57,6 @@ function onlyVector(body: string): VectorShapeProjection {
 const XFRM = '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></a:xfrm>';
 const FILL = '<a:solidFill><a:srgbClr val="336699"/></a:solidFill>';
 
-function bounds(points: readonly Readonly<{ x: number; y: number }>[]) {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-}
-
 describe('dark-edged bevels', () => {
   test('a dark-edged bevel adds an inset rim over the fill', () => {
     const bevel = '<a:sp3d prstMaterial="dkEdge"><a:bevelT w="8200" h="38100"/></a:sp3d>';

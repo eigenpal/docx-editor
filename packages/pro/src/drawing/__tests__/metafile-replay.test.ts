@@ -124,7 +124,7 @@ describe('metafile replay', () => {
       { fn: 0x012d, words: [1] },
       { fn: 0x0324, words: [3, 0, 0, 200, 0, 100, 100] },
     ]);
-    const replay = await replayMetafile(bytes, 'image/x-wmf', { measureText });
+    const replay = await replayMetafile(bytes, 'image/x-wmf', { textAdvance: measureText });
     expect(replay?.complete).toBe(true);
     const fill = replay!.drawing.commands.find((command) => command.kind === 'fill');
     expect(fill).toMatchObject({ paint: { r: 0, g: 0, b: 255, alpha: 1 } });
@@ -152,7 +152,7 @@ describe('metafile replay', () => {
       // SRCCOPY, RGB colours, the whole 2×2 source into (20, 10, 100, 50).
       { fn: 0x0f43, words: [0x0020, 0x00cc, 0, 2, 2, 0, 0, 50, 100, 10, 20, ...dib] },
     ]);
-    const replay = await replayMetafile(bytes, 'image/x-wmf', { measureText });
+    const replay = await replayMetafile(bytes, 'image/x-wmf', { textAdvance: measureText });
     const image = replay!.drawing.commands.find((command) => command.kind === 'image');
     expect(image).toBeTruthy();
     const scale = replay!.drawing.width / 200;
@@ -165,11 +165,13 @@ describe('metafile replay', () => {
 
   test('a replay leaves no canvas stand-in on the global object', async () => {
     const before = (globalThis as Record<string, unknown>).OffscreenCanvas;
-    await replayMetafile(wmf(10, 10, []), 'image/x-wmf', { measureText });
+    await replayMetafile(wmf(10, 10, []), 'image/x-wmf', { textAdvance: measureText });
     expect((globalThis as Record<string, unknown>).OffscreenCanvas).toBe(before);
   });
 
   test('bytes that are not a metafile replay as null', async () => {
-    expect(await replayMetafile(new Uint8Array(64), 'image/x-emf', { measureText })).toBeNull();
+    expect(
+      await replayMetafile(new Uint8Array(64), 'image/x-emf', { textAdvance: measureText })
+    ).toBeNull();
   });
 });

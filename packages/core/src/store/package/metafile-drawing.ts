@@ -105,10 +105,10 @@ export interface MetafileDrawing {
   readonly commands: readonly MetafileCommand[];
 }
 
-/** Options for a metafile replay. @public */
-export interface MetafileReplayOptions {
+/** What a metafile renderer reads beside the bytes. @public */
+export interface MetafileRenderOptions {
   /** Advance width of `text` in `font`, in pixels at `font.sizePx`. */
-  readonly measureText: (text: string, font: MetafileFont) => number;
+  readonly textAdvance: (text: string, font: MetafileFont) => number;
 }
 
 /** A replayed metafile. `complete` is false when a bound stopped recording early. @public */

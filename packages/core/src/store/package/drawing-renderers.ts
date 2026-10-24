@@ -26,7 +26,7 @@ import type { PictureFrameEffects } from './drawing-picture-frame.ts';
 import type { VectorShapeComponent } from './drawing-shape-projection.ts';
 import type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
 import type { MetafileImageMime } from './image-resources.ts';
-import type { MetafileReplay, MetafileReplayOptions } from './metafile-drawing.ts';
+import type { MetafileRenderOptions, MetafileReplay } from './metafile-drawing.ts';
 
 /**
  * What a shape effects renderer reads for one shape: its properties, the effect list the
@@ -102,7 +102,7 @@ export interface MetafileRenderer {
   readonly replay: (
     bytes: Uint8Array,
     mime: MetafileImageMime,
-    options: MetafileReplayOptions
+    options: MetafileRenderOptions
   ) => Promise<MetafileReplay | null>;
   /**
    * A PNG of the metafile no larger than `maxEdge` pixels on a side, drawn in the current
