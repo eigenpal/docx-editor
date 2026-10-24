@@ -576,7 +576,6 @@
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.32.0",
         "bidi-js": "1.1.0",
-        "emf-converter": "2.0.2",
         "fast-xml-parser": "^5.10.1",
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.6.1",
@@ -720,6 +719,7 @@
       "name": "@docx-editor.dev/pro",
       "version": "2.32.0",
       "dependencies": {
+        "emf-converter": "2.0.2",
         "y-protocols": "^1.0.7",
       },
       "devDependencies": {

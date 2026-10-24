@@ -1,12 +1,17 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // WMF text in its font's character set and face while the rasterizer draws it.
 //
 // The rasterizer draws WMF text bytes as Latin-1, in a fallback face (see
-// `store/package/metafile-wmf-text.ts`). While one conversion runs, the canvases it creates
+// `metafile-wmf-text.ts`). While one conversion runs, the canvases it creates
 // draw each text through a matcher that re-decodes it and sets the face its record names.
 // Conversions run one at a time, because the stand-in sits on the global constructor.
 
-import { wmfTextMatcher, wmfTextRecords } from '../store/package/metafile-wmf-text.ts';
-import type { WmfText } from '../store/package/metafile-wmf-text.ts';
+import { wmfTextMatcher, wmfTextRecords } from './metafile-wmf-text.ts';
+import type { WmfText } from './metafile-wmf-text.ts';
 
 type CanvasConstructor = new (width: number, height: number) => OffscreenCanvas;
 type TextContext = Pick<

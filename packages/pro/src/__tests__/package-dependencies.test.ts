@@ -72,8 +72,9 @@ describe('how this package asks for the engine', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/i18n']).toBe('workspace:*');
   });
 
-  test('the only runtime dependency is y-protocols', () => {
-    expect(Object.keys(manifest.dependencies ?? {})).toEqual(['y-protocols']);
+  test('the runtime dependencies are the metafile rasterizer and y-protocols', () => {
+    // The drawing module loads `emf-converter` on first use, for a metafile picture.
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual(['emf-converter', 'y-protocols']);
   });
 
   test('yjs and the network providers are optional peers and never regular dependencies', () => {

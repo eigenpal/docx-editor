@@ -1,8 +1,13 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Replayed WMF text commands in the character set and face their font records name; see
-// `store/package/metafile-wmf-text.ts`.
+// `metafile-wmf-text.ts`.
 
 import type { MetafileCommand } from './metafile-recording.ts';
-import { wmfTextMatcher, type WmfTextRecord } from '../store/package/metafile-wmf-text.ts';
+import { wmfTextMatcher, type WmfTextRecord } from './metafile-wmf-text.ts';
 
 /**
  * The replayed commands with each text command re-decoded in its record's character set and

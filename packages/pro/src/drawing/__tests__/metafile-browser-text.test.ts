@@ -1,9 +1,14 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // While one WMF converts, the rasterizer's canvases draw its text in the character set and
 // face its font records name, and the global constructor is restored afterwards.
 
 import { afterEach, expect, test } from 'bun:test';
-import { withWmfTextCanvas } from '../browser-metafile-text.ts';
-import { wmf, type WmfRecord } from '../../export/__tests__/metafile-fixture.ts';
+import { withWmfTextCanvas } from '../metafile-browser-text.ts';
+import { wmf, type WmfRecord } from './metafile-fixture.ts';
 
 const scope = globalThis as { OffscreenCanvas?: unknown };
 const saved = scope.OffscreenCanvas;

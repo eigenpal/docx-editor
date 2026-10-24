@@ -25,6 +25,8 @@ const shared = {
     'y-protocols/awareness',
     'y-webrtc',
     '@hocuspocus/provider',
+    // Loaded on first use by the metafile renderer, never bundled.
+    'emf-converter',
   ],
 };
 

@@ -141,7 +141,7 @@ const shared = {
   // the most of them: fast-xml-parser, fflate and the prosemirror-* family all end up as
   // source inside `dist/`.
   metafile: true,
-  external: ['emf-converter', 'utif2'],
+  external: ['utif2'],
   // The engine's own files import it by package name ('@docx-editor.dev/core/store'
   // and friends), which resolved through the export map back when that map pointed
   // at src. Now that it points at dist, the build has to be told where source is,

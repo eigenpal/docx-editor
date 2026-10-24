@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/pro",
   "version": "2.32.0",
-  "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, and realtime collaboration.",
+  "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, realtime collaboration, and advanced drawing rendering.",
   "sideEffects": false,
   "type": "module",
   "exports": {
@@ -113,6 +113,7 @@
     }
   },
   "dependencies": {
+    "emf-converter": "2.0.2",
     "y-protocols": "^1.0.7"
   },
   "devDependencies": {
