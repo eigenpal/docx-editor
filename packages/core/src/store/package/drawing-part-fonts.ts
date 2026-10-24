@@ -1,4 +1,5 @@
-// Faces named by the parts a drawing renders from: chart parts and saved diagram drawings.
+// Faces named by the parts a drawing renders from: chart parts, saved diagram drawings, and
+// EMF and WMF pictures.
 //
 // Their labels lower to stories that live outside every document story, so a collector that
 // walks the stories never sees the faces they name. Theme font tokens (`+mn-lt`, `+mj-lt`)
@@ -11,6 +12,7 @@ import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { validFontFamily } from './run-defaults.ts';
+import { metafileFontFamilies } from './metafile-fonts.ts';
 
 const MAX_NODES = 200_000;
 const MAX_FAMILIES = 32;
@@ -78,5 +80,7 @@ export function drawingPartFontFamilies(
       else add(typeface);
     }
   }
+  // EMF and WMF pictures name their text faces in their own font records.
+  for (const face of metafileFontFamilies(pkg, validFontFamily)) add(face);
   return [...byFold.values()];
 }
