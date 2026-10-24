@@ -329,6 +329,19 @@ describe('a text-relative table narrower than its column that misses the page bo
     expect(tablesOn(layout, 1)[0]!.box.y).toBe(0);
   });
 
+  test('a negative offset at the page top reaches into the top margin', () => {
+    // A 50 pt top margin leaves 150 pt; 30 pt above the margin, the four 40 pt rows fit whole.
+    const margined = {
+      ...options,
+      geometry: { ...options.geometry, margin: { ...options.geometry.margin, top: 50 } },
+    };
+    const layout = layoutSemanticDocument(part(table({ offset: -30 }) + p('Anchor')), 0, margined);
+    expect(layout.pages).toHaveLength(1);
+    const [only] = tablesOn(layout, 0);
+    expect(only!.box.y).toBeCloseTo(-30, 0);
+    expect(rowText(only!)).toEqual(['Row 0', 'Row 1', 'Row 2', 'Row 3']);
+  });
+
   test('opening rows that fit only a fresh page move the table there with its offset', () => {
     const rows = minimumRow(0, 150) + minimumRow(1, 150);
     const layout = render(lead(100) + table({ width: 80, offset: 20, body: rows }) + p('Anchor'));

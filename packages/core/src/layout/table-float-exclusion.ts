@@ -5,7 +5,11 @@ import { hardBreakKind } from '../store/package/hard-break.ts';
 import { paragraphBreaksBefore } from './paragraph-style.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
+import {
+  TABLE_WRAP_MIN_PASSAGE_PT,
+  type ExclusionZone,
+  type ExclusionColumnLayout,
+} from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import {
@@ -442,7 +446,9 @@ function pageFramedAnchorBand(
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const bandLeft = left - distances.left;
   const bandRight = left + tableWidth + distances.right;
-  if (bandLeft > column.left || bandRight < column.left + column.width) return 0;
+  // A passage beside the table no wider than a quarter inch holds no text, so the table spans.
+  const passage = Math.max(bandLeft - column.left, column.left + column.width - bandRight);
+  if (passage > TABLE_WRAP_MIN_PASSAGE_PT) return 0;
   // An offset top does not depend on the table height: skip the probe when no line reaches it.
   const inkBottom = lineBoxes.reduce((bottom, box) => Math.max(bottom, box.y + box.height), 0);
   if (

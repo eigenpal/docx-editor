@@ -122,6 +122,13 @@ describe('a page-framed table over earlier body lines', () => {
     expect(paragraphNamed(layout, 'anchorline').pageIndex).toBe(0);
   });
 
+  test('a table that leaves a passage of a quarter inch or less moves as a spanning one', () => {
+    // 9120 twips leaves 12pt beside the table: no text fits there.
+    const layout = layoutOf(lines(36) + table(PAGE_TOP, 9120) + anchor);
+    expect(positionedTable(layout).pageIndex).toBe(1);
+    expect(paragraphNamed(layout, 'anchorline').pageIndex).toBe(1);
+  });
+
   test('an incremental pass places the table like a cold pass', () => {
     const session = createLayoutSession();
     layoutSemanticDocument(documentOf(lines(10) + table(PAGE_TOP) + anchor), 0, {

@@ -15,7 +15,8 @@
 // - The first fragment keeps the `w:tblpY` offset below the body cursor. When the opening fits
 //   only a fresh page below content already in the column, or a negative offset would break the
 //   table below that content, the table moves there first and keeps its offset, as a whole table
-//   moves with its anchor (`openTextTable`).
+//   moves with its anchor (`openTextTable`). A negative offset at a page top reaches into the
+//   top margin, as an unbroken positioned table does.
 // - Rows paginate as in an unpositioned table: a row splits between lines at the page bottom
 //   and moves to the next page only when the room left cannot hold its minimum height or the
 //   first line of every cell. The first body row is the opening's and never moves alone.
@@ -83,7 +84,7 @@ export function openingRowsBottom(
  * Opens an in-flow text-anchored table `w:tblpY` below the body cursor. Below content already in
  * the column, when its opening does not fit there, or a negative offset leaves the whole table
  * short of the room, but the opening fits a fresh column, the table first moves to the next
- * column or page and keeps its offset there (clamped to the top). Returns the table's left edge
+ * column or page and keeps its offset there, up into the top margin. Returns the table's left edge
  * in the column it opens in.
  */
 export function openTextTable(
@@ -111,7 +112,10 @@ export function openTextTable(
     flow.advanceColumn();
     left = originX();
   }
-  flow.cursorY = Math.max(0, Math.min(flow.cursorY + offset, flow.contentHeight()));
+  // A negative offset at the top of a page reaches into the top margin, never past the sheet.
+  // `|| 0` keeps a page without a top margin at +0, not -0.
+  const sheetTop = flow.verticalAnchorFrames().page.top || 0;
+  flow.cursorY = Math.max(sheetTop, Math.min(flow.cursorY + offset, flow.contentHeight()));
   return left;
 }
 

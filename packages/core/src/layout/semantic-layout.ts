@@ -2156,6 +2156,9 @@ function* layoutBlocksPass(
       previousSpaceAfter = collapsingSpaceAfter(frameStart.previousSpaceAfter, styleCascade);
     }
 
+    // A held mark whose line misses the bottom paints nothing there and takes no room from a
+    // footnote area: it stays out of the flow, as a collapsed mark does.
+    let markPastBottom = false;
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     if (!frame) {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
@@ -2214,6 +2217,7 @@ function* layoutBlocksPass(
         });
         if (need !== null) needed = Math.max(needed, need);
       }
+      markPastBottom = !collapsedMark && cursorY + needed > contentHeight() && holdsSheet();
       if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
         advanceColumn();
         previousSpaceAfter = 0;
@@ -2388,7 +2392,7 @@ function* layoutBlocksPass(
         indent,
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
         ...(strokes.length > 0 ? { borders: strokes } : {}),
-        ...(collapsedMark || keptBreakLine ? { outOfFlow: true as const } : {}),
+        ...(collapsedMark || keptBreakLine || markPastBottom ? { outOfFlow: true as const } : {}),
         ...(shading === undefined || collapsedMark
           ? {}
           : {

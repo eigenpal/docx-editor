@@ -3919,6 +3919,7 @@ export interface SemanticTableCell {
         readonly bottom: number;
         readonly top: number;
     };
+    readonly noWrap?: true;
     readonly preferredWidth: PreferredWidth;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';

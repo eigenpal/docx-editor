@@ -330,9 +330,6 @@ export function paragraphContentWidthsPt(
     }
     segment = 0;
   };
-  // Spaces that open a line are placed before its first word, so they count toward it.
-  let lineStart = true;
-  let lead = 0;
   let layoutEquation: ReturnType<typeof createEquationLayouter> | undefined;
   // A dash that ends a run breaks only if the next run does not open with another dash.
   let dashPending = false;
@@ -353,8 +350,6 @@ export function paragraphContentWidthsPt(
       endLine();
       close();
       first = false;
-      lineStart = true;
-      lead = 0;
       continue;
     }
     // A picture or an equation is one box with a break opportunity on each side.
@@ -368,10 +363,8 @@ export function paragraphContentWidthsPt(
       previousText = undefined;
       advance(atomWidth);
       close();
-      segment = (lineStart ? lead : 0) + atomWidth;
+      segment = atomWidth;
       close();
-      lineStart = false;
-      lead = 0;
       continue;
     }
     // A run that opens with a breaking space breaks before it, as the line breaker does.
@@ -380,9 +373,7 @@ export function paragraphContentWidthsPt(
     const measure = (text: string): number => measureDisplayText(text, style, measurer);
     if (piece.measureText !== undefined) {
       advance(measure(piece.measureText));
-      segment += lead + measure(piece.measureText);
-      lineStart = false;
-      lead = 0;
+      segment += measure(piece.measureText);
       continue;
     }
     const boundaries =
@@ -410,24 +401,16 @@ export function paragraphContentWidthsPt(
         // A tab uses up the first-line indent, and spaces after it no longer open the line.
         close();
         first = false;
-        lineStart = false;
-        lead = 0;
         continue;
       }
       const ink = withoutLineEndWhitespace(candidate);
       // A minimum cut omits only its leading gap; internal gaps and token shaping remain.
       const continues = segment > 0;
       segment += spacing.minimum(to - candidate.length, continues);
-      if (lineStart && ink.length === 0) {
-        lead += measure(candidate);
-        continue;
-      }
       segment -= cjkBreaks?.shared(piece, to - candidate.length, to, continues) ?? 0;
-      if (lineStart && ink.length > 0) {
-        segment += lead;
-        lineStart = false;
-        lead = 0;
-      }
+      // Spaces that open the paragraph end its first line: the word after them may start the
+      // next line, where the first-line indent no longer applies.
+      if (ink.length === 0 && segment === 0) first = false;
       if (ink.length === candidate.length) segment += measure(candidate);
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
@@ -722,9 +705,13 @@ export function autofitColumnMinimumsPt(
         });
         continue;
       }
-      const needed = least + measured.left + measured.right;
+      // An unwrapped cell holds its column at the width it asks for, though its text wraps.
+      const held =
+        cell.noWrap && cell.preferredWidth.type === 'dxa' ? cell.preferredWidth.value : 0;
+      const needed = Math.max(held, least + measured.left + measured.right);
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
-      if (least + around > wide[cell.gridColumn]!) wide[cell.gridColumn] = least + around;
+      const neededWide = Math.max(held, least + around);
+      if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
       if (most + around > widest[cell.gridColumn]!) widest[cell.gridColumn] = most + around;
     }
   }

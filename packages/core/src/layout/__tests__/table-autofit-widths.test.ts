@@ -646,10 +646,34 @@ describe('autofit layout', () => {
     expect(columns(outer).widths[0]).toBe(60);
   });
 
-  test('spaces that open a line count toward its first word', () => {
+  test('spaces that open a paragraph break before its first word', () => {
+    // The spaces end the first line, so the column holds only the word, on the second.
     const lead = columns(table('', run('  ABCDEFGHIJ')));
-    expect(lead.widths[1]).toBe(72);
-    expect(lead.lines[1]).toBe(1);
+    expect(lead.widths[1]).toBe(60);
+    expect(lead.lines[1]).toBe(2);
+    // The first-line indent stays on the line the spaces end.
+    const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('  ABCDEFGHIJ')}`;
+    expect(columns(table('', indented)).widths[1]).toBe(60);
+    // A left indent applies to every line, so it still counts.
+    const left = `<w:pPr><w:ind w:left="240"/></w:pPr>${run('  ABCDEFGHIJ')}`;
+    expect(columns(table('', left)).widths[1]).toBe(72);
+  });
+
+  test('an unwrapped cell holds its column at its preferred width', () => {
+    // `w:noWrap` keeps the first column at its 60pt preferred width; the wide word in the
+    // second column takes its room from the third column alone, and the first still wraps.
+    const unwrapped = (noWrap: string) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/>${noWrap}</w:tcPr><w:p>${run('ab cd ef gh ij kl')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(unwrapped('')).widths).toEqual([38.18, 60, 21.82]);
+    const held = columns(unwrapped('<w:noWrap/>'));
+    expect(held.widths).toEqual([60, 60, 12]);
+    expect(held.lines[0]).toBe(2);
   });
 
   test('an empty grid band gains no width when the table scales down', () => {
