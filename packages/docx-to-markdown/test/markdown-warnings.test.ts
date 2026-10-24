@@ -159,8 +159,8 @@ test('reports both supported and unsupported legacy images without duplicate sou
     expect(result.markdown).toBe('Body');
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]?.code).toBe('omitted-drawing');
-    if (rotation) expect(result.warnings[0]?.partName).toBe('/word/document.xml');
-    else expect(result.warnings[0]?.pageNumber).toBe(1);
+    // A supported picture and an unsupported one both keep their box on page 1.
+    expect(result.warnings[0]?.pageNumber).toBe(1);
     if (!rotation) {
       entries['word/document.xml'] = strToU8(
         strFromU8(entries['word/document.xml']!)

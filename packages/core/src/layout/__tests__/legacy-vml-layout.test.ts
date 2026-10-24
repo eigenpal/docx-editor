@@ -1,3 +1,4 @@
+import { isLegacyPlaceholder } from '../../store/__tests__/legacy-vml-refusal.ts';
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
@@ -328,10 +329,13 @@ test('an outlined VML picture reserves its picture size plus the outline on each
   } finally {
     outlined.bundle.dispose();
   }
-  // One side is not a supported outline: the drawing stays refused, not drawn without it.
+  // One side is not a supported outline: the drawing stays refused, not drawn without it. It
+  // keeps its box on the line as a placeholder that paints nothing.
   const partial = setup(shape(['top']));
   try {
-    expect(drawingAtomIdentities(partial.reader.part())?.size ?? 0).toBe(0);
+    const ids = [...(drawingAtomIdentities(partial.reader.part())?.keys() ?? [])];
+    expect(ids).toHaveLength(1);
+    expect(isLegacyPlaceholder(partial.bundle.bodyContext.projectionForAtom!(ids[0]!)!)).toBe(true);
   } finally {
     partial.bundle.dispose();
   }

@@ -10,6 +10,7 @@ import type {
 } from './drawing-projection.ts';
 import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
 import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
+import { legacyPlaceholderProjection } from './legacy-vml-placeholder.ts';
 import {
   legacyLineReach,
   legacyPictureBorder,
@@ -696,7 +697,13 @@ export function isLegacyVmlAtom(node: OoxmlNode): boolean {
   if (!object && !named(node, WML_NAMESPACE_URI, 'pict')) return false;
   if (!memo.has(node)) {
     const preview = object ? embeddedObjectPreview(node) : undefined;
-    memo.set(node, preview === null ? null : readProjection(node, preview));
+    // A drawing on the line that cannot paint still keeps its box, with a placeholder.
+    memo.set(
+      node,
+      preview === null
+        ? null
+        : (readProjection(node, preview) ?? legacyPlaceholderProjection(node, preview))
+    );
   }
   return memo.get(node) !== null;
 }

@@ -17,6 +17,8 @@ import type { DrawingGroupPictureRecord } from './drawing-layout.ts';
 const GRAPHIC_URI_KIND: ReadonlyMap<string, string> = new Map([
   ['http://schemas.openxmlformats.org/drawingml/2006/chart', 'chart'],
   ['http://schemas.openxmlformats.org/drawingml/2006/diagram', 'diagram'],
+  // A legacy drawing on the line that cannot paint (`legacy-vml-placeholder.ts`).
+  ['legacy-vml', 'shape'],
   ['http://schemas.microsoft.com/office/word/2010/wordprocessingGroup', 'group'],
   ['http://schemas.microsoft.com/office/word/2010/wordprocessingShape', 'textbox'],
   ['http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas', 'canvas'],

@@ -90,8 +90,23 @@ describe('VML comment offsets share the drawing atom model', () => {
     ).toBe(true);
   });
 
-  test('an unsupported picture stays opaque in both offset models', () => {
+  test('an unsupported picture on the line is one placeholder unit in both offset models', () => {
     const unsupported = PICTURE.replace('width:100pt;', 'rotation:90;width:100pt;');
+    const { part, paragraph } = parse(`${START}<w:r>${unsupported}</w:r>${END}`);
+    expect(isLegacyVmlAtom(pictureIn(paragraph))).toBe(true);
+    expect(paragraphOffsetIndex(paragraph).spanOf(pictureIn(paragraph).id)).toEqual({
+      start: 0,
+      end: 1,
+    });
+    const span = collectOwnerCommentSpans(part.root, createCommentScanBudget()).spans.get('1')!;
+    expect({ start: span.startOffset, end: span.endOffset }).toEqual({ start: 0, end: 1 });
+  });
+
+  test('an unsupported floating picture stays opaque in both offset models', () => {
+    const unsupported = PICTURE.replace(
+      'width:100pt;',
+      'position:absolute;rotation:90;width:100pt;'
+    );
     const { part, paragraph } = parse(`${START}<w:r>${unsupported}</w:r>${END}`);
     expect(isLegacyVmlAtom(pictureIn(paragraph))).toBe(false);
     expect(paragraphOffsetIndex(paragraph).spanOf(pictureIn(paragraph).id)).toEqual({

@@ -194,10 +194,8 @@ test('keeps warnings for unsupported legacy content beside an exported legacy im
   const mixed = await exportMarkdown(imageDocx(shape + extra), fast);
   expect(mixed.markdown).toContain('![');
   expect(mixed.warnings).toHaveLength(1);
-  expect(mixed.warnings[0]).toMatchObject({
-    code: 'omitted-drawing',
-    partName: '/word/document.xml',
-  });
+  // The unsupported shape keeps its box on the line, so the warning names its page.
+  expect(mixed.warnings[0]).toMatchObject({ code: 'omitted-drawing', pageNumber: 1 });
 });
 
 test('supports SVG and existing raster/positioned-image corpus without placement fallbacks', async () => {

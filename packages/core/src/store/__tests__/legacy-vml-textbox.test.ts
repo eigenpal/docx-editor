@@ -15,6 +15,7 @@ import { textboxStoriesInPart } from '../package/textbox-stories.ts';
 import { paragraphLength } from '../store/tree-op-segments.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { expectRefused } from './legacy-vml-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -241,7 +242,7 @@ describe('drawings inside a VML text box story', () => {
 });
 
 describe('VML text box refusals', () => {
-  const refused = (content: string) => expect(projectDrawingsInPart(parse(content))).toEqual([]);
+  const refused = (content: string) => expectRefused(projectDrawingsInPart(parse(content)));
 
   test('unknown children, an extrusion, and malformed insets refuse the shape', () => {
     refused(floatingBox({ children: '<o:extrusion v:ext="view" on="t"/>' }));
@@ -392,7 +393,7 @@ describe('VML lines and rectangles', () => {
       '<w:pict><v:line style="width:10pt;height:10pt" from="0,0" to="10pt,10pt"/></w:pict>',
       '<w:pict><v:line style="position:absolute;flip:x" from="0,0" to="10pt,10pt"/></w:pict>',
     ])
-      expect(projectDrawingsInPart(parse(content))).toEqual([]);
+      expectRefused(projectDrawingsInPart(parse(content)));
   });
 
   test('a rectangle with short hex and named colors paints', () => {

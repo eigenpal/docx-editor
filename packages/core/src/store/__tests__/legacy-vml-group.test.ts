@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import { projectDrawingsInPart, type DrawingProjection } from '../package/drawing-projection.ts';
 import { readOoxmlPart } from '../package/ooxml-tree.ts';
+import { expectRefused } from './legacy-vml-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -69,7 +70,7 @@ describe('legacy VML groups as vector members', () => {
 
   test('a group with text refuses when a member is outside the subset', () => {
     const picture = '<v:shape style="width:100;height:100" type="#_x0000_t75" filled="t"/>';
-    expect(project(canvasGroup(`${box('a', 0, 'Start')}${picture}`))).toHaveLength(0);
+    expectRefused(project(canvasGroup(`${box('a', 0, 'Start')}${picture}`)));
   });
 
   test('a group of shapes without text keeps painting as vectors', () => {

@@ -28,6 +28,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { containsClipboardObject } from '../store/clipboard-object-policy.ts';
+import { expectRefused } from './legacy-vml-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -208,7 +209,7 @@ describe('a picture with an embedded object beside it', () => {
     expect(projection.relationshipId).toBe('rPreview');
     expect(JSON.stringify(projection)).not.toContain('rExternal');
     expect(serializeOoxmlPart(part)).toContain('r:href="rExternal"');
-    expect(projectDrawingsInPart(parse(xml.replace('r:id="rPreview"', '')))).toHaveLength(0);
+    expectRefused(projectDrawingsInPart(parse(xml.replace('r:id="rPreview"', ''))));
   });
 
   test('never resolves the embedded part, and save keeps the object unchanged', () => {
@@ -248,7 +249,7 @@ describe('a picture with an embedded object beside it', () => {
     for (const sample of samples) {
       const part = parse(sample);
       expect(isLegacyVmlAtom(find(part.root, 'pict')!)).toBe(false);
-      expect(projectDrawingsInPart(part)).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(part));
     }
   });
 });

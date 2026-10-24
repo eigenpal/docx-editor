@@ -30,6 +30,7 @@ import {
 import { paragraphLength, segmentsOf } from '../store/tree-op-segments.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { expectRefused } from './legacy-vml-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -164,20 +165,20 @@ describe('bounded legacy VML projections', () => {
 
   test('refuses invalid colour keys and retains all input budgets', () => {
     for (const key of ['url(https://example.invalid)', '#ffff', '', 'transparent']) {
-      expect(
+      expectRefused(
         projectDrawingsInPart(
           parse(`<w:pict>${photo().replace('o:title="photo"', `chromakey="${key}"`)}</w:pict>`)
         )
-      ).toHaveLength(0);
+      );
     }
     for (const metadata of [
       `o:equationxml="${'x'.repeat(65_537)}"`,
       `o:title="${'x'.repeat(8193)}"`,
       `r:equationxml="${'x'.repeat(28_000)}"`,
     ]) {
-      expect(
+      expectRefused(
         projectDrawingsInPart(parse(`<w:pict>${photo().replace('id="photo"', metadata)}</w:pict>`))
-      ).toHaveLength(0);
+      );
     }
   });
 
@@ -194,7 +195,7 @@ describe('bounded legacy VML projections', () => {
       ['<v:fill on="f"', '<v:fill on="t"'],
       ['<v:stroke on="f"', '<v:stroke on="t"'],
     ]) {
-      expect(projectDrawingsInPart(parse(content.replace(from!, to!)))).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(parse(content.replace(from!, to!))));
     }
   });
 
@@ -229,7 +230,7 @@ describe('bounded legacy VML projections', () => {
       content.replace('text-align:left', 'rotation:30'),
       content.replace('anchorx="page"', 'anchorx="unknown"'),
     ])
-      expect(projectDrawingsInPart(parse(altered))).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(parse(altered)));
     const centered = onlyProjection(
       parse(content.replace('mso-position-horizontal:absolute', 'mso-position-horizontal:center'))
     );
@@ -303,7 +304,7 @@ describe('bounded legacy VML projections', () => {
     ]) {
       const part = parse(group(extra));
       const before = serializeOoxmlPart(part);
-      expect(projectDrawingsInPart(part)).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(part));
       expect(serializeOoxmlPart(part)).toBe(before);
     }
   });
@@ -318,25 +319,25 @@ describe('bounded legacy VML projections', () => {
       wordArt().replace('width:120pt', 'rotation:10;width:120pt'),
       wordArt('x'.repeat(1025)),
     ];
-    for (const sample of samples) expect(projectDrawingsInPart(parse(sample))).toHaveLength(0);
+    for (const sample of samples) expectRefused(projectDrawingsInPart(parse(sample)));
   });
 
   test('bounds group member count and nesting before generating previews', () => {
     const child = '<v:rect style="left:100;top:200;width:1;height:1"/>';
-    expect(projectDrawingsInPart(parse(group(child.repeat(129))))).toHaveLength(0);
+    expectRefused(projectDrawingsInPart(parse(group(child.repeat(129)))));
     let nested = photo('left:0;top:0;width:10;height:10');
     for (let depth = 0; depth < 10; depth++) {
       nested = `<v:group style="left:0;top:0;width:10;height:10">${nested}</v:group>`;
     }
-    expect(projectDrawingsInPart(parse(group(nested)))).toHaveLength(0);
+    expectRefused(projectDrawingsInPart(parse(group(nested))));
   });
 
   test('refuses groups whose members or arrow ink would be clipped by the viewport', () => {
     const outside = photo('left:50;top:200;width:500;height:250');
     const edgeArrow =
       '<v:shape type="#_x0000_t32" style="left:100;top:200;width:900;height:0" strokecolor="#ff0000" strokeweight="12pt"><v:stroke startarrow="block" endarrow="block"/></v:shape>';
-    expect(projectDrawingsInPart(parse(group(outside)))).toHaveLength(0);
-    expect(projectDrawingsInPart(parse(group(edgeArrow)))).toHaveLength(0);
+    expectRefused(projectDrawingsInPart(parse(group(outside))));
+    expectRefused(projectDrawingsInPart(parse(group(edgeArrow))));
   });
 
   test('treats the complete photo/arrow group as one offset and restores it on undo', () => {
@@ -357,7 +358,7 @@ describe('bounded legacy VML projections', () => {
       ).ok
     ).toBe(true);
     expect(paragraphTextOf(store.part, paragraph.id)).toBe('AZ');
-    expect(projectDrawingsInPart(store.part)).toHaveLength(0);
+    expectRefused(projectDrawingsInPart(store.part));
     expect(store.undo()).not.toBeNull();
     expect(serializeOoxmlPart(store.part)).toBe(before);
     expect(projectDrawingsInPart(store.part)).toHaveLength(1);
@@ -613,7 +614,10 @@ describe('legacy VML picture borders', () => {
     });
     // One drawing atom between the two text characters, as for an unbordered picture.
     expect(paragraphLength(firstParagraph(part))).toBe(3);
-    expect(paragraphLength(firstParagraph(parse(borderedPhoto({ sides: ['top'] }))))).toBe(2);
+    // A refused outline keeps the picture box as an unpainted placeholder atom.
+    const partial = parse(borderedPhoto({ sides: ['top'] }));
+    expect(paragraphLength(firstParagraph(partial))).toBe(3);
+    expectRefused(projectDrawingsInPart(partial));
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 
@@ -661,7 +665,7 @@ describe('legacy VML picture borders', () => {
     for (const sample of samples) {
       const part = parse(sample);
       const before = serializeOoxmlPart(part);
-      expect(projectDrawingsInPart(part)).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(part));
       expect(serializeOoxmlPart(part)).toBe(before);
     }
   });
@@ -680,7 +684,7 @@ describe('legacy VML picture borders', () => {
         .replace('stroked="f">', `stroked="f" xmlns:w10="${W10}"${colors}>`)
         .replace('</v:shape>', `${borders}</v:shape>`),
     ])
-      expect(projectDrawingsInPart(parse(sample))).toHaveLength(0);
+      expectRefused(projectDrawingsInPart(parse(sample)));
   });
 
   test('resolves the outlined picture through the validated raster path', async () => {

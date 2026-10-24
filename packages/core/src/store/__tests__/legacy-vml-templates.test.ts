@@ -9,6 +9,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { projectDrawingsInPart } from '../package/drawing-projection.ts';
 import { VML, OFFICE } from '../package/legacy-vml-values.ts';
+import { isLegacyPlaceholder } from './legacy-vml-refusal.ts';
 
 function template(file: string, part: string, type: number): string {
   const fixture = new URL(`../../../../../e2e/fixtures/${file}`, import.meta.url);
@@ -30,7 +31,8 @@ function count(source: string, shape: string): number {
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   const before = serializeOoxmlPart(parsed.part);
-  const result = projectDrawingsInPart(parsed.part).length;
+  // A refused drawing keeps only its placeholder, which paints nothing.
+  const result = projectDrawingsInPart(parsed.part).filter((p) => !isLegacyPlaceholder(p)).length;
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
   return result;
 }

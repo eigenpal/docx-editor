@@ -31,6 +31,7 @@ import { paragraphLength, segmentsOf } from '../store/tree-op-segments.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { expectRefused } from './legacy-vml-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -185,7 +186,7 @@ describe('embedded object cached previews', () => {
     }
   });
 
-  test('keep unsupported objects opaque, with no offset and no geometry', () => {
+  test('keep unsupported objects unpainted: opaque, or a placeholder that keeps the box', () => {
     const samples = [
       embeddedObject({
         ole: '<o:OLEObject Type="Link" ProgID="Package" ShapeID="_x0000_i1025" r:id="rOle"/>',
@@ -228,9 +229,11 @@ describe('embedded object cached previews', () => {
     for (const sample of samples) {
       const part = parse(sample);
       const before = serializeOoxmlPart(part);
-      expect(isLegacyVmlAtom(objectIn(part.root)!)).toBe(false);
-      expect(projectDrawingsInPart(part)).toHaveLength(0);
-      expect(paragraphLength(firstParagraph(part))).toBe(2);
+      // An object whose preview cannot paint keeps its box as a placeholder atom on the line;
+      // an object without a readable preview stays opaque. Neither paints.
+      const atom = isLegacyVmlAtom(objectIn(part.root)!);
+      expectRefused(projectDrawingsInPart(part));
+      expect(paragraphLength(firstParagraph(part))).toBe(atom ? 3 : 2);
       expect(serializeOoxmlPart(part)).toBe(before);
     }
   });
