@@ -137,7 +137,8 @@ function keyMetrics(
   entry: LegendEntry,
   size: number
 ): { readonly key: number; readonly text: number } {
-  return entry.line
+  // A line entry whose line is hidden keys only its marker, as narrow as a square key.
+  return entry.line && entry.look.line
     ? { key: 2.1 * size, text: 2.32 * size }
     : { key: 0.54 * size, text: 0.77 * size };
 }

@@ -252,7 +252,15 @@ export function markerPath(symbol: string, x: number, y: number, size: number): 
         ],
       ];
     case 'dot':
-      return [ellipse(x, y, size * 0.2, size * 0.2, 12)];
+      // A short bar from the point to its right.
+      return [
+        [
+          { x, y: y - size * 0.12 },
+          { x: x + size * 0.55, y: y - size * 0.12 },
+          { x: x + size * 0.55, y: y + size * 0.12 },
+          { x, y: y + size * 0.12 },
+        ],
+      ];
     case 'x':
     case 'star':
     case 'plus':

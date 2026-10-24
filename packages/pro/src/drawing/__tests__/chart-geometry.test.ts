@@ -140,4 +140,67 @@ describe('chart geometry', () => {
     expect(Math.abs(equation.y - end.y / EMU)).toBeLessThan(0.5);
     expect(equation.x).toBeLessThan(end.x / EMU);
   });
+
+  test('a dot marker is a short bar from the point to its right', () => {
+    const plot =
+      '<c:lineChart><c:grouping val="standard"/>' +
+      series(
+        0,
+        'Close',
+        ['A', 'B'],
+        [2, 4],
+        '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="dot"/><c:size val="10"/></c:marker>'
+      ) +
+      '<c:axId val="1"/><c:axId val="2"/></c:lineChart>' +
+      CATEGORY_VALUE_AXES;
+    const projection = project(chartSpace(plot));
+    const marks = projection.vectorShape!.components.find(
+      (component) => component.fillHex === '4472C4' && component.subpathsEmu.length === 2
+    )!;
+    const bar = marks.subpathsEmu[0]!.map((p) => ({ x: p.x / EMU, y: p.y / EMU }));
+    const xs = bar.map((p) => p.x);
+    const ys = bar.map((p) => p.y);
+    expect(bar).toHaveLength(4);
+    // Markers paint at 0.96 of their size: 0.55 and 0.24 of 9.6 points.
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(5.28, 1);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(2.3, 1);
+  });
+
+  test('a legend entry whose line is hidden keys narrowly, as a square key does', () => {
+    const legendGap = (line: string) => {
+      const plot =
+        '<c:lineChart><c:grouping val="standard"/>' +
+        series(0, 'High', ['A', 'B'], [2, 4], line) +
+        series(1, 'Low', ['A', 'B'], [1, 3], line) +
+        '<c:axId val="1"/><c:axId val="2"/></c:lineChart>' +
+        CATEGORY_VALUE_AXES;
+      const placed = labels(project(chartSpace(plot, { legend: 'b' })));
+      return (
+        placed.find((item) => item.text === 'Low')!.x -
+        placed.find((item) => item.text === 'High')!.x
+      );
+    };
+    const shown = legendGap('<c:marker><c:symbol val="none"/></c:marker>');
+    const hidden = legendGap(
+      '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>'
+    );
+    // A line key is 2.32 sizes to its text, a narrow key 0.77: 15.5 points at 10 points.
+    expect(shown - hidden).toBeCloseTo(15.5, 0);
+  });
+
+  test('a 3-D view that names no angles looks square on: no tops or sides show', () => {
+    const plot =
+      '<c:bar3DChart><c:barDir val="col"/><c:grouping val="clustered"/>' +
+      series(0, 'Alpha', ['A', 'B'], [2, 4]) +
+      '<c:axId val="1"/><c:axId val="2"/><c:axId val="0"/></c:bar3DChart>' +
+      CATEGORY_VALUE_AXES;
+    const xml = chartSpace(plot).replace(
+      '<c:plotArea>',
+      '<c:view3D><c:rAngAx val="1"/></c:view3D><c:plotArea>'
+    );
+    const fills = project(xml).vectorShape!.components.map((component) => component.fillHex);
+    expect(fills.filter((hex) => hex === '4472C4')).toHaveLength(2);
+    expect(fills).not.toContain('2C497D');
+    expect(fills).not.toContain('345795');
+  });
 });

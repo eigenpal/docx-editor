@@ -84,7 +84,7 @@ function numberVal(
   return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : null;
 }
 
-/** The view of a 3-D chart, with Office's defaults for a chart that names none. */
+/** The view of a 3-D chart: the schema defaults for missing values, Office's usual view for a chart that names none. */
 export function readView3D(model: ChartModel, kind: 'box' | 'pie' | 'contour'): View3D {
   const view = model.view3D;
   if (kind === 'contour') {
@@ -99,8 +99,10 @@ export function readView3D(model: ChartModel, kind: 'box' | 'pie' | 'contour'): 
   }
   const rawAngles = childVal(view, 'rAngAx');
   return {
-    rotX: numberVal(view, 'rotX', -90, 90) ?? (kind === 'pie' ? 30 : 15),
-    rotY: numberVal(view, 'rotY', 0, 360) ?? (kind === 'pie' ? 0 : 20),
+    // Missing angles take the schema defaults, a square-on view; a chart with no view at all
+    // takes the usual Office view.
+    rotX: numberVal(view, 'rotX', -90, 90) ?? (view ? 0 : kind === 'pie' ? 30 : 15),
+    rotY: numberVal(view, 'rotY', 0, 360) ?? (view ? 0 : kind === 'pie' ? 0 : 20),
     depthPercent: numberVal(view, 'depthPercent', 20, 2000) ?? 100,
     hPercent: numberVal(view, 'hPercent', 5, 500),
     rightAngles:
