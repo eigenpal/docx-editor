@@ -23,7 +23,9 @@ export function synthesizeExportSmallCaps(
   input: ShapeInput,
   featured: ShapedRun
 ): ShapedRun {
-  if (input.environment.features.smcp !== 1 || !/\p{Ll}/u.test(input.text)) return featured;
+  // Spaces take the small capital size too, between capitals as well; digits and punctuation
+  // keep the run size.
+  if (input.environment.features.smcp !== 1 || !/[\p{Ll} ]/u.test(input.text)) return featured;
   const plainInput = {
     ...input,
     environment: { ...input.environment, features: { ...input.environment.features, smcp: 0 } },
@@ -37,7 +39,7 @@ export function synthesizeExportSmallCaps(
   const groups: { text: string; start: number; lower: boolean }[] = [];
   let offset = 0;
   for (const char of input.text) {
-    const lower = char.toUpperCase() !== char;
+    const lower = char === ' ' || char.toUpperCase() !== char;
     const previous = groups.at(-1);
     if (previous && (previous.lower === lower || /\p{M}/u.test(char))) previous.text += char;
     else groups.push({ text: char, start: offset, lower });
