@@ -3,12 +3,12 @@
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { runDirectionFormattingContext } from '../layout/complex-script-formatting.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type { TreeDocOp } from '../store/store/tree-op-types.ts';
+import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-op-types.ts';
 import { complexScriptAt } from '../store/store/direct-properties.ts';
 import { partOfNodeId } from './surface-scope.ts';
+import { authoredRunPropertiesAt } from './surface-formatting.ts';
+import { RIGHT_TO_LEFT_LETTER } from '../layout/rtl-letter.ts';
 
-/** Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic, and their presentation forms. */
-const RTL_LETTER = /[֐-׿؀-ٟٮ-ۯۺ-ࣿיִ-﷿ﹰ-﻿]/u;
 const LETTER = /\p{L}/u;
 
 /**
@@ -18,20 +18,24 @@ const LETTER = /\p{L}/u;
 export function typedTextDirection(text: string): 'rtl' | 'ltr' | null {
   for (const char of text) {
     if (!LETTER.test(char)) continue;
-    return RTL_LETTER.test(char) ? 'rtl' : 'ltr';
+    return RIGHT_TO_LEFT_LETTER.test(char) ? 'rtl' : 'ltr';
   }
   return null;
 }
 
 /**
- * The run-direction write for right-to-left letters typed at a caret, or none when the run
- * the text joins is already right-to-left. Latin letters typed into a right-to-left run keep
- * that run's direction.
+ * The format writes for typed text: `formatOps` (the armed caret format, possibly none) with
+ * `w:rtl` added when right-to-left letters join a run that is not right-to-left. Latin letters
+ * typed into a right-to-left run keep that run's direction.
  *
  * A keyboard in a right-to-left language marks what it types as right-to-left text
  * (`w:rtl`). The browser does not report the keyboard, so the first letter of the typed text
  * stands for it. The write rides the insert's own transaction: one undo step, and refused
  * together with the other caret formats.
+ *
+ * `setRunProperties` replaces a run's writable properties, so the direction never travels
+ * alone: it joins the armed caret format's write, or else carries the authored properties of
+ * the run the text joins, which keeps that run's bold, size, and fonts on the typed text.
  */
 export function createTypedDirectionOps(
   session: Pick<TreeDocxSessionView, 'currentPackage' | 'part' | 'stylesRoot' | 'settingsRoot'>,
@@ -42,29 +46,50 @@ export function createTypedDirectionOps(
   return (
     target: { readonly paragraphId: string; readonly offset: number },
     landing: number,
-    text: string
+    text: string,
+    formatOps: readonly TreeDocOp[]
   ): TreeDocOp[] => {
     const { paragraphId, offset: caretOffset } = target;
     const landingStart = landing - text.length;
-    if (typedTextDirection(text) !== 'rtl') return [];
+    if (typedTextDirection(text) !== 'rtl') return [...formatOps];
     const mode = displayMode();
     const filter = authorFilter();
+    const part = partOfNodeId(session, paragraphId) ?? session.part();
     const rtl = complexScriptAt(
-      partOfNodeId(session, paragraphId) ?? session.part(),
+      part,
       paragraphId,
       caretOffset,
       runDirectionFormattingContext(session.stylesRoot(), session.settingsRoot(), mode, filter),
       mode,
       filter
     );
-    if (rtl) return [];
+    if (rtl) return [...formatOps];
+    const withRtl = (properties: readonly OoxmlProperty[]): OoxmlProperty[] => [
+      ...properties.filter((property) => property.localName !== 'rtl'),
+      { localName: 'rtl' },
+    ];
+    const armed = formatOps.findIndex(
+      (op) =>
+        op.op === 'setRunProperties' &&
+        op.paragraphId === paragraphId &&
+        op.start === landingStart &&
+        op.end === landingStart + text.length
+    );
+    if (armed >= 0) {
+      return formatOps.map((op, index) =>
+        index === armed && op.op === 'setRunProperties'
+          ? { ...op, properties: withRtl(op.properties) }
+          : op
+      );
+    }
     return [
+      ...formatOps,
       {
         op: 'setRunProperties',
         paragraphId,
         start: landingStart,
         end: landingStart + text.length,
-        properties: [{ localName: 'rtl' }],
+        properties: withRtl(authoredRunPropertiesAt(part, paragraphId, caretOffset, mode, filter)),
       },
     ];
   };

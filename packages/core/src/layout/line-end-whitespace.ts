@@ -125,7 +125,7 @@ export function paragraphEndSpacesOf<
   pieces: readonly P[],
   paragraphRtl: boolean,
   measurer: TextMeasurer
-): (index: number, offset: number, candidate: string) => EndSpaces {
+): (index: number, offset: number, candidate: string, lineWidth: number) => EndSpaces {
   // The paragraph's last visible character, found once: only spaces follow a position at or
   // past it, so each candidate's test is a comparison and a long space run stays linear.
   let lastIndex = -1;
@@ -141,7 +141,7 @@ export function paragraphEndSpacesOf<
       }
     }
   }
-  return (index, offset, candidate) => {
+  return (index, offset, candidate, lineWidth) => {
     if (index < lastIndex || (index === lastIndex && offset <= lastOffset)) return NO_END_SPACES;
     const takesRoom = endSpacesTakeRoom(pieces[index]!.style, paragraphRtl);
     // Only the last word needs the room; a space candidate is itself one of the spaces.
@@ -152,7 +152,8 @@ export function paragraphEndSpacesOf<
       if (text.length > 0 && endSpacesTakeRoom(pieces[at]!.style, paragraphRtl))
         room += measuredWidth(text, pieces[at]!.style, pieces[at]!.fontSlot, measurer);
     }
-    return { takesRoom, room };
+    // Spaces wider than a whole line hang on any line, so they ask the last word for nothing.
+    return { takesRoom, room: room < lineWidth ? room : 0 };
   };
 }
 

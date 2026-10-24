@@ -6,10 +6,17 @@ import {
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { readVMerge } from './table-row-properties.ts';
 
-const rowParagraphs = new WeakMap<
+type RowParagraphCache = WeakMap<
   OoxmlNode,
-  { remaining: number; skipMergedCells: boolean; paragraphs: readonly OoxmlElement[] }
->();
+  { remaining: number; paragraphs: readonly OoxmlElement[] }
+>;
+
+/** One cache per `skipMergedCells` value, so numbering and other walks never evict each other. */
+const rowParagraphs: readonly [RowParagraphCache, RowParagraphCache] = [
+  new WeakMap(),
+  new WeakMap(),
+];
+const rowCache = (skipMergedCells: boolean) => rowParagraphs[skipMergedCells ? 1 : 0];
 
 /**
  * Collect story paragraphs, preserving table depth limits across immutable row reuse.
@@ -33,8 +40,8 @@ export function walkStoryParagraphs(
  * table depth still allowed at the row's table (its walk's `maxTableDepth` minus the depth).
  */
 export function storyRowParagraphs(row: OoxmlElement, remaining: number): readonly OoxmlElement[] {
-  const cached = rowParagraphs.get(row);
-  if (cached?.remaining === remaining && !cached.skipMergedCells) return cached.paragraphs;
+  const cached = rowCache(false).get(row);
+  if (cached?.remaining === remaining) return cached.paragraphs;
   const out: OoxmlElement[] = [];
   pushRowParagraphs(row, remaining, out, false);
   return out;
@@ -64,8 +71,9 @@ function pushRowParagraphs(
   out: OoxmlElement[],
   skipMergedCells: boolean
 ): void {
-  const cached = rowParagraphs.get(row);
-  if (cached?.remaining === remaining && cached.skipMergedCells === skipMergedCells) {
+  const cache = rowCache(skipMergedCells);
+  const cached = cache.get(row);
+  if (cached?.remaining === remaining) {
     for (const paragraph of cached.paragraphs) out.push(paragraph);
     return;
   }
@@ -77,8 +85,7 @@ function pushRowParagraphs(
     // uses the remaining depth for the table walk itself.
     pushStoryParagraphs(collectFlowBlocks(cell.children), remaining - 1, out, skipMergedCells);
   }
-  if (out.length - start <= 256)
-    rowParagraphs.set(row, { remaining, skipMergedCells, paragraphs: out.slice(start) });
+  if (out.length - start <= 256) cache.set(row, { remaining, paragraphs: out.slice(start) });
 }
 
 function continuesVerticalMerge(cell: OoxmlElement): boolean {

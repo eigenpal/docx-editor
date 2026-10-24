@@ -66,6 +66,29 @@ function runs(editor: DocxEditorInstance): string[] {
   });
 }
 
+/** The first paragraph's runs as `text|propertyName,propertyName`. */
+function runProperties(editor: DocxEditorInstance): string[] {
+  const paragraph = editor
+    .surface!.session.part()
+    .root.children[0]!.children.find((node) => node.kind === 'paragraph') as Extract<
+    OoxmlNode,
+    { kind: 'paragraph' }
+  >;
+  return paragraph.children.flatMap((child) => {
+    if (child.kind !== 'run') return [];
+    const rPr = child.children.find((node) => node.kind === 'runProperties');
+    const names =
+      rPr && rPr.kind !== 'textValue'
+        ? rPr.children.flatMap((node) => (node.kind !== 'textValue' ? [node.localName] : []))
+        : [];
+    const text = child.children
+      .flatMap((node) => (node.kind === 'text' ? node.children : []))
+      .map((node) => (node.kind === 'textValue' ? node.value : ''))
+      .join('');
+    return [`${text}|${[...names].sort().join(',')}`];
+  });
+}
+
 function caretAt(editor: DocxEditorInstance, offset: number): void {
   const paragraphId = editor.surface!.session.paragraphIds()[0]!;
   editor.surface!.setSelection({
@@ -134,6 +157,37 @@ describe('typing', () => {
       editor.surface!.type('مرحبا');
       editor.surface!.undo();
       expect(runs(editor)).toEqual(['Hello |ltr']);
+    });
+  });
+
+  test('typed right-to-left letters keep the formatting of the run they join', () => {
+    const bold =
+      '<w:r><w:rPr><w:b/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">Hello </w:t></w:r>';
+    withEditor(`<w:p>${bold}</w:p>`, (editor) => {
+      caretAt(editor, 6);
+      editor.surface!.type('مرحبا');
+      expect(runProperties(editor)).toEqual(['Hello |b,sz', 'مرحبا|b,rtl,sz']);
+    });
+  });
+
+  test('typed right-to-left letters keep a caret format armed before them', () => {
+    withEditor(`<w:p>${run('Hello ')}</w:p>`, (editor) => {
+      caretAt(editor, 6);
+      editor.surface!.toggleRunProperty('b');
+      editor.surface!.type('مرحبا');
+      expect(runProperties(editor).at(-1)).toBe('مرحبا|b,rtl');
+    });
+  });
+
+  test('right-to-left letters typed over a selection start a right-to-left run', () => {
+    withEditor(`<w:p>${run('Hello world')}</w:p>`, (editor) => {
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 6 },
+        head: { paragraphId, offset: 11 },
+      });
+      editor.surface!.type('مرحبا');
+      expect(runs(editor)).toEqual(['Hello |ltr', 'مرحبا|rtl']);
     });
   });
 });

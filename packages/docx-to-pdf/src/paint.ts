@@ -55,6 +55,16 @@ function extractedText(span: SemanticSpanVisit['span']): string {
   return element ? span.text : span.text.replaceAll('\u00ad', '-');
 }
 
+/** Border styles `rule()` draws as authored; any other style is drawn as an approximation. */
+const FAITHFUL_RULES: ReadonlySet<string> = new Set([
+  'single',
+  'thick',
+  'dashed',
+  'dotted',
+  'double',
+  'triple',
+]);
+
 const DASHED_RULES = new Set([
   'dotted',
   'dashed',
@@ -169,7 +179,7 @@ function decorations(
         const style = border.edge.val;
         if (border.edge.shadow)
           work.report('border-shadow', 'Paragraph border shadow is not encoded', pageIndex);
-        if (!['single', 'thick', 'dashed', 'dotted', 'double'].includes(style))
+        if (!FAITHFUL_RULES.has(style))
           work.report(
             'paragraph-border-style',
             `Unsupported paragraph border: ${style}`,
@@ -407,10 +417,7 @@ export async function paint(
         record.index
       ]!;
       for (const border of record.pageBorders.strokes) {
-        if (
-          !['single', 'thick', 'dashed', 'dotted', 'double'].includes(border.edge.val) ||
-          border.edge.shadow
-        )
+        if (!FAITHFUL_RULES.has(border.edge.val) || border.edge.shadow)
           work.report(
             'page-border-style',
             `Unsupported page border: ${border.edge.val}`,
@@ -726,7 +733,7 @@ export async function paint(
       const y = visit.storyOrigin.y - visit.page.box.y;
       if (visit.paragraph.clipToBox) out.push(`q ${rect(visit.paragraph.box, x, y, height)} W n`);
       for (const { box, edge } of strokes) {
-        if (edge.shadow || !['single', 'thick', 'dashed', 'dotted', 'double'].includes(edge.val))
+        if (edge.shadow || !FAITHFUL_RULES.has(edge.val))
           work.report(
             'run-border-style',
             `Unsupported character border: ${edge.val}${edge.shadow ? ' with shadow' : ''}`,

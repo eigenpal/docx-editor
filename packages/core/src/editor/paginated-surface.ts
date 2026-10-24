@@ -4542,12 +4542,12 @@ export function mountPaginatedSurface(
         text.length
       );
       const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
-      // Letters in a right-to-left script start a `w:rtl` run; other letters leave one.
-      const directionOps = plan.ops.length ? [] : typedDirectionOps(target, landing, text);
+      // Letters in a right-to-left script start a `w:rtl` run, joined to the caret format.
+      const formatOps = typedDirectionOps(target, landing, text, pendingOps);
       commit(
         () =>
           withoutPendingOnRejection(
-            [...insertOps, ...pendingOps, ...directionOps],
+            [...insertOps, ...formatOps],
             insertOps,
             selectionMark(),
             redoMark

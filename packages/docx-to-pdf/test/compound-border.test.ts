@@ -75,3 +75,8 @@ test('line styles without a dash pattern paint solid, and dashed styles keep das
   );
   expect(redDashes(dashed)).toBe(4);
 });
+
+test('a triple page border exports under the default strict policy', async () => {
+  const result = await exportPdf(pageBorder('triple'), { useSystemFonts: false });
+  expect(result.diagnostics.filter((d) => d.code === 'page-border-style')).toEqual([]);
+});

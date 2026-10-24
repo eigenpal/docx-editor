@@ -74,6 +74,16 @@ test('an empty end paragraph takes the mark line', () => {
   expect(rows(run(table(emptyMark())))[0]!.box.height).toBe(20);
 });
 
+test('an end paragraph of hidden or deleted runs takes the mark line', () => {
+  expect(rows(run(table(paragraph('Hidden', 20, '<w:vanish/>'))))[0]!.box.height).toBe(20);
+  const deleted = paragraph('Gone').replace(
+    /<w:r>(.*)<\/w:r>/u,
+    (_, inner: string) =>
+      `<w:del w:id="1" w:author="A"><w:r>${inner.replace(/w:t>/gu, 'w:delText>')}</w:r></w:del>`
+  );
+  expect(rows(run(table(deleted)))[0]!.box.height).toBe(20);
+});
+
 test('wrapped small text grows beyond the cell marker without enlarging its last line', () => {
   const result = run(table(paragraph('Small text '.repeat(30))));
   const lines = linesOf(result);

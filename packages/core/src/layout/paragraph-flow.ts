@@ -1345,7 +1345,7 @@ export function breakParagraph(
         protectedSeamAfter(cjkBreaks, pieces, pieceIndex, boundary, candidate);
       const protectedEnd =
         opticalParagraph && !sameParagraphAnchorStarts.length && groupContinues();
-      const endSpaces = endSpacesAt(pieceIndex, boundary, candidate);
+      const endSpaces = endSpacesAt(pieceIndex, boundary, candidate, lineAvailable());
       // Spaces that take room still hang where they would not fit even on a fresh line.
       const keepsEnd =
         protectedEnd || (endSpaces.takesRoom && line.width + width <= lineAvailable() + 0.001);

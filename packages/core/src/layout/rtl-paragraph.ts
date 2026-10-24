@@ -1,3 +1,4 @@
+import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
 import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
@@ -95,7 +96,7 @@ export function bidiPieces(
   const text = pieces.map((piece) => piece.text).join('');
   if (
     !rtl &&
-    !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
+    !RIGHT_TO_LEFT_LETTER.test(text) &&
     !pieces.some((piece) => !isPicture(piece) && runIsRtl(piece.props))
   )
     return pieces;

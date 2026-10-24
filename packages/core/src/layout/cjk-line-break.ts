@@ -15,6 +15,7 @@
 // cjk-spacing.ts owns compression and hanging punctuation; cjk-justify.ts distributes
 // line slack as published geometry. Layout-owned field results remain atomic.
 
+import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -95,9 +96,6 @@ export function lastCodePointOf(text: string): number | undefined {
  * absent — its whole meaning is "no wrap here".
  */
 export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–', '—']);
-
-/** Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and their presentation forms. */
-const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
 
 /**
  * Characters that normally join adjacent text. Run-boundary whitespace tests exclude
