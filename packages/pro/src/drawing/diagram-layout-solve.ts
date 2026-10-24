@@ -451,6 +451,26 @@ function applyConstraint(
       });
     }
   }
+  // A font size equal to another node's moves with it: both shrink to the size the least
+  // fitting one needs.
+  if (
+    constraint.op === 'equ' &&
+    refNode !== null &&
+    constraint.refType === constraint.type &&
+    FONT_TYPES.has(constraint.type) &&
+    constraint.fact === 1
+  ) {
+    // Every node the reference names takes part, not only the first.
+    const named =
+      constraint.refFor === 'self'
+        ? [owner]
+        : (constraint.refFor === 'ch' ? owner.children : descendants(owner)).filter((node) =>
+            matches(node, constraint.refForName, constraint.refPtType)
+          );
+    const members = targets.map((target) => target.index);
+    for (const node of named) if (!members.includes(node.index)) members.push(node.index);
+    context.groups.set(`${groupKey}=`, { type: constraint.type, members });
+  }
   for (const target of targets) {
     const state = context.states[target.index]!;
     if (value === null) {
@@ -578,6 +598,22 @@ function applyChildAdjustments(states: readonly NodeState[], node: DiagramLayout
   }
 }
 
+/** Groups of one type that share a member, joined: equality is transitive. */
+function mergeGroups(groups: readonly EquGroup[]): EquGroup[] {
+  const out: { type: string; members: Set<number> }[] = [];
+  for (const group of groups) {
+    const members = new Set(group.members);
+    for (let i = out.length - 1; i >= 0; i--) {
+      const other = out[i]!;
+      if (other.type !== group.type || ![...other.members].some((m) => members.has(m))) continue;
+      for (const member of other.members) members.add(member);
+      out.splice(i, 1);
+    }
+    out.push({ type: group.type, members });
+  }
+  return out.map((group) => ({ type: group.type, members: [...group.members] }));
+}
+
 /** Override key of a node's custom text size. */
 export const CUSTOM_FONT_SIZE = 'custFontSz';
 
@@ -684,7 +720,7 @@ export function solveDiagramLayout(
   return {
     tree,
     states: context.states,
-    groups: [...context.groups.values()],
+    groups: mergeGroups([...context.groups.values()]),
     overflow,
   };
 }

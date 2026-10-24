@@ -44,6 +44,15 @@ describe('SmartArt hierarchy offsets', () => {
   });
 });
 
+describe('SmartArt font equalities', () => {
+  test('text sizes an equality ties to a named node shrink with every node of that name', () => {
+    // Nested target boxes: every parent label one size, every child label one size.
+    for (const id of ['targets-short-2-target2', 'targets-long-2-target2']) {
+      expect(score(id).misses).toEqual([]);
+    }
+  });
+});
+
 describe('SmartArt list growth', () => {
   // Custom text sizes: the unbounded heights grow in the units the line scales down.
   for (const id of ['probe-p6-vlist2-cust-1', 'probe-p6-vlist2-cust2-1']) {

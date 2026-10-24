@@ -41,7 +41,7 @@ const FLOORS: Readonly<Record<string, Floor>> = {
   hProcess9: { boxes: 21, presets: 21, rotations: 21, fonts: 16, refused: 0 },
   process1: { boxes: 25, presets: 25, rotations: 25, fonts: 15, refused: 0 },
   target3: { boxes: 36, presets: 36, rotations: 36, fonts: 24, refused: 0 },
-  target2: { boxes: 36, presets: 36, rotations: 36, fonts: 24, refused: 0 },
+  target2: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
   venn2: { boxes: 16, presets: 16, rotations: 16, fonts: 16, refused: 0 },
   lProcess2: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
   vList5: { boxes: 36, presets: 36, rotations: 36, fonts: 36, refused: 0 },
