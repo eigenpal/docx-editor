@@ -1,14 +1,20 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "SmartArt diagrams and drawing canvases have no graphic projection and paint a placeholder.",
-  "after": "SmartArt diagrams render from their saved drawing part and drawing canvases render their members, read-only, without changing their source XML or package parts.",
-  "reason": "Only graphic projection and paint change. Shared nodes, text offsets, operations, diagram parts, and package serialization remain unchanged; joining peers render the same diagrams from the shared package.",
+  "before": "SmartArt diagrams, charts and drawing canvases have no graphic projection and paint a placeholder. Legacy shape groups with text boxes, horizontal rules, connectors, dashed or double legacy lines, ActiveX previews and other legacy drawings outside the painted subset stay opaque: no paragraph offset, no layout space, nothing painted.",
+  "after": "SmartArt diagrams render from their saved drawing part and drawing canvases render their members, read-only; charts and SmartArt layout render through the Pro drawing module. Those legacy drawings project as read-only drawing atoms that paint, and any other legacy drawing on the line keeps its box as a read-only placeholder atom. No source XML or package part changes.",
+  "reason": "Only graphic projection, layout and paint change. The change adds no shared state, operations, snapshot fields or protocol messages, and writes nothing to the document. Each participant derives paragraph offsets from the shared tree locally. A published selection after a legacy drawing that this change turns into an atom can differ by one offset between versions, as for other projection subset changes such as embedded object previews. Joining peers render the same drawings from the shared package.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/diagram-drawings.test.ts",
     "packages/core/src/store/__tests__/diagram-projection.test.ts",
     "packages/core/src/store/__tests__/diagram-projection-invalidation.test.ts",
-    "packages/core/src/store/__tests__/drawing-shape-geometry-projection.test.ts"
+    "packages/core/src/store/__tests__/drawing-shape-geometry-projection.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-placeholder.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-comment-offsets.test.ts",
+    "packages/core/src/binding/__tests__/legacy-vml-binding.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-group.test.ts",
+    "packages/pro/src/collaboration/__tests__/chart-drawings.test.ts",
+    "packages/pro/src/collaboration/__tests__/legacy-drawings.test.ts"
   ],
   "changeset": "smartart-drawingml-render",
   "migration": null

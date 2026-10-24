@@ -217,13 +217,22 @@ describe('native VML binding model offsets', () => {
     ).toBe(false);
   });
 
-  test('unsupported VML retains its previous zero-length model', () => {
+  test('unsupported floating VML retains its previous zero-length model', () => {
+    const part = load(
+      `<w:p><w:r>${PICTURE.replace('width:100pt;', 'position:absolute;rotation:90;width:100pt;')}<w:t>A</w:t></w:r></w:p>`
+    );
+    const projected = treeToDoc(part).child(0);
+    const changed = document([paragraph(projected, [projected.child(0), treeSchema.text('B')])]);
+    expect(paragraphTextOf(commit(part, changed), projected.attrs.nodeId)).toBe('B');
+  });
+
+  test('unsupported VML on the line keeps one placeholder atom through a text edit', () => {
     const part = load(
       `<w:p><w:r>${PICTURE.replace('width:100pt;', 'rotation:90;width:100pt;')}<w:t>A</w:t></w:r></w:p>`
     );
     const projected = treeToDoc(part).child(0);
     const changed = document([paragraph(projected, [projected.child(0), treeSchema.text('B')])]);
-    expect(paragraphTextOf(commit(part, changed), projected.attrs.nodeId)).toBe('B');
+    expect(paragraphTextOf(commit(part, changed), projected.attrs.nodeId)).toBe('\uFFFCB');
   });
 });
 
