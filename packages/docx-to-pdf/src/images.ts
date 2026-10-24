@@ -16,6 +16,7 @@ import { paintTextArt } from './text-art.ts';
 import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 import { MetafileForms } from './metafile-pdf.ts';
+import { gifToPng } from './gif-png.ts';
 import { reflectionMask, softEdgeMask } from './picture-effects.ts';
 
 const EMU_PER_POINT = 12_700;
@@ -30,7 +31,16 @@ const EMU_PER_POINT = 12_700;
  * widening this set means writing new decoders over attacker-controlled bytes, not reading
  * a buffer core already has.
  */
-const EMBEDDABLE_MIMES: ReadonlySet<string> = new Set(['image/png', 'image/jpeg']);
+// A GIF embeds as the PNG of its first frame.
+const EMBEDDABLE_MIMES: ReadonlySet<string> = new Set(['image/png', 'image/jpeg', 'image/gif']);
+
+/** Embed a picture of one of the embeddable formats. */
+async function embedRaster(doc: PDFDocument, mime: string, bytes: Uint8Array): Promise<PDFImage> {
+  if (mime === 'image/jpeg') return doc.embedJpg(bytes);
+  const png = mime === 'image/gif' ? gifToPng(bytes) : bytes;
+  if (!png) throw new Error('GIF picture could not be decoded');
+  return doc.embedPng(png);
+}
 
 /**
  * Why a picture bullet cannot be drawn into the PDF, or null when it can.
@@ -96,11 +106,10 @@ export class ImageWriter {
     if (picture.resource.kind !== 'ready') return '';
     const mime = picture.resource.mime;
     const bytes = this.session.validatedImageBytes(picture);
-    if (!bytes) return '';
+    if (!bytes || (mime === 'image/gif' && !gifToPng(bytes))) return '';
     let image = this.images.get(picture.resource.resourceKey);
     if (!image) {
-      image =
-        mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+      image = await embedRaster(this.doc, mime, bytes);
       this.images.set(picture.resource.resourceKey, image);
     }
     const key = `Im${image.ref.objectNumber}`;
@@ -371,8 +380,7 @@ export class ImageWriter {
     const plain = async () => {
       let image = this.images.get(resourceKey);
       if (!image) {
-        image =
-          mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+        image = await embedRaster(this.doc, mime, bytes);
         this.images.set(resourceKey, image);
       }
       return image;
@@ -381,8 +389,7 @@ export class ImageWriter {
     const key = `${resourceKey}\0lum:${transfer.slope}:${transfer.intercept}`;
     const cached = this.images.get(key);
     if (cached) return { image: cached, lum: true };
-    const image =
-      mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+    const image = await embedRaster(this.doc, mime, bytes);
     await image.embed();
     const stream = this.doc.context.lookup(image.ref);
     const dict = stream instanceof PDFStream ? stream.dict : null;
@@ -428,6 +435,7 @@ export class ImageWriter {
     // An inline drawing has no authored alternative, so an unembeddable format is a real
     // refusal here — unlike a picture bullet, whose level authors `w:lvlText` beside it.
     if (!EMBEDDABLE_MIMES.has(mime)) return report(`Unsupported PDF image format: ${mime}`);
+    if (mime === 'image/gif' && !gifToPng(bytes)) return report('GIF picture could not be decoded');
     const transfer = lumTransfer(d.effects.brightness, d.effects.contrast);
     const embedded = await this.embedPicture(d.resource.resourceKey, mime, bytes, transfer);
     if (d.effects.grayscale || d.effects.bilevel !== undefined || (transfer && !embedded.lum))
