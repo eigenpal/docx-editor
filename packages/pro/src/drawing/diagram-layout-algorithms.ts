@@ -25,6 +25,8 @@ export interface PlacementContext {
   readonly pin: (state: NodeState, type: string) => void;
   /** Re-solve a node's own constraints, leaving `except` as it is. */
   readonly resolveSelf: (state: NodeState, except: string) => void;
+  /** Record that a line of children had to shrink by `scale` to fit its box. */
+  readonly overflow: (scale: number) => void;
 }
 
 const SUPPORTED = new Set([
@@ -112,7 +114,9 @@ function naturalSize(
 /**
  * `lin`: children in a row or column. The primary sizes scale down together until the line
  * fits; each child then re-solves its own constraints from its new primary size (a node as
- * tall as 0.6 of its width stays so). A line still too thick scales down as a whole.
+ * tall as 0.6 of its width stays so). A line still too thick scales down as a whole. A line
+ * shorter than its box keeps its sizes and is aligned in it. Shrinking is reported as
+ * overflow, which the rule loop answers with smaller text.
  */
 function placeLinear(context: PlacementContext, state: NodeState): void {
   const box = state.box!;
@@ -127,20 +131,19 @@ function placeLinear(context: PlacementContext, state: NodeState): void {
   const primaryBox = horizontal ? box.w : box.h;
   const crossBox = horizontal ? box.h : box.w;
   const gap = state.values.get('sp') ?? 0;
-  let unbounded = false;
   const natural = new Set<NodeState>();
   const primaries = children.map((child) => {
     const value = child.values.get(primaryKey) ?? 0;
     if (Number.isFinite(value)) return value;
     // An unbounded size (`INF`) takes what the child's own children need.
-    unbounded = true;
     natural.add(child);
     return naturalSize(context, child, primaryKey, 0);
   });
   const total = primaries.reduce((sum, size) => sum + size, 0) + gap * (children.length - 1);
-  // A line too long shrinks to fit. A line with an unbounded child also grows to fill the
-  // box, so sizes that follow the text size (a list sized in font units) fill the frame.
-  const scale = total > 0 && (total > primaryBox || unbounded) ? primaryBox / total : 1;
+  // A line too long shrinks to fit; an unbounded child (`INF`) takes what its own children
+  // need and no more.
+  const scale = total > 0 && total > primaryBox ? primaryBox / total : 1;
+  if (scale < 1) context.overflow(scale);
   const crosses = children.map((child, index) => {
     if (scale !== 1) {
       child.values.set(primaryKey, primaries[index]! * scale);
@@ -165,6 +168,7 @@ function placeLinear(context: PlacementContext, state: NodeState): void {
   const maxCross = sizes.reduce((max, size) => Math.max(max, size.cross), 0);
   if (maxCross > crossBox && maxCross > 0) {
     const shrink = crossBox / maxCross;
+    context.overflow(shrink);
     sizes = sizes.map((size) => ({ primary: size.primary * shrink, cross: size.cross * shrink }));
     spacing *= shrink;
   }

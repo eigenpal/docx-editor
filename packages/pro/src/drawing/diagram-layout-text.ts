@@ -33,6 +33,21 @@ const MAX_SHAPE_PARAGRAPHS = 256;
 export const PARENT_LINE_SPACING = 0.9;
 export const PARENT_SPACE_AFTER = 0.35;
 export const CHILD_SPACE_AFTER = 0.15;
+/**
+ * Space after a paragraph, as a share of its line: the text algorithm's `lnSpAfParP` or
+ * `lnSpAfChP` (percent) for the node's own or child text, else the gallery default.
+ */
+export function spaceAfter(state: NodeState, level: number): number {
+  const raw = state.node.algorithm.params.get(level > 0 ? 'lnSpAfChP' : 'lnSpAfParP');
+  const percent = raw !== undefined && /^\d{1,3}(\.\d+)?$/.test(raw) ? Number(raw) : NaN;
+  if (Number.isFinite(percent) && percent <= 500) return percent / 100;
+  return level > 0 ? CHILD_SPACE_AFTER : PARENT_SPACE_AFTER;
+}
+
+/** Child text size relative to the primary size when no secondary size is set. */
+export const SECONDARY_FONT_SCALE = 0.78;
+/** A text margin no constraint sets, relative to the primary size. */
+export const DEFAULT_MARGIN_SCALE = 0.56;
 
 export interface DiagramParagraph {
   readonly element: OoxmlElement;
@@ -203,11 +218,15 @@ export interface TextStyle {
 }
 
 /** Font sizes and margins of a node, with the defaults the gallery definitions rely on. */
-export function textStyle(state: NodeState, paragraphs: readonly DiagramParagraph[]): TextStyle {
-  const primary = state.values.get('primFontSz') ?? 65;
-  const secondary = state.values.get('secFontSz') ?? primary;
-  const onlySecondary = paragraphs.length > 0 && paragraphs.every((p) => p.level > 0);
-  const fallback = 0.3 * (onlySecondary ? secondary : primary) * EMU_PER_POINT;
+export function textStyle(state: NodeState): TextStyle {
+  const primary = state.customFontSize ?? state.values.get('primFontSz') ?? 65;
+  // Without a secondary size, child text is 78% of the primary size in whole points.
+  const secondary =
+    state.customFontSize ??
+    state.values.get('secFontSz') ??
+    Math.max(1, Math.round(primary * SECONDARY_FONT_SCALE));
+  // A margin no constraint sets is 0.56 of the primary size, for child text too.
+  const fallback = DEFAULT_MARGIN_SCALE * primary * EMU_PER_POINT;
   const margin = (key: string) => Math.max(0, state.values.get(key) ?? fallback);
   return {
     primary,
@@ -230,7 +249,7 @@ export function textFits(
   measurer: DiagramTextMeasurer,
   family: string
 ): FitResult {
-  const style = textStyle(state, paragraphs);
+  const style = textStyle(state);
   const [l, t, r, b] = style.margins;
   const width = (rectangle.w - l - r) / EMU_PER_POINT;
   const height = (rectangle.h - t - b) / EMU_PER_POINT;
@@ -264,8 +283,7 @@ export function textFits(
     }
     used += lines * line;
     if (index < paragraphs.length - 1) {
-      const after = paragraph.level > 0 ? CHILD_SPACE_AFTER : PARENT_SPACE_AFTER;
-      used += after * measurer.lineHeight(size, family);
+      used += spaceAfter(state, paragraph.level) * measurer.lineHeight(size, family);
     }
   });
   return { fits: wordsFit && used <= height + 0.01, wordsFit };

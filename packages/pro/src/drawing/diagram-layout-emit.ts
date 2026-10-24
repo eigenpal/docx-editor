@@ -29,7 +29,6 @@ import {
   type PickedColor,
 } from './diagram-layout-style.ts';
 import {
-  CHILD_SPACE_AFTER,
   hasVisibleText,
   nodeAdjust,
   nodeParagraphs,
@@ -37,7 +36,7 @@ import {
   nodeRotation,
   nodeTextFrame,
   PARENT_LINE_SPACING,
-  PARENT_SPACE_AFTER,
+  spaceAfter,
   storedBox,
   textOwner,
   textStyle,
@@ -270,7 +269,7 @@ function paragraphMarkup(
   const bullets = child && layoutVariable(model, textNode.node.pres, 'bulletEnabled') === '1';
   const indent = bullets ? Math.round(sizePt * 0.409 * EMU_PER_POINT) : 0;
   const marL = bullets ? indent * paragraph.level : 0;
-  const after = child ? CHILD_SPACE_AFTER : PARENT_SPACE_AFTER;
+  const after = spaceAfter(textNode, paragraph.level);
   let out =
     `<a:p><a:pPr marL="${marL}" lvl="${paragraph.level}" indent="${-indent}" ` +
     `algn="${escapeXmlAttribute(align)}" defTabSz="${Math.round(sizePt * 44_450)}">` +
@@ -309,7 +308,7 @@ function textMarkup(context: EmitContext, shape: DiagramShape): string {
   const textNode = shape.text;
   if (!textNode) return '';
   const paragraphs = nodeParagraphs(context.model, textNode);
-  const style = textStyle(textNode, paragraphs);
+  const style = textStyle(textNode);
   const [l, t, r, b] = style.margins;
   let body =
     `<dsp:txBody><a:bodyPr spcFirstLastPara="0" vert="horz" wrap="square" lIns="${emu(l)}" ` +

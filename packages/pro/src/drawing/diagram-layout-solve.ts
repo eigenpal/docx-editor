@@ -57,6 +57,12 @@ export interface NodeState {
   scale: number;
   /** A line connector's path, relative to its box, drawn instead of a preset. */
   path: readonly { readonly x: number; readonly y: number }[] | null;
+  /**
+   * The size custom text (`custT`) keeps, in points, or null. It sizes the node's text and
+   * the node's own values that refer to its font size (margins); every other node reads the
+   * solved font size.
+   */
+  readonly customFontSize: number | null;
 }
 
 export interface EquGroup {
@@ -68,6 +74,11 @@ export interface LayoutSolution {
   readonly tree: DiagramLayoutTree;
   readonly states: readonly NodeState[];
   readonly groups: readonly EquGroup[];
+  /**
+   * The smallest scale a line of children needed to fit its box: 1 when every line fits,
+   * below 1 when the layout overflows and the line shrank.
+   */
+  readonly overflow: number;
 }
 
 const GEOMETRY_TYPES = new Set([
@@ -111,19 +122,39 @@ export function isFontType(type: string): boolean {
   return FONT_TYPES.has(type);
 }
 
+const MARGIN_TYPES = new Set(['lMarg', 'tMarg', 'rMarg', 'bMarg']);
+
+/** A constant in the value's unit: millimetres for geometry, points for text margins. */
 function convertConstant(value: number, type: string): number {
+  if (MARGIN_TYPES.has(type)) return value * EMU_PER_POINT;
   if (type === 'wArH' || type === 'hArH') return value;
   return GEOMETRY_TYPES.has(type) ? value * EMU_PER_MM : value;
 }
 
-/** A referenced value in the target's unit: font points become EMU and back. */
+/**
+ * The unit a value's number counts in: millimetres for geometry, points for font sizes and
+ * text margins. Values here hold geometry in EMU and the rest as plain numbers.
+ */
+function unitOf(type: string): 'mm' | 'pt' | null {
+  if (FONT_TYPES.has(type) || MARGIN_TYPES.has(type)) return 'pt';
+  if (type === 'wArH' || type === 'hArH') return null;
+  return GEOMETRY_TYPES.has(type) ? 'mm' : null;
+}
+
+/**
+ * A referenced value in the target's unit. The number carries over and takes the target's
+ * unit: a 65 pt font size makes a 65 mm height, and a 152.4 mm width a 152.4 pt margin.
+ */
 function convertReference(value: number, refType: string, type: string): number {
-  const fromFont = FONT_TYPES.has(refType);
-  const toFont = FONT_TYPES.has(type);
-  const toGeometry = GEOMETRY_TYPES.has(type) && type !== 'wArH' && type !== 'hArH';
-  if (fromFont && toGeometry) return value * EMU_PER_POINT;
-  if (!fromFont && GEOMETRY_TYPES.has(refType) && toFont) return value / EMU_PER_POINT;
-  return value;
+  const from = unitOf(refType);
+  const to = unitOf(type);
+  if (from === null || to === null) return value;
+  // Geometry and margins are stored in EMU, font sizes in points.
+  const toNumber = (v: number) =>
+    FONT_TYPES.has(refType) ? v : v / (from === 'mm' ? EMU_PER_MM : EMU_PER_POINT);
+  const number = toNumber(value);
+  if (FONT_TYPES.has(type)) return number;
+  return number * (to === 'mm' ? EMU_PER_MM : EMU_PER_POINT);
 }
 
 export function matchesPointType(type: DiagramPointType, ptType: string): boolean {
@@ -377,7 +408,12 @@ function applyConstraint(
     refNode = referenceNode(owner, constraint);
     if (!refNode) return true;
     const refState = context.states[refNode.index]!;
-    const raw = readValue(refState, constraint.refType, parentBoxOf(context, refNode));
+    // Custom text sizes the node's own values that refer to its font size.
+    const custom =
+      constraint.for === 'self' && refNode === owner && FONT_TYPES.has(constraint.refType)
+        ? refState.customFontSize
+        : null;
+    const raw = custom ?? readValue(refState, constraint.refType, parentBoxOf(context, refNode));
     if (raw === null) return false;
     base = convertReference(raw, constraint.refType, constraint.type);
     value = base * constraint.fact;
@@ -509,7 +545,10 @@ function applyUserAdjustments(state: NodeState): void {
   };
 }
 
-function freshState(node: DiagramLayoutNode): NodeState {
+/** Override key of a node's custom text size. */
+export const CUSTOM_FONT_SIZE = 'custFontSz';
+
+function freshState(node: DiagramLayoutNode, overrides: ReadonlyMap<string, number>): NodeState {
   return {
     node,
     values: new Map(),
@@ -523,6 +562,7 @@ function freshState(node: DiagramLayoutNode): NodeState {
     hidden: false,
     scale: 1,
     path: null,
+    customFontSize: overrides.get(overrideKey(node.index, CUSTOM_FONT_SIZE)) ?? null,
   };
 }
 
@@ -536,7 +576,7 @@ export function solveDiagramLayout(
   overrides: ReadonlyMap<string, number> = new Map()
 ): LayoutSolution | null {
   const context: SolveContext = {
-    states: tree.nodes.map(freshState),
+    states: tree.nodes.map((node) => freshState(node, overrides)),
     overrides,
     groups: new Map(),
     limits: new Map(),
@@ -552,8 +592,12 @@ export function solveDiagramLayout(
         applyConstraint(context, tree.root, constraint, `r#${i}`, bounds);
     });
   }
+  let overflow = 1;
   const placement: PlacementContext = {
     model: tree.model,
+    overflow: (scale) => {
+      if (scale < overflow) overflow = scale;
+    },
     states: context.states,
     readValue: (state, type) => readValue(state, type, parentBoxOf(context, state.node)),
     pin: (state, type) => {
@@ -607,5 +651,6 @@ export function solveDiagramLayout(
     tree,
     states: context.states,
     groups: [...context.groups.values()],
+    overflow,
   };
 }
