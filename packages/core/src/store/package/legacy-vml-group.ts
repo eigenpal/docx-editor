@@ -1,0 +1,218 @@
+// A legacy VML group (`v:group`) as vector members and member text stories, painted as a
+// drawing canvas paints: every member is a vector component in the group extent, and each
+// member text box lays out as a group member story over its shape.
+//
+// A group renders whole or not at all here. A member outside this subset (a picture, a
+// custom path, an unknown template) leaves the group to the graphic preview reader.
+
+import { transformComponent } from './drawing-group-transform.ts';
+import type { VectorShapeComponent, VectorShapeProjection } from './drawing-shape-projection.ts';
+import type { GroupTextboxProjection } from './group-textbox-projection.ts';
+import type { OoxmlElement } from './ooxml-tree.ts';
+import {
+  legacyBoxShape,
+  legacyLineShape,
+  type LegacyBox,
+  type LegacyLineEnds,
+} from './legacy-vml-shapes.ts';
+import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
+import {
+  attribute as a,
+  children,
+  named,
+  numeric,
+  OFFICE,
+  pair,
+  VML,
+  WORD_VML,
+} from './legacy-vml-values.ts';
+
+const EMU_PER_POINT = 12_700;
+const MAX_MEMBERS = 128;
+const MAX_DEPTH = 8;
+const PICTURE_TEMPLATE = '#_x0000_t75';
+const LINE_TEMPLATE = '#_x0000_t32';
+
+/** The vector members and member stories of a legacy group. */
+export interface LegacyVectorGroup {
+  readonly vectorShape: VectorShapeProjection | null;
+  readonly groupTextboxes: readonly GroupTextboxProjection[] | null;
+}
+
+/** The validated style of a group member, or null when it is outside the subset. */
+export type LegacyMemberStyle = (node: OoxmlElement) => ReadonlyMap<string, string> | null;
+
+interface Output {
+  readonly components: VectorShapeComponent[];
+  readonly texts: GroupTextboxProjection[];
+  members: number;
+}
+
+/**
+ * A picture frame with no picture: the background a canvas group writes first. It takes its
+ * template's switched-off fill and outline and paints nothing.
+ */
+function emptyFrame(node: OoxmlElement): boolean {
+  if (node.localName !== 'shape' || a(node, 'type') !== PICTURE_TEMPLATE) return false;
+  if (['filled', 'stroked', 'fillcolor', 'strokecolor'].some((key) => a(node, key) !== undefined))
+    return false;
+  return children(node).every(
+    (child) =>
+      named(child, OFFICE, 'lock') ||
+      (named(child, VML, 'fill') &&
+        child.attributes.every(
+          (attr) => attr.namespaceUri === OFFICE && attr.localName === 'detectmouseclick'
+        ))
+  );
+}
+
+/** The ends of a straight connector in its own box, mirrored by its flip. */
+function connectorEnds(style: ReadonlyMap<string, string>, box: LegacyBox): LegacyLineEnds | null {
+  const flip = (style.get('flip') ?? '').trim().split(/\s+/).filter(Boolean);
+  if (flip.some((axis) => axis !== 'x' && axis !== 'y')) return null;
+  const x0 = flip.includes('x') ? box.width : 0,
+    y0 = flip.includes('y') ? box.height : 0;
+  return Object.freeze([
+    Object.freeze([x0, y0]),
+    Object.freeze([box.width - x0, box.height - y0]),
+  ]) as LegacyLineEnds;
+}
+
+function projectMember(
+  member: OoxmlElement,
+  style: ReadonlyMap<string, string>,
+  box: LegacyBox,
+  host: OoxmlElement,
+  out: Output
+): boolean {
+  if (style.get('visibility') === 'hidden') return true;
+  const local = { x: 0, y: 0, width: box.width, height: box.height };
+  let shape: VectorShapeProjection | null;
+  if (member.localName === 'shape' && a(member, 'type') === LINE_TEMPLATE) {
+    if (legacyTextbox(member) !== undefined) return false;
+    const ends = connectorEnds(style, box);
+    shape = ends ? legacyLineShape(member, box.width, box.height, ends) : null;
+  } else {
+    if (style.has('flip')) return false;
+    shape = legacyBoxShape(member, local, local);
+  }
+  if (!shape) return false;
+  const origin = { x: box.x * EMU_PER_POINT, y: box.y * EMU_PER_POINT };
+  for (const component of shape.components)
+    out.components.push(transformComponent(component, origin, 1, 1));
+  const textbox = legacyTextbox(member);
+  if (textbox === undefined) return true;
+  if (textbox === null) return false;
+  const story = legacyTextboxStory(member, textbox, style, host, box.width, box.height);
+  if (!story) return false;
+  out.texts.push(
+    Object.freeze({
+      memberNodeId: member.id,
+      frameEmu: Object.freeze({
+        x: Math.round(origin.x),
+        y: Math.round(origin.y),
+        cx: Math.round(box.width * EMU_PER_POINT),
+        cy: Math.round(box.height * EMU_PER_POINT),
+      }),
+      // The member's shape paints as a vector component; its story paints text only.
+      story: Object.freeze({ ...story, fillHex: null, strokeHex: null }),
+      rotationDegrees: 0,
+    })
+  );
+  return true;
+}
+
+function projectMembers(
+  group: OoxmlElement,
+  box: LegacyBox,
+  depth: number,
+  host: OoxmlElement,
+  memberStyle: LegacyMemberStyle,
+  out: Output
+): boolean {
+  const origin = pair(a(group, 'coordorigin') ?? '0,0'),
+    size = pair(a(group, 'coordsize') ?? '21600,21600');
+  if (!origin || !size || size.some((v) => v <= 0)) return false;
+  for (const child of children(group)) {
+    if (named(child, OFFICE, 'lock') || (depth === 0 && named(child, WORD_VML, 'wrap'))) continue;
+    if (named(child, VML, 'shapetype')) {
+      if (!isStandardVmlTemplate(child)) return false;
+      continue;
+    }
+    if (++out.members > MAX_MEMBERS) return false;
+    if (
+      child.namespaceUri !== VML ||
+      !['shape', 'rect', 'roundrect', 'oval', 'group'].includes(child.localName)
+    )
+      return false;
+    if (emptyFrame(child)) continue;
+    const style = memberStyle(child);
+    if (!style) return false;
+    const left = numeric(style.get('left') ?? '0'),
+      top = numeric(style.get('top') ?? '0'),
+      width = numeric(style.get('width')),
+      height = numeric(style.get('height'));
+    const line = child.localName === 'shape' && a(child, 'type') === LINE_TEMPLATE;
+    if (
+      ![left, top, width, height].every(Number.isFinite) ||
+      (line ? width < 0 || height < 0 || width + height <= 0 : width <= 0 || height <= 0)
+    )
+      return false;
+    const next = {
+      x: box.x + ((left - origin[0]) * box.width) / size[0],
+      y: box.y + ((top - origin[1]) * box.height) / size[1],
+      width: (width * box.width) / size[0],
+      height: (height * box.height) / size[1],
+    };
+    if (Object.values(next).some((v) => !Number.isFinite(v) || Math.abs(v) > 100_000)) return false;
+    if (child.localName === 'group') {
+      if (depth >= MAX_DEPTH || !projectMembers(child, next, depth + 1, host, memberStyle, out))
+        return false;
+      continue;
+    }
+    if (!projectMember(child, style, next, host, out)) return false;
+  }
+  return true;
+}
+
+/**
+ * The members of a `v:group` of `width`×`height` points as vector components and member
+ * stories, or null when a member is outside this subset. `host` is the `w:pict` that holds the
+ * group, and `memberStyle` validates each member's style.
+ */
+export function legacyVectorGroup(
+  root: OoxmlElement,
+  host: OoxmlElement,
+  width: number,
+  height: number,
+  memberStyle: LegacyMemberStyle
+): LegacyVectorGroup | null {
+  const out: Output = { components: [], texts: [], members: 0 };
+  if (!projectMembers(root, { x: 0, y: 0, width, height }, 0, host, memberStyle, out)) return null;
+  if (!out.components.length && !out.texts.length) return null;
+  const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
+  for (const component of out.components) {
+    for (const path of component.subpathsEmu) subpathsEmu.push(path);
+  }
+  return Object.freeze({
+    vectorShape: out.components.length
+      ? Object.freeze({
+          extentEmu: Object.freeze({
+            cx: Math.round(width * EMU_PER_POINT),
+            cy: Math.round(height * EMU_PER_POINT),
+          }),
+          subpathsEmu,
+          fillHex: null,
+          fillAlpha: 1,
+          strokeHex: null,
+          strokeAlpha: 1,
+          strokeWidthEmu: 0,
+          components: Object.freeze(out.components),
+          // A group does not cut its members at its frame, as a canvas does not.
+          overflowVisible: true as const,
+        })
+      : null,
+    groupTextboxes: out.texts.length ? Object.freeze(out.texts) : null,
+  });
+}

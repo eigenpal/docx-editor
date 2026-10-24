@@ -9,6 +9,7 @@ import type {
   DrawingWrapProjection,
 } from './drawing-projection.ts';
 import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
+import { legacyVectorGroup, type LegacyVectorGroup } from './legacy-vml-group.ts';
 import {
   legacyLineReach,
   legacyPictureBorder,
@@ -263,6 +264,24 @@ function pictureOutline(
   });
 }
 
+/**
+ * The story roots inside a shape: its own text box story, or those of a group's members at
+ * any depth. Bounded scans; a group too large to scan names none, and its text then counts
+ * against the graphic budget, which refuses it.
+ */
+function storyCandidates(root: OoxmlElement): ReadonlySet<OoxmlNode> {
+  const stories = new Set<OoxmlNode>();
+  const stack: { node: OoxmlElement; depth: number }[] = [{ node: root, depth: 0 }];
+  for (let seen = 0; stack.length && seen < 512; seen += 1) {
+    const { node, depth } = stack.pop()!;
+    const story = storyCandidate(node);
+    if (story) stories.add(story);
+    if (node.localName !== 'group' || depth >= 8 || node.children.length > 512) continue;
+    for (const child of children(node)) stack.push({ node: child, depth: depth + 1 });
+  }
+  return stories;
+}
+
 /** The first `w:txbxContent` of a `v:textbox` child, found with bounded direct-child scans. */
 function storyCandidate(root: OoxmlElement): OoxmlNode | undefined {
   if (root.children.length > 512) return undefined;
@@ -340,7 +359,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     return null;
   // The text box story is ordinary WML content, bounded by story layout rather than here.
   // Everything else is bounded before the text box is read.
-  if (!boundedVml(preview ?? node, preview ? undefined : storyCandidate(root))) return null;
+  if (!boundedVml(preview ?? node, preview ? undefined : storyCandidates(root))) return null;
   const textbox = readOnly ? undefined : legacyTextbox(root);
   if (textbox === null) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
@@ -393,8 +412,15 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     ? legacyTextboxStory(root, textbox, style, node, width, height)
     : null;
   if (textbox && !textboxStory) return null;
+  let vectorGroup: LegacyVectorGroup | null = null;
   if (!textboxStory && root.localName === 'group') {
-    if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
+    // Shapes, lines and text boxes paint as vectors in every output; anything else keeps the
+    // graphic preview.
+    if (!readOnly)
+      vectorGroup = legacyVectorGroup(root, node, width, height, (n) => supportedStyle(n, false));
+    // The preview cannot paint member text, so a group with text paints as vectors or not at all.
+    if (!vectorGroup && storyCandidates(root).size) return null;
+    if (!vectorGroup && (!groupLayers(root, box, fragments, 0) || !fragments.length)) return null;
   } else if (!textboxStory && !textArt) {
     const fragment = legacyShapeFragment(
       root,
@@ -415,7 +441,9 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         { x: 0, y: 0, width: outerWidth, height: outerHeight }
       );
   }
-  const vectorShape = line ? legacyLineShape(root, width, height, line.ends) : boxShape;
+  const vectorShape = line
+    ? legacyLineShape(root, width, height, line.ends)
+    : (vectorGroup?.vectorShape ?? boxShape);
   if (line && !vectorShape) return null;
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
   if (wrapNodes.length > 1) return null;
@@ -613,7 +641,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     textboxStory,
     // The graphic covers the whole drawing, outline reach included.
     ...(textArt ? { textArt } : {}),
-    ...(!photo && !textboxStory && !vectorShape && !textArt
+    ...(vectorGroup?.groupTextboxes ? { groupTextboxes: vectorGroup.groupTextboxes } : {}),
+    ...(!photo && !textboxStory && !vectorShape && !textArt && !vectorGroup
       ? {
           legacyGraphic: Object.freeze({
             width: outerWidth,

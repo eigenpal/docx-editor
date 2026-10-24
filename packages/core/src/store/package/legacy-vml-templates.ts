@@ -20,7 +20,10 @@ function signature(node: OoxmlElement): string {
     node.attributes
       .map((a) => [a.namespaceUri ?? '', a.localName, a.value.trim().replace(/\s+/g, ' ')])
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    children(node).map(signature),
+    // An editing lock never changes the geometry, so writers that add one still match.
+    children(node)
+      .filter((child) => !(child.namespaceUri === OFFICE && child.localName === 'lock'))
+      .map(signature),
   ]);
 }
 let signatures: ReadonlySet<string> | undefined;

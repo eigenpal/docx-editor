@@ -110,17 +110,18 @@ const NAMED_COLORS: ReadonlyMap<string, string> = new Map([
 /**
  * Bound the complete input before doing any splitting, recursion or SVG allocation.
  *
- * `story` is a validated text-box story root inside the shape. It is ordinary WML content that
- * the story layout bounds by its own limits, so this graphic budget counts only its element.
+ * `stories` are the text-box story roots inside the shape, a group member's included. They are
+ * ordinary WML content that story layout bounds by its own limits, so this graphic budget
+ * counts only their elements.
  */
-export function boundedVml(node: OoxmlNode, story?: OoxmlNode): boolean {
+export function boundedVml(node: OoxmlNode, stories?: ReadonlySet<OoxmlNode>): boolean {
   const stack = [{ node, depth: 0 }];
   let visited = 0,
     characters = 0;
   while (stack.length) {
     const current = stack.pop()!;
     if (++visited > 512 || current.depth > 16) return false;
-    if (current.node === story) continue;
+    if (stories?.has(current.node)) continue;
     if (!element(current.node)) {
       if (current.node.value.trim()) return false;
       characters += current.node.value.length;

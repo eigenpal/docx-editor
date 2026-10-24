@@ -43,7 +43,8 @@ export interface LegacyBox {
 }
 
 function paint(
-  node: OoxmlElement
+  node: OoxmlElement,
+  line = false
 ): { fill: string; stroke: string; weight: number; strokeNode?: OoxmlElement } | null {
   const list = children(node);
   if (['fill', 'stroke', 'path'].some((name) => list.filter((n) => named(n, VML, name)).length > 1))
@@ -76,8 +77,9 @@ function paint(
     )
   )
     return null;
+  // A line has no inside, so its fill is never read; a writer may spell it `this`.
   const fill =
-    off(a(node, 'filled')) || (fillNode && off(a(fillNode, 'on')))
+    line || off(a(node, 'filled')) || (fillNode && off(a(fillNode, 'on')))
       ? 'none'
       : color(
           fillNode ? (a(fillNode, 'color') ?? a(node, 'fillcolor')) : a(node, 'fillcolor'),
@@ -264,7 +266,7 @@ export type LegacyLineEnds = readonly [readonly [number, number], readonly [numb
  * is outside the subset.
  */
 export function legacyLineReach(node: OoxmlElement, closed = false): number | null {
-  const ink = paint(node);
+  const ink = paint(node, !closed);
   if (!ink) return null;
   if (ink.stroke === 'none') return 0;
   // A closed shape draws no arrowheads.
@@ -320,7 +322,7 @@ export function legacyLineShape(
   height: number,
   ends: LegacyLineEnds
 ): VectorShapeProjection | null {
-  const ink = paint(node);
+  const ink = paint(node, true);
   if (!ink) return null;
   const emu = ([x, y]: readonly [number, number]): Point =>
     Object.freeze({ x: Math.round(x * EMU_PER_POINT), y: Math.round(y * EMU_PER_POINT) });
@@ -384,8 +386,10 @@ export function legacyBoxShape(
   box: LegacyBox,
   outer: LegacyBox
 ): VectorShapeProjection | null {
+  // The text box template is a plain rectangle.
+  const kind = a(node, 'type') === '#_x0000_t202' ? 'rect' : node.localName;
   const preset = ({ rect: 'rect', roundrect: 'roundRect', oval: 'ellipse' } as const)[
-    node.localName as 'rect' | 'roundrect' | 'oval'
+    kind as 'rect' | 'roundrect' | 'oval'
   ];
   const ink = preset ? paint(node) : null;
   if (!preset || !ink) return null;
