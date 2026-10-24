@@ -232,7 +232,9 @@ export function holdsOnlyPageBreak(line: PendingLine): boolean {
  * A no-break space still counts, and so does a line break.
  */
 export function isHeightlessWhitespace(text: string): boolean {
-  return text.length > 0 && /^[ \t]+$/.test(text);
+  // Spaces, tabs, soft hyphens and zero-width characters draw no ink: a line of only these
+  // takes the paragraph mark's height.
+  return text.length > 0 && /^[ \t\u00AD\u200B\u200C\u200D\u2060\uFEFF]+$/.test(text);
 }
 
 /** Face extents translated by an authored baseline position, without rescaling glyphs. */
