@@ -637,7 +637,10 @@ export function paragraphBorderStrokeWidthPt(edge: ParagraphBorderEdge): number 
  */
 export function paragraphBorderExtentPt(edge: ParagraphBorderEdge | undefined): number {
   if (!edge) return 0;
-  return edge.spacePt + paragraphBorderStrokeWidthPt(edge);
+  // A shadowed edge takes its own width once more: the box moves down by it under a shadowed
+  // top rule, and the shadow band lies below a shadowed bottom rule.
+  const stroke = paragraphBorderStrokeWidthPt(edge);
+  return edge.spacePt + stroke + (edge.shadow ? stroke : 0);
 }
 
 /** Vertical extent a bottom border adds below the last line (gap + rule). */

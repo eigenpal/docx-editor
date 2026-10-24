@@ -129,8 +129,6 @@ function decorations(
       for (const border of block.borders ??
         (block.bottomBorder ? [{ ...block.bottomBorder, side: 'bottom' }] : [])) {
         const style = border.edge.val;
-        if (border.edge.shadow)
-          work.report('border-shadow', 'Paragraph border shadow is not encoded', pageIndex);
         if (!['single', 'thick', 'dashed', 'dotted', 'double'].includes(style))
           work.report(
             'paragraph-border-style',
