@@ -61,12 +61,7 @@ export function transformComponent(
     ...(component.arrowheadsEmu
       ? {
           arrowheadsEmu: component.arrowheadsEmu.map((path) =>
-            scaleX !== 0 && scaleY !== 0
-              ? path.map((point) => ({
-                  x: offset.x + point.x * scaleX,
-                  y: offset.y + point.y * scaleY,
-                }))
-              : collapsedArrowhead(path, offset, scaleX, scaleY)
+            groupArrowhead(path, offset, scaleX, scaleY)
           ),
         }
       : {}),
@@ -74,16 +69,16 @@ export function transformComponent(
 }
 
 /**
- * A line end under a group that collapses one axis. The line now runs along the other axis,
- * so the outline is turned to point along it: the line end follows the line, and the length
- * and width keep their size at the other axis's scale, as the stroke width does. A line
- * perpendicular to the collapsed axis shrinks to a point and loses its line end.
+ * A line end under a group's child-to-extent scale. The outline is sized from the line width,
+ * an absolute length, so it keeps its size and only turns to follow the scaled line. A group
+ * that collapses one axis turns it along the other axis; a line perpendicular to the
+ * collapsed axis shrinks to a point and loses its line end.
  *
  * The outline's first point is the line end (see `projectLineArrowheads`). The line direction
  * runs from the outline's centroid to that end, or for a centred outline from the end to the
  * second point.
  */
-function collapsedArrowhead(
+function groupArrowhead(
   path: readonly Readonly<{ x: number; y: number }>[],
   offset: Readonly<{ x: number; y: number }>,
   scaleX: number,
@@ -107,17 +102,18 @@ function collapsedArrowhead(
   if (!(norm > 0)) return [];
   ux /= norm;
   uy /= norm;
-  const alongY = scaleX === 0;
-  const scale = Math.abs(alongY ? scaleY : scaleX);
-  // The direction's reach along the surviving axis gives the turned direction there.
-  const direction = Math.sign(alongY ? uy * scaleY : ux * scaleX);
-  if (direction === 0) return [];
-  const [newUx, newUy] = alongY ? [0, direction] : [direction, 0];
+  // The scaled direction; zero when the line runs along a collapsed axis.
+  let newUx = ux * scaleX;
+  let newUy = uy * scaleY;
+  const newNorm = Math.hypot(newUx, newUy);
+  if (!(newNorm > 1e-12)) return [];
+  newUx /= newNorm;
+  newUy /= newNorm;
   const endX = offset.x + end.x * scaleX;
   const endY = offset.y + end.y * scaleY;
   return path.map((point) => {
-    const along = ((point.x - end.x) * ux + (point.y - end.y) * uy) * scale;
-    const across = (-(point.x - end.x) * uy + (point.y - end.y) * ux) * scale;
+    const along = (point.x - end.x) * ux + (point.y - end.y) * uy;
+    const across = -(point.x - end.x) * uy + (point.y - end.y) * ux;
     return { x: endX + along * newUx - across * newUy, y: endY + along * newUy + across * newUx };
   });
 }

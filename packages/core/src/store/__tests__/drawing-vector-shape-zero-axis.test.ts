@@ -124,6 +124,30 @@ describe('zero-width and zero-height group children', () => {
     expect(arrow![1]!.x).toBeCloseTo(-arrow![2]!.x, 6);
   });
 
+  test('an arrowhead keeps its absolute size in a group with a large child scale', () => {
+    // Child units 635 times smaller than the extent: the line scales, its line end does not.
+    const arrowRule = (cy: number) =>
+      lineChild(0, 0, cy).replace(
+        '</a:solidFill></a:ln>',
+        '</a:solidFill><a:tailEnd type="triangle" w="lg" len="lg"/></a:ln>'
+      );
+    const span = (points: readonly { x: number; y: number }[]) =>
+      Math.max(...points.map((point) => point.y)) - Math.min(...points.map((point) => point.y));
+    const plain = shapeOf(arrowRule(1000000))?.components[0]!.arrowheadsEmu?.[0];
+    const drawing =
+      '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="600000" cy="1000000"/><wp:docPr id="9" name="Group 9"/>' +
+      `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>` +
+      '<a:xfrm><a:off x="0" y="0"/><a:ext cx="600000" cy="1000000"/>' +
+      '<a:chOff x="0" y="0"/><a:chExt cx="945" cy="1575"/></a:xfrm></wpg:grpSpPr>' +
+      arrowRule(1575) +
+      '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+    const scaled = project(drawing)?.components[0]!.arrowheadsEmu?.[0];
+    expect(scaled).toHaveLength(plain!.length);
+    expect(scaled![0]!.y).toBeCloseTo(1000000, 0);
+    expect(span(scaled!)).toBeCloseTo(span(plain!), 0);
+  });
+
   test('a zero child extent under a wider group puts every child at the group origin', () => {
     // Such children draw on the extent's left edge, at their full stroke width.
     const drawing =
