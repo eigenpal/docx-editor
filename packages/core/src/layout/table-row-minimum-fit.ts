@@ -14,10 +14,11 @@
 // the same room below that band.
 //
 // Positioned-table limit:
-// - Positioned (`w:tblpPr`) tables, except one breaking across pages from a page or margin
-//   anchor (`table-pinned-break.ts`).
+// - Positioned (`w:tblpPr`) tables, except one breaking across pages in the body flow
+//   (`table-pinned-break.ts`, `table-text-float-break.ts`).
 
-import type { SemanticTableRow } from './semantic-table.ts';
+import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
+import { cutRowContentDeps } from './table-fragment-content-insets.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
@@ -62,6 +63,22 @@ export function rowMinimumFits(
   return minimum === undefined || minimum <= availablePt + 0.001;
 }
 
+/**
+ * The deps that place the part of a row that does not fit, so it ends its fragment. A first part
+ * keeps room for the inside rule that closes the cut (`cutRowContentDeps`). A middle part of a
+ * row that spans more pages keeps none, and neither does a page-positioned break
+ * (`table-pinned-break.ts`), whose band already ends at the margin or the page edge.
+ */
+export function splitPartDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  continuation: boolean,
+  pinned: boolean
+): TableFlowDeps {
+  return continuation || pinned ? deps : cutRowContentDeps(structure, row, deps);
+}
+
 /** Where a row would start in the column being filled, in page content coordinates. */
 export interface RowMinimumPlace {
   readonly top: number;
@@ -79,14 +96,21 @@ export interface RowMinimumPlace {
 /**
  * Whether the first fragment of `row` moves to the next column or page: content already sits
  * above `at.top` in the column, the minimum does not fit below it, and a fresh column holds it.
+ * A row whose `wholeHeight` fits the room never moves here. A row that would split
+ * ends its fragment, so with `cut` its minimum is padded by the inside rule that closes the cut
+ * (`cutRowContentDeps`); a page-positioned break fills its band without one.
  */
 export function rowMinimumMoves(
   row: SemanticTableRow,
   deps: TableFlowDeps,
-  cellSpacingPt: number,
+  structure: SemanticTableStructure,
+  wholeHeight: number,
+  cut: boolean,
   at: RowMinimumPlace
 ): boolean {
   if (at.belowBandOnly || at.top <= at.columnTop + 0.001) return false;
+  if (wholeHeight <= at.bottom - at.top + 0.001) return false;
   const fresh = at.band - at.columnTop - at.repeat;
-  return !rowMinimumFits(row, deps, cellSpacingPt, fresh, at.bottom - at.top);
+  const closing = cut ? cutRowContentDeps(structure, row, deps) : deps;
+  return !rowMinimumFits(row, closing, structure.cellSpacingPt, fresh, at.bottom - at.top);
 }

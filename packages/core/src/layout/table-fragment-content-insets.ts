@@ -38,6 +38,27 @@ export function lastRowContentDeps(
   row: SemanticTableRow,
   deps: TableFlowDeps
 ): TableFlowDeps {
+  return closingRowContentDeps(structure, row, deps, 'bottom');
+}
+
+/**
+ * A row split at the end of its fragment closes the fragment with the inside rule it would share
+ * with the row below, not with the table's outer bottom edge.
+ */
+export function cutRowContentDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps
+): TableFlowDeps {
+  return closingRowContentDeps(structure, row, deps, 'insideH');
+}
+
+function closingRowContentDeps(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  edge: 'bottom' | 'insideH'
+): TableFlowDeps {
   if (structure.cellSpacingPt > 0) return deps;
   const insets = new Map(deps.cellContentInsets);
   const minimumInsets = new Map(deps.cellMinimumContentInsets);
@@ -48,7 +69,7 @@ export function lastRowContentDeps(
       cell.margins.bottom,
       effectiveBorderSide(
         cell.borders.bottom,
-        (cell.rowTableBorders ?? structure.tableBorders).bottom
+        (cell.rowTableBorders ?? structure.tableBorders)[edge]
       )
     );
     if (before.bottom !== bottom) changed = true;

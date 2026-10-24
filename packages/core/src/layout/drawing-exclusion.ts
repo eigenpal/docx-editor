@@ -61,6 +61,9 @@ export const MAX_ANCHOR_PAGE_DEFERRALS = 8;
  */
 export const MAX_DRAWING_EXCLUSION_REFLOW_PASSES = 16;
 
+/** Passages of a quarter inch or less beside a floating table hold no text. */
+export const TABLE_WRAP_MIN_PASSAGE_PT = 18;
+
 /** Raised when wrap-exclusion reflow does not converge within {@link MAX_DRAWING_EXCLUSION_REFLOW_PASSES}. */
 export class DrawingExclusionConvergenceError extends Error {
   readonly name = 'DrawingExclusionConvergenceError';
@@ -357,7 +360,9 @@ export function mergeAvailableIntervalsAtY(
   // even when individual letters fit. Apply this after all exclusions intersect,
   // so a second float cannot reduce an admitted passage to a column of letters.
   if (wrapsTable)
-    available = available.filter((interval) => interval.end - interval.start > 18.001);
+    available = available.filter(
+      (interval) => interval.end - interval.start > TABLE_WRAP_MIN_PASSAGE_PT + 0.001
+    );
   return Object.freeze(available);
 }
 

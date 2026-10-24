@@ -1181,6 +1181,9 @@ function* layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
+  /** Records that `anchorId` reached `anchorY` on the page being filled. */
+  const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
+    positionedFlow.note(floatSignals, anchorId, flowColumnIndex, pageFragments.length, anchorY);
   // Pass-local: the shared flow token prevents checkpoint resume inside this group.
   const terminalTextTableIds = new Set<string>();
   // A continuous section resumes the previous section's column rather than opening a
@@ -1794,8 +1797,10 @@ function* layoutBlocksPass(
         shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
-      publishFragment: (fragment) =>
-        pageFragments.push(tableWrap.withFloatingWrap(fragment, positioned, flowColumnIndex)),
+      publishFragment: (fragment, wraps) =>
+        pageFragments.push(
+          tableWrap.withFloatingWrap(fragment, positioned, flowColumnIndex, wraps)
+        ),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
     };
@@ -2007,7 +2012,7 @@ function* layoutBlocksPass(
         positionedTablePolicy.has(entry.table.id) &&
         !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
-          allowBreak: columns.count === 1 && positionedTablePolicy.get(entry.table.id),
+          allowBreak: columns.count === 1,
           zones: admission(options.drawingExclusionZonesByPage),
           page: pages.length,
           width: Math.min(...columns.widths),
@@ -2019,6 +2024,10 @@ function* layoutBlocksPass(
         positionedFlow.add(pendingFloatIds, entry.table.id);
         continue;
       }
+      // Tables waiting for the anchor of a text-anchored table placed in the flow are placed
+      // where the body reaches that table, even when it then moves to the next page.
+      const inFlow = positionedByTable.get(entry.table.id);
+      if (inFlow?.float.vertAnchor === 'text') noteAnchor(inFlow.anchorId);
       collectingCellBreakKeys.begin();
       try {
         const outOfFlow = yield* layoutTableInFlowSteps(entry.table, cursorY, false, index + 1);
@@ -2090,13 +2099,7 @@ function* layoutBlocksPass(
     if (lines.length === 0) {
       // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
       releasePlacedBreaks(paragraphId);
-      positionedFlow.note(
-        floatSignals,
-        paragraph.id,
-        flowColumnIndex,
-        pageFragments.length,
-        cursorY
-      );
+      noteAnchor(paragraph.id);
       continue;
     }
     // A blank paragraph-level `w:sectPr` is the section break, not content. It cannot open a
@@ -2357,13 +2360,7 @@ function* layoutBlocksPass(
         : undefined;
       if (!frame && fragmentIndex === 0) {
         publishParagraphFrames(paragraphId, fragmentParagraphStartY, pending);
-        positionedFlow.note(
-          floatSignals,
-          paragraphId,
-          flowColumnIndex,
-          pageFragments.length,
-          fragmentParagraphStartY
-        );
+        noteAnchor(paragraphId, fragmentParagraphStartY);
       }
       const publishedFragment: ParagraphFragmentRecord = {
         kind: 'paragraph',

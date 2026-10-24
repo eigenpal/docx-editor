@@ -95,3 +95,57 @@ test('a row stays when the next row opens below it, though a thick bottom rule w
   // 13pt: `Three` opens with its first line, so `Two` stays.
   expect(rowsOnFirstPage(38)).toBe(3);
 });
+
+test('a row splits only where its minimum and the rule at the cut fit', () => {
+  // Two 30pt-minimum rows with 0.5pt rules. The second holds three lines, so it must split. Its
+  // first part needs the minimum plus the rule above it and the inside rule closing the cut.
+  const row = (lines: readonly string[]) =>
+    `<w:tr><w:trPr><w:trHeight w:val="600" w:hRule="atLeast"/></w:trPr><w:tc>${lines.map(paragraph).join('')}</w:tc></w:tr>`;
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr>` +
+      `<w:tblBorders>${edges.map((edge) => `<w:${edge} w:val="single" w:sz="4"/>`).join('')}</w:tblBorders>` +
+      `<w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar>` +
+      `</w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
+      row(['One']) +
+      row(['Two', 'More', 'Last']) +
+      '</w:tbl></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const rowsOnFirstPage = (height: number) =>
+    layoutSemanticDocument(parsed.part, 0, {
+      measurer: createFixedMeasurer(5, 12),
+      geometry: { width: 150, height, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+    }).pages[0]!.fragments.flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []))
+      .length;
+  // The first row ends at 30.5pt. 30.9pt below it cannot hold 30 + 0.5 + 0.5: the row moves.
+  expect(rowsOnFirstPage(61.4)).toBe(1);
+  // 31.1pt holds them: the row starts and splits.
+  expect(rowsOnFirstPage(61.6)).toBe(2);
+});
+
+test('a minimum-height row that fits whole stays, with no rule reserved for a cut', () => {
+  const row = (text: string) =>
+    `<w:tr><w:trPr><w:trHeight w:val="600" w:hRule="atLeast"/></w:trPr><w:tc>${paragraph(text)}</w:tc></w:tr>`;
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr>` +
+      `<w:tblBorders>${edges.map((edge) => `<w:${edge} w:val="single" w:sz="4"/>`).join('')}</w:tblBorders>` +
+      `<w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar>` +
+      `</w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
+      row('One') +
+      row('Two') +
+      row('Three') +
+      '</w:tbl></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  // `Two` fills the 30.5pt from 30.5 to 61pt; the page ends 0.2pt below it.
+  const layout = layoutSemanticDocument(parsed.part, 0, {
+    measurer: createFixedMeasurer(5, 12),
+    geometry: { width: 150, height: 61.2, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+  });
+  const rows = layout.pages[0]!.fragments.flatMap((fragment) =>
+    fragment.kind === 'table' ? fragment.rows : []
+  );
+  expect(rows).toHaveLength(2);
+});

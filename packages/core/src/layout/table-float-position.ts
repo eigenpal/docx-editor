@@ -321,14 +321,18 @@ export function bodyTableVerticalAnchorFrames(
   };
 }
 
-/** True when the current region holds body-flow content. */
+/**
+ * True when the current region holds body-flow content. A floating table is not flow content,
+ * nor is the last fragment of a broken text-anchored table that text wraps beside.
+ */
 export function hasFlowFragments(
   fragments: readonly BlockFragmentRecord[],
   start: number
 ): boolean {
   for (let index = start; index < fragments.length; index += 1) {
     const fragment = fragments[index]!;
-    if (!isOutOfFlowFragment(fragment)) return true;
+    if (!isOutOfFlowFragment(fragment) && !(fragment.kind === 'table' && fragment.floatingWrap))
+      return true;
   }
   return false;
 }

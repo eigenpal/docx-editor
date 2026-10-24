@@ -10,6 +10,9 @@ import {
   withSplittableRows,
   type PinnedTableBreak,
 } from './table-pinned-break.ts';
+import { isInFlowTextTable } from './table-text-float-break.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
+import type { TableFlowDeps } from './semantic-table-layout.ts';
 
 export interface FlowTable {
   readonly structure: SemanticTableStructure;
@@ -17,6 +20,10 @@ export interface FlowTable {
   readonly pinnedBreak: PinnedTableBreak | undefined;
   /** A positioned table that keeps its sheet position. */
   readonly outOfFlow: boolean;
+  /** A text-anchored table that breaks across pages in the body flow (`table-text-float-break.ts`). */
+  readonly textFlow: boolean;
+  /** The deps its cells lay out with: the cells of a floating table never wrap around another. */
+  readonly cellDeps: TableFlowDeps;
 }
 
 /** Read `table` for the flow at its column width; undefined when it has no rows. */
@@ -37,11 +44,14 @@ export function readFlowTable(table: OoxmlElement, flow: TableFlowCursor): FlowT
   const pinnedBreak = flow.positionTextTable
     ? undefined
     : pinnedBreakAtCursor(table, authored, flow);
-  const structure = pinnedBreak ? withSplittableRows(authored) : authored;
   const outOfFlow =
     pinnedBreak === undefined &&
-    structure.float !== undefined &&
-    (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
-    structure.float.ySpec !== 'inline';
-  return { structure, pinnedBreak, outOfFlow };
+    authored.float !== undefined &&
+    (authored.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
+    authored.float.ySpec !== 'inline';
+  // Both kinds of breaking positioned table may split any row (`table-text-float-break.ts`).
+  const textFlow = isInFlowTextTable(authored, outOfFlow);
+  const structure = pinnedBreak || textFlow ? withSplittableRows(authored) : authored;
+  const cellDeps = outOfFlow || textFlow ? withoutFloatingTableZones(flow.deps) : flow.deps;
+  return { structure, pinnedBreak, outOfFlow, textFlow, cellDeps };
 }

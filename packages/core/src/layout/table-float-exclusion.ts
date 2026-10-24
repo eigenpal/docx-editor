@@ -20,10 +20,8 @@ import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
   layoutTableFragment,
-  measureRowHeight,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
@@ -32,6 +30,7 @@ import {
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { pinnedTableBreak } from './table-pinned-break.ts';
+import { openingRowsBottom } from './table-text-float-break.ts';
 import {
   noOverlapShift,
   tableRefusesOverlap,
@@ -223,7 +222,10 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
   return band;
 }
 
-/** Keep anchor page breaks, authored gaps, and shared anchors on the whole-table path. */
+/**
+ * Keep a page- or margin-positioned table whole when its anchor has a page break, an authored
+ * gap, or another table (`pinnedBreakAllowed`). A text-anchored table breaks whatever its anchor.
+ */
 export function anchorBreakPolicy(
   anchors: readonly PositionedTableAnchor[],
   blocks: readonly PreparedBlock[]
@@ -294,7 +296,8 @@ export function anchorFlowKeys(keys: string[], state: PositionedTableFlowPolicy)
 
 /** Where the body flow stands when it reaches a positioned table. */
 export interface FloatAdmissionFlow {
-  readonly allowBreak: boolean | undefined;
+  /** Single-column flow, where a text-anchored table may break across pages. */
+  readonly allowBreak: boolean;
   readonly zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
   readonly page: number;
   /** The narrowest column. The table must fit whichever column its anchor reaches. */
@@ -311,11 +314,10 @@ const flowTop = (flow: FloatAdmissionFlow): number => flow.verticalFrames.text.t
  * True when a positioned table waits for its anchor paragraph and is placed there whole.
  *
  * Row pagination places the table instead when earlier objects wrap its cells, or when its
- * band is taller than a page. It also places a text-relative table that spans its column
- * and does not fit the room left, when its opening rows do fit there. That table breaks at
- * the page bottom, and its remaining rows continue at the top of the next page. No text can
- * stand beside it, so the flow resumes below its last row. When the opening rows do not fit,
- * the table still moves whole with its anchor.
+ * band is taller than a page. It also places a text-relative table that does not fit the room
+ * left, when its opening rows do fit there. That table breaks between rows at the page bottom,
+ * and its remaining rows continue at the top of the next page (`table-text-float-break.ts`).
+ * When the opening rows do not fit, the table still moves whole with its anchor.
  */
 export function admitsAtAnchor(
   table: OoxmlElement,
@@ -324,8 +326,12 @@ export function admitsAtAnchor(
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
   if (breaksAcrossPages(table, deps, flow)) return false;
-  const band = floatingTableBand(table, flow.width, deps);
-  if (band > flow.bottom) return false;
+  // Rows that fit keep the table whole, even when its `w:bottomFromText` reaches past the room.
+  // Only rows taller than a page take row pagination: a table that a page holds stays whole
+  // although its `w:tblpY` pushes it past the bottom margin.
+  const float = floatTableStructure(table, flow.width, deps)?.float;
+  const band = floatingTableBand(table, flow.width, deps) - (float?.distances?.bottom ?? 0);
+  if (band - Math.max(0, float?.yPt ?? 0) > flow.bottom) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return (
     band <= flow.bottom - flowTop(flow) ||
@@ -368,33 +374,12 @@ function breaksAtPageBottom(
 ): boolean {
   const structure = floatTableStructure(table, flow.width, deps);
   const float = structure?.float;
-  // A negative offset collides with earlier text. Only anchor placement displaces it.
+  // A negative offset collides with earlier text. Only anchor placement displaces it. Space
+  // above the table keeps it whole too; space below it does not.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
-  const distances = float.distances ?? NO_DISTANCES;
-  if (distances.top > 0 || distances.bottom > 0) return false;
-  const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
-  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const column = flow.frames.text;
-  if (
-    left - distances.left > column.left ||
-    left + width + distances.right < column.left + column.width
-  )
-    return false;
-  // The opening rows are the header prefix, which moves as one group, and the first body row.
-  let top = flowTop(flow) + float.yPt;
-  for (const [index, row] of structure.rows.entries()) {
-    top += measureRowHeight(
-      row,
-      structure.columnWidthsPt,
-      left,
-      0,
-      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
-      structure.cellSpacingPt
-    );
-    if (top > flow.bottom + 0.001) return false;
-    if (!row.isHeader) return true;
-  }
-  return false;
+  if ((float.distances?.top ?? 0) > 0) return false;
+  const opening = openingRowsBottom(table, structure, flow.width, flowTop(flow) + float.yPt, deps);
+  return opening !== undefined && opening <= flow.bottom + 0.001;
 }
 
 function probeTableHeight(
@@ -555,8 +540,12 @@ export function requiredAnchorBand(
         ])
       : NO_SHIFT;
     if (shift.band) prospective.push(shift.band);
+    // A text-anchored table's `w:bottomFromText` may reach past the page bottom; only the rows
+    // must fit. Other anchors have no band here.
+    const gap = anchor.float.vertAnchor === 'text' ? (anchor.float.distances?.bottom ?? 0) : 0;
     const band =
-      floatingTableBand(anchor.table, width, deps) +
+      floatingTableBand(anchor.table, width, deps) -
+      gap +
       clearedY +
       shift.dy -
       placement.anchorY +
@@ -778,13 +767,22 @@ export function hasEarlierCellExclusions(
   return false;
 }
 
-/** Preserve body wrapping when external obstacles require immediate table placement. */
+/**
+ * Preserve body wrapping when external obstacles require immediate table placement, and beside
+ * the last fragment of a text-anchored table that broke across pages.
+ */
 export function withFloatingWrap(
   fragment: BlockFragmentRecord,
   positioned: PositionedTableAnchor | undefined,
-  columnIndex: number
+  columnIndex: number,
+  wrapsFollowingText = false
 ): BlockFragmentRecord {
-  if (!positioned || fragment.kind !== 'table' || !isOutOfFlowFragment(fragment)) return fragment;
+  if (
+    !positioned ||
+    fragment.kind !== 'table' ||
+    !(isOutOfFlowFragment(fragment) || wrapsFollowingText)
+  )
+    return fragment;
   return {
     ...fragment,
     floatingWrap: {

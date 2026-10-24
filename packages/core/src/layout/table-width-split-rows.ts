@@ -18,7 +18,7 @@
 // first occurrence as for every later one. The admission probe that decides whether headers
 // repeat above a continuation is run again and must agree.
 
-import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { firstRowContentDeps, cutRowContentDeps } from './table-fragment-content-insets.ts';
 import {
   initialCellCursors,
   layoutRowFragmentBounded,
@@ -211,7 +211,9 @@ function placeChain(
       )
     )
       return null;
-    const rowDeps = index === 0 ? firstRowContentDeps(structure, source, base) : base;
+    const opening = index === 0 ? firstRowContentDeps(structure, source, base) : base;
+    // The first occurrence ends its fragment, so it keeps room for the inside rule at the cut.
+    const rowDeps = k === 0 ? cutRowContentDeps(structure, source, opening) : opening;
     const placementDeps: TableFlowDeps = {
       ...rowDeps,
       rowAtPageStart:
