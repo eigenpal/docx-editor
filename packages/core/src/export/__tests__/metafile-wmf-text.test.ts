@@ -63,6 +63,27 @@ test('a later font selection decodes the text after it; ANSI uses its code page'
   ]);
 });
 
+test('text sits by the alignment in force: top left by default, then as set', async () => {
+  const replay = await replayMetafile(
+    wmf(200, 100, [
+      font('Arial', 0),
+      { fn: META_SELECTOBJECT, words: [0] },
+      textOut([0x41]),
+      { fn: 0x012e, words: [24 | 6] }, // META_SETTEXTALIGN: TA_BASELINE | TA_CENTER
+      textOut([0x42]),
+    ]),
+    'image/x-wmf',
+    { measureText: (text, face) => text.length * face.sizePx * 0.5 }
+  );
+  const placed = replay!.drawing.commands.flatMap((command) =>
+    command.kind === 'text' ? [[command.text, command.baseline, command.align]] : []
+  );
+  expect(placed).toEqual([
+    ['A', 'top', 'left'],
+    ['B', 'alphabetic', 'center'],
+  ]);
+});
+
 test('a symbol font keeps its bytes', async () => {
   const records = [font('Wingdings', 2), { fn: META_SELECTOBJECT, words: [0] }, textOut([0xfe])];
   expect(await texts(records)).toEqual([{ text: 'þ', family: 'Wingdings' }]);

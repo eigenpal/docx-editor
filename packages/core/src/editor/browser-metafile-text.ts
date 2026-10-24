@@ -9,7 +9,10 @@ import { wmfTextMatcher, wmfTextRecords } from '../store/package/metafile-wmf-te
 import type { WmfText } from '../store/package/metafile-wmf-text.ts';
 
 type CanvasConstructor = new (width: number, height: number) => OffscreenCanvas;
-type TextContext = Pick<OffscreenCanvasRenderingContext2D, 'fillText' | 'font'>;
+type TextContext = Pick<
+  OffscreenCanvasRenderingContext2D,
+  'fillText' | 'font' | 'textBaseline' | 'textAlign'
+>;
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -19,11 +22,44 @@ function withFace(font: string, face: string): string {
   return size ? `${size[1]} "${face}", sans-serif` : font;
 }
 
+/**
+ * `font` with a family the canvas can parse. The rasterizer reads the face name four bytes
+ * early, so it can start with control bytes; the canvas then drops the whole assignment and
+ * keeps its default size, which the picture's scale shrinks to dots.
+ */
+function parsableFont(font: string): string {
+  const size = /^(.*?\d+(?:\.\d+)?px(?:\/\S+)?)\s+(.*)$/.exec(font);
+  if (!size || !/[\x00-\x1f\x7f]/.test(size[2]!)) return font;
+  return `${size[1]} sans-serif`;
+}
+
+/** The `font` accessor the context inherits, found up its prototype chain. */
+function fontAccessor(context: object): PropertyDescriptor | undefined {
+  for (let proto = Object.getPrototypeOf(context); proto; proto = Object.getPrototypeOf(proto)) {
+    const descriptor = Object.getOwnPropertyDescriptor(proto, 'font');
+    if (descriptor) return descriptor;
+  }
+  return undefined;
+}
+
 function drawThrough(context: TextContext, match: (text: string) => WmfText | null): void {
+  const accessor = fontAccessor(context);
+  if (accessor?.get && accessor.set) {
+    const { get, set } = accessor;
+    Object.defineProperty(context, 'font', {
+      configurable: true,
+      get: () => get.call(context),
+      set: (value: unknown) => set.call(context, parsableFont(String(value))),
+    });
+  }
   const fill = context.fillText.bind(context);
   context.fillText = (text: string, x: number, y: number, maxWidth?: number) => {
     const found = match(String(text));
     if (found?.face) context.font = withFace(context.font, found.face);
+    if (found) {
+      context.textBaseline = found.baseline;
+      context.textAlign = found.align;
+    }
     const value = found ? found.text : text;
     if (maxWidth === undefined) fill(value, x, y);
     else fill(value, x, y, maxWidth);

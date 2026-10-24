@@ -20,9 +20,21 @@ export function withWmfText(
     const found = match(command.text);
     if (!found) return command;
     const family = found.face || command.font.family;
-    if (found.text === command.text && family === command.font.family) return command;
+    if (
+      found.text === command.text &&
+      family === command.font.family &&
+      found.baseline === command.baseline &&
+      found.align === command.align
+    )
+      return command;
     changed = true;
-    return { ...command, text: found.text, font: { ...command.font, family } };
+    return {
+      ...command,
+      text: found.text,
+      font: { ...command.font, family },
+      baseline: found.baseline,
+      align: found.align,
+    };
   });
   return changed ? out : commands;
 }

@@ -79,3 +79,37 @@ test('a picture with no text runs without a stand-in', async () => {
     expect(scope.OffscreenCanvas).toBe(fake);
   });
 });
+
+test('a font with a control byte in its family keeps its size', async () => {
+  const drawn: { text: string; font: string }[] = [];
+  /** A context that, like a canvas, ignores a font string it cannot parse. */
+  class StrictContext {
+    #font = '10px sans-serif';
+    textBaseline = 'alphabetic';
+    textAlign = 'start';
+    get font() {
+      return this.#font;
+    }
+    set font(value: string) {
+      if (!/[\x00-\x1f]/.test(value)) this.#font = value;
+    }
+    fillText(text: string) {
+      drawn.push({ text, font: this.font });
+    }
+  }
+  scope.OffscreenCanvas = class {
+    getContext() {
+      return new StrictContext();
+    }
+  };
+  await withWmfTextCanvas(bytes, async () => {
+    const Canvas = scope.OffscreenCanvas as new (
+      w: number,
+      h: number
+    ) => { getContext(id: string): StrictContext };
+    const context = new Canvas(10, 10).getContext('2d');
+    context.font = '92px \x04@';
+    context.fillText(String.fromCharCode(...shalom));
+  });
+  expect(drawn).toEqual([{ text: 'שלום', font: '92px "David", sans-serif' }]);
+});

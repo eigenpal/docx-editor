@@ -15,6 +15,7 @@ const MAX_RECORDS = 200_000;
 const MAX_OBJECTS = 4096;
 const META_EOF = 0x0000;
 const META_SELECTOBJECT = 0x012d;
+const META_SETTEXTALIGN = 0x012e;
 const META_DELETEOBJECT = 0x01f0;
 const META_CREATEFONTINDIRECT = 0x02fb;
 const META_TEXTOUT = 0x0521;
@@ -53,12 +54,17 @@ interface FontRecord {
 export interface WmfTextRecord {
   readonly bytes: string;
   readonly font: FontRecord | null;
+  /** The `META_SETTEXTALIGN` flags in force; 0 is top left. */
+  readonly align: number;
 }
 
 /** A replayed text, re-decoded, and the face its record names ('' keeps the replayer's). */
 export interface WmfText {
   readonly text: string;
   readonly face: string;
+  /** Which edge of the text the record's reference point names. */
+  readonly baseline: 'top' | 'alphabetic' | 'bottom';
+  readonly align: 'left' | 'center' | 'right';
 }
 
 function latin1(view: DataView, start: number, count: number, end: number): string {
@@ -92,6 +98,7 @@ export function wmfTextRecords(bytes: Uint8Array): readonly WmfTextRecord[] {
     else if (objects.length < MAX_OBJECTS) objects.push(value);
   };
   let selected: FontRecord | null = null;
+  let align = 0;
   const out: WmfTextRecord[] = [];
   for (let count = 0; count < MAX_RECORDS && at + 6 <= bytes.length; count++) {
     const words = view.getUint32(at, true);
@@ -107,19 +114,21 @@ export function wmfTextRecords(bytes: Uint8Array): readonly WmfTextRecord[] {
     } else if (fn === META_DELETEOBJECT && data + 2 <= end) {
       const slot = view.getUint16(data, true);
       if (slot < objects.length) objects[slot] = null;
+    } else if (fn === META_SETTEXTALIGN && data + 2 <= end) {
+      align = view.getUint16(data, true);
     } else if (fn === META_SELECTOBJECT && data + 2 <= end) {
       const object = objects[view.getUint16(data, true)];
       if (object && object !== 'other') selected = object;
     } else if (fn === META_TEXTOUT && data + 2 <= end) {
       const chars = view.getInt16(data, true);
       if (chars > 0 && data + 2 + chars <= end)
-        out.push({ bytes: latin1(view, data + 2, chars, end), font: selected });
+        out.push({ bytes: latin1(view, data + 2, chars, end), font: selected, align });
     } else if (fn === META_EXTTEXTOUT && data + 8 <= end) {
       const chars = view.getInt16(data + 4, true);
       const clipped = (view.getUint16(data + 6, true) & 4) !== 0;
       const text = data + 8 + (clipped ? 8 : 0);
       if (chars > 0 && text + chars <= end)
-        out.push({ bytes: latin1(view, text, chars, end), font: selected });
+        out.push({ bytes: latin1(view, text, chars, end), font: selected, align });
     }
     at = end;
   }
@@ -161,8 +170,15 @@ export function wmfTextMatcher(
       const record = records[index]!;
       if (record.bytes !== replayed) continue;
       next = index + 1;
-      if (!record.font) return null;
-      return { text: decode(replayed, record.font.charset), face: record.font.face };
+      // TA_BASELINE is 24 and TA_BOTTOM 8 of the vertical bits; TA_CENTER 6 and TA_RIGHT 2.
+      const vertical = record.align & 24;
+      const horizontal = record.align & 6;
+      return {
+        text: record.font ? decode(replayed, record.font.charset) : replayed,
+        face: record.font?.face ?? '',
+        baseline: vertical === 24 ? 'alphabetic' : vertical === 8 ? 'bottom' : 'top',
+        align: horizontal === 6 ? 'center' : horizontal === 2 ? 'right' : 'left',
+      };
     }
     return null;
   };
