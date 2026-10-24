@@ -1880,7 +1880,7 @@ function* layoutBlocksPass(
         return member.kind === 'paragraph' ? breakBlock(member, at) : [];
       },
       skipBlock: (at) =>
-        prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || collapsesSectionMark(at)),
+        prepared[at]?.kind === 'paragraph' && (!!prepared[at].frame || !!emptySectionMarkAt(at)),
       breaksBefore: (at) => prepared[at]?.kind === 'paragraph' && breaksBeforeAt(at, prepared[at]),
       sumAdjacentSpacing: styleCascade?.fixedParagraphSpacing,
       tableOpening: (at) =>

@@ -301,7 +301,9 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
     expect(linesPerPage(lay(body).pages)).toEqual([3, 4]);
   });
 
-  test('an ignored page break before an empty section mark does not end the keep group', () => {
+  // The empty mark never opens a sheet, so nothing keeps with it: the heading stays with the
+  // fillers, the mark rides below them, and the next section opens the next sheet.
+  test('a keepNext paragraph before an empty section mark is priced alone', () => {
     const section =
       '<w:sectPr><w:pgSz w:w="4000" w:h="2000"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>';
     const mark =
@@ -309,7 +311,7 @@ describe('w:keepNext (§17.3.1.15) — stay on the page the next paragraph start
       section +
       '</w:pPr></w:p>';
     const body = fillers(4) + one('heading', '<w:keepNext/>') + mark + one('next') + section;
-    expect(linesPerPage(lay(body).pages)).toEqual([4, 2, 1]);
+    expect(linesPerPage(lay(body).pages)).toEqual([6, 1]);
   });
 
   test('a chain of keepNext paragraphs moves together, not one at a time', () => {
