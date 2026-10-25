@@ -43,7 +43,11 @@ import {
 import type { LayoutBox } from './semantic-records.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { withGroupTextboxStories } from './group-textbox-layout.ts';
-import { drawingPaintFields, type DrawingPlaceholderKind } from './drawing-paint-fields.ts';
+import {
+  drawingPaintFields,
+  type DrawingGroupPictureRecord,
+  type DrawingPlaceholderKind,
+} from './drawing-paint-fields.ts';
 import {
   groupPictureLayerFields,
   groupPictureLayerResources,
@@ -232,17 +236,6 @@ export function repositionInlineDrawingsForBaseline(
   });
 }
 
-/** Clip `box` to a horizontal content band; preserves authored size, zeroes clipped axes. */
-/** How a drawing record holds the picture member of a shape group. */
-export interface DrawingGroupPictureRecord {
-  /**
-   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. An output
-   * that cannot draw the picture leaves such a group out, as it leaves out other MC content
-   * it cannot draw. A group without it shows the output's unsupported-drawing result.
-   */
-  readonly alternateContent: boolean;
-}
-
 export interface InlineDrawingRecord {
   readonly kind: 'inlineDrawing';
   readonly drawingNodeId: string;
@@ -275,6 +268,7 @@ export interface InlineDrawingRecord {
   readonly transform: DrawingTransform;
   /** Graphic kind of a non-picture drawing, naming its placeholder; null for pictures. */
   readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
+  /** The title and plot types of a chart that does not paint, for its placeholder. */
   readonly chart?: DrawingChartSummary;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;

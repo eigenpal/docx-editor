@@ -214,6 +214,8 @@ export interface ExportSession {
    * A defensive copy of the original bytes of an EMF or WMF picture that has no raster in this
    * session, for an exporter that draws the metafile itself. Null for any other resource, and
    * when the part's signature does not match the metafile format it claims.
+   *
+   * @internal
    */
   metafileBytes?(
     source: InlineDrawingRecord | AnchoredDrawingRecord

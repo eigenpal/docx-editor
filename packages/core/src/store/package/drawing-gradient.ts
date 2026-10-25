@@ -21,6 +21,7 @@ const MAX_GRADIENT_STOPS = 16;
 /** An affine map `[a, b, c, d, e, f]`: x' = a x + c y + e, y' = b x + d y + f. */
 export type AffineMatrix = readonly [number, number, number, number, number, number];
 
+/** One colour stop of a gradient. @public */
 export interface GradientStop {
   /** Position along the gradient, 0..1. */
   readonly offset: number;

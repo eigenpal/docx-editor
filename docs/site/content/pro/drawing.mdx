@@ -86,7 +86,7 @@ const modules = [drawingModule({ licenseKey: import.meta.env.VITE_DOCX_LICENSE }
 
 `reviewModule()` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
 
-The module serves every editor and export in the page or process, and it stays installed when an editor unmounts or remounts with other modules. Register it before the first document opens. A drawing that the editor already read keeps what it read. If you install the module after a document opened, the console shows a warning once.
+The module serves every editor and export in the page or process, and it stays installed when an editor unmounts or remounts with other modules. Register it before the first document opens. A drawing that the editor already read keeps what it read. If you install the module after a document opened, the console shows a warning once. To render that document's drawings, open it again, or remount the editor.
 
 The chart, SmartArt, effects, and WordArt renderers are part of the module's bundle, so they also load with `reviewModule()`. The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture.
 
@@ -100,7 +100,7 @@ import { installDrawing } from '@docx-editor.dev/pro/drawing';
 installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ```
 
-`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, call `installDrawing()` at startup so that every document reads its drawings the same way.
+`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, add `@docx-editor.dev/pro` as a direct dependency and call `installDrawing()` at startup, before you open any document. A session that opens before the install reads its charts as placeholders, and a strict PDF export from that session is refused.
 
 ## What renders
 
@@ -110,12 +110,13 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 - WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion.
 - EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
 
-These drawings keep a labeled placeholder even with the module:
+These drawings keep a labeled placeholder in the editor even with the module. PDF export leaves them out and reports a `drawing` diagnostic:
 
 - Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
 - SmartArt diagrams with picture fills, or with a text mode that cannot render.
 - WordArt with gradients at angles other than vertical, perspective extrusion, or a shape type whose definition the drawing does not include, other than plain text, triangle, and arch.
-- Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint. The shape paints without them.
+
+Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
 
 For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).
 
@@ -123,7 +124,7 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. Your component fills the drawing's box, and the document content stays unchanged through save.
 
-A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the chart title as plain text or `null`, and `plotTypes`, such as `['bar', 'line']`. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
+A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), or `null`, and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -162,4 +163,4 @@ A chart placeholder also carries `drawing.chart`, a summary read from the chart 
 </Framework>
 </FrameworkTabs>
 
-The title and the alternative text come from the document, so render them as text, never as HTML. The other values of `placeholderGraphicKind` are `shape`, `group`, `textbox`, `canvas`, and `graphic`. Floating WordArt without the module, and metafile placeholders in PDF export, have no declaration hook. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+The title and the alternative text come from the document, so render them as text, never as HTML. The other values of `placeholderGraphicKind` are `shape`, `group`, `textbox`, `canvas`, and `graphic`. Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor; PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).

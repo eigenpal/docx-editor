@@ -185,6 +185,7 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
+    // @internal
     metafileBytes?(source: InlineDrawingRecord | AnchoredDrawingRecord): {
         readonly bytes: Uint8Array;
         readonly mime: 'image/x-emf' | 'image/x-wmf';

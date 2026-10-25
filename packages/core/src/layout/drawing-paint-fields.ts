@@ -11,7 +11,20 @@ import type {
   VectorShapeProjection,
 } from '../store/package/drawing-projection.ts';
 import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
-import type { DrawingGroupPictureRecord } from './drawing-layout.ts';
+
+/**
+ * How a drawing record holds the picture member of a shape group.
+ *
+ * @public
+ */
+export interface DrawingGroupPictureRecord {
+  /**
+   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. An output
+   * that cannot draw the picture leaves such a group out, as it leaves out other MC content
+   * it cannot draw. A group without it shows the output's unsupported-drawing result.
+   */
+  readonly alternateContent: boolean;
+}
 
 /**
  * The kind of graphic a non-picture drawing holds: `graphic` for any kind the engine does not

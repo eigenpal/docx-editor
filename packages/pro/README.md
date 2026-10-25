@@ -162,7 +162,7 @@ Register `drawingModule()` to render charts, SmartArt saved without its drawing,
 ```ts
 import { drawingModule } from '@docx-editor.dev/pro/drawing';
 
-const MODULES = [drawingModule()];
+const MODULES = [drawingModule({ licenseKey: process.env.DOCX_LICENSE })];
 ```
 
 For headless use, call `installDrawing()` from the same entry before you open documents.
@@ -171,7 +171,7 @@ For headless use, call `installDrawing()` from the same entry before you open do
 
 This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
-`reviewModule`, `customNodesModule`, `collaborationModule`, `drawingModule`, and `installDrawing` accept an optional `licenseKey`. Pass the key once, to any of them. Construction never validates it and never touches the network.
+`reviewModule`, `customNodesModule`, `collaborationModule`, `drawingModule`, and `installDrawing` accept an optional `licenseKey`. Pass the key once, to any of them. The key is optional and is never validated or sent anywhere: every module works the same with or without it. Production use requires an EigenPal Pro License, and the key identifies yours when you contact support. Construction never validates it and never touches the network.
 
 ## Documentation
 

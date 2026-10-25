@@ -1,5 +1,5 @@
-// A chart that does not paint carries its title and plot types, so its placeholder and a host
-// component replacing it can name the chart.
+// A chart that does not paint carries the title it shows and its plot types, so a host
+// component that replaces its placeholder can name the chart.
 
 import { expect, test } from 'bun:test';
 import { projectDrawingsInPackage } from '../package/drawing-projection.ts';
@@ -31,4 +31,30 @@ test('a chart without a title has a null title', () => {
     chartPackage(chartSpace(BAR + CATEGORY_VALUE_AXES))
   );
   expect(projection!.chartSummary).toEqual({ title: null, plotTypes: ['bar'] });
+});
+
+const summaryOf = (xml: string) => projectDrawingsInPackage(chartPackage(xml))[0]!.chartSummary;
+const automatic = (xml: string) =>
+  xml.replace('<c:autoTitleDeleted val="1"/>', '<c:autoTitleDeleted val="0"/>');
+
+test('title paragraphs and line breaks read as spaces', () => {
+  const twoLines = 'Revenue</a:t></a:r></a:p><a:p><a:r><a:t>2024';
+  const summary = summaryOf(chartSpace(BAR + CATEGORY_VALUE_AXES, { title: twoLines }));
+  expect(summary?.title).toBe('Revenue 2024');
+});
+
+test('a title from a cell reads its cached text', () => {
+  const cell =
+    '<c:title><c:tx><c:strRef><c:f>S!A1</c:f><c:strCache><c:ptCount val="1"/>' +
+    '<c:pt idx="0"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx></c:title>';
+  const xml = chartSpace(BAR + CATEGORY_VALUE_AXES).replace(
+    '<c:autoTitleDeleted',
+    `${cell}<c:autoTitleDeleted`
+  );
+  expect(summaryOf(xml)?.title).toBe('Sales');
+});
+
+test('an automatic title is the name of the only series', () => {
+  expect(summaryOf(automatic(chartSpace(BAR + CATEGORY_VALUE_AXES)))?.title).toBe('One');
+  expect(summaryOf(automatic(chartSpace(BAR + LINE + CATEGORY_VALUE_AXES)))?.title).toBeNull();
 });

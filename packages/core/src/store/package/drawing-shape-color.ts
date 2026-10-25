@@ -12,8 +12,11 @@ export type ShapeSchemeColorResolver = (scheme: string) => string | null;
 
 const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
 
+/** A resolved shape colour. @public */
 export interface ShapeColor {
+  /** Validated six-character sRGB hex, without `#`. */
   readonly hex: string;
+  /** Opacity, 0..1. */
   readonly alpha: number;
 }
 

@@ -832,8 +832,11 @@ export interface DrawingAccessibility {
 }
 
 // @public
+export type DrawingChartPlotType = 'area' | 'area3D' | 'bar' | 'bar3D' | 'bubble' | 'doughnut' | 'line' | 'line3D' | 'ofPie' | 'pie' | 'pie3D' | 'radar' | 'scatter' | 'stock' | 'surface' | 'surface3D';
+
+// @public
 export interface DrawingChartSummary {
-    readonly plotTypes: readonly string[];
+    readonly plotTypes: readonly DrawingChartPlotType[];
     readonly title: string | null;
 }
 
@@ -1383,7 +1386,7 @@ export interface GlyphOutline {
 // @public
 export function glyphSizeFactorOf(style: ResolvedRunStyle): number;
 
-// @public (undocumented)
+// @public
 export interface GradientStop {
     readonly alpha: number;
     readonly hex: string;
@@ -1635,7 +1638,6 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
-    // (undocumented)
     readonly chart?: DrawingChartSummary;
     // (undocumented)
     readonly crop: SourceCrop;
@@ -4084,11 +4086,9 @@ export const sha256FontBytes: (bytes: Uint8Array) => string;
 // @public
 export function shadingFillFromElement(shd: OoxmlElement | undefined): string | undefined;
 
-// @public (undocumented)
+// @public
 export interface ShapeColor {
-    // (undocumented)
     readonly alpha: number;
-    // (undocumented)
     readonly hex: string;
 }
 
@@ -4237,7 +4237,6 @@ export interface ShapeInput {
 
 // @public
 export interface ShapeReflection {
-    // (undocumented)
     readonly blurEmu: number;
     readonly distanceEmu: number;
     readonly endAlpha: number;
@@ -4247,11 +4246,9 @@ export interface ShapeReflection {
 
 // @public
 export interface ShapeShadow {
-    // (undocumented)
     readonly alpha: number;
     readonly blurEmu: number;
     readonly dxEmu: number;
-    // (undocumented)
     readonly dyEmu: number;
     readonly hex: string;
 }

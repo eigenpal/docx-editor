@@ -1,7 +1,6 @@
-// A plain-text summary of a chart drawing: its title and plot types, read from the chart part.
-// A placeholder that stands in for an unpainted chart shows it, and a host component that
-// replaces the placeholder can show it too. Chart text is file-derived, so the title is
-// bounded and never parsed as markup.
+// A plain-text summary of a chart drawing: its title and plot types, read from the chart part
+// for a host component that replaces the chart's placeholder. Chart text is file-derived, so
+// the title is bounded and never parsed as markup.
 
 import { CHART_NAMESPACE_URI, type ChartPartResolver } from './chart-parts.ts';
 import { findGraphicData } from './drawing-group-frame.ts';
@@ -13,18 +12,61 @@ const MAX_PLOT_TYPES = 8;
 const MAX_TITLE_NODES = 2000;
 
 /**
+ * A chart plot type, named by its element without the `Chart` suffix. Column and bar charts
+ * are both `bar`; `ofPie` is a pie-of-pie or bar-of-pie chart.
+ *
+ * @public
+ */
+export type DrawingChartPlotType =
+  | 'area'
+  | 'area3D'
+  | 'bar'
+  | 'bar3D'
+  | 'bubble'
+  | 'doughnut'
+  | 'line'
+  | 'line3D'
+  | 'ofPie'
+  | 'pie'
+  | 'pie3D'
+  | 'radar'
+  | 'scatter'
+  | 'stock'
+  | 'surface'
+  | 'surface3D';
+
+const PLOT_TYPES: ReadonlySet<string> = new Set<DrawingChartPlotType>([
+  'area',
+  'area3D',
+  'bar',
+  'bar3D',
+  'bubble',
+  'doughnut',
+  'line',
+  'line3D',
+  'ofPie',
+  'pie',
+  'pie3D',
+  'radar',
+  'scatter',
+  'stock',
+  'surface',
+  'surface3D',
+]);
+
+/**
  * The title and plot types of a chart, as text.
  *
  * @public
  */
 export interface DrawingChartSummary {
-  /** The chart title as plain text, or null when the chart has no typed title. */
-  readonly title: string | null;
   /**
-   * The chart's plot types in document order, named by their element without the `Chart`
-   * suffix: `bar`, `line`, `pie`, `bar3D`, `scatter`, and so on.
+   * The title the chart shows, as plain text: its own title, typed or from a cell, or the name
+   * of its only series for an automatic title. Null when it shows none.
    */
-  readonly plotTypes: readonly string[];
+  readonly title: string | null;
+  /** The chart's plot types in document order; a combination chart has more than one. */
+  readonly plotTypes: readonly DrawingChartPlotType[];
 }
 
 function chartChild(element: OoxmlElement, localName: string): OoxmlElement | null {
@@ -35,25 +77,63 @@ function chartChild(element: OoxmlElement, localName: string): OoxmlElement | nu
   return null;
 }
 
-/** The `a:t` text under a title, depth-first, bounded in nodes and length. */
-function titleText(title: OoxmlElement): string | null {
+/**
+ * The text under a title or series name: rich text runs (`a:t`, a space at each paragraph
+ * and line break) and cached cell text (`c:v`), depth-first, bounded in nodes and length.
+ */
+function plainText(element: OoxmlElement): string | null {
   let text = '';
   let visited = 0;
-  const stack: OoxmlNode[] = [title];
+  const stack: OoxmlNode[] = [element];
   while (stack.length > 0 && visited < MAX_TITLE_NODES && text.length < MAX_TITLE_UNITS) {
     const node = stack.pop()!;
     visited += 1;
     if (node.kind === 'textValue') continue;
-    if (node.namespaceUri === DRAWINGML_MAIN && node.localName === 't') {
-      for (const child of node.children) if (child.kind === 'textValue') text += child.value;
+    const drawing = node.namespaceUri === DRAWINGML_MAIN;
+    if (drawing && (node.localName === 'p' || node.localName === 'br')) text += ' ';
+    const textual =
+      (drawing && node.localName === 't') ||
+      (node.namespaceUri === CHART_NAMESPACE_URI && node.localName === 'v');
+    if (textual) {
+      for (const child of node.children) {
+        if (child.kind === 'textValue') text += child.value.slice(0, MAX_TITLE_UNITS);
+      }
       continue;
     }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       stack.push(node.children[index]!);
     }
   }
-  const trimmed = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_UNITS);
-  return trimmed.length > 0 ? trimmed : null;
+  const trimmed = text
+    .slice(0, 2 * MAX_TITLE_UNITS)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return trimmed.length > 0 ? trimmed.slice(0, MAX_TITLE_UNITS) : null;
+}
+
+/**
+ * The title a chart shows: its own title text, or, when it names none and keeps its automatic
+ * title, the name of its only series.
+ */
+function chartTitle(chart: OoxmlElement, plotArea: OoxmlElement | null): string | null {
+  const title = chartChild(chart, 'title');
+  const own = title ? chartChild(title, 'tx') : null;
+  const text = own ? plainText(own) : null;
+  if (text !== null) return text;
+  const deleted = chartChild(chart, 'autoTitleDeleted');
+  const value = deleted?.attributes.find((attribute) => attribute.localName === 'val')?.value;
+  if (!title && (value === '1' || value === 'true')) return null;
+  let only: OoxmlElement | null = null;
+  for (const plot of plotArea?.children ?? []) {
+    if (plot.kind === 'textValue' || !plot.localName.endsWith('Chart')) continue;
+    for (const series of plot.children) {
+      if (series.kind === 'textValue' || series.localName !== 'ser') continue;
+      if (only) return null;
+      only = series;
+    }
+  }
+  const name = only ? chartChild(only, 'tx') : null;
+  return name ? plainText(name) : null;
 }
 
 /** The summary of the chart behind a drawing anchor, or null when it holds no chart part. */
@@ -67,18 +147,16 @@ export function readChartSummary(
   const part = reference ? resolveChartPart(reference) : null;
   const chart = part ? chartChild(part.chartSpace, 'chart') : null;
   if (!chart) return null;
-  const title = chartChild(chart, 'title');
   const plotArea = chartChild(chart, 'plotArea');
-  const plotTypes: string[] = [];
+  const plotTypes: DrawingChartPlotType[] = [];
   for (const child of plotArea?.children ?? []) {
     if (plotTypes.length >= MAX_PLOT_TYPES) break;
     if (child.kind === 'textValue' || child.namespaceUri !== CHART_NAMESPACE_URI) continue;
-    if (child.localName.endsWith('Chart') && child.localName.length > 5) {
-      plotTypes.push(child.localName.slice(0, -5));
-    }
+    const type = child.localName.endsWith('Chart') ? child.localName.slice(0, -5) : '';
+    if (PLOT_TYPES.has(type)) plotTypes.push(type as DrawingChartPlotType);
   }
   return Object.freeze({
-    title: title ? titleText(title) : null,
+    title: chartTitle(chart, plotArea),
     plotTypes: Object.freeze(plotTypes),
   });
 }

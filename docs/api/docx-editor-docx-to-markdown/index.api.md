@@ -75,8 +75,11 @@ export interface DrawingAccessibility {
 }
 
 // @public
+export type DrawingChartPlotType = 'area' | 'area3D' | 'bar' | 'bar3D' | 'bubble' | 'doughnut' | 'line' | 'line3D' | 'ofPie' | 'pie' | 'pie3D' | 'radar' | 'scatter' | 'stock' | 'surface' | 'surface3D';
+
+// @public
 export interface DrawingChartSummary {
-    readonly plotTypes: readonly string[];
+    readonly plotTypes: readonly DrawingChartPlotType[];
     readonly title: string | null;
 }
 
@@ -271,6 +274,7 @@ export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
+    // @internal
     metafileBytes?(source: InlineDrawingRecord | AnchoredDrawingRecord): {
         readonly bytes: Uint8Array;
         readonly mime: 'image/x-emf' | 'image/x-wmf';
@@ -420,7 +424,6 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
-    // (undocumented)
     readonly chart?: DrawingChartSummary;
     // (undocumented)
     readonly crop: SourceCrop;
@@ -984,7 +987,6 @@ export interface SemanticTrackedChangeArtifactRecord {
 
 // @public
 export interface ShapeReflection {
-    // (undocumented)
     readonly blurEmu: number;
     readonly distanceEmu: number;
     readonly endAlpha: number;

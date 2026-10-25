@@ -33,7 +33,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * import { createDocxEditor } from '@docx-editor.dev/core/editor';
  * import { drawingModule } from '@docx-editor.dev/pro/drawing';
  *
- * const editor = createDocxEditor({ document: bytes, modules: [drawingModule()] });
+ * const modules = [drawingModule({ licenseKey: process.env.DOCX_LICENSE })];
+ * const editor = createDocxEditor({ document: bytes, modules });
  * ```
  *
  * @packageDocumentation

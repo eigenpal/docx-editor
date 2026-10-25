@@ -4760,11 +4760,9 @@ export interface SetTextFormFieldDefaultOp {
 // @public
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;
 
-// @public (undocumented)
+// @public
 export interface ShapeColor {
-    // (undocumented)
     readonly alpha: number;
-    // (undocumented)
     readonly hex: string;
 }
 
@@ -4786,7 +4784,6 @@ export interface ShapeEffectsInput {
 
 // @public
 export interface ShapeReflection {
-    // (undocumented)
     readonly blurEmu: number;
     readonly distanceEmu: number;
     readonly endAlpha: number;
@@ -4799,11 +4796,9 @@ export type ShapeSchemeColorResolver = (scheme: string) => string | null;
 
 // @public
 export interface ShapeShadow {
-    // (undocumented)
     readonly alpha: number;
     readonly blurEmu: number;
     readonly dxEmu: number;
-    // (undocumented)
     readonly dyEmu: number;
     readonly hex: string;
 }

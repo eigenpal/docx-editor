@@ -612,7 +612,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The browser rasterizes the metafile and the editor paints it at the authored extent. The drawingModule from @docx-editor.dev/pro/drawing, under the EigenPal Pro License, places metafiles that set their own drawing origin correctly. PDF export includes the module. Without it, a metafile picture in PDF export keeps its extent and shows a labeled placeholder. PDF export draws the metafile as vector paths, text, and embedded bitmaps in the picture frame, with its crop and clip. Metafile text uses the named font when the document uses it, and the default font otherwise. A metafile that will not convert keeps its extent and shows a labeled placeholder. The original bytes round-trip untouched.',
+      'The browser rasterizes the metafile and the editor paints it at the authored extent. The drawingModule from @docx-editor.dev/pro/drawing, under the EigenPal Pro License, places metafiles that set their own drawing origin correctly. PDF export includes the module. PDF export draws the metafile as vector paths, text, and embedded bitmaps in the picture frame, with its crop and clip. Metafile text uses the named font when the document uses it, and the default font otherwise. In the editor, a metafile that will not convert keeps its extent and shows a labeled placeholder; PDF export leaves it out and reports a diagnostic. The original bytes round-trip untouched.',
   },
   {
     id: 'images.tiff',
@@ -624,7 +624,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The browser decodes baseline TIFF and the editor paints it at the authored extent. PDF export decodes the same TIFF flavours, including CCITT Group 4 black and white scans, and embeds the picture. A multi-page file shows its first page. A flavour that will not decode keeps its extent and shows a labeled placeholder. Inserting a new TIFF is not supported yet.',
+      'The browser decodes baseline TIFF and the editor paints it at the authored extent. PDF export decodes the same TIFF flavors, including CCITT Group 4 black and white scans, and embeds the picture. A multi-page file shows its first page. A flavour that will not decode keeps its extent and shows a labeled placeholder. Inserting a new TIFF is not supported yet.',
   },
   {
     id: 'images.tracked',

@@ -25,11 +25,13 @@ const MAX_SHADOW_EMU = 1_270_000;
 export interface ShapeShadow {
   /** Offset of the silhouette, in the component's point space. */
   readonly dxEmu: number;
+  /** Vertical offset of the silhouette, in the same units. */
   readonly dyEmu: number;
   /** Blur radius in the same units; 0 is a crisp silhouette. */
   readonly blurEmu: number;
   /** Validated six-character sRGB hex, without `#`. */
   readonly hex: string;
+  /** Opacity, 0..1. */
   readonly alpha: number;
 }
 
@@ -175,5 +177,6 @@ export interface ShapeReflection {
   readonly endPosition: number;
   /** Gap between the shape and its mirror image. */
   readonly distanceEmu: number;
+  /** Blur radius of the mirror image. */
   readonly blurEmu: number;
 }
