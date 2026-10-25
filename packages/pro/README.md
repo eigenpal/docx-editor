@@ -162,7 +162,8 @@ Register `drawingModule()` to render charts, SmartArt saved without its drawing,
 ```ts
 import { drawingModule } from '@docx-editor.dev/pro/drawing';
 
-const MODULES = [drawingModule({ licenseKey: process.env.DOCX_LICENSE })];
+// Next.js; with Vite, read import.meta.env.VITE_DOCX_LICENSE.
+const MODULES = [drawingModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
 ```
 
 For headless use, call `installDrawing()` from the same entry before you open documents.

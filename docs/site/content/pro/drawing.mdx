@@ -29,7 +29,7 @@ Text watermarks are a page feature, so they render without the module.
 
 ## Register the module
 
-Pass `drawingModule()` to the editor through `modules`. Build the module array once, outside render.
+Pass `drawingModule()` to the editor through `modules`. Build the module array once: outside render in React, and in `<script setup>` or a module file in Vue.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -163,4 +163,4 @@ A chart placeholder also carries `drawing.chart`, a summary read from the chart 
 </Framework>
 </FrameworkTabs>
 
-The title and the alternative text come from the document, so render them as text, never as HTML. The values of `placeholderGraphicKind` are `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor; PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+The title and the alternative text come from the document, so render them as text, never as HTML. To type a card component, import `DrawingChartSummary`, `DrawingChartPlotType`, and `DrawingPlaceholderKind` from `@docx-editor.dev/core/layout`. The values of `placeholderGraphicKind` are `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor; PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).

@@ -30,7 +30,7 @@ Node.js requires `^20.16.0 || >=22.3.0`.
 ## Features
 
 - [Read and save DOCX files](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving).
-- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/word-fidelity).
+- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/word-fidelity). Charts, SmartArt saved without its drawing, shape effects, and WordArt need [`@docx-editor.dev/pro/drawing`](https://www.docx-editor.dev/docs/2.x/pro/drawing).
 - [Build an editor with shared commands and controls](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots).
 - [Configure fonts for text measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 

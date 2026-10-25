@@ -14,14 +14,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * - the layout of a SmartArt diagram saved without its drawing;
  * - shape and picture effects: glow, inner shadow, reflection, soft edge, and the rim of a
  *   dark-edged bevel;
- * - WordArt: VML text paths outside a watermark, laid along arches, triangles and the other
- *   text path shapes, with gradient fills, shadows and 3-D extrusion;
- * - EMF and WMF pictures: a vector replay for PDF export, and a browser raster that honours a
+ * - WordArt: VML text paths outside a watermark, fitted to the shape, between two guides, or
+ *   along an arch, with gradient fills, shadows and 3-D extrusion;
+ * - EMF and WMF pictures: a vector replay for PDF export, and a browser raster that honors a
  *   metafile's own drawing origin.
  *
- * Without it, a chart, an unlaid diagram, a WordArt drawing and a metafile picture in PDF
- * export keep their labelled placeholders, the editor rasterizes metafiles with the plain
- * converter, and a shape paints without those effects.
+ * Without it, the editor shows a labeled placeholder for a chart, a diagram saved without its
+ * drawing, and inline WordArt; floating WordArt does not show. The editor still rasterizes
+ * EMF and WMF pictures, and a shape paints without those effects. PDF export always includes
+ * this module.
  *
  * The renderers serve every editor and export in the process. Install them before any
  * document opens; a later install logs a console warning once. `reviewModule()` installs them
@@ -33,7 +34,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * import { createDocxEditor } from '@docx-editor.dev/core/editor';
  * import { drawingModule } from '@docx-editor.dev/pro/drawing';
  *
- * const modules = [drawingModule({ licenseKey: process.env.DOCX_LICENSE })];
+ * // Next.js; with Vite, read import.meta.env.VITE_DOCX_LICENSE.
+ * const modules = [drawingModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
  * const editor = createDocxEditor({ document: bytes, modules });
  * ```
  *
