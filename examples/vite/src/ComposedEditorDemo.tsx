@@ -31,7 +31,7 @@ import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-import { catalogDirection, locales, type LocaleCode } from '@docx-editor.dev/i18n';
+import { demoCatalog, demoDirection, demoLanguage } from '../../shared/demo-language';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
@@ -385,7 +385,7 @@ function EditorChrome({
   };
   // A right-to-left interface starts new documents right to left, in the interface language.
   const newDocument = () => {
-    const rtl = catalogDirection(DEMO_CATALOG) === 'rtl';
+    const rtl = demoDirection() === 'rtl';
     const language = DEMO_CATALOG?._lang;
     if (!collaborating)
       editor?.load(
@@ -590,13 +590,10 @@ function RulerRow() {
 // The demo surface
 // ─────────────────────────────────────────────────────────────────────────────
 
-// `?lang=ar` (or any shipped locale code) translates the chrome. Under `LocaleProvider` the
-// library parts mirror on their own for a right-to-left catalog; the demo's own header is
-// not a library part, so the wrapper takes the catalog direction for it.
-const DEMO_LANG = new URLSearchParams(location.search).get('lang') ?? '';
-const DEMO_CATALOG = Object.hasOwn(locales, DEMO_LANG)
-  ? locales[DEMO_LANG as LocaleCode]
-  : undefined;
+// `?lang=ar` (or any shipped locale code) translates the chrome; the settings panel sets it.
+// Under `LocaleProvider` the library parts mirror on their own for a right-to-left catalog;
+// the demo's own header is not a library part, so the wrapper takes the catalog direction.
+const DEMO_CATALOG = demoCatalog(demoLanguage());
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const showAdapterSwitcher =
@@ -666,7 +663,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
       <div
         className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
         data-testid="composed-mount"
-        dir={catalogDirection(DEMO_CATALOG) ?? 'ltr'}
+        dir={demoDirection()}
       >
         {loadError ? (
           // A failed fetch is NOT a loading state: it is terminal, and routing it through

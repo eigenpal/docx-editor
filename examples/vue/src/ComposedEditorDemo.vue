@@ -1,14 +1,19 @@
 <template>
-  <div
-    :class="['docx-editor', 'demo-app', colorMode === 'dark' ? 'dark' : '']"
-    data-testid="composed-mount"
-  >
-    <!-- A failed fetch is NOT a loading state: it is terminal, and routing it through
+  <!-- `?lang=ar` (or any shipped locale code) translates the chrome; the settings panel sets
+       it. The library parts mirror on their own for a right-to-left catalog; the demo's own
+       header is not a library part, so the wrapper takes the catalog direction. -->
+  <LocaleProvider :i18n="catalog">
+    <div
+      :class="['docx-editor', 'demo-app', colorMode === 'dark' ? 'dark' : '']"
+      data-testid="composed-mount"
+      :dir="direction"
+    >
+      <!-- A failed fetch is NOT a loading state: it is terminal, and routing it through
          the polite live region would announce it as progress. Its own assertive region. -->
-    <div v-if="loadError" class="demo-loading" role="alert">
-      {{ `Could not load the document: ${loadError.message}` }}
-    </div>
-    <!-- The Root mounts BEFORE the bytes arrive, so the visitor sees the real chrome with
+      <div v-if="loadError" class="demo-loading" role="alert">
+        {{ `Could not load the document: ${loadError.message}` }}
+      </div>
+      <!-- The Root mounts BEFORE the bytes arrive, so the visitor sees the real chrome with
          the library's own loading overlay over it instead of a bare spinner on an empty
          page. `document` stays undefined until the fetch settles, which mounts NO document
          (not an empty one), and the Root builds a fresh editor when `document` or `fonts`
@@ -17,54 +22,55 @@
          Authoring is ambient: comments and tracked changes take their `@w:author` from
          `author`, the way the Office JS API sources it from context. A real app supplies
          the signed-in user; a demo supplies a name so replies can be written at all. -->
-    <DocxEditorRoot
-      v-else
-      :document="bytes"
-      author="Demo Reviewer"
-      mode="edit"
-      :modules="proModules"
-      :fonts="fonts ?? undefined"
-      @font-error="onFontError"
-    >
-      <EditorChrome
-        :title="title"
-        :color-mode="colorMode"
-        :show-adapter-switcher="showAdapterSwitcher"
-        @update:title="title = $event"
-        @update:color-mode="colorMode = $event"
-        @insert-citation="citationForm = { mode: 'insert', at: $event }"
-      />
-      <div class="demo-ruler-row">
-        <DocxEditorHorizontalRuler />
-      </div>
-      <div class="demo-main">
-        <DocxEditorNavigation :pane-width="280" />
-        <DocxEditorViewport class="demo-viewport">
-          <div class="demo-vruler">
-            <DocxEditorVerticalRuler />
-          </div>
-          <DocxEditorHeaderFooterChrome />
-          <DocxEditorNotesChrome />
-          <DocxEditorContent />
-          <CustomNodeChrome :on-node-click="editCitation" />
-          <DocxEditorContextMenu>
-            <CustomNodeContextMenu :on-edit-node="editCitation" />
-          </DocxEditorContextMenu>
-          <DocxEditorHyperLink />
-          <DocxEditorReview :card="{ className: 'demo-review-card' }" />
-        </DocxEditorViewport>
-        <DocxEditorPageNumber />
-        <!-- The library's loading overlay, pinned over the workspace (`.demo-main` is the
+      <DocxEditorRoot
+        v-else
+        :document="bytes"
+        author="Demo Reviewer"
+        mode="edit"
+        :modules="proModules"
+        :fonts="fonts ?? undefined"
+        @font-error="onFontError"
+      >
+        <EditorChrome
+          :title="title"
+          :color-mode="colorMode"
+          :show-adapter-switcher="showAdapterSwitcher"
+          @update:title="title = $event"
+          @update:color-mode="colorMode = $event"
+          @insert-citation="citationForm = { mode: 'insert', at: $event }"
+        />
+        <div class="demo-ruler-row">
+          <DocxEditorHorizontalRuler />
+        </div>
+        <div class="demo-main">
+          <DocxEditorNavigation :pane-width="280" />
+          <DocxEditorViewport class="demo-viewport">
+            <div class="demo-vruler">
+              <DocxEditorVerticalRuler />
+            </div>
+            <DocxEditorHeaderFooterChrome />
+            <DocxEditorNotesChrome />
+            <DocxEditorContent />
+            <CustomNodeChrome :on-node-click="editCitation" />
+            <DocxEditorContextMenu>
+              <CustomNodeContextMenu :on-edit-node="editCitation" />
+            </DocxEditorContextMenu>
+            <DocxEditorHyperLink />
+            <DocxEditorReview :card="{ className: 'demo-review-card' }" />
+          </DocxEditorViewport>
+          <DocxEditorPageNumber />
+          <!-- The library's loading overlay, pinned over the workspace (`.demo-main` is the
              positioned ancestor). Zero conditions wired here: the engine reports both the
              first open and a later one, so picking a large document through Open DOCX
              shows this screen instead of freezing on the old one. It renders nothing while
              the document is on screen. -->
-        <DocxEditorLoading overlay />
-        <PerfHud />
-        <CitationDialog :form="citationForm" @close="citationForm = null" />
-      </div>
-    </DocxEditorRoot>
-  </div>
+          <DocxEditorLoading overlay />
+          <PerfHud />
+          <CitationDialog :form="citationForm" @close="citationForm = null" />
+        </div>
+      </DocxEditorRoot>
+    </div>
+  </LocaleProvider>
 </template>
 
 <script setup lang="ts">
@@ -84,6 +90,7 @@ import {
   DocxEditorHyperLink,
   DocxEditorPageNumber,
   DocxEditorLoading,
+  LocaleProvider,
   useDocxSource,
 } from '@docx-editor.dev/vue';
 import { customNodesModule, reviewModule, type ActivatedCustomNode } from '@docx-editor.dev/pro';
@@ -99,11 +106,15 @@ import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
 import { DEMO_CITATION, type CitationFormState } from './demoCitation';
 import { storedReviewPane } from '../../shared/review-settings';
+import { demoCatalog, demoDirection } from '../../shared/demo-language';
 
 void DocxEditorToolbar;
 void DocxEditorMenu;
 
 const props = defineProps<{ fixtureUrl: string }>();
+
+const catalog = demoCatalog();
+const direction = demoDirection();
 
 const showAdapterSwitcher =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
