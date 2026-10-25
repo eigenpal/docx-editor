@@ -123,6 +123,12 @@ export interface ExclusionZone {
    * forward-only: reaching back would move the anchor that positions them.
    */
   readonly pageFramedBand?: boolean;
+  /**
+   * A text-anchored table raised above its anchor that leaves no text passage beside it. Like a
+   * page-framed band it moves the earlier lines it covers on its page below it. Its own position
+   * leaves out that move, so it does not chase its anchor.
+   */
+  readonly reachesEarlierLines?: boolean;
   readonly sourceOrder: number;
   readonly paintLayer: DrawingPaintLayer;
   readonly relativeHeight: number;

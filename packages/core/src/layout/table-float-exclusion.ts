@@ -31,6 +31,7 @@ import {
   readTableStructure,
   type SemanticTableStructure,
   type TableAnchorFrames,
+  type TableFloatPosition,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { pinnedTableBreak } from './table-pinned-break.ts';
@@ -162,6 +163,18 @@ export function addFloatingTableExclusions(
         relativeHeight: 0,
         allowOverlap: true,
         columnIndex: column,
+        // A page- or margin-positioned table does not move with the text before it, so it also
+        // moves the earlier lines it covers on its page below it.
+        ...(metadata.float.vertAnchor !== 'text'
+          ? { pageFramedBand: true }
+          : raisedAboveAnchor(metadata.float) &&
+              !metadata.float.ySpec &&
+              Math.max(
+                box.x - distances.left - left,
+                left + width - (box.x + box.width + distances.right)
+              ) <= TABLE_WRAP_MIN_PASSAGE_PT
+            ? { reachesEarlierLines: true }
+            : {}),
         y: box.y,
         verticalBand: {
           x: box.x - distances.left,
@@ -196,6 +209,14 @@ export function addFloatingTableExclusions(
 }
 
 const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+
+/**
+ * Whether a text-anchored offset raises the table above its anchor: by more than the one twip
+ * of storage bias that an authored `w:tblpY="0"` carries.
+ */
+function raisedAboveAnchor(float: TableFloatPosition): boolean {
+  return float.yPt < -0.051;
+}
 const NO_SHIFT: { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } =
   Object.freeze({ dx: 0, dy: 0 });
 
@@ -682,6 +703,15 @@ export function clearEarlierText(
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
+  // A raised table that leaves no passage beside it keeps its place: the earlier lines it
+  // covers move below it instead (`reachesEarlierLines`).
+  const column = frames.text;
+  const right = left + tableWidth + distances.left + distances.right;
+  if (
+    raisedAboveAnchor(float) &&
+    Math.max(left - column.left, column.left + column.width - right) <= TABLE_WRAP_MIN_PASSAGE_PT
+  )
+    return anchorY;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier

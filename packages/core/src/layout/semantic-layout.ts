@@ -1,3 +1,5 @@
+import { createEarlierLinePush } from './earlier-line-push.ts';
+import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
@@ -111,7 +113,7 @@ import {
   paragraphHoldsNothing,
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
-import { resolveOverlapDisplacement, shiftAnchoredDrawingY } from './drawing-overlap.ts';
+import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -1164,6 +1166,7 @@ function* layoutBlocksPass(
 
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   const positionedByTable = new Map(positionedTables.map((anchor) => [anchor.table.id, anchor]));
+  const earlierLinePush = createEarlierLinePush((id) => paragraphDocumentOrder.get(id));
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
   let regionFragmentStart = 0;
@@ -1296,37 +1299,17 @@ function* layoutBlocksPass(
     return options.drawingSourceOrder?.get(projectedId);
   };
 
-  const collectAnchoredDrawings = (drawings: readonly AnchoredDrawingRecord[]): void => {
-    if (drawings.length === 0) return;
-    for (const drawing of drawings) {
-      if (
-        pendingAnchoredDrawings.some((existing) => existing.drawingNodeId === drawing.drawingNodeId)
-      ) {
-        continue;
-      }
-      pendingAnchoredDrawings.push(
-        drawing.sourceOrder === undefined && sourceOrderOf(drawing.drawingNodeId) !== undefined
-          ? Object.freeze({ ...drawing, sourceOrder: sourceOrderOf(drawing.drawingNodeId) })
-          : drawing
-      );
-    }
-    if (!options.inlineDrawingLayout) return;
-    const resolved = resolveOverlapDisplacement(pendingAnchoredDrawings, anchorFrameBase());
-    pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length, ...resolved.drawings);
-    if (resolved.deferred.length > 0) {
-      for (const drawing of resolved.deferred) {
-        const count = (anchorPageDeferCounts.get(drawing.drawingNodeId) ?? 0) + 1;
-        anchorPageDeferCounts.set(drawing.drawingNodeId, count);
-        if (count >= MAX_ANCHOR_PAGE_DEFERRALS) {
-          pendingAnchoredDrawings.push(
-            withAnchoredDrawingLayoutFallback(drawing, 'page-defer-exhausted')
-          );
-        } else {
-          deferredAnchoredDrawings.push(drawing);
-        }
-      }
-    }
-  };
+  const collectAnchoredDrawings = (drawings: readonly AnchoredDrawingRecord[]): void =>
+    collectAnchoredDrawingRecords(
+      drawings,
+      {
+        pending: pendingAnchoredDrawings,
+        deferred: deferredAnchoredDrawings,
+        deferCounts: anchorPageDeferCounts,
+      },
+      sourceOrderOf,
+      options.inlineDrawingLayout ? anchorFrameBase : undefined
+    );
 
   const carryDeferredToNextPage = (): void => {
     if (deferredAnchoredDrawings.length === 0) return;
@@ -1822,9 +1805,12 @@ function* layoutBlocksPass(
         flowColumnIndex = anchorColumn;
         collectingCellBreakKeys.begin();
         try {
+          // A raised table keeps the place its anchor had before it pushed earlier lines down.
+          const anchorId = positionedByTable.get(table.id)?.anchorId;
+          const pushed = anchorId === undefined ? 0 : earlierLinePush.of(pages.length, anchorId);
           const start = tableWrap.positionedTableStart(
             table,
-            anchorY,
+            anchorY - pushed,
             columnWidth(),
             anchorFrames(),
             pageFragments,
@@ -2648,6 +2634,15 @@ function* layoutBlocksPass(
       emptyFurnitureAdvances = 0;
       const columnX = columnOffsetX();
       appliedSkipByLineIndex.set(lineIndex, skipBefore);
+      if (skipBefore > 0)
+        earlierLinePush.note(
+          pages.length,
+          paragraphId,
+          cursorY,
+          pendingLine.height,
+          skipBefore,
+          pageExclusionZones()
+        );
       cursorY += skipBefore;
       // Inside the band, so the page's notes and furniture still see the body where it ends.
       if (keptBreakLine) {
