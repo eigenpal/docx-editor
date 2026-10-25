@@ -3,7 +3,9 @@ import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/
 import {
   REVIEW_MARKERS_GUTTER_PX,
   reviewPaneEntitledZoom,
+  hostDirectionOf,
   hostWindowOf,
+  observeHostDirection,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { claimsReviewGutter, useReviewRailRegistry } from './context';
@@ -91,25 +93,17 @@ export function useReviewColumnSide(): () => ReviewColumnSide {
   const viewport = useNavigationViewportElement();
   const host = shallowRef<'ltr' | 'rtl'>('ltr');
   const stop = watch(
-    viewport,
-    (element, _previous, onCleanup) => {
+    [viewport, chrome],
+    ([element, decided], _previous, onCleanup) => {
       const around = element?.parentElement;
-      if (!around) return;
-      const view = hostWindowOf(around);
-      // The nearest `dir` attribute, not the computed style: see the React twin.
+      // A provider's decision wins, so the host needs no watching then.
+      if (decided || !around) return;
+      // `dir` attributes, not the computed style: see the React twin.
       const read = () => {
-        host.value = around.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'rtl' : 'ltr';
+        host.value = hostDirectionOf(around);
       };
       read();
-      // A host that flips `dir` on an ancestor at run time moves the toolbar at once.
-      if (typeof view.MutationObserver !== 'function') return;
-      const observer = new view.MutationObserver(read);
-      observer.observe(around.ownerDocument.documentElement, {
-        attributes: true,
-        attributeFilter: ['dir'],
-        subtree: true,
-      });
-      onCleanup(() => observer.disconnect());
+      onCleanup(observeHostDirection(around, read));
     },
     { immediate: true, flush: 'post' }
   );

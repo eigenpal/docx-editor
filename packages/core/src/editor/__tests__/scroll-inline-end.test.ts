@@ -56,3 +56,16 @@ test('stops following while the reader scrolls away, and resumes at the end', ()
   stop();
   expect(listeners.size).toBe(0);
 });
+
+test('its own scroll, reported after the content grew again, does not unpin it', () => {
+  const { scroller, grow, listeners } = fakeScroller();
+  const stop = keepScrollAtInlineEnd(scroller as unknown as HTMLElement);
+  grow(1600);
+  expect(scroller.scrollLeft).toBe(600);
+  // The content grows before the event for the write above arrives.
+  scroller.scrollWidth = 1650;
+  listeners.get('scroll')?.();
+  grow(1700);
+  expect(scroller.scrollLeft).toBe(700);
+  stop();
+});

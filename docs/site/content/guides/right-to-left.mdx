@@ -70,7 +70,7 @@ function ArabicEditor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-In Vue, wrap `DocxEditor.Root` in `<LocaleProvider :i18n="ar">` the same way. Both adapters return the direction from `useTranslation().dir`.
+In Vue, wrap `DocxEditor.Root` in `<LocaleProvider :i18n="ar">` the same way. To read the direction the interface renders in, use `useChromeDir()` in either adapter.
 
 ### What mirrors
 

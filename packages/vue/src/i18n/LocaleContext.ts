@@ -82,7 +82,9 @@ export const LocaleProvider = defineComponent({
 
 /**
  * The active catalogue's `t()`, the catalogue itself, and its language tag (`_lang`, `en`
- * by default), which formats numbers the way the strings around them read.
+ * by default), which formats numbers the way the strings around them read. Its `dir` is the
+ * providers' direction, `'ltr'` when the chrome inherits a right-to-left host page; use
+ * `useChromeDir()` for the direction the chrome renders in.
  * @public
  */
 export function useTranslation(): {

@@ -45,6 +45,8 @@ import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/
 import {
   hostWindowOf,
   REVIEW_MARKERS_GUTTER_PX,
+  hostDirectionOf,
+  observeHostDirection,
   reviewPaneEntitledZoom,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
@@ -141,21 +143,12 @@ export function useReviewColumnSide(): ReviewColumnSide {
   useLayoutEffect(() => {
     const around = viewport?.parentElement;
     if (chrome || !around) return undefined;
-    const view = hostWindowOf(around);
-    // The nearest `dir` attribute, not the computed style: reading the style here forced a
-    // style pass on the first commit, and the padding flip after it then animated on mount.
-    const read = () =>
-      setHost(around.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'rtl' : 'ltr');
+    // `dir` attributes, not the computed style: reading the style here forced a style pass
+    // on the first commit, and the padding flip after it then animated on mount.
+    const read = () => setHost(hostDirectionOf(around));
     read();
-    // A host that flips `dir` on an ancestor at run time moves the toolbar at once; follow it.
-    if (typeof view.MutationObserver !== 'function') return undefined;
-    const observer = new view.MutationObserver(read);
-    observer.observe(around.ownerDocument.documentElement, {
-      attributes: true,
-      attributeFilter: ['dir'],
-      subtree: true,
-    });
-    return () => observer.disconnect();
+    // A host that flips `dir` at run time moves the toolbar at once; follow it.
+    return observeHostDirection(around, read);
   }, [chrome, viewport]);
   return (chrome ?? host) === 'rtl' ? 'left' : 'right';
 }

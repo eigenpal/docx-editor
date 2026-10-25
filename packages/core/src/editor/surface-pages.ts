@@ -41,12 +41,18 @@ export function surfaceScroller(container: HTMLElement): HTMLElement | null {
  * Scroll the host's scroller back to the document start. A NEW document opens at its first
  * page: the scroller survives the remount, so the previous document's offset would otherwise
  * carry over, and a reader ten pages into one file opened the next file ten pages in.
+ *
+ * Horizontally the start is the right end in a right-to-left interface (`data-chrome-dir`):
+ * a review column that scrolls sideways stands at the left there, and the page at the right.
  */
 export function scrollToDocumentStart(container: HTMLElement): void {
   const scroller = surfaceScroller(container);
   if (!scroller) return;
   scroller.scrollTop = 0;
-  scroller.scrollLeft = 0;
+  scroller.scrollLeft =
+    scroller.getAttribute('data-chrome-dir') === 'rtl'
+      ? scroller.scrollWidth - scroller.clientWidth
+      : 0;
 }
 
 function viewportInLayout(

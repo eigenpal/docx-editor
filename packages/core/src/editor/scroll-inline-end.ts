@@ -22,10 +22,18 @@ export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void {
   const view = hostWindowOf(scroller);
   const end = () => scroller.scrollWidth - scroller.clientWidth;
   let pinned = true;
+  // The offset this helper wrote last. Its own write arrives as a scroll event a frame
+  // later, measured against content that kept growing; that, and a vertical scroll, leave
+  // the offset where the helper put it and must not unpin it.
+  let written: number | null = null;
   const follow = () => {
-    if (pinned) scroller.scrollLeft = end();
+    if (!pinned) return;
+    scroller.scrollLeft = end();
+    written = scroller.scrollLeft;
   };
   const onScroll = () => {
+    if (scroller.scrollLeft === written) return;
+    written = null;
     pinned = scroller.scrollLeft >= end() - END_SLACK;
   };
   follow();

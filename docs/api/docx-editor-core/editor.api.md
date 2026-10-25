@@ -1991,6 +1991,9 @@ export interface HistoryShortcutKeys {
 // @public
 export function historyShortcutOf(event: HistoryShortcutKeys): 'undo' | 'redo' | null;
 
+// @internal
+export function hostDirectionOf(node: Element | null): 'ltr' | 'rtl';
+
 // @public
 export function hostDocumentOf(node: Node | null | undefined): Document;
 
@@ -2351,6 +2354,9 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 
 // @public
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
+
+// @internal
+export function observeHostDirection(node: Element, onChange: () => void): () => void;
 
 // @public
 export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
