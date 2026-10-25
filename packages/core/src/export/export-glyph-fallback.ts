@@ -70,7 +70,14 @@ export function withExportGlyphFallbacks(
     // Hebrew letters in an Arabic face fall back the same way: the face keeps drawing the
     // spaces and punctuation it has, so its line height still applies to the line.
     // Joining scripts retain whole-run fallback so font boundaries do not sever joins.
-    if (/^(Latn|Cyrl|Grek|Hebr|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script)) {
+    // A joining script falls back per cluster too when every missing cluster is a character no
+    // join passes through, such as a checkbox symbol after an Arabic word: the face keeps the
+    // letters, and only the symbol moves.
+    if (
+      /^(Latn|Cyrl|Grek|Hebr|Hani|Hira|Kana|Hang|Zyyy|Zinh)$/.test(input.environment.script) ||
+      (/^(Arab|Syrc|Nkoo|Mong)$/.test(input.environment.script) &&
+        missingClustersAreNonJoining(input.text, primary))
+    ) {
       const mixed = shapeExportClusterFallback(compatible, input, primary, fonts);
       if (mixed) return mixed;
     }
@@ -103,4 +110,19 @@ export function withExportGlyphFallbacks(
     return primary;
   };
   return { ...shaping, shaper };
+}
+
+/** Letters of the joining scripts, the tatweel, and the join controls: what a join passes through. */
+const JOINING = /[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Nko}\p{Script=Mongolian}ـ‌‍]/u;
+
+/** Whether every cluster the primary face could not draw holds no joining character. */
+function missingClustersAreNonJoining(text: string, run: ShapedRun): boolean {
+  let missing = false;
+  for (const cluster of run.clusters) {
+    if (!run.glyphs.slice(cluster.glyphStart, cluster.glyphEnd).some((glyph) => glyph.id === 0))
+      continue;
+    missing = true;
+    if (JOINING.test(text.slice(cluster.textStart, cluster.textEnd))) return false;
+  }
+  return missing;
 }
