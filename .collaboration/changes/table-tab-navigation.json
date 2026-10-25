@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Tab in a table cell typed a tab character or changed the list level.",
+  "after": "Tab and Shift+Tab move between cells; Tab in the last cell adds a row with the existing row insert operation.",
+  "reason": "Moving between cells changes only the local selection. The added row uses the existing insertTableRow operation, so shared nodes, operations, and serialization are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/table-cell-tab.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-tab.test.ts"
+  ],
+  "changeset": "table-cell-tab",
+  "migration": null
+}

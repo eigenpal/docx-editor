@@ -301,7 +301,7 @@ describe('selections that reach the next paragraph only at its start', () => {
     expect(indentOf(surface, ids[1]!)).toEqual({});
   });
 
-  test('Tab over a one-cell rectangle on an empty cell indents the cell', () => {
+  test('indentWithTab over a one-cell rectangle on an empty cell indents the cell', () => {
     const surface = mount(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>` +
         paragraph('After')
@@ -312,7 +312,8 @@ describe('selections that reach the next paragraph only at its start', () => {
     expect(xml(surface)).toContain('w:left="720"');
   });
 
-  test('Tab over a cell rectangle indents the cells and keeps their text', () => {
+  test('indentWithTab over a cell rectangle indents the cells and keeps their text', () => {
+    // The Tab key moves between cells instead; a host can still indent a rectangle this way.
     const cell = (text: string) => `<w:tc>${paragraph(text)}</w:tc>`;
     const surface = mount(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
@@ -320,14 +321,7 @@ describe('selections that reach the next paragraph only at its start', () => {
         paragraph('After')
     );
     selectCellRectangle(surface, { row: 0, column: 0 }, { row: 0, column: 1 });
-    createKeyDownHandler(surface)({
-      key: 'Tab',
-      preventDefault: () => {},
-      shiftKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-    } as KeyboardEvent);
+    expect(surface.indentWithTab('increase')).toBe(true);
     expect(xml(surface)).toContain('Left');
     expect(xml(surface)).toContain('Right');
     expect(hasTab(surface)).toBe(false);

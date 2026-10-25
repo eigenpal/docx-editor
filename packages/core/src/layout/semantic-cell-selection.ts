@@ -651,3 +651,36 @@ export function cellAddressAt(
   cellAddressIndexCache.set(layout, index);
   return index.get(paragraphId) ?? null;
 }
+
+/**
+ * The cell Tab (`next`) or Shift+Tab (`previous`) moves to from the innermost cell holding
+ * `paragraphId`: the table's cells in document order, each once (a cell split across pages
+ * included), skipping the cells a vertical merge continues and the empty stand-in a merge that
+ * crosses a page paints at the top of the next page. Its paragraphs come with it, in document
+ * order, nested tables included. `end` when no cell follows in that direction, null outside a
+ * table.
+ */
+export function cellInTabOrder(
+  layout: SemanticLayout,
+  paragraphId: string,
+  direction: 'next' | 'previous'
+): { readonly cellId: string; readonly paragraphIds: readonly string[] } | 'end' | null {
+  const address = cellAddressAt(layout, paragraphId);
+  if (!address) return null;
+  const table = tableIndex(layout).get(address.tableId);
+  if (!table) return null;
+  const order = new Set<string>();
+  for (const entry of table.placed)
+    if (!entry.isHeaderRepeat && !entry.cell.vMergeContinue && entry.cell.blocks.length > 0)
+      order.add(entry.cell.id);
+  const cells = [...order];
+  // A paragraph in a cell a vertical merge continues has no place in the order.
+  const from = cells.indexOf(address.cellId);
+  if (from < 0) return null;
+  const step = direction === 'next' ? 1 : -1;
+  for (let at = from + step; at >= 0 && at < cells.length; at += step) {
+    const paragraphIds = paragraphsInCells(layout, [cells[at]!]);
+    if (paragraphIds.length > 0) return { cellId: cells[at]!, paragraphIds };
+  }
+  return 'end';
+}
