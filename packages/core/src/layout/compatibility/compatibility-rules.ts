@@ -115,6 +115,10 @@ export const MODE_RULES = {
     'A column break that opens a paragraph leaves no line in the column it ends',
     'ECMA-376 Part 1 §17.3.3.1 br'
   ),
+  leftTabStopsPastMargin: legacy(
+    'A custom left tab stop past the margin is honoured, and the text after it may run past the margin. In modern modes the stop reaches the margin and its text wraps there',
+    'ECMA-376 Part 1 §17.3.1.37 tabs'
+  ),
   oversizedRowKeepGroupReleases: legacy(
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'

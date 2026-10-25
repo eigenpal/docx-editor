@@ -36,7 +36,14 @@ export function tabClosesLine(
   return !inTableCell && !customAhead && pastEdge;
 }
 
-/** Choose the ordinary or positional destination without changing either stop policy. */
+/**
+ * Choose the ordinary or positional destination without changing either stop policy, and how
+ * far the text after the tab may run (`segmentRight`), given the furthest such point so far.
+ *
+ * An aligned stop's text reaches the stop, up to the margin (`tabEdge`). A left stop may lie
+ * past the right indent: it reaches the margin, and its text may run to the margin. With
+ * `pastMargin` (a legacy mode) any custom left stop is honoured and its text has no bound.
+ */
 export function tabDestinationForFlow(
   tabs: ResolvedTabStops,
   stopX: number,
@@ -44,19 +51,36 @@ export function tabDestinationForFlow(
   tabEdge: number,
   currentX: number,
   rightEdge: number,
-  positional: TabDestination | null
-): TabDestination {
+  positional: TabDestination | null,
+  pastMargin = false,
+  rtl = false,
+  segmentRight = 0
+): TabDestination & { readonly segmentRight: number } {
   const authored = nextTabDestination(tabs, stopX, tabEdge);
-  return positional === null
-    ? authored.alignment === 'left'
-      ? nextTabDestination(tabs, stopX, stopRight)
-      : authored
-    : Number.isFinite(positional.positionPt) && positional.positionPt > currentX
-      ? positional
-      : {
-          ...nextTabDestination(tabs, currentX, rightEdge),
-          ...(positional.leader ? { leader: positional.leader } : {}),
-        };
+  // Only a custom stop reaches past the right indent; the default grid stops at it.
+  const customAhead = tabs.stops.some((stop) => !stop.numberingOnly && stop.positionPt > stopX);
+  const destination =
+    positional === null
+      ? authored.alignment !== 'left'
+        ? authored
+        : !customAhead
+          ? nextTabDestination(tabs, stopX, stopRight)
+          : pastMargin
+            ? nextTabDestination(tabs, stopX, Number.POSITIVE_INFINITY)
+            : authored
+      : Number.isFinite(positional.positionPt) && positional.positionPt > currentX
+        ? positional
+        : {
+            ...nextTabDestination(tabs, currentX, rightEdge),
+            ...(positional.leader ? { leader: positional.leader } : {}),
+          };
+  // Right-to-left stops count from the other edge; their text keeps the measure.
+  let right = segmentRight;
+  if (!rtl && destination.alignment !== 'left')
+    right = Math.max(segmentRight, Math.min(destination.positionPt, tabEdge));
+  else if (!rtl && destination.positionPt > stopRight + 1e-6)
+    right = Math.max(segmentRight, pastMargin ? Number.POSITIVE_INFINITY : tabEdge);
+  return { ...destination, segmentRight: right };
 }
 
 /** Repeated tab sequences retain their existing placement across the whole paragraph. */

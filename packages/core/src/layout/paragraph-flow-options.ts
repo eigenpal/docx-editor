@@ -15,6 +15,8 @@ import type { LayoutBox } from './semantic-records.ts';
 export interface ParagraphFlowOptions {
   readonly paragraphRtl?: boolean;
   readonly justifySpaceShrink?: boolean;
+  /** A left tab stop past the margin is honoured, and its text may run past the margin. */
+  readonly leftTabsPastMargin?: boolean;
   /** A body paragraph, where a column break ends its column. */
   readonly columnBreaksEndColumns?: boolean;
   /** The paragraph mark after a closing page break takes a line on the next page. */

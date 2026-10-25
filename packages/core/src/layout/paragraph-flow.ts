@@ -1258,11 +1258,12 @@ export function breakParagraph(
           tabEdge,
           currentX,
           rightEdge,
-          positional
+          positional,
+          flow?.leftTabsPastMargin,
+          paragraphRtl,
+          alignedTabRight
         );
-        if (destination.alignment !== 'left' && !paragraphRtl) {
-          alignedTabRight = Math.max(alignedTabRight, Math.min(destination.positionPt, tabEdge));
-        }
+        alignedTabRight = destination.segmentRight;
         const width = tabAdvanceWidth(
           destination.alignment,
           positional === null ? stopX : currentX,
@@ -1290,8 +1291,6 @@ export function breakParagraph(
               }
             : {}),
           ...(piece.link ? { link: piece.link } : {}),
-          // destination rather than re-derived from the paragraph at paint time.
-          ...(destination.leader ? { tabLeader: destination.leader } : {}),
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
           ...paragraphSpanMetadata(piece),
