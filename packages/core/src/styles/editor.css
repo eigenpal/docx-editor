@@ -3241,7 +3241,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Blank furniture: a page with no header/footer paints an empty band over that margin.
  * Invisible until hovered; the hover invites the double-click that creates the story.
- * The hint text stays in CSS (like the band itself it is screen-only chrome), and the
+ * The hint text comes from the interface language through `--docx-hf-*` properties the
+ * surface sets on the pages layer, with English as the fallback, and the
  * document canvas stays Word-faithful because nothing shows until the pointer asks. */
 .docx-pages .docx-hf--placeholder {
   display: flex;
@@ -3255,7 +3256,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf--placeholder:hover::after {
-  content: 'Double-click to add header';
+  content: var(--docx-hf-add-header, 'Double-click to add header');
   font-family:
     system-ui,
     -apple-system,
@@ -3267,7 +3268,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf--placeholder[data-docx-hf='footer']:hover::after {
-  content: 'Double-click to add footer';
+  content: var(--docx-hf-add-footer, 'Double-click to add footer');
 }
 
 /* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
@@ -3298,7 +3299,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf-edit-hint::after {
-  content: 'Double-click to edit header';
+  content: var(--docx-hf-edit-header, 'Double-click to edit header');
   font-family:
     system-ui,
     -apple-system,
@@ -3319,7 +3320,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer']::after {
-  content: 'Double-click to edit footer';
+  content: var(--docx-hf-edit-footer, 'Double-click to edit footer');
   margin-top: 0;
   margin-bottom: 4px;
 }

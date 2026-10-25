@@ -584,6 +584,10 @@
   "headerFooter": {
     "header": "כותרת עליונה",
     "footer": "כותרת תחתונה",
+    "addHeaderHint": "לחץ פעמיים כדי להוסיף כותרת עליונה",
+    "addFooterHint": "לחץ פעמיים כדי להוסיף כותרת תחתונה",
+    "editHeaderHint": "לחץ פעמיים כדי לערוך את הכותרת העליונה",
+    "editFooterHint": "לחץ פעמיים כדי לערוך את הכותרת התחתונה",
     "options": "אפשרויות",
     "insertPageNumber": "הוסף מספר עמוד נוכחי",
     "insertTotalPages": "הוסף סך כל העמודים",

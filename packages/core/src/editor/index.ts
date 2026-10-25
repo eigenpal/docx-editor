@@ -46,7 +46,7 @@ export {
   type FontResolverMark,
   type MarkedFontResolver,
 } from './font-resolver.ts';
-export { blankDocumentBytes } from './blank-document.ts';
+export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {
   copyEditorStyles,

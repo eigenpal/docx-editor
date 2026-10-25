@@ -383,8 +383,21 @@ function EditorChrome({
       editor?.load(new Uint8Array(buffer));
     });
   };
+  // A right-to-left interface starts new documents right to left, in the interface language.
   const newDocument = () => {
-    if (!collaborating) editor?.load(blankDocumentBytes());
+    const rtl = catalogDirection(DEMO_CATALOG) === 'rtl';
+    const language = DEMO_CATALOG?._lang;
+    if (!collaborating)
+      editor?.load(
+        blankDocumentBytes(
+          rtl
+            ? {
+                direction: 'rtl',
+                ...(typeof language === 'string' ? { bidiLanguage: language } : {}),
+              }
+            : {}
+        )
+      );
   };
   const saveDocument = () => {
     void editor?.save().then((buffer) => {
