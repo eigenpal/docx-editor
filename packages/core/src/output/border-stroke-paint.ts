@@ -8,6 +8,8 @@
 // THICKNESS IS NOT DECIDED HERE. Layout publishes the stroke box, already inflated for the
 // compound styles (`border-metrics.ts`), and these functions only choose how to fill it.
 
+import { compoundBorderStrokesForExtentPt } from '../layout/border-metrics.ts';
+
 /** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
 export function isCompoundParagraphBorder(val: string): boolean {
   return (
@@ -69,9 +71,23 @@ export function applyParagraphBorderStyle(
     case 'thinThickThinLargeGap': {
       // Fill the published band without CSS border-width snapping. A subpixel
       // stroke must not grow to a whole CSS pixel at small zoom levels.
-      // Triple and thinThick* retain their existing double approximation.
-      const line = thicknessPx / 3;
       rule.style.backgroundColor = 'transparent';
+      const strokes = scale > 0 ? compoundBorderStrokesForExtentPt(val, thicknessPx / scale) : null;
+      if (strokes) {
+        const stops = strokes.flatMap((stroke) => {
+          const from = stroke.offsetPt * scale;
+          const to = from + stroke.widthPt * scale;
+          return [
+            `transparent ${from}px`,
+            `#${color} ${from}px`,
+            `#${color} ${to}px`,
+            `transparent ${to}px`,
+          ];
+        });
+        rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'right' : 'bottom'}, ${stops.join(', ')})`;
+        return;
+      }
+      const line = thicknessPx / 3;
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'right' : 'bottom'}, #${color} 0px, #${color} ${line}px, transparent ${line}px, transparent ${line * 2}px, #${color} ${line * 2}px)`;
       return;
     }

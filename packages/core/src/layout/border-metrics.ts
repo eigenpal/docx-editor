@@ -60,12 +60,89 @@ export function isCompoundBorderVal(val: string): boolean {
   return COMPOUND_BORDER_VALS.has(val);
 }
 
+/** A thin stroke or gap of the thin-thick styles, in points, whatever the authored width. */
+const FIXED_THIN_PT = 0.75;
+/** The thick stroke of the large-gap styles, in points. */
+const FIXED_THICK_PT = 1.5;
+
+/**
+ * Each stroke and gap of a thin-thick or triple style, top to bottom (or left to right) in
+ * page space on every edge, as a linear term `a × w + b` of the authored width `w`. Strokes
+ * sit at even indices, gaps at odd ones.
+ */
+const COMPOUND_SEQUENCES: ReadonlyMap<string, readonly (readonly [number, number])[]> = (() => {
+  const w = [1, 0] as const;
+  const half = [0.5, 0] as const;
+  const thin = [0, FIXED_THIN_PT] as const;
+  const thick = [0, FIXED_THICK_PT] as const;
+  return new Map<string, readonly (readonly [number, number])[]>([
+    ['triple', [w, w, w, w, w]],
+    ['thinThickSmallGap', [w, thin, thin]],
+    ['thickThinSmallGap', [thin, thin, w]],
+    ['thinThickMediumGap', [w, half, half]],
+    ['thickThinMediumGap', [half, half, w]],
+    ['thinThickLargeGap', [thick, w, thin]],
+    ['thickThinLargeGap', [thin, w, thick]],
+    ['thinThickThinSmallGap', [thin, thin, w, thin, thin]],
+    ['thinThickThinMediumGap', [half, half, w, half, half]],
+    ['thinThickThinLargeGap', [thin, w, thick, w, thin]],
+  ]);
+})();
+
+/** One stroke of a compound border: offset from the band's top or left edge, and width. */
+export interface CompoundBorderStroke {
+  /** Distance from the band's top (or left) edge to this stroke, in points. */
+  readonly offsetPt: number;
+  /** Thickness of this stroke, in points. */
+  readonly widthPt: number;
+}
+
+/**
+ * The strokes of a triple or thin-thick border with authored width `widthPt`, or null for
+ * any other style. The band is the sum of every stroke and gap.
+ */
+export function compoundBorderStrokesPt(
+  val: string,
+  widthPt: number
+): readonly CompoundBorderStroke[] | null {
+  const sequence = COMPOUND_SEQUENCES.get(val);
+  if (!sequence) return null;
+  const strokes: CompoundBorderStroke[] = [];
+  let offset = 0;
+  sequence.forEach(([a, b], index) => {
+    const size = Math.max(a * widthPt + b, COMPOUND_BORDER_MIN_STROKE_PT);
+    if (index % 2 === 0) strokes.push({ offsetPt: offset, widthPt: size });
+    offset += size;
+  });
+  return strokes;
+}
+
+/**
+ * The strokes of a triple or thin-thick border whose painted band is `extentPt` thick, for a
+ * painter that holds the band and not the authored width. Null for any other style.
+ */
+export function compoundBorderStrokesForExtentPt(
+  val: string,
+  extentPt: number
+): readonly CompoundBorderStroke[] | null {
+  const sequence = COMPOUND_SEQUENCES.get(val);
+  if (!sequence) return null;
+  const a = sequence.reduce((sum, [slope]) => sum + slope, 0);
+  const b = sequence.reduce((sum, [, fixed]) => sum + fixed, 0);
+  return compoundBorderStrokesPt(val, Math.max(0, (extentPt - b) / a));
+}
+
 /**
  * Visual thickness of one border edge in points — the stroke box height/width layout
- * publishes. Double borders include both strokes and their gap. Other compound styles
- * retain their existing double-band approximation; everything else uses `w:sz`.
+ * publishes. Double borders include both strokes and their gap; triple and thin-thick styles
+ * span their own strokes and gaps; everything else uses `w:sz`.
  */
 export function borderStrokeWidthPt(val: string, widthPt: number): number {
+  const strokes = compoundBorderStrokesPt(val, widthPt);
+  if (strokes) {
+    const last = strokes[strokes.length - 1]!;
+    return last.offsetPt + last.widthPt;
+  }
   if (isCompoundBorderVal(val)) return computeDoubleBorderMetricsPt(widthPt).extentPt;
   return widthPt;
 }

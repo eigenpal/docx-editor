@@ -21,6 +21,7 @@ import {
   forEachSemanticSpan,
   forEachSemanticStory,
   forEachSemanticDrawing,
+  compoundBorderStrokesForExtentPt,
   runBorderStrokesForLine,
   type BlockFragmentRecord,
   type LayoutBox,
@@ -55,6 +56,25 @@ function extractedText(span: SemanticSpanVisit['span']): string {
   return element ? span.text : span.text.replaceAll('\u00ad', '-');
 }
 
+/** Border styles the PDF draws as authored: single lines, dashes, and every compound style. */
+const PAINTED_BORDER_STYLES = new Set([
+  'single',
+  'thick',
+  'dashed',
+  'dotted',
+  'double',
+  'triple',
+  'thinThickSmallGap',
+  'thickThinSmallGap',
+  'thinThickThinSmallGap',
+  'thinThickMediumGap',
+  'thickThinMediumGap',
+  'thinThickThinMediumGap',
+  'thinThickLargeGap',
+  'thickThinLargeGap',
+  'thinThickThinLargeGap',
+]);
+
 function rule(
   box: LayoutBox,
   colorHex: string | null,
@@ -76,6 +96,24 @@ function rule(
             width: horizontal ? box.width : third,
             height: horizontal ? third : box.height,
           },
+          colorHex,
+          'single',
+          x,
+          y,
+          height
+        )
+      )
+      .join('\n');
+  }
+  const horizontalBand = box.width >= box.height;
+  const strokes = compoundBorderStrokesForExtentPt(style, horizontalBand ? box.height : box.width);
+  if (strokes) {
+    return strokes
+      .map((stroke) =>
+        rule(
+          horizontalBand
+            ? { ...box, y: box.y + stroke.offsetPt, height: stroke.widthPt }
+            : { ...box, x: box.x + stroke.offsetPt, width: stroke.widthPt },
           colorHex,
           'single',
           x,
@@ -129,7 +167,7 @@ function decorations(
       for (const border of block.borders ??
         (block.bottomBorder ? [{ ...block.bottomBorder, side: 'bottom' }] : [])) {
         const style = border.edge.val;
-        if (!['single', 'thick', 'dashed', 'dotted', 'double'].includes(style))
+        if (!PAINTED_BORDER_STYLES.has(style))
           work.report(
             'paragraph-border-style',
             `Unsupported paragraph border: ${style}`,
@@ -367,10 +405,7 @@ export async function paint(
         record.index
       ]!;
       for (const border of record.pageBorders.strokes) {
-        if (
-          !['single', 'thick', 'dashed', 'dotted', 'double'].includes(border.edge.val) ||
-          border.edge.shadow
-        )
+        if (!PAINTED_BORDER_STYLES.has(border.edge.val) || border.edge.shadow)
           work.report(
             'page-border-style',
             `Unsupported page border: ${border.edge.val}`,
@@ -681,7 +716,7 @@ export async function paint(
       const y = visit.storyOrigin.y - visit.page.box.y;
       if (visit.paragraph.clipToBox) out.push(`q ${rect(visit.paragraph.box, x, y, height)} W n`);
       for (const { box, edge } of strokes) {
-        if (edge.shadow || !['single', 'thick', 'dashed', 'dotted', 'double'].includes(edge.val))
+        if (edge.shadow || !PAINTED_BORDER_STYLES.has(edge.val))
           work.report(
             'run-border-style',
             `Unsupported character border: ${edge.val}${edge.shadow ? ' with shadow' : ''}`,

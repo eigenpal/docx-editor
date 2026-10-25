@@ -740,6 +740,7 @@ export {
   TablePaginationError,
   type TablePaginationErrorCode,
 } from './semantic-table-layout.ts';
+export { compoundBorderStrokesForExtentPt, type CompoundBorderStroke } from './border-metrics.ts';
 export {
   borderExtentPt,
   borderWeight,

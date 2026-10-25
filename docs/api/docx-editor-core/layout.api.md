@@ -469,6 +469,15 @@ export interface CompoundBorderMetrics {
 }
 
 // @public
+export interface CompoundBorderStroke {
+    readonly offsetPt: number;
+    readonly widthPt: number;
+}
+
+// @public
+export function compoundBorderStrokesForExtentPt(val: string, extentPt: number): readonly CompoundBorderStroke[] | null;
+
+// @public
 export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMetrics;
 
 // @public
