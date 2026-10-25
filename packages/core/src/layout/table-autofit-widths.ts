@@ -942,7 +942,7 @@ export function autofitColumnWidthsPt(
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
   // A table wider than its text column grows to hold its minimums instead of scaling them.
-  const roomPt = structure.pastTextColumn ? MAX_TABLE_GROWTH_PT : Math.max(0, availablePt - gaps);
+  const roomPt = Math.max(0, (structure.pastTextColumn ? MAX_TABLE_GROWTH_PT : availablePt) - gaps);
   const ownWidth = structure.tableWidth.value > 0 && structure.tableWidth.type !== 'auto';
   const settle = (): readonly number[] =>
     sizedByContent

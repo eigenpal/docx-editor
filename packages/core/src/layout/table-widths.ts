@@ -394,8 +394,8 @@ function applyWidthClaims(
  * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
  * table narrower than its stated percentage is stretched up to it as well as shrunk down, and
  * so is one whose absolute width is past the text column (`pastTextColumn`). Any other
- * absolute or absent width only ever shrinks: a narrow autofit table is already showing what
- * Word shows, and stretching it would invent geometry no one authored.
+ * absolute or absent width only ever shrinks: a narrow autofit table already shows its
+ * authored geometry, and stretching it would invent geometry no one authored.
  */
 export function resolveColumnWidthsPt(input: {
   readonly gridCols: readonly OoxmlElement[];
@@ -490,12 +490,14 @@ export function resolveColumnWidthsPt(input: {
  *
  * Measured in a 451.3pt column with a 489.7pt grid, compatibility mode 15 and legacy alike:
  * `w:tblW` 500pt and 700pt stretch the grid to 500pt and 700pt; `w:noWrap` cells holding
- * 598.5pt keep it under a 500pt or 563pt width; a long URL widens a table only 10.8pt past the
- * column (also with a negative indent) past the page, and breaks in a table exactly as wide
- * as the column; a 450pt table fits everything into the column. In a 207pt section column, a
- * 300pt table stretches a 150pt grid to 300pt. A floating table follows the same rule; the
- * indent does not count. Nested, fixed-layout and text-box tables keep the column rule, for
- * want of evidence.
+ * 598.5pt keep it under a 500pt or 563pt width; a table only 10.8pt wider than the column
+ * grows past the page to hold a long URL (also with a negative indent), and a table exactly as
+ * wide as the column breaks it; a 450pt table fits everything into the column. In a 207pt
+ * section column, a 300pt table stretches a 150pt grid to 300pt. Right-aligned and centered
+ * 500pt tables keep their alignment (into the left margin). A floating table follows the same
+ * rule; the indent does not count. Header, footer and note tables measure against their own
+ * text column. Nested and text-box tables, whose container is not a text column, keep the
+ * column rule, as do fixed-layout tables and percentage widths, for want of evidence.
  */
 export function tableWidthPastTextColumn(table: {
   readonly tableWidth: PreferredWidth;
@@ -517,7 +519,7 @@ export function tableWidthPastTextColumn(table: {
 }
 
 /**
- * The widest a table past its text column grows to hold its minimums: ~22", Word's widest
- * page, the same bound as one grid column. Content that needs more breaks.
+ * The widest a table past its text column grows to hold its minimums: ~22", the widest page a
+ * document can declare, the same bound a grid column has. Content that needs more breaks.
  */
-export const MAX_TABLE_GROWTH_PT = 31_680 / 20;
+export const MAX_TABLE_GROWTH_PT = MAX_COLUMN_WIDTH_PT;

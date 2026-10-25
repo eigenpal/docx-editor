@@ -112,3 +112,26 @@ test('in a section of two columns, the rule measures against one column', () => 
   expect(width(table(6000, [], { grid }), twoColumns)).toBeCloseTo(300, 0);
   expect(width(table(6000, ['A'.repeat(60)], { grid }), twoColumns)).toBeGreaterThan(300);
 });
+
+test('a right-aligned table past the column keeps its right edge on the margin', () => {
+  // The 500pt table reaches 48.7pt into the left margin.
+  const layout = lay(table(10000, [], { tblPr: '<w:jc w:val="right"/>' }));
+  const fragment = layout.pages[0]!.fragments.find((f) => f.kind === 'table')!;
+  expect(fragment.box.width).toBeCloseTo(500, 0);
+  expect(fragment.box.x + fragment.box.width).toBeCloseTo(451.3, 0);
+});
+
+test('a floating table past the column follows the same rule', () => {
+  const floating = '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpY="0"/>';
+  expect(width(table(10000, [], { tblPr: floating }))).toBeCloseTo(500, 0);
+  expect(width(table(10000, ['A'.repeat(120)], { tblPr: floating }))).toBeGreaterThan(600);
+});
+
+test('a percentage width keeps the column rule', () => {
+  // 120% of the column is 541.6pt; the word breaks rather than widening the table.
+  const pct = table(0, ['A'.repeat(120)]).replace(
+    '<w:tblW w:w="0" w:type="dxa"/>',
+    '<w:tblW w:w="6000" w:type="pct"/>'
+  );
+  expect(width(pct)).toBeCloseTo(541.6, 0);
+});
