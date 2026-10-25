@@ -529,7 +529,8 @@ function coveredLinesAnchorBand(
       firstTop = Math.min(firstTop, box.y);
   }
   if (firstTop > placement.anchorY) return 0;
-  return bandBottom - firstTop + placement.anchorExtent;
+  // A raised table stays while the lines it moves fit below it; its anchor may move on alone.
+  return bandBottom - firstTop + (raised ? 0 : placement.anchorExtent);
 }
 
 export function requiredAnchorBand(

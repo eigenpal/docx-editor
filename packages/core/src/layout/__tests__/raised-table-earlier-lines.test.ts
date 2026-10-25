@@ -141,6 +141,36 @@ test('near the page bottom the anchor and its table open the next page when they
   expect(moved.slice(-2)).toEqual(['1:T@-30.1', '1:Head@29.9']);
 });
 
+test('near the page bottom the table stays and its anchor moves on alone when only the anchor misses', () => {
+  // With 45 lines the two moved lines fit below the table, but the anchor does not.
+  const alone = placed(lay(lines(45) + table(RAISED) + p('Head')));
+  expect(alone).toContain('0:T@542.7');
+  expect(alone).toContain('0:L44@628.1');
+  expect(alone.at(-1)).toBe('1:Head@0.0');
+});
+
+test('in two columns no anchor lands under its table at a column bottom', () => {
+  const columns = '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>';
+  for (const count of [44, 45, 46, 47, 48, 94, 95, 96, 97]) {
+    const layout = lay(lines(count) + table(RAISED, 4320) + p('Head') + p('After') + columns);
+    for (const page of layout.pages) {
+      const tables = page.fragments.filter((fragment) => fragment.kind === 'table');
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'paragraph') continue;
+        for (const other of tables) {
+          const box = fragment.box;
+          const under =
+            box.x < other.box.x + other.box.width &&
+            box.x + box.width > other.box.x &&
+            box.y < other.box.y + other.box.height - 0.5 &&
+            box.y + box.height > other.box.y + 0.5;
+          expect(under).toBe(false);
+        }
+      }
+    }
+  }
+});
+
 test('a warm pass near the page bottom lays out like a cold one after an edit or a deletion', () => {
   for (let count = 40; count <= 50; count += 1) {
     for (const edited of [p('Z') + lines(count), lines(count - 1)]) {

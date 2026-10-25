@@ -20,10 +20,7 @@ import {
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
 import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
-import {
-  furnitureDrawingExclusionsForPage,
-  hasFurnitureDrawingExclusions,
-} from './furniture-drawing-exclusion.ts';
+import { hasFurnitureDrawingExclusions } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
@@ -644,7 +641,7 @@ function* layoutBlocksPass(
     pageCount: () => pages.length,
     ...(options.sectionPageBorders ? { pageBorders: options.sectionPageBorders } : {}),
   });
-  const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
+  const { pageBox, furnitureFor, overflowShellAt, furnitureZonesFor } = sectionFurniture;
 
   const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
     hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones),
@@ -662,25 +659,7 @@ function* layoutBlocksPass(
     if (hostZones) {
       if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
     } else if (furnitureHoldsTables) {
-      const box = pageBox(index);
-      const insets = insetsFor(index);
-      // Resolve furniture on the page being filled, including newly minted pages.
-      // Waiting for the previous reflow's page list would leave each new tail page
-      // unwrapped and make long documents exceed the drawing convergence budget.
-      const zones = furnitureDrawingExclusionsForPage(
-        {
-          box,
-          contentBox: {
-            x: box.x + geometry.margin.left,
-            y: box.y + insets.top,
-            width: contentWidthForReflow,
-            height: insets.height,
-          },
-          header: furnitureFor('header', index, box),
-          footer: furnitureFor('footer', index, box),
-        },
-        options.yieldHiddenFurnitureZones
-      );
+      const zones = furnitureZonesFor(index, options.yieldHiddenFurnitureZones);
       if (zones.length) currentPageZones = Object.freeze([...bodyZones, ...zones]);
     }
     return currentPageZones;
@@ -1190,6 +1169,14 @@ function* layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
+  /** Whether the region being filled holds a wrap zone of a table anchored at `anchorId`. */
+  const holdsOwnTableZone = (anchorId: string): boolean =>
+    pageExclusionZones().some(
+      (zone) =>
+        zone.sourceKind === 'table' &&
+        zone.anchorParagraphId === anchorId &&
+        (columns.count === 1 || zone.columnIndex === flowColumnIndex)
+    );
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
   const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
     positionedFlow.note(floatSignals, anchorId, flowColumnIndex, pageFragments.length, anchorY);
@@ -2210,6 +2197,7 @@ function* layoutBlocksPass(
       }
       markPastBottom = !collapsedMark && cursorY + needed > contentHeight() && holdsSheet();
       if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
+        if (!frame && holdsOwnTableZone(paragraphId)) noteAnchor(paragraphId, cursorY);
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2573,6 +2561,10 @@ function* layoutBlocksPass(
                 contentHeight())));
       if (overflowsPage) {
         keepTailAt = -1;
+        // A floating table that the previous pass placed beside this anchor stays there when
+        // its band pushes the anchor on: only the anchor moves to the next column or page.
+        if (lineIndex === 0 && fragmentIndex === 0 && !frame && holdsOwnTableZone(paragraphId))
+          noteAnchor(paragraphId, cursorY);
         if (
           !regionHasFragments() &&
           skipBefore > 0 &&
