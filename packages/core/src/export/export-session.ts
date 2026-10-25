@@ -32,6 +32,7 @@ import {
 } from '../layout/document-layout-coordinator.ts';
 import { createFixedMeasurer } from '../layout/fixed-measurer.ts';
 import { sniffImageMime } from '../store/package/image-resources.ts';
+import { IMAGE_RESOURCE_HARD_CEILINGS } from '../store/runtime/limits.ts';
 import { createInlineDrawingLayoutBundle } from '../layout/inline-drawing-source.ts';
 import { releasePageFieldProjectionState } from '../layout/field-page-furniture.ts';
 import { createParagraphLayoutCache } from '../layout/layout-cache.ts';
@@ -736,10 +737,16 @@ export function openDocumentForExport(
       const state = activeState;
       const resource = source.resource;
       if (!state || resource.kind !== 'unrenderable' || resource.partName === null) return null;
+      // Only a format refusal falls back to the vector replay; a resource-limit or signature
+      // refusal stays refused, so the replay never sees bytes the image pipeline turned away.
+      if (resource.reason !== 'unsupported-format' && resource.reason !== 'decode-failed') {
+        return null;
+      }
       const mime = resource.mime;
       if (mime !== 'image/x-emf' && mime !== 'image/x-wmf') return null;
       const bytes = state.view.currentPackage().partBytes.get(resource.partName);
-      if (!bytes || sniffImageMime(bytes) !== mime) return null;
+      if (!bytes || bytes.byteLength > IMAGE_RESOURCE_HARD_CEILINGS.maxEncodedBytes) return null;
+      if (sniffImageMime(bytes) !== mime) return null;
       return { mime, bytes: bytes.slice() };
     },
     dispose: disposeSession,

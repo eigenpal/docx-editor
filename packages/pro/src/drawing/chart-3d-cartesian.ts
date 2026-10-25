@@ -40,7 +40,7 @@ import { elementText } from './chart-labels.ts';
 import { child, type ChartAxis, type ChartPlot, type ChartSeries } from './chart-model.ts';
 import { paintSurface, type SurfaceBand } from './chart-3d-surface.ts';
 import { formatChartNumber } from './chart-number-format.ts';
-import type { ValueScale } from './chart-scale.ts';
+import { scaleRatio, type ValueScale } from './chart-scale.ts';
 import { seriesLook } from './chart-series.ts';
 import {
   mergeStroke,
@@ -242,9 +242,8 @@ export function paint3DCartesian(
     scaleValues(info, Math.max(1, length), !horizontal, valueStyle, model.date1904, true);
   const reversed = valueAxis?.reversed ?? false;
   const layout = (extents: ReturnType<typeof world>, scale: ValueScale) => {
-    const span = scale.max - scale.min || 1;
     const valueAt = (value: number): number => {
-      const ratio = Math.min(1, Math.max(0, (value - scale.min) / span));
+      const ratio = Math.min(1, Math.max(0, scaleRatio(scale, value)));
       return (reversed ? 1 - ratio : ratio) * (horizontal ? extents.w : extents.h);
     };
     const along = horizontal ? extents.h : extents.w;

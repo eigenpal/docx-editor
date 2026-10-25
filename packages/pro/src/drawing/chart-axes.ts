@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { ChartAxis, ChartModel, ChartPlot } from './chart-model.ts';
 import { formatChartNumber, isDateFormatCode } from './chart-number-format.ts';
-import { autoValueScale, type ValueScale } from './chart-scale.ts';
+import { autoValueScale, logValueScale, scaleRatio, type ValueScale } from './chart-scale.ts';
 import { estimateTextWidth, type ChartTextStyle } from './chart-text.ts';
 import { seriesErrorBars, seriesTrendlines } from './chart-trendline.ts';
 
@@ -271,6 +271,9 @@ export function scaleValues(
     date1904
   );
   const labelWidth = estimateTextWidth(estimateLabel, style);
+  if (axis?.logBase && !percentFixed) {
+    return logValueScale(dataMin, dataMax, axis.logBase, axis.min, axis.max);
+  }
   // A vertical axis keeps more than a label's height between ticks; a horizontal one keeps
   // its widest label clear of the next by one size. A fixed percent range
   // takes one tick more.
@@ -299,7 +302,6 @@ export function valuePosition(
   high: number,
   reversed: boolean
 ): number {
-  const span = scale.max - scale.min || 1;
-  const ratio = (value - scale.min) / span;
+  const ratio = scaleRatio(scale, value);
   return reversed ? high + (low - high) * ratio : low + (high - low) * ratio;
 }
