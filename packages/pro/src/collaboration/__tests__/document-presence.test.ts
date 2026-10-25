@@ -629,5 +629,6 @@ test('a remote caret on an unchanged long document resolves without reading its 
   for (let resolve = 0; resolve < 100; resolve += 1) {
     expect(bob.room.session.remoteSelections()[0]?.head).toEqual(first);
   }
-  expect(recorder.enumerations).toBeLessThanOrEqual(1);
+  // The walk for the split tree ran before the reset; resolving again reads no paragraphs.
+  expect(recorder.enumerations).toBe(0);
 });

@@ -51,12 +51,8 @@ const MAX_MEMOIZED_PARTS = 24;
  */
 const MAX_ADDRESS_HINTS = 512;
 
-interface PartAddresses {
-  /** Stable paraId to node id, first claimant only. */
-  readonly byParagraphId: ReadonlyMap<string, string>;
-  /** Node id to the stable paraId a snapshot lists it under. */
-  readonly byNodeId: ReadonlyMap<string, string>;
-}
+/** Which map an identity walk builds. */
+type WalkDirection = 'byParagraphId' | 'byNodeId';
 
 const partAddresses = createRecentRootCache<ReadonlyMap<string, string>>(MAX_MEMOIZED_PARTS);
 
@@ -67,7 +63,8 @@ let paragraphVisits = 0;
  * @internal Warm-path recorder for collaboration paragraph enumerations.
  *
  * Presence address resolution must not enumerate paragraphs per caret move: one walk per
- * body tree, shared by every lookup on it, is the expected cost. This counts the enumerations
+ * body tree for each lookup direction (node id to paraId, paraId to node id) is the expected
+ * cost. This counts the enumerations
  * that do happen so a test can assert the caret path stays off them.
  */
 export function collaborationParagraphScanRecorder(): {
@@ -152,9 +149,10 @@ export function paragraphAddressesOf(part: OoxmlPart): ReadonlyMap<string, strin
  * One walk of a part's paragraphs under the snapshot's own id rules: `normalizeParagraphIdentity`
  * mints an id for a missing, invalid, or later duplicate one, and the first `w:p` to carry an id
  * claims it (a demoted generic `w:p` too, which then has no address). Builds the one map its
- * caller keeps, paraId to node id or node id to paraId. Not memoized here.
+ * caller keeps: `byParagraphId`, stable paraId to node id for the first claimant, or
+ * `byNodeId`, node id to the stable paraId a snapshot lists it under. Not memoized here.
  */
-function identityWalk(part: OoxmlPart, direction: keyof PartAddresses): Map<string, string> {
+function identityWalk(part: OoxmlPart, direction: WalkDirection): Map<string, string> {
   const identified = normalizeParagraphIdentity(part);
   paragraphEnumerations += 1;
   const addresses = new Map<string, string>();
