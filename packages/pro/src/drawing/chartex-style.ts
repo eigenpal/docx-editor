@@ -13,6 +13,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The element's own `cx:spPr`/`cx:txPr` win over its entry. Without the parts, or for an
 // entry they lack, the default chartex look applies: the entries below and the colourful
 // accent cycle.
+//
+// A chartex `cx:txPr` gives its text the run properties of its first paragraph's end
+// (`a:endParaRPr`); the paragraph's default run (`a:pPr/a:defRPr`) does not reach the text.
+// The chart space's own `cx:txPr` reaches every element but cannot change the text size.
 
 import {
   CHART_STYLE_NAMESPACE_URI,
@@ -33,7 +37,7 @@ import {
   type ChartPaint,
   type ChartStroke,
 } from './chart-style.ts';
-import { applyRunLayer, bodyDefaultRun, type ChartTextStyle } from './chart-text.ts';
+import { applyRunLayer, type ChartTextStyle } from './chart-text.ts';
 
 const CS = CHART_STYLE_NAMESPACE_URI;
 const A = DRAWINGML_MAIN_NAMESPACE_URI;
@@ -156,6 +160,24 @@ function transformed(color: ChartPaint, transforms: readonly OoxmlElement[]): Ch
   return resolved ? { hex: resolved.hex, alpha: resolved.alpha * color.alpha } : null;
 }
 
+/** The run properties a chartex `cx:txPr` gives its text: its first paragraph's end run. */
+export function chartexTextRun(txPr: OoxmlElement | null): OoxmlElement | null {
+  const paragraph = txPr
+    ? findDirectChild(txPr.children, { namespaceUri: A, localName: 'p' })
+    : null;
+  return paragraph
+    ? findDirectChild(paragraph.children, { namespaceUri: A, localName: 'endParaRPr' })
+    : null;
+}
+
+/** Whether a chartex `cx:txPr` names its own text colour. */
+export function namesTextColor(txPr: OoxmlElement | null): boolean {
+  const run = chartexTextRun(txPr);
+  return run
+    ? findDirectChild(run.children, { namespaceUri: A, localName: 'solidFill' }) !== null
+    : false;
+}
+
 /** The look of one chartex chart. */
 export class ChartexLook {
   private readonly style: OoxmlElement | null;
@@ -248,9 +270,13 @@ export class ChartexLook {
       }
       style = applyRunLayer(style, csChild(entry, 'defRPr'), this.resolveSchemeColor);
     }
-    style = applyRunLayer(style, bodyDefaultRun(this.chartTxPr), this.resolveSchemeColor);
+    const size = style.sizePt;
+    style = {
+      ...applyRunLayer(style, chartexTextRun(this.chartTxPr), this.resolveSchemeColor),
+      sizePt: size,
+    };
     for (const layer of layers) {
-      style = applyRunLayer(style, bodyDefaultRun(layer), this.resolveSchemeColor);
+      style = applyRunLayer(style, chartexTextRun(layer), this.resolveSchemeColor);
     }
     return style;
   }
@@ -280,6 +306,24 @@ export class ChartexLook {
   ): ChartPaint | null {
     const own = readChartShapeProperties(spPr, this.resolverWith(color));
     return own.fill === undefined ? this.entryShape(name, color).fill : own.fill;
+  }
+
+  /**
+   * The fill and outline of one data point: its `cx:dataPt` shape properties over the
+   * series' own, over the style entry. A point that names only a fill keeps the series
+   * outline.
+   */
+  point(
+    name: string,
+    seriesSpPr: OoxmlElement | null,
+    pointSpPr: OoxmlElement | null,
+    color: ChartPaint | null = null
+  ): { fill: ChartPaint | null; line: ChartStroke | null } {
+    const own = readChartShapeProperties(pointSpPr, this.resolverWith(color));
+    return {
+      fill: own.fill === undefined ? this.fill(name, seriesSpPr, color) : own.fill,
+      line: mergeStroke(own.line, this.line(name, seriesSpPr, color)),
+    };
   }
 
   /** The outline of an element: its own `spPr`, else its style entry. */

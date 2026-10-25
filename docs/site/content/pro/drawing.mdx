@@ -20,7 +20,7 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 | Drawing | With the module | Without the module |
 | --- | --- | --- |
 | Charts | Render read-only from the values cached in the chart part. | Labeled placeholder |
-| Waterfall charts | Render read-only from the values cached in the chart part, with the look its chart style and color parts give it. | Labeled placeholder |
+| Waterfall, funnel, histogram, Pareto, and box and whisker charts | Render read-only from the values cached in the chart part, with the look its chart style and color parts give it. | Labeled placeholder |
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
 | WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
@@ -106,7 +106,11 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ## What renders
 
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
-- Waterfall charts render their running total as floating columns, with subtotal columns from zero, increase, decrease, and total colors, connector lines, data labels, axes, gridlines, the title, and a legend of increases, decreases, and totals. Their text, lines, and colors come from the chart style and color parts that the chart names.
+- Waterfall charts render their running total as floating columns, with subtotal columns from zero, increase, decrease, and total colors, connector lines, data labels, axes, gridlines, the title, and a legend of increases, decreases, and totals.
+- Funnel charts render one centered bar per category, widest for the largest value, with category labels and data labels.
+- Histograms bin the cached values themselves: automatic bin width, a fixed bin size or count, either closed side, and underflow and overflow bins, with bin labels such as `[1, 3]` and `> 9`. Pareto charts sort their columns from largest to smallest and add a cumulative percentage line on a 0% to 100% axis.
+- Box and whisker charts compute quartiles with the exclusive or inclusive method, and render whiskers to 1.5 times the interquartile range, outliers, inner points, the mean marker, and the mean line. They render without data labels.
+- These newer charts take their text, lines, and colors from the chart style and color parts that the chart names.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
 - Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself.
 - WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion.
@@ -115,12 +119,11 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 These drawings keep a labeled placeholder in the editor even with the module. PDF export leaves them out and reports a `drawing` diagnostic:
 
 - Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
-- Funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts.
-
-A waterfall chart, and the other chart types in the preceding list, often comes with a picture fallback for older applications. The editor shows the chart or its labeled placeholder, never the fallback picture, and saves both unchanged.
-
+- Treemap, sunburst, and map charts.
 - SmartArt diagrams with picture fills, or with a text mode that cannot render.
 - WordArt with gradients at angles other than vertical, perspective extrusion, or a shape type whose definition the drawing does not include, other than plain text, triangle, and arch.
+
+A waterfall, funnel, histogram, box and whisker, treemap, sunburst, or map chart often comes with a picture fallback for older applications. The editor shows the chart or its labeled placeholder, never the fallback picture, and saves both unchanged.
 
 Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
 

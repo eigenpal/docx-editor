@@ -35,6 +35,7 @@ import {
 import type { ChartexContext, ChartexLayout, ChartexLegendEntry } from './chartex-layout.ts';
 import {
   pointLabelVisibility,
+  pointSpPr,
   seriesCategories,
   seriesDimension,
   seriesValues,
@@ -169,6 +170,7 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
       formatCode: valueAxis?.formatCode ?? dataFormat,
       categoryAxis,
       valueAxis,
+      frameBox: box,
     },
     plotBox,
     context
@@ -184,7 +186,7 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const base = axes.valueAt(clamp(0));
   for (const [index, column] of columns.entries()) {
     // A point override applies to the column at its position.
-    const own = owner.points.get(index) ?? owner.spPr;
+    const { fill, line } = look.point('dataPoint', owner.spPr, pointSpPr(owner, index), color);
     const top = axes.valueAt(clamp(column.value));
     // An empty bin draws nothing, not even its outline.
     if (Math.abs(base - top) < 1e-6) continue;
@@ -193,8 +195,8 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
       Math.min(top, base),
       barWidth,
       Math.abs(base - top),
-      look.fill('dataPoint', own, color),
-      look.line('dataPoint', own, color)
+      fill,
+      line
     );
   }
 
@@ -303,6 +305,7 @@ function paintParetoLine(
 
 export const HISTOGRAM_LAYOUT: ChartexLayout = Object.freeze({
   layoutIds: Object.freeze(['clusteredColumn', 'paretoLine']),
+  roomAbovePlot: true,
   legendEntries,
   paint,
 });

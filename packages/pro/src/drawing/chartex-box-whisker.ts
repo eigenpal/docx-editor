@@ -21,7 +21,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // third of a box when the axis names no gap): one series fills it, several take 98 % of it,
 // each box a tenth of its width apart from the next. Boxes and points take the series fill;
 // their outlines, whiskers, median, mean marks and mean line take the series line, which by
-// default is the data colour at eight tenths of its brightness. Data labels are not drawn.
+// default is the data colour at eight tenths of its brightness.
+//
+// Limit: data labels are not drawn. Labelled charts show the quartiles, whisker ends, inner
+// points and outliers, and the mean beside their marks, each left of or right of its mark
+// with some left out where they meet; that placement is not modelled.
 
 import { schemaAttributeValue } from '@docx-editor.dev/core/store';
 import { markerPath, markerStrokes, type Point } from './chart-scene.ts';
@@ -372,6 +376,7 @@ function paint(
 
 export const BOX_WHISKER_LAYOUT: ChartexLayout = Object.freeze({
   layoutIds: Object.freeze(['boxWhisker']),
+  roomAbovePlot: true,
   legendEntries,
   paint,
 });

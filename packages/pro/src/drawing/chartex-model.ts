@@ -93,7 +93,7 @@ export interface ChartexSeries {
   readonly name: string | null;
   readonly data: ChartexData | null;
   readonly spPr: OoxmlElement | null;
-  /** `cx:dataPt` shape properties by point index. */
+  /** `cx:dataPt` elements by point index; `pointSpPr` reads their shape properties. */
   readonly points: ReadonlyMap<number, OoxmlElement>;
   readonly dataLabels: ChartexDataLabels | null;
   /** `cx:layoutPr`, which each layout reads for its own settings. */
@@ -159,6 +159,11 @@ export function cxChild(
   localName: string
 ): OoxmlElement | null {
   return parent ? findDirectChild(parent.children, { namespaceUri: CX, localName }) : null;
+}
+
+/** The shape properties a `cx:dataPt` names for point `index` of `series`, or null. */
+export function pointSpPr(series: ChartexSeries, index: number): OoxmlElement | null {
+  return cxChild(series.points.get(index), 'spPr');
 }
 
 /** Direct `cx:` children of one name, at most `limit` (past it: null). */

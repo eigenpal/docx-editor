@@ -14,10 +14,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // than a third of the room is cut at a word boundary with an ellipsis. When slots are closer
 // than 1.2 text sizes, only every n-th label shows, from the first. The category axis line
 // runs down the plot's left edge. Data labels sit at the centre of their bar whatever their
-// position, in the light text colour unless the labels name their own text, and only when
-// the text fits inside the bar, across and up. All bars share the series colour; a `cx:dataPt` names
-// its own fill. The legend lists the series. A hidden category axis draws no labels and no
-// line. A chart without a category axis element shows both.
+// position, in the light text colour unless the labels name their own colour, and only when
+// the text fits inside the bar, across and up. All bars share the series colour; a `cx:dataPt`
+// paints its bar over it. The legend lists the series. A hidden category axis draws no labels
+// and no line. A chart without a category axis element shows both.
+//
+// Limit: with 24 or more categories the plot keeps a height of about 216 pt (in a 259.2 pt
+// tall chart, whatever the count) and moves down by up to 3 pt as the count grows. That is
+// not modelled: the plot keeps the full height.
 
 import { formatChartNumber } from './chart-number-format.ts';
 import { themeColor, type ChartPaint } from './chart-style.ts';
@@ -28,10 +32,12 @@ import {
   type ChartTextStyle,
 } from './chart-text.ts';
 import type { Box } from './chart-axes.ts';
+import { cutToWidth } from './chartex-axes.ts';
 import type { ChartexContext, ChartexLayout, ChartexLegendEntry } from './chartex-layout.ts';
+import { namesTextColor } from './chartex-style.ts';
 import {
-  cxChild,
   pointLabelVisibility,
+  pointSpPr,
   seriesCategories,
   seriesValues,
   type ChartexAxis,
@@ -53,11 +59,6 @@ const CATEGORY_WIDTH_SCALE = 1.0103;
 const CATEGORY_LABEL_PITCH = 1.2;
 /** A category label is cut to this share of the room beside the plot. */
 const CATEGORY_LABEL_SHARE = 1 / 3;
-/**
- * The room the frame keeps above every plot for a value label reaching above it. A funnel
- * draws no label above its plot, so it gives this room back.
- */
-const FRAME_PLOT_TOP_ROOM = 5.41;
 /** The plot inside the frame's box: top and bottom insets, with and without an axis line. */
 const INSET_TOP = 0.98;
 const INSET_BOTTOM = 1.22;
@@ -67,7 +68,6 @@ const INSET_LEFT_BARE = 0.38;
 const INSET_RIGHT = 0.24;
 /** Without an axis line the plot reaches a little past the frame's box on the right. */
 const INSET_RIGHT_BARE = -0.48;
-const MAX_WORDS = 64;
 
 /** One bar of a funnel, in plot fractions: `share` of the plot width, slot `index`. */
 export interface FunnelBar {
@@ -109,30 +109,9 @@ export function funnelLabelStep(slot: number, line: number, count: number): numb
   return Math.min(Math.max(1, count), Math.max(1, Math.ceil(line / slot - 1e-9)));
 }
 
-/** `text` cut at a word boundary to `width`, with an ellipsis when cut. */
-function cutToWidth(text: string, style: ChartTextStyle, width: number): string {
-  if (estimateTextWidth(text, style) <= width) return text;
-  const room = width - estimateTextWidth('…', style);
-  let kept = '';
-  for (const word of text.split(/\s+/).slice(0, MAX_WORDS)) {
-    const next = kept ? `${kept} ${word}` : word;
-    if (estimateTextWidth(next, style) > room) break;
-    kept = next;
-  }
-  if (!kept) {
-    let units = 0;
-    for (const char of text) {
-      if (++units > 1_024 || estimateTextWidth(kept + char, style) > room) break;
-      kept += char;
-    }
-  }
-  return `${kept}…`;
-}
-
 function seriesPaint(item: ChartexSeries, context: ChartexContext) {
   const color = context.look.dataColor(item.formatIndex);
   return {
-    color,
     fill: context.look.fill('dataPoint', item.spPr, color),
     line: context.look.line('dataPoint', item.spPr, color),
   };
@@ -186,7 +165,7 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const labelsShown = declared === null ? true : !declared.hidden && declared.tickLabels;
   const axisStyle = look.text('categoryAxis', declared?.txPr ?? null);
 
-  const top = box.t - FRAME_PLOT_TOP_ROOM + (axisShown ? INSET_TOP : INSET_TOP_BARE);
+  const top = box.t + (axisShown ? INSET_TOP : INSET_TOP_BARE);
   const bottom = box.b - (axisShown ? INSET_BOTTOM : INSET_BOTTOM_BARE);
   let left = box.l + (axisShown ? 0 : INSET_LEFT_BARE);
   const right = box.r - (axisShown ? INSET_RIGHT : INSET_RIGHT_BARE);
@@ -205,26 +184,26 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const width = plot.r - plot.l;
   const slotCenter = (index: number) => plot.t + slot * (index + 0.5);
 
-  const { color, fill, line: outline } = seriesPaint(item, context);
+  const color = look.dataColor(item.formatIndex);
   for (const bar of bars) {
     // A `cx:dataPt` paints with its own `cx:spPr` over the series look.
-    const own = cxChild(item.points.get(bar.index), 'spPr');
+    const { fill, line } = look.point('dataPoint', item.spPr, pointSpPr(item, bar.index), color);
     const barWidth = width * bar.share;
     scene.rect(
       center - barWidth / 2,
       slotCenter(bar.index) - barHeight / 2,
       barWidth,
       barHeight,
-      own ? look.fill('dataPoint', own, color) : fill,
-      own ? look.line('dataPoint', own, color) : outline
+      fill,
+      line
     );
   }
 
   const dataLabels = item.dataLabels;
   if (dataLabels) {
     const base = look.text('dataLabel', dataLabels.txPr);
-    // Labels sit on their bar: the light text colour, unless they name their own text.
-    const light: ChartPaint | null = dataLabels.txPr
+    // Labels sit on their bar: the light text colour, unless they name their own colour.
+    const light: ChartPaint | null = namesTextColor(dataLabels.txPr)
       ? null
       : themeColor('lt1', '', look.resolveSchemeColor);
     const style = light ? { ...base, colorHex: light.hex } : base;
@@ -272,6 +251,7 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
 
 export const FUNNEL_LAYOUT: ChartexLayout = Object.freeze({
   layoutIds: Object.freeze(['funnel']),
+  roomAbovePlot: false,
   legendEntries,
   paint,
 });

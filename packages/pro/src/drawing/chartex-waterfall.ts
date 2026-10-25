@@ -8,24 +8,28 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Each point moves the running total by its value, drawn as a column from the total before
 // it to the total after it. A subtotal point (`cx:subtotals/cx:idx`) is a column from zero to
 // its own value, and the running total continues from that value. Increases take data colour
-// 0, decreases data colour 1 and totals data colour 2, unless a `cx:dataPt` names its own
-// fill. Connector lines (on unless `cx:visibility connectorLines="0"`) join the end of each
-// column to the start of the next, in the `seriesLine` look. A data label at the default
+// 0, decreases data colour 1 and totals data colour 2. The series' `cx:spPr` paints every
+// column, its connector lines and its legend keys; a `cx:dataPt` paints one column over it,
+// and keeps the series outline unless it names its own. Connector lines (on unless
+// `cx:visibility connectorLines="0"`) join the end of each column to the start of the next,
+// in the `seriesLine` look under the series outline. A data label at the default
 // `outEnd` position sits against the end the column grows to: above an increase or positive
 // total, below a decrease or negative total, kept inside the plot; a label the plot's edge
 // pushes onto its own column turns light. The legend lists Increase, Decrease and Total.
 
 import { formatChartNumber } from './chart-number-format.ts';
-import { themeColor, type ChartPaint } from './chart-style.ts';
+import { themeColor } from './chart-style.ts';
 import { estimateTextWidth, lineHeight } from './chart-text.ts';
 import { layoutChartexAxes } from './chartex-axes.ts';
 import type { ChartexContext, ChartexLayout, ChartexLegendEntry } from './chartex-layout.ts';
+import { namesTextColor } from './chartex-style.ts';
 import {
   CHARTEX_LIMITS,
   cxChild,
   cxChildren,
   cxFlag,
   pointLabelVisibility,
+  pointSpPr,
   seriesCategories,
   seriesValues,
   type ChartexSeries,
@@ -95,12 +99,9 @@ export function waterfallSteps(
 
 const KIND_COLOR: Record<WaterfallKind, number> = { increase: 0, decrease: 1, total: 2 };
 
-function kindPaint(kind: WaterfallKind, context: ChartexContext): ChartPaint | null {
-  return context.look.fill('dataPoint', null, context.look.dataColor(KIND_COLOR[kind], 3));
-}
-
-function legendEntries(_series: readonly ChartexSeries[], context: ChartexContext) {
+function legendEntries(series: readonly ChartexSeries[], context: ChartexContext) {
   const entries: ChartexLegendEntry[] = [];
+  const spPr = series[0]?.spPr ?? null;
   for (const [text, kind] of [
     ['Increase', 'increase'],
     ['Decrease', 'decrease'],
@@ -109,8 +110,8 @@ function legendEntries(_series: readonly ChartexSeries[], context: ChartexContex
     const color = context.look.dataColor(KIND_COLOR[kind], 3);
     entries.push({
       text,
-      fill: kindPaint(kind, context),
-      line: context.look.line('dataPoint', null, color),
+      fill: context.look.fill('dataPoint', spPr, color),
+      line: context.look.line('dataPoint', spPr, color),
     });
   }
   return entries;
@@ -160,22 +161,15 @@ function paint(
   for (const step of steps) {
     if (!step) continue;
     const color = look.dataColor(KIND_COLOR[step.kind], 3);
-    const own = item.points.get(step.index) ?? item.spPr;
+    const { fill, line } = look.point('dataPoint', item.spPr, pointSpPr(item, step.index), color);
     const center = axes.categoryAt(step.index);
     const top = axes.valueAt(clamp(Math.max(step.from, step.to)));
     const bottom = axes.valueAt(clamp(Math.min(step.from, step.to)));
-    scene.rect(
-      center - barWidth / 2,
-      top,
-      barWidth,
-      bottom - top,
-      look.fill('dataPoint', own, color),
-      look.line('dataPoint', own, color)
-    );
+    scene.rect(center - barWidth / 2, top, barWidth, bottom - top, fill, line);
   }
 
   const connectors = cxFlag(cxChild(item.layoutPr, 'visibility'), 'connectorLines', true);
-  const connector = connectors ? look.line('seriesLine', null) : null;
+  const connector = connectors ? look.line('seriesLine', item.spPr) : null;
   if (connector) {
     const segments: { x: number; y: number }[][] = [];
     let previous: (typeof steps)[number] = null;
@@ -226,10 +220,12 @@ function paint(
           center = up ? end - height / 2 : end + height / 2;
       }
       // A label stays inside the plot. One pushed onto its own column takes the light text
-      // colour, unless the labels name their own text.
+      // colour, unless the labels name their own colour.
       center = Math.min(axes.plot.b - height / 2, Math.max(axes.plot.t + height / 2, center));
       const onColumn =
-        center > Math.min(end, base) && center < Math.max(end, base) && !dataLabels.txPr;
+        center > Math.min(end, base) &&
+        center < Math.max(end, base) &&
+        !namesTextColor(dataLabels.txPr);
       const light = onColumn ? themeColor('lt1', '', look.resolveSchemeColor) : null;
       const frame = estimateTextWidth(text, style) * 1.3 + style.sizePt * 2;
       labels.push({
@@ -249,6 +245,7 @@ function paint(
 
 export const WATERFALL_LAYOUT: ChartexLayout = Object.freeze({
   layoutIds: Object.freeze(['waterfall']),
+  roomAbovePlot: true,
   legendEntries,
   paint,
 });

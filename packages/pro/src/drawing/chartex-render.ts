@@ -8,8 +8,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // The automatic layout, in chart points: a 5.5 pt margin on every side but the right, which
 // keeps 6.6 pt. The title sits at the top, centred; a top legend follows 3.84 pt below it,
-// and the plot starts 5.41 pt below the last of them, which leaves room for the half of the
-// top value label that reaches above the plot. A legend box is one line plus 7 pt above and
+// and the plot starts 5.41 pt below the last of them when its layout asks for that room
+// (`ChartexLayout.roomAbovePlot`), for the half of the top value label that reaches above
+// the plot. A legend box is one line plus 7 pt above and
 // below; its keys are squares of about 7 pt, their text 10.8 pt after the key's left edge,
 // the next entry 7.9 pt after the text, whatever the text size. A bottom legend sits on the bottom margin with
 // the category labels 3.84 pt above it. A side legend lists one entry every two sizes,
@@ -35,7 +36,12 @@ import {
   type ChartTextRun,
   type ChartTextStyle,
 } from './chart-text.ts';
-import type { ChartexContext, ChartexLayout, ChartexLegendEntry } from './chartex-layout.ts';
+import {
+  CHARTEX_PLOT_TOP_ROOM,
+  type ChartexContext,
+  type ChartexLayout,
+  type ChartexLegendEntry,
+} from './chartex-layout.ts';
 import { cxChild, cxText, type ChartexModel, type ChartexSeries } from './chartex-model.ts';
 import { chartexLayoutFor } from './chartex-registry.ts';
 import { ChartexLook } from './chartex-style.ts';
@@ -44,7 +50,6 @@ const A = DRAWINGML_MAIN_NAMESPACE_URI;
 const MARGIN = 5.5;
 const RIGHT_MARGIN = 6.6;
 const STACK_GAP = 3.84;
-const PLOT_TOP_ROOM = 5.41;
 const LEGEND_PAD_Y = 7;
 const LEGEND_PAD_LEFT = 9;
 const LEGEND_PAD_RIGHT = 5.8;
@@ -281,7 +286,7 @@ export function renderChartex(
       legendItems = placeLegend(model, entries, legendStyle, box, width, height);
     }
   }
-  box.t += PLOT_TOP_ROOM;
+  if (layout.roomAbovePlot) box.t += CHARTEX_PLOT_TOP_ROOM;
 
   if (!layout.paint(series, box, context)) return null;
   if (legendStyle) paintLegend(legendItems, legendStyle, context);

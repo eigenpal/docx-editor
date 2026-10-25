@@ -117,10 +117,26 @@ function colorOf(node: OoxmlNode): string | null {
   return null;
 }
 
+/** The text size of a story's first run, in points. */
+function sizeOf(node: OoxmlNode): number | null {
+  if (node.kind === 'textValue') return null;
+  const element = node as OoxmlElement;
+  if (element.localName === 'sz') {
+    const raw = element.attributes.find((attribute) => attribute.localName === 'val')?.value;
+    return raw === undefined ? null : Number(raw) / 2;
+  }
+  for (const child of element.children) {
+    const found = sizeOf(child);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 function labels(projection: DrawingProjection) {
   return (projection.groupTextboxes ?? []).map((box) => ({
     text: textOf(box.story.content),
     color: colorOf(box.story.content),
+    size: sizeOf(box.story.content),
     left: box.frameEmu.x / EMU,
     right: (box.frameEmu.x + box.frameEmu.cx) / EMU,
     x: (box.frameEmu.x + box.frameEmu.cx / 2) / EMU,
@@ -303,12 +319,22 @@ describe('labels', () => {
     expect(texts).not.toContain('210');
   });
 
-  test('labels with their own text properties keep their colour', () => {
+  test('labels whose text properties end in their own colour keep it', () => {
     const txPr =
-      '<cx:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"><a:solidFill>' +
-      '<a:srgbClr val="000000"/></a:solidFill></a:defRPr></a:pPr></a:p></cx:txPr>';
+      '<cx:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr/><a:endParaRPr lang="en-US">' +
+      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:endParaRPr></a:p></cx:txPr>';
     const label = labels(project({ labelTxPr: txPr })).find((item) => item.text === '400')!;
     expect(label.color).toBe('000000');
+  });
+
+  test('a colour and size on the default run alone do not reach the labels', () => {
+    const txPr =
+      '<cx:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200"><a:solidFill>' +
+      '<a:srgbClr val="000000"/></a:solidFill></a:defRPr></a:pPr>' +
+      '<a:endParaRPr lang="en-US"/></a:p></cx:txPr>';
+    const label = labels(project({ labelTxPr: txPr })).find((item) => item.text === '400')!;
+    expect(label.color).toBe('FFFFFF');
+    expect(label.size).toBe(9);
   });
 
   test('labels off show none; a hidden axis shows no category labels and no line', () => {

@@ -40,6 +40,12 @@ export interface ChartexContext {
   readonly chartHeight: number;
 }
 
+/**
+ * The room the frame keeps above the plot of a layout that asks for it, for the half of the
+ * top value label (9 pt) that reaches above the plot.
+ */
+export const CHARTEX_PLOT_TOP_ROOM = 5.41;
+
 /** One chartex chart type. */
 export interface ChartexLayout {
   /**
@@ -47,6 +53,12 @@ export interface ChartexLayout {
    * may join it in one chart (a Pareto line joins its clustered columns).
    */
   readonly layoutIds: readonly string[];
+  /**
+   * Whether the frame keeps `CHARTEX_PLOT_TOP_ROOM` above the plot. A layout with a value
+   * axis beside the plot asks for it; one without (a funnel) paints its plot from the top of
+   * the box.
+   */
+  readonly roomAbovePlot: boolean;
   /** The legend entries, in legend order. */
   legendEntries(series: readonly ChartexSeries[], context: ChartexContext): ChartexLegendEntry[];
   /**

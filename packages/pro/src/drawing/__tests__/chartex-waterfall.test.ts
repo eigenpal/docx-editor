@@ -207,8 +207,52 @@ describe('labels and frame', () => {
       categories: ['Opening balance carried forward', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
       values: [5, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     });
-    const turned = (projection.groupTextboxes ?? []).filter((box) => box.rotationDegrees === 315);
+    // The label box reaches a third of the box under the title and legend (about 64 pt).
+    const turned = (projection.groupTextboxes ?? []).filter(
+      (box) => Math.abs(box.rotationDegrees - 300) < 1e-6
+    );
     expect(turned.length).toBe(10);
-    expect(textOf(turned[0]!.story.content)).toMatch(/…$/);
+    expect(textOf(turned[0]!.story.content)).toBe('Opening…');
+  });
+});
+
+describe('point and series shape properties', () => {
+  const FILL = (hex: string) => `<a:solidFill><a:srgbClr val="${hex}"/></a:solidFill>`;
+  const LINE = (hex: string) => `<a:ln w="28575">${FILL(hex)}</a:ln>`;
+
+  test('a point paints its column with its own shape properties', () => {
+    const projection = project({
+      seriesExtra:
+        `<cx:dataPt idx="1"><cx:spPr>${FILL('70AD47')}</cx:spPr></cx:dataPt>` +
+        `<cx:dataPt idx="2"><cx:spPr>${FILL('7030A0')}${LINE('000000')}</cx:spPr></cx:dataPt>`,
+    });
+    expect(bars(projection).map((bar) => bar.hex)).toEqual([
+      'A5A5A5',
+      '70AD47',
+      '7030A0',
+      'A5A5A5',
+    ]);
+    const outlined = (projection.vectorShape?.components ?? []).filter(
+      (component) => component.fillHex === '7030A0'
+    );
+    expect(outlined[0]!.strokeHex).toBe('000000');
+  });
+
+  test('the series outline reaches every column, its connector lines and its legend keys', () => {
+    const projection = project({
+      seriesExtra:
+        `<cx:spPr>${LINE('C00000')}</cx:spPr>` +
+        `<cx:dataPt idx="1"><cx:spPr>${FILL('FFC000')}</cx:spPr></cx:dataPt>`,
+    });
+    const components = projection.vectorShape?.components ?? [];
+    const columns = bars(projection);
+    expect(columns.map((bar) => bar.hex)).toEqual(['A5A5A5', 'FFC000', 'ED7D31', 'A5A5A5']);
+    // The point names only a fill: it keeps the series outline.
+    for (const hex of ['A5A5A5', 'FFC000', 'ED7D31', '4472C4']) {
+      const filled = components.filter((component) => component.fillHex === hex);
+      expect(filled.length).toBeGreaterThan(0);
+      for (const component of filled) expect(component.strokeHex).toBe('C00000');
+    }
+    expect(strokes(projection, 'C00000').some((paths) => paths.length === 3)).toBe(true);
   });
 });
