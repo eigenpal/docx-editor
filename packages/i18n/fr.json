@@ -994,7 +994,8 @@
     "nothingToPaint": "Sélectionnez du texte pour appliquer la mise en forme",
     "noReviewAuthors": "Ce document ne contient aucun auteur de révision",
     "suggestingNeedsAuthor": "Les suggestions nécessitent un auteur. Définissez l’auteur dans la configuration de l’éditeur.",
-    "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image."
+    "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image.",
+    "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image."
   },
   "equationPopup": {
     "apply": "Appliquer",

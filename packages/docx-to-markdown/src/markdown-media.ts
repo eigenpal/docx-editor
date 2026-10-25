@@ -16,6 +16,23 @@ export function drawingKey(drawing: Drawing): string {
   return `${drawing.ownerPartName}\0${drawing.drawingNodeId}`;
 }
 
+/**
+ * The picture resource Markdown exports for a drawing. A chart exports the picture saved in
+ * its `mc:Fallback`, whichever branch the page shows, and nothing without one; any other
+ * drawing exports its own picture.
+ */
+export function exportedResource(drawing: Drawing): Drawing['resource'] | undefined {
+  return drawing.chart ? drawing.chartFallbackResource : drawing.resource;
+}
+
+/**
+ * The alt text of an exported picture: the author's description (or title) on the drawing,
+ * then a chart's own title. A picture with neither is decorative and has empty alt text.
+ */
+export function exportedAlt(drawing: Drawing): string {
+  return drawing.accessibility.label ?? drawing.chart?.title ?? '';
+}
+
 export interface MediaRendering {
   readonly syntax: 'markdown' | 'html';
   readonly assets: readonly MarkdownImageAsset[];
@@ -46,10 +63,7 @@ export function imageMarkdown(
   const asset = media.byDrawing.get(key);
   if (!asset) return '';
   media.represented.add(key);
-  // A chart's saved fallback picture takes the chart's title as its alt text.
-  const alt =
-    drawing.chart?.title ??
-    (drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? ''));
+  const alt = exportedAlt(drawing);
   if (media.syntax === 'html') {
     const width = Math.round(drawing.width * (96 / 72));
     const height = Math.round(drawing.height * (96 / 72));

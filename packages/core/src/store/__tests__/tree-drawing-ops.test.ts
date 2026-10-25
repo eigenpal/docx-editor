@@ -752,6 +752,19 @@ describe('refuses invalid or locked drawing operations', () => {
   });
 
   test('refuses non-picture graphic', () => {
+    const xml = inlinePictureDrawing().replace(`uri="${PIC_URI}"`, 'uri="urn:example:graphic"');
+    const graphicPart = parse(xml);
+    const drawing = drawingOf(graphicPart);
+    expect(
+      refuse(graphicPart, {
+        op: 'resizeDrawing',
+        drawingNodeId: drawing.id,
+        extentEmu: { cx: 1, cy: 1 },
+      })
+    ).toBe('not-a-picture-drawing');
+  });
+
+  test('refuses a chart graphic as a chart', () => {
     const xml = inlinePictureDrawing().replace(`uri="${PIC_URI}"`, `uri="${CHART_URI}"`);
     const chartPart = parse(xml);
     const drawing = drawingOf(chartPart);
@@ -761,7 +774,7 @@ describe('refuses invalid or locked drawing operations', () => {
         drawingNodeId: drawing.id,
         extentEmu: { cx: 1, cy: 1 },
       })
-    ).toBe('not-a-picture-drawing');
+    ).toBe('chart-drawing');
   });
 
   test('refuses resize when noResize lock is set', () => {

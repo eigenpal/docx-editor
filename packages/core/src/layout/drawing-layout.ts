@@ -33,8 +33,8 @@ import {
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
-import { measureDisplayText } from './run-style.ts';
-import { styleForFontSlot } from './script-itemization.ts';
+import { anchorCharacterFrameOffset, anchorCharacterXOnLine } from './anchor-character-offset.ts';
+import { chartFallbackFields, chartFallbackResource } from './drawing-chart-fallback.ts';
 import {
   drawingGeometryFromProjection,
   clipGeometryToRegion,
@@ -269,11 +269,17 @@ export interface InlineDrawingRecord {
   /** Graphic kind of a non-picture drawing, naming its placeholder; null for pictures. */
   readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
   /**
-   * The title and plot types of a drawing that holds a chart. Present whether the chart renders
-   * (`vectorShape`), shows its fallback picture (`resource`), or shows the placeholder
-   * (`placeholderGraphicKind` `'chart'`).
+   * The title and plot types of a drawing that holds a chart whose chart part can be read, and
+   * how the page shows it (`shownAs`): drawn, by its saved fallback, or as a placeholder.
    */
   readonly chart?: DrawingChartSummary;
+  /**
+   * The resource of the picture saved in a chart's `mc:Fallback`, whichever branch the page
+   * shows, for an output that exports a chart as its saved picture. Absent without one.
+   *
+   * @internal
+   */
+  readonly chartFallbackResource?: ImageResourceState;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;
   /** Legacy text art on the line, fitted to its box. */
@@ -375,6 +381,8 @@ export interface InlineDrawingLayoutInput {
   readonly resource: ImageResourceState;
   /** The resources of the projection's `groupPictureLayers`, in the same order. */
   readonly groupPictureLayerResources?: readonly ImageResourceState[];
+  /** The resource of the projection's `chartFallbackPicture`. */
+  readonly chartFallbackResource?: ImageResourceState;
 }
 
 export interface InlineDrawingLayoutContext {
@@ -1039,76 +1047,9 @@ export function buildAnchoredDrawingRecord(options: {
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
     ...groupPictureLayerFields(projection, options.input.groupPictureLayerResources),
+    ...chartFallbackFields(options.input.chartFallbackResource),
     ...(textArt ? { textArt } : {}),
   });
-}
-
-export function anchorCharacterXOnLine(
-  line: {
-    readonly range: { readonly start: number; readonly end: number };
-    readonly box: LayoutBox;
-    readonly spans: readonly {
-      readonly range: { readonly start: number; readonly end: number };
-      readonly box: LayoutBox;
-      readonly text?: string;
-      readonly style?: import('./run-style.ts').ResolvedRunStyle;
-      readonly fontSlot?: import('./script-itemization.ts').FontSlot;
-    }[];
-  },
-  modelOffset: number,
-  measurer?: import('./semantic-records.ts').TextMeasurer
-): number {
-  // As drawn: the span's font slot decides the face this prefix measures in.
-  const measured = (
-    text: string,
-    style: import('./run-style.ts').ResolvedRunStyle,
-    slot: import('./script-itemization.ts').FontSlot | undefined
-  ): number => measureDisplayText(text, styleForFontSlot(style, slot), measurer!);
-  for (const span of line.spans) {
-    if (modelOffset < span.range.start) break;
-    if (modelOffset < span.range.end) {
-      if (measurer && span.text !== undefined && span.style !== undefined) {
-        const within = modelOffset - span.range.start;
-        return span.box.x + measured(span.text.slice(0, within), span.style, span.fontSlot);
-      }
-      const spanLength = span.range.end - span.range.start;
-      if (spanLength <= 0) return span.box.x;
-      const within = modelOffset - span.range.start;
-      return span.box.x + (span.box.width * within) / spanLength;
-    }
-    if (modelOffset === span.range.end) {
-      if (measurer && span.text !== undefined && span.style !== undefined) {
-        return span.box.x + measured(span.text, span.style, span.fontSlot);
-      }
-      return span.box.x + span.box.width;
-    }
-  }
-  let trailing: (typeof line.spans)[number] | undefined;
-  for (const span of line.spans) {
-    if (span.range.end <= modelOffset) trailing = span;
-  }
-  if (trailing) {
-    if (measurer && trailing.text !== undefined && trailing.style !== undefined) {
-      return trailing.box.x + measured(trailing.text, trailing.style, trailing.fontSlot);
-    }
-    return trailing.box.x + trailing.box.width;
-  }
-  return line.box.x;
-}
-
-/** Model offset for a character-relative anchor — last text boundary before the drawing atom. */
-export function anchorCharacterFrameOffset(
-  line: {
-    readonly range: { readonly start: number; readonly end: number };
-    readonly spans: readonly { readonly range: { readonly start: number; readonly end: number } }[];
-  },
-  modelStart: number
-): number {
-  let textEnd = line.range.start;
-  for (const span of line.spans) {
-    if (span.range.end <= modelStart) textEnd = span.range.end;
-  }
-  return textEnd;
 }
 
 /** Column content box for one column of a multi-column section. */
@@ -1284,6 +1225,7 @@ export function publishAnchoredDrawingsForParagraph(
           projection,
           options.drawingLayout.resourceOf
         ),
+        chartFallbackResource: chartFallbackResource(projection, options.drawingLayout.resourceOf),
       }),
       anchorParagraphId: options.paragraphId,
       start: characterFrameOffset,
@@ -1389,6 +1331,7 @@ export function buildInlineDrawingRecord(options: {
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
     ...groupPictureLayerFields(options.input.projection, options.input.groupPictureLayerResources),
+    ...chartFallbackFields(options.input.chartFallbackResource),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
     ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
     ...(textboxStory ? { textboxStory } : {}),

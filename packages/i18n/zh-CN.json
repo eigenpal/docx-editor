@@ -994,7 +994,8 @@
     "nothingToPaint": "请选择要应用格式的文本",
     "noReviewAuthors": "此文档没有审阅作者",
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
-    "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。"
+    "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
+    "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。"
   },
   "equationPopup": {
     "apply": "应用",

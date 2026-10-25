@@ -46,6 +46,7 @@
     "equationSuggesting": "Editing an equation is unavailable in suggesting mode",
     "equationSuggestingDisplay": "In suggesting mode, remove the whole equation block instead of one equation",
     "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",
+    "chartDrawing": "This is a chart. You can delete it, but you can't edit it as a picture.",
     "invalidValue": "This value is not valid for the command",
     "unavailable": "This command is unavailable",
     "bodyOnlySectionBreak": "Section breaks go in the document body.",

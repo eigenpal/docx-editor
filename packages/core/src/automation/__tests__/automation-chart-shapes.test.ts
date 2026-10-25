@@ -30,5 +30,5 @@ test('a chart fallback picture is no inline picture, and its edits map to unsupp
   const part = pkg.parts.get('/word/document.xml')!;
   const paragraphId = storyParagraphs(bodyStoryRoot(part) ?? part.root)[0]!.id;
   expect(pictureIdsInSpans(part, [{ paragraphId, start: 0, end: 1 }])).toEqual([]);
-  expect(storeEditDiagnosticCode('chart-fallback')).toBe('edit.unsupported-content');
+  expect(storeEditDiagnosticCode('chart-drawing')).toBe('edit.unsupported-content');
 });

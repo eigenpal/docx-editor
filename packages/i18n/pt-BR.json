@@ -994,7 +994,8 @@
     "nothingToPaint": "Selecione um texto para aplicar a formatação",
     "noReviewAuthors": "Este documento não tem autores de revisão",
     "suggestingNeedsAuthor": "O modo de sugestão precisa de um autor. Defina o autor na configuração do editor.",
-    "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem."
+    "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem.",
+    "chartDrawing": "Isto é um gráfico. Você pode excluí-lo, mas não pode editá-lo como uma imagem."
   },
   "equationPopup": {
     "apply": "Aplicar",

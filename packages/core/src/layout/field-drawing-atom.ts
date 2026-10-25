@@ -9,6 +9,7 @@ import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { groupPictureLayerResources } from './drawing-group-picture-layers.ts';
+import { chartFallbackResource } from './drawing-chart-fallback.ts';
 import {
   revisionsAreDeletion,
   revisionsVisible,
@@ -78,6 +79,7 @@ export function runDrawingAtomPlan(options: {
         projection,
         resource: layout.resourceOf(projection),
         groupPictureLayerResources: groupPictureLayerResources(projection, layout.resourceOf),
+        chartFallbackResource: chartFallbackResource(projection, layout.resourceOf),
       }),
     },
   };

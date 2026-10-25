@@ -43,5 +43,9 @@ test('an unsupported chart type without a fallback keeps the placeholder', () =>
   );
   expect(projection!.picture).toBeNull();
   expect(drawingPaintFields(projection!).placeholderGraphicKind).toBe('chart');
-  expect(projection!.chartSummary).toEqual({ title: 'Sales', plotTypes: ['treemap'] });
+  expect(projection!.chartSummary).toEqual({
+    title: 'Sales',
+    plotTypes: ['treemap'],
+    shownAs: 'placeholder',
+  });
 });

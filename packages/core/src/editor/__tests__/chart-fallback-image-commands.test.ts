@@ -6,11 +6,12 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { expect, test } from 'bun:test';
+import { createT, en, localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { chartexDocx, waterfallChartSpace } from '../../store/__tests__/chartex-fixture.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
-import { CHART_FALLBACK_REASON } from '../image-state-rules.ts';
+import { CHART_DRAWING_REASON } from '../image-state-rules.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import type { EditorCommand } from '../../contracts/editor.ts';
 
@@ -75,17 +76,17 @@ test('picture commands on a chart fallback refuse with the engine reason', async
       expect(editor.can(command)).toEqual({
         ok: false,
         code: 'unsupported',
-        reason: CHART_FALLBACK_REASON,
+        reason: CHART_DRAWING_REASON,
       });
-      expect(editor.exec(command)).toMatchObject({ ok: false, reason: CHART_FALLBACK_REASON });
+      expect(editor.exec(command)).toMatchObject({ ok: false, reason: CHART_DRAWING_REASON });
     }
     expect(
       editor.canExecuteImageCommand!({ type: 'replaceImage', data: PNG_1X1, mime: 'image/png' })
-    ).toMatchObject({ ok: false, reason: CHART_FALLBACK_REASON });
+    ).toMatchObject({ ok: false, reason: CHART_DRAWING_REASON });
     for (const slot of ['image.wrap', 'image.altText', 'image.properties'] as const) {
       expect(toolbarCommandState(editor, slot)).toMatchObject({
         enabled: false,
-        disabledReason: CHART_FALLBACK_REASON,
+        disabledReason: CHART_DRAWING_REASON,
       });
     }
     expect(selectedDrawingOverlayTargetOf(editor.surface)).toMatchObject({
@@ -117,4 +118,10 @@ test('delete removes the chart and its fallback as one undo step', async () => {
   } finally {
     editor.destroy();
   }
+});
+
+test('the chart refusal reaches every locale through the disabled-reason catalog', () => {
+  const t = createT(en);
+  expect(localizeDisabledReason(CHART_DRAWING_REASON, t)).toBe(t('disabledReason.chartDrawing'));
+  expect(localizeDisabledReason(CHART_DRAWING_REASON, t)).not.toBe(CHART_DRAWING_REASON);
 });

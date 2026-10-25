@@ -123,13 +123,10 @@ export function projectDrawingContent(
     chartSummary =
       readChartexSummary(anchor, ctx.resolveDiagramParts?.chartex) ??
       readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
-    // A chart paints through an installed renderer; without one it keeps its placeholder. A
-    // projection that asks for no drawn charts skips the renderer.
-    const chartRenderer =
-      ctx.resolveDiagramParts?.drawCharts === false ? undefined : drawingRenderers().chart;
+    // A chart paints through an installed renderer; without one it keeps its placeholder.
     const diagram =
       projectDiagram(anchor, extent, ctx) ??
-      chartRenderer?.(anchor, extent, {
+      drawingRenderers().chart?.(anchor, extent, {
         resolveChartPart: ctx.resolveDiagramParts?.chart,
         resolveChartexPart: ctx.resolveDiagramParts?.chartex,
         resolveSchemeColor: ctx.resolveSchemeColor,
@@ -142,7 +139,7 @@ export function projectDrawingContent(
         textboxStory: null,
         ...(diagram.groupTextboxes ? { groupTextboxes: diagram.groupTextboxes } : {}),
         paints: true,
-        ...(chartSummary ? { chartSummary } : {}),
+        ...(chartSummary ? { chartSummary: { ...chartSummary, shownAs: 'chart' as const } } : {}),
       };
     }
   }

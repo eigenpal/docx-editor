@@ -112,7 +112,7 @@ try {
 }
 ```
 
-Both exporters consume the same cached layout and font evidence. This workflow retains PDF's font and shaping policy for both outputs.
+Both exporters consume the same cached layout and font evidence. This workflow retains PDF's font and shaping policy for both outputs. Each exporter keeps its own rule for charts: PDF draws a chart that the drawing module renders, and Markdown exports the chart's saved fallback picture. The session that opened the document does not change either rule.
 
 `exportPdfFrom` also accepts `displayMode` to encode another cached revision projection. The default session mode does not change when you request another projection.
 

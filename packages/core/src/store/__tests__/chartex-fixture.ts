@@ -5,6 +5,7 @@ import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 
 export const CX = 'http://schemas.microsoft.com/office/drawing/2014/chartex';
+const C = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
 const CX1 = 'http://schemas.microsoft.com/office/drawing/2015/9/8/chartex';
 const CS = 'http://schemas.microsoft.com/office/drawing/2012/chartStyle';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -128,6 +129,28 @@ export function waterfallChartSpace(options: WaterfallOptions = {}): string {
   );
 }
 
+/** A classic clustered column chart part titled `title`, with two cached points. */
+export function classicBarChartSpace(title = 'Quarterly totals'): string {
+  const cache = (values: readonly (string | number)[], numeric: boolean) =>
+    (numeric
+      ? '<c:numRef><c:f>S!B1</c:f><c:numCache><c:formatCode>General</c:formatCode>'
+      : '<c:strRef><c:f>S!A1</c:f><c:strCache>') +
+    `<c:ptCount val="${values.length}"/>` +
+    values.map((value, index) => `<c:pt idx="${index}"><c:v>${value}</c:v></c:pt>`).join('') +
+    (numeric ? '</c:numCache></c:numRef>' : '</c:strCache></c:strRef>');
+  return (
+    `<c:chartSpace xmlns:c="${C}" xmlns:a="${A}" xmlns:r="${R}"><c:chart>` +
+    `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${title}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>` +
+    '<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>' +
+    `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx>${cache(['Alpha'], false)}</c:tx>` +
+    `<c:cat>${cache(['North', 'South'], false)}</c:cat><c:val>${cache([3, 5], true)}</c:val></c:ser>` +
+    '<c:axId val="1"/><c:axId val="2"/></c:barChart>' +
+    '<c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx>' +
+    '<c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:crossAx val="1"/></c:valAx>' +
+    '</c:plotArea><c:plotVisOnly val="1"/></c:chart></c:chartSpace>'
+  );
+}
+
 /** A one-pixel PNG: the picture fallback Office saves beside a chartex drawing. */
 const FALLBACK_PNG = Uint8Array.from(
   atob(
@@ -143,6 +166,10 @@ export interface ChartexDocxOptions {
   readonly emptyFallback?: boolean;
   /** Leave out the chart style and colour style parts. */
   readonly noStyleParts?: boolean;
+  /** `chartXml` is a classic `c:chartSpace` part, referenced through `c:chart`. */
+  readonly classic?: boolean;
+  /** Lock attributes for the chart's `a:graphicFrameLocks`, such as `noSelect="1"`. */
+  readonly frameLocks?: string;
   readonly cx?: number;
   readonly cy?: number;
 }
@@ -150,13 +177,19 @@ export interface ChartexDocxOptions {
 export function chartexDocx(chartXml: string, options: ChartexDocxOptions = {}): Uint8Array {
   const cx = options.cx ?? 5486400;
   const cy = options.cy ?? 3200400;
-  const inline = (graphic: string, id: number) =>
+  const inline = (graphic: string, id: number, framePr = '') =>
     `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
-    `<wp:docPr id="${id}" name="Chart ${id}"/><a:graphic>${graphic}</a:graphic></wp:inline></w:drawing>`;
+    `<wp:docPr id="${id}" name="Chart ${id}"/>${framePr}<a:graphic>${graphic}</a:graphic></wp:inline></w:drawing>`;
   const chart = inline(
-    `<a:graphicData uri="${CX}"><cx:chart xmlns:cx="${CX}" r:id="rId10"/></a:graphicData>`,
-    1
+    options.classic
+      ? `<a:graphicData uri="${C}"><c:chart xmlns:c="${C}" r:id="rId10"/></a:graphicData>`
+      : `<a:graphicData uri="${CX}"><cx:chart xmlns:cx="${CX}" r:id="rId10"/></a:graphicData>`,
+    1,
+    options.frameLocks
+      ? `<wp:cNvGraphicFramePr><a:graphicFrameLocks ${options.frameLocks}/></wp:cNvGraphicFramePr>`
+      : ''
   );
+  const chartPart = options.classic ? 'chart1.xml' : 'chartEx1.xml';
   const fallback = inline(
     `<a:graphicData uri="${PIC}"><pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="0" name=""/>` +
       '<pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId11"/></pic:blipFill>' +
@@ -176,7 +209,9 @@ export function chartexDocx(chartXml: string, options: ChartexDocxOptions = {}):
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '<Override PartName="/word/charts/chartEx1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>' +
+        (options.classic
+          ? '<Override PartName="/word/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>'
+          : '<Override PartName="/word/charts/chartEx1.xml" ContentType="application/vnd.ms-office.chartex+xml"/>') +
         '<Override PartName="/word/charts/style1.xml" ContentType="application/vnd.ms-office.chartstyle+xml"/>' +
         '<Override PartName="/word/charts/colors1.xml" ContentType="application/vnd.ms-office.chartcolorstyle+xml"/>' +
         '</Types>'
@@ -186,16 +221,18 @@ export function chartexDocx(chartXml: string, options: ChartexDocxOptions = {}):
     ),
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${PR}"><Relationship Id="rId1" Type="${R}/theme" Target="theme/theme1.xml"/>` +
-        '<Relationship Id="rId10" Type="http://schemas.microsoft.com/office/2014/relationships/chartEx" Target="charts/chartEx1.xml"/>' +
+        (options.classic
+          ? `<Relationship Id="rId10" Type="${R}/chart" Target="charts/chart1.xml"/>`
+          : '<Relationship Id="rId10" Type="http://schemas.microsoft.com/office/2014/relationships/chartEx" Target="charts/chartEx1.xml"/>') +
         `<Relationship Id="rId11" Type="${R}/image" Target="media/fallback.png"/></Relationships>`
     ),
     'word/document.xml': strToU8(document),
     'word/theme/theme1.xml': strToU8(THEME),
-    'word/charts/chartEx1.xml': strToU8(chartXml),
+    [`word/charts/${chartPart}`]: strToU8(chartXml),
     'word/media/fallback.png': FALLBACK_PNG,
     ...(styleParts
       ? {
-          'word/charts/_rels/chartEx1.xml.rels': strToU8(
+          [`word/charts/_rels/${chartPart}.rels`]: strToU8(
             `<Relationships xmlns="${PR}">` +
               '<Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle" Target="style1.xml"/>' +
               '<Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" Target="colors1.xml"/>' +

@@ -115,6 +115,7 @@ export type {
   AnchoredDrawingRecord,
   DrawingAccessibility,
   DrawingChartPlotType,
+  DrawingChartShownAs,
   DrawingChartSummary,
   DrawingGeometry,
   DrawingGroupPictureLayerRecord,
@@ -331,10 +332,8 @@ export async function openDocumentForExport(
     fonts: _fonts,
     fallbackFonts: _fallbackFonts,
     fontShaping: requestedExecution,
-    ...openOptions
+    ...coreOptions
   } = options;
-  // Markdown cannot use a drawn chart, so a chart shows its saved fallback picture instead.
-  const coreOptions = { ...openOptions, drawCharts: false };
   const fontShaping =
     requestedExecution === undefined
       ? undefined

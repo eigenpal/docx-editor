@@ -15,7 +15,11 @@ test('a chartex chart without a renderer keeps a chart placeholder with its summ
     chartexPackage(waterfallChartSpace({ title: 'Net  cash' }))
   );
   expect(projection!.picture).toBeNull();
-  expect(projection!.chartSummary).toEqual({ title: 'Net cash', plotTypes: ['waterfall'] });
+  expect(projection!.chartSummary).toEqual({
+    title: 'Net cash',
+    plotTypes: ['waterfall'],
+    shownAs: 'placeholder',
+  });
   const fields = drawingPaintFields(projection!);
   expect(fields.placeholderGraphicKind).toBe('chart');
   expect(fields.chart?.plotTypes).toEqual(['waterfall']);
@@ -27,7 +31,11 @@ test('without a renderer, a wrapped chartex chart shows its fallback picture', (
   );
   expect(projection!.picture?.embeddedRelationshipId).toBe('rId11');
   // The fallback carries the chart's summary, so a host can tell it stands for a chart.
-  expect(projection!.chartSummary).toEqual({ title: 'Net', plotTypes: ['waterfall'] });
+  expect(projection!.chartSummary).toEqual({
+    title: 'Net',
+    plotTypes: ['waterfall'],
+    shownAs: 'fallback',
+  });
   expect(drawingPaintFields(projection!).placeholderGraphicKind).toBeFalsy();
   expect(drawingPaintFields(projection!).chart?.title).toBe('Net');
 });
@@ -41,7 +49,11 @@ test('without a renderer or a fallback that paints, the chart placeholder shows'
   );
   expect(projection!.picture).toBeNull();
   expect(drawingPaintFields(projection!).placeholderGraphicKind).toBe('chart');
-  expect(projection!.chartSummary).toEqual({ title: 'Net', plotTypes: ['waterfall'] });
+  expect(projection!.chartSummary).toEqual({
+    title: 'Net',
+    plotTypes: ['waterfall'],
+    shownAs: 'placeholder',
+  });
 });
 
 test('an empty title element and a missing title both read as no title', () => {

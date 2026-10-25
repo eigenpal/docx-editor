@@ -145,7 +145,7 @@ const STORE_EDIT_CODES: Readonly<
   unsupported: 'edit.unsupported-content',
   'unsupported-property': 'edit.unsupported-content',
   'not-a-picture-drawing': 'edit.unsupported-content',
-  'chart-fallback': 'edit.unsupported-content',
+  'chart-drawing': 'edit.unsupported-content',
   'unknown-op': 'edit.invalid-argument',
   'invalid-range': 'edit.invalid-argument',
   'offset-out-of-range': 'edit.invalid-argument',

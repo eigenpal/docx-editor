@@ -64,5 +64,6 @@ export function readChartexSummary(
   return Object.freeze({
     title: tx ? plainText(tx, true, CHARTEX_NAMESPACE_URI) : null,
     plotTypes: Object.freeze(plotTypes),
+    shownAs: 'placeholder',
   });
 }

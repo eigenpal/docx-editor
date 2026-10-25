@@ -376,8 +376,6 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: ReviewDisplayMode;
-    // @internal
-    readonly drawCharts?: boolean;
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;

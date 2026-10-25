@@ -68,12 +68,20 @@ const PLOT_TYPES: ReadonlySet<string> = new Set<DrawingChartPlotType>([
 ]);
 
 /**
- * The title and plot types of a chart, as text.
+ * How the page shows a chart: `chart` when the installed chart renderer draws it,
+ * `fallback` when it shows the content saved in its `mc:AlternateContent` fallback (a
+ * picture, a shape, a group or VML), and `placeholder` when it shows the labeled chart
+ * placeholder.
  *
- * A drawing record carries it as `chart` whenever the drawing holds a chart, in each of three
- * states. A chart that renders has a non-null `vectorShape`. A chart that shows its saved
- * fallback picture has a picture `resource` and a null `placeholderGraphicKind`. A chart that
- * shows the placeholder has `placeholderGraphicKind` `'chart'`.
+ * @public
+ */
+export type DrawingChartShownAs = 'chart' | 'fallback' | 'placeholder';
+
+/**
+ * The title and plot types of a chart, as text, and how the page shows it.
+ *
+ * A drawing record carries it as `chart` whenever the drawing holds a chart whose chart part
+ * can be read, in each of the three states that `shownAs` names.
  *
  * @public
  */
@@ -95,6 +103,13 @@ export interface DrawingChartSummary {
    * of the chartex types.
    */
   readonly plotTypes: readonly DrawingChartPlotType[];
+  /**
+   * How the page shows the chart. The projection sets it from the renderers installed when
+   * the document opened: `chart` (the record has a `vectorShape`), `fallback` (the record
+   * paints the fallback content, such as a picture `resource`), or `placeholder` (the record
+   * has `placeholderGraphicKind` `'chart'`). Read this field rather than the other fields.
+   */
+  readonly shownAs: DrawingChartShownAs;
 }
 
 function chartChild(element: OoxmlElement, localName: string): OoxmlElement | null {
@@ -197,5 +212,6 @@ export function readChartSummary(
   return Object.freeze({
     title: chartTitle(chart, plotArea),
     plotTypes: Object.freeze(plotTypes),
+    shownAs: 'placeholder',
   });
 }

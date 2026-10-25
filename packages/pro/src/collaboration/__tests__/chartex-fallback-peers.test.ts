@@ -5,9 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A wrapped chartex chart in two collaborating editors, where Alice has the drawing module and
 // Bob does not: Alice sees the drawn chart, Bob sees its saved fallback picture. Bob's picture
-// edits on the fallback refuse and change nothing for either participant; Bob's delete removes
-// the chart and its fallback for both, undo restores both branches, a delete races Alice's
-// typing, and both converge after save and reopen.
+// edits on the fallback refuse and change nothing for either participant; Alice's drawn chart
+// takes no picture selection; a delete by either participant removes the chart and its
+// fallback for both, undo restores both branches, a delete races Alice's typing, and both
+// converge after save and reopen.
 //
 // The renderer registry is process-wide, so one process cannot hold one participant with the
 // module and one without. Each step installs the chart renderer for the participant it acts
@@ -105,13 +106,13 @@ function sync(a: Peer, b: Peer): void {
   }
 }
 
-/** How the participant's layout shows the chart: drawn, fallback picture, or none. */
+/** How the participant's layout shows the chart, as its record's `chart.shownAs` says. */
 function shown(client: Peer): readonly string[] {
   as(client.withModule);
   const kinds: string[] = [];
   forEachSemanticDrawing(client.editor.surface!.layout(), ({ drawing }) => {
     expect(drawing.chart?.title).toBe('Net cash');
-    kinds.push(drawing.vectorShape ? 'drawn' : (drawing.placeholderGraphicKind ?? 'fallback'));
+    kinds.push(drawing.chart!.shownAs);
   });
   return kinds;
 }
@@ -157,10 +158,17 @@ test('a participant without the drawing module edits a chart through its fallbac
     bob = await peer('Bob', false, alice);
   let reopened: Peer | undefined;
   try {
-    expect(shown(alice)).toEqual(['drawn']);
+    expect(shown(alice)).toEqual(['chart']);
     expect(shown(bob)).toEqual(['fallback']);
     const original = await converged(alice, bob);
     expect(original).toContain('AlternateContent');
+
+    // Alice's drawn chart takes no picture selection, so no picture command reaches it.
+    selectChart(alice);
+    expect(alice.editor.getSelectedImage!()).toBeNull();
+    expect(alice.editor.exec({ type: 'setImageProperties', widthEmu: 914400 })).toMatchObject({
+      ok: false,
+    });
 
     // Bob's picture edits on the fallback refuse and change nothing for either participant.
     selectChart(bob);
@@ -175,7 +183,7 @@ test('a participant without the drawing module edits a chart through its fallbac
     }
     sync(alice, bob);
     expect(await converged(alice, bob)).toBe(original);
-    expect(shown(alice)).toEqual(['drawn']);
+    expect(shown(alice)).toEqual(['chart']);
 
     // Bob's delete removes the chart and its fallback for both; undo restores both branches.
     selectChart(bob);
@@ -187,7 +195,26 @@ test('a participant without the drawing module edits a chart through its fallbac
     as(false);
     expect(bob.editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
     sync(alice, bob);
-    expect(shown(alice)).toEqual(['drawn']);
+    expect(shown(alice)).toEqual(['chart']);
+    expect(shown(bob)).toEqual(['fallback']);
+    expect(await converged(alice, bob)).toBe(original);
+
+    // Alice deletes her drawn chart as one character of its paragraph; undo restores it.
+    as(true);
+    const chartParagraph = alice.editor.surface!.session.paragraphIds()[1]!;
+    alice.editor.surface!.setSelection({
+      anchor: { paragraphId: chartParagraph, offset: 0 },
+      head: { paragraphId: chartParagraph, offset: 1 },
+    });
+    expect(alice.editor.surface!.deleteSelection()).toBe(true);
+    sync(alice, bob);
+    expect(shown(alice)).toEqual([]);
+    expect(shown(bob)).toEqual([]);
+    expect(await converged(alice, bob)).not.toContain('AlternateContent');
+    as(true);
+    expect(alice.editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    sync(alice, bob);
+    expect(shown(alice)).toEqual(['chart']);
     expect(shown(bob)).toEqual(['fallback']);
     expect(await converged(alice, bob)).toBe(original);
 

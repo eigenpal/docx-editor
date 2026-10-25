@@ -246,6 +246,12 @@ export interface DrawingProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** The title and plot types of a chart: rendered, shown by its fallback, or a placeholder. */
   readonly chartSummary?: DrawingChartSummary;
+  /**
+   * The picture saved in the `mc:Fallback` of a chart's `mc:AlternateContent`, whichever
+   * branch the page shows, for an output that exports a chart as its saved picture. Absent
+   * when the fallback is not a picture that paints.
+   */
+  readonly chartFallbackPicture?: PictureProjection;
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
   /** Floating VML text art (a text watermark), fitted to the box by layout. */
@@ -1573,25 +1579,45 @@ export function projectRunLevelMcDrawing(
   ) {
     if (projection.chartSummary || holdsChartGraphic(atom.drawing)) {
       // A hidden chart stays hidden, whatever its fallback shows.
-      const chartFallback = projection.hidden
-        ? null
-        : paintableMcChartFallback(
-            wrapper,
-            context.namespaceScope,
-            context.ownerPartName,
-            (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
-          );
-      if (chartFallback && projection.chartSummary) {
-        return Object.freeze({ ...chartFallback, chartSummary: projection.chartSummary });
+      const chartFallback = projection.hidden ? null : chartFallbackOf(wrapper, context);
+      if (chartFallback) {
+        return Object.freeze({
+          ...chartFallback,
+          // The author's text on the chart describes it on either branch.
+          title: projection.title || chartFallback.title,
+          description: projection.description || chartFallback.description,
+          ...(projection.chartSummary
+            ? { chartSummary: { ...projection.chartSummary, shownAs: 'fallback' as const } }
+            : {}),
+          ...(chartFallback.picture ? { chartFallbackPicture: chartFallback.picture } : {}),
+        });
       }
-      return chartFallback ?? withAlternateContentGroupPictures(projection);
+      return withAlternateContentGroupPictures(projection);
     }
     const fallback = paintableMcFallback(wrapper, context.ownerPartName);
     if (fallback) return fallback;
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
+  // A drawn chart keeps the picture saved in its fallback, for an output that exports it.
+  if (projection.chartSummary && !projection.hidden) {
+    const picture = chartFallbackOf(wrapper, context)?.picture;
+    if (picture) return Object.freeze({ ...projection, chartFallbackPicture: picture });
+  }
   // Layout applies the same rule to a group picture whose resource fails.
   return withAlternateContentGroupPictures(projection);
+}
+
+/** The fallback content that stands for a chart in `wrapper`, when it paints. */
+function chartFallbackOf(
+  wrapper: OoxmlGenericElementNode,
+  context: Parameters<typeof projectRunLevelMcDrawing>[1]
+): DrawingProjection | null {
+  return paintableMcChartFallback(
+    wrapper,
+    context.namespaceScope,
+    context.ownerPartName,
+    (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
+  );
 }
 
 /**

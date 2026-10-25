@@ -105,13 +105,6 @@ export interface OpenDocumentForExportOptions {
   readonly resourceTimeoutMs?: number;
   /** Retain incremental state for a live view. Defaults to true for views and false for bytes. */
   readonly reuseAcrossRevisions?: boolean;
-  /**
-   * False: charts skip the installed chart renderer and show their saved fallback picture or
-   * their placeholder, for an exporter that cannot use a drawn chart. Default: true.
-   *
-   * @internal
-   */
-  readonly drawCharts?: boolean;
 }
 
 /**
@@ -369,7 +362,6 @@ export function openDocumentForExport(
           : undefined
       ),
     onResourcesChanged: resourcesChanged,
-    drawCharts: options.drawCharts,
   });
   let activeState: {
     readonly view: HeadlessDocumentView;

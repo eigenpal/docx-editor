@@ -133,7 +133,20 @@ A chart often comes with a fallback picture for older applications. Waterfall, f
 
 The chart, its parts, and its fallback picture are saved unchanged. A hidden chart stays hidden, also when its fallback is visible.
 
-When the page shows a chart's fallback picture, you can select it like a picture, but picture commands on it are refused: resize, crop, move, wrap, replace, rotate, flip, and alternative text. Each refused command reports the reason, and the matching toolbar controls are disabled. Delete removes the chart and its fallback together, as one undo step. The SmartArt diagrams and WordArt in the list keep a labeled placeholder in the editor, and PDF export leaves them out with a `drawing` diagnostic.
+The SmartArt diagrams and WordArt in the list keep a labeled placeholder in the editor, and PDF export leaves them out with a `drawing` diagnostic.
+
+### Edit a chart
+
+A chart is not a picture, whichever way the page shows it. The editor never resizes, crops, moves, wraps, replaces, rotates, or flips a chart, and it never changes its alternative text. A delete always removes the whole chart: the chart and its fallback together, as one undo step. The delete image command and direct document edits refuse to delete a chart whose own locks forbid selecting it. The following table shows what the editor does in each state that `drawing.chart.shownAs` names:
+
+| How the page shows the chart | Selection | Move and resize | Delete |
+| --- | --- | --- | --- |
+| The drawn chart (`chart`) | No picture selection. Select the chart as part of a text range. | No handles. | Press Delete or Backspace on a text range that includes the chart. |
+| A fallback picture, DrawingML or VML (`fallback`) | Selects like a picture. Picture commands are refused with a reason, and the matching toolbar controls are disabled. | No handles. | The delete image command, or a text range that includes the chart. |
+| A fallback shape, group, or VML drawing without a picture (`fallback`) | No picture selection, as for the drawn chart. | No handles. | A text range that includes the chart. |
+| A labeled placeholder (`placeholder`) | No picture selection, as for the drawn chart. | No handles. | A text range that includes the chart. |
+
+Automation and other direct document edits follow the same rule. A picture edit of a chart, or of either branch of its `mc:AlternateContent`, is refused with `chart-drawing`, and a delete removes the whole chart. The rule reads only the document, so editors with and without the module make the same decision in a collaboration session.
 
 Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
 
@@ -143,7 +156,26 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. A chart that shows its fallback picture has no placeholder, so no declaration applies to it. Your component fills the drawing's box, and the document content stays unchanged through save.
 
-Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback picture, and a placeholder. To tell the three apart, check the record: a chart that renders has a non-null `vectorShape`, a chart that shows its fallback picture has a picture `resource` and a `null` `placeholderGraphicKind`, and a placeholder has `placeholderGraphicKind` `chart`.
+Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
+
+The editor exposes only placeholders to your components, through `UnsupportedElement`. To read every chart record without an editor, open the document for export and walk its drawings. This example lists each chart with its page number, state, and title:
+
+```ts
+import { openDocumentForExport } from '@docx-editor.dev/core/export';
+import { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
+
+const opened = openDocumentForExport(bytes);
+if (!opened.ok) throw new Error(opened.reason);
+try {
+  const layout = await opened.session.layout();
+  forEachSemanticDrawing(layout, ({ drawing, page }) => {
+    const chart = drawing.chart;
+    if (chart) console.log(page.index + 1, chart.shownAs, chart.title);
+  });
+} finally {
+  opened.session.dispose();
+}
+```
 
 `drawing.chart` is a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart, at most 8. `title` is `null` when the chart shows no title, and when a title with no text of its own sits on a chart with several series. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts have the plot types `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. These charts report exactly one plot type, so a Pareto chart reports `['pareto']`, and an unknown chart type reports `[]`. Their title is `null` when the title element has no text of its own and the chart shows its default caption, and they never use a series name as an automatic title. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 
@@ -200,4 +232,4 @@ const isChartPlaceholder = (element: UnsupportedElement) =>
 </Framework>
 </FrameworkTabs>
 
-The title and the alternative text come from the document, so render them as text, never as HTML. To type a card component, import `DrawingChartSummary`, `DrawingChartPlotType`, and `DrawingPlaceholderKind` from `@docx-editor.dev/core/layout`. The values of `placeholderGraphicKind` are `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor; PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+The title and the alternative text come from the document, so render them as text, never as HTML. To type a card component, import `DrawingChartSummary`, `DrawingChartShownAs`, `DrawingChartPlotType`, and `DrawingPlaceholderKind` from `@docx-editor.dev/core/layout`. The values of `placeholderGraphicKind` are `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor; PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).

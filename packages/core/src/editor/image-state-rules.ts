@@ -1,34 +1,38 @@
 // Selected-image rules shared by the image commands and the snapshot: value equality of the
-// selected image, and the refusal for a chart's saved fallback.
+// selected image, and the refusal for a chart.
 //
-// A chart in `mc:AlternateContent` that cannot render shows the fallback saved beside it. The
-// fallback is not the chart: resizing, cropping, moving, wrapping, replacing or describing it
-// alone would leave the chart branch unchanged. Those commands refuse; delete removes the chart.
+// A chart is no picture, whether the page draws it, shows the fallback saved beside it in
+// `mc:AlternateContent`, or shows a placeholder. Resizing, cropping, moving, wrapping,
+// replacing or describing it as a picture would edit one branch alone, so those commands
+// refuse; delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`).
 
 import type { EditorCommand, ExecResult, SelectedImageState } from '../contracts/editor.ts';
-import { chartWrapperOfFallback } from '../store/store/tree-op-chart-fallback.ts';
+import { chartDrawingOf } from '../store/store/tree-op-chart-drawing.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { partOfNodeId } from './surface-scope.ts';
 
-/** The engine's reason for a refused picture command on a chart's fallback. */
-export const CHART_FALLBACK_REASON =
-  "this picture is a chart's saved fallback; only delete applies, and it removes the chart";
+/**
+ * The engine's reason for a refused picture command on a chart. Adapters translate it through
+ * `DISABLED_REASON_KEYS` in `@docx-editor.dev/i18n`, so the two sentences must stay the same.
+ */
+export const CHART_DRAWING_REASON =
+  'this drawing is a chart; only delete applies, and it removes the whole chart';
 
-/** Whether `drawingNodeId` names a chart's saved fallback in the active story. */
-export function isChartFallbackDrawing(surface: PaginatedSurface, drawingNodeId: string): boolean {
-  const part = surface.session.partFor(surface.storyScope()) ?? surface.session.part();
-  return chartWrapperOfFallback(part, drawingNodeId) !== null;
+/** Whether `drawingNodeId` names a chart: drawn, shown by its saved fallback, or a placeholder. */
+export function isChartDrawing(surface: PaginatedSurface, drawingNodeId: string): boolean {
+  // A pure read: `partOfNodeId`, never `partFor`, which would retain a story store.
+  const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  return chartDrawingOf(part, drawingNodeId) !== null;
 }
 
-/** The refusal for every image command but delete on a chart's fallback, or null. */
-export function chartFallbackRefusal(
+/** The refusal for every image command but delete on a chart, or null. */
+export function chartDrawingRefusal(
   surface: PaginatedSurface,
   command: EditorCommand,
   drawingNodeId: string
 ): ExecResult | null {
-  if (command.type === 'deleteImage' || !isChartFallbackDrawing(surface, drawingNodeId)) {
-    return null;
-  }
-  return { ok: false, code: 'unsupported', reason: CHART_FALLBACK_REASON };
+  if (command.type === 'deleteImage' || !isChartDrawing(surface, drawingNodeId)) return null;
+  return { ok: false, code: 'unsupported', reason: CHART_DRAWING_REASON };
 }
 
 export function imageContextEqual(

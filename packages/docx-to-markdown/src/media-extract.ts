@@ -12,6 +12,7 @@ import type {
   MarkdownProjectionOptions,
 } from './media-types.ts';
 import { MarkdownMediaError } from './media-errors.ts';
+import { exportedAlt, exportedResource } from './markdown-media.ts';
 
 export const EMPTY_MEDIA: readonly MarkdownImageAsset[] = Object.freeze([]);
 const EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
@@ -61,12 +62,13 @@ export function extractMedia(
   >();
   let total = 0;
   forEachSemanticDrawing(layout, ({ drawing, page, story, rootStory }) => {
-    const resource = drawing.resource;
-    if (resource.kind !== 'ready' || drawing.accessibility.hidden) return;
+    // A chart exports the picture saved in its fallback, whether the page draws the chart.
+    const resource = exportedResource(drawing);
+    if (resource?.kind !== 'ready' || drawing.accessibility.hidden) return;
     // A shape group stays opaque: its picture is one member, not the drawing, so extracting
     // it alone would stand in for the whole group at the group's size. The group gets the
     // omitted-drawing warning instead.
-    if (drawing.groupPicture) return;
+    if (drawing.groupPicture && !drawing.chart) return;
     // Core prefixes the digest with sha256:. Use its hex digest as a portable ID.
     const id = resource.contentId.startsWith('sha256:')
       ? resource.contentId.slice(7)
@@ -84,7 +86,7 @@ export function extractMedia(
       const extension = EXTENSIONS[resource.mime];
       if (!extension || !/^[a-f0-9]{64}$/i.test(id))
         throw new TypeError('Invalid ready-image content identifier or MIME type');
-      const bytes = session.validatedImageBytes(drawing);
+      const bytes = session.validatedImageBytes({ ...drawing, resource });
       if (!bytes)
         throw new MarkdownMediaError(
           'image-bytes-unavailable',
@@ -124,11 +126,8 @@ export function extractMedia(
         displayWidthPx: drawing.width * (96 / 72),
         displayHeightPx: drawing.height * (96 / 72),
         kind: drawing.kind === 'inlineDrawing' ? 'inline' : 'anchored',
-        decorative: drawing.accessibility.decorative && !drawing.chart?.title,
-        // A chart's saved fallback picture takes the chart's title as its alt text.
-        alt:
-          drawing.chart?.title ??
-          (drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? '')),
+        decorative: exportedAlt(drawing) === '',
+        alt: exportedAlt(drawing),
       })
     );
   });

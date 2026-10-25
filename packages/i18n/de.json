@@ -994,7 +994,8 @@
     "nothingToPaint": "Wählen Sie Text aus, auf den Sie die Formatierung übertragen möchten",
     "noReviewAuthors": "Dieses Dokument enthält keine Überarbeitungsautoren",
     "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
-    "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen."
+    "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
+    "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten."
   },
   "equationPopup": {
     "apply": "Übernehmen",

@@ -23,6 +23,7 @@ test('an unpainted chart carries its title and plot types', () => {
   expect(projection!.chartSummary).toEqual({
     title: 'Revenue by quarter',
     plotTypes: ['bar', 'line'],
+    shownAs: 'placeholder',
   });
 });
 
@@ -30,7 +31,11 @@ test('a chart without a title has a null title', () => {
   const [projection] = projectDrawingsInPackage(
     chartPackage(chartSpace(BAR + CATEGORY_VALUE_AXES))
   );
-  expect(projection!.chartSummary).toEqual({ title: null, plotTypes: ['bar'] });
+  expect(projection!.chartSummary).toEqual({
+    title: null,
+    plotTypes: ['bar'],
+    shownAs: 'placeholder',
+  });
 });
 
 const summaryOf = (xml: string) => projectDrawingsInPackage(chartPackage(xml))[0]!.chartSummary;

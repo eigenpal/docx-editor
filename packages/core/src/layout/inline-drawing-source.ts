@@ -48,6 +48,7 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
 import { framedTokenJoin } from './framed-token.ts';
+import { chartFallbackResource } from './drawing-chart-fallback.ts';
 import {
   drawingResourceLayoutToken,
   FOOTPRINT_RESOURCE,
@@ -92,8 +93,6 @@ export interface CreateInlineDrawingLayoutBundleOptions {
   readonly onResourcesChanged: () => void;
   /** Test-only override; production creates one independently disposable lookup per bundle. */
   readonly resourceLookup?: ImageResourceLookup;
-  /** False: charts skip the chart renderer and show their fallback picture or placeholder. */
-  readonly drawCharts?: boolean;
 }
 
 interface PartDrawingContextSlot {
@@ -304,8 +303,16 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
     groupTextboxes: groupTextboxesLayoutToken(projection.groupTextboxes),
     chartSummary: projection.chartSummary
-      ? framedTokenJoin([projection.chartSummary.title ?? '', ...projection.chartSummary.plotTypes])
+      ? framedTokenJoin([
+          projection.chartSummary.title ?? '',
+          projection.chartSummary.shownAs,
+          ...projection.chartSummary.plotTypes,
+        ])
       : '',
+    chartFallbackPicture: framedTokenJoin([
+      projection.chartFallbackPicture?.embeddedRelationshipId ?? '',
+      projection.chartFallbackPicture?.linkedRelationshipId ?? '',
+    ]),
     compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
     footprintOnly: projection.footprintOnly ? 'footprint' : '',
     anchor: anchor
@@ -423,7 +430,6 @@ function createPartDrawingContextSlot(options: {
   readonly rememberReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly forgetReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly pictureBulletResource: NonNullable<InlineDrawingLayoutContext['pictureBulletResource']>;
-  readonly drawCharts?: boolean;
 }): PartDrawingContextSlot {
   const {
     ownerPartName,
@@ -452,7 +458,7 @@ function createPartDrawingContextSlot(options: {
   const stylesPart = stylesPartOf(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(
     part,
-    packageDrawingProjectionContext(pkg, ownerPartName, options)
+    packageDrawingProjectionContext(pkg, ownerPartName)
   );
   const atomIdentities = drawingAtomIdentities(part);
   const hasObjects = atomIdentities
@@ -659,7 +665,7 @@ function createPartDrawingContextSlot(options: {
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(
         nextPart,
-        packageDrawingProjectionContext(nextPkg, ownerPartName, options)
+        packageDrawingProjectionContext(nextPkg, ownerPartName)
       );
       if (nextProjections.size !== atomProjections.size) return false;
       for (const [atomId, projection] of atomProjections) {
@@ -765,7 +771,6 @@ export function createInlineDrawingLayoutBundle(
       rememberReadyHandle,
       forgetReadyHandle,
       pictureBulletResource: pictureBullets.resolve,
-      drawCharts: options.drawCharts,
     });
     slots.set(ownerPartName, slot);
     slotMintCounter += 1;
@@ -908,6 +913,7 @@ function framedAtomToken(
     drawingProjectionLayoutToken(projection),
     drawingResourceLayoutToken(resourceOf(projection)),
     ...(groupPictureLayerResources(projection, resourceOf) ?? []).map(drawingResourceLayoutToken),
+    drawingResourceLayoutToken(chartFallbackResource(projection, resourceOf) ?? FOOTPRINT_RESOURCE),
   ];
   if (epochOf) parts.push(String(epochOf(projection)));
   return framedTokenJoin(parts);
