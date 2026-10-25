@@ -743,6 +743,18 @@ export const wordFeatures: WordFeature[] = [
       'Charts require the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, a chart keeps a labeled placeholder. Charts render read-only from the values cached in the chart part, in the editor and in PDF export: column and bar charts (clustered, stacked, and percent stacked), line, area, scatter, bubble, radar, stock, pie, doughnut, pie-of-pie, bar-of-pie, surface, and contour charts. 3-D column, bar, line, area, pie, and surface charts render in 3-D with shaded faces, walls, gridlines, and axis labels, with right-angle axes or in perspective. A chart with a series axis places each series in its own row. Axes, tick label number and date formats, gridlines, chart and axis titles, legends, data labels (with best-fit pie labels that move outside crowded slices and spread around the pie on bent leader lines), trendlines with their equations, error bars, series colors, markers, smoothed lines, exploded slices, and manual plot layouts render. Surface and contour charts fill their value bands, and wireframe surfaces draw the band edges. The embedded workbook is never read, and external data is never loaded. Charts that combine a pie or radar plot with other plot types, and surfaces of more than 20,000 points, keep a labeled placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The chart parts are preserved on save.',
   },
   {
+    id: 'images.newer-charts',
+    name: 'Waterfall, funnel, histogram, and other newer charts',
+    category: 'images',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'premium',
+    docsLink: '/docs/2.x/pro/drawing',
+    notes:
+      'Waterfall charts require the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. They render read-only from the values cached in the chart part, in the editor and in PDF export: running totals as floating columns, subtotal columns, increase, decrease, and total colors, connector lines, data labels with their number formats, category and value axes, gridlines, the title, and the legend. Text, lines, and colors come from the chart style and color parts. Funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts, and any of these charts without the module, keep a labeled chart placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The picture fallback saved for older applications is not shown. The chart, style, and color parts and the fallback are preserved on save.',
+  },
+  {
     id: 'images.smartart',
     name: 'SmartArt & diagrams',
     category: 'images',

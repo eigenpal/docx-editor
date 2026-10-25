@@ -15,6 +15,7 @@
 // read, so documents without these drawings pay nothing for the hooks.
 
 import type { ChartPartResolver } from './chart-parts.ts';
+import type { ChartexPartResolver } from './chartex-parts.ts';
 import type {
   ShapeSchemeColorResolver,
   VectorShapeProjection,
@@ -134,6 +135,8 @@ export interface DrawingGraphicProjection {
  */
 export interface ChartRenderContext {
   readonly resolveChartPart?: ChartPartResolver;
+  /** The chartex part behind a `cx:chart` element (waterfall, funnel, histogram, ...). */
+  readonly resolveChartexPart?: ChartexPartResolver;
   readonly resolveSchemeColor?: ShapeSchemeColorResolver;
 }
 
@@ -180,8 +183,8 @@ export interface LegacyTextArtContext {
  */
 export interface DrawingRenderers {
   /**
-   * The shapes and labels of a chart drawing, or null when the drawing is not a chart or the
-   * chart is outside what the renderer paints.
+   * The shapes and labels of a chart drawing, classic (`c:chart`) or chartex (`cx:chart`), or
+   * null when the drawing is not a chart or the chart is outside what the renderer paints.
    */
   readonly chart?: (
     anchor: OoxmlElement,

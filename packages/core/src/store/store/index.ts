@@ -196,6 +196,7 @@ export {
 export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';
 export type { DiagramPartResolver, DiagramParts } from '../package/diagram-parts.ts';
 export type { ChartPart, ChartPartResolver, ChartThemeFaces } from '../package/chart-parts.ts';
+export type { ChartexPart, ChartexPartResolver } from '../package/chartex-parts.ts';
 
 export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
 export {

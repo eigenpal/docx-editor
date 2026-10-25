@@ -409,6 +409,27 @@ export const CHART_GRAPHIC_DATA_URI = "http://schemas.openxmlformats.org/drawing
 export const CHART_NAMESPACE_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
 // @internal
+export const CHART_STYLE_NAMESPACE_URI = "http://schemas.microsoft.com/office/drawing/2012/chartStyle";
+
+// @internal (undocumented)
+export const CHARTEX_GRAPHIC_DATA_URI = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+// @internal (undocumented)
+export const CHARTEX_NAMESPACE_URI = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+// @internal
+export interface ChartexPart {
+    readonly chartSpace: OoxmlElement;
+    readonly colors: OoxmlElement | null;
+    readonly partName: string;
+    readonly style: OoxmlElement | null;
+    readonly themeFaces: ChartThemeFaces;
+}
+
+// @internal
+export type ChartexPartResolver = (chart: OoxmlElement) => ChartexPart | null;
+
+// @internal
 export interface ChartPart {
     readonly chartSpace: OoxmlElement;
     readonly partName: string;
@@ -420,6 +441,7 @@ export type ChartPartResolver = (chart: OoxmlElement) => ChartPart | null;
 
 // @internal
 export interface ChartRenderContext {
+    readonly resolveChartexPart?: ChartexPartResolver;
     // (undocumented)
     readonly resolveChartPart?: ChartPartResolver;
     // (undocumented)
@@ -1259,6 +1281,7 @@ export interface DiagramLayoutParts {
 export interface DiagramPartResolver {
     (relIds: OoxmlElement): DiagramParts | null;
     readonly chart?: ChartPartResolver;
+    readonly chartex?: ChartexPartResolver;
 }
 
 // @internal

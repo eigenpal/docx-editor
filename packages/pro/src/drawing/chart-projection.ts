@@ -12,45 +12,30 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   CHART_GRAPHIC_DATA_URI,
+  CHARTEX_GRAPHIC_DATA_URI,
   CHART_NAMESPACE_URI,
   findDirectChild,
   findGraphicData,
   schemaAttributeValue,
-  shapeThemeCacheToken,
   type ChartPart,
   type ChartPartResolver,
-  type GroupTextboxProjection,
+  type ChartexPartResolver,
   type OoxmlElement,
   type ShapeSchemeColorResolver,
-  type VectorShapeProjection,
 } from '@docx-editor.dev/core/store';
 import { readChartModel } from './chart-model.ts';
 import { renderChart } from './chart-render.ts';
-import { chartLabelTextbox } from './chart-text.ts';
+import { chartGraphic, themeKey, type ChartProjection } from './chart-graphic.ts';
+import { projectChartex } from './chartex-projection.ts';
 
 const EMU_PER_POINT = 12_700;
-/** Labels one chart may set; past it the chart does not render. */
-const MAX_LABELS = 4_096;
 
-export interface ChartProjection {
-  readonly vectorShape: VectorShapeProjection | null;
-  readonly groupTextboxes: readonly GroupTextboxProjection[] | null;
-}
+export type { ChartProjection } from './chart-graphic.ts';
 
 export interface ChartProjectionContext {
   readonly resolveChartPart?: ChartPartResolver;
+  readonly resolveChartexPart?: ChartexPartResolver;
   readonly resolveSchemeColor?: ShapeSchemeColorResolver;
-}
-
-const SCHEME_SLOTS = ['dk1', 'lt1', 'dk2', 'lt2', 'tx1', 'bg1', 'tx2', 'bg2'] as const;
-
-/** What the theme contributes to a chart: its scheme colours. */
-function themeKey(resolveSchemeColor?: ShapeSchemeColorResolver): string {
-  if (!resolveSchemeColor) return '';
-  const token = shapeThemeCacheToken(resolveSchemeColor);
-  if (token !== undefined) return token;
-  const slots = [...SCHEME_SLOTS, 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6'];
-  return slots.map((slot) => resolveSchemeColor(slot) ?? '').join(',');
 }
 
 interface ChartMemo {
@@ -75,9 +60,12 @@ export function projectChart(
   extent: Readonly<{ cx: number; cy: number }>,
   context: ChartProjectionContext
 ): ChartProjection | null {
-  if (!context.resolveChartPart || extent.cx <= 0 || extent.cy <= 0) return null;
+  if (extent.cx <= 0 || extent.cy <= 0) return null;
   const data = findGraphicData(anchor);
-  if (!data || schemaAttributeValue(data.attributes, 'uri') !== CHART_GRAPHIC_DATA_URI) return null;
+  const uri = data ? schemaAttributeValue(data.attributes, 'uri') : undefined;
+  if (data && uri === CHARTEX_GRAPHIC_DATA_URI)
+    return projectChartex(anchor, data, extent, context);
+  if (!data || !context.resolveChartPart || uri !== CHART_GRAPHIC_DATA_URI) return null;
   const reference = findDirectChild(data.children, {
     namespaceUri: CHART_NAMESPACE_URI,
     localName: 'chart',
@@ -121,30 +109,6 @@ function projectChartPart(
     context.resolveSchemeColor,
     themeFaces
   );
-  if (!rendered || rendered.labels.length > MAX_LABELS) return null;
-  const texts: GroupTextboxProjection[] = [];
-  for (const [index, label] of rendered.labels.entries()) {
-    const textbox = chartLabelTextbox(label, `${anchorId}#chart-label:${index}`, partName);
-    if (textbox) texts.push(textbox);
-  }
-  const components = rendered.scene.components;
-  const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
-  for (const component of components) {
-    for (const path of component.subpathsEmu) subpathsEmu.push(path);
-  }
-  return Object.freeze({
-    vectorShape: components.length
-      ? Object.freeze({
-          extentEmu: Object.freeze({ cx: extent.cx, cy: extent.cy }),
-          subpathsEmu,
-          fillHex: null,
-          fillAlpha: 1,
-          strokeHex: null,
-          strokeAlpha: 1,
-          strokeWidthEmu: 0,
-          components,
-        })
-      : null,
-    groupTextboxes: texts.length ? Object.freeze(texts) : null,
-  });
+  if (!rendered) return null;
+  return chartGraphic(rendered.scene, rendered.labels, anchorId, partName, extent);
 }

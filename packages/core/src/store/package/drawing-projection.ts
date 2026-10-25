@@ -61,6 +61,7 @@ import {
   type GroupPictureProjection,
 } from './drawing-group-picture.ts';
 import { createDiagramPartResolver, type DiagramPartResolver } from './diagram-parts.ts';
+import { CHARTEX_MC_NAMESPACES } from './chartex-parts.ts';
 import { projectDrawingContent, withPictureClip } from './drawing-content-projection.ts';
 import { parseCropPercent } from './drawing-shape-readers.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
@@ -322,6 +323,8 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
   'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
   'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
   'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
+  // A chartex chart renders or keeps its labelled placeholder, never its fallback.
+  ...CHARTEX_MC_NAMESPACES,
 ]);
 
 const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
@@ -1554,12 +1557,14 @@ export function projectRunLevelMcDrawing(
   // An MC-wrapped payload the engine cannot draw (charts, diagrams, unsupported groups) shows
   // its VML fallback when that paints. Otherwise it stays invisible: a placeholder card over
   // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
-  // story and pass through. Layout still reserves the extent or the anchor's wrap area.
+  // story and pass through, and a chart (chartex charts come MC-wrapped) keeps its labelled
+  // placeholder. Layout still reserves the extent or the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
     projection.groupPicture === null &&
-    !hostsTextboxStory(projection)
+    !hostsTextboxStory(projection) &&
+    !projection.chartSummary
   ) {
     const fallback = paintableMcFallback(wrapper, context.ownerPartName);
     if (fallback) return fallback;

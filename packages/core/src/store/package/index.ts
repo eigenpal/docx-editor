@@ -630,6 +630,11 @@ export {
 } from './legacy-vml-values.ts';
 export type { MetafileImageMime } from './image-resources.ts';
 export { CHART_GRAPHIC_DATA_URI, CHART_NAMESPACE_URI } from './chart-parts.ts';
+export {
+  CHART_STYLE_NAMESPACE_URI,
+  CHARTEX_GRAPHIC_DATA_URI,
+  CHARTEX_NAMESPACE_URI,
+} from './chartex-parts.ts';
 export { DIAGRAM_NAMESPACE_URI } from './diagram-parts.ts';
 export { DRAWINGML_MAIN_NAMESPACE_URI } from './ooxml-tree.ts';
 export type {

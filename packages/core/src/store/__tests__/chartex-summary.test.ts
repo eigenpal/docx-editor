@@ -1,0 +1,62 @@
+// A chartex chart (waterfall, funnel, histogram, ...) with no renderer installed keeps the
+// labelled `chart` placeholder with a summary, also when Office wrapped it in
+// `mc:AlternateContent` with a picture fallback: the engine never swaps it for the fallback.
+
+import { expect, test } from 'bun:test';
+import { drawingPaintFields } from '../../layout/drawing-paint-fields.ts';
+import { diagramPartsToken } from '../package/diagram-parts.ts';
+import { projectDrawingsInPackage } from '../package/drawing-projection.ts';
+import { drawingRenderers } from '../package/drawing-renderers.ts';
+import { chartexPackage, waterfallChartSpace } from './chartex-fixture.ts';
+
+test('a chartex chart without a renderer keeps a chart placeholder with its summary', () => {
+  expect(drawingRenderers().chart).toBeUndefined();
+  const [projection] = projectDrawingsInPackage(
+    chartexPackage(waterfallChartSpace({ title: 'Net  cash' }))
+  );
+  expect(projection!.picture).toBeNull();
+  expect(projection!.chartSummary).toEqual({ title: 'Net cash', plotTypes: ['waterfall'] });
+  const fields = drawingPaintFields(projection!);
+  expect(fields.placeholderGraphicKind).toBe('chart');
+  expect(fields.chart?.plotTypes).toEqual(['waterfall']);
+});
+
+test('the chartex Choice wins over the picture fallback', () => {
+  const [projection] = projectDrawingsInPackage(
+    chartexPackage(waterfallChartSpace(), { alternateContent: true })
+  );
+  expect(projection!.picture).toBeNull();
+  expect(drawingPaintFields(projection!).placeholderGraphicKind).toBe('chart');
+  expect(projection!.chartSummary?.plotTypes).toEqual(['waterfall']);
+});
+
+test('an empty title element and a missing title both read as no title', () => {
+  const empty = projectDrawingsInPackage(chartexPackage(waterfallChartSpace()));
+  expect(empty[0]!.chartSummary?.title).toBeNull();
+  const none = projectDrawingsInPackage(chartexPackage(waterfallChartSpace({ title: null })));
+  expect(none[0]!.chartSummary?.title).toBeNull();
+});
+
+test('layout ids map to plot types; a Pareto chart is one plot type', () => {
+  const pareto = waterfallChartSpace({ layoutId: 'clusteredColumn' }).replace(
+    '</cx:plotAreaRegion>',
+    '<cx:series layoutId="paretoLine" ownerIdx="0"><cx:dataId val="0"/></cx:series></cx:plotAreaRegion>'
+  );
+  expect(projectDrawingsInPackage(chartexPackage(pareto))[0]!.chartSummary?.plotTypes).toEqual([
+    'pareto',
+  ]);
+  const histogram = waterfallChartSpace({ layoutId: 'clusteredColumn' });
+  expect(projectDrawingsInPackage(chartexPackage(histogram))[0]!.chartSummary?.plotTypes).toEqual([
+    'histogram',
+  ]);
+  for (const layoutId of ['__proto__', 'constructor', 'unknownLayout']) {
+    const summary = projectDrawingsInPackage(chartexPackage(waterfallChartSpace({ layoutId })))[0]!
+      .chartSummary;
+    expect(summary?.plotTypes).toEqual([]);
+  }
+});
+
+test('the parts token covers chartex and chart style parts', () => {
+  const token = diagramPartsToken(chartexPackage(waterfallChartSpace()));
+  expect(token.split(',')).toHaveLength(3);
+});

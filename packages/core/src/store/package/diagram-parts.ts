@@ -14,6 +14,12 @@ import {
   createChartPartResolver,
   type ChartPartResolver,
 } from './chart-parts.ts';
+import {
+  CHART_STYLE_NAMESPACE_URI,
+  CHARTEX_NAMESPACE_URI,
+  createChartexPartResolver,
+  type ChartexPartResolver,
+} from './chartex-parts.ts';
 import { findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
@@ -72,6 +78,8 @@ export interface DiagramPartResolver {
   (relIds: OoxmlElement): DiagramParts | null;
   /** The chart part behind one `c:chart` element of the same story part. */
   readonly chart?: ChartPartResolver;
+  /** The chartex part behind one `cx:chart` element of the same story part. */
+  readonly chartex?: ChartexPartResolver;
 }
 
 /** `dsp:dataModelExt/@relId` under the data model's `dgm:extLst/a:ext`. */
@@ -119,6 +127,7 @@ export function createDiagramPartResolver(
   };
   const resolver: DiagramPartResolver = Object.assign(resolveDiagram, {
     chart: createChartPartResolver(pkg, ownerPartName),
+    chartex: createChartexPartResolver(pkg, ownerPartName),
   });
   byOwner.set(ownerPartName, resolver);
   return resolver;
@@ -168,8 +177,8 @@ const partIds = new WeakMap<OoxmlElement, number>();
 let nextPartId = 1;
 
 /**
- * The identity of every diagram part (data model, layout, style, colors, saved drawing) and
- * chart part in a package. Layout reuses drawing projections while the story part is
+ * The identity of every diagram part (data model, layout, style, colors, saved drawing),
+ * chart part, chartex part and chart style part in a package. Layout reuses drawing projections while the story part is
  * unchanged; a changed diagram or chart part must invalidate them too.
  */
 export function diagramPartsToken(pkg: OoxmlPackage): string {
@@ -180,7 +189,9 @@ export function diagramPartsToken(pkg: OoxmlPackage): string {
     if (
       root.namespaceUri !== DIAGRAM_NAMESPACE_URI &&
       root.namespaceUri !== DIAGRAM_DRAWING_NAMESPACE_URI &&
-      root.namespaceUri !== CHART_NAMESPACE_URI
+      root.namespaceUri !== CHART_NAMESPACE_URI &&
+      root.namespaceUri !== CHARTEX_NAMESPACE_URI &&
+      root.namespaceUri !== CHART_STYLE_NAMESPACE_URI
     )
       continue;
     let id = partIds.get(part.root);

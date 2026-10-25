@@ -47,6 +47,8 @@ export type DrawingPlaceholderKind =
 // of `__proto__` or `constructor` must answer undefined, not a prototype member.
 const GRAPHIC_URI_KIND: ReadonlyMap<string, DrawingPlaceholderKind> = new Map([
   ['http://schemas.openxmlformats.org/drawingml/2006/chart', 'chart'],
+  // A chartex chart (waterfall, funnel, histogram, ...): `chartex-parts.ts`.
+  ['http://schemas.microsoft.com/office/drawing/2014/chartex', 'chart'],
   ['http://schemas.openxmlformats.org/drawingml/2006/diagram', 'diagram'],
   // A legacy drawing on the line that cannot paint (`legacy-vml-placeholder.ts`).
   ['legacy-vml', 'shape'],

@@ -20,6 +20,7 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 | Drawing | With the module | Without the module |
 | --- | --- | --- |
 | Charts | Render read-only from the values cached in the chart part. | Labeled placeholder |
+| Waterfall charts | Render read-only from the values cached in the chart part, with the look its chart style and color parts give it. | Labeled placeholder |
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
 | WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
@@ -105,6 +106,7 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ## What renders
 
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
+- Waterfall charts render their running total as floating columns, with subtotal columns from zero, increase, decrease, and total colors, connector lines, data labels, axes, gridlines, the title, and a legend of increases, decreases, and totals. Their text, lines, and colors come from the chart style and color parts that the chart names.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
 - Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself.
 - WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion.
@@ -113,6 +115,10 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 These drawings keep a labeled placeholder in the editor even with the module. PDF export leaves them out and reports a `drawing` diagnostic:
 
 - Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
+- Funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts.
+
+A waterfall chart, and the other chart types in the preceding list, often comes with a picture fallback for older applications. The editor shows the chart or its labeled placeholder, never the fallback picture, and saves both unchanged.
+
 - SmartArt diagrams with picture fills, or with a text mode that cannot render.
 - WordArt with gradients at angles other than vertical, perspective extrusion, or a shape type whose definition the drawing does not include, other than plain text, triangle, and arch.
 
@@ -124,7 +130,7 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. Your component fills the drawing's box, and the document content stays unchanged through save.
 
-A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), or `null` when it shows none, and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
+A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), or `null` when it shows none, and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts have the plot types `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. Their title is `null` when the chart shows the default caption. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 
 <FrameworkTabs>
 <Framework value="react">

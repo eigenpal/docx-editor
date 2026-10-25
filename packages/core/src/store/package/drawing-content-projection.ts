@@ -3,6 +3,7 @@
 // or a drawing canvas.
 
 import { readChartSummary, type DrawingChartSummary } from './chart-summary.ts';
+import { readChartexSummary } from './chartex-summary.ts';
 import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
 import { projectCanvas } from './drawing-canvas-projection.ts';
@@ -123,6 +124,7 @@ export function projectDrawingContent(
       // A chart paints through an installed renderer; without one it keeps its placeholder.
       drawingRenderers().chart?.(anchor, extent, {
         resolveChartPart: ctx.resolveDiagramParts?.chart,
+        resolveChartexPart: ctx.resolveDiagramParts?.chartex,
         resolveSchemeColor: ctx.resolveSchemeColor,
       }) ??
       projectCanvas(anchor, extent, ctx);
@@ -135,7 +137,9 @@ export function projectDrawingContent(
         paints: true,
       };
     }
-    chartSummary = readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
+    chartSummary =
+      readChartexSummary(anchor, ctx.resolveDiagramParts?.chartex) ??
+      readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
   }
   const textboxStory = projectTextboxStory(
     anchor,
