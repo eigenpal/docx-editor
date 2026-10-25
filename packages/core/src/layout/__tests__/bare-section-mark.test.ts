@@ -3,6 +3,7 @@
 
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { createLayoutSession } from '../layout-session.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { ParagraphFragmentRecord } from '../semantic-records.ts';
 
@@ -54,4 +55,50 @@ test('a section mark that holds text keeps its borders and its own page rules', 
   const layout = lay(filler(12760) + mark(BORDER, 'Text'));
   expect(layout.pages).toHaveLength(3);
   expect(painted(layout)).toHaveLength(1);
+});
+
+test('a warm pass that changes the next section break lays out like a cold one', () => {
+  const load = (inner: string) => {
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`,
+      {
+        name: '/word/document.xml',
+        contentType: 'app/xml',
+      }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    return read.part;
+  };
+  const body = (type: string) =>
+    `<w:p><w:pPr>${BORDER}</w:pPr><w:r><w:t>A</w:t></w:r></w:p>${mark(BORDER)}` +
+    `<w:p><w:r><w:t>Next</w:t></w:r></w:p><w:sectPr>${type}${SECT}</w:sectPr>`;
+  const nextPage = load(body(''));
+  // The edited document keeps the first section's nodes; only the final break changes.
+  const edited = load(body('<w:type w:val="continuous"/>'));
+  const source = nextPage.root.children[0]!;
+  const target = edited.root.children[0]!;
+  if (source.kind === 'textValue' || target.kind === 'textValue') throw new Error('body');
+  const children = target.children.map((node, index) =>
+    index < 3 ? source.children[index]! : node
+  );
+  const continuous = { ...edited, root: { ...edited.root, children: [{ ...target, children }] } };
+  const shape = (layout: ReturnType<typeof layoutSemanticDocument>) =>
+    layout.pages.map((page) =>
+      page.fragments.map((fragment) => [
+        fragment.box,
+        fragment.kind === 'paragraph' ? (fragment.borders ?? null) : null,
+        fragment.kind === 'paragraph' ? (fragment.bottomBorder ?? null) : null,
+      ])
+    );
+  for (const [first, second] of [
+    [nextPage, continuous],
+    [continuous, nextPage],
+  ] as const) {
+    const measurer = createFixedMeasurer();
+    const session = createLayoutSession();
+    layoutSemanticDocument(first, 1, { measurer, session });
+    const warm = layoutSemanticDocument(second, 2, { measurer, session });
+    const cold = layoutSemanticDocument(second, 2, { measurer });
+    expect(shape(warm)).toEqual(shape(cold));
+  }
 });

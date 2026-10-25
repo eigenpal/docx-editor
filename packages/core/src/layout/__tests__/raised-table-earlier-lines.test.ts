@@ -230,3 +230,27 @@ test('an ordinary table between a raised table and its anchor does not count as 
   const layout = lay(lines(38) + table(RAISED) + ordinary + p('Head'));
   expect(layout.pages).toHaveLength(1);
 });
+
+test('a warm pass after a deletion near the page bottom matches a cold one for long anchors', () => {
+  // Page-positioned tables follow their anchor; raised text tables stay while their band pushes
+  // the anchor on. Either way the edited layout must not keep a stale placement.
+  const long = Array.from({ length: 40 }, () => 'word').join(' ');
+  const anchors = [
+    p(`Head ${long}`),
+    `<w:p><w:pPr><w:keepLines/></w:pPr><w:r><w:t>Head ${long}</w:t></w:r></w:p>`,
+    `<w:p><w:pPr><w:widowControl/></w:pPr><w:r><w:t>Head ${long}</w:t></w:r></w:p>`,
+  ];
+  const tables = [table(RAISED), table('<w:tblpPr w:vertAnchor="page" w:tblpY="13000"/>')];
+  for (const anchor of anchors) {
+    for (const floating of tables) {
+      const body = (count: number) => lines(count) + floating + anchor + p('After');
+      const session = createLayoutSession();
+      const options = { measurer: createFixedMeasurer(), session };
+      layoutSemanticDocument(document(body(45)), 0, options);
+      const edited = document(body(44));
+      const warm = placed(layoutSemanticDocument(edited, 1, options));
+      const cold = placed(layoutSemanticDocument(edited, 1, { measurer: createFixedMeasurer() }));
+      expect(warm).toEqual(cold);
+    }
+  }
+});

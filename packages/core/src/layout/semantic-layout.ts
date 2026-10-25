@@ -164,7 +164,6 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import { createSectionPageFurniture } from './section-page-furniture.ts';
 import { createPageContentInsets, registerOverflowPageShell } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
-import { pageBorderFrame } from './page-border-frame.ts';
 import { layoutPassContextKey } from './layout-pass-context-key.ts';
 import {
   attachContentControlBoundaries,
@@ -642,7 +641,7 @@ function* layoutBlocksPass(
     pageCount: () => pages.length,
     ...(options.sectionPageBorders ? { pageBorders: options.sectionPageBorders } : {}),
   });
-  const { pageBox, furnitureFor, overflowShellAt, furnitureZonesFor } = sectionFurniture;
+  const { pageBox, overflowShellAt, furnitureZonesFor, pageShell } = sectionFurniture;
 
   const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
     hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones),
@@ -953,9 +952,10 @@ function* layoutBlocksPass(
     options.projectionTokenForParagraph !== undefined && options.projectionEpoch === undefined
       ? null
       : (options.projectionEpoch ?? '');
+  // A bare section mark's borders depend on the next section's break (`marksPageBreak`).
   const framePolicy =
     sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
-    `|${options.paragraphLineUnitPt ?? '-'}`;
+    `|${options.paragraphLineUnitPt ?? '-'}|${options.sectionMarkCollapses === true ? 'c' : 'p'}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
   const prepassInputs = {
     framePolicy,
@@ -1170,14 +1170,20 @@ function* layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
-  /** Whether the region being filled holds a wrap zone of a table anchored at `anchorId`. */
-  const holdsOwnTableZone = (anchorId: string): boolean =>
-    pageExclusionZones().some(
-      (zone) =>
-        zone.sourceKind === 'table' &&
-        zone.anchorParagraphId === anchorId &&
-        (columns.count === 1 || zone.columnIndex === flowColumnIndex)
-    );
+  /**
+   * Whether a text-anchored table the previous pass placed beside `anchorId` in this region keeps
+   * that place while its anchor moves on: the anchor's first line, `extent` tall, fits where it
+   * stood before the table moved anything, so the table's band is what pushed it out. A page- or
+   * margin-positioned table follows its anchor instead (`coveredLinesAnchorBand`).
+   */
+  const ownTableStays = (anchorId: string, extent: number): boolean =>
+    pageExclusionZones().some((zone) => {
+      if (zone.sourceKind !== 'table' || zone.anchorParagraphId !== anchorId) return false;
+      if (zone.pageFramedBand || (columns.count > 1 && zone.columnIndex !== flowColumnIndex))
+        return false;
+      const pushed = earlierLinePush.of(pages.length, zone.drawingNodeId.slice('table:'.length));
+      return cursorY - pushed + extent <= contentHeight();
+    });
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
   const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
     positionedFlow.note(floatSignals, anchorId, flowColumnIndex, pageFragments.length, anchorY);
@@ -1317,36 +1323,18 @@ function* layoutBlocksPass(
   let publishPositionedTablesForPage = (): void => undefined;
   const flushPage = (): void => {
     publishPositionedTablesForPage();
-    const index = pages.length;
-    const box = pageBox(index);
-    const header = furnitureFor('header', index, box);
-    const footer = furnitureFor('footer', index, box);
     const { usedBottom, hasBodyPageFields } = summarizeFlushedPage(pageFragments, columnRegionTop);
-    const insets = insetsFor(index);
-    // `index` is SECTION-local here (multi-section renumbers through `remapPage`), which is
-    // exactly what `w:display` asks about: the first page of this section, not of the document.
-    const borderFrame = pageBorderFrame(options.sectionPageBorders, geometry, index === 0);
+    // Header and footer furniture and page borders come with the shell (`pageShell`).
     pages.push({
-      id: `page-${index}`,
-      index,
-      box,
-      contentBox: {
-        x: box.x + geometry.margin.left,
-        y: box.y + insets.top,
-        width: contentWidthForReflow,
-        height: insets.height,
-      },
+      ...pageShell(pages.length),
       fragments: pageFragments,
       hasBodyPageFields,
       ...(columns.separator
         ? { columnSeparators: columnSeparatorBoxes(columns, columnRegionTop, usedBottom) }
         : {}),
-      ...(borderFrame ? { pageBorders: borderFrame } : {}),
       ...(pendingAnchoredDrawings.length > 0
         ? { anchoredDrawings: sortDrawingsForPaint(pendingAnchoredDrawings) }
         : {}),
-      ...(header ? { header } : {}),
-      ...(footer ? { footer } : {}),
     });
     pageFragments = [];
     pendingAnchoredDrawings = [];
@@ -2205,7 +2193,8 @@ function* layoutBlocksPass(
       }
       markPastBottom = !collapsedMark && cursorY + needed > contentHeight() && holdsSheet();
       if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet() && !leadingBreak()) {
-        if (!frame && holdsOwnTableZone(paragraphId)) noteAnchor(paragraphId, cursorY);
+        const plainExtent = lead + topExtent + (lines[0]?.height ?? 0) + firstTail;
+        if (!frame && ownTableStays(paragraphId, plainExtent)) noteAnchor(paragraphId, cursorY);
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2571,7 +2560,8 @@ function* layoutBlocksPass(
         keepTailAt = -1;
         // A floating table that the previous pass placed beside this anchor stays there when
         // its band pushes the anchor on: only the anchor moves to the next column or page.
-        if (lineIndex === 0 && fragmentIndex === 0 && !frame && holdsOwnTableZone(paragraphId))
+        const first = lineIndex === 0 && fragmentIndex === 0 && !frame;
+        if (first && ownTableStays(paragraphId, lineExtent - skipBefore))
           noteAnchor(paragraphId, cursorY);
         if (
           !regionHasFragments() &&
@@ -2607,6 +2597,9 @@ function* layoutBlocksPass(
         const nextOffset = lines[breakAt]!.start;
         const priorColumnWidth = columnWidth();
         const priorPageHadExclusions = pageExclusionZones().length > 0;
+        // An anchor that keeps or widow rules move whole leaves its own table here as well.
+        if (movesWhole && !frame && ownTableStays(paragraphId, lines[0]!.height))
+          noteAnchor(paragraphId, cursorY);
         flushFragment(false);
         advanceColumn();
         fragmentBefore = 0;

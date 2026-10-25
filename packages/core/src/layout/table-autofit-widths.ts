@@ -85,8 +85,9 @@ export interface TableAutofitContext {
   /** The document's default tab interval, where an unwrapped line's tabs advance to. */
   readonly defaultTabStopPt?: number;
   /**
-   * The document's compatibility mode. Legacy modes leave a positive first-line indent out of
-   * a column's minimum. Callers that set it must also fold it into {@link passToken}.
+   * The document's compatibility mode, as `w:compatSetting` states it. Absent means no
+   * declaration, which lays out as a legacy mode: a positive first-line indent is left out of a
+   * column's minimum. Callers that set it must also fold it into {@link passToken}.
    */
   readonly compatibilityMode?: number;
   /**
