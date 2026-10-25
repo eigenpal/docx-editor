@@ -4,8 +4,9 @@ import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
 import { reorderBidiSpans } from '../rtl-paragraph.ts';
 
-// In a right-to-left run, a slash between digits separates the numbers: `17/08/96` reads
-// `96/08/17`. In a left-to-right run the date stays one number.
+// In a right-to-left run of an Arabic-script language, a slash between digits separates the
+// numbers: `17/08/96` reads `96/08/17`. In a left-to-right run, and in a Hebrew run, the date
+// stays one number.
 
 function visualText(runs: string, bidi = true): string {
   const part = loadBody(
@@ -23,8 +24,8 @@ function visualText(runs: string, bidi = true): string {
     .join('');
 }
 
-const run = (text: string, rtl: boolean) =>
-  `<w:r><w:rPr>${rtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const run = (text: string, rtl: boolean, lang = 'ar-SA') =>
+  `<w:r><w:rPr>${rtl ? '<w:rtl/>' : ''}<w:lang w:bidi="${lang}"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
 test('a date in a right-to-left run reads from its last number', () => {
   expect(visualText(run('تاريخ 17/08/96', true))).toStartWith('96/08/17');
@@ -40,4 +41,8 @@ test('a date in a left-to-right run stays one number', () => {
 
 test('a slash without digits on both sides keeps its usual resolution', () => {
   expect(visualText(run('12/ab', true))).toBe('ab/12');
+});
+
+test('a Hebrew run keeps a number with a slash as one left-to-right number', () => {
+  expect(visualText(run('\u05d0"\u05d1 852/20', true, 'he-IL'))).toContain('852/20');
 });

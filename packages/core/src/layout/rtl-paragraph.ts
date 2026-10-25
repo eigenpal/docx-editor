@@ -1,4 +1,5 @@
 import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
+import { arabicScriptLanguage } from './arabic-script-language.ts';
 import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
@@ -36,9 +37,10 @@ function runIsRtl(props: readonly OoxmlProperty[]): boolean {
 const HAS_BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
 /**
- * A slash between ASCII digits. In a right-to-left run it separates the numbers instead of
- * joining them into one, so `17/08/96` reads `96/08/17`. Resolution sees a neutral in its
- * place (UAX #9 class ON instead of CS); the source text does not change.
+ * A slash between ASCII digits. In a right-to-left run of an Arabic-script language it separates
+ * the numbers instead of joining them into one, so `17/08/96` reads `96/08/17`. Resolution sees a
+ * neutral in its place (UAX #9 class ON instead of CS); the source text does not change. A Hebrew
+ * run keeps `852/20` one left-to-right number, as UAX #9 does.
  */
 const RTL_RUN_DIGIT_SLASH = /(?<=[0-9])\/(?=[0-9])/gu;
 const NEUTRAL_SLASH = '!';
@@ -59,7 +61,9 @@ function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rt
     }
     const group = text.slice(offset, offset + length);
     const context = bidiAlgorithm.getEmbeddingLevels(
-      direction ? group.replace(RTL_RUN_DIGIT_SLASH, NEUTRAL_SLASH) : group,
+      direction && arabicScriptLanguage(pieces[start]!.props)
+        ? group.replace(RTL_RUN_DIGIT_SLASH, NEUTRAL_SLASH)
+        : group,
       direction ? 'rtl' : 'ltr'
     );
     embedding.levels.set(context.levels, offset);

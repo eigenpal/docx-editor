@@ -15,20 +15,9 @@
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { withFontFamily } from './run-style.ts';
 import { isSymbolEncodedFamily } from './symbol-encoding.ts';
+import { arabicScriptLanguage } from './arabic-script-language.ts';
 
 const isEuropeanDigit = (code: number) => code >= 0x30 && code <= 0x39;
-
-/** Languages written in Arabic script, by primary subtag. */
-const ARABIC_SCRIPT_LANGUAGES = new Set(['ar', 'fa', 'ur', 'ps', 'sd', 'ug', 'ckb', 'ks']);
-
-/** Whether the run's complex-script language (`w:lang/@w:bidi`) is written in Arabic script. */
-function arabicScriptLanguage(props: FieldAwarePiece['props']): boolean {
-  let bidi: string | undefined;
-  for (const prop of props) {
-    if (prop.localName === 'lang' && prop.attributes?.bidi) bidi = prop.attributes.bidi;
-  }
-  return bidi !== undefined && ARABIC_SCRIPT_LANGUAGES.has(bidi.toLowerCase().split('-')[0]!);
-}
 
 /** Split each complex-script piece so its European digits measure and paint in the Latin face. */
 export function applyComplexRunDigitFaces(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
