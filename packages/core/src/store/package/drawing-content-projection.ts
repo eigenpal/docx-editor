@@ -42,7 +42,7 @@ export interface DrawingContentProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Something paints, so an "unsupported graphic" diagnostic no longer applies. */
   readonly paints: boolean;
-  /** The title and plot types of a chart that does not paint. */
+  /** The title and plot types of a chart, whether it paints or not. */
   readonly chartSummary?: DrawingChartSummary;
   /** A picture's clip ring in the unit square of its extent; see `projectPictureFrame`. */
   readonly pictureClipUnit?: readonly Readonly<{ x: number; y: number }>[];
@@ -119,10 +119,17 @@ export function projectDrawingContent(
   const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
   let chartSummary: DrawingChartSummary | null = null;
   if (!groupPicture && !vectorShape) {
+    // Every chart carries its summary, whether it renders, shows a fallback, or a placeholder.
+    chartSummary =
+      readChartexSummary(anchor, ctx.resolveDiagramParts?.chartex) ??
+      readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
+    // A chart paints through an installed renderer; without one it keeps its placeholder. A
+    // projection that asks for no drawn charts skips the renderer.
+    const chartRenderer =
+      ctx.resolveDiagramParts?.drawCharts === false ? undefined : drawingRenderers().chart;
     const diagram =
       projectDiagram(anchor, extent, ctx) ??
-      // A chart paints through an installed renderer; without one it keeps its placeholder.
-      drawingRenderers().chart?.(anchor, extent, {
+      chartRenderer?.(anchor, extent, {
         resolveChartPart: ctx.resolveDiagramParts?.chart,
         resolveChartexPart: ctx.resolveDiagramParts?.chartex,
         resolveSchemeColor: ctx.resolveSchemeColor,
@@ -135,11 +142,9 @@ export function projectDrawingContent(
         textboxStory: null,
         ...(diagram.groupTextboxes ? { groupTextboxes: diagram.groupTextboxes } : {}),
         paints: true,
+        ...(chartSummary ? { chartSummary } : {}),
       };
     }
-    chartSummary =
-      readChartexSummary(anchor, ctx.resolveDiagramParts?.chartex) ??
-      readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
   }
   const textboxStory = projectTextboxStory(
     anchor,

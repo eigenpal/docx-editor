@@ -124,8 +124,11 @@ export function extractMedia(
         displayWidthPx: drawing.width * (96 / 72),
         displayHeightPx: drawing.height * (96 / 72),
         kind: drawing.kind === 'inlineDrawing' ? 'inline' : 'anchored',
-        decorative: drawing.accessibility.decorative,
-        alt: drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? ''),
+        decorative: drawing.accessibility.decorative && !drawing.chart?.title,
+        // A chart's saved fallback picture takes the chart's title as its alt text.
+        alt:
+          drawing.chart?.title ??
+          (drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? '')),
       })
     );
   });

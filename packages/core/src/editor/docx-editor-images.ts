@@ -9,6 +9,8 @@ import { commandProtectionRefusal } from './command-protection.ts';
 import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
+import { chartFallbackRefusal, isChartFallbackDrawing } from './image-state-rules.ts';
+export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
 // Reads derive from layout records plus canonical projection; writes route through the
@@ -234,15 +236,17 @@ function intrinsicOf(record: SelectedDrawingRecord): SelectedImageState['intrins
 }
 
 function capabilityFlags(
-  projection: DrawingProjection
+  projection: DrawingProjection,
+  chartFallback: boolean
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
-  const locks = projection.locks;
+  const locks = chartFallback ? { resize: true, move: true, changeAspect: true } : projection.locks;
   // An inline text box flows with its line: it resizes in place but is never dragged.
   const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
     canResize: !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
-    canChangeWrap: projection.picture !== null && !locks.move && !projection.hidden,
+    canChangeWrap:
+      !chartFallback && projection.picture !== null && !locks.move && !projection.hidden,
     canCrop:
       projection.picture !== null && !locks.resize && !locks.changeAspect && !projection.hidden,
   });
@@ -287,51 +291,8 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     hidden: projection.hidden,
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
-    ...capabilityFlags(projection),
+    ...capabilityFlags(projection, isChartFallbackDrawing(surface!, record.drawingNodeId)),
   });
-}
-
-export function imageContextEqual(
-  a: SelectedImageState | null,
-  b: SelectedImageState | null
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.id === b.id &&
-    a.kind === b.kind &&
-    a.widthEmu === b.widthEmu &&
-    a.heightEmu === b.heightEmu &&
-    a.crop.left === b.crop.left &&
-    a.crop.top === b.crop.top &&
-    a.crop.right === b.crop.right &&
-    a.crop.bottom === b.crop.bottom &&
-    a.rotationDegrees === b.rotationDegrees &&
-    a.wrap === b.wrap &&
-    a.name === b.name &&
-    a.title === b.title &&
-    a.description === b.description &&
-    a.hyperlink === b.hyperlink &&
-    a.hidden === b.hidden &&
-    a.resourceStatus === b.resourceStatus &&
-    a.canResize === b.canResize &&
-    a.canMove === b.canMove &&
-    a.canChangeWrap === b.canChangeWrap &&
-    a.canCrop === b.canCrop &&
-    a.locks.select === b.locks.select &&
-    a.locks.move === b.locks.move &&
-    a.locks.resize === b.locks.resize &&
-    a.locks.changeAspect === b.locks.changeAspect &&
-    (a.position?.mode ?? 'frame') === (b.position?.mode ?? 'frame') &&
-    (a.position?.horizontalEmu ?? null) === (b.position?.horizontalEmu ?? null) &&
-    (a.position?.verticalEmu ?? null) === (b.position?.verticalEmu ?? null) &&
-    (a.position?.relativeToH ?? null) === (b.position?.relativeToH ?? null) &&
-    (a.position?.relativeToV ?? null) === (b.position?.relativeToV ?? null) &&
-    (a.intrinsic?.pixelWidth ?? null) === (b.intrinsic?.pixelWidth ?? null) &&
-    (a.intrinsic?.pixelHeight ?? null) === (b.intrinsic?.pixelHeight ?? null) &&
-    (a.intrinsic?.dpiX ?? null) === (b.intrinsic?.dpiX ?? null) &&
-    (a.intrinsic?.dpiY ?? null) === (b.intrinsic?.dpiY ?? null)
-  );
 }
 
 function requestedDrawingId(command: EditorCommand): string | undefined {
@@ -643,10 +604,12 @@ export function gateImageCommand(
     }
     const resolved = selectedOrRequestedId(surface, command);
     if ('ok' in resolved) return resolved;
-    return null;
+    return chartFallbackRefusal(surface, command, resolved.id);
   }
   const resolved = selectedOrRequestedId(surface, command);
   if ('ok' in resolved) return resolved;
+  const chartFallback = chartFallbackRefusal(surface, command, resolved.id);
+  if (chartFallback) return chartFallback;
   const image = selectedImageStateOf(surface);
   if (!image) {
     return { ok: false, code: 'notFound', reason: 'no drawing is selected' };
@@ -1192,12 +1155,13 @@ export interface SelectedDrawingOverlayTarget {
 
 function overlayCapabilityFlags(
   record: SelectedDrawingRecord,
-  projection: DrawingProjection | null
+  projection: DrawingProjection | null,
+  chartFallback: boolean
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
   if (!projection || projection.hidden || projection.locks.select || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
-  const caps = capabilityFlags(projection);
+  const caps = capabilityFlags(projection, chartFallback);
   return Object.freeze({
     canResize: caps.canResize,
     canMove: caps.canMove,
@@ -1242,7 +1206,11 @@ export function selectedDrawingOverlayTargetOf(
   const shapeSelectable = projection !== null && !projection.locks.select;
   if (!shapeSelectable && scope.kind !== 'frame') return null;
   const caps = shapeSelectable
-    ? overlayCapabilityFlags(record, projection)
+    ? overlayCapabilityFlags(
+        record,
+        projection,
+        isChartFallbackDrawing(surface, record.drawingNodeId)
+      )
     : { canResize: false, canMove: false, aspectLocked: true };
   // The MODE, on top of the drawing's own OOXML locks. Without it a viewing-mode reader got
   // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the

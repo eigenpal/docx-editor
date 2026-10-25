@@ -125,7 +125,7 @@
   },
   "Word.InlinePicture#width": {
     "status": "partial",
-    "notes": "Points. Under an aspect lock, changing one dimension updates the other proportionally. Simultaneous contradictory width/height writes refuse; unlock first for independent dimensions. Writes coalesce per proxy. Existing unrelated drawing settings survive."
+    "notes": "Points. Under an aspect lock, changing one dimension updates the other proportionally. Simultaneous contradictory width/height writes refuse; unlock first for independent dimensions. Writes coalesce per proxy. Existing unrelated drawing settings survive. A chart in mc:AlternateContent that shows its saved fallback picture is not listed in inlinePictures, so no InlinePicture write reaches the fallback; a store edit of the fallback alone refuses with edit.unsupported-content."
   },
   "Word.InlinePicture#height": {
     "status": "partial",
@@ -141,7 +141,7 @@
   },
   "Word.InlinePicture#delete": {
     "status": "partial",
-    "notes": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use."
+    "notes": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use. A chart's saved fallback picture is not listed in inlinePictures; see InlinePicture#width."
   },
   "Word.Range#insertTable": {
     "status": "partial",

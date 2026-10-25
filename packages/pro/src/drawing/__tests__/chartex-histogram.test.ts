@@ -353,7 +353,8 @@ function bars(projection: DrawingProjection) {
 describe('histogram rendering', () => {
   test('one column per bin, touching at gap 0, labelled with the bin text and count', () => {
     const projection = project({ values: U20 });
-    expect(projection.chartSummary).toBeUndefined();
+    // A drawn chart keeps its summary too.
+    expect(projection.chartSummary?.plotTypes).toEqual(['histogram']);
     const columns = bars(projection);
     expect(columns).toHaveLength(3);
     expect(columns[1]!.l).toBeCloseTo(columns[0]!.r, 3);

@@ -80,6 +80,11 @@ export interface DiagramPartResolver {
   readonly chart?: ChartPartResolver;
   /** The chartex part behind one `cx:chart` element of the same story part. */
   readonly chartex?: ChartexPartResolver;
+  /**
+   * False: a chart never paints through the installed chart renderer, so it shows its saved
+   * fallback picture or its placeholder. For an export that cannot use a drawn chart.
+   */
+  readonly drawCharts?: false;
 }
 
 /** `dsp:dataModelExt/@relId` under the data model's `dgm:extLst/a:ext`. */
@@ -131,6 +136,21 @@ export function createDiagramPartResolver(
   });
   byOwner.set(ownerPartName, resolver);
   return resolver;
+}
+
+const UNDRAWN_CHARTS = new WeakMap<DiagramPartResolver, DiagramPartResolver>();
+
+/** The same resolver, marked so that charts project without the chart renderer. */
+export function withUndrawnCharts(resolver: DiagramPartResolver): DiagramPartResolver {
+  const cached = UNDRAWN_CHARTS.get(resolver);
+  if (cached) return cached;
+  const undrawn: DiagramPartResolver = Object.assign((relIds: OoxmlElement) => resolver(relIds), {
+    chart: resolver.chart,
+    chartex: resolver.chartex,
+    drawCharts: false as const,
+  });
+  UNDRAWN_CHARTS.set(resolver, undrawn);
+  return undrawn;
 }
 
 function resolveDiagramParts(

@@ -42,6 +42,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { cloneWithNewIds, fromEdit, paragraphContainingNode, TEXT_DEPS } from './tree-op-nodes.ts';
 import { drawingEffect, drawingOpImpact, isValidXmlMetadata } from './tree-op-drawing-kinds.ts';
+import { chartWrapperOfFallback } from './tree-op-chart-fallback.ts';
 import {
   applyLegacyVmlGeometryOp,
   legacyVmlDrawingOp,
@@ -312,6 +313,9 @@ function drawingContext(
 ):
   | { drawing: OoxmlDrawingNode; anchor: OoxmlElement; projection: DrawingProjection }
   | TreeOpRejection {
+  if (operation !== 'deleteDrawing' && chartWrapperOfFallback(part, drawingNodeId)) {
+    return 'chart-fallback';
+  }
   const original = findNode(part, drawingNodeId);
   const atomProjection =
     original?.kind === 'drawing' ? null : drawingAtomProjection(part, drawingNodeId);
@@ -388,7 +392,9 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
     case 'deleteDrawing': {
       if (op.revision) return 'trackedDrawingDeletionUnsupported';
       const ctx = drawingContext(part, op.drawingNodeId, op.op);
-      if (typeof ctx === 'string') return ctx;
+      // A chart's fallback in VML has no picture context; its delete removes the chart.
+      if (typeof ctx === 'string')
+        return chartWrapperOfFallback(part, op.drawingNodeId) ? null : ctx;
       return lockBlocks(ctx.anchor, op.op);
     }
     case 'replaceDrawingResource': {
@@ -1521,9 +1527,12 @@ export function applyDrawingOp(
       return fromEdit(edited, effect);
     }
     case 'deleteDrawing': {
-      const ctx = drawingContext(part, op.drawingNodeId, op.op);
+      // A chart's fallback goes with its chart: the whole `mc:AlternateContent`.
+      const chartWrapper = chartWrapperOfFallback(part, op.drawingNodeId);
+      const ctx = chartWrapper ? null : drawingContext(part, op.drawingNodeId, op.op);
       if (typeof ctx === 'string') return { ok: false, reason: ctx };
-      const targetId = ctx.projection.textboxStory ? op.drawingNodeId : ctx.drawing.id;
+      const targetId =
+        chartWrapper?.id ?? (ctx!.projection.textboxStory ? op.drawingNodeId : ctx!.drawing.id);
       const paragraph = paragraphContainingNode(part, targetId);
       const effect: TreeOpEffect = {
         dirty: paragraph ? [paragraph.id, targetId] : [targetId],

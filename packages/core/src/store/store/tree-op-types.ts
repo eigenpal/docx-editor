@@ -1274,6 +1274,8 @@ export type TreeOpRejection =
   | 'unknown-drawing'
   /** The drawing's graphic payload is not a supported picture. */
   | 'not-a-picture-drawing'
+  /** The drawing is a chart's saved fallback; only a delete, which removes the chart, applies. */
+  | 'chart-fallback'
   /** A lock flag or `@locked` forbids this mutation. */
   | 'drawing-locked'
   /** Finite EMU extent, crop, or position value is out of range. */

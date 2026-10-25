@@ -46,7 +46,10 @@ export function imageMarkdown(
   const asset = media.byDrawing.get(key);
   if (!asset) return '';
   media.represented.add(key);
-  const alt = drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? '');
+  // A chart's saved fallback picture takes the chart's title as its alt text.
+  const alt =
+    drawing.chart?.title ??
+    (drawing.accessibility.decorative ? '' : (drawing.accessibility.label ?? ''));
   if (media.syntax === 'html') {
     const width = Math.round(drawing.width * (96 / 72));
     const height = Math.round(drawing.height * (96 / 72));

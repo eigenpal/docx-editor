@@ -276,7 +276,8 @@ describe('groups', () => {
 describe('painted boxes', () => {
   test('boxes span the quartiles with the median across them', () => {
     const projection = project();
-    expect(projection.chartSummary).toBeUndefined();
+    // A drawn chart keeps its summary too.
+    expect(projection.chartSummary?.plotTypes).toEqual(['boxWhisker']);
     const painted = boxes(projection);
     expect(painted).toHaveLength(3);
     const y = valueScale(projection, [0, 5, 10, 15, 20, 25, 30, 35, 40]);

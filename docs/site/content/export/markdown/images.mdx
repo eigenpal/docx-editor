@@ -193,6 +193,16 @@ The resolver gets a separate byte copy. Mutations cannot corrupt returned assets
 
 `MarkdownBundleError.code` is `invalid-media-path`, `duplicate-output-path`, `non-portable-image-url`, `output-not-empty`, `write-failed`, or `archive-failed`. Filesystem failures preserve the cause and relevant path. Helpers remove only files they created during a failed write.
 
+## Charts
+
+Markdown cannot hold a drawn chart. A chart saved with a fallback picture exports that picture as an image, also when the [drawing module](/docs/2.x/pro/drawing) is installed in the process. The image's alternative text is the chart title from `drawing.chart`. If the chart has no title, the image uses the fallback picture's own description.
+
+A chart without a fallback picture exports no image. It gets an `omitted-drawing` warning that names the chart title, for example `The chart "Net cash" has no fallback picture and is omitted from Markdown.` An untitled chart gets `A chart without a fallback picture is omitted from Markdown.`
+
+The fallback picture is the image saved with the document. It can differ from the chart's cached values.
+
+If you pass a session to `exportMarkdownFrom()`, open it with this package's `openDocumentForExport()`. A session from `@docx-editor.dev/core/export` draws charts when the drawing module is installed, so a drawn chart has no picture to export and gets the `omitted-drawing` warning.
+
 ## Output limits
 
 Extraction covers validated ready images published by layout, including the body, headers, footers, tables, notes, separators, and nested text boxes. Hidden and revision-suppressed images are not published and are not extracted. Unsupported images, missing resources, external links, and shapes remain omitted with warnings. A shape group is omitted as one drawing, even when it holds a picture; extraction never fetches document-linked external images. Existing conversion hooks can supply raster replacements for preserved TIFF, EMF, and WMF files.

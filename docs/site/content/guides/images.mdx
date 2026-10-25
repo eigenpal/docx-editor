@@ -215,7 +215,7 @@ Register a component for unsupported inline or block content, or an existing dra
 </DocxEditor>
 ```
 
-Return `null`, `false`, an empty fragment or array, or whitespace to keep the built-in fallback. The check reads only the value that your function returns. A child component that renders `null` replaces the fallback with an empty box. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
+Return `null`, `false`, an empty fragment or array, or whitespace to keep the built-in placeholder. The check reads only the value that your function returns. A child component that renders `null` replaces the placeholder with an empty box. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
 
 </Framework>
 <Framework value="vue">
@@ -233,7 +233,7 @@ Return `null`, `false`, an empty fragment or array, or whitespace to keep the bu
 </DocxEditor>
 ```
 
-A default slot that renders nothing, such as a slot whose `v-if` is false, keeps the built-in fallback. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
+A default slot that renders nothing, such as a slot whose `v-if` is false, keeps the built-in placeholder. The same declaration works inside `DocxEditor.Root` beside `DocxEditor.Content`.
 
 </Framework>
 </FrameworkTabs>
@@ -245,7 +245,7 @@ Both packages export `UnsupportedElement` with these fields:
 - `source` exposes the read-only canonical source. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the default fallback text.
-- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. A chart placeholder also has `drawing.chart`, with the chart's `title` and `plotTypes`.
+- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. Every chart drawing also has `drawing.chart`, with the chart's `title` and `plotTypes`, whether the chart renders, shows its fallback picture, or shows the placeholder.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the fallback; it does not try the next declaration.
@@ -264,11 +264,11 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
-| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. A chart that does not render shows its saved fallback picture when it has one. Otherwise, the editor preserves the extent and shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic, which fails the default strict export. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. For the list, see [What renders](/docs/2.x/pro/drawing#what-renders). |
+| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. A chart that does not render shows its saved fallback picture or drawing when it has one. Its fallback picture produces no PDF diagnostic and can differ from the chart's cached values. Otherwise, the editor preserves the extent and shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic, which fails the default strict export. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. For the list, see [What renders](/docs/2.x/pro/drawing#what-renders). |
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |
-| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, and a floating one with a wrapping mode still reserves its wrap area |
+| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, except charts, which show a placeholder. A floating drawing with a wrapping mode still reserves its wrap area |
 | Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes | Render clipped stories on the line and edit supported body text boxes. They move with their line, so they cannot be dragged or resized |

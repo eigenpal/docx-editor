@@ -244,7 +244,7 @@ export interface DrawingProjection {
   readonly textboxStory: TextboxStoryProjection | null;
   /** Text box members of a `wpg:wgp` group, laid out read-only; absent when none has text. */
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
-  /** The title and plot types of a chart that does not paint. */
+  /** The title and plot types of a chart: rendered, shown by its fallback, or a placeholder. */
   readonly chartSummary?: DrawingChartSummary;
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
@@ -1572,12 +1572,18 @@ export function projectRunLevelMcDrawing(
     !hostsTextboxStory(projection)
   ) {
     if (projection.chartSummary || holdsChartGraphic(atom.drawing)) {
-      const chartFallback = paintableMcChartFallback(
-        wrapper,
-        context.namespaceScope,
-        context.ownerPartName,
-        (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
-      );
+      // A hidden chart stays hidden, whatever its fallback shows.
+      const chartFallback = projection.hidden
+        ? null
+        : paintableMcChartFallback(
+            wrapper,
+            context.namespaceScope,
+            context.ownerPartName,
+            (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
+          );
+      if (chartFallback && projection.chartSummary) {
+        return Object.freeze({ ...chartFallback, chartSummary: projection.chartSummary });
+      }
       return chartFallback ?? withAlternateContentGroupPictures(projection);
     }
     const fallback = paintableMcFallback(wrapper, context.ownerPartName);

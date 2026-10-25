@@ -113,7 +113,8 @@ describe('columns', () => {
 
   test('every point paints, coloured by kind from the data colours', () => {
     expect(projection.vectorShape).not.toBeNull();
-    expect(projection.chartSummary).toBeUndefined();
+    // A drawn chart keeps its summary too.
+    expect(projection.chartSummary?.plotTypes).toEqual(['waterfall']);
     expect(columns.map((bar) => bar.hex)).toEqual(['A5A5A5', '4472C4', 'ED7D31', 'A5A5A5']);
   });
 

@@ -39,15 +39,21 @@ export function markdownWarnings(
       if (drawing.accessibility.hidden || media?.represented.has(drawingKey(drawing))) return;
       const textbox = drawing.textboxStory !== undefined;
       const code = textbox ? 'omitted-textbox' : 'omitted-drawing';
-      const key = `${page.index}:${code}`;
+      // Each chart without a saved fallback picture gets its own warning, named by its title.
+      const chart = textbox ? undefined : drawing.chart;
+      const key = chart ? `${page.index}:chart:${drawing.drawingNodeId}` : `${page.index}:${code}`;
       if (warned.has(key)) return;
       warned.add(key);
       warnings.push(
         Object.freeze({
           code,
-          message: textbox
-            ? 'Text box content is omitted from Markdown.'
-            : 'Images and shapes are omitted from Markdown.',
+          message: chart
+            ? chart.title
+              ? `The chart "${chart.title}" has no fallback picture and is omitted from Markdown.`
+              : 'A chart without a fallback picture is omitted from Markdown.'
+            : textbox
+              ? 'Text box content is omitted from Markdown.'
+              : 'Images and shapes are omitted from Markdown.',
           pageNumber: page.index + 1,
         })
       );

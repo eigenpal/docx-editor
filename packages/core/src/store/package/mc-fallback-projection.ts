@@ -8,8 +8,10 @@
 // A chart (classic `c:chart` or chartex `cx:chart`) follows one rule: its chosen branch when
 // that paints (a chart renderer is installed and supports the chart), otherwise its fallback
 // when that paints (a DrawingML picture or drawable VML), otherwise its labelled `chart`
-// placeholder. A chart never paints nothing. The renderer registry is process-wide and read
-// when the drawing is projected, so install renderers before opening a document.
+// placeholder. A chart never paints nothing, and a hidden chart stays hidden whatever its
+// fallback shows. The fallback that stands in carries the chart's summary. The renderer
+// registry is process-wide and read when the drawing is projected, so install renderers
+// before opening a document.
 
 import { CHART_GRAPHIC_DATA_URI } from './chart-parts.ts';
 import { CHARTEX_GRAPHIC_DATA_URI } from './chartex-parts.ts';

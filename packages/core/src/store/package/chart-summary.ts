@@ -70,6 +70,11 @@ const PLOT_TYPES: ReadonlySet<string> = new Set<DrawingChartPlotType>([
 /**
  * The title and plot types of a chart, as text.
  *
+ * A drawing record carries it as `chart` whenever the drawing holds a chart, in each of three
+ * states. A chart that renders has a non-null `vectorShape`. A chart that shows its saved
+ * fallback picture has a picture `resource` and a null `placeholderGraphicKind`. A chart that
+ * shows the placeholder has `placeholderGraphicKind` `'chart'`.
+ *
  * @public
  */
 export interface DrawingChartSummary {

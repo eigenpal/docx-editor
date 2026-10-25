@@ -225,7 +225,8 @@ describe('geometry', () => {
 
   test('every positive value paints one bar in the series colour', () => {
     expect(projection.vectorShape).not.toBeNull();
-    expect(projection.chartSummary).toBeUndefined();
+    // A drawn chart keeps its summary too.
+    expect(projection.chartSummary?.plotTypes).toEqual(['funnel']);
     expect(columns.map((bar) => bar.hex)).toEqual(['4472C4', '4472C4', '4472C4', '4472C4']);
   });
 

@@ -268,7 +268,11 @@ export interface InlineDrawingRecord {
   readonly transform: DrawingTransform;
   /** Graphic kind of a non-picture drawing, naming its placeholder; null for pictures. */
   readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
-  /** The title and plot types of a chart that does not paint, for its placeholder. */
+  /**
+   * The title and plot types of a drawing that holds a chart. Present whether the chart renders
+   * (`vectorShape`), shows its fallback picture (`resource`), or shows the placeholder
+   * (`placeholderGraphicKind` `'chart'`).
+   */
   readonly chart?: DrawingChartSummary;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;

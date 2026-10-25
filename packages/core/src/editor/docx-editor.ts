@@ -155,8 +155,8 @@ import {
   gateModeOf,
   isContentControlEditorCommand,
 } from './content-controls.ts';
+import { imageContextEqual } from './image-state-rules.ts';
 import {
-  imageContextEqual,
   selectedImageStateOf,
   canExecuteImageCommand as canExecuteImageCommandOf,
   canAsyncImageCommand as canAsyncImageCommandOf,

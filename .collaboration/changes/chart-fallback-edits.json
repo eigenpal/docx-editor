@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Picture commands on a chart's saved fallback picture in mc:AlternateContent edited only the fallback branch, and deleting it removed only the fallback and left the chart branch.",
+  "after": "Resize, crop, position, wrap, replace, metadata, lock and transform edits on a chart's fallback refuse with chart-fallback and change nothing. Deleting it removes the whole mc:AlternateContent wrapper, chart and fallback together, as one undo step.",
+  "reason": "The change narrows which drawing ops apply and widens one delete to the wrapper node that is already the run-level drawing atom. It adds no shared state, operations, snapshot fields or protocol messages. A participant with the drawing module and one without converge: the refused edits write nothing, and the wrapper delete and its undo synchronize as ordinary node removal.",
+  "tests": [
+    "packages/core/src/store/__tests__/chart-fallback-ops.test.ts",
+    "packages/core/src/editor/__tests__/chart-fallback-image-commands.test.ts",
+    "packages/pro/src/collaboration/__tests__/chartex-fallback-peers.test.ts"
+  ],
+  "changeset": "chart-fallback-picture-edits",
+  "migration": null
+}

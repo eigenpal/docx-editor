@@ -23,11 +23,13 @@ test('a chartex chart without a renderer keeps a chart placeholder with its summ
 
 test('without a renderer, a wrapped chartex chart shows its fallback picture', () => {
   const [projection] = projectDrawingsInPackage(
-    chartexPackage(waterfallChartSpace(), { alternateContent: true })
+    chartexPackage(waterfallChartSpace({ title: 'Net' }), { alternateContent: true })
   );
   expect(projection!.picture?.embeddedRelationshipId).toBe('rId11');
-  expect(projection!.chartSummary).toBeUndefined();
+  // The fallback carries the chart's summary, so a host can tell it stands for a chart.
+  expect(projection!.chartSummary).toEqual({ title: 'Net', plotTypes: ['waterfall'] });
   expect(drawingPaintFields(projection!).placeholderGraphicKind).toBeFalsy();
+  expect(drawingPaintFields(projection!).chart?.title).toBe('Net');
 });
 
 test('without a renderer or a fallback that paints, the chart placeholder shows', () => {

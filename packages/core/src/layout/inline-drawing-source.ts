@@ -49,6 +49,11 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
 import { framedTokenJoin } from './framed-token.ts';
 import {
+  drawingResourceLayoutToken,
+  FOOTPRINT_RESOURCE,
+  pendingResourceKey,
+} from './drawing-resource-keys.ts';
+import {
   groupPictureLayerResources,
   groupPictureLayoutToken,
 } from './drawing-group-picture-layers.ts';
@@ -87,24 +92,8 @@ export interface CreateInlineDrawingLayoutBundleOptions {
   readonly onResourcesChanged: () => void;
   /** Test-only override; production creates one independently disposable lookup per bundle. */
   readonly resourceLookup?: ImageResourceLookup;
-}
-
-const FOOTPRINT_RESOURCE: ImageResourceState = Object.freeze({
-  kind: 'unrenderable',
-  partName: null,
-  mime: 'unknown',
-  reason: 'non-picture-graphic',
-});
-
-function pendingResourceKey(projection: DrawingProjection): string {
-  const picture = projection.picture ?? projection.groupPicture;
-  if (picture?.embeddedRelationshipId) {
-    return `embed:${projection.ownerPartName}:${picture.embeddedRelationshipId}`;
-  }
-  if (picture?.linkedRelationshipId) {
-    return `link:${projection.ownerPartName}:${picture.linkedRelationshipId}`;
-  }
-  return `nonpicture:${projection.drawingNodeId}`;
+  /** False: charts skip the chart renderer and show their fallback picture or placeholder. */
+  readonly drawCharts?: boolean;
 }
 
 interface PartDrawingContextSlot {
@@ -397,30 +386,6 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   return framedTokenJoin(Object.values(fields));
 }
 
-// Length-framed where a field embeds file text (resource keys carry relationship ids and
-// part names verbatim), so no crafted id can shift a field boundary.
-function drawingResourceLayoutToken(resource: ImageResourceState): string {
-  switch (resource.kind) {
-    case 'ready':
-      return framedTokenJoin([
-        'ready',
-        resource.resourceKey,
-        resource.contentId,
-        `${resource.pixelWidth}x${resource.pixelHeight}`,
-      ]);
-    case 'pending':
-      return framedTokenJoin(['pending', resource.resourceKey]);
-    case 'external':
-      return framedTokenJoin(['external', resource.relationshipId, resource.sinkSafe ? '1' : '0']);
-    case 'missing':
-      return 'missing';
-    case 'unrenderable':
-      return `unrenderable:${resource.reason}`;
-    default:
-      return (resource as ImageResourceState).kind;
-  }
-}
-
 /**
  * Story levels folded into a paragraph's drawing token.
  *
@@ -458,6 +423,7 @@ function createPartDrawingContextSlot(options: {
   readonly rememberReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly forgetReadyHandle: (handle: ValidatedImageBytesHandle) => void;
   readonly pictureBulletResource: NonNullable<InlineDrawingLayoutContext['pictureBulletResource']>;
+  readonly drawCharts?: boolean;
 }): PartDrawingContextSlot {
   const {
     ownerPartName,
@@ -486,7 +452,7 @@ function createPartDrawingContextSlot(options: {
   const stylesPart = stylesPartOf(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(
     part,
-    packageDrawingProjectionContext(pkg, ownerPartName)
+    packageDrawingProjectionContext(pkg, ownerPartName, options)
   );
   const atomIdentities = drawingAtomIdentities(part);
   const hasObjects = atomIdentities
@@ -693,7 +659,7 @@ function createPartDrawingContextSlot(options: {
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(
         nextPart,
-        packageDrawingProjectionContext(nextPkg, ownerPartName)
+        packageDrawingProjectionContext(nextPkg, ownerPartName, options)
       );
       if (nextProjections.size !== atomProjections.size) return false;
       for (const [atomId, projection] of atomProjections) {
@@ -799,6 +765,7 @@ export function createInlineDrawingLayoutBundle(
       rememberReadyHandle,
       forgetReadyHandle,
       pictureBulletResource: pictureBullets.resolve,
+      drawCharts: options.drawCharts,
     });
     slots.set(ownerPartName, slot);
     slotMintCounter += 1;
