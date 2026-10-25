@@ -176,6 +176,20 @@ test('in two columns a raised table moves below the earlier text instead', () =>
   expect(raised).toContain('0:T@38.2');
 });
 
+test('in two columns a warm pass near a column bottom lays out like a cold one', () => {
+  const columns = '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>';
+  const body = (count: number) => lines(count) + table(RAISED, 4320) + p('Head') + columns;
+  for (const count of [44, 45, 46, 47, 48, 94, 95, 96, 97]) {
+    const session = createLayoutSession();
+    const options = { measurer: createFixedMeasurer(), session };
+    layoutSemanticDocument(document(body(count)), 0, options);
+    const source = document(p('Z') + body(count));
+    const warm = placed(layoutSemanticDocument(source, 1, options));
+    const cold = placed(layoutSemanticDocument(source, 1, { measurer: createFixedMeasurer() }));
+    expect(warm).toEqual(cold);
+  }
+});
+
 test('an ordinary table between a raised table and its anchor does not count as moved', () => {
   // The band moves only paragraph lines, so the ordinary table it covers stays where it is and
   // the anchor still fits on the page.

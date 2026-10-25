@@ -171,7 +171,7 @@ export function addFloatingTableExclusions(
         inBodyFlow &&
         !pageFramed &&
         spans &&
-        columns.columnCount === 1 &&
+        singleColumn(width, columns.contentWidth) &&
         raisedAboveText(metadata.float);
       const zone: ExclusionZone = {
         sourceKind: 'table',
@@ -230,6 +230,11 @@ const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
  */
 function raisedAboveText(float: TableFloatPosition): boolean {
   return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
+}
+
+/** Whether the column being filled is the whole text width: a single-column section. */
+function singleColumn(columnWidth: number, textWidth: number): boolean {
+  return columnWidth >= textWidth - 0.5;
 }
 
 /**
@@ -482,7 +487,7 @@ function coveredLinesAnchorBand(
   if (
     (anchor.float.vertAnchor === 'text' && !raised) ||
     column.left > placement.frames.margin.left + 0.5 ||
-    column.width < placement.frames.margin.width - 0.5
+    !singleColumn(column.width, placement.frames.margin.width)
   )
     return 0;
   // A raised table's band moves only paragraph lines: the flow never moves a table for it.
@@ -554,8 +559,8 @@ export function requiredAnchorBand(
   const here = pendingOf(paragraphId);
   // Tables of earlier anchors on this page are placed first, at the flush, in anchor order.
   // Only in one column: a waiting table in another column is placed against other frames.
-  const singleColumn = placement.frames.text.width >= placement.frames.margin.width - 0.5;
-  const before = here.length > 0 && singleColumn ? (placement.signals ?? []) : [];
+  const oneColumn = singleColumn(placement.frames.text.width, placement.frames.margin.width);
+  const before = here.length > 0 && oneColumn ? (placement.signals ?? []) : [];
   const waiting = before.flatMap((signal) =>
     pendingOf(signal.anchorId).map((anchor) => ({ anchor, signal }))
   );
@@ -742,9 +747,8 @@ export function clearEarlierText(
   // covers move below it instead (`reachesEarlierLines`).
   const right = left + tableWidth + distances.left + distances.right;
   // In one column only, as `reachesEarlierLines` is: elsewhere the table clears the text.
-  const oneColumn = frames.text.width >= frames.margin.width - 0.5;
   if (
-    oneColumn &&
+    singleColumn(frames.text.width, frames.margin.width) &&
     raisedAboveText(float) &&
     leavesNoPassage(left, right, frames.text.left, frames.text.width)
   )
