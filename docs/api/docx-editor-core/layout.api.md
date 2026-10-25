@@ -2813,6 +2813,7 @@ export interface ParagraphLineSpacing {
     // (undocumented)
     readonly rule: LineSpacingRule;
     readonly value: number;
+    readonly wrapsContentOnly?: true;
 }
 
 // @public

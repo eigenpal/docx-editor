@@ -10,7 +10,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Registering it is the whole enablement story: the review chrome slots light
  * up through the same `toolbarCommandState` they were disabled by, suggesting
  * mode becomes reachable, and the editor renders revisions in markup rather
- * than the free tier's final-state projection.
+ * than the free tier's final-state projection. It also installs the drawing renderers, as
+ * `drawingModule()` from `@docx-editor.dev/pro/drawing` does.
  */
 
 import { createRevisionMarkupDialog } from './revision-markup-dialog';
@@ -20,7 +21,8 @@ import {
   type ReviewPaneOptions,
 } from '@docx-editor.dev/core/editor';
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
-import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
+import type { ProLicenseOptions } from '../license.ts';
+import { installDrawing } from '../drawing/index.ts';
 
 export type {
   CommentMarkerStyle,
@@ -48,11 +50,15 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
   readonly pane?: ReviewPaneOptions;
 }
 
-/** Build the review module. Construction never validates the key and never touches the network. */
+/**
+ * Build the review module. Construction never validates the key and never touches the network.
+ * It installs the drawing renderers process-wide, so charts, SmartArt layout, drawing effects,
+ * WordArt, and metafile pictures render without a separate `drawingModule()`.
+ */
 export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   // Validate now, so a misspelled setting fails where the host wrote it.
   const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
-  rememberLicenseKey(options.licenseKey);
+  installDrawing(options);
   return {
     id: 'review',
     review: {

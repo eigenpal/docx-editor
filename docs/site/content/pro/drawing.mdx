@@ -17,7 +17,7 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
 | WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
-| EMF and WMF pictures | Rasterized in the editor. Drawn as vector paths, text, and bitmaps in PDF export. | Labeled placeholder |
+| EMF and WMF pictures | Drawn as vector paths, text, and bitmaps in PDF export. In the editor, a picture that sets its own drawing origin is placed correctly. | Rasterized in the editor. Labeled placeholder in PDF export. |
 
 Text watermarks are a page feature, so they render without the module.
 
@@ -46,6 +46,8 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read.
 
+`reviewModule()` from `@docx-editor.dev/pro` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
+
 The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture. Documents without one do not load them.
 
 ## Use the module without an editor
@@ -69,3 +71,40 @@ installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
 - EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
 
 For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).
+
+## Replace placeholders without the module
+
+If you don't use the module, you can replace a chart or SmartArt placeholder with your own component. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram saved without its drawing. Your component fills the drawing's box, and the document content stays unchanged through save.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor document={bytes}>
+  <DocxEditor.UnsupportedElement
+    match={(element) => element.drawing?.placeholderGraphicKind === 'chart'}
+  >
+    {({ element }) => <ChartSummary nodeId={element.nodeId} />}
+  </DocxEditor.UnsupportedElement>
+</DocxEditor>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes">
+  <DocxEditor.UnsupportedElement
+    :match="(element) => element.drawing?.placeholderGraphicKind === 'chart'"
+  >
+    <template #default="{ element }">
+      <ChartSummary :node-id="element.nodeId" />
+    </template>
+  </DocxEditor.UnsupportedElement>
+</DocxEditor>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`ChartSummary` is your own component. For example, it can show a static image of the chart from your server, or a link that opens the chart in another view. Treat values from the document as untrusted data. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
