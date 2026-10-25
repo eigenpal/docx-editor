@@ -76,3 +76,18 @@ test('refuses picture effects and duplicate style nodes instead of dropping auth
     '<v:shape type="#_x0000_t136" style="width:120pt;height:30pt"><v:fill color="red"/><v:fill color="blue"/><v:textpath style="font-size:24pt" string="Label"/></v:shape>';
   expect(count('', art)).toBe(0);
 });
+
+test('recognizes the picture frame template without its formulas, and nothing looser', () => {
+  const photo = template('demo.docx', 'word/numbering.xml', 75).replace(
+    /<v:formulas>[\s\S]*?<\/v:formulas>/,
+    ''
+  );
+  const image =
+    '<v:shape type="#_x0000_t75" style="width:80pt;height:40pt"><v:imagedata r:id="rPhoto"/></v:shape>';
+  expect(photo).not.toContain('formulas');
+  expect(count(photo, image)).toBe(1);
+  // Any other change to the shortened template is custom geometry and stays refused.
+  expect(count(photo.replace('m@4@5l@4@11', 'm@4@5l@4@10'), image)).toBe(0);
+  expect(count(photo.replace('<v:stroke joinstyle="miter"/>', ''), image)).toBe(0);
+  expect(count(photo.replace('id="_x0000_t75"', 'id="_x0000_t76"'), image)).toBe(0);
+});

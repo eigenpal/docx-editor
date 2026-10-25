@@ -10,6 +10,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { blankDocumentBytes } from '../blank-document.ts';
 import { PNG_1X1 } from './image-decode-harness.ts';
+import { docx, PNG } from '../../export/__tests__/header-picture-watermark-fixture.ts';
 
 function mount(document: Uint8Array = blankDocumentBytes()): DocxEditorInstance {
   const container = window.document.createElement('div');
@@ -114,6 +115,17 @@ describe('document watermark', () => {
     editor.exec({ type: 'setWatermark', watermark: { text: 'COPY' } });
     const files = unzipSync(new Uint8Array(await editor.save()));
     expect(Object.keys(files).some((name) => name.startsWith('word/media/'))).toBe(false);
+  });
+
+  test('an authored picture watermark reads back and a new watermark replaces it', async () => {
+    const editor = mount(docx({ imageData: ' gain="19661f" blacklevel="22938f"' }));
+    expect(editor.getWatermark()).toEqual({ kind: 'image', washout: true });
+    expect(editor.query({ type: 'watermark' })?.imageData).toEqual(PNG);
+    editor.exec({ type: 'setWatermark', watermark: { text: 'COPY' } });
+    const headers = (await headerXml(editor)).join('');
+    expect(headers).not.toContain('WordPictureWatermark');
+    expect(headers.match(/PowerPlusWaterMarkObject/g)).toHaveLength(1);
+    expect(editor.getWatermark()).toMatchObject({ kind: 'text', text: 'COPY' });
   });
 
   test('invalid options are refused before anything is written', () => {
