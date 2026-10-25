@@ -157,7 +157,9 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
           {row.empty ? <PointIcon /> : <MaterialSymbol name="bookmark" size={16} />}
         </span>
         <span className="docx-nav__result-text">
-          <MatchedName name={row.name} query={goTo.query} />
+          <bdi>
+            <MatchedName name={row.name} query={goTo.query} />
+          </bdi>
         </span>
         {row.atSelection && (
           <span className="docx-nav__goto-here" title={t('navigation.goTo.atCaret')}>

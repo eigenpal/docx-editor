@@ -896,7 +896,8 @@ function placeCellParagraph(
         deps.measurer,
         rawRecords[0],
         originX,
-        rtl ? indent.left + available + indent.right : undefined,
+        // The content box: indents wider than a narrow cell would mirror the marker out of it.
+        rtl ? cellContentWidth : undefined,
         deps.inlineDrawingLayout?.pictureBulletResource
       )
     : undefined;

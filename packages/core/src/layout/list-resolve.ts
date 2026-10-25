@@ -40,6 +40,7 @@ import {
 } from './style-cascade.ts';
 import { mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
+import { bulletMarkerStyle } from './marker-symbol-face.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { propertiesOf } from './paragraph-flow.ts';
@@ -390,8 +391,12 @@ export function resolveStoryListItems(
   isFontAvailable?: (family: string) => boolean
 ): ReadonlyMap<string, ResolvedListItem> {
   if (index.nums.size === 0) return new Map();
-  return resolveListSequence(walkStoryParagraphs(blocks), index, styleCascade, isFontAvailable)
-    .items;
+  return resolveListSequence(
+    walkStoryParagraphs(blocks, 8, true),
+    index,
+    styleCascade,
+    isFontAvailable
+  ).items;
 }
 
 /** Numbered paragraphs between two saved counter states of a {@link ListSequenceResolve}. */
@@ -459,9 +464,13 @@ function resolveListSequence(
         advanced.level.runProperties,
         styleCascade
       );
+      const resolved = resolveRunStyle(markerProps, styleCascade?.themeFonts);
       levelDerived = {
         indent,
-        markerStyle: resolveRunStyle(markerProps, styleCascade?.themeFonts),
+        markerStyle:
+          advanced.level.numFmt === 'bullet'
+            ? bulletMarkerStyle(resolved, advanced.markerText)
+            : resolved,
       };
       prelude.perLevel.set(advanced.level, levelDerived);
     }
@@ -756,7 +765,7 @@ function numberedParagraphsOfBlock(
 ): readonly OoxmlElement[] {
   const cached = numberedBlockMemos.get(block);
   if (cached && cached.styleCascade === styleCascade) return cached.numbered;
-  const collected = walkStoryParagraphs([block]).filter(
+  const collected = walkStoryParagraphs([block], 8, true).filter(
     (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
   );
   const numbered = collected.length > 0 ? collected : NO_NUMBERED_PARAGRAPHS;

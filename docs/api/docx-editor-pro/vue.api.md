@@ -1165,6 +1165,7 @@ export interface ReviewRailMetrics {
     readonly compactCardLeft: number | null;
     readonly left: number | null;
     readonly scale: number;
+    readonly side: 'left' | 'right';
     readonly top: number;
 }
 

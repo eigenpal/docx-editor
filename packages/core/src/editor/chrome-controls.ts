@@ -894,19 +894,33 @@ export function defaultChromeGroups(): readonly ChromeGroup[] {
   }));
 }
 
+/** Options for {@link formattingBarChromeGroups}. @public */
+export interface FormattingBarOptions {
+  /** Show `direction.ltr` and `direction.rtl` after alignment, as for a right-to-left UI. */
+  readonly direction?: boolean;
+}
+
 /**
- * The formatting-bar groups for one editor snapshot: the default bar, plus the
- * contextual `image` group when a drawing is selected. Insertion without a selection
- * lives in the packaged Insert menu (`CHROME_MENUS`), not in the bar — a host that wants
- * a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
+ * The formatting-bar groups for one editor snapshot: the default bar, the contextual `image`
+ * group when a drawing is selected, and the direction group when `options.direction` asks.
+ * Insertion without a selection lives in the packaged Insert menu (`CHROME_MENUS`), not in
+ * the bar — a host that wants a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
  *
  * @public
  */
-export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[] {
-  const base = defaultChromeGroups();
-  if (!image) return base;
+export function formattingBarChromeGroups(
+  image: ImageContext | null,
+  options?: FormattingBarOptions
+): readonly ChromeGroup[] {
+  let groups = defaultChromeGroups();
+  const direction = options?.direction
+    ? CHROME_GROUPS_CONFORMANCE.find((g) => g.id === 'direction')
+    : undefined;
+  const at = groups.findIndex((group) => group.id === 'alignment') + 1;
+  if (direction && at > 0) groups = [...groups.slice(0, at), direction, ...groups.slice(at)];
+  if (!image) return groups;
   const imageGroup = CHROME_GROUPS_CONFORMANCE.find((group) => group.id === 'image');
-  return imageGroup ? [...base, imageGroup] : base;
+  return imageGroup ? [...groups, imageGroup] : groups;
 }
 
 // ── The menu region above the toolbar ─────────────────────────────────────────────────

@@ -78,7 +78,8 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null {
 function visitStory(
   root: SemanticStoryVisit,
   paragraphOrder: ReadonlyMap<string, number>,
-  visitor: (visit: SemanticSpanVisit) => void
+  visitor: (visit: SemanticSpanVisit) => void,
+  spanlessMarkers = false
 ): void {
   const { page, story, host, noteScopeId, noteAreaKind } = root;
   const rootDrawingOrigin =
@@ -94,6 +95,46 @@ function visitStory(
     (block, textboxContext) => {
       const { textboxDepth, textboxOwner, textboxPath, storyOrigin } = textboxContext;
       const visitStoryKind = textboxDepth === 0 ? story : 'textbox';
+      if (spanlessMarkers && block.marker && !block.lines.some((line) => line.spans.length > 0)) {
+        // A marker with no text beside it: one empty span on the first line carries it.
+        const first = block.lines[0];
+        if (!first || !block.marker) return;
+        const span: StyleSpanRecord = {
+          range: {
+            paragraphId: block.paragraphId,
+            start: first.range.start,
+            end: first.range.start,
+          },
+          text: '',
+          props: [],
+          style: block.marker.style,
+          box: { ...first.box, width: 0 },
+        };
+        visitor({
+          page,
+          story: visitStoryKind,
+          rootStory: story,
+          root,
+          storyOrigin,
+          absoluteBox: Object.freeze({
+            x: storyOrigin.x + span.box.x,
+            y: storyOrigin.y + span.box.y,
+            width: 0,
+            height: span.box.height,
+          }),
+          noteScopeId,
+          noteAreaKind,
+          textboxDepth,
+          textboxOwner,
+          textboxPath,
+          paragraph: block,
+          paragraphId: block.paragraphId,
+          line: first,
+          span,
+          sourceRange: null,
+        });
+        return;
+      }
       for (const line of block.lines) {
         const segments = [...lineSegments(line)].sort(
           (left, right) =>
@@ -136,14 +177,20 @@ function visitStory(
 
 /**
  * Visit every published span in page/story order without consulting the source package.
+ * With `spanlessMarkers`, a paragraph fragment that publishes a list marker but no span, such
+ * as an empty numbered paragraph, is visited once, in order, with an empty span on its first
+ * line, so an exporter that paints markers beside spans paints its marker too.
  * @public
  */
 export function forEachSemanticSpan(
   layout: SemanticLayout,
-  visitor: (visit: SemanticSpanVisit) => void
+  visitor: (visit: SemanticSpanVisit) => void,
+  options: { readonly spanlessMarkers?: boolean } = {}
 ): void {
   const paragraphOrder = new Map(
     everyStoryOrder(layout).map((paragraphId, index) => [paragraphId, index])
   );
-  forEachSemanticStory(layout, (story) => visitStory(story, paragraphOrder, visitor));
+  forEachSemanticStory(layout, (story) =>
+    visitStory(story, paragraphOrder, visitor, options.spanlessMarkers === true)
+  );
 }

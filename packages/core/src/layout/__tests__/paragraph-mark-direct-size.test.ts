@@ -452,13 +452,13 @@ describe('table cells', () => {
       fragment.kind === 'table' ? fragment.rows.map((row) => row.box.height) : []
     );
 
-  test('text paragraphs in a cell keep their lines; the end mark floors the row', () => {
+  test('text paragraphs in a cell keep their lines; under text the end mark sets no floor', () => {
     const twoLines = lay(cell(paragraph(run('Alpha')) + paragraph(run('Beta'))));
     expect(heights(twoLines)).toEqual([line(12), line(12)]);
     expect(tops(twoLines)).toEqual([0, line(12)]);
     const oneLine = lay(cell(paragraph(run('Alpha'))));
     expect(heights(oneLine)).toEqual([line(12)]);
-    expect(rowHeights(oneLine)[0]).toBeCloseTo(line(24), 5);
+    expect(rowHeights(oneLine)[0]).toBeCloseTo(line(12), 5);
     const threeLines = lay(
       cell(paragraph(run('Alpha')) + paragraph(run('Beta')) + paragraph(run('Gamma')))
     );

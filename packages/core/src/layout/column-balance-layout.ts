@@ -89,12 +89,15 @@ function columnBottomsOf(
   for (const fragment of page.fragments) {
     if (isOutOfFlowFragment(fragment)) continue;
     let column = 0;
-    // A fragment starts at its column's left edge plus indents; assign it to the LAST
-    // column whose origin it does not precede (half-point slack for table indents).
-    for (let index = columns.count - 1; index >= 0; index -= 1) {
-      if (fragment.box.x + 0.5 >= columns.lefts[index]!) {
+    let columnLeft = -Infinity;
+    // A fragment starts at its column's left edge plus indents; assign it to the column with
+    // the rightmost origin it does not precede (half-point slack for table indents). By
+    // position, not index: a right-to-left section stores its columns right to left.
+    for (let index = 0; index < columns.count; index += 1) {
+      const left = columns.lefts[index]!;
+      if (fragment.box.x + 0.5 >= left && left > columnLeft) {
         column = index;
-        break;
+        columnLeft = left;
       }
     }
     bottoms[column] = Math.max(bottoms[column]!, fragment.box.y + fragment.box.height);

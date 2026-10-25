@@ -20,8 +20,29 @@ import {
   cascadeRunProperties,
 } from './style-cascade.ts';
 
+/** The effective `w:rtl` and `w:cs` of a run or paragraph mark. */
+interface RunScriptFlags {
+  readonly rtl: boolean;
+  readonly cs: boolean;
+}
+
+type ScriptFlagsContext = (...args: Parameters<ComplexScriptContext>) => RunScriptFlags;
+
 const absent = {};
-const contexts = new WeakMap<object, WeakMap<object, ComplexScriptContext>>();
+const contexts = new WeakMap<object, WeakMap<object, ScriptFlagsContext>>();
+
+function scriptFlagsContext(
+  styles: OoxmlElement | null,
+  settings: OoxmlElement | null
+): ScriptFlagsContext {
+  const key = styles ?? absent;
+  let bySettings = contexts.get(key);
+  if (!bySettings) contexts.set(key, (bySettings = new WeakMap()));
+  const settingKey = settings ?? absent;
+  let context = bySettings.get(settingKey);
+  if (!context) bySettings.set(settingKey, (context = createContext(styles, settings)));
+  return context;
+}
 
 /** Internal, shared by selection, caret, and automation writes. */
 export function complexScriptFormattingContext(
@@ -30,21 +51,32 @@ export function complexScriptFormattingContext(
   displayMode: FormattingDisplayMode = 'all-markup',
   authorFilter?: FormattingRevisionAuthorFilter
 ): ComplexScriptContext {
-  const key = styles ?? absent;
-  let bySettings = contexts.get(key);
-  if (!bySettings) contexts.set(key, (bySettings = new WeakMap()));
-  const settingKey = settings ?? absent;
-  let context = bySettings.get(settingKey);
-  if (!context) bySettings.set(settingKey, (context = createContext(styles, settings)));
-  const resolve = context;
+  const resolve = scriptFlagsContext(styles, settings);
+  return (paragraph, container, mark, part, mode = displayMode, filter = authorFilter) => {
+    const flags = resolve(paragraph, container, mark, part, mode, filter);
+    return flags.rtl || flags.cs;
+  };
+}
+
+/**
+ * Like {@link complexScriptFormattingContext}, but answers only the effective run direction
+ * (`w:rtl`), without `w:cs`. Typed text uses it to decide the direction of a new run.
+ */
+export function runDirectionFormattingContext(
+  styles: OoxmlElement | null,
+  settings: OoxmlElement | null = null,
+  displayMode: FormattingDisplayMode = 'all-markup',
+  authorFilter?: FormattingRevisionAuthorFilter
+): ComplexScriptContext {
+  const resolve = scriptFlagsContext(styles, settings);
   return (paragraph, container, mark, part, mode = displayMode, filter = authorFilter) =>
-    resolve(paragraph, container, mark, part, mode, filter);
+    resolve(paragraph, container, mark, part, mode, filter).rtl;
 }
 
 function createContext(
   styles: OoxmlElement | null,
   settings: OoxmlElement | null
-): ComplexScriptContext {
+): ScriptFlagsContext {
   const table = buildStyleCascadeTable(styles, undefined, settings);
   const cellStyleOf = createFormattingCellStyles(table);
   const paragraphs = new WeakMap<
@@ -79,7 +111,7 @@ function createContext(
       if (property.localName === 'rtl') rtl = on;
       else cs = on;
     }
-    return rtl || cs;
+    return { rtl, cs };
   };
 }
 

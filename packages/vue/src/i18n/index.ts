@@ -1,5 +1,6 @@
 export {
   LocaleProvider,
+  useChromeDir,
   useTranslation,
   type LocaleProviderProps,
   type TranslationKey,

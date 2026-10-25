@@ -163,7 +163,9 @@ export function useNavigationPane(
         const measure = () => {
           viewportWidth.value = el.clientWidth;
           const style = hostWindowOf(el).getComputedStyle(el);
-          const padding = Number.parseFloat(style.paddingInlineEnd);
+          // A right-to-left interface opens the pane at the right: see the React twin.
+          const rtl = el.getAttribute('data-chrome-dir') === 'rtl';
+          const padding = Number.parseFloat(rtl ? style.paddingLeft : style.paddingInlineEnd);
           inlineEndReservation.value = Number.isFinite(padding) ? padding : 0;
           const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
           inlineStartReservation.value = Number.isFinite(strip) ? strip : 0;

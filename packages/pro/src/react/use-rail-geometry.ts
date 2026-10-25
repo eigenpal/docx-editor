@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // which is at its max-lines cap.
 
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { hostWindowOf } from '@docx-editor.dev/core/editor';
 import {
   INITIAL_REVIEW_RAIL_METRICS,
@@ -52,12 +53,33 @@ export function useRailMetrics(
   useEffect(() => {
     const rail = railRef.current;
     if (!editor || !rail) return undefined;
-    return observeReviewRailMetrics(
+    let bound = false;
+    let last: ReviewRailGeometry | null = null;
+    const stop = observeReviewRailMetrics(
       rail,
       editor,
-      (next) => setMetrics((previous) => (sameReviewRailMetrics(previous, next) ? previous : next)),
+      (next) => {
+        const previous = last;
+        if (previous && sameReviewRailMetrics(previous, next)) return;
+        last = next;
+        const update = () =>
+          setMetrics((current) => (sameReviewRailMetrics(current, next) ? current : next));
+        // An observer reports after layout and before paint. A plain state update renders
+        // after that paint, so the column stood one frame where the page used to be. Only a
+        // moved column pays for the synchronous render: a scroll that moves just the compact
+        // card's offset batches as before.
+        const moved =
+          !previous ||
+          previous.left !== next.left ||
+          previous.top !== next.top ||
+          previous.scale !== next.scale;
+        if (bound && moved) flushSync(update);
+        else update();
+      },
       { trackScroll }
     );
+    bound = true;
+    return stop;
   }, [editor, railRef, remeasure, mounted, trackScroll]);
   return metrics;
 }

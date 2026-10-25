@@ -47,7 +47,8 @@ describe('descent-anchored line spacing', () => {
       NATURAL_HEIGHT,
       NATURAL_BASELINE
     );
-    expect(reduced.baseline).toBeCloseTo(NATURAL_BASELINE, 6);
+    // A document line under a reduced multiple scales its baseline with the line.
+    expect(reduced.baseline).toBeCloseTo(NATURAL_BASELINE * (216 / 240), 6);
     const grown = applyLineSpacing({ rule: 'auto', value: 360 }, NATURAL_HEIGHT, NATURAL_BASELINE);
     expect(grown.baseline).toBeCloseTo(NATURAL_BASELINE, 6);
   });

@@ -1,34 +1,177 @@
 ---
-title: 'Right-to-left text'
-description: 'Edit Arabic, Hebrew, Persian, and Urdu documents. Set paragraph direction with the toolbar, keyboard, or code.'
+title: 'Right-to-left support'
+description: 'Edit Arabic, Hebrew, Persian, and Urdu documents. Learn how the editor interface mirrors and how the rendering engine lays out right-to-left and mixed-direction text.'
 category: 'Guides'
-seoTitle: 'Right-to-left and bidirectional text'
+seoTitle: 'Right-to-left and bidirectional text: interface and rendering'
 ---
 
-You can open and edit Arabic, Hebrew, Persian, and Urdu documents with right-to-left (RTL) or mixed-direction text. Change paragraph direction through the toolbar, keyboard, or browser `Editor` API.
+You can open, edit, and export Arabic, Hebrew, Persian, and Urdu documents with right-to-left (RTL) or mixed-direction text. Right-to-left support has two parts, and you can use each part on its own:
 
-## How the editor reads direction
+- **Editor interface**: the toolbar, menus, dialogs, panes, rulers, and review column mirror for an RTL interface language. The interface is available in Arabic and Hebrew.
+- **Rendering engine**: the engine shapes and joins Arabic letters, orders mixed-direction text, and mirrors paragraph layout, lists, tables, and columns. It reads direction only from the document, so an RTL document renders the same way in an English interface.
 
-A DOCX file stores direction at two levels. The editor reads both levels:
+| Task | Section |
+| --- | --- |
+| Show the interface in Arabic or Hebrew | [Editor interface](#editor-interface) |
+| Start a new RTL document | [New right-to-left documents](#new-right-to-left-documents) |
+| Understand how a DOCX file stores direction | [Rendering engine](#rendering-engine) |
+| Type and select RTL text | [Editing right-to-left text](#editing-right-to-left-text) |
+| Change paragraph direction from the interface or from code | [Change paragraph direction](#change-paragraph-direction) |
+| Export RTL text to PDF | [Export right-to-left text to PDF](#export-right-to-left-text-to-pdf) |
+| Check what is not supported | [Limits](#limits) |
+
+## Editor interface
+
+### Show the interface in Arabic or Hebrew
+
+Pass the `ar` or `he` catalog from `@docx-editor.dev/i18n`. These catalogs declare `_dir: 'rtl'`, and the editor's locale provider reads that flag. Each part of the editor chrome then sets `dir="rtl"` on itself. You don't need a wrapper element with `dir`, in either framework:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { ar } from '@docx-editor.dev/i18n';
+
+<DocxEditor document={bytes} i18n={ar} locale="ar-SA" />;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { ar } from '@docx-editor.dev/i18n';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :i18n="ar" locale="ar-SA" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+A composed editor works the same way. Wrap `DocxEditor.Root` and its parts in `LocaleProvider`:
+
+```tsx
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { ar } from '@docx-editor.dev/i18n';
+
+function ArabicEditor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <LocaleProvider i18n={ar}>
+      <DocxEditor.Root document={bytes}>{/* Toolbar, viewport, and other parts */}</DocxEditor.Root>
+    </LocaleProvider>
+  );
+}
+```
+
+In Vue, wrap `DocxEditor.Root` in `<LocaleProvider :i18n="ar">` the same way. To read the direction a provider decides for the interface, use `useChromeDir()` in either adapter. It returns `undefined` when the interface inherits the host page direction.
+
+### What mirrors
+
+In an RTL interface, the editor changes these parts:
+
+| Part | Behavior |
+| --- | --- |
+| Title bar, toolbar, and menu bar | Controls run from right to left. Icons that point along the reading direction, such as **Undo**, **Redo**, lists, and indents, flip. Keyboard shortcuts keep their left-to-right order. |
+| Dialogs and context menu | Content reads from right to left. |
+| Navigation pane | Opens at the right. Headings, search results, and bookmark names keep the direction of the document text. |
+| Review column | Sits to the left of the page, with its markers and the **Add comment** button. A card's colored edge faces the page. On a narrow viewport, the open card floats inside the left edge. |
+| Review cards | Card text keeps the direction of the document text. Dates use the interface language. |
+| Rulers | The vertical ruler stands at the right of the page. The horizontal ruler counts from the paragraph's leading margin: the left margin, or the right margin in an RTL paragraph. |
+| Header and footer hints | The hover hints, such as **Double-click to edit header**, use the interface language. |
+| Page setup | The margin unit uses the interface language. |
+
+The pages take their direction from the document, not from the interface. The vertical scroll bar stays at the right edge, which differs from other right-to-left applications. The scroll container keeps a left-to-right base for its scroll offsets.
+
+### Choose the interface direction
+
+The provider decides the direction in this order:
+
+1. The `dir` prop of `LocaleProvider`, `'ltr'` or `'rtl'`.
+1. The catalog's `_dir` flag.
+1. A right-to-left `_lang` tag in the catalog, such as `fa` or `ur`.
+1. The direction of an outer `LocaleProvider`.
+
+If none of these applies, the chrome inherits the host page direction. The shipped left-to-right catalogs, such as `en` and `de`, declare no `_dir`, so they inherit it too. To keep a left-to-right interface on a right-to-left host page, pass `dir="ltr"` to `LocaleProvider`.
+
+The review column and the navigation pane follow the same direction as the rest of the chrome, including an inherited one.
+
+To mirror the chrome for your own translations, add the flag to your catalog:
+
+```ts
+import type { Translations } from '@docx-editor.dev/i18n';
+
+const persian: Translations = {
+  _lang: 'fa',
+  _dir: 'rtl',
+  // Translated strings
+};
+```
+
+Your own controls inside the editor chrome inherit its direction through CSS, so they mirror without code. To read the direction in code, use `useChromeDir()` from the adapter package. It returns `'ltr'` or `'rtl'` when a provider decides the direction, and `undefined` when the chrome inherits the host page direction. In that case, read the computed `direction` of your own element. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
+
+### New right-to-left documents
+
+To start a new document that reads right to left, pass `direction` to `blankDocumentBytes()`. The document's paragraphs and section then read right to left, so the first paragraph is ready for RTL typing. The optional `bidiLanguage` sets the default language of RTL text, such as `ar-SA` or `he-IL`. A value that is not a language tag is ignored.
+
+```ts
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+
+const bytes = blankDocumentBytes({ direction: 'rtl', bidiLanguage: 'ar-SA' });
+```
+
+The interface language does not change the direction of an existing document.
+
+### Host pages with RTL direction
+
+You can mount the editor in a page that sets `dir="rtl"` on the page or on an ancestor of the editor. You don't need to override the direction on the editor components. The review column and the navigation pane read the nearest `dir` attribute, so set the attribute rather than only the CSS `direction` property.
+
+The painted pages and the `DocxEditor.Viewport` scroll container keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, zoom, and horizontal scrolling are the same in left-to-right and right-to-left host pages.
+
+The toolbar, menus, and other controls outside the viewport inherit the host page direction. So do the review column, which moves to the left of the page, and the navigation pane, which opens at the right. Controls that mount inside the viewport, such as dialogs, the context menu, and comment cards, take the direction that a `dir` attribute declares on an ancestor. They keep their positions, so only their content mirrors.
+
+If you attach the editor to your own scroll container instead of `DocxEditor.Viewport`, set `direction: ltr` on it. Otherwise horizontal scrolling and zoom follow the host direction.
+
+## Rendering engine
+
+### How the engine reads direction
+
+A DOCX file stores direction at two levels. The engine reads both levels:
 
 | Property | Scope | Effect |
 | --- | --- | --- |
 | `w:bidi` | Paragraph | Sets the base direction for lines, list markers, and indents. |
 | `w:rtl` | Run | Orders numbers and punctuation right to left, and selects the run's complex-script formatting. |
 
-Alignment and indents name the leading and trailing sides of a paragraph. In an RTL paragraph, `w:jc="left"` aligns to the right margin. The `w:ind w:left` property indents from the right. First-line and hanging indents count from the right indent. The kashida justification values justify the paragraph.
+A section with `w:bidi` places its first column at the right margin, and text flows into the columns from right to left.
+
+### Alignment, indents, and lists
+
+Alignment and indents name the leading and trailing sides of a paragraph. In an RTL paragraph, `w:jc="left"` aligns to the right margin. The `w:ind w:left` property indents from the right. First-line and hanging indents count from the right indent. The kashida justification values justify the paragraph. A justified line with no space to stretch, such as one word before a manual line break, stays at its leading edge.
 
 List levels follow the same rule. In an RTL paragraph, a level's `w:ind w:left` indents from the right margin. The `w:lvlJc="left"` property aligns the marker's right edge with its position. The marker text reads right to left. For example, `1.` shows its period on the left. The `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` formats number in their own scripts.
 
 Tab stops count from the right margin, and the text on each side of a tab stays in reading order.
 
+### Text order
+
 Trailing ordinary spaces (`U+0020`) stay beside the text whose direction they follow. Their direction determines whether they extend outside the width used for alignment. The editor preserves these spaces in document text. Tabs and nonbreaking spaces (`U+00A0`) retain their width.
+
+A space inside a `w:rtl` run belongs to the RTL text. In a left-to-right paragraph, a space at the start of an RTL run therefore stands on the far side of that run, not between the run and the preceding left-to-right word.
 
 An inline picture reads in the direction of the text on both sides of it. Between text of different directions, or before the first text of a paragraph, it reads in the paragraph's direction. After the last text of a paragraph, it reads in the direction of that text. In an RTL paragraph, a picture before the text stands at the right, and a picture after left-to-right text stands to the right of that text.
 
-A click past the end side of a line, where the paragraph mark stands, places the caret at the end of the line. A click past the start side places the caret on that side of the picture or text at the edge.
+Floating pictures, shapes, symbols (`w:sym`), and equations do not change the order of the text around them. Arabic letters on both sides of such an object stay joined to their own word.
 
-The ruler mirrors for an RTL paragraph. The first-line, hanging, and **Before text** handles appear on the right. The **After text** handle appears on the left. The **Paragraph** dialog's **Before text** and **After text** fields edit `w:ind w:left` and `w:ind w:right`.
+In a `w:rtl` run whose language is written in Arabic script, a slash between digits separates the numbers. For example, `17/08/96` reads `96/08/17`. In a Hebrew run, and in a run without `w:rtl`, the date stays one number.
+
+Page fields and note marks containing ASCII decimal digits preserve the surrounding text order. This includes footnote references. Multi-digit values remain one character in the document model. Their display width and navigation remain intact. This support applies to projected fields and note marks with one-character model ranges. Form controls and other projected content retain their existing layout limits.
 
 ### Complex-script formatting
 
@@ -40,13 +183,41 @@ A run with `w:rtl` or `w:cs` uses complex-script properties for every character.
 
 `w:sz`, `w:b`, and `w:i` have no effect on such a run. A run without `w:rtl` or `w:cs` uses the Latin properties, even for Arabic or Hebrew characters.
 
+In a `w:rtl` run whose language (`w:lang w:bidi`) is written in Arabic script, European digits use the run's Latin font and its line height. Letters, punctuation, and spaces keep the complex-script font.
+
+### Arabic shaping and joining
+
+Arabic and other joining scripts keep their letter forms across adjacent formatting runs, including color changes. Joining requires the same bidirectional level and no whitespace between the letters. When a font lacks a character beside Arabic letters, such as a check box symbol, only that character takes a fallback font. The letters keep their own font and stay joined.
+
+### Tables
+
+Tables with `w:bidiVisual` display their logical cells from right to left, including merged cells and repeated header rows. Table styles can supply the property, and a direct false value overrides it.
+
+In compatibility mode 15 and later modes, leading-aligned fixed-width RTL tables share simple side borders with cell margins. The grid moves left by the border width. This rule requires an absolute table width, complete rows, and equal simple side borders. Nested tables, floating tables, spaced cells, and other alignments keep their existing geometry.
+
+## Editing right-to-left text
+
+### Typed text
+
+Arabic and Hebrew letters that you type into a run without `w:rtl` start a run with `<w:rtl/>`, so they use the complex-script properties. The first letter of the typed text decides: digits, spaces, and punctuation keep the direction of the run they join. Latin letters that you type into a right-to-left run stay in that run. The text and its direction form one undo step, and collaboration peers receive both.
+
+Clear Formatting keeps `w:rtl`, because it marks the direction of the text and not its formatting. The format painter does not copy it.
+
 Formatting commands use the effective `w:rtl` and `w:cs` values, including character styles, paragraph styles, table styles, and document defaults. Direct false values override inherited values. For complex-script runs, commands write both property variants. For example, **Bold** writes `<w:b/><w:bCs/>`. It writes `<w:b/>` on a left-to-right (LTR) run. Selection formatting, caret typing, paragraph marks, format painter, and automation font writes follow this rule.
+
+### Caret and selection
+
+The arrow keys move the caret in visual order, so the Right Arrow key moves right in both directions of text. A selection across mixed-direction text can show separate highlighted bands.
+
+A click past the end side of a line, where the paragraph mark stands, places the caret at the end of the line. A click past the start side places the caret on that side of the picture or text at the edge.
+
+The ruler mirrors for an RTL paragraph. The first-line, hanging, and **Before text** handles appear on the right. The **After text** handle appears on the left. The **Paragraph** dialog's **Before text** and **After text** fields edit `w:ind w:left` and `w:ind w:right`.
 
 ## Change paragraph direction
 
 You can change the direction of the paragraphs in the selection in four ways:
 
-- Toolbar: the **Left-to-right text** and **Right-to-left text** buttons follow the alignment control. A mixed selection shows neither button as pressed.
+- Toolbar: if the interface language is right to left, the **Left-to-right text** and **Right-to-left text** buttons follow the alignment control. A mixed selection shows neither button as pressed. In other languages, add the `direction.ltr` and `direction.rtl` slots to a custom toolbar.
 - **Format** menu: the same two commands follow the alignment rows.
 - **Paragraph** dialog: the **Direction** setting.
 - Keyboard: press Ctrl+Right Shift for RTL and Ctrl+Left Shift for LTR. The command runs when you release the keys. If you press another key or click before you release them, the command does not run. On macOS, use the Control key.
@@ -55,7 +226,7 @@ The shortcuts require an RTL paragraph or run in the document region you edit. T
 
 The command changes only the paragraph direction. It does not change the text, the run direction, or `w:jc`. A paragraph aligned to its start moves to the other margin. Paragraphs in table cells change too.
 
-## Change direction from code
+### Change direction from code
 
 Use the browser `Editor` API's `setParagraphDirection` command. It applies to every paragraph that the selection touches. The command creates one undo step.
 
@@ -89,35 +260,14 @@ To build your own buttons, use the `direction.ltr` and `direction.rtl` [chrome s
 
 To set direction from a document automation script on a server or in the browser, use `Paragraph.readingOrder`. It addresses paragraphs instead of the selection. For more information, see [Right-to-left paragraphs](/docs/2.x/editor-api/formatting#right-to-left-paragraphs).
 
-## Table border spacing
-
-In compatibility mode 15 and later modes, leading-aligned fixed-width RTL tables share simple side borders with cell margins. The grid moves left by the border width. This rule requires an absolute table width, complete rows, and equal simple side borders. Nested tables, floating tables, spaced cells, and other alignments keep their existing geometry.
-
-## Host pages with RTL direction
-
-You can mount the editor in a page that sets `dir="rtl"` or `direction: rtl`. You don't need to override the direction on the editor components.
-
-The painted pages and the `DocxEditor.Viewport` scroll container keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, zoom, and horizontal scrolling are the same in left-to-right and right-to-left host pages.
-
-Controls inside the viewport, such as comment cards, also use a left-to-right base. The toolbar, menus, and other controls outside the viewport inherit the host page direction.
-
-If you attach the editor to your own scroll container instead of `DocxEditor.Viewport`, set `direction: ltr` on it. Otherwise horizontal scrolling and zoom follow the host direction.
-
-## Export RTL text to PDF
+## Export right-to-left text to PDF
 
 PDF export preserves Arabic joining across formatting runs and uses fonts that support Arabic shaping. The PDF text layer keeps Arabic, Persian, and Hebrew words in logical order for text extraction. Default fallback fonts cover Arabic and Hebrew when the selected font lacks those characters.
 
 For font configuration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts). For supported content, see [Word feature support](/docs/2.x/word-fidelity).
 
-## Numeric fields and note marks
-
-Page fields and note marks containing ASCII decimal digits preserve the surrounding text order. This includes footnote references. Multi-digit values remain one character in the document model. Their display width and navigation remain intact.
-
-This support applies to projected fields and note marks with one-character model ranges. Form controls and other projected content retain their existing layout limits.
-
 ## Limits
 
-- The editor does not add `w:rtl` to typed text. Text that you type in an RTL run keeps that run's direction.
-- Section direction (`w:sectPr/w:bidi`) and run direction wrappers (`w:dir`, `w:bdo`) do not change layout.
-- A paragraph that anchors a floating picture keeps left-to-right order for its text.
-- The editor interface does not mirror for RTL languages.
+- Run direction wrappers (`w:dir`, `w:bdo`) do not change layout. Section direction changes only the column order.
+- A paragraph that contains a positional tab (`w:ptab`) keeps left-to-right order for its text.
+- Kerning and cursive offsets across formatting run boundaries are not applied.

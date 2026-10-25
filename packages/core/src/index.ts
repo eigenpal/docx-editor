@@ -29,6 +29,7 @@
 export {
   createDocxEditor,
   blankDocumentBytes,
+  type BlankDocumentOptions,
   type DocxEditorInstance,
   type DocxEditorConfig,
 } from './editor/index.ts';

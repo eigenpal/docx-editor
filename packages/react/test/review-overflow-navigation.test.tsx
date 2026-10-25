@@ -12,6 +12,8 @@ import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { useContext, useEffect } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
@@ -25,6 +27,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
 import { ReviewRailContext } from '../src/editor/context.ts';
+import { LocaleProvider } from '../src/i18n/LocaleContext.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -121,22 +124,32 @@ async function refit(editor: DocxEditorInstance) {
   }
 }
 
-async function mountBothPanes(overflow: ReviewPaneOverflow) {
+async function mountBothPanes(
+  overflow: ReviewPaneOverflow,
+  dir?: 'ltr' | 'rtl',
+  hostDir?: 'ltr' | 'rtl'
+) {
   let editor: DocxEditorInstance | null = null;
+  const host = document.createElement('div');
+  if (hostDir) host.setAttribute('dir', hostDir);
+  document.body.append(host);
   const view = render(
-    <DocxEditorRoot
-      document={SOURCE}
-      modules={[REVIEW_MODULE]}
-      onReady={(ready) => {
-        editor = ready as DocxEditorInstance;
-      }}
-    >
-      <DocxEditorNavigation defaultOpen />
-      <DocxEditorViewport>
-        <DocxEditorContent />
-      </DocxEditorViewport>
-      <RailStub />
-    </DocxEditorRoot>
+    <LocaleProvider {...(dir ? { dir } : {})}>
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorNavigation defaultOpen />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <RailStub />
+      </DocxEditorRoot>
+    </LocaleProvider>,
+    { container: host }
   );
   await settle();
   act(() => {
@@ -223,5 +236,75 @@ describe('the navigation pane beside a scrolling review column', () => {
       scrollerWidth = VIEWPORT;
       removeStyle();
     }
+  });
+});
+
+describe('a right-to-left interface', () => {
+  /** The stylesheet's own right-to-left scroller rules, read from the shipped CSS. */
+  function withRightToLeftRules(): () => void {
+    const css = readFileSync(
+      fileURLToPath(new URL('../../core/src/styles/editor.css', import.meta.url)),
+      'utf8'
+    );
+    const rules = css.match(/[^{}]*\[data-chrome-dir='rtl'\][^{}]*\{[^}]*\}/g) ?? [];
+    expect(rules.length).toBeGreaterThanOrEqual(3);
+    const style = document.createElement('style');
+    style.textContent = rules.join('\n');
+    document.head.append(style);
+    return () => style.remove();
+  }
+
+  test("'scroll' at 900px: the column pads the left and the pane docks on the right", async () => {
+    let removeStyle = withRightToLeftRules();
+    let shift = 0;
+    try {
+      const { scroller, nav } = await mountBothPanes('scroll', 'rtl');
+      expect(scroller.getAttribute('data-chrome-dir')).toBe('rtl');
+      expect(scroller.getAttribute('data-review-side')).toBe('left');
+      // The custom properties stay logical: the column is the end, the clearance the start.
+      expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+      expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
+      // The stylesheet puts the column on the left edge.
+      expect(getComputedStyle(scroller).paddingLeft).toBe('316px');
+      // The pane measures the left edge as the other side, so it takes the same room as in
+      // the mirrored left-to-right layout.
+      expect(nav.getAttribute('data-open')).toBe('true');
+      expect(nav.classList.contains('docx-nav--overlay')).toBe(false);
+      shift = px(scroller, '--docx-nav-shift');
+    } finally {
+      removeStyle();
+    }
+    cleanup();
+    removeStyle = withGutterPadding();
+    try {
+      const mirrored = await mountBothPanes('scroll');
+      expect(shift).toBe(px(mirrored.scroller, '--docx-nav-shift'));
+      expect(shift).toBeGreaterThan(0);
+    } finally {
+      removeStyle();
+    }
+  });
+
+  test('an inherited host page direction decides the side, and dir="ltr" overrides it', async () => {
+    const inherited = await mountBothPanes('float', undefined, 'rtl');
+    expect(inherited.scroller.getAttribute('data-chrome-dir')).toBe('rtl');
+    expect(inherited.scroller.getAttribute('data-review-side')).toBe('left');
+    cleanup();
+    const forced = await mountBothPanes('float', 'ltr', 'rtl');
+    expect(forced.scroller.getAttribute('data-chrome-dir')).toBeNull();
+    expect(forced.scroller.getAttribute('data-review-side')).toBeNull();
+    expect(forced.nav.getAttribute('dir')).toBe('ltr');
+  });
+
+  test('a host page that flips its direction at run time moves the column', async () => {
+    const { scroller } = await mountBothPanes('float', undefined, 'ltr');
+    expect(scroller.getAttribute('data-review-side')).toBeNull();
+    const host = scroller.closest('[dir]') as HTMLElement;
+    act(() => {
+      host.setAttribute('dir', 'rtl');
+    });
+    await settle();
+    expect(scroller.getAttribute('data-review-side')).toBe('left');
+    expect(scroller.getAttribute('data-chrome-dir')).toBe('rtl');
   });
 });

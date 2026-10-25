@@ -41,7 +41,7 @@ const arabic = (rPr: string) =>
   );
 const exported = (input: Uint8Array) => exportPdf(input, { useSystemFonts: false });
 
-test('bold in a single-weight face is stroked, on unchanged advances', async () => {
+test('bold in a single-weight face is stroked, and each inked glyph advances 1/50 em further', async () => {
   const [regular, bold] = await Promise.all([
     exported(arabic('')),
     exported(arabic('<w:b/><w:bCs/>')),
@@ -52,8 +52,16 @@ test('bold in a single-weight face is stroked, on unchanged advances', async () 
   expect(stream).toMatch(/0 0 0 RG/);
   expect(stream).toMatch(/1 0 0 0\.980392 [\d.]+ [\d.]+ Tm/);
   expect(await contentStreams(regular.bytes)).not.toContain('2 Tr');
-  // Paint only: layout and glyph origins are those of the regular run.
-  expect(await glyphPositions(bold.bytes)).toEqual(await glyphPositions(regular.bytes));
+  // Each step between glyphs of one word grows by 1/50 of the 10.08pt grid size. The one
+  // step across the space differs: right alignment moves the first word by the second's growth.
+  const steps = (positions: number[]) => positions.slice(1).map((x, i) => x - positions[i]!);
+  const [plain, heavy] = [
+    steps(await glyphPositions(regular.bytes)),
+    steps(await glyphPositions(bold.bytes)),
+  ];
+  expect(heavy).toHaveLength(plain.length);
+  const grown = heavy.filter((step, i) => Math.abs(step - plain[i]! - 10.08 / 50) < 0.005);
+  expect(grown).toHaveLength(plain.length - 1);
   expect(await extracted(bold.bytes)).toBe(await extracted(regular.bytes));
 });
 

@@ -14,7 +14,9 @@
 .demo-settings__panel {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  /* Under the gear, opening toward the page: leftward, or rightward in a right-to-left
+     interface, where the gear sits at the left. */
+  inset-inline-end: 0;
   z-index: var(--doc-z-overlay, 50);
   width: 360px;
   max-height: calc(100vh - 96px);
@@ -105,7 +107,13 @@
   border: 0;
 }
 
-.demo-settings__group legend {
+.demo-settings__group legend,
+.demo-settings__label {
+  display: block;
+}
+
+.demo-settings__group legend,
+.demo-settings__label {
   margin: 0 0 7px;
   padding: 0;
   color: var(--doc-text-muted);
@@ -113,6 +121,24 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* The interface language: a native select, as wide as the segmented controls below it. */
+.demo-settings__select {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.demo-settings__select:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
 }
 
 /* A segmented control over native radios: arrow keys move between options, and the
@@ -242,4 +268,10 @@
     width: auto;
     max-height: calc(100vh - 72px);
   }
+}
+
+/* The demo's own text is English. In a right-to-left interface each line keeps its own
+   direction, so its punctuation stays at its end. */
+.demo-settings__panel :is(h2, p, legend, .demo-settings__label) {
+  unicode-bidi: plaintext;
 }

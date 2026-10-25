@@ -170,3 +170,66 @@ export function dragIndent(
     }
   }
 }
+
+/**
+ * Where a tab stop sits, in twips from the page's left sheet edge. `tabTwips` counts from the
+ * paragraph's leading margin, as `w:tab/@w:pos` does: leftward from the right margin when
+ * `indent.rtl` is set.
+ *
+ * @public
+ */
+export function rulerTabPosition(
+  tabTwips: number,
+  page: RulerPageMetrics,
+  indent: Pick<RulerIndent, 'rtl'>
+): number {
+  return indent.rtl ? page.pageWidth - page.rightMargin - tabTwips : page.leftMargin + tabTwips;
+}
+
+/**
+ * One horizontal ruler tick, in twips from the page's left sheet edge.
+ *
+ * @public
+ */
+export interface RulerMarginTick {
+  /** Twips from the page's left sheet edge. */
+  readonly position: number;
+  /** Tick length in CSS pixels: 8 for a whole unit, 5 for a half, 3 or 2 for minor ticks. */
+  readonly height: number;
+  /** Whole units from the paragraph's leading margin; omitted at the margin and on minor ticks. */
+  readonly label?: string;
+}
+
+/**
+ * Horizontal ruler ticks counted from the margin the paragraph starts at: the left margin, or
+ * the right margin when `indent.rtl` is set. Labels count whole units outward on both sides,
+ * so the margin zone also reads 1, 2, and so on toward the sheet edge.
+ *
+ * @public
+ */
+export function rulerMarginTicks(
+  page: RulerPageMetrics,
+  indent: Pick<RulerIndent, 'rtl'>,
+  unit: RulerUnit
+): RulerMarginTick[] {
+  if (!Number.isFinite(page.pageWidth) || page.pageWidth <= 0) return [];
+  const origin = indent.rtl ? page.pageWidth - page.rightMargin : page.leftMargin;
+  const perUnit = unit === 'inch' ? 8 : 10;
+  const step = (unit === 'inch' ? TWIPS_PER_INCH : TWIPS_PER_CM) / perUnit;
+  const ticks: RulerMarginTick[] = [];
+  const first = -Math.floor(origin / step);
+  const last = Math.floor((page.pageWidth - origin) / step);
+  for (let index = first; index <= last; index += 1) {
+    const position = origin + index * step;
+    const minor = Math.abs(index) % perUnit;
+    if (minor === 0) {
+      const units = Math.abs(index) / perUnit;
+      // A label centred on a sheet edge would show only half of itself.
+      const labelled = units > 0 && position > 0 && position < page.pageWidth;
+      ticks.push({ position, height: 8, ...(labelled ? { label: String(units) } : {}) });
+    } else if (minor === perUnit / 2) ticks.push({ position, height: 5 });
+    else if (unit === 'cm' || minor % 2 === 0) ticks.push({ position, height: 3 });
+    else ticks.push({ position, height: 2 });
+  }
+  return ticks;
+}

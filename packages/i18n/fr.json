@@ -586,6 +586,10 @@
   "headerFooter": {
     "header": "En-tête",
     "footer": "Pied de page",
+    "addHeaderHint": "Double-cliquez pour ajouter un en-tête",
+    "addFooterHint": "Double-cliquez pour ajouter un pied de page",
+    "editHeaderHint": "Double-cliquez pour modifier l’en-tête",
+    "editFooterHint": "Double-cliquez pour modifier le pied de page",
     "options": "Options",
     "insertPageNumber": "Insérer le numéro de page",
     "insertTotalPages": "Insérer le nombre total de pages",

@@ -23,6 +23,8 @@ import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   dragIndent,
   handlePosition,
+  rulerMarginTicks,
+  rulerTabPosition,
   SNAP_TWIPS_CM,
   SNAP_TWIPS_INCH,
   type RulerIndent,
@@ -43,7 +45,8 @@ import { useTranslation } from '../../i18n';
 export type RulerPageSetup = NonNullable<ReturnType<Editor['getPageSetup']>>;
 
 /**
- * A tab stop the ruler paints. `position` is twips from the left margin edge —
+ * A tab stop the ruler paints. `position` is twips from the paragraph's leading margin
+ * (the right one for a right-to-left paragraph) —
  * the same value the `removeTabMark` command takes as `positionTwips`.
  */
 export interface RulerTabStop {
@@ -253,7 +256,12 @@ export const HorizontalRuler = defineComponent({
       const unit = props.unit ?? 'inch';
       const { pageWidthTwips, page, current, pageWidthPx, leftMarginPx, rightMarginPx } =
         metrics.value;
-      const ticks = generateTicks(pageWidthTwips, zoom, unit);
+      // Numbers count from the margin the paragraph starts at, the right one when it reads
+      // right to left.
+      const ticks = rulerMarginTicks(page, current, unit).map((tick) => ({
+        ...tick,
+        position: twipsToPixels(tick.position) * zoom,
+      }));
       const indentDraggable =
         (props.showIndentHandles ?? false) &&
         (props.indentEditable ?? false) &&
@@ -412,7 +420,7 @@ export const HorizontalRuler = defineComponent({
             <TabMarker
               key={tab.position}
               tabMark={tab}
-              positionPx={twipsToPixels(tab.position) * zoom}
+              positionPx={twipsToPixels(rulerTabPosition(tab.position, page, current)) * zoom}
               onDoubleClick={() => props.onTabMarkRemove?.(tab.position)}
             />
           ))}
@@ -701,46 +709,6 @@ function TabMarker({ tabMark, positionPx, onDoubleClick }: TabMarkerProps): VNod
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
-
-function generateTicks(pageWidthTwips: number, zoom: number, unit: 'inch' | 'cm'): TickData[] {
-  const ticks: TickData[] = [];
-
-  if (unit === 'inch') {
-    const eighthInchTwips = TWIPS_PER_INCH / 8;
-    const totalEighths = Math.ceil(pageWidthTwips / eighthInchTwips);
-    for (let i = 0; i <= totalEighths; i++) {
-      const twipsPos = i * eighthInchTwips;
-      if (twipsPos > pageWidthTwips) break;
-      const pxPos = twipsToPixels(twipsPos) * zoom;
-      if (i % 8 === 0) {
-        ticks.push({ position: pxPos, height: 8, label: i / 8 > 0 ? String(i / 8) : undefined });
-      } else if (i % 4 === 0) {
-        ticks.push({ position: pxPos, height: 5 });
-      } else if (i % 2 === 0) {
-        ticks.push({ position: pxPos, height: 3 });
-      } else {
-        ticks.push({ position: pxPos, height: 2 });
-      }
-    }
-  } else {
-    const mmTwips = TWIPS_PER_CM / 10;
-    const totalMm = Math.ceil(pageWidthTwips / mmTwips);
-    for (let i = 0; i <= totalMm; i++) {
-      const twipsPos = i * mmTwips;
-      if (twipsPos > pageWidthTwips) break;
-      const pxPos = twipsToPixels(twipsPos) * zoom;
-      if (i % 10 === 0) {
-        ticks.push({ position: pxPos, height: 8, label: i / 10 > 0 ? String(i / 10) : undefined });
-      } else if (i % 5 === 0) {
-        ticks.push({ position: pxPos, height: 5 });
-      } else {
-        ticks.push({ position: pxPos, height: 3 });
-      }
-    }
-  }
-
-  return ticks;
-}
 
 export function positionToMargin(
   positionPx: number,

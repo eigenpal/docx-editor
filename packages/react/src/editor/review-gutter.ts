@@ -40,14 +40,17 @@
 // "cramped". Two components deciding independently is how a ruler ends up an inch off
 // the page it is measuring, so they all read `useReviewGutter`.
 
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import {
   hostWindowOf,
   REVIEW_MARKERS_GUTTER_PX,
+  hostDirectionOf,
+  observeHostDirection,
   reviewPaneEntitledZoom,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
+import { useChromeDir } from '../i18n';
 import { ReviewRailContext, claimsReviewGutter } from './context';
 import { useEditorState } from './useEditorState';
 import {
@@ -119,6 +122,45 @@ export function reviewGutterScrolls(gutter: ReviewGutter): boolean {
 export function visibleInlineEndReservation(gutter: ReviewGutter, measured: number): number {
   if (!reviewGutterScrolls(gutter)) return measured;
   return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
+}
+
+/**
+ * The side of the page the review column takes. It follows the interface: a right-to-left
+ * interface reads the page from the right, so its comments sit on the left. The scroll
+ * container keeps a left-to-right base for its scroll offsets, so the side is physical.
+ */
+export type ReviewColumnSide = 'left' | 'right';
+
+/**
+ * The side the review column takes: the left when the interface reads right to left. The
+ * direction a `LocaleProvider` decides comes first; without one, the `dir` attribute nearest
+ * the viewport decides, which is the direction the toolbar inherits too.
+ */
+export function useReviewColumnSide(): ReviewColumnSide {
+  const chrome = useChromeDir();
+  const viewport = useNavigationViewportElement();
+  const [host, setHost] = useState<'ltr' | 'rtl'>('ltr');
+  useLayoutEffect(() => {
+    const around = viewport?.parentElement;
+    if (chrome || !around) return undefined;
+    // `dir` attributes, not the computed style: reading the style here forced a style pass
+    // on the first commit, and the padding flip after it then animated on mount.
+    const read = () => setHost(hostDirectionOf(around));
+    read();
+    // A host that flips `dir` at run time moves the toolbar at once; follow it.
+    return observeHostDirection(around, read);
+  }, [chrome, viewport]);
+  return (chrome ?? host) === 'rtl' ? 'left' : 'right';
+}
+
+/** The physical paddings for `gutter` with the column on `side`. */
+export function physicalReviewGutter(
+  gutter: ReviewGutter,
+  side: ReviewColumnSide
+): { readonly left: number; readonly right: number } {
+  return side === 'left'
+    ? { left: gutter.inlineEnd, right: gutter.inlineStart }
+    : { left: gutter.inlineStart, right: gutter.inlineEnd };
 }
 
 export interface ReviewGutterInput {
@@ -289,17 +331,27 @@ export function useReviewGutter(): ReviewGutter {
     [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation, scroll]
   );
 
-  const [gutter, setGutter] = useState<ReviewGutter>(() =>
-    compute(viewport ? viewport.clientWidth : null)
-  );
+  // A changed input derives the gutter DURING render, not in an effect: the pane's own state
+  // and the padding it asks for then reach the DOM in one commit. Deriving it a render later
+  // painted one frame with the column open beside a page that had not moved yet.
+  const read = (): ReviewGutter => compute(viewport ? viewport.clientWidth : null);
+  const [state, setState] = useState(() => ({ compute, viewport, gutter: read() }));
+  let current = state;
+  if (state.compute !== compute || state.viewport !== viewport) {
+    current = { compute, viewport, gutter: read() };
+    setState(current);
+  }
   useEffect(() => {
-    const sync = () => setGutter(compute(viewport ? viewport.clientWidth : null));
-    sync();
     const Observer = viewport ? hostWindowOf(viewport).ResizeObserver : undefined;
     if (!viewport || typeof Observer === 'undefined') return undefined;
+    const sync = () =>
+      setState((previous) => {
+        const gutter = compute(viewport.clientWidth);
+        return gutter === previous.gutter ? previous : { compute, viewport, gutter };
+      });
     const observer = new Observer(sync);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [viewport, compute]);
-  return gutter;
+  return current.gutter;
 }

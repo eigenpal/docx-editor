@@ -94,7 +94,7 @@ describe('negative level indents', () => {
 });
 
 describe('a list pulled into the margin', () => {
-  test('layout places the text and its marker left of the content origin', () => {
+  test('layout places the text left of the content origin, and its marker a hang further', () => {
     const part = document(
       `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>` +
         `<w:r><w:t>Margin</w:t></w:r></w:p>`
@@ -105,7 +105,7 @@ describe('a list pulled into the margin', () => {
     });
     const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
     expect(fragment.box.x).toBe(-18);
-    expect(fragment.marker?.box.x).toBe(-18);
+    expect(fragment.marker?.box.x).toBe(-36);
   });
 
   test('the marker never lands right of the text it numbers', () => {

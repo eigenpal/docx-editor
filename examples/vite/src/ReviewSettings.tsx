@@ -16,6 +16,8 @@ import {
   storedReviewPane,
   type ReviewSettingsPreview,
 } from '../../shared/review-settings';
+import { DEMO_LANGUAGES, demoLanguage, switchDemoLanguage } from '../../shared/demo-language';
+import type { LocaleCode } from '@docx-editor.dev/i18n';
 import { DemoHeaderButton } from './DemoHeaderButton';
 import '../../shared/review-settings.css';
 
@@ -127,6 +129,27 @@ export function ReviewSettings() {
             </button>
           </header>
           <div className="demo-settings__body">
+            <div className="demo-settings__group">
+              <label className="demo-settings__label" htmlFor={`${id}-language`}>
+                {t('reviewSettings.language')}
+              </label>
+              <select
+                id={`${id}-language`}
+                className="demo-settings__select"
+                value={demoLanguage()}
+                aria-describedby={`${id}-language-help`}
+                onChange={(event) => switchDemoLanguage(event.target.value as LocaleCode)}
+              >
+                {DEMO_LANGUAGES.map((language) => (
+                  <option key={language.code} value={language.code} lang={language.code}>
+                    {language.name}
+                  </option>
+                ))}
+              </select>
+              <p id={`${id}-language-help`} className="demo-settings__help">
+                {t('reviewSettings.languageHelp')}
+              </p>
+            </div>
             {REVIEW_SETTINGS_GROUPS.map((group) => {
               const current = pane[group.field];
               const help = reviewSettingsHelp(group, current);

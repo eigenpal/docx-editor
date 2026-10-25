@@ -639,6 +639,10 @@
   "headerFooter": {
     "header": "Header",
     "footer": "Footer",
+    "addHeaderHint": "Klik dua kali untuk menambahkan header",
+    "addFooterHint": "Klik dua kali untuk menambahkan footer",
+    "editHeaderHint": "Klik dua kali untuk mengedit header",
+    "editFooterHint": "Klik dua kali untuk mengedit footer",
     "options": "Opsi",
     "insertPageNumber": "Sisipkan nomor halaman saat ini",
     "insertTotalPages": "Sisipkan jumlah total halaman",

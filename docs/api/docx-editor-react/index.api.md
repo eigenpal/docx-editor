@@ -2225,6 +2225,7 @@ export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 export interface LocaleProviderProps {
     // (undocumented)
     children: DocxEditorChildren;
+    dir?: 'ltr' | 'rtl';
     // (undocumented)
     i18n?: Translations;
 }
@@ -3220,6 +3221,9 @@ export interface UseBookmarksReturn {
 }
 
 // @public
+export function useChromeDir(): 'ltr' | 'rtl' | undefined;
+
+// @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
 
 // @public
@@ -3673,6 +3677,7 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 // @public
 export function useTranslation(): {
     catalogue: LocaleStrings;
+    dir: 'ltr' | 'rtl';
     lang: string;
     t: TFunction;
 };

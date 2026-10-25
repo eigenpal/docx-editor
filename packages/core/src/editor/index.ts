@@ -46,7 +46,10 @@ export {
   type FontResolverMark,
   type MarkedFontResolver,
 } from './font-resolver.ts';
-export { blankDocumentBytes } from './blank-document.ts';
+export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
+export { keepScrollAtInlineEnd } from './scroll-inline-end.ts';
+export { placeSubmenu, submenuKeys } from './submenu-placement.ts';
+export { hostDirectionOf, observeHostDirection } from './host-direction.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {
   copyEditorStyles,
@@ -109,6 +112,8 @@ export {
 export {
   dragIndent,
   handlePosition,
+  rulerMarginTicks,
+  rulerTabPosition,
   snapTwips,
   SNAP_TWIPS_CM,
   SNAP_TWIPS_INCH,
@@ -117,6 +122,7 @@ export {
   type RulerDragOptions,
   type RulerIndent,
   type RulerIndentHandle,
+  type RulerMarginTick,
   type RulerPageMetrics,
 } from './ruler-indent.ts';
 export {
@@ -198,6 +204,7 @@ export {
   chromeSlotId,
   defaultChromeGroups,
   formattingBarChromeGroups,
+  type FormattingBarOptions,
   type ChromeControl,
   type ChromeControlId,
   type ChromeControlState,

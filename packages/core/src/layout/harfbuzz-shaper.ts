@@ -7,6 +7,7 @@ import {
   type FontByteValidator,
   type ResolvedFont,
 } from './font-resource.ts';
+import { fontHasSymbolCmap, toSymbolCmapText } from './symbol-cmap.ts';
 import {
   createShapedRun,
   createShapingEnvironment,
@@ -777,8 +778,11 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
       buffer.reset();
       // Context is read for contextual forms and never shaped. HarfBuzz reports clusters as
       // offsets into the whole string, so they shift back by the leading context below.
-      if (before || after) buffer.addText(before + text + after, before.length, text.length);
-      else buffer.addText(text);
+      // A symbol cmap face answers a plain byte at U+F000 plus the code (`symbol-cmap.ts`).
+      const mapped = fontHasSymbolCmap(environment.font, bytes) ? toSymbolCmapText : String;
+      if (before || after)
+        buffer.addText(mapped(before + text + after), before.length, text.length);
+      else buffer.addText(mapped(text));
       buffer.setDirection(
         environment.direction === 'rtl'
           ? this.#harfBuzz.Direction.RTL

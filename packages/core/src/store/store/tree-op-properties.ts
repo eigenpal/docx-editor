@@ -11,6 +11,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
+  ADDITIVE_RUN_PROPERTIES,
   type OoxmlProperty,
 } from './tree-op-types.ts';
 
@@ -112,6 +113,8 @@ const CT_RPR_SEQUENCE: readonly string[] = [
 /** What one container's merge is allowed to author, and the order it must emit. */
 export interface PropertyVocabulary {
   readonly authorable: ReadonlySet<string>;
+  /** Names a write may add or replace, but keeps when the write leaves them out. */
+  readonly additive?: ReadonlySet<string>;
   readonly sequence: readonly string[];
 }
 
@@ -122,6 +125,7 @@ export const PARAGRAPH_VOCABULARY: PropertyVocabulary = {
 
 export const RUN_VOCABULARY: PropertyVocabulary = {
   authorable: new Set(ACCEPTED_RUN_PROPERTIES),
+  additive: new Set(ADDITIVE_RUN_PROPERTIES),
   sequence: CT_RPR_SEQUENCE,
 };
 
@@ -215,6 +219,19 @@ export function mergedPropertyChildren(
       child.namespaceUri !== WML_NAMESPACE_URI ||
       !vocabulary.authorable.has(child.localName)
     ) {
+      // An additive property the write names is replaced below; one it leaves out stays.
+      if (
+        child.kind !== 'textValue' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        vocabulary.additive?.has(child.localName) &&
+        wanted.has(child.localName)
+      ) {
+        const index = taken.get(child.localName) ?? 0;
+        taken.set(child.localName, index + 1);
+        const property = wanted.get(child.localName)?.[index];
+        if (property) children.push(propertyElement(property, nextId(), child));
+        continue;
+      }
       children.push(child);
       continue;
     }
@@ -229,7 +246,7 @@ export function mergedPropertyChildren(
     // else, so this is the second lock on the same door: a merge is the one place a name
     // becomes an ELEMENT, and it must not be reachable from a caller that forgot to
     // validate.
-    if (!vocabulary.authorable.has(localName)) continue;
+    if (!vocabulary.authorable.has(localName) && !vocabulary.additive?.has(localName)) continue;
     for (let index = taken.get(localName) ?? 0; index < bucket.length; index += 1) {
       const node = propertyElement(bucket[index]!, nextId());
       const rank = rankOf(vocabulary.sequence, node);

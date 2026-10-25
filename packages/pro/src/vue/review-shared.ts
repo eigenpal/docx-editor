@@ -65,12 +65,7 @@ export function initialsOf(author: string): string {
     .join('');
 }
 
-export const REVIEW_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
+export { reviewDateFormat } from '../review/review-date-format.ts';
 
 export function partOverrides(
   children: VNode | VNode[] | undefined

@@ -53,7 +53,7 @@ import {
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { useTranslation } from '../../i18n';
+import { useChromeDir, useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
@@ -242,6 +242,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const popups = usePopupConfig();
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
+  const chromeDir = useChromeDir();
   const {
     className,
     t,
@@ -597,6 +598,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         // `docx-editor` self-emitted so a composed menu bar is styled outside the packaged
         // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
         className={`${scopeClassName}docx-menubar${className ? ` ${className}` : ''}`}
+        dir={chromeDir}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled row
         // never receives mousedown, so per-row handlers cannot cover it.
         onMouseDown={guardToolbarMousedown}

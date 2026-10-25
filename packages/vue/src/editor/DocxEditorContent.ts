@@ -23,6 +23,7 @@ import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
 import { mergeHostClass } from '../lib/mergeHostClass';
+import { useChromeDir } from '../i18n';
 
 function hasImageFile(transfer: DataTransfer): boolean {
   return [...transfer.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
@@ -50,6 +51,7 @@ export const DocxEditorContent = defineComponent({
     const imageInsert = useImageInsertOptional();
     const elementRef = shallowRef<HTMLDivElement | null>(null);
     const portalRef = shallowRef<HTMLDivElement | null>(null);
+    const chromeDir = useChromeDir();
     watch(elementRef, (element) => registry?.setContainer(element), { flush: 'post' });
     onUnmounted(() => registry?.setContainer(null));
 
@@ -133,7 +135,6 @@ export const DocxEditorContent = defineComponent({
           ref: (el: unknown) => {
             portalRef.value =
               isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
-            if (dialogs) dialogs.target.value = portalRef.value;
           },
           class: 'docx-content-mount',
         },
@@ -147,6 +148,17 @@ export const DocxEditorContent = defineComponent({
             onPaste,
             onDragover: onDragOver,
             onDrop,
+          }),
+          // Dialogs mount in their own element, as in the React adapter, so a right-to-left
+          // provider can mirror them without touching the pages beside them.
+          h('div', {
+            ref: (el: unknown) => {
+              if (dialogs)
+                dialogs.target.value =
+                  isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
+            },
+            class: 'docx-dialog-mount',
+            dir: chromeDir.value,
           }),
           h(ConfiguredPopups),
           h(ConfiguredEnginePopups),

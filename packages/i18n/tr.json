@@ -586,6 +586,10 @@
   "headerFooter": {
     "header": "Üstbilgi",
     "footer": "Altbilgi",
+    "addHeaderHint": "Üstbilgi eklemek için çift tıklayın",
+    "addFooterHint": "Altbilgi eklemek için çift tıklayın",
+    "editHeaderHint": "Üstbilgiyi düzenlemek için çift tıklayın",
+    "editFooterHint": "Altbilgiyi düzenlemek için çift tıklayın",
     "options": "Seçenekler",
     "insertPageNumber": "Mevcut sayfa numarasını ekle",
     "insertTotalPages": "Toplam sayfa sayısını ekle",

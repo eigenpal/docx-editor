@@ -9,7 +9,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/react';
+import {
+  Slot,
+  useDocxEditor,
+  useEditorEvent,
+  useEditorState,
+  useTranslation,
+} from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
 import type { ReviewBalloonProps, ReviewMarkersProps, ReviewPartProps } from './review-types.ts';
 import {
@@ -20,7 +26,7 @@ import {
 } from './review-context.ts';
 import {
   MARKER_STEP,
-  REVIEW_DATE_FORMAT,
+  reviewDateFormat,
   guardMousedown,
   idsOf,
   initialsOf,
@@ -788,11 +794,12 @@ type BalloonEntry = Extract<ReviewItemView, { readonly kind: 'revision' }>;
 
 /** `ReviewTime` for a raw dataset date, outside any item context. */
 export function BalloonTime({ raw }: { raw: string }) {
+  const { lang } = useTranslation();
   const when = new Date(raw);
   if (Number.isNaN(when.getTime())) return null;
   return (
     <time className="docx-review__time" dateTime={raw}>
-      {REVIEW_DATE_FORMAT.format(when)}
+      {reviewDateFormat(lang).format(when)}
     </time>
   );
 }

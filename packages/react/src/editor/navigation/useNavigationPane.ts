@@ -182,11 +182,14 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     const measure = () => {
       setViewportWidth(viewport.clientWidth);
       const style = hostWindowOf(viewport).getComputedStyle(viewport);
-      const padding = Number.parseFloat(style.paddingInlineEnd);
+      // A right-to-left interface opens the pane at the right, so the shift pads the right
+      // edge and the other edge is the left. The viewport keeps a left-to-right base.
+      const rtl = viewport.getAttribute('data-chrome-dir') === 'rtl';
+      const padding = Number.parseFloat(rtl ? style.paddingLeft : style.paddingInlineEnd);
       setInlineEndReservation(Number.isFinite(padding) ? padding : 0);
-      // The review gutter's mirrored strip, standing on the SAME edge the shift pads. The
-      // custom property, not `paddingInlineStart` — that computed value already contains
-      // this hook's own published shift, and measuring it back would be circular.
+      // The review gutter's value on the SAME edge the shift pads. The custom property, not
+      // the computed padding: that already contains this hook's own published shift, and
+      // measuring it back would be circular.
       const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
       setInlineStartReservation(Number.isFinite(strip) ? strip : 0);
     };

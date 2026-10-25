@@ -228,3 +228,50 @@ describe('column separators', () => {
     expect(columnSeparatorBoxes(resolved, 0, 10).map((box) => box.x)).toEqual([17.625]);
   });
 });
+
+describe('right-to-left sections', () => {
+  test('the first column is the rightmost', () => {
+    const columns = columnsOf('<w:cols w:num="2" w:space="720"/><w:bidi/>');
+    expect(columns.rightToLeft).toBe(true);
+    const resolved = resolveSectionColumns(columns, 468);
+    expect(resolved.lefts).toEqual([252, 0]);
+    expect(resolved.widths).toEqual([216, 216]);
+  });
+
+  test('unequal columns keep their widths and gaps in mirrored order', () => {
+    const resolved = resolveSectionColumns(
+      columnsOf(
+        '<w:cols w:num="2" w:equalWidth="0">' +
+          '<w:col w:w="2880" w:space="720"/><w:col w:w="5760"/></w:cols><w:bidi/>'
+      ),
+      468
+    );
+    expect(resolved.lefts).toEqual([324, 0]);
+    expect(resolved.widths).toEqual([144, 288]);
+  });
+
+  test('the separator stays centered in the gap', () => {
+    const resolved = resolveSectionColumns(
+      columnsOf('<w:cols w:num="2" w:space="720" w:sep="1"/><w:bidi/>'),
+      468
+    );
+    expect(columnSeparatorBoxes(resolved, 0, 100).map((box) => box.x)).toEqual([233.625]);
+  });
+
+  test('a single column and a left-to-right section are unchanged', () => {
+    expect(columnsOf('<w:cols w:num="1"/><w:bidi/>').rightToLeft).toBeUndefined();
+    expect(columnsOf('<w:cols w:num="2" w:space="720"/>').rightToLeft).toBeUndefined();
+  });
+
+  test('text flows into the right column first', () => {
+    const part = partWithColumns('<w:cols w:num="2" w:space="720"/><w:bidi/>');
+    const layout = layoutSemanticDocument(part, 1, { measurer: createFixedMeasurer(6, 14) });
+    const x = (word: string) =>
+      layout.pages[0]!.fragments.find(
+        (fragment) =>
+          fragment.kind === 'paragraph' &&
+          fragment.lines.some((line) => line.spans.some((span) => span.text.includes(word)))
+      )!.box.x;
+    expect(x('FIRST')).toBeGreaterThan(x('SECOND'));
+  });
+});

@@ -200,7 +200,9 @@ const PageSetupDialogImpl = defineComponent({
         <label data-docx-part="field" data-docx-field={name} class="docx-dialog__row">
           <span class="docx-dialog__label">{label}</span>
           {cloneVNode(input, { 'aria-label': label })}
-          {name.startsWith('margin') ? <span class="docx-dialog__unit">in</span> : null}
+          {name.startsWith('margin') ? (
+            <span class="docx-dialog__unit">{t('dialogs.paragraph.unitInches')}</span>
+          ) : null}
         </label>
       );
       const margins = ['top', 'bottom', 'left', 'right'] as const;

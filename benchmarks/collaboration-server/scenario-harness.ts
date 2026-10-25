@@ -25,6 +25,7 @@ import { advanceClock, resetClock } from './scenario-clock.ts';
 import { TypedTokens } from './scenario-tokens.ts';
 import { DecisionOracle } from './scenario-decisions.ts';
 import { CaretWatch } from './scenario-presence.ts';
+import { sameShownState, shownStateOf, type ShownState } from './scenario-shown-state.ts';
 import * as Y from 'yjs';
 import {
   paragraphTextOf,
@@ -177,6 +178,8 @@ class Simulation {
   firstFailure = -1;
   /** Check every replica against its shared state after every action, not only at the end. */
   strict = false;
+  /** The shared state and tree each replica last passed `checkShown` with. */
+  private readonly passedAt = new Map<Replica, ShownState>();
   /**
    * With in-order delivery every edit sees every earlier one, so the editing replica must
    * hold exactly what one plain store holds after the same edits. The store follows each
@@ -194,9 +197,14 @@ class Simulation {
     for (const replica of this.replicas) {
       // A replica waiting for a held-back update keeps its last complete view on purpose.
       if (awaitingUpdates(replica.ydoc)) continue;
+      // An unchanged replica passes again; see `scenario-shown-state.ts` for why.
+      const now = shownStateOf(replica.ydoc, replica.store.currentPackage());
+      const passed = this.passedAt.get(replica);
+      if (passed && sameShownState(passed, now)) continue;
       const problem = withFreshBuild(replica.ydoc, replica.handle.session, (built, registry) =>
         built.ok ? this.shownDifference(replica, built.package, registry) : null
       );
+      if (!problem) this.passedAt.set(replica, now);
       if (problem) {
         this.problems.push(`replica ${replica.index} ${when} ${problem}`);
         if (this.firstFailure < 0) this.firstFailure = this.performed;

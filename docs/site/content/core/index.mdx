@@ -84,6 +84,10 @@ Press Tab to increase the indent of selected paragraphs. Press Shift+Tab to decr
 
 In a list, Tab changes the list level. Form-fill mode uses Tab to move between enabled fields. Elsewhere, Tab inserts a tab character when the selection does not support paragraph indentation.
 
+In a table cell, Tab moves to the next cell and selects its content, and Shift+Tab moves to the previous cell. Shift+Tab in the first cell keeps the caret where it is. With several cells selected, Tab and Shift+Tab select the content of the first one. Tab in the last cell adds a row, unless the table is locked or the row cannot be tracked.
+
+To type a tab character in a cell, press Option+Tab on macOS. Ctrl+Tab also works, but most browsers use it to switch tabs. With several cells selected, these keys do nothing. Tables in headers, footers, and notes behave the same. In a table inside a text box, Tab keeps its paragraph behavior.
+
 ### Typing and undo
 
 Typing uses short undo groups. A pause of at least 1 second starts a new group on the next keystroke. Continuous typing starts a new group after 2 seconds. These actions also start a new step:

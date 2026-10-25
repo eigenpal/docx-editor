@@ -33,6 +33,7 @@
 // JSON files. Edit the JSON, not this block.
 
 import enJson from '../en.json';
+import arJson from '../ar.json';
 import deJson from '../de.json';
 import esJson from '../es.json';
 import frJson from '../fr.json';
@@ -64,10 +65,13 @@ export type LocaleStrings = typeof enJson;
  * @public
  */
 // prettier-ignore
-export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'ar' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;
+
+/** Arabic (`ar`). Community-maintained; null leaves fall back to English. @public */
+export const ar: PartialLocaleStrings = arJson;
 
 /** German (`de`). Community-maintained; null leaves fall back to English. @public */
 export const de: PartialLocaleStrings = deJson;
@@ -121,6 +125,7 @@ export const zhCN: PartialLocaleStrings = zhCNJson;
  */
 export const locales: Record<LocaleCode, PartialLocaleStrings> = {
   en,
+  ar,
   de,
   es,
   fr,
@@ -160,6 +165,12 @@ export type PartialLocaleStrings = DeepPartial<LocaleStrings> & {
   // `string & {}` keeps the literal-union completions for `LocaleCode`
   // while still accepting arbitrary strings at runtime.
   _lang?: LocaleCode | (string & {});
+  /**
+   * The writing direction of the interface strings. `'rtl'` mirrors the editor chrome, as
+   * the shipped Arabic (`ar`) and Hebrew (`he`) catalogs do. Without it, the direction
+   * follows `_lang` (see {@link localeDirection}).
+   */
+  _dir?: 'ltr' | 'rtl' | (string & {});
 };
 
 /**
@@ -286,6 +297,7 @@ function formatMessage(
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 export { localizeDisabledReason } from './disabled-reasons';
+export { catalogDirection, chromeDirection, localeDirection } from './direction';
 export { isApplePlatform, platformShortcut } from './platform-shortcuts';
 
 /**

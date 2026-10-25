@@ -65,6 +65,7 @@ import {
 } from './parts';
 import { useScopeClassName } from '../scope-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
+import { useChromeDir } from '../../i18n';
 
 const VIEWPORT_INSET = 8;
 
@@ -291,6 +292,7 @@ export const DocxEditorContextMenu = defineComponent({
   },
   setup(props, { slots }) {
     const scopeClassName = useScopeClassName();
+    const chromeDir = useChromeDir();
     const editorRef = useDocxEditor();
     const stateTick = useEditorStateTick();
     const { t: catalogT } = useTranslation();
@@ -405,9 +407,12 @@ export const DocxEditorContextMenu = defineComponent({
         const win = hostWindowOf(panel);
         const maxX = win.innerWidth - width - VIEWPORT_INSET;
         const maxY = win.innerHeight - height - VIEWPORT_INSET;
+        // Right-to-left chrome opens toward the left of the pointer, and flips right instead.
+        const rtl = win.getComputedStyle(panel).direction === 'rtl';
+        const leftward = rtl ? anchor.value.x - width >= VIEWPORT_INSET : anchor.value.x > maxX;
         const x = Math.max(
           VIEWPORT_INSET,
-          anchor.value.x > maxX ? anchor.value.x - width : anchor.value.x
+          Math.min(leftward ? anchor.value.x - width : anchor.value.x, maxX)
         );
         const y = Math.max(
           VIEWPORT_INSET,
@@ -525,6 +530,7 @@ export const DocxEditorContextMenu = defineComponent({
                     catalogT('contextMenu.ariaLabel' as TranslationKey),
                   tabindex: -1,
                   class: `${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`,
+                  dir: chromeDir.value,
                   style,
                   onKeydown: (event: KeyboardEvent) => {
                     const panel = panelRef.value;

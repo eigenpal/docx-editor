@@ -60,6 +60,12 @@ export function resolveSectionColumns(
     lefts.push(left);
     left += Math.max(0, stated[index]!) + (gaps[index] ?? 0);
   }
+  // A right-to-left section places its first column at the right edge of the content box
+  // and the next ones leftward, with the same widths and gaps.
+  if (columns.rightToLeft && count > 1) {
+    for (let index = 0; index < count; index += 1)
+      lefts[index] = width - lefts[index]! - Math.max(0, stated[index]!);
+  }
 
   return {
     count,
@@ -78,8 +84,10 @@ export function columnSeparatorBoxes(
 ): LayoutBox[] {
   // Centered between the stated column end and the next column's start: a column narrower than
   // the minimum flow width still ends where its stated width says.
+  // In a right-to-left section the next column sits to the left, so the gap ends where the
+  // current column starts.
   return columns.gaps.map((gap, index) => ({
-    x: columns.lefts[index + 1]! - gap / 2 - 0.375,
+    x: Math.max(columns.lefts[index + 1]!, columns.lefts[index]!) - gap / 2 - 0.375,
     y: top,
     width: 0.75,
     height: Math.max(0, usedBottom - top),

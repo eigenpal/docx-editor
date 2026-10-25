@@ -15,6 +15,7 @@
 // cjk-spacing.ts owns compression and hanging punctuation; cjk-justify.ts distributes
 // line slack as published geometry. Layout-owned field results remain atomic.
 
+import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -231,7 +232,10 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
     } else if (
       BREAK_AFTER_DASH.has(ch) &&
       index > 0 &&
-      text[index - 1] !== ' ' &&
+      // A dash after a space opens its word ("-word") and stays with it, except before a
+      // right-to-left letter: there the dash may end the line alone, as the reference
+      // renders "... -word" in Arabic.
+      (text[index - 1] !== ' ' || RIGHT_TO_LEFT_LETTER.test(text[index + 1] ?? '')) &&
       index + 1 < text.length &&
       text[index + 1] !== ' ' &&
       text[index + 1] !== ZERO_WIDTH_SPACE &&

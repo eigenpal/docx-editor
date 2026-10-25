@@ -733,29 +733,29 @@ describe('toolbar overflow integration', () => {
     const fontSizeRule =
       coreCss.match(/\.docx-toolbar__more-panel \.docx-toolbar__font-size-menu\s*\{[^}]+\}/)?.[0] ??
       '';
-    expect(fontSizeRule).toContain('right: 0');
-    expect(fontSizeRule).toContain('left: auto');
+    expect(fontSizeRule).toContain('inset-inline-end: 0');
+    expect(fontSizeRule).toContain('inset-inline-start: auto');
 
     const pickerEdgeRule =
       coreCss.match(
         /\.docx-toolbar__more-panel \.docx-toolbar__font-family-content,\s*\.docx-toolbar__more-panel \.docx-toolbar__style-content\s*\{[^}]+\}/
       )?.[0] ?? '';
-    expect(pickerEdgeRule).toContain('right: 0');
-    expect(pickerEdgeRule).toContain('left: auto');
+    expect(pickerEdgeRule).toContain('inset-inline-end: 0');
+    expect(pickerEdgeRule).toContain('inset-inline-start: auto');
 
     const lowerMenuRule =
       coreCss.match(
         /\.docx-toolbar__more-panel \.docx-toolbar__alignment-popup,\s*\.docx-toolbar__more-panel \.docx-toolbar__line-spacing-menu\s*\{[^}]+\}/
       )?.[0] ?? '';
     expect(lowerMenuRule).toContain('top: auto');
-    expect(lowerMenuRule).toContain('right: 0');
+    expect(lowerMenuRule).toContain('inset-inline-end: 0');
     expect(lowerMenuRule).toContain('bottom: 100%');
-    expect(lowerMenuRule).toContain('left: auto');
+    expect(lowerMenuRule).toContain('inset-inline-start: auto');
 
     const tableMenuRule =
       coreCss.match(/\.docx-toolbar__more-panel \.docx-table-chrome__panel\s*\{[^}]+\}/)?.[0] ?? '';
-    expect(tableMenuRule).toContain('right: 0');
-    expect(tableMenuRule).toContain('left: auto');
+    expect(tableMenuRule).toContain('inset-inline-end: 0');
+    expect(tableMenuRule).toContain('inset-inline-start: auto');
     expect(tableMenuRule).not.toContain('top: auto');
     expect(tableMenuRule).not.toContain('bottom: 100%');
 

@@ -2,6 +2,7 @@
 export const VUE_COMPOSABLES = [
   'useBookmarkDialog',
   'useBookmarks',
+  'useChromeDir',
   'useChromeTranslate',
   'useCommentDraftRequest',
   'useContentControl',

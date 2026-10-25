@@ -1,3 +1,5 @@
+import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
+import { arabicScriptLanguage } from './arabic-script-language.ts';
 import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
@@ -34,6 +36,15 @@ function runIsRtl(props: readonly OoxmlProperty[]): boolean {
 
 const HAS_BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
+/**
+ * A slash between ASCII digits. In a right-to-left run of an Arabic-script language it separates
+ * the numbers instead of joining them into one, so `17/08/96` reads `96/08/17`. Resolution sees a
+ * neutral in its place (UAX #9 class ON instead of CS); the source text does not change. A Hebrew
+ * run keeps `852/20` one left-to-right number, as UAX #9 does.
+ */
+const RTL_RUN_DIGIT_SLASH = /(?<=[0-9])\/(?=[0-9])/gu;
+const NEUTRAL_SLASH = '!';
+
 /** Resolve contiguous run-direction groups without changing source text or offsets. */
 function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rtl: boolean) {
   const embedding = bidiAlgorithm.getEmbeddingLevels(text, rtl ? 'rtl' : 'ltr');
@@ -48,8 +59,11 @@ function runDirectionLevels(pieces: readonly FieldAwarePiece[], text: string, rt
       length += pieces[end]!.text.length;
       end++;
     }
+    const group = text.slice(offset, offset + length);
     const context = bidiAlgorithm.getEmbeddingLevels(
-      text.slice(offset, offset + length),
+      direction && arabicScriptLanguage(pieces[start]!.props)
+        ? group.replace(RTL_RUN_DIGIT_SLASH, NEUTRAL_SLASH)
+        : group,
       direction ? 'rtl' : 'ltr'
     );
     embedding.levels.set(context.levels, offset);
@@ -86,7 +100,7 @@ export function bidiPieces(
   const text = pieces.map((piece) => piece.text).join('');
   if (
     !rtl &&
-    !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
+    !RIGHT_TO_LEFT_LETTER.test(text) &&
     !pieces.some((piece) => !isPicture(piece) && runIsRtl(piece.props))
   )
     return pieces;
@@ -102,7 +116,24 @@ export function bidiPieces(
       const { projected: _projected, measureText: _measureText, ...plain } = piece;
       return { ...plain, text: piece.text[0]! };
     }
-    if (!isPicture(piece)) return piece;
+    // Any other opaque one-unit atom (an anchored drawing's placeholder, a `w:sym` glyph, an
+    // equation, a projected mark) resolves as the object replacement character, which is a
+    // neutral (UAX #9 class ON): the text around it keeps its own order and joining, and the
+    // atom takes the level of its neighbours. One such atom once dropped the whole paragraph
+    // back to left-to-right order with unjoined letters.
+    if (!isPicture(piece)) {
+      if (!isOpaqueUnit(piece)) return piece;
+      atoms.set(piece.start, piece);
+      const {
+        projected: _projected,
+        measureText: _measureText,
+        equation: _equation,
+        anchoredAtom: _anchored,
+        inlineDrawing: _drawing,
+        ...plain
+      } = piece;
+      return { ...plain, text: OBJECT_CHAR };
+    }
     atoms.set(piece.start, piece);
     const { projected: _projected, inlineDrawing: _picture, ...plain } = piece;
     const side = (step: number) => {
@@ -131,19 +162,21 @@ export function bidiPieces(
   if (
     resolvable.some(
       (p) =>
-        (!isOptionalHyphenPiece(p) && p.projected) ||
-        p.inlineDrawing ||
-        p.equation ||
-        p.positionalTab ||
-        (!isOptionalHyphenPiece(p) && p.measureText !== undefined) ||
-        p.end - p.start !== p.text.length
+        !isZeroWidthOpaque(p) &&
+        ((!isOptionalHyphenPiece(p) && p.projected) ||
+          p.inlineDrawing ||
+          p.equation ||
+          p.positionalTab ||
+          (!isOptionalHyphenPiece(p) && p.measureText !== undefined) ||
+          p.end - p.start !== p.text.length)
     )
   )
     return pieces;
   const ignored = pageBreaksIgnored && resolvable.some(isPageBreak);
   // An optional hyphen is resolved like an ignored break: absent, then at a neighbour's level.
+  // So is zero-width opaque content, which holds no model offset to resolve.
   const neutral = (piece: FieldAwarePiece | undefined) =>
-    (ignored && isPageBreak(piece)) || isOptionalHyphenPiece(piece);
+    (ignored && isPageBreak(piece)) || isOptionalHyphenPiece(piece) || isZeroWidthOpaque(piece);
   const items = resolvable.some(neutral)
     ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries, neutral)
     : resolvedItems(resolvable, rtl, sourceBoundaries);
@@ -187,6 +220,34 @@ function withAtoms(
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+
+/** U+FFFC OBJECT REPLACEMENT CHARACTER, a bidi neutral that stands in for an opaque atom. */
+const OBJECT_CHAR = '\uFFFC';
+
+/**
+ * A one-unit piece whose displayed text or advance is not its model text: an anchored
+ * drawing's placeholder, a `w:sym` glyph, an equation, or a projected mark. Inline pictures,
+ * numeric marks, and optional hyphens have their own resolution and are not included.
+ */
+function isOpaqueUnit(piece: FieldAwarePiece): boolean {
+  if (piece.end - piece.start !== 1 || piece.positionalTab || isOptionalHyphenPiece(piece))
+    return false;
+  if (piece.inlineDrawing && !piece.anchoredAtom) return false;
+  return (
+    piece.projected === true ||
+    piece.anchoredAtom === true ||
+    piece.equation !== undefined ||
+    piece.measureText !== undefined ||
+    piece.text.length !== 1
+  );
+}
+
+/** Opaque content with no model offset, such as an unsupported element's placeholder. */
+const isZeroWidthOpaque = (piece: FieldAwarePiece | undefined) =>
+  piece !== undefined &&
+  piece.start === piece.end &&
+  piece.unsupported !== undefined &&
+  !piece.positionalTab;
 /** A `w:softHyphen`: one model character laid out as U+00AD with no advance. */
 const isOptionalHyphenPiece = (piece: FieldAwarePiece | undefined) =>
   piece?.text === '\u00ad' && piece.measureText === '' && piece.end - piece.start === 1;
@@ -211,21 +272,25 @@ function withoutIgnoredBreaks(
   sourceBoundaries: ReadonlySet<number> | undefined,
   isNeutral: (piece: FieldAwarePiece | undefined) => boolean
 ): FieldAwarePiece[] | null {
-  // Each break is one UTF-16 unit (the caller refuses pieces whose text and range differ);
-  // `at` is where it sits in the offsets without breaks.
-  const breaks: { piece: FieldAwarePiece; at: number }[] = [];
+  // Each break is one UTF-16 unit or none (zero-width opaque content; the caller refuses
+  // other pieces whose text and range differ). `at` is where it sits in the offsets without
+  // breaks, and `shift` is the units removed before it.
+  const breaks: { piece: FieldAwarePiece; at: number; shift: number }[] = [];
   const kept: FieldAwarePiece[] = [];
+  let removed = 0;
   for (const piece of pieces) {
-    const removed = breaks.length;
-    if (isNeutral(piece)) breaks.push({ piece, at: piece.start - removed });
-    else
+    if (isNeutral(piece)) {
+      breaks.push({ piece, at: piece.start - removed, shift: removed });
+      removed += piece.end - piece.start;
+    } else
       kept.push(
         removed ? { ...piece, start: piece.start - removed, end: piece.end - removed } : piece
       );
   }
-  // The breaks are in source order, so the count before a boundary is a binary search. A
-  // scan per boundary was quadratic in merged-paragraph members that each end with a break.
-  const breaksBefore = (boundary: number) => {
+  // The units removed before a source offset. The breaks are in source order, so this is a
+  // binary search. A scan per boundary was quadratic in merged-paragraph members that each
+  // end with a break.
+  const unitsBefore = (boundary: number) => {
     let low = 0;
     let high = breaks.length;
     while (low < high) {
@@ -233,28 +298,34 @@ function withoutIgnoredBreaks(
       if (breaks[mid]!.piece.start < boundary) low = mid + 1;
       else high = mid;
     }
-    return low;
+    const last = breaks[low - 1];
+    return last ? last.shift + last.piece.end - last.piece.start : 0;
   };
   const boundaries = sourceBoundaries
-    ? new Set([...sourceBoundaries].map((boundary) => boundary - breaksBefore(boundary)))
+    ? new Set([...sourceBoundaries].map((boundary) => boundary - unitsBefore(boundary)))
     : undefined;
   const items = resolvedItems(kept, rtl, boundaries);
   if (!items) return null;
   const result: FieldAwarePiece[] = [];
   let next = 0;
+  // The units of the breaks already placed, which is the shift back to source offsets.
+  let placed = 0;
   const placeBreaks = (at: number) => {
-    for (; next < breaks.length && breaks[next]!.at <= at; next++) result.push(breaks[next]!.piece);
+    for (; next < breaks.length && breaks[next]!.at <= at; next++) {
+      const piece = breaks[next]!.piece;
+      result.push(piece);
+      placed += piece.end - piece.start;
+    }
   };
   for (const item of items) {
     placeBreaks(item.start);
     let from = item.start;
-    // `next` counts the breaks already placed, which is the shift back to source offsets.
     const slice = (to: number) => {
       result.push({
         ...item,
         text: item.text.slice(from - item.start, to - item.start),
-        start: from + next,
-        end: to + next,
+        start: from + placed,
+        end: to + placed,
       });
       from = to;
     };

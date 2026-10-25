@@ -34,7 +34,7 @@ import { contextMenuRowId } from './row-alias';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useAddCommentState } from '../toolbar/add-comment-state';
-import { useTranslation } from '../../i18n';
+import { useChromeDir, useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -347,6 +347,7 @@ export function DocxEditorContextMenu({
 }: DocxEditorContextMenuProps) {
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
+  const chromeDir = useChromeDir();
   const editor = useDocxEditor();
   const { t: catalogT } = useTranslation();
   const tableContextVisible = useTableContextMenuVisible();
@@ -470,7 +471,10 @@ export function DocxEditorContextMenu({
     // ends. The low end is not theoretical: a keyboard-invoked menu anchors on the scroller's
     // client rect, whose `top` is far negative once the reader is on page ten, and an
     // unclamped `position: fixed` panel then renders thousands of pixels above the window.
-    const x = Math.max(VIEWPORT_INSET, anchor.x > maxX ? anchor.x - width : anchor.x);
+    // Right-to-left chrome opens toward the left of the pointer, and flips right instead.
+    const rtl = view.getComputedStyle(panel).direction === 'rtl';
+    const leftward = rtl ? anchor.x - width >= VIEWPORT_INSET : anchor.x > maxX;
+    const x = Math.max(VIEWPORT_INSET, Math.min(leftward ? anchor.x - width : anchor.x, maxX));
     const y = Math.max(VIEWPORT_INSET, anchor.y > maxY ? anchor.y - height : anchor.y);
     setPlacement({ x, y });
   }, [anchor]);
@@ -559,6 +563,7 @@ export function DocxEditorContextMenu({
               // reached with the arrows, never with Tab.
               tabIndex={-1}
               className={`${scopeClassName}docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
+              dir={chromeDir}
               style={style}
               onKeyDown={(event) => {
                 const panel = panelRef.current;

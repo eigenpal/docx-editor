@@ -207,15 +207,27 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'text.rtl',
-    name: 'Right-to-left & bidirectional text',
+    name: 'Right-to-left text: Arabic, Hebrew, Persian, and Urdu',
     category: 'text',
-    editing: 'partial',
-    rendering: 'partial',
+    editing: 'full',
+    rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Alignment and indents name leading and trailing sides, and kashida alignments justify. Run direction controls numbers and punctuation independently of paragraph alignment. Runs with effective w:rtl or w:cs use complex-script font, size, bold, and italic properties. Formatting commands resolve inherited styles and document defaults, then write both property variants. Direct false values override inherited values. Arabic and other joining scripts preserve letter forms across adjacent formatting runs, including color changes. Joining requires the same bidirectional level and no intervening whitespace. Kerning and cursive offsets across those boundaries remain unsupported. List markers, spacing, indents, and tab stops follow paragraph direction in body text and table cells, and list markers read right to left. Left-to-right and right-to-left paragraph direction controls are in the toolbar, the Format menu, the Paragraph dialog, and the Ctrl+Shift keyboard chords in documents that already contain right-to-left text. The document automation API sets and reads paragraph direction with Paragraph.readingOrder. Review cards show a tracked paragraph direction change. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Inline pictures read in the direction of the text around them, in paragraph direction between text of different directions or before the first text, and in the direction of the last text after it. They take the caret and clicks on their leading and trailing sides. Numeric page fields and note marks containing only ASCII decimal digits preserve surrounding text order when they occupy one model character. Positional tabs, other inline objects, paragraphs with floating objects, section direction, and w:dir and w:bdo wrappers have partial support. Typed text does not receive w:rtl automatically. The i18n package includes Hebrew UI translations.',
+      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Alignment and indents name leading and trailing sides, and kashida alignments justify. Run direction controls numbers and punctuation independently of paragraph alignment. Runs with effective w:rtl or w:cs use complex-script font, size, bold, and italic properties. Formatting commands resolve inherited styles and document defaults, then write both property variants. Direct false values override inherited values. Arabic and other joining scripts preserve letter forms across adjacent formatting runs, including color changes. Joining requires the same bidirectional level and no intervening whitespace. Kerning and cursive offsets across those boundaries remain unsupported. List markers, spacing, indents, and tab stops follow paragraph direction in body text and table cells, and list markers read right to left. Left-to-right and right-to-left paragraph direction controls are in the Format menu, the Paragraph dialog, and the Ctrl+Shift keyboard chords in documents that already contain right-to-left text. The toolbar shows them for a right-to-left interface language. Arabic and Hebrew letters typed into a left-to-right run start a right-to-left run (w:rtl), and Clear Formatting keeps that direction. The document automation API sets and reads paragraph direction with Paragraph.readingOrder. Review cards show a tracked paragraph direction change. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Inline pictures read in the direction of the text around them, in paragraph direction between text of different directions or before the first text, and in the direction of the last text after it. They take the caret and clicks on their leading and trailing sides. Numeric page fields and note marks containing only ASCII decimal digits preserve surrounding text order when they occupy one model character. Floating objects, symbols, equations, and other inline objects keep the order and joining of the right-to-left text around them. In a right-to-left run of an Arabic-script language, a slash between digits separates the numbers, so 17/08/96 reads 96/08/17; a Hebrew run keeps the date one number. Right-to-left sections place the first column at the right. Positional tabs and w:dir and w:bdo wrappers have partial support. The i18n package includes Arabic and Hebrew interface translations, and the packaged editor mirrors its controls for them.',
     docsLink: '/docs/2.x/guides/right-to-left',
+  },
+  {
+    id: 'text.cjk',
+    name: 'Chinese, Japanese, and Korean text',
+    category: 'text',
+    editing: 'full',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Type Chinese, Japanese, and Korean text with the input method of the operating system, and format it like other text. Runs select their East Asian font through w:rFonts, theme fonts, and language hints. Line breaking keeps closing punctuation, small kana, and full-width number groups with their characters. Korean text can wrap by word. Install @docx-editor.dev/fonts-cjk for fallback fonts on hosts without suitable fonts; PDF export uses the same fonts. The i18n package includes Japanese and Simplified Chinese interface translations. Horizontal text is supported; vertical composition (w:textDirection) renders only in table cells. See East Asian typography for spacing and punctuation compression.',
+    docsLink: '/docs/2.x/customization/fonts#render-chinese-japanese-and-korean-text',
   },
   {
     id: 'text.effects',
@@ -329,7 +341,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Left, right, first-line, and hanging indents control line placement. Increase Indent and Decrease Indent are on the toolbar, on Tab, and on Ctrl+M. Inside a list they change the level, so the marker changes too. Outside a list, Tab over a selection of two or more paragraphs indents them, and Tab over a selection that starts at a paragraph start sets a first-line indent, or steps the left indent when the first line is already indented or hanging. Shift+Tab reverses these steps. Tab over selected table cells indents them. The selected text stays. A caret, or a selection in one paragraph that starts inside the text, types a tab character.',
+      'Left, right, first-line, and hanging indents control line placement. Increase Indent and Decrease Indent are on the toolbar, on Tab, and on Ctrl+M. Inside a list they change the level, so the marker changes too. Outside a list, Tab over a selection of two or more paragraphs indents them, and Tab over a selection that starts at a paragraph start sets a first-line indent, or steps the left indent when the first line is already indented or hanging. Shift+Tab reverses these steps. The selected text stays. In a table cell, Tab and Shift+Tab move between cells instead. A caret, or a selection in one paragraph that starts inside the text, types a tab character.',
   },
   {
     id: 'paragraphs.styles',
@@ -473,7 +485,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. Row drags stop at 8 points, or the initial height when the row starts shorter. Column resizing supports merged cells in left-to-right tables. A divider shows where the row has a cell edge. Legacy horizontal merges, row offsets, and merged right-to-left tables remain unsupported for column resizing. Column insert and delete work on tables with merged cells: a merged cell that spans the edited column widens or narrows. The context menu adds nine structural actions, including Merge cells and Split cells. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges. New rows and columns copy the paragraph formatting of the cells they come from, and written values take that formatting too.',
+      'Tab and Shift+Tab move to the next or previous cell and select its content, also from a list item, and with several cells selected they select the first of them. Shift+Tab in the first cell keeps the caret where it is. Tab in the last cell adds a row and puts the caret in its first cell, or does nothing when the row cannot be added. Option+Tab or Ctrl+Tab types a tab character in a cell, and does nothing with several cells selected; browsers usually keep Ctrl+Tab for switching tabs. Tables in headers, footers, and notes behave the same; in a table inside a text box, Tab keeps its paragraph behavior. Hover controls insert a row or column. Drag a divider or the outer right edge to resize. Row drags stop at 8 points, or the initial height when the row starts shorter. Column resizing supports merged cells in left-to-right tables. A divider shows where the row has a cell edge. Legacy horizontal merges, row offsets, and merged right-to-left tables remain unsupported for column resizing. Column insert and delete work on tables with merged cells: a merged cell that spans the edited column widens or narrows. The context menu adds nine structural actions, including Merge cells and Split cells. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges. New rows and columns copy the paragraph formatting of the cells they come from, and written values take that formatting too.',
   },
   {
     id: 'tables.borders-shading',
@@ -1258,13 +1270,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.i18n',
-    name: 'Editor UI in 12 languages',
+    name: 'Editor UI in 14 languages',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'de, en, es, fr, he, hi, id, ja, pl, pt-BR, tr, and zh-CN via @docx-editor.dev/i18n.',
+    notes:
+      'ar, de, en, es, fr, he, hi, id, ja, pl, pt-BR, ru, tr, and zh-CN via @docx-editor.dev/i18n. The ar and he catalogs declare _dir: rtl, and every chrome part under LocaleProvider mirrors for them: toolbar, menus, dialogs, context menu, navigation, rulers, and review cards, and the review column moves to the left of the page. LocaleProvider accepts a dir prop for other catalogs.',
     docsLink: '/docs/2.x/i18n',
   },
   {

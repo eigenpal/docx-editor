@@ -23,6 +23,9 @@ function part(xml: string, name = '/word/document.xml') {
 const paragraph = (content = '', extra = '') =>
   `<w:p><w:pPr>${extra}<w:rPr><w:sz w:val="40"/></w:rPr></w:pPr>${content}</w:p>`;
 const text = '<w:r><w:rPr><w:sz w:val="10"/></w:rPr><w:t>Small</w:t></w:r>';
+// Under text, an end mark sets no row minimum; an empty final paragraph shows whether the
+// mark is hidden: 5pt of text alone, or 5pt plus the visible mark's 20pt line.
+const marked = paragraph(text) + paragraph();
 const cell = (content: string, properties = '<w:hideMark/>') =>
   `<w:tc><w:tcPr>${properties}</w:tcPr>${content}</w:tc>`;
 const row = (cells: string, properties = '') =>
@@ -67,7 +70,8 @@ for (const [value, hidden] of [
 ] as const) {
   test(`hideMark ${value || '(empty)'} sizes the row from printable content`, () => {
     const properties = `<w:hideMark${value ? ` w:val="${value}"` : ''}/>`;
-    expect(height(table(row(cell(paragraph(text), properties))))).toBe(hidden ? 5 : 20);
+    expect(height(table(row(cell(paragraph(text), properties))))).toBe(5);
+    expect(height(table(row(cell(marked, properties))))).toBe(hidden ? 5 : 25);
     expect(height(table(row(cell(paragraph(), properties))))).toBe(20);
   });
 }
@@ -135,15 +139,13 @@ test('whole-style inheritance, conditional overrides, and direct false values re
   const properties = '<w:tblStyle w:val="Derived"/><w:tblLook w:firstRow="1"/>';
   const result = run(
     table(
-      row(cell(paragraph(text), '')) +
-        row(cell(paragraph(text), '')) +
-        row(cell(paragraph(text), '<w:hideMark w:val="0"/>')),
+      row(cell(marked, '')) + row(cell(marked, '')) + row(cell(marked, '<w:hideMark w:val="0"/>')),
       properties
     ),
     cascade
   );
-  expect(rows(result).map((r) => r.box.height)).toEqual([20, 5, 20]);
-  expect(height(table(row(cell(paragraph(text))), properties), cascade)).toBe(5);
+  expect(rows(result).map((r) => r.box.height)).toEqual([25, 5, 25]);
+  expect(height(table(row(cell(marked)), properties), cascade)).toBe(5);
 });
 
 test('derived conditional shading does not erase an inherited conditional hideMark', () => {
@@ -159,12 +161,12 @@ test('derived conditional shading does not erase an inherited conditional hideMa
   const cascade = styles(inherited + derived);
   for (const [enabled, expected] of [
     ['1', 5],
-    ['0', 20],
+    ['0', 25],
   ] as const) {
     expect(
       height(
         table(
-          row(cell(paragraph(text), '')),
+          row(cell(marked, '')),
           `<w:tblStyle w:val="Derived"/><w:tblLook w:firstRow="${enabled}"/>`
         ),
         cascade
@@ -178,11 +180,11 @@ test('derived conditional shading does not erase an inherited conditional hideMa
 });
 
 test('foreign hideMark elements do not change cell metrics', () => {
-  expect(height(table(row(cell(paragraph(text), '<x:hideMark/>'))))).toBe(20);
+  expect(height(table(row(cell(marked, '<x:hideMark/>'))))).toBe(25);
 });
 
 test('a style-only hideMark edit invalidates a reused layout session', () => {
-  const source = documentPart(table(row(cell(paragraph(text), '')), '<w:tblStyle w:val="Base"/>'));
+  const source = documentPart(table(row(cell(marked, '')), '<w:tblStyle w:val="Base"/>'));
   const session = createLayoutSession();
   const hidden = styles(style('Base', '<w:tcPr><w:hideMark/></w:tcPr>'));
   const visible = styles(style('Base', '<w:tcPr><w:hideMark w:val="off"/></w:tcPr>'));
@@ -194,12 +196,12 @@ test('a style-only hideMark edit invalidates a reused layout session', () => {
       session,
       styleCascade: cascade,
     });
-    expect(rows(result)[0]!.box.height).toBe(cascade === hidden ? 5 : 20);
+    expect(rows(result)[0]!.box.height).toBe(cascade === hidden ? 5 : 25);
   }
 });
 
 test('hidden and visible cell markers cannot mutate each other through the paragraph break cache', () => {
-  const source = documentPart(table(row(cell(paragraph(text), ''))));
+  const source = documentPart(table(row(cell(marked, ''))));
   const body = source.root.children.find((n) => n.kind !== 'textValue' && n.localName === 'body')!;
   if (body.kind === 'textValue') throw new Error('body');
   const node = body.children.find((n) => n.kind === 'table')!;
@@ -212,7 +214,7 @@ test('hidden and visible cell markers cannot mutate each other through the parag
       cells: original.cells.map((c) => ({ ...c, hideEndMark: hidden })),
     };
     const result = layoutRowFragment(changed, [100], 0, 0, false, 0, deps);
-    expect(result.record.box.height).toBe(hidden ? 5 : 20);
+    expect(result.record.box.height).toBe(hidden ? 5 : 25);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
 });

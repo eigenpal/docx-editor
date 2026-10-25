@@ -62,6 +62,7 @@ export const EXPECTED_AT_100 = {
   scale: 96 / 72,
   top: 140 - FRAME_RECT.top,
   left: 1116 - FRAME_RECT.left + 16,
+  side: 'right',
   compactCardLeft: 1400 - (1116 - FRAME_RECT.left + 16) - 300 - 12,
   compact: false,
 } as const;
@@ -158,7 +159,9 @@ export function insertBanner(scroller: Element): HTMLElement {
 }
 
 /** Parse the metrics a probe wrote into `data-metrics`. */
-export function readMetrics(node: Element | null): Record<string, number | boolean | null> | null {
+export function readMetrics(
+  node: Element | null
+): Record<string, number | boolean | string | null> | null {
   const raw = node?.getAttribute('data-metrics');
-  return raw ? (JSON.parse(raw) as Record<string, number | boolean | null>) : null;
+  return raw ? (JSON.parse(raw) as Record<string, number | boolean | string | null>) : null;
 }
