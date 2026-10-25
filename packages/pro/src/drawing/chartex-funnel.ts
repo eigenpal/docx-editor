@@ -12,16 +12,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // negative or missing value draws no bar. Category labels sit right-aligned 6.6 pt left of
 // the plot, centred on their slot. The widest label sets the plot's left edge; a label wider
 // than a third of the room is cut at a word boundary with an ellipsis. When slots are closer
-// than 1.2 text sizes, only every n-th label shows, from the first. The category axis line
+// than 1.22 text sizes, only every n-th label shows, from the first; when the last category
+// then has no label, the plot ends 0.987 text sizes higher, and the plot moves down so that
+// the first label's centre is at least 0.477 text sizes below its top. The category axis line
 // runs down the plot's left edge. Data labels sit at the centre of their bar whatever their
 // position, in the light text colour unless the labels name their own colour, and only when
 // the text fits inside the bar, across and up. All bars share the series colour; a `cx:dataPt`
 // paints its bar over it. The legend lists the series. A hidden category axis draws no labels
 // and no line. A chart without a category axis element shows both.
 //
-// Limit: with 24 or more categories the plot keeps a height of about 216 pt (in a 259.2 pt
-// tall chart, whatever the count) and moves down by up to 3 pt as the count grows. That is
-// not modelled: the plot keeps the full height.
+// Limit: a funnel whose skipped labels would sit closer than a line once the plot is shorter
+// can show no category labels and keep the full plot height; that is not modelled.
 
 import { formatChartNumber } from './chart-number-format.ts';
 import { themeColor, type ChartPaint } from './chart-style.ts';
@@ -55,8 +56,12 @@ const CATEGORY_LABEL_GAP = 6.6;
  */
 const CATEGORY_ROOM = 6.18;
 const CATEGORY_WIDTH_SCALE = 1.0103;
-/** Category labels keep this many text sizes apart. */
-const CATEGORY_LABEL_PITCH = 1.2;
+/** Category labels keep this many text sizes apart: a line of text. */
+const CATEGORY_LABEL_PITCH = 1.22;
+/** With skipped category labels, the plot ends this many text sizes higher. */
+const SKIPPED_LABEL_ROOM = 0.987;
+/** The first category label's centre sits at least this many text sizes below the plot top. */
+const FIRST_LABEL_REACH = 0.477;
 /** A category label is cut to this share of the room beside the plot. */
 const CATEGORY_LABEL_SHARE = 1 / 3;
 /** The plot inside the frame's box: top and bottom insets, with and without an axis line. */
@@ -165,8 +170,20 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const labelsShown = declared === null ? true : !declared.hidden && declared.tickLabels;
   const axisStyle = look.text('categoryAxis', declared?.txPr ?? null);
 
-  const top = box.t + (axisShown ? INSET_TOP : INSET_TOP_BARE);
-  const bottom = box.b - (axisShown ? INSET_BOTTOM : INSET_BOTTOM_BARE);
+  let top = box.t + (axisShown ? INSET_TOP : INSET_TOP_BARE);
+  let bottom = box.b - (axisShown ? INSET_BOTTOM : INSET_BOTTOM_BARE);
+  // When labels are skipped and the last category has none, the plot ends a text size higher.
+  // With skipped labels the first one keeps its half line below the plot's top: a small slot
+  // moves the plot down.
+  const step = labelsShown
+    ? funnelLabelStep((bottom - top) / count, CATEGORY_LABEL_PITCH * axisStyle.sizePt, count)
+    : 1;
+  if (step > 1) {
+    if ((count - 1) % step !== 0) bottom -= SKIPPED_LABEL_ROOM * axisStyle.sizePt;
+    const shift = Math.max(0, FIRST_LABEL_REACH * axisStyle.sizePt - (bottom - top) / count / 2);
+    top += shift;
+    bottom += shift;
+  }
   let left = box.l + (axisShown ? 0 : INSET_LEFT_BARE);
   const right = box.r - (axisShown ? INSET_RIGHT : INSET_RIGHT_BARE);
   const room = Math.max(0, (right - box.l) * CATEGORY_LABEL_SHARE);
@@ -238,7 +255,6 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
     }
   }
   if (labelsShown) {
-    const step = funnelLabelStep(slot, CATEGORY_LABEL_PITCH * axisStyle.sizePt, count);
     // Only the labels that show are cut: at most one per line of the plot.
     for (let index = 0; index < count; index += step) {
       const text = cutToWidth(categories[index]!, axisStyle, room);

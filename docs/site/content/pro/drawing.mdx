@@ -19,8 +19,8 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 
 | Drawing | With the module | Without the module |
 | --- | --- | --- |
-| Charts | Render read-only from the values cached in the chart part. | Labeled placeholder |
-| Waterfall, funnel, histogram, Pareto, and box and whisker charts | Render read-only from the values cached in the chart part, with the look its chart style and color parts give it. | Labeled placeholder |
+| Charts | Render read-only from the values cached in the chart part. | Saved fallback picture, or a labeled placeholder |
+| Waterfall, funnel, histogram, Pareto, and box and whisker charts | Render read-only from the values cached in the chart part, with the look its chart style and color parts give it. | Saved fallback picture, or a labeled placeholder |
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
 | WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
@@ -101,7 +101,7 @@ import { installDrawing } from '@docx-editor.dev/pro/drawing';
 installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ```
 
-`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, add `@docx-editor.dev/pro` as a direct dependency and call `installDrawing()` at startup, before you open any document. A session that opens before the install reads its charts as placeholders, and a strict PDF export from that session is refused.
+`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, add `@docx-editor.dev/pro` as a direct dependency and call `installDrawing()` at startup, before you open any document. A session that opens before the install shows its charts as their saved fallback pictures or as placeholders, and a strict PDF export from that session is refused when a chart has no fallback picture.
 
 ## What renders
 
@@ -109,21 +109,29 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 - Waterfall charts render their running total as floating columns, with subtotal columns from zero, increase, decrease, and total colors, connector lines, data labels, axes, gridlines, the title, and a legend of increases, decreases, and totals.
 - Funnel charts render one centered bar per category, widest for the largest value, with category labels and data labels.
 - Histograms bin the cached values themselves: automatic bin width, a fixed bin size or count, either closed side, and underflow and overflow bins, with bin labels such as `[1, 3]` and `> 9`. Pareto charts sort their columns from largest to smallest and add a cumulative percentage line on a 0% to 100% axis.
-- Box and whisker charts compute quartiles with the exclusive or inclusive method, and render whiskers to 1.5 times the interquartile range, outliers, inner points, the mean marker, and the mean line. They render without data labels.
+- Box and whisker charts compute quartiles with the exclusive or inclusive method, and render whiskers to 1.5 times the interquartile range, outliers, inner points, the mean marker, and the mean line. Value labels at the right of their marks show the quartiles, the whisker ends, the shown points, and the mean.
 - These newer charts take their text, lines, and colors from the chart style and color parts that the chart names.
+- Value axes pick the denser scale that fits the plot and leave out all value labels when they would sit closer than about one line.
+- Known limits of the newer charts: box and whisker value labels at other positions, or that name the series or category, are not drawn, and charts with several categories can show inner point labels that the reference leaves out; a funnel whose skipped category labels no longer fit once the plot is shorter can differ in plot height; narrow charts whose category labels stagger only beside the value labels, and value axis text under 8 points, can pick the other scale near the spacing thresholds; and after long category labels fail to fit in two rows, the plot can be up to 2 points narrower.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
 - Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself.
 - WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion.
 - EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
 
-These drawings keep a labeled placeholder in the editor even with the module. PDF export leaves them out and reports a `drawing` diagnostic:
+These drawings do not render, even with the module:
 
 - Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
 - Treemap, sunburst, and map charts.
 - SmartArt diagrams with picture fills, or with a text mode that cannot render.
 - WordArt with gradients at angles other than vertical, perspective extrusion, or a shape type whose definition the drawing does not include, other than plain text, triangle, and arch.
 
-A waterfall, funnel, histogram, box and whisker, treemap, sunburst, or map chart often comes with a picture fallback for older applications. The editor shows the chart or its labeled placeholder, never the fallback picture, and saves both unchanged.
+A chart often comes with a fallback picture for older applications. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts usually have one. The editor and PDF export apply these rules to a chart, in order:
+
+1. If the module renders the chart, they show the chart.
+1. If the chart has a fallback picture, they show the fallback picture.
+1. Otherwise, the editor shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic.
+
+The chart, its parts, and its fallback picture are saved unchanged. The SmartArt diagrams and WordArt in the list keep a labeled placeholder in the editor, and PDF export leaves them out with a `drawing` diagnostic.
 
 Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
 
@@ -131,9 +139,9 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 ## Replace a placeholder
 
-You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. Your component fills the drawing's box, and the document content stays unchanged through save.
+You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. A chart that shows its fallback picture has no placeholder, so no declaration applies to it. Your component fills the drawing's box, and the document content stays unchanged through save.
 
-A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), or `null` when it shows none, and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts have the plot types `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. Their title is `null` when the chart shows the default caption. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
+A chart placeholder also carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged), a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), or `null` when it shows none, and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts have the plot types `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. These charts report exactly one plot type, so a Pareto chart reports `['pareto']`, and an unknown chart type reports `[]`. Their title is `null` when the chart shows the default caption, and they never use a series name as an automatic title. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 
 <FrameworkTabs>
 <Framework value="react">

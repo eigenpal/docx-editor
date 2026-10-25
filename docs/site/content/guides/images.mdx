@@ -264,7 +264,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
-| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. Without the module, preserve the extent and show a labeled placeholder |
+| Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. A chart that does not render shows its saved fallback picture when it has one. Otherwise, the editor preserves the extent and shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic, which fails the default strict export. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. For the list, see [What renders](/docs/2.x/pro/drawing#what-renders). |
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |

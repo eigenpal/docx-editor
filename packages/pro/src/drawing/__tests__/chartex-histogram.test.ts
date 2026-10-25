@@ -230,6 +230,24 @@ describe('model edge cases', () => {
     expect(performance.now() - started).toBeLessThan(50);
     expect(histogramColumns(U20, binning({ count: 1_000 }), null)).toHaveLength(1_000);
   });
+
+  test('values whose span overflows the number range refuse, with any binning', () => {
+    const huge = [-1e308, 1e308, 3];
+    expect(histogramColumns(huge, binning({ count: 3 }), null)).toBeNull();
+    expect(histogramColumns(huge, binning({ size: 1e300 }), null)).toBeNull();
+    expect(histogramColumns(huge, null, null)).toBeNull();
+    // A finite span next to the range limit still bins with finite edges.
+    const edges = histogramColumns([1.7e308, 1.79e308], binning({ count: 2 }), null)!;
+    expect(edges).toHaveLength(2);
+    expect(edges.every((column) => !/NaN|Infinity/.test(column.label))).toBe(true);
+  });
+
+  test('a bin count the cutoff bins use up leaves only the cutoff bins', () => {
+    // As measured with a bin count of 2: every value over the underflow counts as overflow.
+    expect(bins(U20, { count: 1, underflow: 10, overflow: 40 })).toEqual(
+      bins(U20, { count: 2, underflow: 10, overflow: 40 })
+    );
+  });
 });
 
 describe('aggregation and Pareto order', () => {
@@ -267,6 +285,7 @@ interface ChartOptions {
   readonly pareto?: boolean;
   readonly gap?: string | null;
   readonly legend?: boolean;
+  readonly formatCode?: string;
 }
 
 function chartSpace(options: ChartOptions): string {
@@ -277,7 +296,7 @@ function chartSpace(options: ChartOptions): string {
     (categories
       ? `<cx:strDim type="cat"><cx:lvl ptCount="${categories.length}">${points(categories)}</cx:lvl></cx:strDim>`
       : '') +
-    `<cx:numDim type="val"><cx:lvl ptCount="${values.length}" formatCode="General">${points(values)}</cx:lvl></cx:numDim>`;
+    `<cx:numDim type="val"><cx:lvl ptCount="${values.length}" formatCode="${options.formatCode ?? 'General'}">${points(values)}</cx:lvl></cx:numDim>`;
   const gap = options.gap === null ? '' : ` gapWidth="${options.gap ?? '0'}"`;
   const line = options.pareto
     ? '<cx:axisId val="1"/></cx:series><cx:series layoutId="paretoLine" ownerIdx="0"><cx:axisId val="2"/></cx:series>'
@@ -357,7 +376,22 @@ describe('histogram rendering', () => {
     expect(columns).toHaveLength(2);
   });
 
-  test('a bin count past the bound keeps the placeholder', () => {
+  test('binned counts keep the general format, also when the series has categories', () => {
+    const texts = labels(
+      project({
+        values: [0.11, 0.12, 0.25, 0.31],
+        categories: ['a', 'b', 'c', 'd'],
+        formatCode: '0.00%',
+        layoutPr: '<cx:binning intervalClosed="r"><cx:binSize val="0.1"/></cx:binning>',
+      })
+    ).map((label) => label.text);
+    expect(texts).toContain('[11.00%, 21.00%]');
+    // Two column labels, and the value axis tick at 2.
+    expect(texts.filter((text) => text === '2')).toHaveLength(3);
+    expect(texts).not.toContain('200.00%');
+  });
+
+  test('a bin count past the bound does not paint the chart', () => {
     const projection = project({
       values: U20,
       layoutPr: '<cx:binning><cx:binCount val="999999999"/></cx:binning>',

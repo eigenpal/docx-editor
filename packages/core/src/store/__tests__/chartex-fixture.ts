@@ -139,6 +139,8 @@ const FALLBACK_PNG = Uint8Array.from(
 export interface ChartexDocxOptions {
   /** Wrap the drawing in `mc:AlternateContent` with a picture fallback, as Office writes it. */
   readonly alternateContent?: boolean;
+  /** With `alternateContent`, leave the `mc:Fallback` empty: nothing that paints. */
+  readonly emptyFallback?: boolean;
   /** Leave out the chart style and colour style parts. */
   readonly noStyleParts?: boolean;
   readonly cx?: number;
@@ -161,8 +163,9 @@ export function chartexDocx(chartXml: string, options: ChartexDocxOptions = {}):
       `<pic:spPr><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData>`,
     2
   );
+  const fallbackXml = options.emptyFallback ? '' : fallback;
   const run = options.alternateContent
-    ? `<mc:AlternateContent><mc:Choice Requires="cx1">${chart}</mc:Choice><mc:Fallback>${fallback}</mc:Fallback></mc:AlternateContent>`
+    ? `<mc:AlternateContent><mc:Choice Requires="cx1">${chart}</mc:Choice><mc:Fallback>${fallbackXml}</mc:Fallback></mc:AlternateContent>`
     : chart;
   const document =
     `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:r="${R}" xmlns:mc="${MC}" ` +

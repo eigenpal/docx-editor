@@ -1,6 +1,6 @@
-// A chartex chart (waterfall, funnel, histogram, ...) with no renderer installed keeps the
-// labelled `chart` placeholder with a summary, also when Office wrapped it in
-// `mc:AlternateContent` with a picture fallback: the engine never swaps it for the fallback.
+// A chartex chart (waterfall, funnel, histogram, ...) with no renderer installed shows the
+// picture fallback of its `mc:AlternateContent` when it has one that paints, and otherwise
+// keeps the labelled `chart` placeholder with a summary. It never paints nothing.
 
 import { expect, test } from 'bun:test';
 import { drawingPaintFields } from '../../layout/drawing-paint-fields.ts';
@@ -21,13 +21,25 @@ test('a chartex chart without a renderer keeps a chart placeholder with its summ
   expect(fields.chart?.plotTypes).toEqual(['waterfall']);
 });
 
-test('the chartex Choice wins over the picture fallback', () => {
+test('without a renderer, a wrapped chartex chart shows its fallback picture', () => {
   const [projection] = projectDrawingsInPackage(
     chartexPackage(waterfallChartSpace(), { alternateContent: true })
   );
+  expect(projection!.picture?.embeddedRelationshipId).toBe('rId11');
+  expect(projection!.chartSummary).toBeUndefined();
+  expect(drawingPaintFields(projection!).placeholderGraphicKind).toBeFalsy();
+});
+
+test('without a renderer or a fallback that paints, the chart placeholder shows', () => {
+  const [projection] = projectDrawingsInPackage(
+    chartexPackage(waterfallChartSpace({ title: 'Net' }), {
+      alternateContent: true,
+      emptyFallback: true,
+    })
+  );
   expect(projection!.picture).toBeNull();
   expect(drawingPaintFields(projection!).placeholderGraphicKind).toBe('chart');
-  expect(projection!.chartSummary?.plotTypes).toEqual(['waterfall']);
+  expect(projection!.chartSummary).toEqual({ title: 'Net', plotTypes: ['waterfall'] });
 });
 
 test('an empty title element and a missing title both read as no title', () => {
@@ -54,6 +66,16 @@ test('layout ids map to plot types; a Pareto chart is one plot type', () => {
       .chartSummary;
     expect(summary?.plotTypes).toEqual([]);
   }
+});
+
+test('a chartex chart reports one plot type, also when its series name several', () => {
+  const mixed = waterfallChartSpace().replace(
+    '</cx:plotAreaRegion>',
+    '<cx:series layoutId="funnel"><cx:dataId val="0"/></cx:series></cx:plotAreaRegion>'
+  );
+  expect(projectDrawingsInPackage(chartexPackage(mixed))[0]!.chartSummary?.plotTypes).toEqual([
+    'waterfall',
+  ]);
 });
 
 test('the parts token covers chartex and chart style parts', () => {

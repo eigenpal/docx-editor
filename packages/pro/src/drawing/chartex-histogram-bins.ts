@@ -145,6 +145,8 @@ export function histogramColumns(
   const low = under ?? min;
   const high = over ?? max;
 
+  // Values near the number range overflow the span; the bins then have no finite edges.
+  if (!Number.isFinite(high - low)) return null;
   let inner: number;
   let width: number;
   if (spec.count !== null) {
@@ -157,6 +159,7 @@ export function histogramColumns(
     if (!(span <= MAX_HISTOGRAM_BINS)) return null;
     inner = Math.max(1, Math.ceil(span - 1e-9));
   }
+  if (!Number.isFinite(width) || !Number.isFinite(low + inner * width)) return null;
   const edges: number[] = [];
   for (let index = 0; index <= inner; index += 1) edges.push(clean(low + index * width));
   // A bin count ends exactly at the range; an overflow cuts the last bin short.

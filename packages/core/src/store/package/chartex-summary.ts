@@ -57,8 +57,9 @@ export function readChartexSummary(
     const type = layout ? LAYOUT_PLOT_TYPES.get(layout.value) : undefined;
     if (type && !types.includes(type) && types.length < MAX_PLOT_TYPES) types.push(type);
   }
-  // A Pareto chart is its column series and their Pareto line: one plot type.
-  const plotTypes = types.includes('pareto') ? types.filter((type) => type !== 'histogram') : types;
+  // A chartex chart is one chart type. A Pareto chart is its column series and their Pareto
+  // line; otherwise the first layout the series name counts.
+  const plotTypes = types.includes('pareto') ? ['pareto' as const] : types.slice(0, 1);
   const tx = cx(cx(chart, 'title'), 'tx');
   return Object.freeze({
     title: tx ? plainText(tx, true, CHARTEX_NAMESPACE_URI) : null,

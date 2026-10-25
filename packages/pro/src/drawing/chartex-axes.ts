@@ -27,18 +27,26 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // box's left edge. A rejected try still moves the plot once, from the slot before the move,
 // and the next try starts from there: turned labels that follow a rejected 30 degree try keep
 // part of its move to the right. A try whose first check fails moves nothing. The value scale
-// is the shared automatic scale with ticks at least one line apart. Gridlines take the
-// `gridlineMajor`/`gridlineMinor` look; both axis lines take the category axis line.
+// is the shared automatic scale, fitted to the plot as it is without value labels, with ticks
+// at least 1.094 label text sizes apart. The value labels show only when their ticks, on the
+// plot that makes room for them, are at least 1.16 text sizes apart; otherwise no value label
+// shows, and the plot keeps its bare layout 6.26 pt right of the box. Gridlines take the `gridlineMajor`/`gridlineMinor`
+// look; both axis lines take the category axis line.
+//
+// When the value labels' room changes the category label arrangement (a narrow chart whose
+// labels stagger only beside the value labels), the scale instead fits the labelled plot
+// with ticks a line apart, and the labels show.
 //
 // Limits: after a rejected staggered try the plot can end up to 2 pt narrower than the
-// one-move rule gives. Value labels that would sit closer than one line still show, on a
-// coarser scale, where they can also be left out together; neither difference is modelled.
+// one-move rule gives. Near the spacing thresholds, a chart whose category labels change
+// arrangement, and a value axis with text under 8 pt, can pick the other scale.
 
 import type { Box } from './chart-axes.ts';
 import { formatChartNumber } from './chart-number-format.ts';
 import { autoValueScale, type ValueScale } from './chart-scale.ts';
 import type { Point } from './chart-scene.ts';
 import {
+  CHART_LINE_HEIGHT,
   estimateTextWidth,
   lineHeight,
   type ChartLabel,
@@ -53,6 +61,14 @@ const VALUE_LABEL_GAP = 6.49;
 const VALUE_TOP_INSET = 0.08;
 /** Above the plot without value labels. */
 const BARE_TOP_ROOM = 0.98;
+/** Ticks keep this many value label text sizes apart on the plot without value labels. */
+const TICK_DENSITY = 1.094;
+/** Ticks a line of label text apart, in text sizes. */
+const LINE_DENSITY = CHART_LINE_HEIGHT;
+/** Value labels show when their ticks keep this many text sizes apart. */
+const LABEL_SPACING = 1.16;
+/** Left of the plot when the value labels are left out for their spacing. */
+const HIDDEN_LABEL_ROOM = 6.26;
 /** From the plot's bottom edge to the top of the first row of category labels. */
 const CATEGORY_GAP = 6.6;
 /** From the plot's bottom edge to the top of turned category label boxes. */
@@ -252,7 +268,7 @@ export function layoutChartexAxes(
   const valueAxis = input.valueAxis;
   const categoryStyle = look.text('categoryAxis', categoryAxis?.txPr ?? null);
   const valueStyle = look.text('valueAxis', valueAxis?.txPr ?? null);
-  const showValueLabels = valueAxis !== null && !valueAxis.hidden && valueAxis.tickLabels;
+  const valueLabelsOn = valueAxis !== null && !valueAxis.hidden && valueAxis.tickLabels;
   const showCategoryLabels =
     categoryAxis !== null && !categoryAxis.hidden && categoryAxis.tickLabels;
   const count = Math.max(1, input.categories.length);
@@ -261,14 +277,13 @@ export function layoutChartexAxes(
   const frame = input.frameBox ?? box;
   const bounds = { l: frame.l, r: frame.r + CATEGORY_RIGHT_REACH };
   const limit = (frame.b - frame.t + CHARTEX_PLOT_TOP_ROOM) * CATEGORY_HEIGHT_SHARE;
-  const top =
+  const topFor = (labelled: boolean) =>
     box.t -
     CHARTEX_PLOT_TOP_ROOM +
-    (showValueLabels ? lineHeight(valueStyle) / 2 - VALUE_TOP_INSET : BARE_TOP_ROOM);
+    (labelled ? lineHeight(valueStyle) / 2 - VALUE_TOP_INSET : BARE_TOP_ROOM);
 
-  const scaleFor = (length: number): ValueScale => {
-    // Ticks keep at least one line of label text apart.
-    const minInterval = lineHeight(valueStyle);
+  const scaleFor = (length: number, density: number): ValueScale => {
+    const minInterval = density * valueStyle.sizePt;
     const fitting = Math.max(1, Math.floor(length / minInterval));
     return autoValueScale({
       dataMin: input.dataMin,
@@ -282,25 +297,48 @@ export function layoutChartexAxes(
   };
   const layout = (scale: ValueScale | null) => {
     let left = box.l;
-    if (showValueLabels && scale) {
+    const labelled = valueLabelsOn && scale !== null;
+    if (labelled) {
       let widest = 0;
       for (const tick of scale.ticks) {
         widest = Math.max(widest, estimateTextWidth(format(tick, scale), valueStyle));
       }
       left += widest + VALUE_LABEL_GAP;
+    } else if (valueLabelsOn) {
+      // Value labels left out for their spacing still keep a little room.
+      left += HIDDEN_LABEL_ROOM;
     }
     const edges = { l: left, r: box.r };
     const band: CategoryBand = showCategoryLabels
       ? categoryBand(input.categories, categoryStyle, edges, bounds, limit)
       : { rows: 1, angle: 0, texts: input.categories, height: 0, ...edges };
-    const plot = { l: band.l, t: top, r: band.r, b: box.b - band.height };
+    const plot = { l: band.l, t: topFor(labelled), r: band.r, b: box.b - band.height };
     return { plot, band, slot: (plot.r - plot.l) / count };
   };
-  let placed = layout(null);
-  let scale = scaleFor(placed.plot.b - placed.plot.t);
-  placed = layout(scale);
-  scale = scaleFor(placed.plot.b - placed.plot.t);
-  placed = layout(scale);
+  // The scale fits the plot as it is without value labels. The labels then show only when
+  // their ticks, on the plot that makes room for them, keep their spacing; otherwise none
+  // shows and the plot keeps its bare layout.
+  const bare = layout(null);
+  let scale = scaleFor(bare.plot.b - bare.plot.t, TICK_DENSITY);
+  let placed = bare;
+  let showValueLabels = false;
+  if (valueLabelsOn) {
+    let labelled = layout(scale);
+    const intervals = Math.max(1, Math.round((scale.max - scale.min) / scale.major));
+    const spacing = (labelled.plot.b - labelled.plot.t) / intervals;
+    if (labelled.band.rows !== bare.band.rows || labelled.band.angle !== bare.band.angle) {
+      // The value labels' room changes the category label arrangement: the scale fits the
+      // labelled plot with ticks a line apart, and the labels show.
+      scale = scaleFor(labelled.plot.b - labelled.plot.t, LINE_DENSITY);
+      labelled = layout(scale);
+      scale = scaleFor(labelled.plot.b - labelled.plot.t, LINE_DENSITY);
+      placed = layout(scale);
+      showValueLabels = true;
+    } else if (spacing >= LABEL_SPACING * valueStyle.sizePt) {
+      placed = labelled;
+      showValueLabels = true;
+    }
+  }
   const { plot, band, slot } = placed;
   if (!(plot.r - plot.l > 1) || !(plot.b - plot.t > 1)) return null;
 

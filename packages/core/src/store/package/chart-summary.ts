@@ -77,9 +77,18 @@ export interface DrawingChartSummary {
    * The title the chart shows, as plain text: its own title, typed or from a cell, or the name
    * of its only series for an automatic title. Null when it shows none, and when a title with
    * no text of its own sits on a chart with several series.
+   *
+   * A chartex chart (waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst,
+   * region map) reads only its own title text. Its title is null when the title element has
+   * no text of its own and the chart shows its default caption, and a chartex chart never uses
+   * a series name as an automatic title.
    */
   readonly title: string | null;
-  /** The chart's plot types in document order; a combination chart has more than one. */
+  /**
+   * The chart's plot types in document order; a classic combination chart has more than one.
+   * A chartex chart reports exactly one plot type, or none when its series layout is not one
+   * of the chartex types.
+   */
   readonly plotTypes: readonly DrawingChartPlotType[];
 }
 

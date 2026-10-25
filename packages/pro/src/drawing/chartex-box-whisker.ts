@@ -23,9 +23,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // their outlines, whiskers, median, mean marks and mean line take the series line, which by
 // default is the data colour at eight tenths of its brightness.
 //
-// Limit: data labels are not drawn. Labelled charts show the quartiles, whisker ends, inner
-// points and outliers, and the mean beside their marks, each left of or right of its mark
-// with some left out where they meet; that placement is not modelled.
+// Value labels at the right of their marks follow `chartex-box-whisker-labels.ts`.
+//
+// Limit: value labels at another position, labels that name the series or the category, and
+// per-point label overrides are not drawn.
 
 import { schemaAttributeValue } from '@docx-editor.dev/core/store';
 import { markerPath, markerStrokes, type Point } from './chart-scene.ts';
@@ -36,6 +37,7 @@ import {
   type ChartStroke,
 } from './chart-style.ts';
 import { layoutChartexAxes } from './chartex-axes.ts';
+import { boxLabelsDrawn, boxWhiskerLabels } from './chartex-box-whisker-labels.ts';
 import type { ChartexContext, ChartexLayout, ChartexLegendEntry } from './chartex-layout.ts';
 import {
   cxChild,
@@ -320,9 +322,15 @@ function paint(
   const inside = (value: number) => value >= axes.scale.min && value <= axes.scale.max;
   const y = (value: number) => axes.valueAt(clamp(value));
 
+  const plotBottom = axes.valueAt(axes.scale.min);
   for (const [order, { series: item, settings, boxes }] of drawn.entries()) {
     const { fill, line } = seriesLook(item, context);
     const means: Point[] = [];
+    const dataLabels = item.dataLabels;
+    const labelStyle =
+      dataLabels && dataLabels.visibility.value && boxLabelsDrawn(dataLabels.position)
+        ? context.look.text('dataLabel', dataLabels.txPr)
+        : null;
     for (const [slot, stats] of boxes.entries()) {
       if (!stats) continue;
       const left = axes.categoryAt(slot) - room / 2 + order * pitch;
@@ -367,6 +375,25 @@ function paint(
         scene.path(markerStrokes('x', center, y(stats.mean), MEAN_MARK), false, null, line);
       }
       means.push({ x: center, y: y(stats.mean) });
+      if (labelStyle) {
+        const values = {
+          box: [stats.firstQuartile, stats.median, stats.thirdQuartile].filter(inside),
+          whiskers: [stats.whiskerLow, stats.whiskerHigh].filter(inside),
+          points: points.filter(inside),
+          mean: settings.meanMarker && inside(stats.mean) ? stats.mean : null,
+        };
+        const marks = {
+          boxRight: left + width,
+          capRight: center + cap,
+          center,
+          pointHalf: POINT_SIZE / 2,
+          meanHalf: MEAN_MARK / 2,
+        };
+        const format = item.dataLabels!.formatCode ?? formatCode;
+        for (const label of boxWhiskerLabels(values, marks, y, plotBottom, labelStyle, format)) {
+          context.labels.push(label);
+        }
+      }
     }
     if (settings.meanLine && means.length > 1) scene.line(means, line);
   }

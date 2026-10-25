@@ -4,7 +4,8 @@
 //
 // The engine reads a saved SmartArt drawing, shapes, groups, canvases and pictures on its own.
 // A chart, or a diagram it would have to lay out, keeps its labelled placeholder until a
-// renderer for it is installed. A shape paints without the effects no renderer projects, a
+// renderer for it is installed; a chart in `mc:AlternateContent` shows its fallback picture
+// instead when that paints. A shape paints without the effects no renderer projects, a
 // text path outside a watermark keeps the placeholder of a refused legacy drawing, and a
 // metafile picture keeps the placeholder of an image format the engine cannot decode.
 //

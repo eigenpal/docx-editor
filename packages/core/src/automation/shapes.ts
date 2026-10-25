@@ -8,7 +8,10 @@
 //
 // An inline picture is a shape of type Picture here and also an inline picture. A run-level
 // `mc:AlternateContent` is read through the branch layout selects for it: a shape whose selected
-// branch is a VML fallback has no DrawingML story and is not listed. The VML fallback of a
+// branch is a VML fallback has no DrawingML story and is not listed. A chart is read through
+// its chart branch, an Unsupported shape, even when the page shows its fallback picture
+// because no renderer draws the chart: the listing never depends on installed renderers. The
+// VML fallback of a
 // DrawingML text box follows its story on save (`textbox-fallback-export.ts`).
 
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';

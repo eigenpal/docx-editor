@@ -19,8 +19,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * - EMF and WMF pictures: a vector replay for PDF export, and a browser raster that honors a
  *   metafile's own drawing origin.
  *
- * Without it, the editor shows a labeled placeholder for a chart, a diagram saved without its
- * drawing, and inline WordArt; floating WordArt does not show. The editor still rasterizes
+ * Without it, a chart shows its saved fallback picture when it has one. The editor shows a
+ * labeled placeholder for any other chart, a diagram saved without its drawing, and inline
+ * WordArt; floating WordArt does not show. The editor still rasterizes
  * EMF and WMF pictures, and a shape paints without those effects. PDF export always includes
  * this module.
  *

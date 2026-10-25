@@ -51,6 +51,9 @@ const MARGIN = 5.5;
 const RIGHT_MARGIN = 6.6;
 const STACK_GAP = 3.84;
 const LEGEND_PAD_Y = 7;
+/** A top or bottom legend row: at least this tall, else its text line and this padding. */
+const LEGEND_ROW_MIN = 24.98;
+const LEGEND_ROW_PAD = 10.51;
 const LEGEND_PAD_LEFT = 9;
 const LEGEND_PAD_RIGHT = 5.8;
 const LEGEND_PLOT_GAP = 4.92;
@@ -145,13 +148,15 @@ function placeLegend(
       rows[rows.length - 1]!.push({ entry, width: entryWidth });
     }
     const pitch = 2 * size;
-    const boxHeight = line + (rows.length - 1) * pitch + 2 * LEGEND_PAD_Y;
+    // A row's box keeps a least height, and grows with text taller than that leaves room for.
+    const rowBox = Math.max(LEGEND_ROW_MIN, line + LEGEND_ROW_PAD);
+    const boxHeight = rowBox + (rows.length - 1) * pitch;
     const top = legend.position === 't' ? box.t : box.b - boxHeight;
     for (const [rowIndex, row] of rows.entries()) {
       const total = row.reduce((sum, item, index) => sum + item.width + (index > 0 ? gap : 0), 0);
       let x = width / 2 - (total + LEGEND_PAD_LEFT + LEGEND_PAD_RIGHT) / 2 + LEGEND_PAD_LEFT;
       for (const item of row) {
-        items.push({ entry: item.entry, x, y: top + LEGEND_PAD_Y + line / 2 + rowIndex * pitch });
+        items.push({ entry: item.entry, x, y: top + rowBox / 2 + rowIndex * pitch });
         x += item.width + gap;
       }
     }

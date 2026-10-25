@@ -51,6 +51,8 @@ const RIGHT_LABEL_GAP = 6.64;
 /** With two value axes: extra room left of the left labels and right of the right ones. */
 const PARETO_LEFT_ROOM = 6.43;
 const PARETO_RIGHT_ROOM = 5.47;
+/** With two value axes the plot also starts a little lower, as measured on four charts. */
+const PARETO_TOP_ROOM = 0.96;
 const PERCENT = '0%';
 
 interface Parts {
@@ -69,13 +71,23 @@ function partsOf(series: readonly ChartexSeries[]): Parts | null {
   return { columns: owner, line };
 }
 
+/**
+ * Whether the columns sum the series' categories rather than bin its values: the series asks
+ * to aggregate, or it has categories and no binning.
+ */
+function columnsByCategory(series: ChartexSeries): boolean {
+  return (
+    aggregates(series) ||
+    (readBinning(series.layoutPr) === null && seriesDimension(series, 'cat') !== null)
+  );
+}
+
 /** The columns of the series: bins of its values, or its categories summed. */
 export function seriesColumns(series: ChartexSeries, pareto: boolean): HistogramColumn[] | null {
   const read = seriesValues(series);
   if (!read) return null;
   const binning = readBinning(series.layoutPr);
-  const byCategory =
-    aggregates(series) || (binning === null && seriesDimension(series, 'cat') !== null);
+  const byCategory = columnsByCategory(series);
   const columns = byCategory
     ? aggregateColumns(seriesCategories(series) ?? [], read.values)
     : histogramColumns(read.values, binning, read.formatCode);
@@ -132,8 +144,8 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const columns = seriesColumns(owner, line !== null);
   if (!columns || columns.length === 0) return false;
   const read = seriesValues(owner)!;
-  const byCategory = aggregates(owner) || seriesDimension(owner, 'cat') !== null;
-  const dataFormat = byCategory ? read.formatCode : null;
+  // Binned columns hold counts, which never take the values' number format.
+  const dataFormat = columnsByCategory(owner) ? read.formatCode : null;
   const { look, scene, labels, model } = context;
 
   const categoryAxis = model.axes.find((axis) => axis.kind === 'category') ?? null;
@@ -146,6 +158,7 @@ function paint(series: readonly ChartexSeries[], box: Box, context: ChartexConte
   const plotBox: Box = { ...box };
   if (line) {
     plotBox.l += PARETO_LEFT_ROOM;
+    plotBox.t += PARETO_TOP_ROOM;
     if (showRight) {
       // The right labels' room: the widest at the height the plot will roughly have.
       const scale = percentScale(right, box.b - box.t, rightStyle);

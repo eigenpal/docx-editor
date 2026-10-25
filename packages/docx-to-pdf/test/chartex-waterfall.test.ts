@@ -4,7 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A waterfall chart wrapped in `mc:AlternateContent` exports as vector columns in the data
-// colours of their kind, not as its picture fallback and not as a left-out drawing.
+// colours of their kind, not as its picture fallback and not as a left-out drawing. A chart
+// type the module does not draw exports its fallback picture; without one it is left out.
 import { expect, test } from 'bun:test';
 import { PDFDocument, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import {
@@ -44,4 +45,25 @@ test('a waterfall chart exports as columns in the increase, decrease and total c
   expect(commands).toContain(fill('4472C4'));
   expect(commands).toContain(fill('ED7D31'));
   expect(commands).toContain(fill('A5A5A5'));
+});
+
+test('a chart type the module does not draw exports its fallback picture in strict mode', async () => {
+  const result = await exportPdf(
+    chartexDocx(waterfallChartSpace({ layoutId: 'treemap' }), { alternateContent: true }),
+    { useSystemFonts: false, fidelityPolicy: 'strict' }
+  );
+  expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'drawing')).toEqual([]);
+  const commands = await firstPageCommands(result.bytes);
+  expect(commands).toMatch(/\/\S+ Do/);
+});
+
+test('a chart with no renderer and no fallback picture is left out with a diagnostic', async () => {
+  const result = await exportPdf(
+    chartexDocx(waterfallChartSpace({ layoutId: 'treemap' }), {
+      alternateContent: true,
+      emptyFallback: true,
+    }),
+    { useSystemFonts: false, fidelityPolicy: 'best-effort' }
+  );
+  expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('drawing');
 });

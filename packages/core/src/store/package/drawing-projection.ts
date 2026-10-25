@@ -1,7 +1,11 @@
 import { stylesPartOf } from './ooxml-indexes.ts';
 import type { DrawingChartSummary } from './chart-summary.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
-import { paintableMcFallback } from './mc-fallback-projection.ts';
+import {
+  holdsChartGraphic,
+  paintableMcChartFallback,
+  paintableMcFallback,
+} from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -323,7 +327,8 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
   'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
   'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
   'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
-  // A chartex chart renders or keeps its labelled placeholder, never its fallback.
+  // A chartex Choice is understood. It paints when a renderer supports the chart; otherwise
+  // the wrapper shows its fallback or the chart placeholder (`projectRunLevelMcDrawing`).
   ...CHARTEX_MC_NAMESPACES,
 ]);
 
@@ -1554,18 +1559,27 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot draw (charts, diagrams, unsupported groups) shows
-  // its VML fallback when that paints. Otherwise it stays invisible: a placeholder card over
+  // An MC-wrapped payload the engine cannot draw (diagrams, unsupported groups) shows its VML
+  // fallback when that paints. Otherwise it stays invisible: a placeholder card over
   // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
-  // story and pass through, and a chart (chartex charts come MC-wrapped) keeps its labelled
-  // placeholder. Layout still reserves the extent or the anchor's wrap area.
+  // story and pass through. A chart shows its fallback when that paints and otherwise keeps
+  // its labelled placeholder (`mc-fallback-projection.ts`). Layout still reserves the extent
+  // or the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
     projection.groupPicture === null &&
-    !hostsTextboxStory(projection) &&
-    !projection.chartSummary
+    !hostsTextboxStory(projection)
   ) {
+    if (projection.chartSummary || holdsChartGraphic(atom.drawing)) {
+      const chartFallback = paintableMcChartFallback(
+        wrapper,
+        context.namespaceScope,
+        context.ownerPartName,
+        (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
+      );
+      return chartFallback ?? withAlternateContentGroupPictures(projection);
+    }
     const fallback = paintableMcFallback(wrapper, context.ownerPartName);
     if (fallback) return fallback;
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;

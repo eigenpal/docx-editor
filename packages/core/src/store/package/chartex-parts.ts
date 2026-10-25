@@ -9,9 +9,10 @@
 // XML (`cx:lvl`); its embedded workbook and external data are never read.
 //
 // Office wraps a chartex drawing in `mc:AlternateContent` whose Choice requires one of the
-// chartex namespaces below. The engine always takes that Choice: a chartex chart renders when
-// a renderer is installed and otherwise keeps its labelled `chart` placeholder, so the drawing
-// never silently becomes its fallback or disappears.
+// chartex namespaces below. The engine understands that Choice: the chart renders when an
+// installed renderer supports it. Otherwise its fallback picture shows when it has one that
+// paints, and otherwise its labelled `chart` placeholder (`mc-fallback-projection.ts`), so
+// the drawing never disappears.
 
 import type { ChartThemeFaces } from './chart-parts.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
