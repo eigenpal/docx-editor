@@ -111,6 +111,7 @@ import {
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { createEarlierLinePush } from './earlier-line-push.ts';
+import { stackPartner, stackedAnchorY } from './table-float-stack.ts';
 import { isBareSectionMark } from './section-mark-break.ts';
 import {
   createTableBorderOwnershipBudget,
@@ -1799,9 +1800,11 @@ function* layoutBlocksPass(
         collectingCellBreakKeys.begin();
         try {
           // A raised table keeps the place its anchor had before it pushed earlier lines down.
+          const own = positionedByTable.get(table.id);
+          const stacked = own && stackedAnchorY(positionedTables, own, pageFragments);
           const start = tableWrap.positionedTableStart(
             table,
-            anchorY - earlierLinePush.of(pages.length, table.id),
+            stacked ?? anchorY - earlierLinePush.of(pages.length, table.id),
             columnWidth(),
             anchorFrames(),
             pageFragments,
@@ -2005,9 +2008,14 @@ function* layoutBlocksPass(
       // where the body reaches that table, even when it then moves to the next page.
       const inFlow = positionedByTable.get(entry.table.id);
       if (inFlow?.float.vertAnchor === 'text') noteAnchor(inFlow.anchorId);
+      // A waiting table this one stacks below goes into the flow first, right above it.
+      const partner = inFlow && stackPartner(positionedTables, inFlow);
+      if (partner && pendingFloatIds.delete(partner.table.id))
+        layoutTableInFlow(partner.table, cursorY, false, index);
+      const top = (inFlow && stackedAnchorY(positionedTables, inFlow, pageFragments)) ?? cursorY;
       collectingCellBreakKeys.begin();
       try {
-        const outOfFlow = yield* layoutTableInFlowSteps(entry.table, cursorY, false, index + 1);
+        const outOfFlow = yield* layoutTableInFlowSteps(entry.table, top, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
         firstParagraphOfSection = false;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys.keys());
