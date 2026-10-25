@@ -114,6 +114,7 @@ import {
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { createEarlierLinePush } from './earlier-line-push.ts';
+import { isBareSectionMark } from './section-mark-break.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -758,6 +759,7 @@ function* layoutBlocksPass(
         authorFilter
       )
     : undefined;
+  const marksPageBreak = options.sectionMarkCollapses !== true;
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
     // identity fast path; the context joins only when a key is actually built. `||`, not
@@ -817,6 +819,7 @@ function* layoutBlocksPass(
       memo.contentWidth === availableWidth &&
       memo.frameEnabled ===
         (columns.count === 1 && !options.disabledParagraphFrameIds?.has(block.id)) &&
+      memo.marksPageBreak === marksPageBreak &&
       memo.producer === producer &&
       memo.drawingToken === paragraphDrawingToken &&
       memo.projectionToken === projectionToken &&
@@ -886,11 +889,13 @@ function* layoutBlocksPass(
         contextualSpacing,
         styleId,
         outlineLevel,
-        shading,
         inheritedRunProperties,
         markRunProperties,
       } = preparedParagraph;
-      const borders = preparedParagraph.borders;
+      // Before a section that opens a page, a bare section mark paints no borders or shading.
+      const bareMark = marksPageBreak && !listItem && isBareSectionMark(block);
+      const borders = bareMark ? {} : preparedParagraph.borders;
+      const shading = bareMark ? undefined : preparedParagraph.shading;
       const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
         preparedParagraph,
         defaultTabStopPt,
@@ -938,6 +943,7 @@ function* layoutBlocksPass(
     preparedBlocks.set(block, {
       contentWidth: availableWidth,
       frameEnabled: columns.count === 1 && !options.disabledParagraphFrameIds?.has(block.id),
+      marksPageBreak,
       producer,
       drawingToken: paragraphDrawingToken,
       projectionToken,
