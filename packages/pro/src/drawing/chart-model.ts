@@ -170,6 +170,8 @@ export interface ChartAxis {
   /** Value axes: whether points sit between tick marks (`between`) or on them (`midCat`). */
   readonly crossBetween: 'between' | 'midCat' | null;
   readonly tickLabelSkip: number | null;
+  /** Date axes: the step of one category (`c:baseTimeUnit`); null picks it from the data. */
+  readonly baseTimeUnit: 'days' | 'months' | 'years' | null;
 }
 
 export interface ChartManualLayout {
@@ -490,6 +492,7 @@ function readAxis(element: OoxmlElement): ChartAxis | null {
   const tickMark = childVal(element, 'majorTickMark');
   const labelPosition = childVal(element, 'tickLblPos');
   const crossBetween = childVal(element, 'crossBetween');
+  const timeUnit = childVal(element, 'baseTimeUnit');
   return {
     id,
     kind,
@@ -525,6 +528,8 @@ function readAxis(element: OoxmlElement): ChartAxis | null {
           : 'autoZero',
     crossBetween: crossBetween === 'between' || crossBetween === 'midCat' ? crossBetween : null,
     tickLabelSkip: childNumber(element, 'tickLblSkip', 1, 32_000),
+    baseTimeUnit:
+      timeUnit === 'days' || timeUnit === 'months' || timeUnit === 'years' ? timeUnit : null,
   };
 }
 

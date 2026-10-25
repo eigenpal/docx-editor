@@ -247,7 +247,7 @@ export function hasFontBackedExportCapabilities<T extends object>(value: T): val
 // @public
 export const MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS = 32;
 
-// @public
+// @internal
 export type MetafileCommand = {
     readonly kind: 'save';
 } | {
@@ -287,7 +287,7 @@ export type MetafileCommand = {
     readonly matrix: MetafileMatrix;
 };
 
-// @public
+// @internal
 export interface MetafileDrawing {
     // (undocumented)
     readonly commands: readonly MetafileCommand[];
@@ -297,7 +297,7 @@ export interface MetafileDrawing {
     readonly width: number;
 }
 
-// @public
+// @internal
 export interface MetafileFont {
     // (undocumented)
     readonly bold: boolean;
@@ -309,10 +309,10 @@ export interface MetafileFont {
     readonly sizePx: number;
 }
 
-// @public
+// @internal
 export type MetafileMatrix = readonly [number, number, number, number, number, number];
 
-// @public
+// @internal
 export interface MetafilePaint {
     // (undocumented)
     readonly alpha: number;
@@ -324,7 +324,7 @@ export interface MetafilePaint {
     readonly r: number;
 }
 
-// @public
+// @internal
 export type MetafilePathCommand = {
     readonly op: 'M' | 'L';
     readonly x: number;
@@ -341,7 +341,7 @@ export type MetafilePathCommand = {
     readonly op: 'Z';
 };
 
-// @public
+// @internal
 export type MetafileRaster = {
     readonly data: Uint8Array;
     readonly height: number;
@@ -355,7 +355,7 @@ export type MetafileRaster = {
     readonly width: number;
 };
 
-// @public
+// @internal
 export interface MetafileReplay {
     // (undocumented)
     readonly complete: boolean;
@@ -363,7 +363,7 @@ export interface MetafileReplay {
     readonly drawing: MetafileDrawing;
 }
 
-// @public
+// @internal
 export interface MetafileReplayOptions {
     readonly measureText: (text: string, font: MetafileFont) => number;
 }
@@ -444,7 +444,7 @@ signal?: AbortSignal) => Promise<Readonly<{
     mime: SupportedImageMime;
 }> | null>;
 
-// @public
+// @internal
 export function replayMetafile(bytes: Uint8Array, mime: 'image/x-emf' | 'image/x-wmf', options: MetafileReplayOptions): Promise<MetafileReplay | null>;
 
 // @public

@@ -23,14 +23,16 @@ Text watermarks are a page feature, so they render without the module.
 
 ## Register the module
 
-Pass `drawingModule()` to the editor through `modules`:
+Pass `drawingModule()` to the editor through `modules`. Build the module array once, outside render.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
 import { drawingModule } from '@docx-editor.dev/pro/drawing';
 
-// Module array built once, outside render.
-const modules = [drawingModule()];
+const modules = [drawingModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
 
 export function Editor({ bytes }: { bytes: Uint8Array }) {
   return (
@@ -44,11 +46,42 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read.
+</Framework>
+<Framework value="vue">
 
-`reviewModule()` from `@docx-editor.dev/pro` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorToolbar,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+import { drawingModule } from '@docx-editor.dev/pro/drawing';
 
-The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture. Documents without one do not load them.
+defineProps<{ bytes: Uint8Array }>();
+
+const modules = [drawingModule({ licenseKey: import.meta.env.VITE_DOCX_LICENSE })];
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules">
+    <DocxEditorToolbar />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`reviewModule()` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
+
+The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read. If you install the module after a document opened, the console shows a warning once.
+
+The chart, SmartArt, effects, and WordArt renderers are part of the module's bundle, so they also load with `reviewModule()`. The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture.
 
 ## Use the module without an editor
 
@@ -57,24 +90,33 @@ For headless conversion, call `installDrawing()` once before you open documents:
 ```ts
 import { installDrawing } from '@docx-editor.dev/pro/drawing';
 
-installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
+installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ```
 
-`@docx-editor.dev/docx-to-pdf` installs the module for you, so PDF export renders everything in this page without extra setup.
+`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, call `installDrawing()` at startup so that every document reads its drawings the same way.
 
 ## What renders
 
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.
 - SmartArt diagrams saved without their drawing are laid out from their data, layout, style, and color parts.
-- Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself. Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint.
-- WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion. Gradients at other angles, perspective extrusion, and shape types whose definition the drawing does not include, other than plain text, triangle, and arch, keep the drawing refused.
+- Glows paint as a soft halo of their color and radius. Inner shadows paint inside the shape. An upright picture fades out at soft edges and paints a reflection below itself.
+- WordArt renders text fitted to the shape box, between the guides of shapes such as a triangle, or along an arch, with vertical gradients, shown shadows, and parallel 3-D extrusion.
 - EMF and WMF text uses the named font when the document uses it, and the default font otherwise. The original metafile bytes stay unchanged through save.
+
+These drawings keep a labeled placeholder even with the module:
+
+- Charts that combine a pie or radar plot with other plot types, and surface charts of more than 20,000 points.
+- SmartArt diagrams with picture fills, or with a text mode that cannot render.
+- WordArt with gradients at angles other than vertical, perspective extrusion, or a shape type whose definition the drawing does not include, other than plain text, triangle, and arch.
+- Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint. The shape paints without them.
 
 For the chart types, labels, layouts, and effects that render, see [Word feature support](/docs/2.x/word-fidelity).
 
-## Replace placeholders without the module
+## Replace a placeholder
 
-If you don't use the module, you can replace a chart or SmartArt placeholder with your own component. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram saved without its drawing. Your component fills the drawing's box, and the document content stays unchanged through save.
+You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. Your component fills the drawing's box, and the document content stays unchanged through save.
+
+This example shows the chart's alternative text, from `drawing.accessibility.label`, in a card:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -84,7 +126,9 @@ If you don't use the module, you can replace a chart or SmartArt placeholder wit
   <DocxEditor.UnsupportedElement
     match={(element) => element.drawing?.placeholderGraphicKind === 'chart'}
   >
-    {({ element }) => <ChartSummary nodeId={element.nodeId} />}
+    {({ element }) => (
+      <div className="chart-card">{element.drawing?.accessibility.label ?? 'Chart'}</div>
+    )}
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
 ```
@@ -98,7 +142,7 @@ If you don't use the module, you can replace a chart or SmartArt placeholder wit
     :match="(element) => element.drawing?.placeholderGraphicKind === 'chart'"
   >
     <template #default="{ element }">
-      <ChartSummary :node-id="element.nodeId" />
+      <div class="chart-card">{{ element.drawing?.accessibility.label ?? 'Chart' }}</div>
     </template>
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
@@ -107,4 +151,4 @@ If you don't use the module, you can replace a chart or SmartArt placeholder wit
 </Framework>
 </FrameworkTabs>
 
-`ChartSummary` is your own component. For example, it can show a static image of the chart from your server, or a link that opens the chart in another view. Treat values from the document as untrusted data. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+The alternative text comes from the document, so render it as text, never as HTML. The other values of `placeholderGraphicKind` are `shape`, `group`, `textbox`, `canvas`, and `graphic`. Floating WordArt without the module, and metafile placeholders in PDF export, have no declaration hook. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).

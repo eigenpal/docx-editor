@@ -91,7 +91,7 @@ export interface AutofitFieldContext {
     readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
-// @public
+// @internal
 export function automaticTextColor(background: string | null | undefined): 'FFFFFF' | null;
 
 // @public (undocumented)
@@ -468,13 +468,13 @@ export interface CompoundBorderMetrics {
     readonly strokePt: number;
 }
 
-// @public
+// @internal
 export interface CompoundBorderStroke {
     readonly offsetPt: number;
     readonly widthPt: number;
 }
 
-// @public
+// @internal
 export function compoundBorderStrokesForExtentPt(val: string, extentPt: number): readonly CompoundBorderStroke[] | null;
 
 // @public
@@ -912,6 +912,9 @@ export interface DrawingOverlayFrame {
     // (undocumented)
     readonly y: number;
 }
+
+// @public
+export type DrawingPlaceholderKind = 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public (undocumented)
 export interface DrawingPoint {
@@ -1421,7 +1424,7 @@ export interface GraphemeWordSegmentRecord {
     readonly wordLike: boolean;
 }
 
-// @public
+// @internal
 export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(drawing: D, layer: DrawingGroupPictureLayerRecord): D;
 
 // @public
@@ -1660,7 +1663,7 @@ export interface InlineDrawingRecord {
     readonly paintBounds: LayoutBox;
     // (undocumented)
     readonly paragraphId: string;
-    readonly placeholderGraphicKind: string | null;
+    readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
     // (undocumented)
     readonly resource: ImageResourceState;
     readonly revisions?: readonly RevisionAttribution[];
@@ -4198,7 +4201,7 @@ export interface ShapedRunComparatorInputs {
 // @public
 export const shapedRunComparatorInputs: (input: ShapedRun, environment: ShapingEnvironmentInput) => ShapedRunComparatorInputs;
 
-// @public
+// @internal
 export function shapedRunOutline(run: ShapedRun, pointSize: number, fixedPointScale: number): TextOutline | undefined;
 
 // @public
@@ -4957,7 +4960,7 @@ export interface VectorPattern {
     readonly rows: readonly number[];
 }
 
-// @public (undocumented)
+// @public
 export interface VectorShapeComponent {
     readonly arrowheadsEmu?: readonly (readonly Readonly<{
         x: number;

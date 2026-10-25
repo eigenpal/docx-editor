@@ -29,7 +29,7 @@ export const TEXT_WATERMARK_ID_PREFIX = 'PowerPlusWaterMarkObject';
 /**
  * Plain text fitted to a floating shape box, painted with one fill and an optional outline.
  *
- * @public
+ * @internal
  */
 export interface LegacyTextArtProjection {
   readonly text: string;

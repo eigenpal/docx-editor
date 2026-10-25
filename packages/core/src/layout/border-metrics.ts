@@ -89,7 +89,7 @@ const COMPOUND_SEQUENCES: ReadonlyMap<string, readonly (readonly [number, number
   ]);
 })();
 
-/** One stroke of a compound border: offset from the band's top or left edge, and width. */
+/** One stroke of a compound border: offset from the band's top or left edge, and width. @internal */
 export interface CompoundBorderStroke {
   /** Distance from the band's top (or left) edge to this stroke, in points. */
   readonly offsetPt: number;
@@ -120,6 +120,8 @@ export function compoundBorderStrokesPt(
 /**
  * The strokes of a triple or thin-thick border whose painted band is `extentPt` thick, for a
  * painter that holds the band and not the authored width. Null for any other style.
+ *
+ * @internal
  */
 export function compoundBorderStrokesForExtentPt(
   val: string,

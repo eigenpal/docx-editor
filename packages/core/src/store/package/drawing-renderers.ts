@@ -33,7 +33,7 @@ import type { MetafileRenderOptions, MetafileReplay } from './metafile-drawing.t
  * What a shape effects renderer reads for one shape: its properties, the effect list the
  * engine resolved for the outer shadow, and the components the engine painted.
  *
- * @public
+ * @internal
  */
 export interface ShapeEffectsInput {
   /** The shape (`wps:wsp`) or picture (`pic:pic`) element. */
@@ -49,7 +49,7 @@ export interface ShapeEffectsInput {
  * What a picture effects renderer returns: effects that change how the picture paints, and
  * components that paint under it.
  *
- * @public
+ * @internal
  */
 export interface PictureEffectsProjection {
   readonly effects?: PictureFrameEffects;
@@ -61,7 +61,7 @@ export interface PictureEffectsProjection {
  * Shape and picture effects beyond the outer shadow: glow, inner shadow, reflection, soft
  * edge, and the rim of a dark-edged bevel.
  *
- * @public
+ * @internal
  */
 export interface DrawingEffectsRenderer {
   /**
@@ -86,7 +86,7 @@ export interface DrawingEffectsRenderer {
   ) => PictureEffectsProjection | null;
 }
 
-/** A metafile raster for the editor: PNG bytes the image pipeline validates again. @public */
+/** A metafile raster for the editor: PNG bytes the image pipeline validates again. @internal */
 export interface MetafileRasterImage {
   readonly bytes: Uint8Array;
   readonly mime: 'image/png';
@@ -96,7 +96,7 @@ export interface MetafileRasterImage {
  * EMF and WMF pictures: a vector replay for exporters, and a raster for the browser editor.
  * Both run on attacker-controlled bytes and must bound their own work.
  *
- * @public
+ * @internal
  */
 export interface MetafileRenderer {
   /** Vector drawing commands in canvas pixels, or null when the bytes do not replay. */
@@ -120,7 +120,7 @@ export interface MetafileRenderer {
  * What a drawing renderer paints: vector components over the drawing extent, and read-only
  * stories for its text.
  *
- * @public
+ * @internal
  */
 export interface DrawingGraphicProjection {
   readonly vectorShape: VectorShapeProjection | null;
@@ -130,7 +130,7 @@ export interface DrawingGraphicProjection {
 /**
  * What a chart renderer reads beside the drawing.
  *
- * @public
+ * @internal
  */
 export interface ChartRenderContext {
   readonly resolveChartPart?: ChartPartResolver;
@@ -140,7 +140,7 @@ export interface ChartRenderContext {
 /**
  * The parts a SmartArt layout engine lays a diagram out from.
  *
- * @public
+ * @internal
  */
 export interface DiagramLayoutParts {
   readonly dataModel: OoxmlElement;
@@ -152,7 +152,7 @@ export interface DiagramLayoutParts {
 /**
  * What a SmartArt layout engine reads beside the diagram parts.
  *
- * @public
+ * @internal
  */
 export interface DiagramLayoutOptions {
   /** The theme's minor (body) Latin font, which diagram text uses by default. */
@@ -163,7 +163,7 @@ export interface DiagramLayoutOptions {
 /**
  * What a text art renderer reads beside the shape.
  *
- * @public
+ * @internal
  */
 export interface LegacyTextArtContext {
   /**
@@ -176,7 +176,7 @@ export interface LegacyTextArtContext {
 /**
  * Renderers a capability package installs.
  *
- * @public
+ * @internal
  */
 export interface DrawingRenderers {
   /**
@@ -219,19 +219,91 @@ export interface DrawingRenderers {
 }
 
 let installed: DrawingRenderers = Object.freeze({});
+/** The renderers as their package passed them, so installing the same ones again is silent. */
+const passed = new WeakSet<object>();
+let consulted = false;
+let warnedLate = false;
 
 /**
  * Install drawing renderers for every editor and export in this process. A later install
  * replaces the renderers it names and keeps the others. Install before any document opens:
  * a drawing already read keeps what it read.
  *
- * @public
+ * @internal
  */
 export function installDrawingRenderers(renderers: DrawingRenderers): void {
-  installed = Object.freeze({ ...installed, ...renderers });
+  const added = Object.values(renderers).filter(
+    (renderer): renderer is object => typeof renderer === 'object' || typeof renderer === 'function'
+  );
+  const fresh = added.filter((renderer) => !passed.has(renderer));
+  for (const renderer of fresh) passed.add(renderer);
+  if (fresh.length > 0 && consulted && !warnedLate) {
+    warnedLate = true;
+    console.warn(
+      '[docx-editor] Drawing renderers were installed after a document opened. Drawings read ' +
+        'before the install keep their placeholders. Install them before the first document opens.'
+    );
+  }
+  installed = Object.freeze({ ...installed, ...guardedRenderers(renderers) });
+}
+
+/** `render`, returning `fallback` instead of throwing, so one bad drawing keeps its placeholder. */
+function guard<A extends unknown[], R, F>(
+  render: (...args: A) => R,
+  fallback: (args: A) => F
+): (...args: A) => R | F {
+  return (...args) => {
+    try {
+      return Reflect.apply(render, undefined, args);
+    } catch {
+      return fallback(args);
+    }
+  };
+}
+
+/** `render`, resolving `null` instead of rejecting. */
+function guardAsync<A extends unknown[], R>(
+  render: (...args: A) => Promise<R | null>
+): (...args: A) => Promise<R | null> {
+  return (...args) => {
+    try {
+      return Reflect.apply(render, undefined, args).catch(() => null);
+    } catch {
+      return Promise.resolve(null);
+    }
+  };
+}
+
+function guardedRenderers(renderers: DrawingRenderers): DrawingRenderers {
+  const { chart, diagramLayout, effects, legacyTextArt, textArtLayout, metafile } = renderers;
+  const none = () => null;
+  return {
+    ...(chart ? { chart: guard(chart, none) } : {}),
+    ...(diagramLayout ? { diagramLayout: guard(diagramLayout, none) } : {}),
+    ...(effects
+      ? {
+          effects: Object.freeze({
+            // A shape whose effects fail paints without them.
+            shape: guard(effects.shape, ([input]) => input.components),
+            picture: guard(effects.picture, none),
+          }),
+        }
+      : {}),
+    ...(legacyTextArt ? { legacyTextArt: guard(legacyTextArt, none) } : {}),
+    ...(textArtLayout ? { textArtLayout: guard(textArtLayout, none) } : {}),
+    ...(metafile
+      ? {
+          metafile: Object.freeze({
+            replay: guardAsync(metafile.replay),
+            ...(metafile.rasterize ? { rasterize: guardAsync(metafile.rasterize) } : {}),
+          }),
+        }
+      : {}),
+  };
 }
 
 /** The installed renderers. */
 export function drawingRenderers(): DrawingRenderers {
+  consulted = true;
   return installed;
 }

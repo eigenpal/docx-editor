@@ -4,6 +4,7 @@ import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
 export const MAX_EMU = 2 ** 31 - 1;
 
+/** @internal */
 export function parseEmu(value: string | undefined, clamp = true): number | null {
   if (value === undefined || !/^-?\d{1,15}$/.test(value)) return null;
   const parsed = Number(value);
@@ -32,6 +33,7 @@ export function parseCropPercent(value: string | undefined): number {
   return Math.min(parsed / 100_000, 1);
 }
 
+/** @internal */
 export function findDirectChild(
   nodes: readonly OoxmlNode[],
   options: {

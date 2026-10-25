@@ -41,7 +41,7 @@ const EMU_PER_TWIP = 635;
 /** A generous bullet glyph width, in ems, for deciding whether a bullet fits its indent. */
 const BULLET_WIDTH_EM = 0.6;
 
-/** The text a shape's style supplies: `a:fontRef` names a theme font slot and a colour. */
+/** The text a shape's style supplies: `a:fontRef` names a theme font slot and a colour. @internal */
 export interface DrawingTextDefaults {
   readonly fontSlot: 'major' | 'minor' | null;
   readonly color: ShapeColor | null;
@@ -51,9 +51,12 @@ export interface DrawingTextDefaults {
  * A lowered text body; `'no-text'` when it holds nothing to paint; `'unsupported'` when it
  * holds text the lowering cannot express (a vertical mode other than a quarter turn, several
  * columns, or a body past the bounds), so its shape must not render without it.
+ *
+ * @internal
  */
 export type TextBodyLowering = LoweredDrawingText | 'no-text' | 'unsupported';
 
+/** @internal */
 export interface LoweredDrawingText {
   /** A `w:txbxContent` root holding the lowered paragraphs; node ids are namespaced. */
   readonly content: OoxmlElement;
@@ -318,7 +321,7 @@ function textOfRun(run: OoxmlElement): string {
   return text;
 }
 
-/** Lower one text body; see {@link TextBodyLowering}. */
+/** Lower one text body; see {@link TextBodyLowering}. @internal */
 export function lowerDrawingTextBody(
   txBody: OoxmlElement,
   partName: string,

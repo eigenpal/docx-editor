@@ -86,6 +86,8 @@ const THEME_TOKENS = new WeakMap<(token: string) => string | null, string>();
 /**
  * The theme and settings identity behind a scheme colour resolver. Resolvers are rebuilt for
  * every package revision; the token stays the same while the theme and settings parts do.
+ *
+ * @internal
  */
 export function shapeThemeCacheToken(
   resolveSchemeColor: (token: string) => string | null

@@ -9,6 +9,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // (SRCAND, SRCPAINT) paints the pixels that change a white page or a black one, and leaves
 // the rest clear, as it shows over a plain page.
 //
+// Each bitmap paints at its record's place in the drawing order, in the window in force at its
+// record. The replayer is handed a copy of the WMF whose bitmap records are text records with
+// a marker; where the marker text is drawn is where the bitmap goes.
+//
 // The bytes are attacker-controlled. Every read is bounds-checked, record and pixel counts
 // are capped, and anything outside the uncompressed subset is skipped.
 
@@ -21,6 +25,9 @@ const META_SETWINDOWEXT = 0x020c;
 const META_STRETCHDIB = 0x0f43;
 const META_DIBSTRETCHBLT = 0x0b41;
 const META_DIBBITBLT = 0x0940;
+const META_TEXTOUT = 0x0521;
+/** A marker's text: two control characters, then the bitmap's index. */
+const MARKER_PREFIX = '\u0001\u007f';
 const SRCCOPY = 0x00cc0020;
 /** Destination AND source: white source pixels leave the page as it is. */
 const SRCAND = 0x008800c6;
@@ -35,12 +42,34 @@ interface Placement {
   readonly height: number;
 }
 
-/** A DIB (`BITMAPINFOHEADER` or `BITMAPCOREHEADER` and its bits) as RGBA, or null. */
+/** One bitmap record: its raster operation, rectangles, window, and where its DIB lies. */
+interface PlacedBitmap {
+  readonly rop: number;
+  readonly source: Placement;
+  readonly target: Placement;
+  /** The window origin and extent in force at the record. */
+  readonly window: Placement;
+  readonly record: number;
+  readonly dib: number;
+  readonly end: number;
+}
+
+/** The bitmap records of a WMF, and the copy of it the replayer reads. */
+export interface WmfBitmapScan {
+  /** The WMF with each bitmap record turned into a text record that draws its marker. */
+  readonly marked: Uint8Array;
+  readonly placed: readonly PlacedBitmap[];
+}
+
+/**
+ * A DIB (`BITMAPINFOHEADER` or `BITMAPCOREHEADER` and its bits) as RGBA, top row first, or
+ * null. `topDown` says the DIB stored its rows from the top, so its source rows count from there.
+ */
 export function decodeDib(
   view: DataView,
   start: number,
   end: number
-): { width: number; height: number; data: Uint8Array } | null {
+): { width: number; height: number; topDown: boolean; data: Uint8Array } | null {
   if (start + 12 > end) return null;
   const headerSize = view.getUint32(start, true);
   let width: number;
@@ -103,21 +132,23 @@ export function decodeDib(
       data[out + 3] = 255;
     }
   }
-  return { width, height: rows, data };
+  return { width, height: rows, topDown, data };
+}
+
+/** The bitmap index a replayed text names, or null when it is not a marker. */
+export function wmfBitmapMarkerIndex(text: string): number | null {
+  if (!text.startsWith(MARKER_PREFIX)) return null;
+  const digits = text.slice(MARKER_PREFIX.length);
+  return /^\d{1,6}$/.test(digits) ? Number(digits) : null;
 }
 
 /**
- * The bitmaps of a WMF as image commands in a canvas of `width` × `height` pixels,
- * which spans the metafile's window. Empty for an EMF or a WMF with none.
+ * The bitmap records of a WMF, each with the window in force at it, and a copy of the WMF
+ * whose bitmap records draw their markers instead. Null for an EMF or a WMF with none.
  */
-export function wmfBitmapCommands(
-  bytes: Uint8Array,
-  width: number,
-  height: number,
-  budget: MetafileBudget
-): MetafileCommand[] {
+export function scanWmfBitmaps(bytes: Uint8Array): WmfBitmapScan | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.length < 22) return [];
+  if (bytes.length < 22) return null;
   let at = 0;
   let window: Placement = { x: 0, y: 0, width: 0, height: 0 };
   if (view.getUint32(0, true) === PLACEABLE_KEY) {
@@ -131,10 +162,9 @@ export function wmfBitmapCommands(
     };
     at = 22;
   }
-  if (at + 18 > bytes.length) return [];
+  if (at + 18 > bytes.length) return null;
   at += view.getUint16(at + 2, true) * 2;
-  const placed: { rop: number; source: Placement; target: Placement; dib: number; end: number }[] =
-    [];
+  const placed: PlacedBitmap[] = [];
   for (let records = 0; records < MAX_RECORDS && at + 6 <= bytes.length; records += 1) {
     const size = view.getUint32(at, true) * 2;
     const fn = view.getUint16(at + 4, true);
@@ -151,6 +181,8 @@ export function wmfBitmapCommands(
         rop: view.getUint32(at + 6, true),
         source: { height: word(3), width: word(4), y: word(5), x: word(6) },
         target: { height: word(7), width: word(8), y: word(9), x: word(10) },
+        window,
+        record: at,
         dib: at + 28,
         end: at + size,
       });
@@ -159,6 +191,8 @@ export function wmfBitmapCommands(
         rop: view.getUint32(at + 6, true),
         source: { height: word(2), width: word(3), y: word(4), x: word(5) },
         target: { height: word(6), width: word(7), y: word(8), x: word(9) },
+        window,
+        record: at,
         dib: at + 26,
         end: at + size,
       });
@@ -168,20 +202,54 @@ export function wmfBitmapCommands(
         rop: view.getUint32(at + 6, true),
         source: { height: target.height, width: target.width, y: word(2), x: word(3) },
         target,
+        window,
+        record: at,
         dib: at + 22,
         end: at + size,
       });
     }
     at += size;
   }
-  if (!placed.length || window.width === 0 || window.height === 0) return [];
-  const scaleX = width / window.width;
-  const scaleY = height / window.height;
-  const commands: MetafileCommand[] = [];
-  for (const { rop, source, target, dib, end } of placed) {
+  if (!placed.length) return null;
+  const marked = bytes.slice();
+  const out = new DataView(marked.buffer);
+  placed.forEach(({ record }, index) => {
+    // META_TEXTOUT: StringLength, the string padded to a word, YStart, XStart. The smallest
+    // bitmap record has room for it, and the DIB after it is left as it was.
+    const text = `${MARKER_PREFIX}${index}`;
+    out.setUint16(record + 4, META_TEXTOUT, true);
+    out.setInt16(record + 6, text.length, true);
+    for (let char = 0; char < text.length; char += 1) {
+      out.setUint8(record + 8 + char, text.charCodeAt(char));
+    }
+    const start = record + 8 + text.length + (text.length % 2);
+    out.setInt16(start, 0, true);
+    out.setInt16(start + 2, 0, true);
+  });
+  return { marked, placed };
+}
+
+/**
+ * The scanned bitmaps as image commands in a canvas of `width` × `height` pixels, which
+ * spans the metafile's window: one list per bitmap, empty for one that does not draw.
+ */
+export function wmfBitmapCommands(
+  bytes: Uint8Array,
+  placed: readonly PlacedBitmap[],
+  width: number,
+  height: number,
+  budget: MetafileBudget
+): MetafileCommand[][] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const groups: MetafileCommand[][] = placed.map(() => []);
+  for (const [index, { rop, source, target, window, dib, end }] of placed.entries()) {
     if (rop !== SRCCOPY && rop !== SRCAND && rop !== SRCPAINT) continue;
+    if (window.width === 0 || window.height === 0) continue;
     const image = decodeDib(view, dib, end);
     if (!image) continue;
+    const scaleX = width / window.width;
+    const scaleY = height / window.height;
+    const commands = groups[index]!;
     if (rop !== SRCCOPY) {
       const clear = rop === SRCAND ? 255 : 0;
       for (let pixel = 0; pixel < image.data.length; pixel += 4) {
@@ -201,8 +269,8 @@ export function wmfBitmapCommands(
     const sh = source.height || image.height;
     const pixelX = (target.width / sw) * scaleX;
     const pixelY = (target.height / sh) * scaleY;
-    // DIB source rows count from the bottom.
-    const sourceTop = image.height - source.y - sh;
+    // Source rows count from the bottom of a bottom-up DIB and from the top of a top-down one.
+    const sourceTop = image.topDown ? source.y : image.height - source.y - sh;
     const partial = source.x !== 0 || sourceTop !== 0 || sw !== image.width || sh !== image.height;
     if (partial) {
       const left = (target.x - window.x) * scaleX;
@@ -238,5 +306,28 @@ export function wmfBitmapCommands(
     });
     if (partial) commands.push({ kind: 'restore' });
   }
-  return commands;
+  return groups;
+}
+
+/**
+ * The replayed commands with each bitmap's commands inserted where its marker was drawn.
+ * `position` is the command index of a bitmap's marker, or -1 when the replayer stopped
+ * before its record, in which case the bitmap is left out as the rest of the stream is.
+ */
+export function withWmfBitmaps(
+  commands: readonly MetafileCommand[],
+  groups: readonly (readonly MetafileCommand[])[],
+  position: (index: number) => number
+): readonly MetafileCommand[] {
+  const out: MetafileCommand[] = [];
+  let next = 0;
+  groups.forEach((group, index) => {
+    const at = position(index);
+    if (at < 0 || !group.length) return;
+    // Markers are drawn in record order, so their positions never go back.
+    while (next < Math.min(at, commands.length)) out.push(commands[next++]!);
+    for (const command of group) out.push(command);
+  });
+  while (next < commands.length) out.push(commands[next++]!);
+  return out;
 }

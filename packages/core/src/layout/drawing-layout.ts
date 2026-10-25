@@ -42,7 +42,7 @@ import {
 import type { LayoutBox } from './semantic-records.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
 import { withGroupTextboxStories } from './group-textbox-layout.ts';
-import { drawingPaintFields } from './drawing-paint-fields.ts';
+import { drawingPaintFields, type DrawingPlaceholderKind } from './drawing-paint-fields.ts';
 import {
   groupPictureLayerFields,
   groupPictureLayerResources,
@@ -272,8 +272,8 @@ export interface InlineDrawingRecord {
   readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
-  /** Fixed non-picture graphic kind for refusal labels (`chart`, `group`, …); null for pictures. */
-  readonly placeholderGraphicKind: string | null;
+  /** Graphic kind of a non-picture drawing, naming its placeholder; null for pictures. */
+  readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;
   /** Legacy text art on the line, fitted to its box. */

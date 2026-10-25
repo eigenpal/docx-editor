@@ -99,7 +99,7 @@ function shadowOf(
 /**
  * The effect list a shape paints with, and the colour `phClr` stands for in it.
  *
- * @public
+ * @internal
  */
 export interface ShapeEffectList {
   /** The shape's own `a:effectLst`, or the one in the theme effect style it references. */

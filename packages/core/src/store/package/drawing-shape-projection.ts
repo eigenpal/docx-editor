@@ -76,6 +76,8 @@ export type ShapeStyleMatrixResolver = (
  * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
  * reference. Anything richer (gradient and picture fills, text bodies, rotation, a nested
  * group) projects as `null` and paints the labelled placeholder instead.
+ *
+ * @public
  */
 export interface VectorShapeProjection {
   /** The drawing extent that frames the subpath coordinate space. */
@@ -107,6 +109,7 @@ export interface VectorShapeProjection {
   readonly overflowVisible?: true;
 }
 
+/** One painted layer of a vector shape. @public */
 export interface VectorShapeComponent {
   readonly subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[];
   /** Authored close commands; omitted by older consumers means closed polygons. */
@@ -165,6 +168,8 @@ export interface VectorShapeComponent {
  * The projection captures only the story root and the shape chrome reads; it never walks the
  * story content, so the per-drawing element budget is not spent on paragraphs. Layout collects
  * blocks from `content` under its own caps.
+ *
+ * @internal
  */
 export interface TextboxStoryProjection {
   /** Canonical node id of the `w:txbxContent` element. */

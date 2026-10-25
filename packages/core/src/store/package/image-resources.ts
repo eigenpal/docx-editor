@@ -53,6 +53,7 @@ export type RenderableImageMime = SupportedImageMime | VectorImageMime;
  * A decode port may rasterize it; without one it paints as a labelled placeholder.
  */
 export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
+/** @internal */
 export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
 
 export type { ImageResourceLimits };

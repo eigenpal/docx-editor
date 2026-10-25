@@ -252,7 +252,8 @@ function cachedValues(element: OoxmlElement, name: string): (number | null)[] {
 /** The error bars of a series, one per point and direction. */
 export function seriesErrorBars(plot: ChartPlot, series: ChartSeries): ErrorBar[] {
   const out: ErrorBar[] = [];
-  const points = series.values.map((y, index) => ({ y, x: seriesXs(plot, series)[index] }));
+  const xs = seriesXs(plot, series);
+  const points = series.values.map((y, index) => ({ y, x: xs[index] }));
   const ys = series.values.filter(
     (value): value is number => value !== null && Number.isFinite(value)
   );

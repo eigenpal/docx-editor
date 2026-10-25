@@ -42,6 +42,7 @@ export function createWalkState(): WalkState {
   };
 }
 
+/** @internal */
 export function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
 }

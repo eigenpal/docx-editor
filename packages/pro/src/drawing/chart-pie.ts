@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Pie and doughnut plots: slices from the first slice angle, clockwise, with exploded slices
 // and data labels.
 
+import { categoryLabel } from './chart-number-format.ts';
 import { isElement, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import type { ChartPlot } from './chart-model.ts';
@@ -197,7 +198,7 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
             spec,
             value,
             value / total,
-            item.categories?.[index] ?? null,
+            categoryLabel(item, index, context.date1904),
             item.name,
             item.formatCode,
             context.date1904

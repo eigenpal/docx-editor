@@ -135,10 +135,15 @@ export function traceVmlPath(
     current.push(pen);
   };
   // An arc of the ellipse centred at (cx, cy) with radii (rx, ry), from `start` turning by
-  // `sweep` radians, where an angle runs counterclockwise on the page (y down).
+  // `sweep` radians, where an angle runs counterclockwise on the page (y down). The sweep is
+  // file data, so a turn that needs more points than are left overflows before tracing.
   const arc = (cx: number, cy: number, rx: number, ry: number, start: number, sweep: number) => {
     const steps = Math.max(1, Math.ceil((Math.abs(sweep) / (Math.PI / 2)) * CURVE_STEPS));
-    for (let step = 1; step <= steps; step++) {
+    if (!(count + steps <= MAX_POINTS)) {
+      overflow = true;
+      return;
+    }
+    for (let step = 1; step <= steps && !overflow; step++) {
       const angle = start + (sweep * step) / steps;
       add({ x: cx + rx * Math.cos(angle), y: cy - ry * Math.sin(angle) });
     }

@@ -100,6 +100,8 @@ export function groupPictureLayerFields(
  * The record that paints one layer picture alone: the layer's resource and crop, with its
  * frame as the image corners, no vector members, no link, and no other layers. Every output
  * paints a layer through its ordinary group picture path with this record.
+ *
+ * @internal
  */
 export function groupPictureLayerDrawing<D extends InlineDrawingRecord | AnchoredDrawingRecord>(
   drawing: D,

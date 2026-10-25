@@ -32,7 +32,7 @@ import {
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 
-/** One text box member of a drawing group. */
+/** One text box member of a drawing group. @internal */
 export interface GroupTextboxProjection {
   /** Canonical node id of the member `wps:wsp`; namespaces the story's line ids. */
   readonly memberNodeId: string;

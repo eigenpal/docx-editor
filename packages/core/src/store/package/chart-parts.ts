@@ -11,13 +11,15 @@ import { internalPartRoot, relationshipAttribute } from './package-part-links.ts
 import { collectThemeSchemeFaces } from './theme-font-scheme.ts';
 import { packageThemeRoot } from './theme-color-resolution.ts';
 
+/** @internal */
 export const CHART_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+/** @internal */
 export const CHART_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
 
 const CHART_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart';
 
-/** One resolved chart part. */
+/** One resolved chart part. @internal */
 export interface ChartPart {
   /** The `c:chartSpace` root. */
   readonly chartSpace: OoxmlElement;
@@ -27,12 +29,13 @@ export interface ChartPart {
   readonly themeFaces: ChartThemeFaces;
 }
 
+/** @internal */
 export interface ChartThemeFaces {
   readonly major: string | null;
   readonly minor: string | null;
 }
 
-/** Resolves the chart part behind one `c:chart` element of the owner story part. */
+/** Resolves the chart part behind one `c:chart` element of the owner story part. @internal */
 export type ChartPartResolver = (chart: OoxmlElement) => ChartPart | null;
 
 /**

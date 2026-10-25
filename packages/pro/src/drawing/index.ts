@@ -24,18 +24,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * converter, and a shape paints without those effects.
  *
  * The renderers serve every editor and export in the process. Install them before any
- * document opens. The metafile replay and `emf-converter` load on first use, only when a
- * document holds a metafile picture.
- *
- * Contract for the effects and text art readers: OOXML is read into a typed model
- * (`effects-model.ts`, `text-art-model.ts`), and the model is projected for paint
- * (`effects-projection.ts`, `text-art-projection.ts`). Model fields map one to one to OOXML
- * attributes and keep the canonical node id of the element they come from, so an editor can
- * change a field and write it back with a tree op. The readers are pure functions and the
- * models hold no paint state.
+ * document opens; a later install logs a console warning once. `reviewModule()` installs them
+ * too. The metafile replay and `emf-converter` load on first use, only when a document holds a
+ * metafile picture.
  *
  * @example Enable advanced drawing rendering in an editor
  * ```ts
+ * import { createDocxEditor } from '@docx-editor.dev/core/editor';
  * import { drawingModule } from '@docx-editor.dev/pro/drawing';
  *
  * const editor = createDocxEditor({ document: bytes, modules: [drawingModule()] });

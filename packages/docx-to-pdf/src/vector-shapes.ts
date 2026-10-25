@@ -169,11 +169,15 @@ export function vectorComponentOps(
   if (gradient) {
     out.push(`q ${geometry} ${clipOp} n ${gradientShading(doc, page, gradient, unit)} Q`);
     if (component.strokeHex !== null) {
-      out.push(inset ? `q ${geometry} W* n ${geometry} S Q` : `${geometry} S`);
+      out.push(inset ? `q ${geometry} ${clipOp} n ${geometry} S Q` : `${geometry} S`);
     }
   } else if (inset) {
     // The fill lies inside the clip already, so one clipped pass fills and strokes.
-    out.push(`q ${geometry} W* n`, geometry, component.fillHex !== null ? 'B* Q' : 'S Q');
+    out.push(
+      `q ${geometry} ${clipOp} n`,
+      geometry,
+      component.fillHex !== null ? `${fillStroke} Q` : 'S Q'
+    );
   } else {
     out.push(geometry);
     out.push(

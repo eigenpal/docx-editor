@@ -12,7 +12,7 @@ const MAX_VALUE = 1_000_000_000;
 /** VML angles are fixed-point degrees: 65536 units per degree. */
 const FD = 65536;
 
-/** Named inputs a formula may read besides adjust values and earlier formulas. @public */
+/** Named inputs a formula may read besides adjust values and earlier formulas. @internal */
 export interface VmlFormulaContext {
   readonly width: number;
   readonly height: number;
@@ -111,7 +111,7 @@ function argument(token: string, context: VmlFormulaContext, values: readonly nu
   }
 }
 
-/** The values of `eqns` in order, or null when one cannot be read. @public */
+/** The values of `eqns` in order, or null when one cannot be read. @internal */
 export function vmlFormulaValues(
   eqns: readonly string[],
   context: VmlFormulaContext

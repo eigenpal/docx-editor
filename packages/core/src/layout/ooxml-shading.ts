@@ -95,6 +95,8 @@ export function paragraphShadingBox(
  * The colour of automatic text on a `background` fill: white on a dark fill, null for the
  * default black. A fill is dark when its luma (0.299 R + 0.587 G + 0.114 B, out of 255) is
  * under 59.5: grey `3B3B3B` takes white text and `3C3C3C` black, as measured.
+ *
+ * @internal
  */
 export function automaticTextColor(background: string | null | undefined): 'FFFFFF' | null {
   if (!background || !/^[0-9A-Fa-f]{6}$/.test(background)) return null;

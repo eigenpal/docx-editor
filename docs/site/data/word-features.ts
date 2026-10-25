@@ -726,7 +726,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'premium',
-    docsLink: '/docs/2.x/guides/images',
+    docsLink: '/docs/2.x/pro/drawing',
     notes:
       'WordArt requires the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, inline WordArt keeps its extent with a placeholder, and floating WordArt does not render. WordArt renders its text as glyph outlines fitted to the shape: straight, between the two guides of a shape such as a triangle, or along an arch. It paints its fill (solid or vertical gradient), outline, shown shadow, rotation, and a parallel 3-D extrusion with lit sides. Gradients at other angles, perspective extrusion, and shape types whose drawing does not include their definition (other than plain text, triangle, and arch) do not render. Text watermarks render without the module.',
   },
@@ -738,7 +738,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'premium',
-    docsLink: '/docs/2.x/guides/images',
+    docsLink: '/docs/2.x/pro/drawing',
     notes:
       'Charts require the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, a chart keeps a labelled placeholder. Charts render read-only from the values cached in the chart part, in the editor and in PDF export: column and bar charts (clustered, stacked, and percent stacked), line, area, scatter, bubble, radar, stock, pie, doughnut, pie-of-pie, bar-of-pie, surface, and contour charts. 3-D column, bar, line, area, pie, and surface charts render in 3-D with shaded faces, walls, gridlines, and axis labels, with right-angle axes or in perspective. A chart with a series axis places each series in its own row. Axes, tick label number and date formats, gridlines, chart and axis titles, legends, data labels (with best-fit pie labels that move outside crowded slices and spread around the pie on bent leader lines), trendlines with their equations, error bars, series colors, markers, smoothed lines, exploded slices, and manual plot layouts render. Surface and contour charts fill their value bands, and wireframe surfaces draw the band edges. The embedded workbook is never read, and external data is never loaded. Charts that combine a pie or radar plot with other plot types, and surfaces of more than 20,000 points, keep a labelled placeholder that React and Vue DocxEditor.UnsupportedElement declarations can replace. The chart parts are preserved on save.',
   },
@@ -750,7 +750,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/2.x/guides/images',
+    docsLink: '/docs/2.x/pro/drawing',
     notes:
       'SmartArt diagrams render read-only from the drawing saved with the document, in the editor, in headers and footers, and in PDF export. Shapes, solid and gradient fills, outlines, the diagram background, text, bullets, and quarter-turned vertical text render. The diagram data, layout, colors, styles, and drawing parts are preserved on save. A diagram saved without its drawing is laid out from its data, layout, style, and color parts by the drawingModule from @docx-editor.dev/pro/drawing, which requires the EigenPal Pro License. PDF export includes it. Without the module, such a diagram keeps its labelled placeholder. A diagram with picture fills, or with a text mode that cannot render, keeps its labelled placeholder, and application components can replace that fallback as for charts. Outer shadows render; other effects and 3-D bevels do not. A changed diagram layout is not recalculated: the saved drawing is shown as stored.',
   },

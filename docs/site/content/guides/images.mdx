@@ -245,7 +245,7 @@ Both packages export `UnsupportedElement` with these fields:
 - `source` exposes the read-only canonical source. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the default fallback text.
-- Optional `drawing` and `equation` records provide engine metadata.
+- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart`, `diagram`, `shape`, `group`, `textbox`, `canvas`, or `graphic`. `drawing.accessibility.label` holds the drawing's alternative text.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the fallback; it does not try the next declaration.

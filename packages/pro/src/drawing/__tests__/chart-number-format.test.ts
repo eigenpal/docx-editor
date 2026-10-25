@@ -4,7 +4,12 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { describe, expect, test } from 'bun:test';
-import { formatChartNumber, formatGeneral, isDateFormatCode } from '../chart-number-format.ts';
+import {
+  categoryLabel,
+  formatChartNumber,
+  formatGeneral,
+  isDateFormatCode,
+} from '../chart-number-format.ts';
 
 describe('chart number formats', () => {
   test('General keeps ten significant digits and switches to scientific when long', () => {
@@ -43,5 +48,26 @@ describe('chart number formats', () => {
     expect(isDateFormatCode('m/d/yyyy')).toBe(true);
     expect(isDateFormatCode('#,##0')).toBe(false);
     expect(isDateFormatCode('General')).toBe(false);
+  });
+
+  test('more decimals than a number can show cap at thirty instead of throwing', () => {
+    const long = '0.' + '0'.repeat(101);
+    expect(formatChartNumber(1.5, long)).toBe('1.5' + '0'.repeat(29));
+    expect(formatChartNumber(1234.5, long + 'E+00')).toBe('1.2345' + '0'.repeat(26) + 'E+03');
+  });
+
+  test('elapsed time and fractions of a second', () => {
+    expect(isDateFormatCode('mm:ss.0')).toBe(true);
+    expect(isDateFormatCode('[h]:mm')).toBe(true);
+    expect(formatChartNumber(1234.5, 'mm:ss.0')).toBe('00:00.0');
+    expect(formatChartNumber(1234.5, '[h]:mm')).toBe('29628:00');
+    expect(formatChartNumber(1.25, '[h]:mm:ss')).toBe('30:00:00');
+    expect(formatChartNumber(0.5 + 1.25 / 86_400, 'hh:mm:ss.00')).toBe('12:00:01.25');
+  });
+
+  test('a category shows its cached number in the category format', () => {
+    const series = { categories: ['44927'], categoryNumbers: [44927], categoryFormat: 'mmm-yy' };
+    expect(categoryLabel(series, 0, false)).toBe('Jan-23');
+    expect(categoryLabel({ ...series, categoryNumbers: null }, 0, false)).toBe('44927');
   });
 });

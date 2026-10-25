@@ -62,6 +62,7 @@ export function schemaAngleIsZero(value: string | undefined): boolean {
   return /^[+-]?\d{1,12}$/.test(collapsed) && Number(collapsed) === 0;
 }
 
+/** @internal */
 export function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
   // Non-picture graphic payloads demote to generic nodes even under a typed
   // `drawingGraphic`, so the generic lookup is always in play here.

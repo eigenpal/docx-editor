@@ -39,6 +39,7 @@ export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compat
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';
 /** The `w14` wordml-2010 extension namespace — `w14:paraId`/`w14:textId` live here. */
 export const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
+/** @internal */
 export const DRAWINGML_MAIN_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 export const WP_NAMESPACE_URI =
   'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';

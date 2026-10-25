@@ -11,16 +11,24 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the global object only while one replay runs, and replays run one at a time.
 
 import {
+  MAX_METAFILE_PIXELS,
   RECORDING_MIME,
   RecordingCanvas,
   RecordingImageData,
   type MetafileBudget,
+  type MetafileCommand,
   type MetafileFont,
   type MetafileRaster,
   type RecordingBitmap,
+  type RecordingContext2D,
 } from './metafile-recording.ts';
 import { emfWithCanvasMapping } from './metafile-emf-origin.ts';
-import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
+import {
+  scanWmfBitmaps,
+  wmfBitmapCommands,
+  wmfBitmapMarkerIndex,
+  withWmfBitmaps,
+} from './metafile-wmf-bitmaps.ts';
 import { withWmfText } from './metafile-wmf-text-commands.ts';
 import { wmfTextRecords } from './metafile-wmf-text.ts';
 import type { MetafileRenderOptions, MetafileReplay } from '@docx-editor.dev/core/store';
@@ -94,9 +102,26 @@ async function replayAlone(
     const width = options.textAdvance(text, font);
     return Number.isFinite(width) && width >= 0 ? width : 0;
   };
+  // A WMF's bitmap records reach the replayer as text records drawing a marker; the marker is
+  // not drawn, and its command index is kept as the bitmap's place in the drawing order.
+  const scan = mime === 'image/x-wmf' ? scanWmfBitmaps(bytes) : null;
+  const markers = new Map<number, { commands: readonly MetafileCommand[]; at: number }>();
+  const marking = new WeakSet<RecordingContext2D>();
   class StandInCanvas extends RecordingCanvas {
     constructor(width: number, height: number) {
       super(width, height, budget, measure, exportCanvas);
+    }
+    override getContext(kind: string): RecordingContext2D | null {
+      const context = super.getContext(kind);
+      if (!scan || !context || marking.has(context)) return context;
+      marking.add(context);
+      const fillText = context.fillText.bind(context);
+      context.fillText = (text: string, x: number, y: number) => {
+        const index = wmfBitmapMarkerIndex(String(text));
+        if (index === null || index >= scan.placed.length) return fillText(text, x, y);
+        markers.set(index, { commands: context.commands, at: context.commands.length });
+      };
+      return context;
     }
   }
   class StandInFileReader {
@@ -127,7 +152,13 @@ async function replayAlone(
     }
     const size = encodedSize(data);
     if (!size || !(size.width > 0 && size.height > 0)) throw new Error('Unsupported bitmap');
+    // The replayer decodes a bitmap for each placement, so this counts every placement. A
+    // raster past the bound is refused: the exporter would expand it to RGBA.
     budget.pixels += size.width * size.height;
+    if (budget.pixels > MAX_METAFILE_PIXELS) {
+      budget.exhausted = true;
+      throw new Error('Bitmap past the pixel bound');
+    }
     const raster: MetafileRaster = { kind: 'encoded', ...size, bytes: data };
     return { width: size.width, height: size.height, raster, close() {} };
   };
@@ -153,7 +184,7 @@ async function replayAlone(
       maxRecords: MAX_RECORDS,
     };
     const buffer = (
-      mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, replayOptions) : bytes
+      mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, replayOptions) : (scan?.marked ?? bytes)
     ).slice().buffer;
     const url =
       mime === 'image/x-emf'
@@ -170,13 +201,20 @@ async function replayAlone(
     const commands = wmf
       ? withWmfText(replayed.commands, wmfTextRecords(bytes))
       : replayed.commands;
-    const drawing = commands === replayed.commands ? replayed : { ...replayed, commands };
-    // The replayer skips a WMF's bitmaps; they paint first, under its other drawing.
-    const bitmaps = wmf ? wmfBitmapCommands(bytes, drawing.width, drawing.height, budget) : [];
+    // The replayer skips a WMF's bitmaps; each paints where its record's marker was drawn.
+    // Text decoding maps commands one to one, so the marker indices still hold.
+    const groups = scan
+      ? wmfBitmapCommands(bytes, scan.placed, replayed.width, replayed.height, budget)
+      : [];
+    const position = (index: number): number => {
+      const marker = markers.get(index);
+      return marker && marker.commands === replayed.commands ? marker.at : -1;
+    };
+    const drawn = groups.some((group) => group.length)
+      ? withWmfBitmaps(commands, groups, position)
+      : commands;
     return {
-      drawing: bitmaps.length
-        ? { ...drawing, commands: [...bitmaps, ...drawing.commands] }
-        : drawing,
+      drawing: drawn === replayed.commands ? replayed : { ...replayed, commands: drawn },
       complete: !budget.exhausted,
     };
   } catch {

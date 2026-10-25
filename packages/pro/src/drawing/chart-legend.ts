@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The chart legend: its entries, the room it takes from the plot, and its painting.
 
+import { categoryLabel } from './chart-number-format.ts';
 import type { SurfaceBand } from './chart-3d-surface.ts';
 import { child, type ChartLegend, type ChartModel, type ChartPlot } from './chart-model.ts';
 import { mergeStroke, readChartShapeProperties } from './chart-style.ts';
@@ -67,7 +68,7 @@ export function legendEntries(
       const series = plot.series[0]!;
       const count = series.values.length;
       for (let index = 0; index < count && index < MAX_ENTRIES; index += 1) {
-        const text = series.categories?.[index] ?? String(index + 1);
+        const text = categoryLabel(series, index, model.date1904) ?? String(index + 1);
         const point = varied || series.points.has(index) ? { index, count } : undefined;
         plotEntries.push({ text, look: seriesLook(plot, series, context, point), line });
       }

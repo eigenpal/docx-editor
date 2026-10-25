@@ -33,6 +33,9 @@ import { missingGlyphHint } from './font-provisioning.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
+/** The named highlight colours. A run with one paints it in place of its shading. */
+const HIGHLIGHT_NAME =
+  /^(?:black|blue|cyan|green|magenta|red|yellow|white|lightGray|dark(?:Blue|Cyan|Gray|Green|Magenta|Red|Yellow))$/;
 
 /**
  * Drawn size of a run in half points, after any superscript or subscript reduction.
@@ -370,9 +373,10 @@ export class TextWriter {
     // to the grid first. The tolerance is far under any real geometry and far over the error.
     const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
     const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
-    // Automatic text takes white on dark run shading, else on dark paragraph shading.
-    let foreground =
-      style.color ?? automaticTextColor(style.shading ?? visit.paragraph.shading ?? null);
+    // Automatic text takes white on dark run shading, else on dark paragraph shading. A named
+    // highlight replaces the run shading behind the text, so only the paragraph's counts then.
+    const shading = HIGHLIGHT_NAME.test(style.highlight ?? '') ? null : style.shading;
+    let foreground = style.color ?? automaticTextColor(shading ?? visit.paragraph.shading ?? null);
     const row = marker ? undefined : this.rowRevisions.get(visit.paragraph);
     const revisions = this.showRevisionMarkup ? spanRevisions(visit, row) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');

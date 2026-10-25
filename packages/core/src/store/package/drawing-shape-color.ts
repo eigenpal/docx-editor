@@ -7,6 +7,7 @@ import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 
+/** @internal */
 export type ShapeSchemeColorResolver = (scheme: string) => string | null;
 
 const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
@@ -249,6 +250,7 @@ function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+/** @internal */
 export function resolveColorNode(
   color: OoxmlNode,
   resolveSchemeColor?: ShapeSchemeColorResolver,
@@ -344,6 +346,7 @@ const FILL_ELEMENT_NAMES = new Set([
   'grpFill',
 ]);
 
+/** @internal */
 export function directFill(
   parent: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,

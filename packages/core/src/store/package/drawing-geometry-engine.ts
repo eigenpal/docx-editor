@@ -53,6 +53,7 @@ export interface GeometryPath {
   readonly commands: readonly GeometryCommand[];
 }
 
+/** @internal */
 export interface GeometryDefinition {
   readonly avLst: readonly GeometryGuide[];
   readonly gdLst: readonly GeometryGuide[];
@@ -77,6 +78,7 @@ export interface EvaluatedPath {
   readonly stroke: boolean;
 }
 
+/** @internal */
 export interface EvaluatedGeometry {
   readonly paths: readonly EvaluatedPath[];
   readonly textRect: Readonly<{ left: number; top: number; right: number; bottom: number }>;
@@ -185,7 +187,7 @@ function decodePreset(line: string): GeometryDefinition | null {
   };
 }
 
-/** The ECMA-376 preset geometry named by `a:prstGeom/@prst`, or null for an unknown name. */
+/** The ECMA-376 preset geometry named by `a:prstGeom/@prst`, or null for an unknown name. @internal */
 export function presetGeometryDefinition(name: string): GeometryDefinition | null {
   const cached = presetCache.get(name);
   if (cached !== undefined) return cached;
@@ -351,6 +353,8 @@ function segmentsFor(length: number, tolerance: number): number {
  * Evaluate a definition at a shape size. `adjust` replaces avLst values by name, as
  * `a:prstGeom/a:avLst` does. Null when the flattened geometry would exceed
  * MAX_GEOMETRY_POINTS; sizes that are negative or not finite read as 0.
+ *
+ * @internal
  */
 export function evaluateGeometry(
   definition: GeometryDefinition,

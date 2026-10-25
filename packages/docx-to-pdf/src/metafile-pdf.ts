@@ -8,6 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the picture's crop, clip, and transform place the form exactly as they place an image.
 import { PDFDocument, type PDFRef } from 'pdf-lib';
 import {
+  ExportResourceError,
   replayMetafile,
   type FontBackedExportCapabilities,
   type MetafileCommand,
@@ -23,7 +24,7 @@ import {
   shapedRunOutline,
   type StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
-import { flateStream, number as n, Commands, Work } from './context.ts';
+import { flateStream, number as n, Commands, PdfWorkLimitError, Work } from './context.ts';
 import { pathOperators } from './text-art.ts';
 
 /** A nested drawing deeper than this is left out. */
@@ -106,6 +107,20 @@ export class MetafileForms {
     metafile: { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array },
     pageIndex: number
   ): Promise<PDFRef | null> {
+    try {
+      return await this.write(metafile, pageIndex);
+    } catch (error) {
+      // A metafile that fails to draw is refused for its picture, never for the whole export.
+      // The work budget's own errors still end the export.
+      if (error instanceof PdfWorkLimitError || error instanceof ExportResourceError) throw error;
+      return null;
+    }
+  }
+
+  private async write(
+    metafile: { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array },
+    pageIndex: number
+  ): Promise<PDFRef | null> {
     const replay = await replayMetafile(metafile.bytes, metafile.mime, {
       measureText: (text, font) => this.shape(text, font)?.width ?? 0,
     });
@@ -133,6 +148,13 @@ export class MetafileForms {
       );
       this.substituted.delete(family);
     }
+    if (writer.missedImage) {
+      this.work.report(
+        'metafile-image',
+        'An image in a metafile picture could not be decoded and is left out',
+        pageIndex
+      );
+    }
     if (writer.missedText) {
       this.work.report(
         'metafile-text',
@@ -159,6 +181,7 @@ class FormWriter {
   readonly states: Record<string, PDFRef> = {};
   readonly images: Record<string, PDFRef> = {};
   missedText = false;
+  missedImage = false;
   private readonly alphaNames = new Map<number, string>();
   constructor(
     private readonly doc: PDFDocument,
@@ -295,11 +318,19 @@ class FormWriter {
   private async raster(raster: MetafileRaster): Promise<PDFRef | null> {
     this.work.tick();
     if (raster.kind === 'encoded') {
-      const image =
-        raster.mime === 'image/png'
-          ? await this.doc.embedPng(raster.bytes)
-          : await this.doc.embedJpg(raster.bytes);
-      return image.ref;
+      // The producer checks only the signature and header, so the image data can still be
+      // corrupt. Such an image is left out of the picture.
+      try {
+        const image =
+          raster.mime === 'image/png'
+            ? await this.doc.embedPng(raster.bytes)
+            : await this.doc.embedJpg(raster.bytes);
+        return image.ref;
+      } catch (error) {
+        if (error instanceof PdfWorkLimitError || error instanceof ExportResourceError) throw error;
+        this.missedImage = true;
+        return null;
+      }
     }
     const { width, height, data } = raster;
     const pixels = width * height;

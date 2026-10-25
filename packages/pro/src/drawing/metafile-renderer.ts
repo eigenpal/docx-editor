@@ -30,7 +30,15 @@ const renderer: MetafileRenderer = {
   },
   async rasterize(...args: Parameters<NonNullable<MetafileRenderer['rasterize']>>) {
     rasterModule ??= import('./metafile-raster.ts');
-    return (await rasterModule).rasterizeMetafile(...args);
+    let loaded: typeof import('./metafile-raster.ts');
+    try {
+      loaded = await rasterModule;
+    } catch {
+      // As for replay: decline this picture and let a later one try again.
+      rasterModule = null;
+      return null;
+    }
+    return loaded.rasterizeMetafile(...args);
   },
 };
 /** The metafile renderer: replay for exporters, rasterize for the browser editor. */

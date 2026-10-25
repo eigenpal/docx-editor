@@ -11,7 +11,7 @@ import type { LegacyTextArtProjection } from './legacy-vml-text-art.ts';
  * A string's glyph outlines in points, x right and y down from the pen origin on the
  * baseline. `path` holds only absolute `M`, `L`, `Q`, `C` and `Z` commands.
  *
- * @public
+ * @internal
  */
 export interface TextArtOutline {
   readonly path: string;
@@ -26,7 +26,7 @@ export interface TextArtOutline {
 /**
  * What a text art layout reads.
  *
- * @public
+ * @internal
  */
 export interface TextArtLayoutInput {
   readonly textArt: LegacyTextArtProjection;
@@ -43,7 +43,7 @@ export interface TextArtLayoutInput {
 /**
  * Text art as painted geometry.
  *
- * @public
+ * @internal
  */
 export interface TextArtLayout {
   /**
@@ -59,6 +59,6 @@ export interface TextArtLayout {
  * Lays out text art whose projection carries `renderData`, or returns null to leave it to the
  * engine's plain fit.
  *
- * @public
+ * @internal
  */
 export type TextArtLayoutRenderer = (input: TextArtLayoutInput) => TextArtLayout | null;

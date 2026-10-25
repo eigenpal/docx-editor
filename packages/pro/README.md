@@ -158,7 +158,7 @@ This package ships the task recipes in [`docs/index.md`](./docs/index.md). They 
 
 This package uses the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md). See [pricing](https://www.docx-editor.dev/pricing) for license and support options.
 
-`reviewModule`, `customNodesModule`, and `collaborationModule` accept an optional `licenseKey`. Construction never validates it and never touches the network.
+`reviewModule`, `customNodesModule`, `collaborationModule`, `drawingModule`, and `installDrawing` accept an optional `licenseKey`. Pass the key once, to any of them. Construction never validates it and never touches the network.
 
 ## Documentation
 

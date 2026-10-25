@@ -12,9 +12,24 @@ import type {
 import type { PictureFrameEffects } from '../store/package/drawing-picture-frame.ts';
 import type { DrawingGroupPictureRecord } from './drawing-layout.ts';
 
+/**
+ * The kind of graphic a non-picture drawing holds: `graphic` for any kind the engine does not
+ * name.
+ *
+ * @public
+ */
+export type DrawingPlaceholderKind =
+  | 'chart'
+  | 'diagram'
+  | 'shape'
+  | 'group'
+  | 'textbox'
+  | 'canvas'
+  | 'graphic';
+
 // A Map, not an object literal: the key is a `graphicData@uri` out of the file, so a value
 // of `__proto__` or `constructor` must answer undefined, not a prototype member.
-const GRAPHIC_URI_KIND: ReadonlyMap<string, string> = new Map([
+const GRAPHIC_URI_KIND: ReadonlyMap<string, DrawingPlaceholderKind> = new Map([
   ['http://schemas.openxmlformats.org/drawingml/2006/chart', 'chart'],
   ['http://schemas.openxmlformats.org/drawingml/2006/diagram', 'diagram'],
   // A legacy drawing on the line that cannot paint (`legacy-vml-placeholder.ts`).
@@ -39,13 +54,13 @@ export function drawingPaintFields(projection: DrawingProjection): {
   readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
-  readonly placeholderGraphicKind: string | null;
+  readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
   readonly vectorShape: VectorShapeProjection | null;
   readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
 } {
   const picture = projection.picture;
-  let placeholderGraphicKind: string | null = null;
+  let placeholderGraphicKind: DrawingPlaceholderKind | null = null;
   if (!picture) {
     for (const diagnostic of projection.diagnostics) {
       if (diagnostic.code !== 'unsupported-graphic') continue;

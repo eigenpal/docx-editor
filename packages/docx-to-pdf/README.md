@@ -100,7 +100,7 @@ The converter reads PNG and JPEG images even when DOCX metadata declares another
 
 ## Limitations
 
-Charts, rotated table-cell text, unsupported equation fallbacks, advanced image effects, some revision presentation, and non-PNG/JPEG media produce diagnostics. Brightness and grayscale adjustments are not supported.
+The converter includes the drawing module from `@docx-editor.dev/pro/drawing`, so charts, SmartArt diagrams, shape effects, WordArt, and EMF and WMF pictures render. Drawings that the module cannot render, rotated table-cell text, unsupported equation fallbacks, some revision presentation, and other unsupported media produce diagnostics. Brightness and grayscale adjustments are not supported.
 
 The writer rejects variable fonts, missing glyphs, prohibited embedding, fonts that prohibit subsetting, and font containers that cannot be encoded. Tagged PDF, PDF/A, encryption, and forms are not supported.
 

@@ -94,6 +94,11 @@ function offsetPath(points: readonly Point[], closed: boolean, distance: number)
  * A stroked component as its compound bands: each band strokes the path moved to the band's
  * centre at the band's width. Only the first band keeps the line ends. A single line, or a
  * component with no stroke, stays as it is.
+ *
+ * The bands carry no fill: a filled component becomes one fill-only component on the
+ * original geometry, painted first with the shadow, then the stroke-only bands. Filling each
+ * band's moved path would paint the fill past the geometry, into the gaps between the lines,
+ * and once per band where it is translucent.
  */
 export function compoundBands(
   component: VectorShapeComponent,
@@ -110,7 +115,29 @@ export function compoundBands(
   }
   const width = component.strokeWidthEmu;
   const outset = component.strokeOutsetEmu ?? 0;
-  return BANDS[compound].map(([from, to], index) => {
+  const {
+    arrowheadsEmu,
+    strokeOutsetEmu: _outset,
+    fillGradient: _gradient,
+    fillPattern: _pattern,
+    fillRule: _fillRule,
+    shadow,
+    ...rest
+  } = component;
+  const filled = component.fillHex !== null;
+  const fill: VectorShapeComponent[] = [];
+  if (filled) {
+    const {
+      arrowheadsEmu: _arrowheads,
+      strokeOutsetEmu: _strokeOutset,
+      strokeCap: _cap,
+      strokeJoin: _join,
+      strokeDash: _dash,
+      ...fillOnly
+    } = component;
+    fill.push({ ...fillOnly, strokeHex: null, strokeAlpha: 1, strokeWidthEmu: 0 });
+  }
+  const bands = BANDS[compound].map(([from, to], index): VectorShapeComponent => {
     // Offset of the band centre from the path, toward the outer edge.
     const centre = width / 2 - ((from + to) / 2) * width;
     const subpaths = component.subpathsEmu.map((points, at) => {
@@ -118,14 +145,18 @@ export function compoundBands(
       const side = closed && orientation(points) < 0 ? -1 : 1;
       return offsetPath(points, closed, side * centre);
     });
-    const { arrowheadsEmu, strokeOutsetEmu: _outset, ...rest } = component;
     const reach = outset + Math.abs(centre);
     return {
       ...rest,
       ...(index === 0 && arrowheadsEmu ? { arrowheadsEmu } : {}),
+      // With no fill component, the outer band casts the shadow, once.
+      ...(index === 0 && shadow && !filled ? { shadow } : {}),
+      fillHex: null,
+      fillAlpha: 1,
       subpathsEmu: subpaths,
       strokeWidthEmu: (to - from) * width,
       ...(reach > 0 ? { strokeOutsetEmu: reach } : {}),
     };
   });
+  return [...fill, ...bands];
 }

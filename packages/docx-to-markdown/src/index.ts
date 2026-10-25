@@ -118,6 +118,7 @@ export type {
   DrawingGroupPictureLayerRecord,
   DrawingGroupPictureRecord,
   DrawingHorizontalReferenceFrame,
+  DrawingPlaceholderKind,
   DrawingTransform,
   DrawingVerticalReferenceFrame,
   GroupTextboxStoryRecord,

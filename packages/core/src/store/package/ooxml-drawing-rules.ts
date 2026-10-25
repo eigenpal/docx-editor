@@ -192,7 +192,7 @@ export function parseSchemaBoolean(value: string | undefined): boolean | null {
   return null;
 }
 
-/** Schema-local attribute: unqualified only (no owner-namespace or foreign lookalikes). */
+/** Schema-local attribute: unqualified only (no owner-namespace or foreign lookalikes). @internal */
 export function schemaAttributeValue(
   attributes: readonly OoxmlAttribute[],
   localName: string

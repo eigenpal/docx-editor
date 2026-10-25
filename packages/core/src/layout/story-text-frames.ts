@@ -15,7 +15,6 @@ import {
   translateParagraphFragment,
   type ParagraphFrame,
 } from './paragraph-frame.ts';
-import { shrinkSingleLineFrame } from './paragraph-frame-flow.ts';
 import { meetsOrdinaryContent } from './header-positioned-frames.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -155,20 +154,13 @@ export function placeStoryTextFrames(
     const anchor = ordinary.blocks.find((block) => key(block) === group.anchorId);
     if (!anchor) return null;
     const frame = group.frame;
-    const flow = layout.frame(group.paragraphs, frame.autoWidth ? width : frame.width);
+    // `textFrameGroups` refuses frames that size their own width, so every frame has one.
+    const flow = layout.frame(group.paragraphs, frame.width);
     if (flow.blocks.length !== group.paragraphs.length) return null;
-    let fragments = flow.blocks.filter(
+    const fragments = flow.blocks.filter(
       (block): block is ParagraphFragmentRecord => block.kind === 'paragraph'
     );
     if (fragments.length !== flow.blocks.length) return null;
-    let frameWidth = frame.autoWidth ? width : frame.width;
-    if (frame.autoWidth && fragments.length === 1) {
-      const fitted = shrinkSingleLineFrame(fragments[0]!);
-      if (fitted) {
-        fragments = [fitted.fragment];
-        frameWidth = fitted.width;
-      }
-    }
     const contentHeight = flow.bottom;
     const height =
       frame.heightRule === 'exact'
@@ -176,7 +168,7 @@ export function placeStoryTextFrames(
         : frame.heightRule === 'atLeast'
           ? Math.max(contentHeight, frame.height ?? 0)
           : contentHeight;
-    const size = { width: frameWidth, height };
+    const size = { width: frame.width, height };
     const column = { x: 0, y: 0, width, height: Number.MAX_SAFE_INTEGER };
     const origin = paragraphFrameOrigin(
       frame,

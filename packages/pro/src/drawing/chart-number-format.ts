@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // pass with no regular expressions over the whole code.
 
 const MAX_CODE_UNITS = 256;
+const MAX_DECIMALS = 30;
 const MONTHS = [
   'January',
   'February',
@@ -100,8 +101,10 @@ function tokenize(section: string): Token[] {
       const end = section.indexOf(']', index + 1);
       const stop = end === -1 ? section.length : end;
       const tag = section.slice(index + 1, stop);
+      // `[h]`, `[mm]`, `[ss]`: elapsed time, counted past the day, hour or minute.
+      if (/^(?:h+|m+|s+)$/i.test(tag)) tokens.push({ kind: 'code', text: `[${tag}]` });
       // `[$€-407]` shows its currency text; colours, conditions and locales show nothing.
-      if (tag.startsWith('$')) {
+      else if (tag.startsWith('$')) {
         const dash = tag.indexOf('-');
         tokens.push({ kind: 'literal', text: tag.slice(1, dash === -1 ? tag.length : dash) });
       }
@@ -115,13 +118,25 @@ function tokenize(section: string): Token[] {
   return tokens;
 }
 
+/** The date letter of a code token: `[h]` counts as `h`. */
+function dateLetter(text: string): string {
+  return (text[0] === '[' ? text[1]! : text[0]!).toLowerCase();
+}
+
 function isDateCode(tokens: readonly Token[]): boolean {
   let date = false;
+  // `0` after `s.` is a fraction of a second, not a digit placeholder.
+  let previous = '';
+  let fraction = false;
   for (const token of tokens) {
     if (token.kind !== 'code') continue;
-    const lower = token.text.toLowerCase();
-    if (lower === '0' || lower === '#' || lower === '?') return false;
+    const lower = dateLetter(token.text);
+    if (lower === '.') fraction = previous === 's';
+    else if (lower === '0' && fraction) continue;
+    else if (lower === '0' || lower === '#' || lower === '?') return false;
+    else fraction = false;
     if ('ymdhs'.includes(lower)) date = true;
+    previous = lower;
   }
   return date;
 }
@@ -181,6 +196,9 @@ function formatNumberSection(value: number, tokens: readonly Token[]): string {
       if (codes[index] === '0') minDecimals = maxDecimals;
     }
   }
+  // Spreadsheets cap a format at 30 decimal places; `toFixed` throws past 100.
+  maxDecimals = Math.min(maxDecimals, MAX_DECIMALS);
+  minDecimals = Math.min(minDecimals, maxDecimals);
   let body: string;
   if (exponentAt !== -1) {
     const mantissaDigits = maxDecimals;
@@ -240,6 +258,8 @@ function formatDateSection(serial: number, tokens: readonly Token[], date1904: b
       last &&
       last.kind === 'code' &&
       token.kind === 'code' &&
+      last.text[0] !== '[' &&
+      token.text[0] !== '[' &&
       last.text[0]!.toLowerCase() === token.text.toLowerCase()
     )
       last.text += token.text;
@@ -256,9 +276,20 @@ function formatDateSection(serial: number, tokens: readonly Token[], date1904: b
       continue;
     }
     const lower = run.text.toLowerCase();
-    const letter = lower[0]!;
+    const letter = dateLetter(run.text);
     const length = run.text.length;
-    if (letter === 'y')
+    if (lower[0] === '[') {
+      // Elapsed whole hours, minutes or seconds since serial zero.
+      const per = letter === 'h' ? 24 : letter === 'm' ? 1440 : 86_400;
+      out += pad(Math.floor(Math.abs(serial) * per + 1e-9), length - 2);
+    } else if (letter === '0' && runs[index - 1]?.text === '.') {
+      // Fractional seconds, truncated to the shown digits.
+      const ms = date.getUTCMilliseconds();
+      out += pad(Math.floor(ms / 10 ** (3 - Math.min(length, 3))), Math.min(length, 3)).padEnd(
+        length,
+        '0'
+      );
+    } else if (letter === 'y')
       out += length <= 2 ? pad(date.getUTCFullYear() % 100, 2) : String(date.getUTCFullYear());
     else if (letter === 'd') {
       if (length >= 4) out += DAYS[date.getUTCDay()];
@@ -272,8 +303,8 @@ function formatDateSection(serial: number, tokens: readonly Token[], date1904: b
       const next = runs.slice(index + 1).find((r) => r.kind === 'code');
       const minute =
         length <= 2 &&
-        ((previous && previous.text[0]!.toLowerCase() === 'h') ||
-          (next && next.text[0]!.toLowerCase() === 's'));
+        ((previous && dateLetter(previous.text) === 'h') ||
+          (next && dateLetter(next.text) === 's'));
       if (minute) out += length === 2 ? pad(date.getUTCMinutes(), 2) : String(date.getUTCMinutes());
       else if (length >= 5) out += MONTHS[date.getUTCMonth()]![0];
       else if (length === 4) out += MONTHS[date.getUTCMonth()];
@@ -327,4 +358,24 @@ export function formatChartNumber(value: number, code: string | null, date1904 =
 export function isDateFormatCode(code: string | null): boolean {
   if (!code || code.length > MAX_CODE_UNITS || /^general$/i.test(code.trim())) return false;
   return isDateCode(tokenize(sections(code)[0]!));
+}
+
+/** The categories of one series, as cached: text, and numbers with their format. */
+interface CategoryCache {
+  readonly categories: readonly (string | null)[] | null;
+  readonly categoryNumbers: readonly (number | null)[] | null;
+  readonly categoryFormat: string | null;
+}
+
+/** Category `index` of a series: a cached number in its format, else the cached text. */
+export function categoryLabel(
+  series: CategoryCache,
+  index: number,
+  date1904: boolean
+): string | null {
+  const number = series.categoryNumbers?.[index];
+  if (number !== undefined && number !== null && series.categoryFormat) {
+    return formatChartNumber(number, series.categoryFormat, date1904);
+  }
+  return series.categories?.[index] ?? null;
 }

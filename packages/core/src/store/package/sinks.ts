@@ -57,7 +57,7 @@ const XML_ATTRIBUTE_ESCAPES: Record<string, string> = {
   '\t': '&#x9;',
 };
 
-/** XML-escape a value bound for an ATTRIBUTE, preserving CR/LF/TAB across a re-parse. */
+/** XML-escape a value bound for an ATTRIBUTE, preserving CR/LF/TAB across a re-parse. @internal */
 export function escapeXmlAttribute(value: string): string {
   return value.replace(/[&<>"'\r\n\t]/g, (c) => XML_ATTRIBUTE_ESCAPES[c]);
 }
@@ -76,6 +76,8 @@ function isForbiddenXmlUnit(cu: number): boolean {
  * surrogates — which would emit malformed XML (or be silently mangled during UTF-8 encoding). Returns
  * false so a caller can reject fail-closed. Valid supplementary characters (correct surrogate pairs)
  * pass.
+ *
+ * @internal
  */
 export function isValidXmlText(value: string): boolean {
   // Objects/arrays must never reach serialization: `String({})` is "[object Object]".

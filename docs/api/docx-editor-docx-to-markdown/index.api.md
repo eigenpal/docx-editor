@@ -113,6 +113,9 @@ export interface DrawingGroupPictureRecord {
 // @public (undocumented)
 export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
 
+// @public
+export type DrawingPlaceholderKind = 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
 // @public (undocumented)
 export interface DrawingTransform {
     readonly extentEmu: Readonly<{
@@ -445,7 +448,7 @@ export interface InlineDrawingRecord {
     readonly paintBounds: LayoutBox;
     // (undocumented)
     readonly paragraphId: string;
-    readonly placeholderGraphicKind: string | null;
+    readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
     // (undocumented)
     readonly resource: ImageResourceState;
     readonly revisions?: readonly RevisionAttribution[];

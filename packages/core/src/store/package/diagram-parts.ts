@@ -24,6 +24,7 @@ import { collectThemeSchemeFaces } from './theme-font-scheme.ts';
 import { packageThemeRoot } from './theme-color-resolution.ts';
 
 export const DIAGRAM_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
+/** @internal */
 export const DIAGRAM_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
 export const DIAGRAM_DRAWING_NAMESPACE_URI =
   'http://schemas.microsoft.com/office/drawing/2008/diagram';
@@ -39,7 +40,7 @@ const STYLE_RELATIONSHIP_TYPE =
 const COLORS_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors';
 
-/** The parts one diagram drawing renders from. */
+/** The parts one diagram drawing renders from. @internal */
 export interface DiagramParts {
   /** The data model root (`dgm:dataModel`): background and outline of the whole diagram. */
   readonly dataModel: OoxmlElement;
@@ -63,6 +64,8 @@ export interface DiagramParts {
  * Resolves the parts behind one `dgm:relIds` element of the owner story part. The same
  * resolver answers the chart part behind a `c:chart` element through `chart`, so the drawing
  * projection threads one resolver for every part-backed graphic.
+ *
+ * @internal
  */
 export interface DiagramPartResolver {
   /** The diagram parts behind one `dgm:relIds` element, or null when they do not resolve. */

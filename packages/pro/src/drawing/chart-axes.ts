@@ -29,7 +29,7 @@ export interface CategoryInfo {
   readonly axis: ChartAxis | null;
   readonly count: number;
   readonly labels: readonly string[];
-  /** Day serials when the axis is a date axis. */
+  /** Positions in base time units (days, months or years) when the axis is a date axis. */
   readonly serials: readonly number[] | null;
   /** Points sit in the middle of their slot (`between`) rather than on the ticks. */
   readonly between: boolean;
@@ -109,9 +109,37 @@ export function categoryInfo(
     axis,
     count,
     labels: text,
-    serials: isDate ? (numbers!.slice(0, count) as number[]) : null,
+    serials: isDate
+      ? timeUnitPositions(numbers!.slice(0, count) as number[], axis, model.date1904)
+      : null,
     between: !midCat,
   };
+}
+
+/** Serial dates as indices of the axis's base time unit, so months and years step evenly. */
+export function timeUnitPositions(
+  serials: readonly number[],
+  axis: ChartAxis | null,
+  date1904: boolean
+): number[] {
+  let unit = axis?.baseTimeUnit ?? null;
+  if (unit === null) {
+    // Automatic: the unit of the smallest step between distinct dates.
+    const sorted = [...serials].sort((a, b) => a - b);
+    let smallest = Infinity;
+    for (let index = 1; index < sorted.length; index += 1) {
+      const step = sorted[index]! - sorted[index - 1]!;
+      if (step > 0) smallest = Math.min(smallest, step);
+    }
+    unit = smallest >= 365 ? 'years' : smallest >= 28 ? 'months' : 'days';
+  }
+  if (unit === 'days') return [...serials];
+  return serials.map((serial) => {
+    const days = date1904 ? serial + 1462 : serial < 61 ? serial + 1 : serial;
+    const date = new Date(Math.round((days - 25_569) * 86_400_000));
+    const year = date.getUTCFullYear();
+    return unit === 'years' ? year : year * 12 + date.getUTCMonth();
+  });
 }
 
 /** Position of category `index` (or its date) along an axis from `start` to `end`. */

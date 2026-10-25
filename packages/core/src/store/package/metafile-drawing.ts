@@ -4,10 +4,10 @@
 // replay that produces them is a capability package's metafile renderer
 // (`drawing-renderers.ts`); without one, a metafile picture keeps its placeholder.
 
-/** A 2D affine matrix `[a, b, c, d, e, f]`: x' = a·x + c·y + e, y' = b·x + d·y + f. @public */
+/** A 2D affine matrix `[a, b, c, d, e, f]`: x' = a·x + c·y + e, y' = b·x + d·y + f. @internal */
 export type MetafileMatrix = readonly [number, number, number, number, number, number];
 
-/** One path command in canvas pixels, y down. @public */
+/** One path command in canvas pixels, y down. @internal */
 export type MetafilePathCommand =
   | { readonly op: 'M' | 'L'; readonly x: number; readonly y: number }
   | {
@@ -21,7 +21,7 @@ export type MetafilePathCommand =
     }
   | { readonly op: 'Z' };
 
-/** A solid paint: 0–255 channels and 0–1 alpha. @public */
+/** A solid paint: 0–255 channels and 0–1 alpha. @internal */
 export interface MetafilePaint {
   readonly r: number;
   readonly g: number;
@@ -29,7 +29,7 @@ export interface MetafilePaint {
   readonly alpha: number;
 }
 
-/** The face a text command names. @public */
+/** The face a text command names. @internal */
 export interface MetafileFont {
   readonly family: string;
   readonly sizePx: number;
@@ -37,7 +37,7 @@ export interface MetafileFont {
   readonly italic: boolean;
 }
 
-/** Raster content a metafile draws. @public */
+/** Raster content a metafile draws. @internal */
 export type MetafileRaster =
   | {
       readonly kind: 'rgba';
@@ -57,7 +57,7 @@ export type MetafileRaster =
  * One recorded drawing command. Paths are in canvas pixels with the transform already
  * applied. `matrix` on an image maps its unit square (y down) into canvas pixels; on text and
  * a nested drawing it is the transform in force when it was drawn.
- * @public
+ * @internal
  */
 export type MetafileCommand =
   | { readonly kind: 'save' }
@@ -98,20 +98,20 @@ export type MetafileCommand =
       readonly matrix: MetafileMatrix;
     };
 
-/** A replayed metafile: its canvas size in pixels and its commands in order. @public */
+/** A replayed metafile: its canvas size in pixels and its commands in order. @internal */
 export interface MetafileDrawing {
   readonly width: number;
   readonly height: number;
   readonly commands: readonly MetafileCommand[];
 }
 
-/** What a metafile renderer reads beside the bytes. @public */
+/** What a metafile renderer reads beside the bytes. @internal */
 export interface MetafileRenderOptions {
   /** Advance width of `text` in `font`, in pixels at `font.sizePx`. */
   readonly textAdvance: (text: string, font: MetafileFont) => number;
 }
 
-/** A replayed metafile. `complete` is false when a bound stopped recording early. @public */
+/** A replayed metafile. `complete` is false when a bound stopped recording early. @internal */
 export interface MetafileReplay {
   readonly drawing: MetafileDrawing;
   readonly complete: boolean;

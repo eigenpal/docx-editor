@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // perspective, its slices clockwise from rotY. Tops keep the slice colour; the rim darkens
 // towards the right. The disc is scaled to fit the plot area.
 
+import { categoryLabel } from './chart-number-format.ts';
 import { CHART_EYE, FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
 import type { Box } from './chart-axes.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
@@ -181,7 +182,7 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
       spec,
       slice.value,
       slice.value / total,
-      series.categories?.[slice.index] ?? null,
+      categoryLabel(series, slice.index, context.date1904),
       series.name,
       series.formatCode,
       context.date1904

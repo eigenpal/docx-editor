@@ -18,7 +18,7 @@ const coordinate = (value: number) => {
 /**
  * The run's ink as one path, or undefined when a glyph has no outline the path grammar can
  * read, a glyph is missing from the face (`.notdef`), or the path would exceed its budget.
- * @public
+ * @internal
  */
 export function shapedRunOutline(
   run: ShapedRun,

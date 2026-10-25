@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // stacked bar beside it, and one combined slice stands for them in the main pie, centred at
 // three o'clock. Series lines join that slice to the second plot.
 
+import { categoryLabel } from './chart-number-format.ts';
 import type { Box } from './chart-axes.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { children, childVal, type ChartPlot } from './chart-model.ts';
@@ -111,7 +112,7 @@ export function paintOfPie(plot: ChartPlot, box: Box, context: PieContext): void
       spec,
       value,
       value / total,
-      index < count ? (series.categories?.[index] ?? null) : 'Other',
+      index < count ? categoryLabel(series, index, context.date1904) : 'Other',
       series.name,
       series.formatCode,
       context.date1904
