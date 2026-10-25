@@ -44,7 +44,16 @@ describe('every D8 run property resolves', () => {
   });
 
   test('underline keeps its variant and colour', () => {
-    expect(resolve('u').underline).toEqual({ variant: 'single', color: null });
+    // Without `w:val` the element draws no underline of its own, even with a colour.
+    expect(resolve('u').underline).toBeNull();
+    expect(resolve('u', { color: 'FF00FF' }).underline).toBeNull();
+    // A colour-only element over an inherited underline keeps its variant.
+    expect(
+      resolveRunStyle([
+        { localName: 'u', attributes: { val: 'double' } },
+        { localName: 'u', attributes: { color: 'FF00FF' } },
+      ]).underline
+    ).toEqual({ variant: 'double', color: 'FF00FF' });
     expect(resolve('u', { val: 'wave', color: 'FF0000' }).underline).toEqual({
       variant: 'wave',
       color: 'FF0000',

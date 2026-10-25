@@ -371,7 +371,8 @@ export function resolveRunStyle(
         style.italic = toggle(property);
         break;
       case 'u': {
-        const variant = property.attributes?.val ?? 'single';
+        // Without `w:val` the element sets no underline of its own: it keeps an inherited one.
+        const variant = property.attributes?.val ?? style.underline?.variant ?? 'none';
         style.underline =
           variant === 'none' || !toggle(property)
             ? null
