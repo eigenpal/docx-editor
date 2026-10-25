@@ -222,7 +222,7 @@ test('caret lookups walk the paragraphs once per tree, not once per lookup', () 
 
 // `paragraphByStableId` re-checks a hint by the paragraph's own id only, so after an earlier
 // paragraph takes that id it can keep answering the later holder, while `paragraphs()` and
-// `paragraphByNodeId` follow the first claimant. Not this lookup's contract; see replication.ts.
+// `paragraphByNodeId` follow the first claimant. Tracked in issue #1498.
 test.todo(
   'paragraphByStableId follows the first claimant after an earlier paragraph takes its id',
   () => {

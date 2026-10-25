@@ -71,11 +71,8 @@ export interface CollaborationDocumentPort {
    * The body paragraph with this canonical node id, exactly as `paragraphs()` lists it (the
    * same stable id, minted when the paragraph's own is missing, invalid, or claimed by an
    * earlier paragraph), or null for a node that is not a listed body paragraph. Cheap on an
-   * unchanged document, so presence can ask it on every caret move.
-   *
-   * `paragraphByStableId` can disagree after an earlier paragraph takes the id a later one
-   * held: it may keep answering the later one, while this method and `paragraphs()` follow
-   * the earlier, first claimant.
+   * unchanged document, so presence can ask it on every caret move. See `paragraphByStableId`
+   * for the one case where the two lookups disagree.
    */
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**
@@ -90,6 +87,10 @@ export interface CollaborationDocumentPort {
    * store. Presence may name a header, a footer, a note, or a cell, so this lookup covers
    * those parts too. It resolves through an index, not a scan, because a remote caret
    * resolves two addresses per selection on every caret move.
+   *
+   * After an earlier paragraph takes a stable id that a later one held, this can keep
+   * answering the later one, while `paragraphs()` and `paragraphByNodeId` follow the earlier,
+   * first claimant (issue #1498).
    */
   paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
   applyParagraphText(
