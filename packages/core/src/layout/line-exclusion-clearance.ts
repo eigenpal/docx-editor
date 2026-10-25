@@ -393,6 +393,8 @@ export function createLineExclusionProbe(context: {
     const extent =
       baseline + Math.max(line.height - line.baseline, candidate.height - candidate.baseline);
     const spacing = context.lineSpacing;
+    // Modern modes test a band against the line's content only, not a multiple's extra below.
+    if (spacing.wrapsContentOnly && spacing.gridPitch === undefined) return extent;
     // An auto multiple above single spacing scales the text band of a picture line, not the
     // picture: the line keeps the picture's box plus the multiple's extra text band.
     if (

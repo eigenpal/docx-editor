@@ -127,6 +127,10 @@ export const MODE_RULES = {
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
+  wrapIgnoresMultipleSpacingExtra: modern(
+    'A wrap band moves a line only where it crosses the text or picture of the line, not the extra space an auto line-spacing multiple adds below it',
+    'ECMA-376 Part 1 §17.3.1.33 spacing'
+  ),
   positionedTableBreaksAtMargin: modern(
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'

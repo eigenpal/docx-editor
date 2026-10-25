@@ -253,7 +253,12 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         'inlineObjectStaysBesideFloat'
       ),
       cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
-      lineSpacing: formatting.lineSpacing,
+      lineSpacing:
+        formatting.lineSpacing.rule === 'auto' &&
+        formatting.lineSpacing.value > 240 &&
+        hasCompatibilityRule(request.compatibilityMode, 'wrapIgnoresMultipleSpacingExtra')
+          ? { ...formatting.lineSpacing, wrapsContentOnly: true }
+          : formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),
       equationCacheToken: request.producer,
       ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
