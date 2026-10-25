@@ -86,3 +86,14 @@ describe('decodeTiffFrame directory confinement', () => {
     expect(await decodeTiffFrame(bytes, LIMITS)).toBeNull();
   });
 });
+
+test('a big-endian file decodes through the confinement', async () => {
+  const { default: UTIF } = (await import('utif2')) as unknown as {
+    default: { encodeImage(rgba: Uint8Array, width: number, height: number): ArrayBuffer };
+  };
+  const bytes = new Uint8Array(UTIF.encodeImage(new Uint8Array(3 * 2 * 4).fill(200), 3, 2));
+  expect(String.fromCharCode(bytes[0]!, bytes[1]!)).toBe('MM');
+  const frame = await decodeTiffFrame(bytes, LIMITS);
+  expect(frame?.pixelWidth).toBe(3);
+  expect(frame?.pixelHeight).toBe(2);
+});

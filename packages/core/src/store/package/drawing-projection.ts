@@ -1,4 +1,5 @@
 import { stylesPartOf } from './ooxml-indexes.ts';
+import type { DrawingChartSummary } from './chart-summary.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 import { paintableMcFallback } from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
@@ -238,6 +239,8 @@ export interface DrawingProjection {
   readonly textboxStory: TextboxStoryProjection | null;
   /** Text box members of a `wpg:wgp` group, laid out read-only; absent when none has text. */
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
+  /** The title and plot types of a chart that does not paint. */
+  readonly chartSummary?: DrawingChartSummary;
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
   /** Floating VML text art (a text watermark), fitted to the box by layout. */
@@ -1511,6 +1514,7 @@ export function projectDrawingWithState(
       ...(content.groupPictureLayers ? { groupPictureLayers: content.groupPictureLayers } : {}),
       textboxStory: content.textboxStory,
       ...(content.groupTextboxes ? { groupTextboxes: content.groupTextboxes } : {}),
+      ...(content.chartSummary ? { chartSummary: content.chartSummary } : {}),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,

@@ -245,7 +245,7 @@ Both packages export `UnsupportedElement` with these fields:
 - `source` exposes the read-only canonical source. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the default fallback text.
-- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart`, `diagram`, `shape`, `group`, `textbox`, `canvas`, or `graphic`. `drawing.accessibility.label` holds the drawing's alternative text.
+- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart`, `diagram`, `shape`, `group`, `textbox`, `canvas`, or `graphic`. `drawing.accessibility.label` holds the drawing's alternative text. A chart placeholder also has `drawing.chart`, with the chart's `title` and `plotTypes`.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the fallback; it does not try the next declaration.
@@ -277,7 +277,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
 | Tracked image insertion and deletion | Record the change in suggesting mode |
 | Tracked image property edits | Stay unavailable in suggesting mode |
-| Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
+| Picture artistic effects (`a14:imgEffect`) | Do not render; authored markup round-trips. Glow, inner shadow, reflection, and soft edge in `a:effectLst` render with the drawing module. |
 
 ## Pictures in shape groups
 

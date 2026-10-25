@@ -51,13 +51,15 @@ Links, equation previews, and **Show/Hide** remain available. Search and program
 
 ## Modules
 
-The `modules` prop registers capability modules during construction. [`@docx-editor.dev/pro`](/docs/2.x/pro) uses modules for tracked changes, comments, and custom nodes.
+The `modules` prop registers capability modules during construction. [`@docx-editor.dev/pro`](/docs/2.x/pro) uses modules for tracked changes, comments, custom nodes, collaboration, and drawing rendering.
 
 | Prop | Type | Description |
 | --- | --- | --- |
 | `modules` | `readonly EditorModule[]` | Capability modules that the editor loads during construction. |
 
-The editor reads `modules` only during construction. A later array change has no effect. To change modules, remount the editor with a different React `key`:
+The editor reads `modules` only during construction. A later array change has no effect. To change modules, remount the editor with a different React `key`. The drawing renderers from `drawingModule()` and `reviewModule()` are different: they serve every editor in the page, and a remount does not remove them. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
+
+This example remounts the editor when the module set changes:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';

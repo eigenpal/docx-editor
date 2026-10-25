@@ -2,6 +2,7 @@
 // transform, effects, hyperlink, vector shape, and the placeholder kind of a graphic that
 // does not render.
 
+import type { DrawingChartSummary } from '../store/package/chart-summary.ts';
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import type {
   DrawingProjection,
@@ -58,6 +59,7 @@ export function drawingPaintFields(projection: DrawingProjection): {
   readonly vectorShape: VectorShapeProjection | null;
   readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
+  readonly chart?: DrawingChartSummary;
 } {
   const picture = projection.picture;
   let placeholderGraphicKind: DrawingPlaceholderKind | null = null;
@@ -86,5 +88,6 @@ export function drawingPaintFields(projection: DrawingProjection): {
           }),
         }
       : {}),
+    ...(projection.chartSummary ? { chart: projection.chartSummary } : {}),
   });
 }

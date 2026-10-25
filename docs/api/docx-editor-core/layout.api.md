@@ -831,6 +831,12 @@ export interface DrawingAccessibility {
     readonly label: string | null;
 }
 
+// @public
+export interface DrawingChartSummary {
+    readonly plotTypes: readonly string[];
+    readonly title: string | null;
+}
+
 // @public (undocumented)
 export type DrawingClipFallback = 'none' | 'unsupported-preset';
 
@@ -1630,6 +1636,8 @@ export interface InlineDrawingRecord {
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
     // (undocumented)
+    readonly chart?: DrawingChartSummary;
+    // (undocumented)
     readonly crop: SourceCrop;
     // (undocumented)
     readonly distB: number;
@@ -1646,7 +1654,6 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
-    // (undocumented)
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
@@ -2810,12 +2817,14 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    // @internal
     readonly descentAnchored?: true;
     readonly gridPitch?: number;
     readonly preserveExactBaseline?: true;
     // (undocumented)
     readonly rule: LineSpacingRule;
     readonly value: number;
+    // @internal
     readonly wrapsContentOnly?: true;
 }
 
@@ -4430,6 +4439,7 @@ export interface StyleCascadeTable {
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly noColumnBalance?: true;
     readonly pageBreakLinesStretch?: true;
+    // @internal
     readonly pageBreakMarkOnNextPage?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;

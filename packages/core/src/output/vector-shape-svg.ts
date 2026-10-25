@@ -47,14 +47,16 @@ export function applyInsetStroke(
   svg: SVGSVGElement,
   path: SVGPathElement,
   d: string,
-  widthEmu: number
+  widthEmu: number,
+  fillRule: 'nonzero' | 'evenodd' = 'evenodd'
 ): void {
   const id = `docx-inset-${++nextClipId}`;
   const clip = document.createElementNS(SVG_NAMESPACE, 'clipPath');
   clip.setAttribute('id', id);
   const outline = document.createElementNS(SVG_NAMESPACE, 'path');
   outline.setAttribute('d', d);
-  outline.setAttribute('clip-rule', 'evenodd');
+  // The clip follows the fill rule, so the kept half of the stroke matches the filled area.
+  outline.setAttribute('clip-rule', fillRule);
   clip.append(outline);
   svg.append(clip);
   path.setAttribute('stroke-width', String(2 * Math.max(1, widthEmu)));

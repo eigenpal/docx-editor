@@ -277,7 +277,9 @@ function guardAsync<A extends unknown[], R>(
 function guardedRenderers(renderers: DrawingRenderers): DrawingRenderers {
   const { chart, diagramLayout, effects, legacyTextArt, textArtLayout, metafile } = renderers;
   const none = () => null;
+  // Spread first, so a renderer named with `undefined` clears the installed one.
   return {
+    ...renderers,
     ...(chart ? { chart: guard(chart, none) } : {}),
     ...(diagramLayout ? { diagramLayout: guard(diagramLayout, none) } : {}),
     ...(effects

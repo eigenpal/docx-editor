@@ -22,9 +22,16 @@ test('a monthly axis places each month one step apart', () => {
   expect(categorySlot(info, 300)).toBeCloseTo(100, 6);
 });
 
-test('without a base unit the smallest step between dates picks it', () => {
+test('without a base unit the largest unit that separates the dates picks it', () => {
   expect(timeUnitPositions(MONTHLY, axis(null), false)).toEqual(
     timeUnitPositions(MONTHLY, axis('months'), false)
   );
   expect(timeUnitPositions([44927, 44928], axis(null), false)).toEqual([44927, 44928]);
+});
+
+test('dates four weeks apart stay on a day scale, so no two share a slot', () => {
+  const fourWeekly = [45292, 45320, 45348, 45376];
+  expect(new Set(timeUnitPositions(fourWeekly, axis(null), false)).size).toBe(4);
+  // Yearly data with a 365-day step in a leap year keeps one year per slot.
+  expect(timeUnitPositions([45292, 45658, 46023], axis(null), false)).toEqual([2024, 2025, 2026]);
 });

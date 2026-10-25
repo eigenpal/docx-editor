@@ -43,3 +43,9 @@ test('installing new renderers after a document read warns once; reinstalling is
   expect(String(warn.mock.calls[0]![0])).toContain('before the first document opens');
   warn.mockRestore();
 });
+
+test('naming a renderer with undefined removes it', () => {
+  installDrawingRenderers({ chart: () => null });
+  installDrawingRenderers({ chart: undefined });
+  expect(drawingRenderers().chart).toBeUndefined();
+});

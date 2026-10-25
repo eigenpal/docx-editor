@@ -150,11 +150,13 @@ export interface ParagraphLineSpacing {
   readonly value: number;
   /** Legacy noExtraLineSpacing: retain the natural baseline within an exact-height box. */
   readonly preserveExactBaseline?: true;
-  /** A wrap band tests only the line's content, not the extra an `auto` multiple adds. */
+  /** A wrap band tests only the line's content, not the extra an `auto` multiple adds. @internal */
   readonly wrapsContentOnly?: true;
   /**
    * DrawingML shape text: an `auto` line keeps its descent at the bottom of the box, so the
    * space a multiple adds or removes is above the glyphs, never below them.
+   *
+   * @internal
    */
   readonly descentAnchored?: true;
   /**

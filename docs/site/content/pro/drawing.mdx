@@ -7,6 +7,12 @@ order: 68
 
 The drawing module adds advanced drawing rendering to the editor and to PDF export. It requires the EigenPal Pro License.
 
+The module is in the `@docx-editor.dev/pro` package, at the `@docx-editor.dev/pro/drawing` subpath, for both React and Vue:
+
+```bash
+npm install @docx-editor.dev/pro
+```
+
 Without the module, the editor renders pictures, shapes with fills, gradients, patterns, outlines, and outer shadows, text boxes, shape groups, drawing canvases, text watermarks, and SmartArt diagrams saved with their drawing.
 
 ## What the module adds
@@ -17,7 +23,7 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 | SmartArt saved without its drawing | Laid out from its data, layout, style, and color parts. | Labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Paint on shapes, lines, and pictures. | The shape or picture paints without these effects. |
 | WordArt (VML text paths) | Renders its text fitted to the shape, between two guides, or along an arch, with its fill, gradient, outline, shadow, rotation, and 3-D extrusion. | Inline WordArt keeps its extent with a placeholder. Floating WordArt does not render. |
-| EMF and WMF pictures | Drawn as vector paths, text, and bitmaps in PDF export. In the editor, a picture that sets its own drawing origin is placed correctly. | Rasterized in the editor. Labeled placeholder in PDF export. |
+| EMF and WMF pictures | Drawn as vector paths, text, and bitmaps in PDF export. In the editor, a picture that sets its own drawing origin is placed correctly. | Rasterized in the editor. |
 
 Text watermarks are a page feature, so they render without the module.
 
@@ -32,6 +38,7 @@ Pass `drawingModule()` to the editor through `modules`. Build the module array o
 import { DocxEditor } from '@docx-editor.dev/react';
 import { drawingModule } from '@docx-editor.dev/pro/drawing';
 
+// Next.js; with Vite, read import.meta.env.VITE_DOCX_LICENSE.
 const modules = [drawingModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
 
 export function Editor({ bytes }: { bytes: Uint8Array }) {
@@ -79,7 +86,7 @@ const modules = [drawingModule({ licenseKey: import.meta.env.VITE_DOCX_LICENSE }
 
 `reviewModule()` also installs the drawing renderers. If you register the review module, you don't need to register `drawingModule()` too. Registering both is harmless.
 
-The module serves every editor and export in the page or process. Register it before the first document opens. A drawing that the editor already read keeps what it read. If you install the module after a document opened, the console shows a warning once.
+The module serves every editor and export in the page or process, and it stays installed when an editor unmounts or remounts with other modules. Register it before the first document opens. A drawing that the editor already read keeps what it read. If you install the module after a document opened, the console shows a warning once.
 
 The chart, SmartArt, effects, and WordArt renderers are part of the module's bundle, so they also load with `reviewModule()`. The EMF and WMF renderer and its `emf-converter` dependency load the first time a document holds a metafile picture.
 
@@ -93,7 +100,7 @@ import { installDrawing } from '@docx-editor.dev/pro/drawing';
 installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 ```
 
-`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, call `installDrawing()` at startup so that every document reads its drawings the same way.
+`@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, call `installDrawing()` at startup so that every document reads its drawings the same way.
 
 ## What renders
 
@@ -116,7 +123,7 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. Your component fills the drawing's box, and the document content stays unchanged through save.
 
-This example shows the chart's alternative text, from `drawing.accessibility.label`, in a card:
+A chart placeholder also carries `drawing.chart`, a summary read from the chart part: `title`, the chart title as plain text or `null`, and `plotTypes`, such as `['bar', 'line']`. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -127,7 +134,9 @@ This example shows the chart's alternative text, from `drawing.accessibility.lab
     match={(element) => element.drawing?.placeholderGraphicKind === 'chart'}
   >
     {({ element }) => (
-      <div className="chart-card">{element.drawing?.accessibility.label ?? 'Chart'}</div>
+      <div className="chart-card">
+        {element.drawing?.chart?.title ?? element.drawing?.accessibility.label ?? 'Chart'}
+      </div>
     )}
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
@@ -142,7 +151,9 @@ This example shows the chart's alternative text, from `drawing.accessibility.lab
     :match="(element) => element.drawing?.placeholderGraphicKind === 'chart'"
   >
     <template #default="{ element }">
-      <div class="chart-card">{{ element.drawing?.accessibility.label ?? 'Chart' }}</div>
+      <div class="chart-card">
+        {{ element.drawing?.chart?.title ?? element.drawing?.accessibility.label ?? 'Chart' }}
+      </div>
     </template>
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
@@ -151,4 +162,4 @@ This example shows the chart's alternative text, from `drawing.accessibility.lab
 </Framework>
 </FrameworkTabs>
 
-The alternative text comes from the document, so render it as text, never as HTML. The other values of `placeholderGraphicKind` are `shape`, `group`, `textbox`, `canvas`, and `graphic`. Floating WordArt without the module, and metafile placeholders in PDF export, have no declaration hook. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
+The title and the alternative text come from the document, so render them as text, never as HTML. The other values of `placeholderGraphicKind` are `shape`, `group`, `textbox`, `canvas`, and `graphic`. Floating WordArt without the module, and metafile placeholders in PDF export, have no declaration hook. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).

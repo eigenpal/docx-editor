@@ -146,7 +146,14 @@ export function appendVectorComponent(
       );
     }
     if (component.strokeInset) {
-      applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
+      applyInsetStroke(
+        document,
+        svg,
+        path,
+        d,
+        finite(component.strokeWidthEmu),
+        component.fillRule ?? 'evenodd'
+      );
     }
     if (component.strokeAlpha < 1) {
       path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));

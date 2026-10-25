@@ -74,6 +74,12 @@ export interface DrawingAccessibility {
     readonly label: string | null;
 }
 
+// @public
+export interface DrawingChartSummary {
+    readonly plotTypes: readonly string[];
+    readonly title: string | null;
+}
+
 // @public (undocumented)
 export interface DrawingGeometry {
     // (undocumented)
@@ -415,6 +421,8 @@ export interface InlineDrawingRecord {
     readonly baselineOffset: number;
     readonly bidiLevel?: number;
     // (undocumented)
+    readonly chart?: DrawingChartSummary;
+    // (undocumented)
     readonly crop: SourceCrop;
     // (undocumented)
     readonly distB: number;
@@ -431,7 +439,6 @@ export interface InlineDrawingRecord {
     readonly frameEffects?: PictureFrameEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
-    // (undocumented)
     readonly groupPicture?: DrawingGroupPictureRecord;
     readonly groupPictureLayers?: readonly DrawingGroupPictureLayerRecord[];
     readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];

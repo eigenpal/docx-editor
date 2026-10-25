@@ -122,24 +122,23 @@ export function timeUnitPositions(
   axis: ChartAxis | null,
   date1904: boolean
 ): number[] {
-  let unit = axis?.baseTimeUnit ?? null;
-  if (unit === null) {
-    // Automatic: the unit of the smallest step between distinct dates.
-    const sorted = [...serials].sort((a, b) => a - b);
-    let smallest = Infinity;
-    for (let index = 1; index < sorted.length; index += 1) {
-      const step = sorted[index]! - sorted[index - 1]!;
-      if (step > 0) smallest = Math.min(smallest, step);
-    }
-    unit = smallest >= 365 ? 'years' : smallest >= 28 ? 'months' : 'days';
-  }
+  const inUnit = (unit: 'months' | 'years') =>
+    serials.map((serial) => {
+      const days = date1904 ? serial + 1462 : serial < 61 ? serial + 1 : serial;
+      const date = new Date(Math.round((days - 25_569) * 86_400_000));
+      const year = date.getUTCFullYear();
+      return unit === 'years' ? year : year * 12 + date.getUTCMonth();
+    });
+  const unit = axis?.baseTimeUnit ?? null;
   if (unit === 'days') return [...serials];
-  return serials.map((serial) => {
-    const days = date1904 ? serial + 1462 : serial < 61 ? serial + 1 : serial;
-    const date = new Date(Math.round((days - 25_569) * 86_400_000));
-    const year = date.getUTCFullYear();
-    return unit === 'years' ? year : year * 12 + date.getUTCMonth();
-  });
+  if (unit !== null) return inUnit(unit);
+  // Automatic: the largest unit that keeps every distinct date in a unit of its own.
+  const distinct = new Set(serials).size;
+  for (const candidate of ['years', 'months'] as const) {
+    const positions = inUnit(candidate);
+    if (new Set(positions).size === distinct) return positions;
+  }
+  return [...serials];
 }
 
 /** Position of category `index` (or its date) along an axis from `start` to `end`. */

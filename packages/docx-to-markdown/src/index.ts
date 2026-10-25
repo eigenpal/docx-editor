@@ -114,6 +114,7 @@ export type {
   SemanticTrackedChangeArtifactRecord,
   AnchoredDrawingRecord,
   DrawingAccessibility,
+  DrawingChartSummary,
   DrawingGeometry,
   DrawingGroupPictureLayerRecord,
   DrawingGroupPictureRecord,

@@ -23,12 +23,13 @@ Add review, collaboration, and custom content to the [docx-editor.dev](https://d
 - [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.
 - [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration): Provider-neutral sessions with WebRTC and Hocuspocus helpers.
 - [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as content controls.
+- [Advanced drawing rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing): Charts, SmartArt layout, shape effects, WordArt, and EMF and WMF pictures.
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`. Drawing rendering is at `@docx-editor.dev/pro/drawing` for both frameworks; `reviewModule()` installs it too.
 
 ## Register a module
 
@@ -153,6 +154,18 @@ Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `tex
 The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor's modules, and an editor `author` for comments and tracked changes. The editing API takes its author from the `author` option of `DocxEditor.createServer`, imported from `@docx-editor.dev/editor-api`, or of `DocxEditor.createBrowser`, imported from `@docx-editor.dev/editor-api/browser`.
 
 This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](https://www.docx-editor.dev/docs/2.x/recipes).
+
+## Render charts and advanced drawings
+
+Register `drawingModule()` to render charts, SmartArt saved without its drawing, shape effects, WordArt, and EMF and WMF pictures. If you already register `reviewModule()`, you don't need it.
+
+```ts
+import { drawingModule } from '@docx-editor.dev/pro/drawing';
+
+const MODULES = [drawingModule()];
+```
+
+For headless use, call `installDrawing()` from the same entry before you open documents.
 
 ## Licensing
 

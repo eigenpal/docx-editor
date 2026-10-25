@@ -108,6 +108,16 @@ Each `font-origin-failed` diagnostic identifies one failed source through `origi
 
 `font-substitution` reports generic substitutes that can change pagination. Other codes identify limitations such as `equation-fallback`, `image-clip`, or `core-*` source omissions.
 
+Drawings report these codes. With the default `fidelityPolicy: 'strict'`, every code except `metafile-font` rejects the export with `PdfFidelityError`. Use `'best-effort'` to keep the rest of the document.
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `drawing` | `unsupported` | A chart, SmartArt diagram, WordArt, or other drawing cannot render and is left out. |
+| `metafile-limit` | `unsupported` | An EMF or WMF picture stopped drawing at a resource bound. |
+| `metafile-image` | `unsupported` | An image inside an EMF or WMF picture could not be decoded and is left out. |
+| `metafile-text` | `unsupported` | Text inside an EMF or WMF picture could not be shaped and is left out. |
+| `metafile-font` | `information` | An EMF or WMF picture names a font that the document does not use; its text uses the default font. |
+
 Handle unknown diagnostic codes by severity; the set can grow. Use messages for display, not program control.
 
 ## Errors

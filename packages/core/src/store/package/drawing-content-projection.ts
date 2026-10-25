@@ -2,6 +2,7 @@
 // a text box story, the text of group members, a SmartArt diagram, a chart from its chart part,
 // or a drawing canvas.
 
+import { readChartSummary, type DrawingChartSummary } from './chart-summary.ts';
 import type { DiagramPartResolver } from './diagram-parts.ts';
 import { projectDiagram } from './diagram-projection.ts';
 import { projectCanvas } from './drawing-canvas-projection.ts';
@@ -40,6 +41,8 @@ export interface DrawingContentProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Something paints, so an "unsupported graphic" diagnostic no longer applies. */
   readonly paints: boolean;
+  /** The title and plot types of a chart that does not paint. */
+  readonly chartSummary?: DrawingChartSummary;
   /** A picture's clip ring in the unit square of its extent; see `projectPictureFrame`. */
   readonly pictureClipUnit?: readonly Readonly<{ x: number; y: number }>[];
   /** A picture's reflection and soft edges; see `projectPictureFrame`. */
@@ -113,6 +116,7 @@ export function projectDrawingContent(
   const groupPicture = groupAdmitted ? groupRead.picture : null;
   const groupPictureLayers = groupAdmitted ? groupRead.pictures.slice(1) : [];
   const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
+  let chartSummary: DrawingChartSummary | null = null;
   if (!groupPicture && !vectorShape) {
     const diagram =
       projectDiagram(anchor, extent, ctx) ??
@@ -131,6 +135,7 @@ export function projectDrawingContent(
         paints: true,
       };
     }
+    chartSummary = readChartSummary(anchor, ctx.resolveDiagramParts?.chart);
   }
   const textboxStory = projectTextboxStory(
     anchor,
@@ -157,6 +162,7 @@ export function projectDrawingContent(
     textboxStory: chrome && textboxStory ? { ...textboxStory, chromeByVector: true } : textboxStory,
     ...groupTextboxesField(anchor, extent, { picture: null, groupPicture, vectorShape }, ctx),
     paints: groupPicture !== null || vectorShape !== null,
+    ...(chartSummary ? { chartSummary } : {}),
   };
 }
 

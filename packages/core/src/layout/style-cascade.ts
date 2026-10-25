@@ -114,7 +114,7 @@ export interface StyleCascadeTable {
    * unless it is the last line of its paragraph.
    */
   readonly pageBreakLinesStretch?: true;
-  /** `w:splitPgBreakAndParaMark` in a legacy mode: the mark after a page break takes a line. */
+  /** `w:splitPgBreakAndParaMark` in a legacy mode: the mark after a page break takes a line. @internal */
   readonly pageBreakMarkOnNextPage?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;

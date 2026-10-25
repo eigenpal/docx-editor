@@ -59,7 +59,7 @@ Links, equation previews, and **Show/Hide** remain available. Search and program
 | --------- | ------------------------- | ----------------------------------- |
 | `modules` | `readonly EditorModule[]` | Modules registered at construction. |
 
-The editor ignores later `modules` array changes. Change the Vue `:key` to remount the editor with another module set.
+The editor ignores later `modules` array changes. Change the Vue `:key` to remount the editor with another module set. The drawing renderers from `drawingModule()` and `reviewModule()` are different: they serve every editor in the page, and a remount does not remove them. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing).
 
 ```vue
 <script setup lang="ts">

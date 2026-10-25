@@ -1,4 +1,5 @@
 import { inlinePictureExtent } from './inline-picture-extent.ts';
+import type { DrawingChartSummary } from '../store/package/chart-summary.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
 
@@ -274,10 +275,13 @@ export interface InlineDrawingRecord {
   readonly transform: DrawingTransform;
   /** Graphic kind of a non-picture drawing, naming its placeholder; null for pictures. */
   readonly placeholderGraphicKind: DrawingPlaceholderKind | null;
+  readonly chart?: DrawingChartSummary;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;
   /** Legacy text art on the line, fitted to its box. */
   readonly textArt?: DrawingTextArtRecord;
+  /** A picture's reflection and soft edges, in the extent's EMU; absent when it has none. */
+  readonly frameEffects?: PictureFrameEffects;
   /**
    * Present when the image is the picture member of a drawing group. The image then fills
    * the bounds of `geometry.imageTransformCorners`, not `geometry.contentBounds`, and paints
@@ -286,8 +290,6 @@ export interface InlineDrawingRecord {
    * picture. The group paints whole or not at all: when the picture cannot paint, an output
    * shows no part of the group.
    */
-  /** A picture's reflection and soft edges, in the extent's EMU; absent when it has none. */
-  readonly frameEffects?: PictureFrameEffects;
   readonly groupPicture?: DrawingGroupPictureRecord;
   /**
    * The group's other picture members, in document order. Each paints above the record's

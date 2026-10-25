@@ -314,6 +314,9 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     wrap: projection.wrap,
     textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
     groupTextboxes: groupTextboxesLayoutToken(projection.groupTextboxes),
+    chartSummary: projection.chartSummary
+      ? framedTokenJoin([projection.chartSummary.title ?? '', ...projection.chartSummary.plotTypes])
+      : '',
     compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
     footprintOnly: projection.footprintOnly ? 'footprint' : '',
     anchor: anchor
