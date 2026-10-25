@@ -64,4 +64,17 @@ describe('typecheckProject', () => {
     },
     TYPECHECK_TIMEOUT_MS
   );
+  test(
+    'with no host types anywhere, a host global that resolves nowhere or only ambiently counts',
+    () => {
+      const untyped = scoped.replace('tsconfig.json', 'tsconfig.untyped.json');
+      const found = located(typecheckProject(untyped, { scope: 'project', forbidHost: true }));
+      expect(found.filter((line) => line.includes('host global'))).toEqual([
+        'dependency.ts:16 names the host global process',
+        'dependency.ts:18 names the host global process',
+        'untyped.ts:13 names the host global Buffer',
+      ]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 });

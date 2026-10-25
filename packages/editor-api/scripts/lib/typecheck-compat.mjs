@@ -38,8 +38,10 @@ export const TYPECHECK_TIMEOUT_MS = 120_000;
  * `bun:test`, `import fs = require('fs')`), a `/// <reference types>` to Node or Bun, a
  * `HOST_IMPORT_META` member of `import.meta`, and a `HOST_GLOBALS` name that resolves to no
  * declaration or only to Node or Bun type packages, which a dependency's own types can pull into
- * any program (a local `process` is fine, and so are `globalThis.process` and a property named
- * `Bun`). A non-dependency file is one whose path has no `/node_modules/`. The scan reads syntax
+ * any program (a local `process` binding is fine, and so are `globalThis.process` and a property
+ * named `Bun`; an ambient `declare const process` is not, since nothing defines it in a browser).
+ * A bare `buffer`, `events` or `util` import counts even where a browser polyfill would answer
+ * it: the scan reports the name, and a polyfill is a decision to state, not to infer. A non-dependency file is one whose path has no `/node_modules/`. The scan reads syntax
  * and resolves only those names, so it is cheap where a whole-program check is not. Node-only
  * members of shared types (`setTimeout(...).unref()`, `Error.captureStackTrace`) are not
  * covered.
@@ -113,6 +115,7 @@ export const HOST_GLOBALS = [
   '__filename',
   'require',
   'module',
+  'exports',
   'NodeJS',
 ];
 
@@ -213,8 +216,11 @@ function isHostSymbol(checker, node) {
   const symbol = ts.isShorthandPropertyAssignment(node.parent)
     ? checker.getShorthandAssignmentValueSymbol(node.parent)
     : checker.getSymbolAtLocation(node);
-  const declarations = symbol?.declarations ?? [];
-  return declarations.every((declaration) =>
-    hostTypeFile.test(declaration.getSourceFile().fileName)
+  // An ambient declaration (`declare const process`) states a name without defining it.
+  const declarations = (symbol?.declarations ?? []).filter(
+    (declaration) =>
+      !hostTypeFile.test(declaration.getSourceFile().fileName) &&
+      !(ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Ambient)
   );
+  return declarations.length === 0;
 }
