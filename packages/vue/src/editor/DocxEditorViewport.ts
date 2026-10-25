@@ -1,4 +1,4 @@
-import { useTranslation } from '../i18n';
+import { useChromeDir, useTranslation } from '../i18n';
 import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import {
   computed,
@@ -18,7 +18,7 @@ import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
+import { REVIEW_MARKERS_GUTTER, physicalReviewGutter, useReviewGutter } from './review-gutter';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -52,6 +52,9 @@ export const DocxEditorViewport = defineComponent({
     const rail = useReviewRailRegistry();
     const reserve = computed(() => claimsReviewGutter(rail.value));
     const reviewGutter = useReviewGutter();
+    // A right-to-left interface puts the column on the page's left. The paddings are
+    // published physically, because this element keeps a left-to-right base.
+    const chromeDir = useChromeDir();
     const navShift = useNavigationShift();
     const layoutStore = useNavigationLayoutStore();
     let viewportEl: HTMLElement | null = null;
@@ -80,6 +83,8 @@ export const DocxEditorViewport = defineComponent({
     };
 
     return () => {
+      const side = chromeDir() === 'rtl' ? 'left' : 'right';
+      const padding = physicalReviewGutter(reviewGutter.value, side);
       const attrs: Record<string, unknown> = {
         ref: (el: unknown) => {
           viewportEl = isHTMLElementNode(el) ? el : null;
@@ -103,8 +108,8 @@ export const DocxEditorViewport = defineComponent({
           '--docx-nav-shift': `${navShift.value}px`,
           ...(reserve.value
             ? {
-                '--docx-review-gutter': `${reviewGutter.value.inlineEnd}px`,
-                '--docx-review-gutter-start': `${reviewGutter.value.inlineStart}px`,
+                '--docx-review-gutter': `${padding.right}px`,
+                '--docx-review-gutter-start': `${padding.left}px`,
                 // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 '--docx-review-strip': `${2 * REVIEW_MARKERS_GUTTER}px`,
@@ -113,6 +118,7 @@ export const DocxEditorViewport = defineComponent({
         } as CSSProperties,
       };
       if (reserve.value) attrs['data-review-pane'] = paneOpen.value ? 'open' : 'closed';
+      if (reserve.value && side === 'left') attrs['data-review-side'] = 'left';
       if (fitting.value) attrs['data-zoom-fit'] = '';
       return h('div', attrs, slots.default?.());
     };

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The review rail's date format, shared by the React and Vue rails.
 
 const reviewDateFormats = new Map<string, Intl.DateTimeFormat>();

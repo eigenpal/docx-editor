@@ -1,4 +1,4 @@
-import { useTranslation } from '../i18n';
+import { useChromeDir, useTranslation } from '../i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // The scroll container around the painted pages.
 //
@@ -16,7 +16,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, claimsReviewGutter, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
+import { REVIEW_MARKERS_GUTTER, physicalReviewGutter, useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
@@ -58,6 +58,10 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // and mirrors the marker strip onto both edges otherwise, so the sheet stays centred.
   // The stylesheet consumes it through `--docx-review-gutter`/`--docx-review-gutter-start`.
   const reviewGutter = useReviewGutter();
+  // A right-to-left interface puts the column on the page's left. The paddings are
+  // published physically, because this element keeps a left-to-right base.
+  const side = useChromeDir() === 'rtl' ? 'left' : 'right';
+  const padding = physicalReviewGutter(reviewGutter, side);
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = claimsReviewGutter(rail);
@@ -101,6 +105,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       aria-label={t('editor.documentViewport')}
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
+      {...(reserve && side === 'left' ? { 'data-review-side': 'left' } : {})}
       {...(fitting ? { 'data-zoom-fit': '' } : {})}
       className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
@@ -111,8 +116,8 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           ['--docx-nav-shift' as string]: `${shift}px`,
           ...(reserve
             ? {
-                ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
-                ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
+                ['--docx-review-gutter' as string]: `${padding.right}px`,
+                ['--docx-review-gutter-start' as string]: `${padding.left}px`,
                 // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,

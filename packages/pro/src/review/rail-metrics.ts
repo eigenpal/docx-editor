@@ -33,13 +33,14 @@ export interface ReviewRailMetrics {
   readonly top: number;
   /**
    * CSS pixels from the scroll container's left padding edge, in its scrolled content, to
-   * the column's left edge: one 16px gutter right of the page. `null` until there is a page
-   * to measure. Keep the column hidden while it is `null`.
+   * the column's left edge: one 16px gutter right of the page, or, in a right-to-left
+   * interface, one 16px gutter and the column's own width left of it. `null` until there is
+   * a page to measure. Keep the column hidden while it is `null`.
    */
   readonly left: number | null;
   /**
    * The `left` value, relative to {@link ReviewRailMetrics.left}, that puts a 300px card
-   * fully inside the visible area with a 12px inset from its right edge. Use it while
+   * fully inside the visible area with a 12px inset from its edge on the column's side. Use it while
    * {@link ReviewRailMetrics.compact} is true. `null` until there is a page to measure.
    */
   readonly compactCardLeft: number | null;
@@ -75,6 +76,15 @@ export const COMPACT_CARD_INSET = 12;
  * `docx-paginated-surface` before the content, and a column bound to it measured a
  * placeholder that is removed when the document opens.
  */
+/**
+ * The scroll container's side for the column, published by the viewport as
+ * `data-review-side`: `left` in a right-to-left interface, the right otherwise. The
+ * container keeps a left-to-right base for its scroll offsets, so the side is physical.
+ */
+export function reviewRailSide(container: HTMLElement | null): 'left' | 'right' {
+  return container?.getAttribute('data-review-side') === 'left' ? 'left' : 'right';
+}
+
 const SURFACE_SELECTOR = '.docx-paginated-surface:not(.docx-editor__loading-surface)';
 
 /** The editor's painted surface inside `container`, or null while there is none. */
@@ -122,10 +132,18 @@ export function measureReviewRailMetrics(rail: HTMLElement, scale: number): Revi
   const box = surface && parent ? surface.getBoundingClientRect() : null;
   const frame = box && parent ? parent.getBoundingClientRect() : null;
   if (!box || !frame || !parent) return { scale, top: 0, left: null, compactCardLeft: null };
-  const left = box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER;
+  const origin = parent.scrollLeft - frame.left - parent.clientLeft;
+  const top = box.top - frame.top - parent.clientTop + parent.scrollTop;
+  if (reviewRailSide(parent) === 'left') {
+    // The column's own width, open or closed, so its right edge keeps one gutter off the page.
+    const left = box.left + origin - RAIL_GUTTER - rail.offsetWidth;
+    // The viewport's left edge in rail-local coordinates, plus the inset.
+    return { scale, top, left, compactCardLeft: parent.scrollLeft + COMPACT_CARD_INSET - left };
+  }
+  const left = box.right + origin + RAIL_GUTTER;
   return {
     scale,
-    top: box.top - frame.top - parent.clientTop + parent.scrollTop,
+    top,
     left,
     // The viewport's right edge in rail-local coordinates, minus a card and its inset.
     compactCardLeft:
@@ -194,9 +212,10 @@ export function observeReviewRailMetrics(
     resize?.disconnect();
     resize = null;
     if (!parent || typeof view.ResizeObserver !== 'function') return;
-    const targets = new Set<Element>([parent]);
+    // The rail too: on the left side its own width, which opening the pane changes, places it.
+    const targets = new Set<Element>([parent, rail]);
     for (const child of Array.from(parent.children)) {
-      if (child !== rail && isHTMLElementNode(child)) targets.add(child);
+      if (isHTMLElementNode(child)) targets.add(child);
     }
     for (let node = surface; node && node !== parent; node = node.parentElement) {
       targets.add(node);
@@ -217,7 +236,11 @@ export function observeReviewRailMetrics(
       if (records.some((record) => record.type === 'childList')) bind();
       measure();
     });
-    mutations.observe(parent, { childList: true, attributes: true, attributeFilter: ['style'] });
+    mutations.observe(parent, {
+      childList: true,
+      attributes: true,
+      attributeFilter: ['style', 'data-review-side'],
+    });
     cleanups.push(() => mutations.disconnect());
   }
   if (options.trackScroll && parent) {

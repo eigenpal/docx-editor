@@ -5433,7 +5433,12 @@ a.docx-hyperlink:focus-visible {
  * keeps the full column with the page's clearance at the start, and the viewport scrolls
  * sideways to the cards. The fallbacks — the full column while open, the strip while
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
- * it always did. */
+ * it always did.
+ *
+ * Both properties are PHYSICAL: this edge is the right, and the start is the left, because
+ * the scroller keeps a left-to-right base. A right-to-left interface puts the column on the
+ * page's left, so the viewport publishes the two values swapped and marks the scroller
+ * `data-review-side='left'`. */
 .docx-editor__scroll-container[data-review-pane='open'] {
   padding-right: var(--docx-review-gutter, 316px);
 }
@@ -5502,6 +5507,33 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-primary, #1a73e8);
   cursor: pointer;
   pointer-events: auto;
+}
+
+/* A right-to-left interface puts the column on the page's left. Markers and the button keep
+   to the column's page edge, which is then its right. */
+.docx-editor__scroll-container[data-review-side='left']
+  :is(.docx-review__markers > .docx-review__marker, .docx-review__add) {
+  left: auto;
+  right: 0;
+}
+
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__add {
+  margin-left: 0;
+  margin-right: calc(-16px - 17px);
+}
+
+/* The speech bubble's tail points at the page, which is then on its right. */
+.docx-editor__scroll-container[data-review-side='left']
+  .docx-review__marker[data-marker='initials'],
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__badge {
+  border-radius: 13px 13px 3px 13px;
+}
+
+/* The column's cards keep their 12px of air on the side away from the page. */
+.docx-editor__scroll-container[data-review-side='left']
+  .docx-review__slot:not(.docx-review__slot--compact)
+  .docx-review__card {
+  margin: 0 0 0 12px;
 }
 
 /* The hover fill must be OPAQUE. `--doc-surface-hover` is a translucent wash, which is right

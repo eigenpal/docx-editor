@@ -23,6 +23,7 @@ import {
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
+  LocaleProvider,
   ReviewRailContext,
   useDocxEditor,
 } from '@docx-editor.dev/react';
@@ -308,6 +309,19 @@ describe('useReviewRailMetrics (React)', () => {
     scroller(view.container).style.setProperty('--probe', '1');
     await waitFor(() => rail().style.left === `${EXPECTED_AT_100.left - 100}px`);
     expect(rail().style.left).toBe(`${EXPECTED_AT_100.left - 100}px`);
+  });
+
+  test('a right-to-left interface puts the column on the left of the page', async () => {
+    const view = render(<LocaleProvider dir="rtl">{tree(<DocxEditorReview />)}</LocaleProvider>);
+    const rail = () => view.container.querySelector('[data-testid="review-rail"]') as HTMLElement;
+    const viewport = scroller(view.container);
+    await waitFor(() => rail()?.style.left !== undefined && rail().style.left !== '');
+    expect(viewport.getAttribute('data-review-side')).toBe('left');
+    // The full column pads the left; the right keeps what the start would have had.
+    expect(viewport.style.getPropertyValue('--docx-review-gutter-start')).toBe('316px');
+    expect(viewport.style.getPropertyValue('--docx-review-gutter')).toBe('0px');
+    // The page starts at x 300 in a frame at x 20: the column ends one gutter before it.
+    expect(rail().style.left).toBe(`${300 - 20 - 16 - rail().offsetWidth}px`);
   });
 
   test('warns once in development when the column is not absolutely positioned', async () => {

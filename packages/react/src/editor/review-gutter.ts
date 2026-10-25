@@ -121,6 +121,23 @@ export function visibleInlineEndReservation(gutter: ReviewGutter, measured: numb
   return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
 }
 
+/**
+ * The side of the page the review column takes. It follows the interface: a right-to-left
+ * interface reads the page from the right, so its comments sit on the left. The scroll
+ * container keeps a left-to-right base for its scroll offsets, so the side is physical.
+ */
+export type ReviewColumnSide = 'left' | 'right';
+
+/** The physical paddings for `gutter` with the column on `side`. */
+export function physicalReviewGutter(
+  gutter: ReviewGutter,
+  side: ReviewColumnSide
+): { readonly left: number; readonly right: number } {
+  return side === 'left'
+    ? { left: gutter.inlineEnd, right: gutter.inlineStart }
+    : { left: gutter.inlineStart, right: gutter.inlineEnd };
+}
+
 export interface ReviewGutterInput {
   /** Whether the pane is showing its cards (`snapshot.reviewPaneOpen`). */
   readonly open: boolean;
