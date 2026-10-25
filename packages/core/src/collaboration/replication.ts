@@ -67,6 +67,16 @@ export interface CollaborationDocumentPort {
    */
   readonly interactive?: boolean;
   paragraphs(): readonly CollaborationParagraph[];
+  /**
+   * The body paragraph with this canonical node id, exactly as `paragraphs()` lists it (the
+   * same stable id, minted when the paragraph's own is missing, invalid, or claimed by an
+   * earlier paragraph), or null for a node that is not a listed body paragraph. Cheap on an
+   * unchanged document, so presence can ask it on every caret move.
+   *
+   * `paragraphByStableId` can disagree after an earlier paragraph takes the id a later one
+   * held: it may keep answering the later one, while this method and `paragraphs()` follow
+   * the earlier, first claimant.
+   */
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**
    * The model text of the paragraph with this node id in any story, or null when the editor

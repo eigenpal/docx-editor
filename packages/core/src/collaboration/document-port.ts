@@ -11,6 +11,7 @@ import {
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
 import {
+  createBodyParagraphLookup,
   createParagraphAddressResolver,
   isStoryPart,
   paragraphSnapshot,
@@ -228,6 +229,7 @@ export function createCollaborationDocumentPort(
   };
 
   const resolveAddress = createParagraphAddressResolver(storyParts);
+  const paragraphByNodeId = createBodyParagraphLookup(() => store.bodyStore().part);
 
   const applyParagraphTexts = (
     updates: readonly CollaborationParagraphTextUpdate[],
@@ -292,9 +294,7 @@ export function createCollaborationDocumentPort(
     documentId,
     interactive: options.interactive === true,
     paragraphs,
-    paragraphByNodeId(nodeId: string) {
-      return paragraphs().find((paragraph) => paragraph.nodeId === nodeId) ?? null;
-    },
+    paragraphByNodeId,
     paragraphTextOf(nodeId: string) {
       for (const part of storyParts()) {
         const text = paragraphTextOf(part, nodeId);

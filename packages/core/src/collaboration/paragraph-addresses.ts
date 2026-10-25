@@ -11,6 +11,10 @@
 //
 //   - `paragraphAddressesOf` maps paraId to node id for ONE part and remembers it against
 //     the part ROOT. A header nobody edits keeps its map for the life of that tree.
+//   - `createBodyParagraphLookup` keeps the reverse map, node id to paraId, for the LAST body
+//     root only: every edit makes a new body root, and the shared cache above would otherwise
+//     fill with body maps that undo history keeps alive. So an edit can cost two body walks,
+//     one per direction, when both lookups run on the new tree.
 //   - `createParagraphAddressResolver` remembers where each paraId resolved last time, then
 //     re-checks the hint through the store's own node index, which is O(1). A paragraph
 //     that did not move survives every keystroke elsewhere in the document.
@@ -46,6 +50,13 @@ const MAX_MEMOIZED_PARTS = 24;
  * number of distinct ids a peer can name.
  */
 const MAX_ADDRESS_HINTS = 512;
+
+interface PartAddresses {
+  /** Stable paraId to node id, first claimant only. */
+  readonly byParagraphId: ReadonlyMap<string, string>;
+  /** Node id to the stable paraId a snapshot lists it under. */
+  readonly byNodeId: ReadonlyMap<string, string>;
+}
 
 const partAddresses = createRecentRootCache<ReadonlyMap<string, string>>(MAX_MEMOIZED_PARTS);
 
@@ -131,11 +142,21 @@ export function paragraphSnapshot(part: OoxmlPart): readonly CollaborationParagr
 export function paragraphAddressesOf(part: OoxmlPart): ReadonlyMap<string, string> {
   const cached = partAddresses.get(part.root);
   if (cached) return cached;
+  const { byParagraphId } = identityWalk(part);
+  partAddresses.set(part.root, byParagraphId);
+  return byParagraphId;
+}
+
+/**
+ * One walk of a part's paragraphs under the snapshot's own id rules: `normalizeParagraphIdentity`
+ * mints an id for a missing, invalid, or later duplicate one, and the first `w:p` to carry an id
+ * claims it (a demoted generic `w:p` too, which then has no address). Not memoized here.
+ */
+function identityWalk(part: OoxmlPart): PartAddresses {
   const identified = normalizeParagraphIdentity(part);
   paragraphEnumerations += 1;
-  const addresses = new Map<string, string>();
-  // An id a demoted-generic `w:p` claims is still taken, even though that node has no
-  // addressable text. The snapshot this replaces claimed it the same way.
+  const byParagraphId = new Map<string, string>();
+  const byNodeId = new Map<string, string>();
   const claimed = new Set<string>();
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
@@ -146,15 +167,17 @@ export function paragraphAddressesOf(part: OoxmlPart): ReadonlyMap<string, strin
         const paragraphId = authoredId.toUpperCase();
         if (!claimed.has(paragraphId)) {
           claimed.add(paragraphId);
-          if (node.kind === 'paragraph') addresses.set(paragraphId, node.id);
+          if (node.kind === 'paragraph') {
+            byParagraphId.set(paragraphId, node.id);
+            byNodeId.set(node.id, paragraphId);
+          }
         }
       }
     }
     for (const child of node.children) visit(child);
   };
   visit(identified.root);
-  partAddresses.set(part.root, addresses);
-  return addresses;
+  return { byParagraphId, byNodeId };
 }
 
 /** One resolved presence address: the live part and the node inside it. */
@@ -235,5 +258,30 @@ export function createParagraphAddressResolver(
     }
     if (absent.ids.size < MAX_ADDRESS_HINTS) absent.ids.add(paragraphId);
     return null;
+  };
+}
+
+/**
+ * The body paragraph with this canonical node id, as `paragraphSnapshot(body)` would list it,
+ * or null. A remote caret's character lookup asks this on every caret move. It reads a node id
+ * to paraId map from `identityWalk`, which applies the snapshot's own id rules, so it answers
+ * exactly what the snapshot does, then reads that one paragraph's text.
+ *
+ * The map is kept for the last body root only. Caret moves on an unchanged document are O(1);
+ * the first lookup after an edit walks the body once (no text), shared by every lookup on that
+ * tree. The snapshot it replaces listed every paragraph and its text on every call.
+ */
+export function createBodyParagraphLookup(
+  body: () => OoxmlPart
+): (nodeId: string) => CollaborationParagraph | null {
+  let last: { readonly root: OoxmlNode; readonly byNodeId: ReadonlyMap<string, string> } | null =
+    null;
+  return (nodeId) => {
+    const part = body();
+    if (last?.root !== part.root) last = { root: part.root, byNodeId: identityWalk(part).byNodeId };
+    const paragraphId = last.byNodeId.get(nodeId);
+    if (paragraphId === undefined) return null;
+    const text = paragraphTextOf(part, nodeId);
+    return text === null ? null : Object.freeze({ paragraphId, nodeId, text });
   };
 }
