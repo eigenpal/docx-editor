@@ -137,7 +137,9 @@ export interface VectorShapeComponent {
   readonly shadowOnly?: true;
   /** Authored line ends and joins, inherited from the selected theme line when absent. */
   readonly strokeCap?: 'butt' | 'round' | 'square';
-  readonly strokeJoin?: 'round' | 'bevel';
+  readonly strokeJoin?: 'round' | 'bevel' | 'miter';
+  /** Miter limit in line widths, for a miter join. */
+  readonly strokeMiterLimit?: number;
   /** Dash and gap lengths in multiples of the stroke width; absent for a solid outline. */
   readonly strokeDash?: readonly number[];
   /** Paint clips to these closed subpaths, as an inner shadow clips to its shape. */
@@ -488,7 +490,8 @@ export function projectShapeComponents(
       strokeAlpha: pathStroke?.alpha ?? 1,
       strokeWidthEmu: pathStroke ? strokeWidthEmu : 0,
       ...(pathStroke && line?.cap ? { strokeCap: line.cap } : {}),
-      ...(pathStroke && line?.join ? { strokeJoin: line.join } : {}),
+      ...(pathStroke && line ? { strokeJoin: line.join } : {}),
+      ...(pathStroke && line?.join === 'miter' ? { strokeMiterLimit: line.miterLimit } : {}),
       ...(pathStroke && line?.dash ? { strokeDash: line.dash } : {}),
       // Only a closed outline with area can sit inside its geometry: a line, or a closed path
       // collapsed onto a line, stays centred, or the clip to its own path would remove it.

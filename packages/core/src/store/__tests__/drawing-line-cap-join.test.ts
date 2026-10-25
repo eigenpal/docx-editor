@@ -99,10 +99,11 @@ describe('source vector line ends and joins', () => {
     expect(value.path.getAttribute('stroke-linecap')).toBe('square');
     expect(value.path.getAttribute('stroke-linejoin')).toBe('round');
   });
-  test('absent cap and join keep the old SVG branch', () => {
+  test('an absent join is round and an absent cap keeps the SVG default', () => {
     const value = fixture(line());
     expect(value.path.getAttribute('stroke-linecap')).toBeNull();
-    expect(value.path.getAttribute('stroke-linejoin')).toBeNull();
+    expect(value.path.getAttribute('stroke-linejoin')).toBe('round');
+    expect(value.path.getAttribute('stroke-miterlimit')).toBeNull();
     expect(value.shape.components[0]!.subpathsEmu).toEqual([
       [
         { x: 0, y: 0 },
@@ -116,18 +117,27 @@ describe('source vector line ends and joins', () => {
       'cap="rnd"><a:round/></a:ln>'
     );
     expect(value.path.getAttribute('stroke-linecap')).toBeNull();
-    expect(value.path.getAttribute('stroke-linejoin')).toBeNull();
+    expect(value.path.getAttribute('stroke-linejoin')).toBe('miter');
+    expect(value.path.getAttribute('stroke-miterlimit')).toBe('8');
+  });
+  test('a miter join without a limit uses 8 line widths, and the limit reads in thousandths', () => {
+    expect(fixture(line('', '<a:miter/>')).path.getAttribute('stroke-miterlimit')).toBe('8');
+    const limited = fixture(line('', '<a:miter lim="250000"/>'));
+    expect(limited.shape.components[0]!.strokeMiterLimit).toBe(2.5);
+    expect(fixture(line('', '<a:miter lim="junk"/>')).shape.components[0]!.strokeMiterLimit).toBe(
+      8
+    );
   });
   test('duplicate joins do not select one or inherit a theme join', () => {
-    const value = fixture(line('', '<a:round/><a:bevel/>'), 'cap="flat"><a:round/></a:ln>');
-    expect(value.path.getAttribute('stroke-linejoin')).toBeNull();
+    const value = fixture(line('', '<a:round/><a:bevel/>'), 'cap="flat"><a:bevel/></a:ln>');
+    expect(value.path.getAttribute('stroke-linejoin')).toBe('round');
   });
   test('foreign QName cap and join do not become DrawingML properties', () => {
     const value = fixture(
       line('xmlns:f="urn:foreign" f:cap="rnd"', '<f:round xmlns:f="urn:foreign"/>')
     );
     expect(value.path.getAttribute('stroke-linecap')).toBeNull();
-    expect(value.path.getAttribute('stroke-linejoin')).toBeNull();
+    expect(value.path.getAttribute('stroke-linejoin')).toBe('round');
   });
   test('projection and paint preserve source cap and join through save and reopen', () => {
     const value = fixture(line('cap="rnd"', '<a:round/>'));
