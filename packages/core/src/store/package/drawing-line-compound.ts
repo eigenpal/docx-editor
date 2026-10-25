@@ -132,6 +132,7 @@ export function compoundBands(
       strokeOutsetEmu: _strokeOutset,
       strokeCap: _cap,
       strokeJoin: _join,
+      strokeMiterLimit: _miterLimit,
       strokeDash: _dash,
       ...fillOnly
     } = component;

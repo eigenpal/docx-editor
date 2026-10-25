@@ -10,6 +10,12 @@ import {
 export interface PreparedBlockMemo {
   readonly contentWidth: number;
   readonly frameEnabled: boolean;
+  /**
+   * Whether the section that follows opens a new page, so a bare section mark drops its borders
+   * and shading. A mark before a continuous section keeps them; the section type can change
+   * without touching the mark paragraph.
+   */
+  readonly marksPageBreak: boolean;
   readonly producer: string;
   readonly drawingToken: string;
   readonly projectionToken: string;

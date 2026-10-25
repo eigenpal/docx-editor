@@ -13,9 +13,10 @@ function childNamed(node: OoxmlElement | undefined, name: string): OoxmlElement 
   }
   return undefined;
 }
-function optionalHideMark(properties: OoxmlElement | undefined): boolean | undefined {
+/** An on/off cell property: `undefined` when absent, else on unless its value turns it off. */
+function optionalFlag(properties: OoxmlElement | undefined, name: string): boolean | undefined {
   if (properties?.namespaceUri !== WML_NAMESPACE_URI) return undefined;
-  const flag = childNamed(properties, 'hideMark');
+  const flag = childNamed(properties, name);
   if (!flag) return undefined;
   const value = flag.attributes.find(
     (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
@@ -23,23 +24,45 @@ function optionalHideMark(properties: OoxmlElement | undefined): boolean | undef
   return value === undefined || !['0', 'false', 'off'].includes(value);
 }
 
-/** Whole-table cell styles, conditional styles, and direct cell properties, in precedence order. */
+/**
+ * An on/off cell property through whole-table cell styles, conditional styles, and direct cell
+ * properties, in precedence order.
+ */
+function cellFlag(
+  style: CascadedTableFormatting,
+  conditions: readonly string[],
+  direct: OoxmlElement | undefined,
+  name: 'hideMark' | 'noWrap'
+): boolean {
+  let on = false;
+  for (const properties of style.tableCellPropertyNodes ?? []) {
+    on = optionalFlag(properties, name) ?? on;
+  }
+  for (const condition of conditions) {
+    const layers = style.conditionalStyleLayers?.get(condition);
+    if (layers) {
+      for (const layer of layers) on = optionalFlag(childNamed(layer, 'tcPr'), name) ?? on;
+    } else {
+      on = optionalFlag(childNamed(style.conditional.get(condition), 'tcPr'), name) ?? on;
+    }
+  }
+  return optionalFlag(direct, name) ?? on;
+}
+
+/** `w:hideMark`: the cell's end mark takes no room in its row's height. */
 export function cellIgnoresEndMark(
   style: CascadedTableFormatting,
   conditions: readonly string[],
   direct: OoxmlElement | undefined
 ): boolean {
-  let hidden = false;
-  for (const properties of style.tableCellPropertyNodes ?? []) {
-    hidden = optionalHideMark(properties) ?? hidden;
-  }
-  for (const condition of conditions) {
-    const layers = style.conditionalStyleLayers?.get(condition);
-    if (layers) {
-      for (const layer of layers) hidden = optionalHideMark(childNamed(layer, 'tcPr')) ?? hidden;
-    } else {
-      hidden = optionalHideMark(childNamed(style.conditional.get(condition), 'tcPr')) ?? hidden;
-    }
-  }
-  return optionalHideMark(direct) ?? hidden;
+  return cellFlag(style, conditions, direct, 'hideMark');
+}
+
+/** `w:noWrap`: autofit never narrows the cell's column below its preferred width. */
+export function cellNoWrap(
+  style: CascadedTableFormatting,
+  conditions: readonly string[],
+  direct: OoxmlElement | undefined
+): boolean {
+  return cellFlag(style, conditions, direct, 'noWrap');
 }

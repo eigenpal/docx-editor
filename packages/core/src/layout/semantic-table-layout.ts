@@ -1505,12 +1505,13 @@ export function layoutRowFragmentBounded(
     }
   } else {
     // Two floors: the authored `atLeast` CONTENT minimum and the height a vMerge span
-    // assigned this row. Neither applies to a continuation fragment — a mid-row split is
-    // content-driven, and flooring both halves counts the span twice — or past the budget.
-    // A span floor already includes the row's insets through its height probe. Pad only
-    // the authored minimum, then take the maximum, or merged rows count the padding twice.
+    // assigned this row. The authored minimum also floors the fragment that completes a
+    // split row: its continuation is at least that tall. The span floor applies to the first
+    // fragment only, since flooring both halves counts the span twice. A span floor already
+    // includes the row's insets through its height probe. Pad only the authored minimum,
+    // then take the maximum, or merged rows count the padding twice.
     const authoredFloorPt =
-      isContinuation || atLeastHeightPt === undefined
+      atLeastHeightPt === undefined
         ? 0
         : authoredRowMinimumFloorPt(
             atLeastHeightPt,

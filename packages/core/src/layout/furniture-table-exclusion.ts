@@ -78,11 +78,12 @@ export function furnitureTableZones(
       box,
       floatingWrap: { anchorId: table.tableId, columnIndex: 0, float, sourceOrder: -1 },
     };
-    const zone = addFloatingTableExclusions([{ fragments: [placed] }], new Map(), {
-      columnCount: 1,
-      columnGapPt: 0,
-      contentWidth: contentBox.width,
-    }).get(0)?.[0];
+    const zone = addFloatingTableExclusions(
+      [{ fragments: [placed] }],
+      new Map(),
+      { columnCount: 1, columnGapPt: 0, contentWidth: contentBox.width },
+      false
+    ).get(0)?.[0];
     if (
       !zone ||
       zone.verticalBand.y >= contentBox.height ||

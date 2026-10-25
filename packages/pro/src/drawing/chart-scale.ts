@@ -21,8 +21,51 @@ const MAX_TICKS = 1_000;
 export interface ValueScale {
   readonly min: number;
   readonly max: number;
+  /** The tick step: added on a linear scale, multiplied on a logarithmic one. */
   readonly major: number;
   readonly ticks: readonly number[];
+  /** The base of a logarithmic scale (`c:logBase`); absent for a linear one. */
+  readonly logBase?: number;
+}
+
+/**
+ * Where `value` sits between the scale's ends, as a share of the axis: linear, or by the
+ * logarithm on a logarithmic scale, where a value at or below zero sits at the minimum.
+ */
+export function scaleRatio(scale: ValueScale, value: number): number {
+  if (scale.logBase !== undefined) {
+    if (!(value > 0)) return 0;
+    const span = Math.log(scale.max / scale.min) || 1;
+    return Math.log(value / scale.min) / span;
+  }
+  return (value - scale.min) / (scale.max - scale.min || 1);
+}
+
+/**
+ * A logarithmic scale: from the power of `base` at or below the smallest positive value to
+ * the power at or above the largest, with a tick at each power between. Fixed ends win when
+ * positive. Values at or below zero have no place on the axis.
+ */
+export function logValueScale(
+  dataMin: number,
+  dataMax: number,
+  base: number,
+  fixedMin: number | null,
+  fixedMax: number | null
+): ValueScale {
+  const log = (value: number) => Math.log(value) / Math.log(base);
+  const low = dataMin > 0 ? dataMin : 1;
+  const high = dataMax > 0 ? Math.max(dataMax, low) : low;
+  const min = fixedMin !== null && fixedMin > 0 ? fixedMin : base ** Math.floor(log(low) + 1e-9);
+  let max = fixedMax !== null && fixedMax > 0 ? fixedMax : base ** Math.ceil(log(high) - 1e-9);
+  if (!(max > min)) max = min * base;
+  const ticks: number[] = [];
+  for (let index = 0; index <= MAX_TICKS; index += 1) {
+    const value = Number((min * base ** index).toPrecision(12));
+    if (value > max * (1 + 1e-9)) break;
+    ticks.push(value);
+  }
+  return { min, max, major: base, ticks, logBase: base };
 }
 
 export interface ScaleRequest {

@@ -5,7 +5,7 @@
 // bottom margin, it breaks across pages in the body flow instead:
 //
 // - Its leading part is what fits between the body cursor and the bottom margin: the whole
-//   rows that fit, or, when not even the first row fits, the lines of that row that do.
+//   rows that fit and the lines of the next row that fit below them.
 // - It starts at the higher of two tops: the authored position of a box as tall as the
 //   leading part, and the top that puts the leading part's bottom at the bottom page edge.
 //   A box that ends above the page edge therefore keeps its `w:tblpY`, and bottom alignment
@@ -13,8 +13,10 @@
 // - Its first fragment is no taller than the room the body had below its cursor. Since mode 15
 //   it also ends at the bottom margin (`positionedTableBreaksAtMargin`); earlier modes run it
 //   to the page edge.
-// - Later fragments open at the top of the next page, and the body flow resumes below the last
-//   row, after `w:bottomFromText`. Rows split at line boundaries, `w:cantSplit` rows included.
+// - Later fragments open at the top of the next page. Rows split at line boundaries,
+//   `w:cantSplit` rows included. The body flow resumes on the last page as after a breaking
+//   text-anchored table (`resumeAfterBreak` in `table-text-float-break.ts`): below the last row
+//   and `w:bottomFromText`, or beside a last part that leaves a passage for text.
 // - When the start lies above the body cursor, the table would cover text already on the
 //   page, so it opens the next page and starts there by the same rule.
 //
@@ -25,9 +27,8 @@
 // - A table with a line, a minimum row height, or a nested row taller than the page band.
 // - A table whose authored top is already in the bottom margin.
 // - Multi-column sections, and `w:doNotBreakWrappedTables`.
-// Further differences: following text resumes below the last row even beside a narrow table,
-// `inside`/`outside` alignment resolve as top/bottom, and a nested table row moves whole, as it
-// does in every table, instead of splitting at line boundaries.
+// Further differences: `inside`/`outside` alignment resolve as top/bottom, and a nested table row
+// moves whole, as it does in every table, instead of splitting at line boundaries.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
@@ -99,7 +100,7 @@ const probes = new WeakMap<
  * exclusion zones are left out, so the probe does not depend on the cursor; it is memoized per
  * body pass and width.
  */
-function probeTable(
+export function probeTable(
   table: OoxmlElement,
   structure: SemanticTableStructure,
   width: number,
@@ -146,7 +147,7 @@ function lineBottoms(row: TableRowFragmentRecord, out: number[]): number[] {
  * Height the first fragment needs to open: the header rows, which move as one group, and the
  * first line of the first body row.
  */
-function openingHeight(fragment: TableFragmentRecord): number {
+export function openingHeight(fragment: TableFragmentRecord): number {
   let bottom = 0;
   let index = 0;
   for (; index < fragment.rows.length && fragment.rows[index]!.isHeaderRow; index++) {
@@ -202,25 +203,27 @@ function paginates(
 }
 
 /**
- * Height of the leading part of a probed table that fits `room`: the whole rows that fit, or
- * the lines of the first row that fit when it does not fit whole. A split row keeps the space
- * its cells leave below their last line. Every box of the probe shares one frame, with the
- * table top at 0.
+ * Height of the leading part of a probed table that fits `room`: the whole rows that fit, and
+ * the lines of the next row that fit below them. A split row keeps the space its cells leave
+ * below their last line. Every box of the probe shares one frame, with the table top at 0.
  */
 export function leadingPartHeight(fragment: TableFragmentRecord, room: number): number {
   let whole = 0;
+  let next: TableRowFragmentRecord | undefined;
   for (const row of fragment.rows) {
     const bottom = row.box.y + row.box.height;
-    if (bottom > room + EPSILON) break;
+    if (bottom > room + EPSILON) {
+      next = row;
+      break;
+    }
     whole = bottom;
   }
-  if (whole > 0) return whole;
-  const first = fragment.rows[0];
-  if (!first) return 0;
-  const bottoms = lineBottoms(first, []);
-  const lastLine = bottoms.reduce((max, bottom) => Math.max(max, bottom), first.box.y);
-  const below = first.box.y + first.box.height - lastLine;
-  let fit = 0;
+  const split = whole > 0 ? next : fragment.rows[0];
+  if (!split) return whole;
+  const bottoms = lineBottoms(split, []);
+  const lastLine = bottoms.reduce((max, bottom) => Math.max(max, bottom), split.box.y);
+  const below = split.box.y + split.box.height - lastLine;
+  let fit = whole;
   for (const bottom of bottoms) {
     if (bottom + below <= room + EPSILON) fit = Math.max(fit, bottom + below);
   }

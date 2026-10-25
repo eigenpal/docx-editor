@@ -1,6 +1,10 @@
 import { carryBlockMetadataIdentity } from './block-metadata-identity.ts';
 import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
-import { firstRowContentDeps, lastRowContentDeps } from './table-fragment-content-insets.ts';
+import {
+  firstRowContentDeps,
+  cutRowContentDeps,
+  lastRowContentDeps,
+} from './table-fragment-content-insets.ts';
 import { bodyLineId } from './body-line-id.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
@@ -110,10 +114,13 @@ export function updateTableText(
     )
       return null;
     const baseDeps = index === 0 ? firstRowContentDeps(structure, source, deps) : deps;
+    // The paginator places the first part of a split row with the rule at the cut, and only so.
     const candidates =
-      index === fragment.rows.length - 1
-        ? [lastRowContentDeps(structure, source, baseDeps), baseDeps]
-        : [baseDeps];
+      continues && occurrenceIndex === 0
+        ? [cutRowContentDeps(structure, source, baseDeps)]
+        : index === fragment.rows.length - 1
+          ? [lastRowContentDeps(structure, source, baseDeps), baseDeps]
+          : [baseDeps];
     const place = (
       row: typeof source,
       keys: Set<string>,

@@ -150,10 +150,13 @@ export function createParagraphDrawingWrap(options: {
           const entryOrder = options.paragraphOrder.get(entry.paragraph.id);
           const anchorOrder = options.paragraphOrder.get(zone.anchorParagraphId);
           // A page- or margin-framed band does not move when the text before it reflows, so it
-          // reaches back over the whole page. A flow-framed one would chase its own anchor.
+          // reaches back over the whole page. A flow-framed one would chase its own anchor, except
+          // a raised text table, whose position leaves out the move it causes.
           const reachesBack =
             (!options.seedForwardOnly &&
-              (zone.pageFramedBand === true || liftedAnchor(zone, index))) ||
+              (zone.pageFramedBand === true ||
+                zone.reachesEarlierLines === true ||
+                liftedAnchor(zone, index))) ||
             (!placement && followingAnchor(zone, index));
           if (entryOrder !== undefined && anchorOrder !== undefined) {
             if (anchorOrder > entryOrder && !reachesBack) return false;

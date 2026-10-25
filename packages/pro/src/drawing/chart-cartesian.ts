@@ -432,13 +432,7 @@ export function paintCartesian(
       if (!stroke) continue;
       const lines: Point[][] = [];
       if (view.value?.scale) {
-        const scale = view.value.scale;
-        const step = minor ? scale.major / 5 : scale.major;
-        for (
-          let index = 0, value = scale.min;
-          value <= scale.max + step * 1e-9 && index < 1_000;
-          index += 1, value = scale.min + index * step
-        ) {
+        for (const value of gridValues(view.value.scale, minor)) {
           const at = valueAt(view.value, value);
           lines.push(
             vertical(view.side)
@@ -706,4 +700,31 @@ function crossesInside(view: AxisView, scale: ValueScale): boolean {
   const crosses = view.axis.crosses;
   if (crosses !== 'autoZero') return false;
   return scale.min < 0 && scale.max > 0;
+}
+
+/**
+ * The values of an axis's gridlines: the ticks, or for minor gridlines five steps per interval
+ * on a linear scale and each whole multiple between powers on a logarithmic one. Bounded.
+ */
+function gridValues(scale: ValueScale, minor: boolean): number[] {
+  const values: number[] = [];
+  if (scale.logBase !== undefined) {
+    if (!minor) return [...scale.ticks];
+    const steps = Math.min(Math.floor(scale.logBase), 100);
+    for (const tick of scale.ticks) {
+      for (let k = 2; k < steps && values.length < 1_000; k += 1) {
+        if (tick * k < scale.max) values.push(tick * k);
+      }
+    }
+    return values;
+  }
+  const step = minor ? scale.major / 5 : scale.major;
+  for (
+    let index = 0, value = scale.min;
+    value <= scale.max + step * 1e-9 && index < 1_000;
+    index += 1, value = scale.min + index * step
+  ) {
+    values.push(value);
+  }
+  return values;
 }

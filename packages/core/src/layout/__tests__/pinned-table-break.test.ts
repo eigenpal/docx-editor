@@ -45,12 +45,21 @@ interface TableShape {
   readonly lines?: number;
   readonly trPr?: string;
   readonly width?: number;
+  /** Lines per row, by row index; rows past the list use `lines`. */
+  readonly rowLines?: readonly number[];
 }
 
-function table({ tblpPr, rows = 1, lines = 110, trPr = '', width = 9360 }: TableShape): string {
+function table({
+  tblpPr,
+  rows = 1,
+  lines = 110,
+  trPr = '',
+  width = 9360,
+  rowLines = [],
+}: TableShape): string {
   const row = (index: number) =>
     `<w:tr>${trPr ? `<w:trPr>${trPr}</w:trPr>` : ''}<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="${width}"/></w:tcPr>` +
-    paragraphs(`row ${index} line`, lines) +
+    paragraphs(`row ${index} line`, rowLines[index] ?? lines) +
     '</w:tc></w:tr>';
   return (
     `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:type="dxa" w:w="${width}"/>` +
@@ -227,6 +236,23 @@ describe('a page-positioned table taller than the room below it', () => {
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);
+  });
+
+  test('the leading part counts the lines of the next row that fit below whole rows', () => {
+    // 624pt of room below the cursor hold the 360pt first row and 22 lines of the second, so
+    // the 624pt leading part ends at the page edge: the table starts at 720 - 624 = 96.
+    const body = lead + table({ tblpPr: PAGE, rows: 2, rowLines: [30, 40] }) + tail;
+    expect(shape(layoutOf(body, { compatibilityMode: 14 }))[0]).toEqual([0, 96, 624]);
+    // From mode 15 the first part ends at the bottom margin: 552pt below the same top.
+    expect(shape(layoutOf(body))[0]).toEqual([0, 96, 552]);
+  });
+
+  test('text after a narrow table wraps beside its last part', () => {
+    const narrow = table({ tblpPr: PAGE, width: 4000 });
+    const layout = layoutOf(lead + narrow + tail);
+    const [last] = tableFragments(layout).slice(-1);
+    expect(last!.fragment.floatingWrap).toBeDefined();
+    expect(paragraphAt(layout, 'tail')).toEqual({ pageIndex: last!.pageIndex, y: 0 });
   });
 
   test('warm reuse matches a cold layout', () => {

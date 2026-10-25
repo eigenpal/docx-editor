@@ -19,6 +19,7 @@
 // repeat above a continuation is run again and must agree.
 
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { cutPart } from './table-row-minimum-fit.ts';
 import {
   initialCellCursors,
   layoutRowFragmentBounded,
@@ -211,9 +212,12 @@ function placeChain(
       )
     )
       return null;
-    const rowDeps = index === 0 ? firstRowContentDeps(structure, source, base) : base;
+    const opening = index === 0 ? firstRowContentDeps(structure, source, base) : base;
+    // Every occurrence ends its page, so it takes the paginator's split-part deps and band. The
+    // width lane only serves tables without `w:tblpPr`, never a page-positioned break.
+    const part = cutPart(structure, source, opening, bottom, k > 0, undefined);
     const placementDeps: TableFlowDeps = {
-      ...rowDeps,
+      ...part.deps,
       rowAtPageStart:
         top <= 0.001 ||
         (index > 0 && fragment.rows.slice(0, index).every((row) => row.isHeaderRepeat)),
@@ -223,7 +227,7 @@ function placeChain(
       cols,
       left,
       top,
-      bottom,
+      part.bottom,
       false,
       k > 0,
       0,

@@ -398,11 +398,26 @@ describe('autofit layout', () => {
     );
   });
 
-  test('a first-line indent counts against the first word', () => {
+  test('a first-line indent counts against the first word in compatibility mode 15', () => {
     const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('ABCDEFGHIJ')}`;
-    const { widths } = columns(table('', indented));
-    expect(widths[1]).toBe(72);
-    expect(lines(table('', indented))).toEqual([1, 1, 1]);
+    const modern = columns(table('', indented), { compatibilityMode: 15 });
+    expect(modern.widths[1]).toBe(72);
+    expect(modern.lines).toEqual([1, 1, 1]);
+  });
+
+  test('earlier compatibility modes leave a first-line indent out of the minimum', () => {
+    // The word fits the column without the indent, so it breaks on the indented first line.
+    const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('ABCDEFGHIJ')}`;
+    const legacy = columns(table('', indented));
+    expect(legacy.widths[1]).toBe(60);
+    expect(legacy.lines[1]).toBe(2);
+  });
+
+  test('a widening column keeps the first-line indent of a word after leading spaces', () => {
+    // The word alone is wider than the column, so it widens, and the word keeps its indent on
+    // the first line. Without the need to widen, the word would start the next line instead.
+    const spaced = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run(' ABCDEFGHIJ')}`;
+    expect(columns(table('', spaced), { compatibilityMode: 15 }).widths[1]).toBe(72);
   });
 
   test('cell spacing counts against the column', () => {
@@ -631,6 +646,24 @@ describe('autofit layout', () => {
     expect(columns(table('', content), { drawings: true }).widths).toEqual([38.18, 60, 21.82]);
   });
 
+  test('a nested word after leading spaces does not widen the outer column it fits', () => {
+    // The nested 65pt column holds the 60pt word on its second line, without the 12pt
+    // first-line indent, so neither table widens.
+    const nested =
+      '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="1300"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="1300" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:ind w:firstLine="240"/></w:pPr>${run(' ABCDEFGHIJ')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="4400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1540"/><w:gridCol w:w="1320"/><w:gridCol w:w="1540"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1540" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1320" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1540" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer, { compatibilityMode: 15 }).widths[1]).toBe(66);
+  });
+
   test('a nested autofit table passes its own word minimum to the outer column', () => {
     const nested =
       '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
@@ -646,10 +679,64 @@ describe('autofit layout', () => {
     expect(columns(outer).widths[0]).toBe(60);
   });
 
-  test('spaces that open a line count toward its first word', () => {
+  test('spaces that open a paragraph break before its first word', () => {
+    // The spaces end the first line, so the column holds only the word, on the second.
     const lead = columns(table('', run('  ABCDEFGHIJ')));
-    expect(lead.widths[1]).toBe(72);
-    expect(lead.lines[1]).toBe(1);
+    expect(lead.widths[1]).toBe(60);
+    expect(lead.lines[1]).toBe(2);
+    // The first-line indent stays on the line the spaces end.
+    const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('  ABCDEFGHIJ')}`;
+    expect(columns(table('', indented)).widths[1]).toBe(60);
+    // A left indent applies to every line, so it still counts.
+    const left = `<w:pPr><w:ind w:left="240"/></w:pPr>${run('  ABCDEFGHIJ')}`;
+    expect(columns(table('', left)).widths[1]).toBe(72);
+  });
+
+  test('an unwrapped cell holds its column at its preferred width', () => {
+    // `w:noWrap` keeps the first column at its 60pt preferred width; the wide word in the
+    // second column takes its room from the third column alone, and the first still wraps.
+    const unwrapped = (noWrap: string) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/>${noWrap}</w:tcPr><w:p>${run('ab cd ef gh ij kl')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(unwrapped('')).widths).toEqual([38.18, 60, 21.82]);
+    const held = columns(unwrapped('<w:noWrap/>'));
+    expect(held.widths).toEqual([60, 60, 12]);
+    expect(held.lines[0]).toBe(2);
+    // An off value is no `w:noWrap` at all.
+    expect(columns(unwrapped('<w:noWrap w:val="0"/>')).widths).toEqual([38.18, 60, 21.82]);
+  });
+
+  test('unwrapped cells wider than the text column share it', () => {
+    // Three 120pt cells hold 360pt in a 300pt text column: each gives up the same share.
+    const cell = `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/><w:noWrap/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>`;
+    const wide =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="800"/><w:gridCol w:w="800"/><w:gridCol w:w="800"/></w:tblGrid>' +
+      `<w:tr>${cell}${cell}${cell}</w:tr></w:tbl>`;
+    expect(columns(wide).widths).toEqual([100, 100, 100]);
+  });
+
+  test('a table wider than its text column grows to hold its cells instead of sharing it', () => {
+    // A 350pt table in the 300pt text column: the three held 120pt cells keep their widths and
+    // the table grows to 360pt; without them the 240pt grid stretches to the table's 350pt.
+    const table = (tcPr: string, grid: number) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="7000" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+      `<w:gridCol w:w="${grid}"/>`.repeat(3) +
+      '</w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr>${tcPr}</w:tcPr><w:p>${run('ab')}</w:p></w:tc>`.repeat(3) +
+      '</w:tr></w:tbl>';
+    expect(columns(table('<w:tcW w:w="2400" w:type="dxa"/><w:noWrap/>', 2400)).widths).toEqual([
+      120, 120, 120,
+    ]);
+    const stretched = columns(table('', 1600)).widths;
+    expect(stretched.reduce((sum, width) => sum + width, 0)).toBeCloseTo(350, 1);
   });
 
   test('an empty grid band gains no width when the table scales down', () => {

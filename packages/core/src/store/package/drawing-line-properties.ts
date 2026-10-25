@@ -24,7 +24,10 @@ export function readLineProperties(
   readonly widthEmu: number;
   readonly alignment: string | undefined;
   readonly cap: 'butt' | 'round' | 'square' | undefined;
-  readonly join: 'round' | 'bevel' | undefined;
+  /** The corner join; round when the outline names none. */
+  readonly join: 'round' | 'bevel' | 'miter';
+  /** The miter limit as a multiple of the line width, for a miter join. */
+  readonly miterLimit: number;
   /** Dash and gap lengths in line widths; null for a solid line. */
   readonly dash: readonly number[] | null;
   /** Parallel bands the outline paints as (`@cmpd`). */
@@ -53,7 +56,7 @@ export function readLineProperties(
     alignment:
       directAlignment ?? (theme ? schemaAttributeValue(theme.attributes, 'algn') : undefined),
     cap: lineCap(directCap ?? (theme ? schemaAttributeValue(theme.attributes, 'cap') : undefined)),
-    join: supportedJoin(directJoin ?? lineJoin(theme)),
+    ...joinOf(directJoin ?? lineJoin(theme)),
     dash: dashOf(wsp, ln, theme, resolveStyleMatrixReference, resolvedThemeLine),
     compound: lineCompound(
       directCompound ?? (theme ? schemaAttributeValue(theme.attributes, 'cmpd') : undefined)
@@ -86,7 +89,13 @@ function lineCap(value: string | undefined): 'butt' | 'round' | 'square' | undef
   return undefined;
 }
 
-function lineJoin(line: OoxmlElement | null): string | undefined {
+/** A join element's name and its `a:miter` limit attribute. */
+interface LineJoin {
+  readonly name: string;
+  readonly limit?: string;
+}
+
+function lineJoin(line: OoxmlElement | null): LineJoin | undefined {
   if (!line) return undefined;
   const joins = line.children.filter(
     (node) =>
@@ -95,12 +104,32 @@ function lineJoin(line: OoxmlElement | null): string | undefined {
       ['round', 'bevel', 'miter'].includes(node.localName)
   );
   // An explicit unsupported or ambiguous join must not inherit a different theme join.
-  if (joins.length > 1) return 'unsupported';
-  return joins.length === 1 && isElement(joins[0]!) ? joins[0]!.localName : undefined;
+  if (joins.length > 1) return { name: 'unsupported' };
+  const join = joins[0];
+  if (joins.length !== 1 || !join || !isElement(join)) return undefined;
+  return { name: join.localName, limit: schemaAttributeValue(join.attributes, 'lim') };
 }
 
-function supportedJoin(value: string | undefined): 'round' | 'bevel' | undefined {
-  return value === 'round' || value === 'bevel' ? value : undefined;
+const DEFAULT_MITER_LIMIT = 8;
+
+/**
+ * The join an outline paints with. An outline without a join element, or with an ambiguous
+ * one, joins round. `a:miter@lim` is a positive percentage in thousandths (800000 is 8 line
+ * widths); without it the limit is 8.
+ */
+function joinOf(join: LineJoin | undefined): {
+  readonly join: 'round' | 'bevel' | 'miter';
+  readonly miterLimit: number;
+} {
+  if (join?.name === 'bevel') return { join: 'bevel', miterLimit: DEFAULT_MITER_LIMIT };
+  if (join?.name !== 'miter') return { join: 'round', miterLimit: DEFAULT_MITER_LIMIT };
+  const raw = join.limit;
+  const parsed = raw !== undefined && /^\d{1,10}$/.test(raw) ? Number(raw) / 100_000 : NaN;
+  // A limit below 1 has no meaning for a stroke; clamp to a bounded range.
+  const miterLimit = Number.isFinite(parsed)
+    ? Math.min(100, Math.max(1, parsed))
+    : DEFAULT_MITER_LIMIT;
+  return { join: 'miter', miterLimit };
 }
 
 /**

@@ -125,3 +125,11 @@ export function sectionMarksJoiningBreakSheet(
   }
   return joins;
 }
+
+/**
+ * Whether a paragraph is a bare section mark: it carries a paragraph-level `w:sectPr` and holds
+ * nothing but inert content. Such a mark paints neither its borders nor its shading.
+ */
+export function isBareSectionMark(paragraph: OoxmlElement): boolean {
+  return paragraphSectionNode(paragraph) !== undefined && holdsOnlyInertContent(paragraph);
+}

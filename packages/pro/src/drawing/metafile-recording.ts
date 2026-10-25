@@ -273,6 +273,25 @@ export class RecordingContext2D {
     if (Number.isFinite(value)) this.state.globalAlpha = Math.max(0, Math.min(1, value));
   }
 
+  /**
+   * Whether `points` more path points fit the budget. Checked before a path is copied into a
+   * command, so a stream that repeats a large path stops costing work once the budget ends.
+   */
+  private admits(points: number): boolean {
+    if (this.budget.exhausted) return false;
+    if (this.budget.points + points > MAX_METAFILE_POINTS) {
+      this.budget.exhausted = true;
+      return false;
+    }
+    return true;
+  }
+
+  /** Extend the current path; path building stops with the budget too. */
+  private extend(command: MetafilePathCommand): void {
+    if (!this.admits(this.path.length + 1)) return;
+    this.path.push(command);
+  }
+
   private push(command: MetafileCommand, points = 0): void {
     if (this.budget.exhausted) return;
     this.budget.commands += 1;
@@ -359,13 +378,13 @@ export class RecordingContext2D {
     this.start = null;
   }
   moveTo(x: number, y: number): void {
-    this.path.push({ op: 'M', ...this.device(x, y) });
+    this.extend({ op: 'M', ...this.device(x, y) });
     this.current = { x: finite(x), y: finite(y) };
     this.start = this.current;
   }
   lineTo(x: number, y: number): void {
     if (!this.current) return this.moveTo(x, y);
-    this.path.push({ op: 'L', ...this.device(x, y) });
+    this.extend({ op: 'L', ...this.device(x, y) });
     this.current = { x: finite(x), y: finite(y) };
   }
   bezierCurveTo(x1: number, y1: number, x2: number, y2: number, x: number, y: number): void {
@@ -373,7 +392,7 @@ export class RecordingContext2D {
     const a = this.device(x1, y1);
     const b = this.device(x2, y2);
     const end = this.device(x, y);
-    this.path.push({ op: 'C', x1: a.x, y1: a.y, x2: b.x, y2: b.y, x: end.x, y: end.y });
+    this.extend({ op: 'C', x1: a.x, y1: a.y, x2: b.x, y2: b.y, x: end.x, y: end.y });
     this.current = { x: finite(x), y: finite(y) };
   }
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void {
@@ -389,7 +408,7 @@ export class RecordingContext2D {
   }
   closePath(): void {
     if (!this.current) return;
-    this.path.push({ op: 'Z' });
+    this.extend({ op: 'Z' });
     this.current = this.start;
   }
   rect(x: number, y: number, w: number, h: number): void {
@@ -497,7 +516,7 @@ export class RecordingContext2D {
 
   fill(rule?: unknown): void {
     const paint = this.paintOf(this.state.fillStyle);
-    if (!paint || !this.path.length) return;
+    if (!paint || !this.path.length || !this.admits(this.path.length)) return;
     this.push(
       { kind: 'fill', path: [...this.path], evenOdd: rule === 'evenodd', paint },
       this.path.length
@@ -505,7 +524,7 @@ export class RecordingContext2D {
   }
   stroke(): void {
     const paint = this.paintOf(this.state.strokeStyle);
-    if (!paint || !this.path.length) return;
+    if (!paint || !this.path.length || !this.admits(this.path.length)) return;
     const scale = this.penScale();
     this.push(
       {
@@ -519,6 +538,7 @@ export class RecordingContext2D {
     );
   }
   clip(rule?: unknown): void {
+    if (!this.admits(this.path.length)) return;
     this.push(
       { kind: 'clip', path: [...this.path], evenOdd: rule === 'evenodd' },
       this.path.length

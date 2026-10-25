@@ -138,6 +138,8 @@ export function appendVectorComponent(
     path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
     if (component.strokeCap) path.setAttribute('stroke-linecap', component.strokeCap);
     if (component.strokeJoin) path.setAttribute('stroke-linejoin', component.strokeJoin);
+    if (component.strokeMiterLimit !== undefined)
+      path.setAttribute('stroke-miterlimit', String(component.strokeMiterLimit));
     if (component.strokeDash?.length) {
       const unit = Math.max(1, component.strokeWidthEmu);
       path.setAttribute(
