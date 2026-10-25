@@ -13,8 +13,8 @@
 //     the part ROOT. A header nobody edits keeps its map for the life of that tree.
 //   - `createBodyParagraphLookup` keeps the reverse map, node id to paraId, for the LAST body
 //     root only: every edit makes a new body root, and the shared cache above would otherwise
-//     fill with body maps that undo history keeps alive. Its walk also seeds the forward map
-//     for that tree, so the two lookups share one walk per edit.
+//     fill with body maps that undo history keeps alive. So an edit can cost two body walks,
+//     one per direction, when both lookups run on the new tree; neither builds the other's map.
 //   - `createParagraphAddressResolver` remembers where each paraId resolved last time, then
 //     re-checks the hint through the store's own node index, which is O(1). A paragraph
 //     that did not move survives every keystroke elsewhere in the document.
@@ -143,7 +143,7 @@ export function paragraphSnapshot(part: OoxmlPart): readonly CollaborationParagr
 export function paragraphAddressesOf(part: OoxmlPart): ReadonlyMap<string, string> {
   const cached = partAddresses.get(part.root);
   if (cached) return cached;
-  const { byParagraphId } = identityWalk(part);
+  const byParagraphId = identityWalk(part, 'byParagraphId');
   partAddresses.set(part.root, byParagraphId);
   return byParagraphId;
 }
@@ -151,13 +151,13 @@ export function paragraphAddressesOf(part: OoxmlPart): ReadonlyMap<string, strin
 /**
  * One walk of a part's paragraphs under the snapshot's own id rules: `normalizeParagraphIdentity`
  * mints an id for a missing, invalid, or later duplicate one, and the first `w:p` to carry an id
- * claims it (a demoted generic `w:p` too, which then has no address). Not memoized here.
+ * claims it (a demoted generic `w:p` too, which then has no address). Builds the one map its
+ * caller keeps, paraId to node id or node id to paraId. Not memoized here.
  */
-function identityWalk(part: OoxmlPart): PartAddresses {
+function identityWalk(part: OoxmlPart, direction: keyof PartAddresses): Map<string, string> {
   const identified = normalizeParagraphIdentity(part);
   paragraphEnumerations += 1;
-  const byParagraphId = new Map<string, string>();
-  const byNodeId = new Map<string, string>();
+  const addresses = new Map<string, string>();
   const claimed = new Set<string>();
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
@@ -169,8 +169,8 @@ function identityWalk(part: OoxmlPart): PartAddresses {
         if (!claimed.has(paragraphId)) {
           claimed.add(paragraphId);
           if (node.kind === 'paragraph') {
-            byParagraphId.set(paragraphId, node.id);
-            byNodeId.set(node.id, paragraphId);
+            if (direction === 'byParagraphId') addresses.set(paragraphId, node.id);
+            else addresses.set(node.id, paragraphId);
           }
         }
       }
@@ -178,7 +178,7 @@ function identityWalk(part: OoxmlPart): PartAddresses {
     for (const child of node.children) visit(child);
   };
   visit(identified.root);
-  return { byParagraphId, byNodeId };
+  return addresses;
 }
 
 /** One resolved presence address: the live part and the node inside it. */
@@ -279,12 +279,8 @@ export function createBodyParagraphLookup(
     null;
   return (nodeId) => {
     const part = body();
-    if (last?.root !== part.root) {
-      const walked = identityWalk(part);
-      // The same walk answers `paragraphAddressesOf(body)` for this tree too.
-      if (!partAddresses.get(part.root)) partAddresses.set(part.root, walked.byParagraphId);
-      last = { root: part.root, byNodeId: walked.byNodeId };
-    }
+    if (last?.root !== part.root)
+      last = { root: part.root, byNodeId: identityWalk(part, 'byNodeId') };
     const paragraphId = last.byNodeId.get(nodeId);
     if (paragraphId === undefined) return null;
     const text = paragraphTextOf(part, nodeId);
