@@ -58,3 +58,28 @@ test('an automatic title is the name of the only series', () => {
   expect(summaryOf(automatic(chartSpace(BAR + CATEGORY_VALUE_AXES)))?.title).toBe('One');
   expect(summaryOf(automatic(chartSpace(BAR + LINE + CATEGORY_VALUE_AXES)))?.title).toBeNull();
 });
+
+test('a bare automatic-title flag deletes the automatic title', () => {
+  const xml = chartSpace(BAR + CATEGORY_VALUE_AXES).replace(
+    '<c:autoTitleDeleted val="1"/>',
+    '<c:autoTitleDeleted/>'
+  );
+  expect(summaryOf(xml)?.title).toBeNull();
+});
+
+test('an authored title with empty text shows no title', () => {
+  const empty = automatic(chartSpace(BAR + CATEGORY_VALUE_AXES)).replace(
+    '<c:autoTitleDeleted',
+    '<c:title><c:tx><c:rich><a:bodyPr/><a:p/></c:rich></c:tx></c:title><c:autoTitleDeleted'
+  );
+  expect(summaryOf(empty)?.title).toBeNull();
+});
+
+test('an automatic title shows the first cell of a series name', () => {
+  const twoCells = series(0, 'One', ['A', 'B'], [1, 2]).replace(
+    '<c:pt idx="0"><c:v>One</c:v></c:pt>',
+    '<c:pt idx="0"><c:v>One</c:v></c:pt><c:pt idx="1"><c:v>Extra</c:v></c:pt>'
+  );
+  const bar = BAR.replace(series(0, 'One', ['A', 'B'], [1, 2]), twoCells);
+  expect(summaryOf(automatic(chartSpace(bar + CATEGORY_VALUE_AXES)))?.title).toBe('One');
+});

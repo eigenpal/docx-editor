@@ -27,8 +27,10 @@ export interface DrawingGroupPictureRecord {
 }
 
 /**
- * The kind of graphic a non-picture drawing holds: `graphic` for any kind the engine does not
- * name.
+ * The kind of graphic a non-picture drawing holds: `chart` (a chart), `diagram` (SmartArt),
+ * `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a
+ * drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other
+ * graphic). A picture, including an EMF, WMF or TIFF picture that does not convert, has none.
  *
  * @public
  */

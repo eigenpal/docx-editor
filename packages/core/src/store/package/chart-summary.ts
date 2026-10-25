@@ -62,7 +62,8 @@ const PLOT_TYPES: ReadonlySet<string> = new Set<DrawingChartPlotType>([
 export interface DrawingChartSummary {
   /**
    * The title the chart shows, as plain text: its own title, typed or from a cell, or the name
-   * of its only series for an automatic title. Null when it shows none.
+   * of its only series for an automatic title. Null when it shows none, and when a title with
+   * no text of its own sits on a chart with several series.
    */
   readonly title: string | null;
   /** The chart's plot types in document order; a combination chart has more than one. */
@@ -81,7 +82,7 @@ function chartChild(element: OoxmlElement, localName: string): OoxmlElement | nu
  * The text under a title or series name: rich text runs (`a:t`, a space at each paragraph
  * and line break) and cached cell text (`c:v`), depth-first, bounded in nodes and length.
  */
-function plainText(element: OoxmlElement): string | null {
+function plainText(element: OoxmlElement, firstValueOnly = false): string | null {
   let text = '';
   let visited = 0;
   const stack: OoxmlNode[] = [element];
@@ -98,6 +99,8 @@ function plainText(element: OoxmlElement): string | null {
       for (const child of node.children) {
         if (child.kind === 'textValue') text += child.value.slice(0, MAX_TITLE_UNITS);
       }
+      // A series name shows its first cell only.
+      if (firstValueOnly && node.localName === 'v') break;
       continue;
     }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
@@ -108,21 +111,25 @@ function plainText(element: OoxmlElement): string | null {
     .slice(0, 2 * MAX_TITLE_UNITS)
     .replace(/\s+/g, ' ')
     .trim();
-  return trimmed.length > 0 ? trimmed.slice(0, MAX_TITLE_UNITS) : null;
+  let bounded = trimmed.slice(0, MAX_TITLE_UNITS);
+  // The cut must not leave half of a surrogate pair.
+  if (/[\uD800-\uDBFF]$/.test(bounded)) bounded = bounded.slice(0, -1);
+  return bounded.length > 0 ? bounded : null;
 }
 
 /**
- * The title a chart shows: its own title text, or, when it names none and keeps its automatic
- * title, the name of its only series.
+ * The title a chart shows: its own title text, or, when its title has no text of its own (or it
+ * keeps its automatic title), the name of its only series.
  */
 function chartTitle(chart: OoxmlElement, plotArea: OoxmlElement | null): string | null {
   const title = chartChild(chart, 'title');
   const own = title ? chartChild(title, 'tx') : null;
-  const text = own ? plainText(own) : null;
-  if (text !== null) return text;
+  // An authored title shows its own text, even when that text is empty.
+  if (own) return plainText(own);
   const deleted = chartChild(chart, 'autoTitleDeleted');
   const value = deleted?.attributes.find((attribute) => attribute.localName === 'val')?.value;
-  if (!title && (value === '1' || value === 'true')) return null;
+  // A bare `c:autoTitleDeleted` is true by its schema default.
+  if (!title && deleted && (value === undefined || value === '1' || value === 'true')) return null;
   let only: OoxmlElement | null = null;
   for (const plot of plotArea?.children ?? []) {
     if (plot.kind === 'textValue' || !plot.localName.endsWith('Chart')) continue;
@@ -133,7 +140,7 @@ function chartTitle(chart: OoxmlElement, plotArea: OoxmlElement | null): string 
     }
   }
   const name = only ? chartChild(only, 'tx') : null;
-  return name ? plainText(name) : null;
+  return name ? plainText(name, true) : null;
 }
 
 /** The summary of the chart behind a drawing anchor, or null when it holds no chart part. */

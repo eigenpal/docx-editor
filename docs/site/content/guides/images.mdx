@@ -33,7 +33,7 @@ JPEG validation accepts large EXIF and ICC metadata segments before the frame he
 
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
 
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. The editor rasterizes EMF and WMF without extra setup. PDF export of EMF and WMF requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. The editor rasterizes EMF and WMF without extra setup. PDF export of EMF and WMF requires the drawing module from `@docx-editor.dev/pro/drawing`, which `@docx-editor.dev/docx-to-pdf` includes. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
@@ -245,7 +245,7 @@ Both packages export `UnsupportedElement` with these fields:
 - `source` exposes the read-only canonical source. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the default fallback text.
-- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart`, `diagram`, `shape`, `group`, `textbox`, `canvas`, or `graphic`. `drawing.accessibility.label` holds the drawing's alternative text. A chart placeholder also has `drawing.chart`, with the chart's `title` and `plotTypes`.
+- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. A chart placeholder also has `drawing.chart`, with the chart's `title` and `plotTypes`.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the fallback; it does not try the next declaration.
