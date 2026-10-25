@@ -288,7 +288,14 @@ export class TextWriter {
       const box = noteSeparatorRuleBox(span, line);
       return `${color(span.style.color)} rg ${rect(box, storyOrigin.x - visit.page.box.x, storyOrigin.y - visit.page.box.y, pageHeight(page), true)} f`;
     }
-    if (/^[\t\n\r\f]+$/.test(span.text)) return span.tabLeader ? this.leader(visit, page) : '';
+    if (/^[\t\n\r\f]+$/.test(span.text)) {
+      if (span.tabLeader) return this.leader(visit, page);
+      // An underlined tab draws its rule across the tab: paint it as a space of the tab's
+      // width, which places no ink of its own and keeps the run's underline metrics.
+      if (span.text === '\t' && (span.style.underline || span.revisions?.length))
+        return this.paint({ ...visit, span: { ...span, text: ' ' } }, page, marker);
+      return '';
+    }
     const report = (code: string, message: string): string => {
       this.work.report(code, message, visit.page.index);
       return '';

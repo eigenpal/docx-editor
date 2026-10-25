@@ -83,3 +83,33 @@ test('exported PDF joins justified underline rectangles at the next text origin'
   expect(first![1]).toBeCloseTo(second![1]!, 5);
   expect(first![0]! + first![2]!).toBeCloseTo(second![0]!, 5);
 });
+
+test('an underlined tab draws its underline across the tab', async () => {
+  const { exportPdf } = await import('../src/index.ts');
+  const { docx } = await import('./fixture.ts');
+  const { PDFDocument, PDFRawStream, decodePDFRawStream } = await import('pdf-lib');
+  const underlinedTabs = (count: number) =>
+    '<w:p><w:r><w:t>Name:</w:t></w:r>' +
+    '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:tab/></w:r>'.repeat(count) +
+    '</w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:left="1440" w:right="1440" w:top="1440" w:bottom="1440"/></w:sectPr>';
+  const rectsOf = async (count: number) => {
+    const result = await exportPdf(docx(underlinedTabs(count)), { useSystemFonts: false });
+    const pdf = await PDFDocument.load(result.bytes);
+    const commands = pdf.context
+      .enumerateIndirectObjects()
+      .flatMap(([, obj]) =>
+        obj instanceof PDFRawStream
+          ? [new TextDecoder().decode(decodePDFRawStream(obj).decode())]
+          : []
+      )
+      .join('\n');
+    return [...commands.matchAll(/rg ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) re f/g)].map((m) =>
+      m.slice(1).map(Number)
+    );
+  };
+  const rects = await rectsOf(3);
+  // Three tabs from the default 36pt grid: the first runs from after "Name:" to 36pt.
+  expect(rects).toHaveLength(3);
+  expect(rects[1]![2]).toBeCloseTo(36, 0);
+  expect(rects[2]![2]).toBeCloseTo(36, 0);
+});
