@@ -178,6 +178,40 @@ export function paragraphEndAt(
 }
 
 /**
+ * Whether the candidate ending at `boundary` of `pieces[pieceIndex]` ends its line: it is the
+ * paragraph's last word ({@link paragraphEndAt}), or only plain U+0020 spaces stand between it
+ * and a text-wrapping break or a tab. The line compresses its spaces to keep that word, as the
+ * paragraph's last line does; a tab that no longer fits then opens the next line.
+ */
+export function lineEndAt(
+  pieces: readonly FieldAwarePiece[]
+): (pieceIndex: number, boundary: number) => boolean {
+  const endsParagraph = paragraphEndAt(pieces);
+  const breakAhead = new Array<Uint8Array>(pieces.length);
+  let follows = 0;
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]!;
+    const ahead = new Uint8Array(piece.text.length + 1);
+    const plain = isSpaceShrinkWordPiece(piece);
+    ahead[piece.text.length] = plain ? follows : 0;
+    for (let offset = piece.text.length - 1; offset >= 0; offset -= 1) {
+      const ch = piece.text[offset];
+      ahead[offset] = !plain
+        ? 0
+        : ch === '\n' || ch === '\t'
+          ? 1
+          : ch === ' '
+            ? ahead[offset + 1]!
+            : 0;
+    }
+    breakAhead[index] = ahead;
+    follows = ahead[0]!;
+  }
+  return (pieceIndex, boundary) =>
+    endsParagraph(pieceIndex, boundary) || breakAhead[pieceIndex]?.[boundary] === 1;
+}
+
+/**
  * True when `piece` opens with a U+0020 that can hang at a line end. Only a plain text
  * piece splits into candidates; a projected field result, positional tab, or reserved
  * measure is laid out whole, so its leading space would open the next line instead.

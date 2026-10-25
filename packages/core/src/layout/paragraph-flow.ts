@@ -22,7 +22,7 @@ import {
   endsAtHyphenBreak,
   fitsWithSpaceShrink,
   opensWithHangingSpace,
-  paragraphEndAt,
+  lineEndAt,
 } from './paragraph-space-shrink.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-walk.ts';
 import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
@@ -250,7 +250,7 @@ export function breakParagraph(
   const seamNaturalWidths = cjkSeamNaturalWidths(pieces, visiblePieces, measurer);
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
-  const endsParagraph = paragraphEndAt(pieces);
+  const endsParagraph = lineEndAt(pieces);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const { opticalParagraph, opticalCompression, fitCjkOptically } = createParagraphCjkOpticalFitter(
     allPieces,

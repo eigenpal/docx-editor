@@ -90,18 +90,12 @@ test('a last word split across styled runs, or followed by blank runs, still fit
   }
 });
 
-test('a hard break, trailing tab, or page field after or as the last word keeps the wrap', () => {
+test('a page field after or as the last word keeps the wrap', () => {
   const ref = (result: string) =>
     `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve">` +
     ` REF bm1 \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
     `<w:r><w:t>${result}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`;
   for (const xml of [
-    '<w:r><w:t>aa bb cc</w:t><w:br/></w:r>',
-    '<w:r><w:t>aa bb cc</w:t><w:br/><w:t>dd</w:t></w:r>',
-    '<w:r><w:t>aa bb cc</w:t><w:tab/></w:r>',
-    // The word keeps its own space, so only the break or tab after it can refuse it.
-    '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:br/></w:r>',
-    '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:tab/></w:r>',
     runs(['aa bb ']) + `<w:fldSimple w:instr="PAGE"><w:r><w:t>cc</w:t></w:r></w:fldSimple>`,
     // A page reference and a note reference can change width after the line is decided.
     runs(['aa bb ']) + ref('cc').replace(' REF bm1 ', ' PAGEREF bm1 '),
@@ -206,4 +200,18 @@ test('a last line compresses only when the flow admitted its last word', () => {
   // A line that is not the paragraph's last compresses whenever it overflows, as before.
   const middle = alignSpans(words, measurer, 0, 66, 'both', false);
   expect(middle.at(-1)!.box.x + middle.at(-1)!.box.width).toBeCloseTo(66, 6);
+});
+
+test('a word before a text-wrapping break or a tab borrows inter-word space', () => {
+  for (const xml of [
+    '<w:r><w:t>aa bb cc</w:t><w:br/></w:r>',
+    '<w:r><w:t>aa bb cc</w:t><w:br/><w:t>dd</w:t></w:r>',
+    '<w:r><w:t>aa bb cc</w:t><w:tab/></w:r>',
+    '<w:r><w:t>aa bb cc</w:t><w:tab/><w:t>dd</w:t></w:r>',
+    '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:br/></w:r>',
+  ]) {
+    const result = modern(paragraph(xml));
+    expect(content(result)[0]).toBe('aa bb cc');
+    expect(compressed(result)).toBe(true);
+  }
 });

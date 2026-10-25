@@ -49,7 +49,8 @@ export function spaceShrinkWordTail(pieces: readonly FieldAwarePiece[], measurer
         ),
       });
       if (space >= 0) {
-        tail = current.text[space] === ' ' ? 0 : undefined;
+        // A tab or a text-wrapping break ends the line's last word as a space does.
+        tail = [' ', '\t', '\n'].includes(current.text[space]!) ? 0 : undefined;
         break;
       }
       const following = pieces[index + 1];
