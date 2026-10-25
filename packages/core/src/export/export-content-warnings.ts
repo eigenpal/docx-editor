@@ -1,5 +1,4 @@
 import { unsupportedStyleSeparator } from './style-separator-warnings.ts';
-import { objectPreviewFrameReader } from '../store/package/legacy-object-context.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 // Source diagnostics for content that never reaches a semantic layout record.
 import {
@@ -50,7 +49,6 @@ function inspectPart(
 ): readonly ExportContentWarning['code'][] {
   const cached = cache.get(part.root);
   if (cached && cached.stylesPart === stylesPart) return cached.codes;
-  const hasFrame = objectPreviewFrameReader(stylesPart);
   const codes = new Set<ExportContentWarning['code']>();
   const stack = [
     {
@@ -58,12 +56,11 @@ function inspectPart(
       scope: emptyNamespaceScope(),
       depth: 0,
       mcSelected: false,
-      framed: false,
     },
   ];
   let visited = 0;
   while (stack.length) {
-    const { node, scope: inherited, depth, mcSelected, framed: inheritedFrame } = stack.pop()!;
+    const { node, scope: inherited, depth, mcSelected } = stack.pop()!;
     if (++visited > MAX_PART_SCAN_ELEMENTS || depth > MAX_XML_DEPTH) {
       codes.add('scan-limit');
       break;
@@ -74,7 +71,6 @@ function inspectPart(
       break;
     }
     const scope = namespaceScopeForNode(inherited, node);
-    const framed = inheritedFrame || hasFrame(node);
     // A selected modern drawing supersedes its legacy fallback. Do not warn about dead copies.
     const alternateContent = isMcAlternateContent(node) ? node : undefined;
     if (alternateContent) {
@@ -82,15 +78,15 @@ function inspectPart(
       const selected = selectedRunLevelMcBranch(alternateContent, scope);
       if (selected.refused) codes.add('scan-limit');
       if (selected.branch)
-        stack.push({ node: selected.branch, scope, depth: depth + 1, mcSelected: true, framed });
+        stack.push({ node: selected.branch, scope, depth: depth + 1, mcSelected: true });
       continue;
     }
     // Supported legacy atoms produce drawing records and are diagnosed by the exporter.
     // Legacy atoms selected through MC are not projected by the modern drawing path.
-    if (!mcSelected && isLegacyVmlAtom(node) && !(framed && node.localName === 'object')) {
+    if (!mcSelected && isLegacyVmlAtom(node)) {
       // A laid-out text box story is scanned like a modern one: content it drops still warns.
       const story = projectLegacyVml(node, part.name)?.textboxStory?.content;
-      if (story) stack.push({ node: story, scope, depth: depth + 1, mcSelected, framed });
+      if (story) stack.push({ node: story, scope, depth: depth + 1, mcSelected });
       continue;
     }
     if (node.namespaceUri === 'urn:schemas-microsoft-com:vml' && node.localName === 'textbox') {
@@ -110,7 +106,7 @@ function inspectPart(
       codes.add('legacy-drawing');
     }
     for (const child of node.children)
-      stack.push({ node: child, scope, depth: depth + 1, mcSelected, framed });
+      stack.push({ node: child, scope, depth: depth + 1, mcSelected });
   }
   const result = Object.freeze([...codes]);
   cache.set(part.root, { stylesPart, codes: result });

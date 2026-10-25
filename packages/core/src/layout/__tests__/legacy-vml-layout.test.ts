@@ -16,10 +16,12 @@ import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
   lineLayoutAtoms,
+  type InlineDrawingLayoutContext,
 } from '../drawing-layout.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 import {
   drawingRenderers,
   installDrawingRenderers,
@@ -59,6 +61,19 @@ function paragraphOf(part: OoxmlPart): OoxmlParagraphNode {
   const paragraph = body.children.find((n) => n.kind === 'paragraph');
   if (!paragraph || paragraph.kind !== 'paragraph') throw new Error('missing paragraph');
   return paragraph;
+}
+
+/** The context with every picture a metafile preview the exporter draws itself. */
+function withDrawablePreview(context: InlineDrawingLayoutContext): InlineDrawingLayoutContext {
+  return {
+    ...context,
+    resourceOf: () => ({
+      kind: 'unrenderable',
+      partName: '/word/media/preview.wmf',
+      mime: 'image/x-wmf',
+      reason: 'unsupported-format',
+    }),
+  };
 }
 
 function setup(source = xml()) {
@@ -392,7 +407,7 @@ test('an embedded object reserves its cached preview height, as the same w:pict 
   expect(linked.tops[2]! - linked.tops[1]!).toBe(linked.tops[1]! - linked.tops[0]!);
 });
 
-test('framed object previews keep atom offsets without adding ordinary flow height', async () => {
+test('framed object previews keep atom offsets and draw out of the ordinary flow', async () => {
   const object =
     '<w:object><v:shape type="#_x0000_t75" style="width:52.5pt;height:56.25pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
   const content = `<w:r><w:t>A</w:t>${object}<w:t>Z</w:t></w:r>`;
@@ -421,11 +436,13 @@ test('framed object previews keep atom offsets without adding ordinary flow heig
     const current = paragraphOf(reader.part());
     const layout = layoutSemanticDocument(reader.part(), 1, {
       measurer: createFixedMeasurer(6, 12),
-      inlineDrawingLayout: context,
+      inlineDrawingLayout: withDrawablePreview(context),
     });
     expect(paragraphTextOf(reader.part(), current.id)).toBe('A\uFFFCZ');
-    expect(linesOf(layout)[0]!.box.height).toBeLessThan(56.25);
-    expect(linesOf(layout)[0]!.drawings ?? []).toHaveLength(0);
+    // The frame takes the paragraph out of the flow and draws the preview inside it.
+    const fragment = layout.pages[0]!.fragments[0]!;
+    expect(fragment.kind === 'paragraph' && fragment.positionedFrame).toBeTruthy();
+    expect(linesOf(layout)[0]!.drawings).toHaveLength(1);
   } finally {
     bundle.dispose();
   }
@@ -437,15 +454,19 @@ test('inherited frame changes invalidate preview geometry without changing atom 
   const part = reader.part();
   const paragraph = paragraphOf(part);
   const atoms = drawingAtomIdentities(part)!;
+  let styleCascade: ReturnType<typeof buildStyleCascadeTable> | undefined;
   const draw = () =>
-    linesOf(
-      layoutSemanticDocument(reader.part(), 1, {
-        measurer: createFixedMeasurer(6, 12),
-        inlineDrawingLayout: bundle.bodyContext,
-      })
-    )[0]!;
+    layoutSemanticDocument(reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 12),
+      inlineDrawingLayout: withDrawablePreview(bundle.bodyContext),
+      styleCascade,
+    }).pages[0]!.fragments[0]!;
+  const framed = () => {
+    const fragment = draw();
+    return fragment.kind === 'paragraph' && fragment.positionedFrame !== undefined;
+  };
   try {
-    expect(draw().box.height).toBeGreaterThan(56.25);
+    expect(framed()).toBe(false);
     for (const frame of [true, false, true]) {
       const read = readOoxmlPart(
         `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Child"><w:basedOn w:val="Base"/></w:style><w:style w:type="paragraph" w:styleId="Base"><w:pPr>${frame ? '<w:framePr w:y="-854" w:vAnchor="text"/>' : ''}</w:pPr></w:style></w:styles>`,
@@ -456,10 +477,11 @@ test('inherited frame changes invalidate preview geometry without changing atom 
       );
       if (!read.ok) throw new Error(read.reason);
       setPart(read.part);
+      styleCascade = buildStyleCascadeTable(read.part.root);
       expect(reader.part()).toBe(part);
       expect(drawingAtomIdentities(part)).toBe(atoms);
       expect(paragraphTextOf(part, paragraph.id)).toBe('A\uFFFCZ');
-      expect(draw().box.height > 56.25).toBe(!frame);
+      expect(framed()).toBe(frame);
     }
   } finally {
     bundle.dispose();

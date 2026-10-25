@@ -1,4 +1,3 @@
-import { objectPreviewFrameReader } from './legacy-object-context.ts';
 import { stylesPartOf } from './ooxml-indexes.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 import { paintableMcFallback } from './mc-fallback-projection.ts';
@@ -1583,7 +1582,6 @@ interface PartCollectFrame {
   readonly depth: number;
   /** Text-box stories entered on the path to this node. */
   readonly storyDepth: number;
-  readonly framed?: boolean;
 }
 
 function collectDrawingsInPartBounded(
@@ -1596,7 +1594,6 @@ function collectDrawingsInPartBounded(
   const stack: PartCollectFrame[] = [
     { node: root, namespaceScope: emptyNamespaceScope(), depth: 0, storyDepth: 0 },
   ];
-  const hasFrame = objectPreviewFrameReader(ctx.stylesPart);
   let visited = 0;
   // A drawing that hosts a text box is not a leaf: its story is ordinary WML that can hold
   // pictures of its own, and those need projections (and atom ids) like any other run-level
@@ -1624,7 +1621,6 @@ function collectDrawingsInPartBounded(
         namespaceScope: scope,
         depth: frame.depth + 1,
         storyDepth: frame.storyDepth + 1,
-        framed: frame.framed || hasFrame(frame.node),
       });
     }
   };
@@ -1641,15 +1637,6 @@ function collectDrawingsInPartBounded(
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
 
-    const framed = frame.framed || hasFrame(frame.node);
-    // Unsupported frame geometry must not turn an embedded preview into ordinary flow.
-    // Its model atom remains present for every editing and offset reader.
-    if (
-      framed &&
-      frame.node.namespaceUri === WML_NAMESPACE_URI &&
-      frame.node.localName === 'object'
-    )
-      continue;
     const legacy = projectLegacyVml(frame.node, ownerPartName);
     if (legacy) {
       out.push(legacy);
@@ -1706,7 +1693,6 @@ function collectDrawingsInPartBounded(
           namespaceScope: scope,
           depth: frame.depth + 1,
           storyDepth: frame.storyDepth,
-          framed,
         });
       }
     }

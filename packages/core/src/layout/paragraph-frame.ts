@@ -63,17 +63,18 @@ export function supportsParagraphFrameContent(
   let count = 0;
   while (pending.length) {
     const node = pending.pop()!;
-    if (++count > MAX_FRAME_NODES || node.localName === 'object') return false;
+    if (++count > MAX_FRAME_NODES) return false;
     if (node.kind === 'drawing' || isLegacyVmlAtom(node) || isRunLevelMcAlternateContent(node)) {
       const projection =
         drawings?.projectionForAtom?.(node.id) ??
         (node.kind === 'drawing' ? drawings?.project(node) : undefined);
-      if (
-        projection?.kind !== 'inline' ||
-        projection.textboxStory ||
-        drawings?.resourceOf(projection).kind !== 'ready'
-      )
-        return false;
+      const resource = projection && drawings?.resourceOf(projection);
+      // A metafile the host does not rasterize still draws: an exporter draws it as vectors.
+      const drawable =
+        resource?.kind === 'ready' ||
+        (resource?.kind === 'unrenderable' &&
+          (resource.mime === 'image/x-emf' || resource.mime === 'image/x-wmf'));
+      if (projection?.kind !== 'inline' || projection.textboxStory || !drawable) return false;
       continue;
     }
     if (node.namespaceUri !== W) return false;
