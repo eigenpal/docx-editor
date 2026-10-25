@@ -375,7 +375,7 @@ describe('automatic space before at the start of the document', () => {
     expect(firstLineY(one!)).toBeCloseTo(12, 6);
   });
 
-  test('a header that pushes the body down keeps the automatic gap', () => {
+  test('a header that pushes the body down does not restore the automatic gap', () => {
     const header = layoutHeaderFooterStory(
       read(`<w:hdr xmlns:w="${W}">${TWO}${TWO}${TWO}</w:hdr>`, '/word/header1.xml'),
       400,
@@ -390,6 +390,7 @@ describe('automatic space before at the start of the document', () => {
       headers: new Map([['default', header]]),
       footers: new Map(),
     });
-    expect(firstLineY(one!)).toBeCloseTo(14, 6);
+    // The body starts below the header, and the first line starts at the body top.
+    expect(firstLineY(one!)).toBeCloseTo(0, 6);
   });
 });

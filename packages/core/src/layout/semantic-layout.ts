@@ -180,7 +180,6 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
-import { marginInset } from './page-body-margins.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
@@ -1510,10 +1509,7 @@ function* layoutBlocksPass(
     options.compatibilityMode,
     () => firstParagraphOfSection,
     // The HTML automatic gap only: the fixed 5pt setting keeps its value.
-    styleCascade?.fixedParagraphSpacing !== true &&
-      pageIndexStart === 0 &&
-      flowStartY === 0 &&
-      insetsFor(0).top <= marginInset(geometry.margin.top)
+    styleCascade?.fixedParagraphSpacing !== true && pageIndexStart === 0 && flowStartY === 0
   );
 
   // Placement and keep-with-next lookahead share cached line breaks.

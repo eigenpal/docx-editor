@@ -22,15 +22,14 @@ interface BreakingParagraph {
  * pagination drops it. `opensSection` must turn false once any in-flow block is placed.
  *
  * `spaceBeforeAt` is the space before a paragraph asks for. The document's first paragraph
- * takes no automatic space before (`w:beforeAutospacing`) when the body starts at the top
- * margin, as an HTML page's first block does. An authored measurement stays, and so does
- * the automatic gap below a header that pushes the body down.
+ * takes no automatic space before (`w:beforeAutospacing`), as an HTML page's first block
+ * does, also below a header that pushes the body down. An authored measurement stays.
  */
 export function pageBreakBeforeRules(
   sectionBlockCount: number,
   compatibilityMode: number | undefined,
   opensSection: () => boolean,
-  opensDocumentAtMargin = false
+  opensDocument = false
 ) {
   const breakKeepsBefore = hasCompatibilityRule(compatibilityMode, 'pageBreakBeforeKeepsSpace');
   const breaksBeforeAt = (at: number, entry: BreakingParagraph): boolean =>
@@ -41,10 +40,7 @@ export function pageBreakBeforeRules(
     keepsBeforeAtPageStart: (at: number, entry: BreakingParagraph): boolean =>
       opensSection() || ((breakKeepsBefore || at === 0) && breaksBeforeAt(at, entry)),
     spaceBeforeAt: (at: number, entry: BreakingParagraph, before: number): number =>
-      opensDocumentAtMargin &&
-      at === 0 &&
-      opensSection() &&
-      paragraphAutoSpacingSides(entry.props).before
+      opensDocument && at === 0 && opensSection() && paragraphAutoSpacingSides(entry.props).before
         ? 0
         : before,
   };
