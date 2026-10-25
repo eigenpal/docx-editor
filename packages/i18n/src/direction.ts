@@ -56,3 +56,23 @@ export function catalogDirection(
   if (catalog._dir === 'rtl' || catalog._dir === 'ltr') return catalog._dir;
   return typeof catalog._lang === 'string' ? localeDirection(catalog._lang) : undefined;
 }
+
+/**
+ * The direction a locale provider decides for the editor chrome: its `dir` prop, then the
+ * catalog's `_dir`, then a right-to-left `_lang`, then the direction an outer provider
+ * decided. A left-to-right `_lang` alone decides nothing, so the shipped left-to-right
+ * catalogs keep the host page direction. `undefined` means the chrome inherits the host page.
+ *
+ * Both editor adapters use this rule, so a custom provider of your own can match them.
+ *
+ * @public
+ */
+export function chromeDirection(
+  dir: 'ltr' | 'rtl' | undefined,
+  catalog: { readonly _lang?: unknown; readonly _dir?: unknown } | null | undefined,
+  inherited: 'ltr' | 'rtl' | undefined
+): 'ltr' | 'rtl' | undefined {
+  if (dir) return dir;
+  if (catalog?._dir === 'ltr') return 'ltr';
+  return catalogDirection(catalog) === 'rtl' ? 'rtl' : inherited;
+}

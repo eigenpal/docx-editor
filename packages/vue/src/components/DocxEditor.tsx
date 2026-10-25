@@ -32,7 +32,7 @@ import {
   type VNode,
 } from 'vue';
 import type { TranslationKey } from '../i18n';
-import { LocaleProvider, useTranslation } from '../i18n';
+import { LocaleProvider, useChromeDir, useTranslation } from '../i18n';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
@@ -385,6 +385,8 @@ const DocxEditorFrame = defineComponent({
 
     const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
     const translation = useTranslation();
+    // The chrome direction a provider decided; nothing keeps the host page direction.
+    const chromeDir = useChromeDir();
     const translate = computed(() => {
       const custom = props.t;
       const catalogT = translation.t;
@@ -446,7 +448,7 @@ const DocxEditorFrame = defineComponent({
                   'div',
                   {
                     style: VERTICAL_RULER_STYLE,
-                    dir: translation.dir === 'rtl' ? 'rtl' : undefined,
+                    dir: chromeDir.value,
                   },
                   [h(DocxEditorVerticalRuler)]
                 )
@@ -466,7 +468,7 @@ const DocxEditorFrame = defineComponent({
               style: CONTAINER_STYLE,
               // A right-to-left catalog mirrors the chrome. Otherwise the chrome inherits the
               // host page direction; the viewport keeps a left-to-right base either way.
-              dir: translation.dir === 'rtl' ? 'rtl' : undefined,
+              dir: chromeDir.value,
             },
             [
               h('div', { style: CHROME_BAND_STYLE }, [

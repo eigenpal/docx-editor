@@ -7,7 +7,7 @@ import {
   type InjectionKey,
   type ShallowRef,
 } from 'vue';
-import { catalogDirection, createT, deepMerge, en } from '@docx-editor.dev/i18n';
+import { catalogDirection, chromeDirection, createT, deepMerge, en } from '@docx-editor.dev/i18n';
 import type { LocaleStrings, TFunction, Translations, TranslationKey } from '@docx-editor.dev/i18n';
 import { defineComponent, type PropType } from 'vue';
 
@@ -17,28 +17,18 @@ const dirKey: InjectionKey<ShallowRef<'ltr' | 'rtl'>> = Symbol('dir');
 /** The direction a provider DECIDED for the chrome; `undefined` keeps the host page's. */
 const chromeDirKey: InjectionKey<ShallowRef<'ltr' | 'rtl' | undefined>> = Symbol('chromeDir');
 
-/** The chrome direction a provider decides: see the React twin. */
-function decidedChromeDir(
-  dir: 'ltr' | 'rtl' | undefined,
-  i18n: Translations | undefined,
-  inherited: 'ltr' | 'rtl' | undefined
-): 'ltr' | 'rtl' | undefined {
-  if (dir) return dir;
-  const declared = i18n?._dir;
-  if (declared === 'ltr') return 'ltr';
-  if (declared === 'rtl') return 'rtl';
-  return catalogDirection(i18n) === 'rtl' ? 'rtl' : inherited;
-}
-
 import type { DocxEditorChildren } from '../docx-editor-children';
 
 /** @public */
 export interface LocaleProviderProps {
   i18n?: Translations;
   /**
-   * The writing direction of the editor chrome. Defaults to the catalog's `_dir`, then to
-   * its `_lang`, then to the direction of an outer provider. With `'rtl'`, the toolbar, menu
-   * bar, dialogs, context menu, and panes mirror without a wrapper element.
+   * The writing direction of the editor chrome. Defaults to the catalog's `_dir`, then to a
+   * right-to-left `_lang`, then to the direction of an outer provider. With `'rtl'`, the
+   * toolbar, menu bar, dialogs, context menu, panes, and review column mirror without a
+   * wrapper element. `'ltr'` keeps a left-to-right chrome on a right-to-left host page.
+   * Without any of these, as with the shipped left-to-right catalogs, the chrome inherits
+   * the host page direction.
    */
   dir?: 'ltr' | 'rtl';
   children?: DocxEditorChildren;
@@ -56,9 +46,12 @@ export const LocaleProvider = defineComponent({
     const inheritedLang = inject(langKey, shallowRef('en'));
     const inheritedDir = inject(dirKey, shallowRef<'ltr' | 'rtl'>('ltr'));
     const inheritedChromeDir = inject(chromeDirKey, shallowRef<'ltr' | 'rtl' | undefined>());
-    const dir = computed(() => props.dir ?? catalogDirection(props.i18n) ?? inheritedDir.value);
     const chromeDir = computed(() =>
-      decidedChromeDir(props.dir, props.i18n, inheritedChromeDir.value)
+      chromeDirection(props.dir, props.i18n, inheritedChromeDir.value)
+    );
+    // The decided chrome direction first, so `useTranslation().dir` agrees with the chrome.
+    const dir = computed(
+      () => chromeDir.value ?? catalogDirection(props.i18n) ?? inheritedDir.value
     );
     const lang = computed(() =>
       typeof props.i18n?._lang === 'string' ? props.i18n._lang : inheritedLang.value
@@ -120,14 +113,16 @@ export function useTranslation(): {
 }
 
 /**
- * The `dir` attribute a chrome part sets on its root, read during render: the direction a
+ * The `dir` attribute a chrome part sets on its root, as a read-only ref: the direction a
  * provider decided (its `dir` prop, the catalog's `_dir`, or a right-to-left `_lang`),
  * otherwise nothing, so the part keeps the host page direction.
- * @internal
+ *
+ * Read it in your own controls to follow the editor chrome: `undefined` means the chrome
+ * inherits the host page direction, so set no `dir` then.
+ * @public
  */
-export function useChromeDir(): () => 'ltr' | 'rtl' | undefined {
-  const dir = inject(chromeDirKey, shallowRef<'ltr' | 'rtl' | undefined>());
-  return () => dir.value;
+export function useChromeDir(): Readonly<ShallowRef<'ltr' | 'rtl' | undefined>> {
+  return inject(chromeDirKey, shallowRef<'ltr' | 'rtl' | undefined>());
 }
 
 export type { TranslationKey };

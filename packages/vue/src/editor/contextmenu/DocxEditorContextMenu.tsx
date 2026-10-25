@@ -530,7 +530,7 @@ export const DocxEditorContextMenu = defineComponent({
                     catalogT('contextMenu.ariaLabel' as TranslationKey),
                   tabindex: -1,
                   class: `${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`,
-                  dir: chromeDir(),
+                  dir: chromeDir.value,
                   style,
                   onKeydown: (event: KeyboardEvent) => {
                     const panel = panelRef.value;

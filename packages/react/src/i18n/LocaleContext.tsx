@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from 'react';
-import { catalogDirection, createT, deepMerge, en } from '@docx-editor.dev/i18n';
+import { catalogDirection, chromeDirection, createT, deepMerge, en } from '@docx-editor.dev/i18n';
 import type { LocaleStrings, TFunction, Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -9,29 +9,15 @@ const DirContext = createContext<'ltr' | 'rtl'>('ltr');
 /** The direction a provider DECIDED for the chrome; `undefined` keeps the host page's. */
 const ChromeDirContext = createContext<'ltr' | 'rtl' | undefined>(undefined);
 
-/**
- * The chrome direction a provider decides: its `dir` prop, the catalog's `_dir`, or a
- * right-to-left `_lang`. A left-to-right `_lang` alone decides nothing, so the shipped
- * left-to-right catalogs keep the host page direction, as before.
- */
-function decidedChromeDir(
-  dir: 'ltr' | 'rtl' | undefined,
-  i18n: Translations | undefined,
-  inherited: 'ltr' | 'rtl' | undefined
-): 'ltr' | 'rtl' | undefined {
-  if (dir) return dir;
-  const declared = i18n?._dir;
-  if (declared === 'ltr') return 'ltr';
-  if (declared === 'rtl') return 'rtl';
-  return catalogDirection(i18n) === 'rtl' ? 'rtl' : inherited;
-}
-
 export interface LocaleProviderProps {
   i18n?: Translations;
   /**
-   * The writing direction of the editor chrome. Defaults to the catalog's `_dir`, then to
-   * its `_lang`, then to the direction of an outer provider. With `'rtl'`, the toolbar, menu
-   * bar, dialogs, context menu, and panes mirror without a wrapper element.
+   * The writing direction of the editor chrome. Defaults to the catalog's `_dir`, then to a
+   * right-to-left `_lang`, then to the direction of an outer provider. With `'rtl'`, the
+   * toolbar, menu bar, dialogs, context menu, panes, and review column mirror without a
+   * wrapper element. `'ltr'` keeps a left-to-right chrome on a right-to-left host page.
+   * Without any of these, as with the shipped left-to-right catalogs, the chrome inherits
+   * the host page direction.
    */
   dir?: 'ltr' | 'rtl';
   children: DocxEditorChildren;
@@ -47,8 +33,10 @@ export function LocaleProvider({ i18n, dir, children }: LocaleProviderProps) {
   const inheritedDir = useContext(DirContext);
   const inheritedChromeDir = useContext(ChromeDirContext);
   const lang = typeof i18n?._lang === 'string' ? i18n._lang : inheritedLang;
-  const direction = dir ?? catalogDirection(i18n) ?? inheritedDir;
-  const chromeDir = decidedChromeDir(dir, i18n, inheritedChromeDir);
+  const chromeDir = chromeDirection(dir, i18n, inheritedChromeDir);
+  // The decided chrome direction first, so `useTranslation().dir` agrees with the chrome
+  // whenever a provider decided one.
+  const direction = chromeDir ?? catalogDirection(i18n) ?? inheritedDir;
   const merged = useMemo(
     () =>
       deepMerge(inherited as Record<string, unknown>, i18n as Record<string, unknown> | undefined),
@@ -89,7 +77,10 @@ export function useTranslation(): {
  * The `dir` attribute a chrome part sets on its root: the direction a provider decided
  * (its `dir` prop, the catalog's `_dir`, or a right-to-left `_lang`), otherwise nothing, so
  * the part keeps the host page direction.
- * @internal
+ *
+ * Read it in your own controls to follow the editor chrome: `undefined` means the chrome
+ * inherits the host page direction, so set no `dir` then.
+ * @public
  */
 export function useChromeDir(): 'ltr' | 'rtl' | undefined {
   return useContext(ChromeDirContext);

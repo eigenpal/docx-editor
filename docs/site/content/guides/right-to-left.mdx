@@ -95,7 +95,7 @@ The provider decides the direction in this order:
 
 1. The `dir` prop of `LocaleProvider`, `'ltr'` or `'rtl'`.
 1. The catalog's `_dir` flag.
-1. The direction of the catalog's `_lang` tag. For example, `fa` and `ur` are right to left.
+1. A right-to-left `_lang` tag in the catalog, such as `fa` or `ur`.
 1. The direction of an outer `LocaleProvider`.
 
 If none of these applies, the chrome inherits the host page direction. The shipped left-to-right catalogs, such as `en` and `de`, declare no `_dir`, so they inherit it too. To keep a left-to-right interface on a right-to-left host page, pass `dir="ltr"` to `LocaleProvider`.
@@ -114,7 +114,7 @@ const persian: Translations = {
 };
 ```
 
-To read the direction in your own controls, use `useTranslation().dir`. To compute it outside the editor, use `catalogDirection(catalog)` or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
+Your own controls inside the editor chrome inherit its direction through CSS, so they mirror without code. To read the direction in code, use `useChromeDir()` from the adapter package. It returns `'ltr'` or `'rtl'` when a provider decides the direction, and `undefined` when the chrome inherits the host page direction. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
 
 ### New right-to-left documents
 
@@ -130,7 +130,7 @@ The interface language does not change the direction of an existing document.
 
 ### Host pages with RTL direction
 
-You can mount the editor in a page that sets `dir="rtl"` or `direction: rtl`. You don't need to override the direction on the editor components.
+You can mount the editor in a page that sets `dir="rtl"` on the page or on an ancestor of the editor. You don't need to override the direction on the editor components. The review column and the navigation pane read the nearest `dir` attribute, so set the attribute rather than only the CSS `direction` property.
 
 The painted pages and the `DocxEditor.Viewport` scroll container keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, zoom, and horizontal scrolling are the same in left-to-right and right-to-left host pages.
 

@@ -14,6 +14,12 @@ export function catalogDirection(catalog: {
 } | null | undefined): 'ltr' | 'rtl' | undefined;
 
 // @public
+export function chromeDirection(dir: 'ltr' | 'rtl' | undefined, catalog: {
+    readonly _dir?: unknown;
+    readonly _lang?: unknown;
+} | null | undefined, inherited: 'ltr' | 'rtl' | undefined): 'ltr' | 'rtl' | undefined;
+
+// @public
 export function createT(strings: LocaleStrings, lang?: string): TFunction;
 
 // @public

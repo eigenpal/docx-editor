@@ -19,7 +19,7 @@ import {
 import { docxSlotOf, unwrapFragment } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
-import { useTranslation } from '../../i18n';
+import { useChromeDir } from '../../i18n';
 import { useScopeClassName } from '../scope-context';
 import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
@@ -364,9 +364,9 @@ const DocxEditorToolbarRoot = defineComponent({
     const toolbarDisabled = useEditorState(selectToolbarDisabled);
     const tableChromeVisible = useEditorState(selectTableChromeVisible);
     // A right-to-left interface language puts the paragraph direction buttons in the bar.
-    const translation = useTranslation();
+    const chromeDir = useChromeDir();
     const defaultGroups = computed(() =>
-      buildDefaultGroups(image.value, translation.dir === 'rtl')
+      buildDefaultGroups(image.value, chromeDir.value === 'rtl')
     );
     const defaultSlots = computed(
       () =>
@@ -562,7 +562,7 @@ const DocxEditorToolbarRoot = defineComponent({
           'aria-label': props.t?.('formattingBar.label') ?? label('formattingBar.label'),
           'data-testid': 'docx-toolbar',
           class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
-          dir: translation.dir === 'rtl' ? 'rtl' : undefined,
+          dir: chromeDir.value,
           ...(measuring.value ? { 'data-overflow': '' } : {}),
           onMousedown: guardToolbarMousedown,
         },

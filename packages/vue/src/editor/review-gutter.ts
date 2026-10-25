@@ -84,7 +84,7 @@ export type ReviewColumnSide = 'left' | 'right';
 /**
  * The side the review column takes, read during render: the left when the interface reads
  * right to left. The direction a `LocaleProvider` decides comes first; without one, the
- * host page's direction around the viewport decides, as it does for the toolbar.
+ * `dir` attribute nearest the viewport decides, as it does for the toolbar.
  */
 export function useReviewColumnSide(): () => ReviewColumnSide {
   const chrome = useChromeDir();
@@ -92,16 +92,29 @@ export function useReviewColumnSide(): () => ReviewColumnSide {
   const host = shallowRef<'ltr' | 'rtl'>('ltr');
   const stop = watch(
     viewport,
-    (element) => {
+    (element, _previous, onCleanup) => {
       const around = element?.parentElement;
       if (!around) return;
-      const direction = hostWindowOf(around).getComputedStyle(around).direction;
-      host.value = direction === 'rtl' ? 'rtl' : 'ltr';
+      const view = hostWindowOf(around);
+      // The nearest `dir` attribute, not the computed style: see the React twin.
+      const read = () => {
+        host.value = around.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'rtl' : 'ltr';
+      };
+      read();
+      // A host that flips `dir` on an ancestor at run time moves the toolbar at once.
+      if (typeof view.MutationObserver !== 'function') return;
+      const observer = new view.MutationObserver(read);
+      observer.observe(around.ownerDocument.documentElement, {
+        attributes: true,
+        attributeFilter: ['dir'],
+        subtree: true,
+      });
+      onCleanup(() => observer.disconnect());
     },
     { immediate: true, flush: 'post' }
   );
   scopeDispose(stop);
-  return () => ((chrome() ?? host.value) === 'rtl' ? 'left' : 'right');
+  return () => ((chrome.value ?? host.value) === 'rtl' ? 'left' : 'right');
 }
 
 /** The physical paddings for `gutter` with the column on `side`. */

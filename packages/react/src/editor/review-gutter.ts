@@ -131,8 +131,8 @@ export type ReviewColumnSide = 'left' | 'right';
 
 /**
  * The side the review column takes: the left when the interface reads right to left. The
- * direction a `LocaleProvider` decides comes first; without one, the host page's direction
- * around the viewport decides, which is the direction the toolbar inherits too.
+ * direction a `LocaleProvider` decides comes first; without one, the `dir` attribute nearest
+ * the viewport decides, which is the direction the toolbar inherits too.
  */
 export function useReviewColumnSide(): ReviewColumnSide {
   const chrome = useChromeDir();
@@ -140,9 +140,22 @@ export function useReviewColumnSide(): ReviewColumnSide {
   const [host, setHost] = useState<'ltr' | 'rtl'>('ltr');
   useLayoutEffect(() => {
     const around = viewport?.parentElement;
-    if (chrome || !around) return;
-    const direction = hostWindowOf(around).getComputedStyle(around).direction;
-    setHost(direction === 'rtl' ? 'rtl' : 'ltr');
+    if (chrome || !around) return undefined;
+    const view = hostWindowOf(around);
+    // The nearest `dir` attribute, not the computed style: reading the style here forced a
+    // style pass on the first commit, and the padding flip after it then animated on mount.
+    const read = () =>
+      setHost(around.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'rtl' : 'ltr');
+    read();
+    // A host that flips `dir` on an ancestor at run time moves the toolbar at once; follow it.
+    if (typeof view.MutationObserver !== 'function') return undefined;
+    const observer = new view.MutationObserver(read);
+    observer.observe(around.ownerDocument.documentElement, {
+      attributes: true,
+      attributeFilter: ['dir'],
+      subtree: true,
+    });
+    return () => observer.disconnect();
   }, [chrome, viewport]);
   return (chrome ?? host) === 'rtl' ? 'left' : 'right';
 }

@@ -2253,6 +2253,9 @@ export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId
 // @public
 export function isTextNode(value: unknown): value is Text;
 
+// @internal
+export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void;
+
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 

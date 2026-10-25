@@ -540,7 +540,7 @@ const DocxEditorMenuRoot = defineComponent({
             // One line when the bar measures itself; the stylesheet reads this.
             {...(props.overflow ? { 'data-overflow': '' } : {})}
             class={`${scopeClassName}docx-menubar${props.className ? ` ${props.className}` : ''}`}
-            dir={chromeDir()}
+            dir={chromeDir.value}
             onMousedown={guardToolbarMousedown}
             onKeydown={(event: KeyboardEvent) => {
               if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

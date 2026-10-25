@@ -131,11 +131,7 @@ async function mountBothPanes(
 ) {
   let editor: DocxEditorInstance | null = null;
   const host = document.createElement('div');
-  if (hostDir) {
-    host.setAttribute('dir', hostDir);
-    // happy-dom does not derive `direction` from `dir`; a browser does.
-    host.style.direction = hostDir;
-  }
+  if (hostDir) host.setAttribute('dir', hostDir);
   document.body.append(host);
   const view = render(
     <LocaleProvider {...(dir ? { dir } : {})}>
@@ -298,5 +294,17 @@ describe('a right-to-left interface', () => {
     expect(forced.scroller.getAttribute('data-chrome-dir')).toBeNull();
     expect(forced.scroller.getAttribute('data-review-side')).toBeNull();
     expect(forced.nav.getAttribute('dir')).toBe('ltr');
+  });
+
+  test('a host page that flips its direction at run time moves the column', async () => {
+    const { scroller } = await mountBothPanes('float', undefined, 'ltr');
+    expect(scroller.getAttribute('data-review-side')).toBeNull();
+    const host = scroller.closest('[dir]') as HTMLElement;
+    act(() => {
+      host.setAttribute('dir', 'rtl');
+    });
+    await settle();
+    expect(scroller.getAttribute('data-review-side')).toBe('left');
+    expect(scroller.getAttribute('data-chrome-dir')).toBe('rtl');
   });
 });

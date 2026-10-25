@@ -45,6 +45,7 @@ import {
   useEditorState,
   useReviewAuthors,
   useReviewGutter,
+  useChromeDir,
   useTranslation,
   REVIEW_PANE_GUTTER,
   type ReviewRailRegistry,
@@ -221,6 +222,7 @@ const ReviewRoot = defineComponent({
     );
     const reviewHook = useReviewWithRevision(() => railQuery.value, editorRevision);
     const translation = useTranslation();
+    const chromeDir = useChromeDir();
     const bundled = translation.t;
     const label = (key: string, params?: Record<string, string | number>) =>
       props.t?.(key, params) ?? bundled(key as never, params as never);
@@ -662,7 +664,7 @@ const ReviewRoot = defineComponent({
           railRef.value = null;
         },
         class: `docx-review${props.className ? ` ${props.className}` : ''}`,
-        dir: translation.dir === 'rtl' ? 'rtl' : undefined,
+        dir: chromeDir.value,
         'data-testid': 'review-rail',
         'data-count': items.value.length,
         'data-open': expanded.value ? '' : undefined,

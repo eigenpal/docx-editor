@@ -163,7 +163,7 @@ const DocxEditorNavigationImpl = defineComponent({
       <div
         ref={focus.rootRef}
         class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${pane.overlay.value ? ' docx-nav--overlay' : ''}${props.className ? ` ${props.className}` : ''}`}
-        dir={chromeDir()}
+        dir={chromeDir.value}
         data-open={pane.open.value ? 'true' : 'false'}
         onKeydown={focus.onKeyDown}
         style={{

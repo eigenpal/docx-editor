@@ -158,7 +158,7 @@ export const DocxEditorContent = defineComponent({
                   isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
             },
             class: 'docx-dialog-mount',
-            dir: chromeDir(),
+            dir: chromeDir.value,
           }),
           h(ConfiguredPopups),
           h(ConfiguredEnginePopups),

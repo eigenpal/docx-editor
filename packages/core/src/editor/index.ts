@@ -47,6 +47,7 @@ export {
   type MarkedFontResolver,
 } from './font-resolver.ts';
 export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
+export { keepScrollAtInlineEnd } from './scroll-inline-end.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 export {
   copyEditorStyles,

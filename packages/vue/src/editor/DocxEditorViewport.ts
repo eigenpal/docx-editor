@@ -1,5 +1,9 @@
 import { useTranslation } from '../i18n';
-import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
+import {
+  isElementNode,
+  isHTMLElementNode,
+  keepScrollAtInlineEnd,
+} from '@docx-editor.dev/core/editor';
 import {
   computed,
   defineComponent,
@@ -66,28 +70,29 @@ export const DocxEditorViewport = defineComponent({
     let viewportEl: HTMLElement | null = null;
 
     // A column that does not fit scrolls sideways. On the left it starts in view, so the
-    // viewport keeps to its right end instead: the page first, the cards one scroll away. A
-    // navigation shift on the right widens the content, so the right end is taken again then.
+    // viewport keeps to its right end instead: the page first, the cards one scroll away,
+    // also while a navigation shift, zoom, or new pages widen the content.
     const scrollsLeft = computed(
       () => columnSide() === 'left' && reserve.value && reviewGutterScrolls(reviewGutter.value)
     );
+    let releaseEnd: (() => void) | null = null;
     const keepPageInView = () => {
-      if (scrollsLeft.value && viewportEl) {
-        viewportEl.scrollLeft = viewportEl.scrollWidth - viewportEl.clientWidth;
-      }
+      releaseEnd?.();
+      releaseEnd = scrollsLeft.value && viewportEl ? keepScrollAtInlineEnd(viewportEl) : null;
     };
     onMounted(() => {
       if (viewportEl) layoutStore?.setViewport(viewportEl);
       keepPageInView();
     });
     onUnmounted(() => {
+      releaseEnd?.();
       layoutStore?.setViewport(null);
     });
     watch(navShift, (shift) => {
       if (viewportEl) viewportEl.style.setProperty('--docx-nav-shift', `${shift}px`);
       layoutStore?.setViewport(viewportEl);
     });
-    watch([scrollsLeft, navShift], keepPageInView, { flush: 'post' });
+    watch(scrollsLeft, keepPageInView, { flush: 'post' });
     const onKeyDownCapture = (event: KeyboardEvent) => {
       const editor = editorRef.value;
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;

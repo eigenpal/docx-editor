@@ -3221,6 +3221,9 @@ export interface UseBookmarksReturn {
 }
 
 // @public
+export function useChromeDir(): 'ltr' | 'rtl' | undefined;
+
+// @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
 
 // @public

@@ -7518,6 +7518,9 @@ export interface UseBookmarksReturn {
     readonly remove: (name: string) => ExecResult;
 }
 
+// @public
+export function useChromeDir(): Readonly<ShallowRef<'ltr' | 'rtl' | undefined>>;
+
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;
 

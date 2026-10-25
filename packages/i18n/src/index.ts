@@ -297,7 +297,7 @@ function formatMessage(
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 export { localizeDisabledReason } from './disabled-reasons';
-export { catalogDirection, localeDirection } from './direction';
+export { catalogDirection, chromeDirection, localeDirection } from './direction';
 export { isApplePlatform, platformShortcut } from './platform-shortcuts';
 
 /**

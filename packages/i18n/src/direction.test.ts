@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { catalogDirection, localeDirection } from './direction';
+import { catalogDirection, chromeDirection, localeDirection } from './direction';
 import { ar, es, he } from './index';
 
 describe('catalogDirection', () => {
@@ -43,5 +43,20 @@ describe('localeDirection', () => {
     expect(localeDirection('ku-Latn')).toBe('ltr');
     expect(localeDirection('uz-Cyrl')).toBe('ltr');
     expect(localeDirection('AR')).toBe('rtl');
+  });
+});
+
+describe('chromeDirection', () => {
+  test('the dir prop decides first, then _dir, then a right-to-left _lang', () => {
+    expect(chromeDirection('ltr', ar, 'rtl')).toBe('ltr');
+    expect(chromeDirection(undefined, { _dir: 'ltr', _lang: 'ar' }, 'rtl')).toBe('ltr');
+    expect(chromeDirection(undefined, ar, undefined)).toBe('rtl');
+    expect(chromeDirection(undefined, { _lang: 'fa' }, undefined)).toBe('rtl');
+  });
+
+  test('a left-to-right _lang alone keeps the inherited or host direction', () => {
+    expect(chromeDirection(undefined, es, undefined)).toBeUndefined();
+    expect(chromeDirection(undefined, es, 'rtl')).toBe('rtl');
+    expect(chromeDirection(undefined, undefined, undefined)).toBeUndefined();
   });
 });

@@ -150,7 +150,7 @@ export const VerticalRuler = defineComponent({
           ref={rulerRef}
           class={`docx-vertical-ruler ${props.className ?? ''}`}
           style={rulerStyle}
-          dir={chromeDir()}
+          dir={chromeDir.value}
           role="group"
           aria-label={translation.t('ruler.vertical')}
         >

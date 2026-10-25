@@ -25,7 +25,7 @@ import {
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
-import { isElementNode } from '@docx-editor.dev/core/editor';
+import { isElementNode, keepScrollAtInlineEnd } from '@docx-editor.dev/core/editor';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -86,13 +86,13 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     [layout]
   );
   // A column that does not fit scrolls sideways. On the left it starts in view, so the
-  // viewport keeps to its right end instead: the page first, the cards one scroll away. A
-  // navigation shift on the right widens the content, so the right end is taken again then.
+  // viewport keeps to its right end instead: the page first, the cards one scroll away,
+  // also while a navigation shift, zoom, or new pages widen the content.
   const scrollsLeft = side === 'left' && reserve && reviewGutterScrolls(reviewGutter);
   useLayoutEffect(() => {
     const node = element.current;
-    if (scrollsLeft && node) node.scrollLeft = node.scrollWidth - node.clientWidth;
-  }, [scrollsLeft, shift]);
+    return scrollsLeft && node ? keepScrollAtInlineEnd(node) : undefined;
+  }, [scrollsLeft]);
   // CAPTURE, not bubble: the engine's keymap is bound to the painted pages inside this
   // element and binds Word's subscript/superscript to the same Ctrl/Cmd+`=` chord. On the way
   // up it had already scripted the selection by the time zoom ran, so one keystroke both

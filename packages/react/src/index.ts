@@ -124,6 +124,7 @@ export {
 export { Slot, type SlotProps } from './editor/toolbar/Slot';
 export {
   LocaleProvider,
+  useChromeDir,
   useTranslation,
   type LocaleProviderProps,
   type TranslationKey,

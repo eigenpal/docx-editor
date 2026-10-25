@@ -2703,7 +2703,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-ruler-frame[data-chrome-dir='rtl'] {
-  transition: padding-right 0.2s ease;
+  /* The property only: the duration stays with the rules that turn it off. */
+  transition-property: padding-right;
 }
 
 /* A deferred open gives the loading overlay one frame before parsing. The parse blocks
@@ -5944,7 +5945,8 @@ a.docx-hyperlink:focus-visible {
 .docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
   padding-left: 0;
   padding-right: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
-  transition: padding-right 0.2s ease;
+  /* The property only: the duration stays with the rules that turn it off. */
+  transition-property: padding-right;
 }
 
 .docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='open'],
