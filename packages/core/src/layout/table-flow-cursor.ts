@@ -11,6 +11,8 @@ export interface TableFlowCursor {
   readonly positionTextTable?: boolean;
   /** How far such a table moved right to clear an earlier floating table (`table-float-overlap.ts`). */
   readonly positionShiftX?: number;
+  /** The top a table that stacks below another one starts at (`table-float-stack.ts`). */
+  readonly stackTop?: number;
   /** Points down the page content box. The paginator both reads and advances it. */
   cursorY: number;
   /** Column being filled in a multi-column section; absent with a single column. */

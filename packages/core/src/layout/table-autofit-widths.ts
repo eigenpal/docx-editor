@@ -480,40 +480,51 @@ function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): Para
 }
 
 /** The width a nested table needs from the column that holds it. */
+/** What a nested table needs from its column, plainly and once the column has to widen. */
+interface NestedTableNeed {
+  readonly plain: number;
+  readonly widened: number;
+}
+
 function nestedTableMinimumPt(
   table: OoxmlElement,
   context: TableAutofitContext,
   view: AutofitView
-): number {
+): NestedTableNeed {
   const depth = (view.depth ?? 0) + 1;
   const nested = view.readNested(table, depth);
   // Past the nesting limit layout paints nothing, so nothing needs room.
-  if (!nested) return 0;
+  if (!nested) return { plain: 0, widened: 0 };
   // A fixed table counts the words it holds, not its stated width, so the column narrows to
   // its content and the table with it, though a cell of vertical text keeps its width.
   const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
   if (nested.layoutFixed) {
     for (const minimum of fixedTableCellMinimums(nested, context, nestedView)) minimums += minimum;
-    return minimums + leadingIndentPt(nested);
+    const fixed = minimums + leadingIndentPt(nested);
+    return { plain: fixed, widened: fixed };
   }
   // An autofit table paints at its resolved width in the narrowest cell: a stated absolute
   // width keeps it, a cell-relative width shrinks with the cell, and the resolver decides both.
   let width = 0;
   for (const column of nested.columnWidthsPt) width += column;
-  const ifWidened: number[] = [];
-  const content = emptyColumnContent();
-  autofitColumnMinimumsPt(nested, context, nestedView, ifWidened, content);
-  // A spanning cell of the nested table asks the outer column for its room too.
-  const held = spanAdjustedMinimums(
-    spacedCellWidths(nested),
-    ifWidened,
-    content.maximums,
-    content.spans
-  );
-  // Every column keeps a hairline, as the widths it settles at do.
-  for (const minimum of held) minimums += Math.max(minimum, MIN_COLUMN_PT);
-  return Math.max(width, minimums) + leadingIndentPt(nested);
+  const need = (keepsFirstLine: boolean): number => {
+    const ifWidened: number[] = [];
+    const content = emptyColumnContent();
+    autofitColumnMinimumsPt(nested, context, nestedView, ifWidened, content, keepsFirstLine);
+    // A spanning cell of the nested table asks the outer column for its room too.
+    const held = spanAdjustedMinimums(
+      spacedCellWidths(nested),
+      ifWidened,
+      content.maximums,
+      content.spans
+    );
+    // Every column keeps a hairline, as the widths it settles at do.
+    let total = minimums;
+    for (const minimum of held) total += Math.max(minimum, MIN_COLUMN_PT);
+    return Math.max(width, total) + leadingIndentPt(nested);
+  };
+  return { plain: need(false), widened: need(true) };
 }
 
 function emptyColumnContent(): AutofitColumnContent {
@@ -539,7 +550,7 @@ function fixedTableCellMinimums(
 ): readonly number[] {
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
-  autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
+  autofitColumnMinimumsPt(structure, context, view, ifWidened, content, false);
   // A column with no horizontal text of its own asks for no more than a hairline, while a cell
   // of vertical text keeps the width it has: one column's minimum, or a span's requirement.
   const own = ifWidened.map((minimum, column) =>
@@ -661,7 +672,13 @@ export function autofitColumnMinimumsPt(
   /** Filled with each column's minimum should it have to widen (see widenedCellInsets). */
   ifWidened?: number[],
   /** Filled with what the cells say beyond their minimums (see {@link AutofitColumnContent}). */
-  content?: AutofitColumnContent
+  content?: AutofitColumnContent,
+  /**
+   * Whether `ifWidened` keeps the first-line indent of a word after leading spaces
+   * (`minWidened`). A nested table asks both ways: only its plain need decides whether the
+   * outer column widens.
+   */
+  widenedKeepsFirstLine = true
 ): number[] {
   const columnCount = structure.columnWidthsPt.length;
   // -1 marks a column no single-column cell measured; a measured empty column may be 0.
@@ -711,9 +728,9 @@ export function autofitColumnMinimumsPt(
         for (const block of cell.blocks) {
           if (block.kind === 'table') {
             const nested = nestedTableMinimumPt(block, context, view);
-            least = Math.max(least, nested);
-            leastWidened = Math.max(leastWidened, nested);
-            most = Math.max(most, nested);
+            least = Math.max(least, nested.plain);
+            leastWidened = Math.max(leastWidened, nested.widened);
+            most = Math.max(most, nested.widened);
           }
           if (block.kind !== 'paragraph') continue;
           const widths = paragraphWidthsPt(block, {
@@ -748,7 +765,7 @@ export function autofitColumnMinimumsPt(
         content?.spans.push({
           from: cell.gridColumn,
           count: cell.gridSpan,
-          minimum: Math.max(0, leastWidened + around - covered),
+          minimum: Math.max(0, (widenedKeepsFirstLine ? leastWidened : least) + around - covered),
           current: Math.max(0, least + measured.left + measured.right - covered),
         });
         continue;
@@ -758,7 +775,7 @@ export function autofitColumnMinimumsPt(
         cell.noWrap && cell.preferredWidth.type === 'dxa' ? cell.preferredWidth.value : 0;
       const needed = Math.max(held, least + measured.left + measured.right);
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
-      const neededWide = Math.max(held, leastWidened + around);
+      const neededWide = Math.max(held, (widenedKeepsFirstLine ? leastWidened : least) + around);
       if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
       const neededMost = Math.max(held, most + around);
       if (neededMost > widest[cell.gridColumn]!) widest[cell.gridColumn] = neededMost;

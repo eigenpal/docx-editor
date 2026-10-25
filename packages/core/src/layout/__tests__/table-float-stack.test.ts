@@ -77,6 +77,43 @@ test('a paragraph between two tables keeps them apart', () => {
   expect(apart).toEqual(['0:R1@241.8', '0:S1@253.8']);
 });
 
+test('margin-positioned and aligned tables stack too', () => {
+  const margin = '<w:tblpPr w:vertAnchor="margin" w:horzAnchor="margin" w:tblpY="2000"/>';
+  const top = '<w:tblpPr w:vertAnchor="margin" w:horzAnchor="margin" w:tblpYSpec="top"/>';
+  for (const [pr, first] of [
+    [margin, 100],
+    [top, 0],
+  ] as const) {
+    const stacked = rows(lay(lines(20) + table('R', 1, pr) + table('S', 2, pr) + p('Anchor')));
+    const tops = stacked.map((row) => Number(row.split('@')[1]));
+    expect(tops[0]).toBeCloseTo(first, 0);
+    expect(tops[1]! - tops[0]!).toBeCloseTo(30, 0);
+    expect(tops[2]! - tops[1]!).toBeCloseTo(30, 0);
+  }
+});
+
+test('a stack of raised tables moves the earlier lines it covers below the whole stack', () => {
+  const raised = '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpY="-1200"/>';
+  const wide = (label: string, count: number) =>
+    table(label, count, raised).replace(/w:w="3000"/g, 'w:w="9360"');
+  const layout = lay(lines(20) + wide('R', 1) + wide('S', 2) + p('Anchor'));
+  const stacked = rows(layout);
+  const tops = stacked.map((row) => Number(row.split('@')[1]));
+  // The stack keeps the place its anchor had: 60pt above the 240pt anchor top.
+  expect(tops[0]).toBeCloseTo(180, 0);
+  expect(tops[1]! - tops[0]!).toBeCloseTo(30, 0);
+  // The lines it covers start below the last row, and none stays under the stack.
+  const moved = layout.pages[0]!.fragments.filter(
+    (fragment) => fragment.kind === 'paragraph' && fragment.box.y >= tops[0]! - 12
+  ).map((fragment) => fragment.box.y);
+  expect(Math.min(...moved)).toBeCloseTo(tops[2]! + 30, 0);
+});
+
+test('in a stack of three, a breaking last table takes both waiting tables into the flow', () => {
+  const chain = rows(lay(lines(45) + table('R', 1) + table('S', 1) + table('U', 7) + p('Anchor')));
+  expect(chain.slice(0, 3)).toEqual(['0:R1@541.9', '0:S1@571.9', '0:U1@601.9']);
+});
+
 test('a warm pass lays out stacked tables like a cold one', () => {
   const session = createLayoutSession();
   const options = { measurer: createFixedMeasurer(6, 12), session };

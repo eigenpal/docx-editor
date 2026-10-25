@@ -55,15 +55,83 @@ export function lastTableFragment(
 }
 
 /**
- * The anchor top that puts `table` right below its stack partner's fragment on this page, or
- * `undefined` when it does not stack or the partner is not on the page.
+ * The top that puts `table` right below its stack partner's fragment on this page, whatever its
+ * vertical anchor, or `undefined` when it does not stack or the partner is not on the page.
  */
-export function stackedAnchorY(
+export function stackedTop(
   positioned: readonly PositionedTableAnchor[],
   table: PositionedTableAnchor,
   fragments: readonly BlockFragmentRecord[]
 ): number | undefined {
   const partner = stackPartner(positioned, table);
   const below = partner && lastTableFragment(fragments, partner.table.id);
-  return below ? below.box.y + below.box.height - table.float.yPt : undefined;
+  return below ? below.box.y + below.box.height : undefined;
+}
+
+/** Every table of the stack `table` belongs to, top first; just `table` when it stacks alone. */
+export function stackMembers(
+  positioned: readonly PositionedTableAnchor[],
+  table: PositionedTableAnchor
+): readonly PositionedTableAnchor[] {
+  const members = [table];
+  for (let above = stackPartner(positioned, table); above; above = stackPartner(positioned, above))
+    members.unshift(above);
+  for (let index = positioned.indexOf(table) + 1; index < positioned.length; index++) {
+    const next = positioned[index]!;
+    if (stackPartner(positioned, next) !== members.at(-1)) break;
+    members.push(next);
+  }
+  return members;
+}
+
+/** What stack placement reads from the body flow that places the tables. */
+interface StackFlow {
+  /** The fragments of the page being filled. */
+  readonly fragments: () => readonly BlockFragmentRecord[];
+  readonly cursorY: () => number;
+  /** How far the raised tables of one anchor pushed the earlier lines on this page. */
+  readonly pushOf: (anchorId: string) => number;
+}
+
+/** Stack placement over one story's positioned tables, reading the flow as it advances. */
+export function createStackPlacement(
+  positioned: readonly PositionedTableAnchor[],
+  flow: StackFlow
+) {
+  const byId = new Map(positioned.map((table) => [table.table.id, table]));
+  return {
+    /**
+     * The push a raised table leaves out of its anchor top: the earlier lines its anchor's raised
+     * tables moved. A table positioned below its anchor does not take it.
+     */
+    push(tableId: string): number {
+      const own = byId.get(tableId);
+      return own && own.float.yPt < -0.051 && !own.float.ySpec ? flow.pushOf(own.anchorId) : 0;
+    },
+    /** The top a waiting table stacks at on this page, when it stacks. */
+    top(tableId: string): number | undefined {
+      const own = byId.get(tableId);
+      return own && stackedTop(positioned, own, flow.fragments());
+    },
+    /** Where an in-flow table opens: below the table it stacks on, else at the body cursor. */
+    anchor(tableId: string): number {
+      const own = byId.get(tableId);
+      const top = own && stackedTop(positioned, own, flow.fragments());
+      return own && top !== undefined ? top - own.float.yPt : flow.cursorY();
+    },
+    /**
+     * The waiting tables `tableId` stacks below, oldest first, taken out of `pending`: they go
+     * into the flow right above it when it breaks across pages.
+     */
+    takeWaiting(tableId: string, pending: Set<string>): readonly string[] {
+      const taken: string[] = [];
+      const own = byId.get(tableId);
+      for (let above = own && stackPartner(positioned, own); above; ) {
+        if (!pending.delete(above.table.id)) break;
+        taken.unshift(above.table.id);
+        above = stackPartner(positioned, above);
+      }
+      return taken;
+    },
+  };
 }

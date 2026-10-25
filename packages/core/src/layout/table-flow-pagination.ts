@@ -142,7 +142,7 @@ export function* paginateTableInFlowSteps(
   else if (outOfFlow && structure.float && verticalFrames) {
     // Alignment needs the final table height. Start at the frame origin, then shift the
     // complete fragment in closeTableFragment once that height is known.
-    flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
+    flow.cursorY = flow.stackTop ?? tableFloatOriginY(structure.float, 0, verticalFrames);
   }
   const rowProbes = createRowProbeReuse(
     structure.columnWidthsPt,
@@ -298,7 +298,7 @@ export function* paginateTableInFlowSteps(
     );
     // A positioned table's alignment needs its final height, so it moves once complete.
     const positionedFragment =
-      outOfFlow && structure.float && verticalFrames
+      outOfFlow && structure.float && verticalFrames && flow.stackTop === undefined
         ? shiftTableFragment(
             fragment,
             tableFloatOriginY(structure.float, fragment.box.height, verticalFrames) -

@@ -646,6 +646,24 @@ describe('autofit layout', () => {
     expect(columns(table('', content), { drawings: true }).widths).toEqual([38.18, 60, 21.82]);
   });
 
+  test('a nested word after leading spaces does not widen the outer column it fits', () => {
+    // The nested 65pt column holds the 60pt word on its second line, without the 12pt
+    // first-line indent, so neither table widens.
+    const nested =
+      '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="1300"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="1300" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:ind w:firstLine="240"/></w:pPr>${run(' ABCDEFGHIJ')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="4400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1540"/><w:gridCol w:w="1320"/><w:gridCol w:w="1540"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1540" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1320" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1540" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer, { compatibilityMode: 15 }).widths[1]).toBe(66);
+  });
+
   test('a nested autofit table passes its own word minimum to the outer column', () => {
     const nested =
       '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +

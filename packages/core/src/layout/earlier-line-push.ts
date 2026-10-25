@@ -17,11 +17,12 @@ const EPSILON = 0.5;
 
 export function createEarlierLinePush(orderOf: (paragraphId: string) => number | undefined) {
   const pushes = new Map<string, number>();
-  const key = (page: number, zoneId: string) => `${page}:${zoneId}`;
+  const key = (page: number, anchorId: string) => `${page}:${anchorId}`;
   return {
     /**
      * Records a line of `paragraphId` that moved from `top` down by `skip` on `page`, when it
-     * landed at the bottom of a raised table's band anchored after that paragraph.
+     * crossed the bands of the raised tables anchored after that paragraph and landed at the
+     * bottom of the lowest one. Tables stacked on one anchor push as one.
      */
     note(
       page: number,
@@ -34,21 +35,57 @@ export function createEarlierLinePush(orderOf: (paragraphId: string) => number |
       if (skip <= 0) return;
       const order = orderOf(paragraphId);
       if (order === undefined) return;
+      const bottoms = new Map<string, number>();
+      const crossed = new Set<string>();
       for (const zone of zones) {
         if (!zone.reachesEarlierLines) continue;
         const anchorOrder = orderOf(zone.anchorParagraphId);
         if (anchorOrder === undefined || anchorOrder <= order) continue;
-        const id = key(page, zone.drawingNodeId);
-        if (pushes.has(id)) continue;
         const band = zone.verticalBand;
         const bottom = band.y + band.height;
-        if (top < bottom && top + height > band.y && Math.abs(top + skip - bottom) <= EPSILON)
+        bottoms.set(
+          zone.anchorParagraphId,
+          Math.max(bottoms.get(zone.anchorParagraphId) ?? 0, bottom)
+        );
+        if (top < bottom && top + height > band.y) crossed.add(zone.anchorParagraphId);
+      }
+      for (const anchorId of crossed) {
+        const id = key(page, anchorId);
+        if (!pushes.has(id) && Math.abs(top + skip - bottoms.get(anchorId)!) <= EPSILON)
           pushes.set(id, skip);
       }
     },
-    /** The push the table `tableId` leaves out of its anchor top on `page`. */
-    of(page: number, tableId: string): number {
-      return pushes.get(key(page, `table:${tableId}`)) ?? 0;
+    /** The push the raised tables anchored at `anchorId` leave out of its top on `page`. */
+    of(page: number, anchorId: string): number {
+      return pushes.get(key(page, anchorId)) ?? 0;
     },
   };
+}
+
+/**
+ * Whether a text-anchored table the previous pass placed beside `anchorId` keeps that place while
+ * its anchor moves on to the next column or page: the anchor's first line fits where it stood
+ * before the table moved anything (`overrun`, how far it now misses the bottom, is no more than
+ * the push), so the table's band is what pushed it out. A page- or margin-positioned table
+ * follows its anchor instead (`coveredLinesAnchorBand`).
+ */
+export function ownTableStaysForAnchor(
+  zones: readonly ExclusionZone[],
+  anchorId: string,
+  at: {
+    /** The column being filled in a multi-column section. */
+    readonly column: number | undefined;
+    /** How far the raised tables of `anchorId` pushed the earlier lines on this page. */
+    readonly pushed: number;
+    readonly overrun: number;
+  }
+): boolean {
+  return zones.some(
+    (zone) =>
+      zone.sourceKind === 'table' &&
+      zone.anchorParagraphId === anchorId &&
+      !zone.pageFramedBand &&
+      (at.column === undefined || zone.columnIndex === at.column) &&
+      at.overrun - at.pushed <= 0
+  );
 }

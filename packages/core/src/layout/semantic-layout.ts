@@ -110,8 +110,8 @@ import {
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
 import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
-import { createEarlierLinePush } from './earlier-line-push.ts';
-import { stackPartner, stackedAnchorY } from './table-float-stack.ts';
+import { createEarlierLinePush, ownTableStaysForAnchor } from './earlier-line-push.ts';
+import { createStackPlacement } from './table-float-stack.ts';
 import { isBareSectionMark } from './section-mark-break.ts';
 import {
   createTableBorderOwnershipBudget,
@@ -1170,19 +1170,18 @@ function* layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
-  /**
-   * Whether a text-anchored table the previous pass placed beside `anchorId` in this region keeps
-   * that place while its anchor moves on: the anchor's first line, `extent` tall, fits where it
-   * stood before the table moved anything, so the table's band is what pushed it out. A page- or
-   * margin-positioned table follows its anchor instead (`coveredLinesAnchorBand`).
-   */
+  // Adjacent tables with the same position stack (`table-float-stack.ts`).
+  const stacks = createStackPlacement(positionedTables, {
+    fragments: () => pageFragments,
+    cursorY: () => cursorY,
+    pushOf: (anchorId) => earlierLinePush.of(pages.length, anchorId),
+  });
+  // A table stays when its band pushes its own anchor on (`ownTableStaysForAnchor`).
   const ownTableStays = (anchorId: string, extent: number): boolean =>
-    pageExclusionZones().some((zone) => {
-      if (zone.sourceKind !== 'table' || zone.anchorParagraphId !== anchorId) return false;
-      if (zone.pageFramedBand || (columns.count > 1 && zone.columnIndex !== flowColumnIndex))
-        return false;
-      const pushed = earlierLinePush.of(pages.length, zone.drawingNodeId.slice('table:'.length));
-      return cursorY - pushed + extent <= contentHeight();
+    ownTableStaysForAnchor(pageExclusionZones(), anchorId, {
+      column: columns.count > 1 ? flowColumnIndex : undefined,
+      pushed: earlierLinePush.of(pages.length, anchorId),
+      overrun: cursorY + extent - contentHeight(),
     });
   /** Records that `anchorId` reached `anchorY` on the page being filled. */
   const noteAnchor = (anchorId: string, anchorY = cursorY): void =>
@@ -1708,10 +1707,11 @@ function* layoutBlocksPass(
     anchorY = cursorY,
     positionTextTable = false,
     next?: number,
-    positionShiftX = 0
+    positionShiftX = 0,
+    stackTop?: number
   ): boolean =>
     drainLayoutSteps(
-      layoutTableInFlowSteps(table, anchorY, positionTextTable, next, positionShiftX)
+      layoutTableInFlowSteps(table, anchorY, positionTextTable, next, positionShiftX, stackTop)
     );
   /** {@link layoutTableInFlow}, pausing between table rows. */
   function* layoutTableInFlowSteps(
@@ -1719,7 +1719,8 @@ function* layoutBlocksPass(
     anchorY = cursorY,
     positionTextTable = false,
     next?: number,
-    positionShiftX = 0
+    positionShiftX = 0,
+    stackTop?: number
   ): LayoutSteps<boolean> {
     const savedCursorY = cursorY;
     const positioned = positionedByTable.get(table.id);
@@ -1727,6 +1728,7 @@ function* layoutBlocksPass(
     const flow: TableFlowCursor = {
       positionTextTable,
       positionShiftX,
+      ...(stackTop !== undefined ? { stackTop } : {}),
       cursorY: anchorY,
       columnWidth,
       columnLeft,
@@ -1787,12 +1789,12 @@ function* layoutBlocksPass(
         flowColumnIndex = anchorColumn;
         collectingCellBreakKeys.begin();
         try {
+          // A table that stacks starts at the bottom of the one above it, whatever its anchor.
+          const stacked = stacks.top(table.id);
           // A raised table keeps the place its anchor had before it pushed earlier lines down.
-          const own = positionedByTable.get(table.id);
-          const stacked = own && stackedAnchorY(positionedTables, own, pageFragments);
           const start = tableWrap.positionedTableStart(
             table,
-            stacked ?? anchorY - earlierLinePush.of(pages.length, table.id),
+            anchorY - stacks.push(table.id),
             columnWidth(),
             anchorFrames(),
             pageFragments,
@@ -1800,7 +1802,8 @@ function* layoutBlocksPass(
             tableDeps,
             contentHeight()
           );
-          layoutTableInFlow(table, start.anchorY, true, undefined, start.dx);
+          if (stacked !== undefined) layoutTableInFlow(table, anchorY, true, undefined, 0, stacked);
+          else layoutTableInFlow(table, start.anchorY, true, undefined, start.dx);
           registerTableCellBreakKeys(table, collectingCellBreakKeys.keys());
         } finally {
           collectingCellBreakKeys.end();
@@ -1996,11 +1999,15 @@ function* layoutBlocksPass(
       // where the body reaches that table, even when it then moves to the next page.
       const inFlow = positionedByTable.get(entry.table.id);
       if (inFlow?.float.vertAnchor === 'text') noteAnchor(inFlow.anchorId);
-      // A waiting table this one stacks below goes into the flow first, right above it.
-      const partner = inFlow && stackPartner(positionedTables, inFlow);
-      if (partner && pendingFloatIds.delete(partner.table.id))
-        layoutTableInFlow(partner.table, cursorY, false, index);
-      const top = (inFlow && stackedAnchorY(positionedTables, inFlow, pageFragments)) ?? cursorY;
+      // The waiting tables this one stacks below go into the flow first, right above it.
+      for (const waiting of stacks.takeWaiting(entry.table.id, pendingFloatIds)) {
+        const waitingTable = positionedByTable.get(waiting)!.table;
+        collectingCellBreakKeys.begin();
+        layoutTableInFlow(waitingTable, stacks.anchor(waiting), false, index);
+        registerTableCellBreakKeys(waitingTable, collectingCellBreakKeys.keys());
+        collectingCellBreakKeys.end();
+      }
+      const top = stacks.anchor(entry.table.id);
       collectingCellBreakKeys.begin();
       try {
         const outOfFlow = yield* layoutTableInFlowSteps(entry.table, top, false, index + 1);
@@ -2173,7 +2180,7 @@ function* layoutBlocksPass(
               verticalFrames: tableVerticalFrames(prospectiveFirstTop),
               earlier: pageFragments,
               signals: floatSignals,
-              pushOf: (tableId) => earlierLinePush.of(pages.length, tableId),
+              pushOf: stacks.push,
             }
           )
         );
