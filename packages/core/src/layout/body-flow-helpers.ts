@@ -130,7 +130,9 @@ const lineFollowsBreak = (line: PendingLine): boolean =>
 export function opensWithPageBreak(
   entry: PaintableParagraph,
   lines: readonly PendingLine[],
-  drawingContext: InlineDrawingLayoutContext | undefined
+  drawingContext: InlineDrawingLayoutContext | undefined,
+  /** Admit a paragraph that holds only the page break: its line fits and stays at the page end. */
+  breakOnly = false
 ): boolean {
   const first = lines[0];
   return (
@@ -138,7 +140,8 @@ export function opensWithPageBreak(
     first.start === 0 &&
     (holdsOnlyColumnBreak(first) ||
       (holdsOnlyPageBreak(first) &&
-        lines.some((line, index) => index > 0 && lineFollowsBreak(line)))) &&
+        ((breakOnly && lines.length === 1) ||
+          lines.some((line, index) => index > 0 && lineFollowsBreak(line))))) &&
     !(drawingContext && anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0)
   );
 }

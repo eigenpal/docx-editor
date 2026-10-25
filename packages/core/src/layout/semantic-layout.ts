@@ -2110,11 +2110,12 @@ function* layoutBlocksPass(
         (columnRegionBottom === undefined || pages.length !== columnRegionPage) &&
         columnIndex + 1 >= columns.count);
     // Floating tables and text frames anchor at the paragraph start, which would stay behind.
+    const breakLineFits = () => cursorY + (lines[0]?.height ?? 0) <= contentHeight() + 0.01;
     const leadingBreak = (): boolean =>
       leadingBreakGroups.admits(previousEntry, entry) &&
       paragraphFrames.checkpoint() === undefined &&
       !tableFloat.positionedTablesByAnchor(positionedTables).has(paragraphId) &&
-      opensWithPageBreak(entry, lines, options.inlineDrawingLayout);
+      opensWithPageBreak(entry, lines, options.inlineDrawingLayout, breakLineFits());
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // ListParagraph styles can set it to suppress paragraph gaps between list items.
     const spacing = contextualParagraphSpacing(
@@ -2158,10 +2159,9 @@ function* layoutBlocksPass(
     if (!frame) {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
       const emptyStyle = markStyleOf(markRunProperties, styleCascade?.themeFonts);
-      // Spacing-after never decides its own line's fit (§17.3.1.33): Word fits the LINE box,
-      // and trailing space that crosses the page boundary clips at the break. Only the closing
-      // border rule is real painted content below the last line, so only it joins the budget.
-      // An oversized `w:after` — the signature-block idiom — otherwise mints blank pages.
+      // Spacing-after never decides its own line's fit (§17.3.1.33): trailing space clips at the
+      // break. Only the closing border rule is painted below the last line, so only it joins the
+      // budget; an oversized `w:after` (the signature-block idiom) would mint blank pages.
       const firstTail = lines.length <= 1 ? borderExtent : 0;
       const prospectiveFirstTop = cursorY + lead + topExtent;
       const firstZones = placementZonesForLine(

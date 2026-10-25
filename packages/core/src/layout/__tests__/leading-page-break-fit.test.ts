@@ -246,6 +246,14 @@ describe('lines that still move to the next sheet', () => {
     expect(pageTexts(layout)).toEqual([lastFill(14), 'lead', 'after']);
   });
 
+  test('a paragraph with nothing after its break stays when only its space before overflows', () => {
+    // 13 lines leave 30pt: the 20pt break line fits, its 20pt space before does not.
+    const before = '<w:spacing w:before="400" w:after="0" w:line="400" w:lineRule="exact"/>';
+    const breakOnly = `<w:p><w:pPr>${before}</w:pPr>${br}</w:p>`;
+    const layout = lay(load(fill(13) + breakOnly + paragraph('after') + sect));
+    expect(pageTexts(layout)).toEqual([lastFill(13), 'after']);
+  });
+
   test('a paragraph with nothing after its break keeps the ordinary fit', () => {
     // Out of scope for this rule: the break line still takes the next sheet.
     const breakOnly = `<w:p><w:pPr>${exact}</w:pPr>${br}</w:p>`;
