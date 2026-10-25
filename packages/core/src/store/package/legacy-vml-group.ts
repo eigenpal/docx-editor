@@ -30,6 +30,7 @@ import {
   styleOf,
   VML,
   WORD_VML,
+  coordOrigin,
 } from './legacy-vml-values.ts';
 
 const EMU_PER_POINT = 12_700;
@@ -53,6 +54,8 @@ interface Output {
   readonly components: VectorShapeComponent[];
   readonly texts: GroupTextboxProjection[];
   picture: GroupPictureProjection | null;
+  /** How many components were projected before the picture, which paint under it. */
+  underPicture: number;
   members: number;
 }
 
@@ -219,7 +222,7 @@ function projectMembers(
   memberStyle: LegacyMemberStyle,
   out: Output
 ): boolean {
-  const origin = pair(a(group, 'coordorigin') ?? '0,0'),
+  const origin = coordOrigin(a(group, 'coordorigin') ?? '0,0'),
     size = pair(a(group, 'coordsize') ?? '21600,21600');
   if (!origin || !size || size.some((v) => v <= 0)) return false;
   for (const child of children(group)) {
@@ -273,6 +276,7 @@ function projectMembers(
     if (picture === null) return false;
     if (picture) {
       out.picture = picture;
+      out.underPicture = out.components.length;
       continue;
     }
     if (!projectMember(child, style, next, host, out)) return false;
@@ -292,12 +296,16 @@ export function legacyVectorGroup(
   height: number,
   memberStyle: LegacyMemberStyle
 ): LegacyVectorGroup | null {
-  const out: Output = { components: [], texts: [], picture: null, members: 0 };
+  const out: Output = { components: [], texts: [], picture: null, underPicture: 0, members: 0 };
   if (!projectMembers(root, { x: 0, y: 0, width, height }, 0, host, memberStyle, out)) return null;
   if (!out.components.length && !out.texts.length && !out.picture) return null;
-  // The graphic preview draws pictures with any number of others; only member text needs
-  // the vector path, so a picture rides along only beside it.
-  if (out.picture && !out.texts.length) return null;
+  // Members before the picture paint under it and the rest over it. A later member that
+  // covers the picture would need a third layer, so that group keeps the graphic preview.
+  if (out.picture && !out.texts.length && coversPicture(out)) return null;
+  if (out.picture) {
+    for (let index = 0; index < out.underPicture; index += 1)
+      out.components[index] = { ...out.components[index]!, belowPicture: true };
+  }
   const subpathsEmu: (readonly Readonly<{ x: number; y: number }>[])[] = [];
   for (const component of out.components) {
     for (const path of component.subpathsEmu) subpathsEmu.push(path);
@@ -323,4 +331,31 @@ export function legacyVectorGroup(
     groupTextboxes: out.texts.length ? Object.freeze(out.texts) : null,
     groupPicture: out.picture,
   });
+}
+
+/** Whether a member projected after the picture overlaps the picture's frame. */
+function coversPicture(out: Output): boolean {
+  const frame = out.picture!.frameEmu;
+  for (const component of out.components.slice(out.underPicture)) {
+    for (const path of component.subpathsEmu) {
+      let left = Infinity,
+        top = Infinity,
+        right = -Infinity,
+        bottom = -Infinity;
+      for (const point of path) {
+        left = Math.min(left, point.x);
+        top = Math.min(top, point.y);
+        right = Math.max(right, point.x);
+        bottom = Math.max(bottom, point.y);
+      }
+      if (
+        left < frame.x + frame.cx &&
+        right > frame.x &&
+        top < frame.y + frame.cy &&
+        bottom > frame.y
+      )
+        return true;
+    }
+  }
+  return false;
 }

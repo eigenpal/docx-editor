@@ -582,7 +582,8 @@ function paintReadyImage(
     appendReflection(document, outer, inner, drawing, ctx.scale);
   }
   if (drawing.vectorShape) {
-    const framed = isFramedPicture(drawing);
+    // A group's members drawn before its picture paint under it, as a frame's fill does.
+    const framed = isFramedPicture(drawing) || drawing.groupPicture !== undefined;
     const ink = vectorShapeInkClip(drawing, drawing.paintBounds);
     // A picture's frame paints its shadow and fill under the picture and its outline over it.
     const frame = vectorShapeFrame(

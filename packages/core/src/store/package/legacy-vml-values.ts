@@ -81,6 +81,12 @@ export function legacyRotationDegrees(raw: string | undefined): number {
   return ((degrees % 360) + 360) % 360;
 }
 
+/** A `coordorigin`: an omitted y is 0, as in `coordorigin="5689"`. */
+export function coordOrigin(value: string): [number, number] | null {
+  const single = /^\s*(-?\d+(?:\.\d+)?)\s*$/.exec(value);
+  return single ? [Number(single[1]), 0] : pair(value);
+}
+
 export function pair(value: string): [number, number] | null {
   const values = value
     .trim()

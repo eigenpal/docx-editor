@@ -8,7 +8,7 @@ import type { VectorShapeProjection } from './drawing-shape-projection.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { vmlPolygonPath } from './legacy-vml-formulas.ts';
 import { inkComponents, legacyInk, type LegacyBox } from './legacy-vml-shapes.ts';
-import { attribute as a, children, named, pair, VML } from './legacy-vml-values.ts';
+import { attribute as a, children, named, pair, VML, coordOrigin } from './legacy-vml-values.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
 const EMU_PER_POINT = 12_700;
@@ -27,7 +27,7 @@ export function legacyPathShape(
   if (!path || children(node).some((child) => named(child, VML, 'formulas'))) return null;
   const polygons = vmlPolygonPath(path, []);
   if (!polygons || polygons.length === 0) return null;
-  const origin = pair(a(node, 'coordorigin') ?? '0,0'),
+  const origin = coordOrigin(a(node, 'coordorigin') ?? '0,0'),
     size = pair(a(node, 'coordsize') ?? '21600,21600');
   if (!origin || !size || size.some((value) => value < 0)) return null;
   // An axis of no size draws on its origin, as a straight rule does.

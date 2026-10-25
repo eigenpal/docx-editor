@@ -1,6 +1,6 @@
 import type { OoxmlElement } from './ooxml-tree.ts';
 import type { LegacyLineEnds } from './legacy-vml-shapes.ts';
-import { attribute, numeric, pair, points } from './legacy-vml-values.ts';
+import { attribute, numeric, pair, points, coordOrigin } from './legacy-vml-values.ts';
 
 interface ShapeLineGeometry {
   readonly x: number;
@@ -45,7 +45,7 @@ export function shapeLineGeometry(
     return null;
   const values = [tokens[1], tokens[2], tokens[4], tokens[5]].map(numeric);
   const size = pair(attribute(node, 'coordsize') ?? '21600,21600'),
-    origin = pair(attribute(node, 'coordorigin') ?? '0,0');
+    origin = coordOrigin(attribute(node, 'coordorigin') ?? '0,0');
   if (!size || !origin || !values.every(Number.isFinite) || size.some((value) => value < 0))
     return null;
   for (const axis of [0, 1]) {

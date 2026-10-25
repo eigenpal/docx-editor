@@ -21,6 +21,7 @@ import {
   styleOf,
   VML,
   WORD_VML,
+  coordOrigin,
 } from './legacy-vml-values.ts';
 
 /** Only generated, escaped SVG and relationship slots; never authored markup. */
@@ -72,7 +73,9 @@ function paint(node: OoxmlElement, line = false): LegacyInk | null {
   const list = children(node);
   if (['fill', 'stroke', 'path'].some((name) => list.filter((n) => named(n, VML, name)).length > 1))
     return null;
-  const fillNode = list.find((n) => named(n, VML, 'fill'));
+  // A frame picture fill draws as a picture over the shape; it adds no paint fill of its own.
+  const picture = !line && !!framePictureFill(node, list);
+  const fillNode = picture ? undefined : list.find((n) => named(n, VML, 'fill'));
   const strokeNode = list.find((n) => named(n, VML, 'stroke'));
   if (
     fillNode &&
@@ -109,7 +112,7 @@ function paint(node: OoxmlElement, line = false): LegacyInk | null {
     return null;
   // A line has no inside, so its fill is never read; a writer may spell it `this`.
   const fill =
-    line || off(a(node, 'filled')) || (fillNode && off(a(fillNode, 'on')))
+    picture || line || off(a(node, 'filled')) || (fillNode && off(a(fillNode, 'on')))
       ? 'none'
       : color(
           fillNode ? (a(fillNode, 'color') ?? a(node, 'fillcolor')) : a(node, 'fillcolor'),
@@ -299,7 +302,7 @@ function pathPoints(
       i += 2;
     }
     const size = pair(a(node, 'coordsize') ?? '21600,21600'),
-      origin = pair(a(node, 'coordorigin') ?? '0,0');
+      origin = coordOrigin(a(node, 'coordorigin') ?? '0,0');
     if (!size || !origin || size.some((v) => v < 0) || coords.length < 2) return null;
     // A zero coordinate extent is a flat axis: every point on it must sit at the origin.
     const scale = (value: number, axis: 0 | 1, extent: number) =>
@@ -683,6 +686,16 @@ export function legacyShapeFragment(
       after: '"/></svg>',
     });
   }
+  const framed = framePictureFill(node, list);
+  if (framed !== undefined) {
+    if (!framed) return null;
+    return Object.freeze({
+      relationshipId: framed,
+      nativeCrop: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
+      before: `<svg x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" viewBox="0 0 ${box.width} ${box.height}" overflow="hidden"><image x="0" y="0" width="${box.width}" height="${box.height}" preserveAspectRatio="none" href="`,
+      after: '"/></svg>',
+    });
+  }
   const ink = paint(node);
   if (!ink) return null;
   // The preview draws one outline; only a line painted as a vector shape draws bands.
@@ -726,4 +739,36 @@ export function legacyShapeFragment(
     end = arrow(path, false, ink.strokeNode, ink.stroke, ink.weight);
   if (start === null || end === null) return null;
   return `<polyline points="${path.map((p) => p.join(',')).join(' ')}" fill="none" stroke="${ink.stroke}" stroke-width="${ink.weight}"${dashArray(ink)}/>${start}${end}`;
+}
+
+/**
+ * A rectangle without an outline whose fill is one picture stretched to the shape
+ * (`v:fill type="frame"`), which draws exactly like that picture: its relationship id.
+ * `recolor` leaves the picture's own colours. Undefined when the shape has no such fill;
+ * null when it has one outside this subset.
+ */
+function framePictureFill(
+  node: OoxmlElement,
+  list: readonly OoxmlElement[]
+): string | null | undefined {
+  const fill = list.find((n) => named(n, VML, 'fill'));
+  if (!fill || a(fill, 'type') !== 'frame') return undefined;
+  const id = a(fill, 'id', RELATIONSHIPS_NAMESPACE_URI);
+  if (
+    node.localName !== 'rect' ||
+    !id ||
+    !off(a(node, 'stroked')) ||
+    off(a(fill, 'on') ?? a(node, 'filled')) ||
+    list.some((n) => n !== fill) ||
+    fill.attributes.some(
+      (attr) =>
+        !(
+          (attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI && attr.localName === 'id') ||
+          (attr.namespaceUri === OFFICE && attr.localName === 'title') ||
+          (!attr.namespaceUri && ['type', 'on', 'recolor', 'rotate'].includes(attr.localName))
+        )
+    )
+  )
+    return null;
+  return id;
 }

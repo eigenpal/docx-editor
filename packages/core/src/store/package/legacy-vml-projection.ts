@@ -45,6 +45,7 @@ import {
   VML,
   WORD_VML,
   wrapDistancePoints,
+  coordOrigin,
 } from './legacy-vml-values.ts';
 export type { LegacyGraphicProjection } from './legacy-vml-shapes.ts';
 
@@ -180,7 +181,7 @@ function groupLayers(
   canvas: LegacyBox = box
 ): boolean {
   if (depth > 8 || out.length >= 128 || !supportedStyle(group, depth === 0)) return false;
-  const origin = pair(a(group, 'coordorigin') ?? '0,0'),
+  const origin = coordOrigin(a(group, 'coordorigin') ?? '0,0'),
     size = pair(a(group, 'coordsize') ?? '21600,21600');
   if (!origin || !size || size.some((v) => v <= 0)) return false;
   for (const child of children(group)) {

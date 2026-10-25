@@ -325,8 +325,8 @@ export class ImageWriter {
   }
 
   /**
-   * A shape group with picture members: the pictures in document order, then the group's
-   * vector members over them.
+   * A shape group with picture members: the members drawn before the picture, the pictures in
+   * document order, then the other vector members over them.
    *
    * The group paints whole or not at all, as it does on screen. Layout already drops an
    * `mc:AlternateContent` group whose picture resource fails, following the rule for MC
@@ -375,8 +375,14 @@ export class ImageWriter {
       if (refused) return '';
       painted.push(commands);
     }
-    const vector = d.vectorShape ? paintVectorShape(this.doc, page, visit, this.work) : '';
-    return [...painted, vector].filter((commands) => commands !== '').join('\n');
+    // Members drawn before the picture paint under it; the rest paint over it.
+    const under = d.vectorShape
+      ? paintVectorShape(this.doc, page, visit, this.work, (c) => !!c.belowPicture)
+      : '';
+    const over = d.vectorShape
+      ? paintVectorShape(this.doc, page, visit, this.work, (c) => !c.belowPicture)
+      : '';
+    return [under, ...painted, over].filter((commands) => commands !== '').join('\n');
   }
 
   /**
