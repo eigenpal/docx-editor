@@ -1,6 +1,6 @@
 // An empty body paragraph beside a wrapping picture in the HEADER moves below the picture
-// when the picture leaves no passage beside it, as it does beside a body picture. A floating
-// table keeps empty paragraphs beside it in place, whether it sits in the body or in a header.
+// when the picture leaves no passage beside it, as it does beside a body picture. A header
+// floating table keeps empty body paragraphs beside it in place.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';

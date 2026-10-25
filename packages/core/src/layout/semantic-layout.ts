@@ -1,5 +1,3 @@
-import { createEarlierLinePush } from './earlier-line-push.ts';
-import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
 import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
@@ -114,6 +112,8 @@ import {
   paragraphPaintsNothing,
 } from './body-flow-helpers.ts';
 import { shiftAnchoredDrawingY } from './drawing-overlap.ts';
+import { collectAnchoredDrawings as collectAnchoredDrawingRecords } from './anchored-drawing-collect.ts';
+import { createEarlierLinePush } from './earlier-line-push.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -1806,11 +1806,9 @@ function* layoutBlocksPass(
         collectingCellBreakKeys.begin();
         try {
           // A raised table keeps the place its anchor had before it pushed earlier lines down.
-          const anchorId = positionedByTable.get(table.id)?.anchorId;
-          const pushed = anchorId === undefined ? 0 : earlierLinePush.of(pages.length, anchorId);
           const start = tableWrap.positionedTableStart(
             table,
-            anchorY - pushed,
+            anchorY - earlierLinePush.of(pages.length, table.id),
             columnWidth(),
             anchorFrames(),
             pageFragments,
@@ -2186,6 +2184,7 @@ function* layoutBlocksPass(
               verticalFrames: tableVerticalFrames(prospectiveFirstTop),
               earlier: pageFragments,
               signals: floatSignals,
+              pushOf: (tableId) => earlierLinePush.of(pages.length, tableId),
             }
           )
         );

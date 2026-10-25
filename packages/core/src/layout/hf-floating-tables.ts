@@ -107,7 +107,8 @@ function storyTableZone(
       },
     ],
     new Map(),
-    { columnCount: 1, columnGapPt: 0, contentWidth }
+    { columnCount: 1, columnGapPt: 0, contentWidth },
+    false
   ).get(0)?.[0];
   if (!zone || zone.verticalBand.y >= anchorTop) return zone;
   const bottom = zone.verticalBand.y + zone.verticalBand.height;

@@ -97,7 +97,7 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
-import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
+import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
 import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
@@ -779,9 +779,7 @@ function readTableStructureUncached(
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: vMerge === 'continue' && mergedAbove.has(gridColumn),
         hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
-        ...(cellProperties && childNamed(cellProperties, 'noWrap')
-          ? { noWrap: true as const }
-          : {}),
+        ...(cellNoWrap(tableStyle, conditions, cellProperties) ? { noWrap: true as const } : {}),
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,

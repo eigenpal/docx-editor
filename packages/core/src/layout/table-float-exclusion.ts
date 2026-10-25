@@ -128,7 +128,12 @@ function outerRuleWidths(fragment: TableFragmentRecord): {
 export function addFloatingTableExclusions(
   pages: readonly Pick<PageRecord, 'fragments'>[],
   drawingZones: ReadonlyMap<number, readonly ExclusionZone[]>,
-  columns: ExclusionColumnLayout
+  columns: ExclusionColumnLayout,
+  /**
+   * Whether the tables sit in the body flow they wrap, where a table that leaves no passage
+   * moves the earlier lines it covers. A header or footer table keeps the plain wrap.
+   */
+  inBodyFlow = true
 ): ReadonlyMap<number, readonly ExclusionZone[]> {
   let result: Map<number, readonly ExclusionZone[]> | undefined;
   for (const [pageIndex, page] of pages.entries()) {
@@ -153,6 +158,14 @@ export function addFloatingTableExclusions(
       const column = metadata.columnIndex;
       const left = columns.columnLefts?.[column] ?? 0;
       const width = columns.columnWidths?.[column] ?? columns.contentWidth;
+      const spans = leavesNoPassage(
+        grid.x - distances.left,
+        grid.x + grid.width + distances.right,
+        left,
+        width
+      );
+      const pageFramed = inBodyFlow && metadata.float.vertAnchor !== 'text';
+      const reaches = inBodyFlow && !pageFramed && spans && raisedAboveText(metadata.float);
       const zone: ExclusionZone = {
         sourceKind: 'table',
         drawingNodeId: `table:${block.tableId}`,
@@ -164,17 +177,8 @@ export function addFloatingTableExclusions(
         allowOverlap: true,
         columnIndex: column,
         // A page- or margin-positioned table does not move with the text before it, so it also
-        // moves the earlier lines it covers on its page below it.
-        ...(metadata.float.vertAnchor !== 'text'
-          ? { pageFramedBand: true }
-          : raisedAboveAnchor(metadata.float) &&
-              !metadata.float.ySpec &&
-              Math.max(
-                box.x - distances.left - left,
-                left + width - (box.x + box.width + distances.right)
-              ) <= TABLE_WRAP_MIN_PASSAGE_PT
-            ? { reachesEarlierLines: true }
-            : {}),
+        // wraps or moves the earlier lines it covers on its page.
+        ...(pageFramed ? { pageFramedBand: true } : reaches ? { reachesEarlierLines: true } : {}),
         y: box.y,
         verticalBand: {
           x: box.x - distances.left,
@@ -183,8 +187,11 @@ export function addFloatingTableExclusions(
           height: box.height + distances.top + distances.bottom,
         },
         input: {
+          // A band that leaves no passage and moves earlier lines moves empty ones too.
           mode:
-            box.x - distances.left <= left && box.x + box.width + distances.right >= left + width
+            (box.x - distances.left <= left &&
+              box.x + box.width + distances.right >= left + width) ||
+            (spans && (pageFramed || reaches))
               ? 'topAndBottom'
               : 'square',
           contentBounds: box,
@@ -211,11 +218,25 @@ export function addFloatingTableExclusions(
 const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 
 /**
- * Whether a text-anchored offset raises the table above its anchor: by more than the one twip
- * of storage bias that an authored `w:tblpY="0"` carries.
+ * Whether a text-anchored table rises above its anchor: an offset more negative than the one
+ * twip of storage bias that an authored `w:tblpY="0"` carries, and no vertical alignment.
  */
-function raisedAboveAnchor(float: TableFloatPosition): boolean {
-  return float.yPt < -0.051;
+function raisedAboveText(float: TableFloatPosition): boolean {
+  return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
+}
+
+/**
+ * Whether a table band from `bandLeft` to `bandRight` (its grid plus its side text distances)
+ * leaves no passage for text in the column: none wider than a quarter inch on either side.
+ */
+function leavesNoPassage(
+  bandLeft: number,
+  bandRight: number,
+  columnLeft: number,
+  columnWidth: number
+): boolean {
+  const passage = Math.max(bandLeft - columnLeft, columnLeft + columnWidth - bandRight);
+  return passage <= TABLE_WRAP_MIN_PASSAGE_PT;
 }
 const NO_SHIFT: { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } =
   Object.freeze({ dx: 0, dy: 0 });
@@ -424,18 +445,19 @@ function probeTableHeight(
 }
 
 /**
- * Room a page- or margin-framed table's anchor needs when the table lands on body lines
- * already placed on the anchor's page.
+ * Room an anchor needs when its table lands on body lines already placed on the anchor's page:
+ * a page- or margin-framed table, or a text-anchored one raised above its anchor.
  *
  * The table's box does not follow the flow, so the lines before its anchor on that page must
  * clear it too. Clearing moves them, and the anchor after them, below the table. When the
  * anchor then no longer fits, the band exceeds the page and the anchor opens the next page:
- * the table follows its anchor there, and the earlier lines keep their places.
+ * the table follows its anchor there, and the earlier lines keep their places. A raised table
+ * is priced where its anchor was before the lines it moved (`pushed`), as it is placed.
  *
  * Only a column-spanning table in single-column flow is priced. Lines beside a narrower table,
  * and earlier columns of the same sheet, are not modeled.
  */
-function pageFramedAnchorBand(
+function coveredLinesAnchorBand(
   anchor: PositionedTableAnchor,
   width: number,
   deps: TableFlowDeps,
@@ -445,40 +467,43 @@ function pageFramedAnchorBand(
     readonly frames: TableAnchorFrames;
     readonly verticalFrames: TableVerticalAnchorFrames;
     readonly earlier: readonly BlockFragmentRecord[];
-  }
+  },
+  pushed: number
 ): number {
   const column = placement.frames.text;
+  const raised = raisedAboveText(anchor.float);
   if (
-    anchor.float.vertAnchor === 'text' ||
+    (anchor.float.vertAnchor === 'text' && !raised) ||
     column.left > placement.frames.margin.left + 0.5 ||
     column.width < placement.frames.margin.width - 0.5
   )
     return 0;
+  // A raised table's band moves only paragraph lines: the flow never moves a table for it.
   const lineBoxes = placement.earlier.flatMap((block) => {
     if (isOutOfFlowFragment(block) || (block.kind === 'table' && block.floatingWrap)) return [];
-    return block.kind === 'table' ? [block.box] : block.lines.map((line) => line.box);
+    if (block.kind === 'table') return raised ? [] : [block.box];
+    return block.lines.map((line) => line.box);
   });
   if (lineBoxes.length === 0) return 0;
   const structure = floatTableStructure(anchor.table, width, deps);
   const float = structure?.float;
-  if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
+  if (!structure || !float || (float.vertAnchor === 'text' && !raised) || float.ySpec === 'inline')
+    return 0;
   const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, placement.frames, deps.compatibilityMode);
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const bandLeft = left - distances.left;
   const bandRight = left + tableWidth + distances.right;
-  // A passage beside the table no wider than a quarter inch holds no text, so the table spans.
-  const passage = Math.max(bandLeft - column.left, column.left + column.width - bandRight);
-  if (passage > TABLE_WRAP_MIN_PASSAGE_PT) return 0;
+  if (!leavesNoPassage(bandLeft, bandRight, column.left, column.width)) return 0;
+  const topOf = (height: number) =>
+    raised
+      ? placement.anchorY - pushed + float.yPt
+      : tableFloatOriginY(float, height, placement.verticalFrames);
   // An offset top does not depend on the table height: skip the probe when no line reaches it.
   const inkBottom = lineBoxes.reduce((bottom, box) => Math.max(bottom, box.y + box.height), 0);
-  if (
-    !float.ySpec &&
-    inkBottom <= tableFloatOriginY(float, 0, placement.verticalFrames) - distances.top
-  )
-    return 0;
+  if (!float.ySpec && inkBottom <= topOf(0) - distances.top) return 0;
   const height = probeTableHeight(structure, anchor.table.id, deps);
-  const top = tableFloatOriginY(float, height, placement.verticalFrames);
+  const top = topOf(height);
   const bandTop = top - distances.top;
   const bandBottom = top + height + distances.bottom;
   let firstTop = Infinity;
@@ -510,6 +535,8 @@ export function requiredAnchorBand(
     readonly earlier: readonly BlockFragmentRecord[];
     /** Anchors already laid on this page whose tables wait for the page flush. */
     readonly signals?: readonly PositionedTableAnchorSignal[];
+    /** How far a raised table's band pushed the lines before its anchor (`earlier-line-push.ts`). */
+    readonly pushOf?: (tableId: string) => number;
   }
 ): number {
   if (pending.size === 0) return 0;
@@ -551,9 +578,10 @@ export function requiredAnchorBand(
     }
   }
   for (const anchor of here) {
+    const pushed = placement.pushOf?.(anchor.table.id) ?? 0;
     const clearedY = clearEarlierText(
       anchor.table,
-      placement.anchorY,
+      placement.anchorY - pushed,
       width,
       placement.frames,
       placement.earlier,
@@ -577,7 +605,7 @@ export function requiredAnchorBand(
       shift.dy -
       placement.anchorY +
       Math.min(0, anchor.float.yPt);
-    height = Math.max(height, band, pageFramedAnchorBand(anchor, width, deps, placement));
+    height = Math.max(height, band, coveredLinesAnchorBand(anchor, width, deps, placement, pushed));
   }
   return height;
 }
@@ -705,12 +733,8 @@ export function clearEarlierText(
   const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
   // A raised table that leaves no passage beside it keeps its place: the earlier lines it
   // covers move below it instead (`reachesEarlierLines`).
-  const column = frames.text;
   const right = left + tableWidth + distances.left + distances.right;
-  if (
-    raisedAboveAnchor(float) &&
-    Math.max(left - column.left, column.left + column.width - right) <= TABLE_WRAP_MIN_PASSAGE_PT
-  )
+  if (raisedAboveText(float) && leavesNoPassage(left, right, frames.text.left, frames.text.width))
     return anchorY;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;

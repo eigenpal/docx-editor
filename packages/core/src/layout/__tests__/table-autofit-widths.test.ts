@@ -674,6 +674,19 @@ describe('autofit layout', () => {
     const held = columns(unwrapped('<w:noWrap/>'));
     expect(held.widths).toEqual([60, 60, 12]);
     expect(held.lines[0]).toBe(2);
+    // An off value is no `w:noWrap` at all.
+    expect(columns(unwrapped('<w:noWrap w:val="0"/>')).widths).toEqual([38.18, 60, 21.82]);
+  });
+
+  test('unwrapped cells wider than the text column share it', () => {
+    // Three 120pt cells hold 360pt in a 300pt text column: each gives up the same share.
+    const cell = `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/><w:noWrap/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>`;
+    const wide =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="800"/><w:gridCol w:w="800"/><w:gridCol w:w="800"/></w:tblGrid>' +
+      `<w:tr>${cell}${cell}${cell}</w:tr></w:tbl>`;
+    expect(columns(wide).widths).toEqual([100, 100, 100]);
   });
 
   test('an empty grid band gains no width when the table scales down', () => {

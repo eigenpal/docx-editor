@@ -5,6 +5,11 @@
 // the table keeps the place its anchor had before the move: its top is the anchor top minus
 // this push, plus the offset. The first earlier line the band pushes sets the push; the lines
 // after it follow without a skip of their own.
+//
+// The zones come from the previous pass, so the push is measured in the pass it applies to and
+// an edit above the table moves the table with its text. When the moved lines would carry the
+// anchor off the page, the anchor's band pricing (`coveredLinesAnchorBand`) sends the anchor and
+// its table to the next page first, so no zone is left behind on this one.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
 
@@ -12,11 +17,11 @@ const EPSILON = 0.5;
 
 export function createEarlierLinePush(orderOf: (paragraphId: string) => number | undefined) {
   const pushes = new Map<string, number>();
-  const key = (page: number, anchorId: string) => `${page}:${anchorId}`;
+  const key = (page: number, zoneId: string) => `${page}:${zoneId}`;
   return {
     /**
-     * Records a line of `paragraphId` that a zone moved from `top` down by `skip` on `page`,
-     * when a raised table anchored after that paragraph caused it.
+     * Records a line of `paragraphId` that moved from `top` down by `skip` on `page`, when it
+     * landed at the bottom of a raised table's band anchored after that paragraph.
      */
     note(
       page: number,
@@ -33,17 +38,17 @@ export function createEarlierLinePush(orderOf: (paragraphId: string) => number |
         if (!zone.reachesEarlierLines) continue;
         const anchorOrder = orderOf(zone.anchorParagraphId);
         if (anchorOrder === undefined || anchorOrder <= order) continue;
-        const id = key(page, zone.anchorParagraphId);
+        const id = key(page, zone.drawingNodeId);
         if (pushes.has(id)) continue;
         const band = zone.verticalBand;
         const bottom = band.y + band.height;
-        if (top < bottom && top + height > band.y && top + skip >= bottom - EPSILON)
+        if (top < bottom && top + height > band.y && Math.abs(top + skip - bottom) <= EPSILON)
           pushes.set(id, skip);
       }
     },
-    /** The push the tables anchored at `anchorId` leave out of their anchor top on `page`. */
-    of(page: number, anchorId: string): number {
-      return pushes.get(key(page, anchorId)) ?? 0;
+    /** The push the table `tableId` leaves out of its anchor top on `page`. */
+    of(page: number, tableId: string): number {
+      return pushes.get(key(page, `table:${tableId}`)) ?? 0;
     },
   };
 }

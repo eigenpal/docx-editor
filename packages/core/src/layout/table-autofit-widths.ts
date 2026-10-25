@@ -712,7 +712,8 @@ export function autofitColumnMinimumsPt(
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
       const neededWide = Math.max(held, least + around);
       if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
-      if (most + around > widest[cell.gridColumn]!) widest[cell.gridColumn] = most + around;
+      const neededMost = Math.max(held, most + around);
+      if (neededMost > widest[cell.gridColumn]!) widest[cell.gridColumn] = neededMost;
     }
   }
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
