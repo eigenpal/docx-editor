@@ -56,6 +56,8 @@ export function parseFormFieldInstruction(raw: string): FormFieldKind | null {
  * the walk's vocabulary.
  */
 export interface CapturedInstructionSpecs {
+  /** ASK and SET store their result in a bookmark and display nothing where they stand. */
+  hidesResult?: boolean;
   characterStyleSpec?: CharacterStyleField | null;
   symbolSpec: SymbolFieldSpec | null;
   linkSpec: HyperlinkFieldSpec | null;
@@ -72,6 +74,7 @@ export interface CapturedInstructionSpecs {
  * mutually exclusive, so the first recognizer that hits wins and the rest stay null.
  */
 export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: string): void {
+  pending.hidesResult = /^\s*(?:ASK|SET)(?:\s|$)/i.test(raw);
   pending.characterStyleSpec = parseCharacterStyleField(raw);
   pending.symbolSpec = parseSymbolInstruction(raw);
   if (pending.symbolSpec) return;

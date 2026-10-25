@@ -758,14 +758,14 @@ export function unmergedPiecesOfParagraphForDisplay(
             donateResultCapture(text);
             continue;
           }
-          if (style.hidden) continue;
+          if (style.hidden || pending.hidesResult) continue;
           donateResultCapture(text);
           pending.cachedText += hyphen?.measureText ?? text;
           continue;
         }
 
         // Demoted field: result text is ordinary addressable content.
-        if (style.hidden) {
+        if (style.hidden || pending.hidesResult) {
           offset += modelWidth;
           pending.bufferOffset = offset;
           continue;

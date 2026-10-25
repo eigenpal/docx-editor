@@ -407,6 +407,8 @@ export interface PieceEmitExtras {
  * `piecesOfParagraph`.
  */
 export interface PendingFieldProjection {
+  /** Set from the instruction: ASK and SET display no result. */
+  hidesResult?: boolean;
   hasNestedField?: boolean;
   characterStyleSpec?: import('./field-character-style.ts').CharacterStyleField | null;
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
