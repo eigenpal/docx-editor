@@ -306,6 +306,12 @@ function lockBlocks(anchor: OoxmlElement, op: DrawingTreeDocOp['op']): TreeOpRej
   return null;
 }
 
+/** A chart's locks, read from its chart drawing's anchor in every state; null without one. */
+export function chartDrawingLocks(chartDrawing: OoxmlElement): DrawingLocks | null {
+  const anchor = anchorRootOf(chartDrawing as OoxmlDrawingNode);
+  return anchor ? effectiveLocks(anchor) : null;
+}
+
 /** A chart's delete lock, read from its chart drawing's anchor: `@locked` or `noSelect`. */
 function chartLockBlocks(chartDrawing: OoxmlElement): TreeOpRejection | null {
   const anchor = anchorRootOf(chartDrawing as OoxmlDrawingNode);

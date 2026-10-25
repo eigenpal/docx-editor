@@ -4909,11 +4909,8 @@ export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null;
 // @public
 export interface UnsupportedElement {
     readonly bounds?: LayoutBox;
-    // (undocumented)
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
-    // (undocumented)
     readonly equation?: EquationSpanRecord;
-    // (undocumented)
     readonly label: string;
     // (undocumented)
     readonly localName: string;

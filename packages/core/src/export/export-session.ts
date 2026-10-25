@@ -222,6 +222,17 @@ export interface ExportSession {
     source: InlineDrawingRecord | AnchoredDrawingRecord
   ): { readonly mime: 'image/x-emf' | 'image/x-wmf'; readonly bytes: Uint8Array } | null;
   /**
+   * The settled resource of the picture saved in a drawn chart's `mc:Fallback`, for an
+   * exporter that exports the chart as that picture. Layout never reads it, so a drawn chart
+   * never waits for it; this reads it on request. Undefined for a record without one, and
+   * after disposal.
+   *
+   * @internal
+   */
+  chartFallbackResource?(
+    source: InlineDrawingRecord | AnchoredDrawingRecord
+  ): Promise<InlineDrawingRecord['resource'] | undefined>;
+  /**
    * Release per-document caches, pending resource work, and image-byte capabilities. Idempotent.
    * Previously resolved layout snapshots remain immutable and traversable after disposal.
    */
@@ -732,6 +743,33 @@ export function openDocumentForExport(
           .mintValidatedBytes(source.resource.validatedHandle, source.resource.contentId)
           ?.slice() ?? null
       );
+    },
+    async chartFallbackResource(source) {
+      const state = activeState;
+      if (!state || !source.chart || !source.chartFallbackResource) return undefined;
+      if (source.chartFallbackResource.kind !== 'pending') return source.chartFallbackResource;
+      // The same bound as layout's resource settlement.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new ExportResourceError(
+                'timedOut',
+                `Image resources did not settle within ${timeoutMs}ms`
+              )
+            ),
+          timeoutMs
+        );
+      });
+      try {
+        return await Promise.race([
+          state.drawingBundle.resolveChartFallback(source.ownerPartName, source.drawingNodeId),
+          timedOut,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
     },
     metafileBytes(source) {
       const state = activeState;

@@ -4,10 +4,13 @@
 // A chart is no picture, whether the page draws it, shows the fallback saved beside it in
 // `mc:AlternateContent`, or shows a placeholder. Resizing, cropping, moving, wrapping,
 // replacing or describing it as a picture would edit one branch alone, so those commands
-// refuse; delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`).
+// refuse; delete removes the whole chart (`store/store/tree-op-chart-drawing.ts`). A chart
+// selects as an object in every state, with no resize, move or crop handles.
 
 import type { EditorCommand, ExecResult, SelectedImageState } from '../contracts/editor.ts';
+import type { DrawingLocks, DrawingProjection } from '../store/package/drawing-projection.ts';
 import { chartDrawingOf } from '../store/store/tree-op-chart-drawing.ts';
+import { chartDrawingLocks } from '../store/store/tree-op-drawings.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId } from './surface-scope.ts';
 
@@ -23,6 +26,22 @@ export function isChartDrawing(surface: PaginatedSurface, drawingNodeId: string)
   // A pure read: `partOfNodeId`, never `partFor`, which would retain a story store.
   const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
   return chartDrawingOf(part, drawingNodeId) !== null;
+}
+
+/**
+ * Whether `drawingNodeId` names a chart, and the locks that gate it. A chart's locks come
+ * from its chart drawing in every state, as the store reads them for its delete, so `can()`
+ * answers what the command does; any other drawing reads its own.
+ */
+export function drawingGate(
+  surface: PaginatedSurface,
+  drawingNodeId: string,
+  projection: DrawingProjection
+): { readonly chart: boolean; readonly locks: DrawingLocks } {
+  const part = partOfNodeId(surface.session, drawingNodeId) ?? surface.session.part();
+  const target = chartDrawingOf(part, drawingNodeId);
+  if (!target) return { chart: false, locks: projection.locks };
+  return { chart: true, locks: chartDrawingLocks(target.chartDrawing) ?? projection.locks };
 }
 
 /** The refusal for every image command but delete on a chart, or null. */

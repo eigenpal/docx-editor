@@ -9,7 +9,7 @@ import { commandProtectionRefusal } from './command-protection.ts';
 import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
 import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
-import { chartDrawingRefusal, isChartDrawing } from './image-state-rules.ts';
+import { chartDrawingRefusal, drawingGate } from './image-state-rules.ts';
 export { imageContextEqual } from './image-state-rules.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -256,9 +256,15 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
   return record.wrap;
 }
 
-/** Image commands reach pictures and text boxes; the overlay offers handles on the same gate. */
+/**
+ * Image commands reach pictures, text boxes and charts (drawn, by their fallback, or as a
+ * placeholder); the overlay offers handles on the same gate. A chart selects as an object.
+ */
 const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
-  record.placeholderGraphicKind === null || !!record.textboxStory;
+  record.placeholderGraphicKind === null ||
+  !!record.textboxStory ||
+  record.placeholderGraphicKind === 'chart' ||
+  !!record.chart;
 
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
@@ -271,7 +277,8 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
   if (!imageCommandsReach(record)) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
-  if (projection.hidden || projection.locks.select) return null;
+  const { chart, locks } = drawingGate(surface!, record.drawingNodeId, projection);
+  if (projection.hidden || locks.select) return null;
   const transform = record.transform;
   return Object.freeze({
     id: record.drawingNodeId,
@@ -286,11 +293,11 @@ export function selectedImageStateOf(surface: PaginatedSurface | null): Selected
     title: projection.title,
     description: projection.description,
     hyperlink: projection.hyperlinkHref,
-    locks: projection.locks,
+    locks,
     hidden: projection.hidden,
     resourceStatus: record.resource.kind,
     intrinsic: intrinsicOf(record),
-    ...capabilityFlags(projection, isChartDrawing(surface!, record.drawingNodeId)),
+    ...capabilityFlags(projection, chart),
   });
 }
 
@@ -1157,14 +1164,14 @@ function overlayCapabilityFlags(
   projection: DrawingProjection | null,
   chart: boolean
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
-  if (!projection || projection.hidden || projection.locks.select || !imageCommandsReach(record)) {
+  if (!projection || projection.hidden || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
   const caps = capabilityFlags(projection, chart);
   return Object.freeze({
     canResize: caps.canResize,
     canMove: caps.canMove,
-    aspectLocked: projection.locks.changeAspect,
+    aspectLocked: chart || projection.locks.changeAspect,
   });
 }
 
@@ -1200,12 +1207,13 @@ export function selectedDrawingOverlayTargetOf(
   const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
   if (!frame) return null;
   const projection = projectDrawingForRecord(surface, record);
+  const gate = projection ? drawingGate(surface, record.drawingNodeId, projection) : null;
   // A text box being edited keeps its frame even when its shape cannot be selected, moved or
   // resized, as a legacy shape cannot: the frame shows which box the caret is in.
-  const shapeSelectable = projection !== null && !projection.locks.select;
+  const shapeSelectable = gate !== null && !gate.locks.select;
   if (!shapeSelectable && scope.kind !== 'frame') return null;
   const caps = shapeSelectable
-    ? overlayCapabilityFlags(record, projection, isChartDrawing(surface, record.drawingNodeId))
+    ? overlayCapabilityFlags(record, projection, gate.chart)
     : { canResize: false, canMove: false, aspectLocked: true };
   // The MODE, on top of the drawing's own OOXML locks. Without it a viewing-mode reader got
   // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the

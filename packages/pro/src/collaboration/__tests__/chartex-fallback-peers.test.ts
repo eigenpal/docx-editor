@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A wrapped chartex chart in two collaborating editors, where Alice has the drawing module and
 // Bob does not: Alice sees the drawn chart, Bob sees its saved fallback picture. Bob's picture
 // edits on the fallback refuse and change nothing for either participant; Alice's drawn chart
-// takes no picture selection; a delete by either participant removes the chart and its
+// selects as an object with no handles; a delete by either participant removes the chart and its
 // fallback for both, undo restores both branches, a delete races Alice's typing, and both
 // converge after save and reopen.
 //
@@ -163,11 +163,17 @@ test('a participant without the drawing module edits a chart through its fallbac
     const original = await converged(alice, bob);
     expect(original).toContain('AlternateContent');
 
-    // Alice's drawn chart takes no picture selection, so no picture command reaches it.
+    // Alice's drawn chart selects as an object with no handles; picture commands refuse.
     selectChart(alice);
-    expect(alice.editor.getSelectedImage!()).toBeNull();
+    expect(alice.editor.getSelectedImage!()).toMatchObject({
+      canResize: false,
+      canMove: false,
+      canChangeWrap: false,
+      canCrop: false,
+    });
     expect(alice.editor.exec({ type: 'setImageProperties', widthEmu: 914400 })).toMatchObject({
       ok: false,
+      code: 'unsupported',
     });
 
     // Bob's picture edits on the fallback refuse and change nothing for either participant.
@@ -194,6 +200,19 @@ test('a participant without the drawing module edits a chart through its fallbac
     expect(await converged(alice, bob)).not.toContain('AlternateContent');
     as(false);
     expect(bob.editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    sync(alice, bob);
+    expect(shown(alice)).toEqual(['chart']);
+    expect(shown(bob)).toEqual(['fallback']);
+    expect(await converged(alice, bob)).toBe(original);
+
+    // Alice deletes her selected drawn chart; Bob sees it go, and undo restores both branches.
+    selectChart(alice);
+    expect(alice.editor.exec({ type: 'deleteImage' })).toMatchObject({ ok: true, changed: true });
+    sync(alice, bob);
+    expect(shown(alice)).toEqual([]);
+    expect(shown(bob)).toEqual([]);
+    as(true);
+    expect(alice.editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
     sync(alice, bob);
     expect(shown(alice)).toEqual(['chart']);
     expect(shown(bob)).toEqual(['fallback']);

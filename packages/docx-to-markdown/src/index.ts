@@ -5,6 +5,7 @@ import {
   resolveMedia,
   withExportAbort,
 } from './media-extract.ts';
+import { resolveChartFallbacks } from './markdown-media.ts';
 import type { MarkdownImageData, MarkdownProjectionOptions } from './media-types.ts';
 export type {
   MarkdownImageData,
@@ -271,6 +272,9 @@ function markdownSession(
       session.layoutFor(displayMode),
     validatedImageBytes: (drawing: Parameters<ExportSession['validatedImageBytes']>[0]) =>
       session.validatedImageBytes(drawing),
+    ...(session.chartFallbackResource
+      ? { chartFallbackResource: session.chartFallbackResource.bind(session) }
+      : {}),
     dispose: () => session.dispose(),
   });
 }
@@ -410,6 +414,7 @@ export async function exportMarkdownFrom(
   const images = imageOptions(options);
   const layout = await withExportAbort(() => session.layout(), options.signal);
   checkExportAbort(options.signal);
+  if (images) await withExportAbort(() => resolveChartFallbacks(layout, session), options.signal);
   const data = extractMedia(layout, session, images);
   const media = images ? await resolveMedia(data, options) : undefined;
   const result = translateMarkdownLayout(layout, media, images?.syntax);
@@ -448,6 +453,10 @@ export async function exportMarkdown(
   try {
     layout = await opened.session.layout();
     checkExportAbort(options.signal);
+    if (images) {
+      const session = opened.session;
+      await withExportAbort(() => resolveChartFallbacks(layout, session), options.signal);
+    }
     data = extractMedia(layout, opened.session, images);
   } finally {
     opened.session.dispose();

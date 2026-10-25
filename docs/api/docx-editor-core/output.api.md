@@ -165,11 +165,8 @@ export interface SelectionOverlayOptions {
 // @public
 export interface UnsupportedElement {
     readonly bounds?: LayoutBox;
-    // (undocumented)
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
-    // (undocumented)
     readonly equation?: EquationSpanRecord;
-    // (undocumented)
     readonly label: string;
     // (undocumented)
     readonly localName: string;

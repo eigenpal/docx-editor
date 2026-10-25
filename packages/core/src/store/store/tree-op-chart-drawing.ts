@@ -8,12 +8,11 @@
 // part. A delete removes the whole chart: the wrapper with both branches, or the bare drawing.
 
 import {
-  isElement,
   isMcAlternateContent,
   isMcChoice,
   isMcFallback,
 } from '../package/drawing-projection-walk.ts';
-import { holdsChartGraphic } from '../package/mc-fallback-projection.ts';
+import { choiceChartDrawing, holdsChartGraphic } from '../package/mc-fallback-projection.ts';
 import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
@@ -35,17 +34,6 @@ function isWmlDrawing(node: OoxmlNode): node is OoxmlElement {
     (node.kind === 'drawing' ||
       (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'drawing'))
   );
-}
-
-/** The chart `w:drawing` in the wrapper's Choice, or null. */
-function choiceChartDrawing(wrapper: OoxmlElement): OoxmlElement | null {
-  for (const choice of wrapper.children) {
-    if (!isElement(choice) || !isMcChoice(choice)) continue;
-    for (const content of choice.children) {
-      if (isWmlDrawing(content) && holdsChartGraphic(content)) return content;
-    }
-  }
-  return null;
 }
 
 function wrapperTarget(wrapper: OoxmlNode | null): ChartDrawingTarget | null {

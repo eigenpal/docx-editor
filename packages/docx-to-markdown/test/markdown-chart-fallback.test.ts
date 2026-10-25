@@ -139,3 +139,15 @@ test('chart warnings on one page stop at the cap and count the rest', async () =
   expect(messages).toHaveLength(MAX_CHART_WARNINGS_PER_PAGE + 1);
   expect(messages.at(-1)).toBe('2 more charts are omitted from Markdown on this page.');
 });
+
+// The same author-text rule as with the drawing module installed.
+test("a chart shown by its fallback takes the fallback's description when the chart has none", async () => {
+  const bytes = edited('Net cash', { alternateContent: true }, (_files, document) =>
+    document.replace(
+      '<wp:docPr id="2" name="Chart 2"/>',
+      '<wp:docPr id="2" name="Chart 2" descr="Cash by quarter"/>'
+    )
+  );
+  const result = await exportMarkdown(bytes, options);
+  expect(result.markdown).toMatch(/^!\[Cash by quarter\]\(media\/[0-9a-f]+\.png\)$/);
+});

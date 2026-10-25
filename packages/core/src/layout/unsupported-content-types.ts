@@ -12,10 +12,18 @@ export interface UnsupportedElement {
   /** Lossless canonical source. Treat this value as read-only and untrusted. */
   readonly source: OoxmlElement | null;
   readonly placement: 'inline' | 'block';
+  /** The text of the built-in placeholder. */
   readonly label: string;
   /** Reserved geometry in document points, when the element has been laid out. */
   readonly bounds?: LayoutBox;
+  /**
+   * The layout record of a drawing shown as the built-in placeholder. Its
+   * `placeholderGraphicKind` names the kind of graphic, such as `chart` or `diagram`. A chart
+   * whose chart part can be read also carries `chart`, whose `shownAs` is always `placeholder`
+   * here, because only a placeholder reaches a declaration. Absent for other content.
+   */
   readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+  /** The layout record of an equation shown as the built-in placeholder. */
   readonly equation?: EquationSpanRecord;
 }
 /** Dimensions reserved before pagination, in document points. @public */

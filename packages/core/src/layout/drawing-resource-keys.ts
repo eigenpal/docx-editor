@@ -11,6 +11,14 @@ export const FOOTPRINT_RESOURCE: ImageResourceState = Object.freeze({
   reason: 'non-picture-graphic',
 });
 
+/** The state of a picture whose decode threw. */
+export const DECODE_FAILED_RESOURCE: ImageResourceState = Object.freeze({
+  kind: 'unrenderable',
+  partName: null,
+  mime: 'unknown',
+  reason: 'decode-failed',
+});
+
 export function pendingResourceKey(projection: DrawingProjection): string {
   const picture = projection.picture ?? projection.groupPicture;
   if (picture?.embeddedRelationshipId) {

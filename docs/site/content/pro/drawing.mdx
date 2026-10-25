@@ -129,7 +129,9 @@ A chart often comes with a fallback picture for older applications. Waterfall, f
 
 1. If the module renders the chart, they show the chart.
 1. If the chart has a fallback picture or drawing that renders, they show the fallback. A fallback produces no PDF diagnostic, and it can differ from the chart's cached values.
-1. Otherwise, the editor shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic.
+1. Otherwise, the editor shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic. This includes a fallback picture that does not load: a missing picture, a linked or external picture, or a picture that cannot be decoded. The placeholder keeps the fallback's size.
+
+A drawn chart never reads its fallback picture, so a slow or broken fallback picture does not delay or fail the export of a drawn chart.
 
 The chart, its parts, and its fallback picture are saved unchanged. A hidden chart stays hidden, also when its fallback is visible.
 
@@ -137,16 +139,23 @@ The SmartArt diagrams and WordArt in the list keep a labeled placeholder in the 
 
 ### Edit a chart
 
-A chart is not a picture, whichever way the page shows it. The editor never resizes, crops, moves, wraps, replaces, rotates, or flips a chart, and it never changes its alternative text. A delete always removes the whole chart: the chart and its fallback together, as one undo step. The delete image command and direct document edits refuse to delete a chart whose own locks forbid selecting it. The following table shows what the editor does in each state that `drawing.chart.shownAs` names:
+A chart is not a picture, whichever way the page shows it. The editor never resizes, crops, moves, wraps, replaces, rotates, or flips a chart, and it never changes its alternative text. A delete always removes the whole chart: the chart and its fallback together, as one undo step. The delete image command and direct document edits refuse to delete a chart whose own locks forbid selecting it. The locks of the chart drawing apply in every state, also when the page shows the fallback.
 
-| How the page shows the chart | Selection | Move and resize | Delete |
-| --- | --- | --- | --- |
-| The drawn chart (`chart`) | No picture selection. Select the chart as part of a text range. | No handles. | Press Delete or Backspace on a text range that includes the chart. |
-| A fallback picture, DrawingML or VML (`fallback`) | Selects like a picture. Picture commands are refused with a reason, and the matching toolbar controls are disabled. | No handles. | The delete image command, or a text range that includes the chart. |
-| A fallback shape, group, or VML drawing without a picture (`fallback`) | No picture selection, as for the drawn chart. | No handles. | A text range that includes the chart. |
-| A labeled placeholder (`placeholder`) | No picture selection, as for the drawn chart. | No handles. | A text range that includes the chart. |
+In every state that `drawing.chart.shownAs` names, a click on the chart selects it as an object:
 
-Automation and other direct document edits follow the same rule. A picture edit of a chart, or of either branch of its `mc:AlternateContent`, is refused with `chart-drawing`, and a delete removes the whole chart. The rule reads only the document, so editors with and without the module make the same decision in a collaboration session.
+- The chart shows a selection frame without resize, move, or crop handles.
+- Picture commands are refused with a reason, and the matching toolbar controls are disabled with the localized reason.
+- Press Delete or Backspace, or use the delete image command, to delete the selected chart. A text range that includes the chart also deletes it.
+
+The refusal of a picture edit has a different code in each layer:
+
+| Layer | Code |
+| --- | --- |
+| Editor commands (`editor.can()` and `editor.exec()`) | `unsupported`, with the chart reason as `reason` |
+| Document store transactions | The rejection `chart-drawing` |
+| `@docx-editor.dev/editor-api` automation | The error code `edit.unsupported-content` |
+
+The rule reads only the document, so editors with and without the module make the same decision in a collaboration session. A picture edit of either branch of the chart's `mc:AlternateContent` is refused in the same way.
 
 Skewed or sideways reflections, lit bevel faces, and other 3-D materials do not paint; the shape paints without them. Floating WordArt that the module cannot render does not show, and it keeps its wrap area.
 
@@ -158,12 +167,14 @@ You can replace a chart or SmartArt placeholder with your own component, with or
 
 Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
 
-The editor exposes only placeholders to your components, through `UnsupportedElement`. To read every chart record without an editor, open the document for export and walk its drawings. This example lists each chart with its page number, state, and title:
+The editor exposes only placeholders to your components, through `UnsupportedElement`, so inside a declaration `drawing.chart.shownAs` is always `placeholder`. To read every chart record, including drawn charts and charts shown by their fallback, open the document for export and walk its drawings. Install the module first, so that the records match what an editor with the module shows. This example lists each chart with its page number, state, and title:
 
 ```ts
 import { openDocumentForExport } from '@docx-editor.dev/core/export';
 import { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
+import { installDrawing } from '@docx-editor.dev/pro/drawing';
 
+installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 const opened = openDocumentForExport(bytes);
 if (!opened.ok) throw new Error(opened.reason);
 try {
@@ -176,6 +187,8 @@ try {
   opened.session.dispose();
 }
 ```
+
+A chart in a header or footer is laid out on every page that shows that header or footer, so the walk reports it once for each of those pages.
 
 `drawing.chart` is a summary read from the chart part: `title`, the title the chart shows as plain text (typed, from a cell, or the name of its only series for an automatic title), and `plotTypes`, the plot types in document order, such as `['bar', 'line']` for a combination chart, at most 8. `title` is `null` when the chart shows no title, and when a title with no text of its own sits on a chart with several series. The plot types are `area`, `area3D`, `bar` (column and bar), `bar3D`, `bubble`, `doughnut`, `line`, `line3D`, `ofPie` (pie-of-pie and bar-of-pie), `pie`, `pie3D`, `radar`, `scatter`, `stock`, `surface`, and `surface3D`. Waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst, and map charts have the plot types `waterfall`, `funnel`, `histogram`, `pareto`, `boxWhisker`, `treemap`, `sunburst`, and `regionMap`. These charts report exactly one plot type, so a Pareto chart reports `['pareto']`, and an unknown chart type reports `[]`. Their title is `null` when the title element has no text of its own and the chart shows its default caption, and they never use a series name as an automatic title. This example shows the title, or the alternative text from `drawing.accessibility.label`, in a card:
 

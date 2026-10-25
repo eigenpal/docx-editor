@@ -2,9 +2,11 @@ import { stylesPartOf } from './ooxml-indexes.ts';
 import type { DrawingChartSummary } from './chart-summary.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 import {
+  chartAuthorText,
   holdsChartGraphic,
   paintableMcChartFallback,
   paintableMcFallback,
+  skippedChoiceChartProjection,
 } from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
@@ -1565,6 +1567,15 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
+  // A chart in a Choice the reader skipped still names the chart its fallback stands for.
+  const skipped = skippedChoiceChartProjection(
+    wrapper,
+    atom.drawing,
+    projection,
+    context.resolveDiagramParts,
+    (anchor) => readDocPrMetadata(anchor, true)
+  );
+  if (skipped) return skipped;
   // An MC-wrapped payload the engine cannot draw (diagrams, unsupported groups) shows its VML
   // fallback when that paints. Otherwise it stays invisible: a placeholder card over
   // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
@@ -1583,9 +1594,7 @@ export function projectRunLevelMcDrawing(
       if (chartFallback) {
         return Object.freeze({
           ...chartFallback,
-          // The author's text on the chart describes it on either branch.
-          title: projection.title || chartFallback.title,
-          description: projection.description || chartFallback.description,
+          ...chartAuthorText(projection, chartFallback),
           ...(projection.chartSummary
             ? { chartSummary: { ...projection.chartSummary, shownAs: 'fallback' as const } }
             : {}),
@@ -1598,10 +1607,17 @@ export function projectRunLevelMcDrawing(
     if (fallback) return fallback;
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
-  // A drawn chart keeps the picture saved in its fallback, for an output that exports it.
+  // A drawn chart keeps the picture saved in its fallback, for an output that exports it,
+  // and takes its author text by the same rule as a chart shown by its fallback.
   if (projection.chartSummary && !projection.hidden) {
-    const picture = chartFallbackOf(wrapper, context)?.picture;
-    if (picture) return Object.freeze({ ...projection, chartFallbackPicture: picture });
+    const fallback = chartFallbackOf(wrapper, context);
+    if (fallback?.picture) {
+      return Object.freeze({
+        ...projection,
+        ...chartAuthorText(projection, fallback),
+        chartFallbackPicture: fallback.picture,
+      });
+    }
   }
   // Layout applies the same rule to a group picture whose resource fails.
   return withAlternateContentGroupPictures(projection);

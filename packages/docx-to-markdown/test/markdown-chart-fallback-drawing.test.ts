@@ -4,6 +4,7 @@
 // Markdown-only session mode: the same session serves PDF with the drawn chart.
 
 import { expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createFixedMeasurer, forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
 import { drawingRenderers } from '../../core/src/store/package/drawing-renderers.ts';
 import {
@@ -35,7 +36,8 @@ for (const classic of [false, true]) {
       forEachSemanticDrawing(await opened.session.layout(), ({ drawing }) => {
         shown.push(drawing.chart!.shownAs);
         expect(drawing.vectorShape).not.toBeNull();
-        expect(drawing.chartFallbackResource?.kind).toBe('ready');
+        // Layout leaves a drawn chart's fallback picture unread; Markdown reads it on request.
+        expect(drawing.chartFallbackResource?.kind).toBe('pending');
       });
       expect(shown).toEqual(['chart']);
       const result = await exportMarkdownFrom(opened.session, { images: true });
@@ -58,4 +60,20 @@ test('a drawn chart without a fallback picture gets the same warning', async () 
   expect(result.warnings.map((warning) => warning.message)).toContain(
     'The chart "Net cash" is omitted from Markdown because it has no saved fallback picture.'
   );
+});
+
+// One rule gives a chart its author text in every state: the chart drawing's own title and
+// description, then the fallback's. The drawing module does not change the alt text.
+test("a drawn chart takes the fallback's description when the chart has none", async () => {
+  const files = unzipSync(
+    chartexDocx(waterfallChartSpace({ title: 'Net cash' }), { alternateContent: true })
+  );
+  files['word/document.xml'] = strToU8(
+    strFromU8(files['word/document.xml']!).replace(
+      '<wp:docPr id="2" name="Chart 2"/>',
+      '<wp:docPr id="2" name="Chart 2" descr="Cash by quarter"/>'
+    )
+  );
+  const result = await exportMarkdown(zipSync(files), options);
+  expect(result.markdown).toMatch(/^!\[Cash by quarter\]\(media\/[0-9a-f]+\.png\)$/);
 });

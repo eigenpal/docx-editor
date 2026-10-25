@@ -3,11 +3,13 @@
 // keeps the labelled `chart` placeholder with a summary. It never paints nothing.
 
 import { expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { drawingPaintFields } from '../../layout/drawing-paint-fields.ts';
 import { diagramPartsToken } from '../package/diagram-parts.ts';
 import { projectDrawingsInPackage } from '../package/drawing-projection.ts';
 import { drawingRenderers } from '../package/drawing-renderers.ts';
-import { chartexPackage, waterfallChartSpace } from './chartex-fixture.ts';
+import { readOoxmlPackage } from '../package/ooxml-package.ts';
+import { chartexDocx, chartexPackage, waterfallChartSpace } from './chartex-fixture.ts';
 
 test('a chartex chart without a renderer keeps a chart placeholder with its summary', () => {
   expect(drawingRenderers().chart).toBeUndefined();
@@ -95,4 +97,26 @@ test('a chartex chart reports one plot type, also when its series name several',
 test('the parts token covers chartex and chart style parts', () => {
   const token = diagramPartsToken(chartexPackage(waterfallChartSpace()));
   expect(token.split(',')).toHaveLength(3);
+});
+
+test('a chart in a Choice the reader does not support still names the chart its fallback shows', () => {
+  const files = unzipSync(
+    chartexDocx(waterfallChartSpace({ title: 'Net' }), { alternateContent: true })
+  );
+  files['word/document.xml'] = strToU8(
+    strFromU8(files['word/document.xml']!)
+      .replace('Requires="cx1"', 'Requires="zz"')
+      .replace('<w:document ', '<w:document xmlns:zz="urn:example:unknown-namespace" ')
+  );
+  const loaded = readOoxmlPackage(zipSync(files));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const [projection] = projectDrawingsInPackage(loaded.package);
+  expect(projection!.picture?.embeddedRelationshipId).toBe('rId11');
+  expect(projection!.chartSummary).toEqual({
+    title: 'Net',
+    plotTypes: ['waterfall'],
+    shownAs: 'fallback',
+  });
+  expect(projection!.chartFallbackPicture).toEqual(projection!.picture!);
+  expect(drawingPaintFields(projection!).chart?.shownAs).toBe('fallback');
 });

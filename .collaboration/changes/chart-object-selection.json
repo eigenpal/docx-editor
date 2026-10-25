@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Only a chart shown by its saved fallback picture took a pointer selection; a drawn chart and a chart placeholder did not. A fallback picture that did not load showed a broken picture, and the editor gated a chart shown by its fallback with the fallback's locks while the store read the chart drawing's.",
+  "after": "A chart selects as an object without handles in every state, so Delete removes it through the existing whole-chart delete. A fallback picture that does not load shows the chart placeholder at the fallback's extent. The editor reads the chart drawing's locks in every state, as the store does. A drawn chart's fallback picture is read only when an exporter asks for it.",
+  "reason": "Selection is local editor state; a remote participant's caret at the chart is the existing caret position, and no object selection is shared. The delete is the existing whole-chart node removal. The placeholder choice and the lazy fallback read are local layout and export decisions over the unchanged tree. No shared field, operation, snapshot field or awareness payload changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/chart-selection.test.ts",
+    "packages/pro/src/collaboration/__tests__/chartex-fallback-peers.test.ts",
+    "packages/docx-to-pdf/test/chartex-fallback-states.test.ts"
+  ],
+  "changeset": "chart-object-selection",
+  "migration": null
+}

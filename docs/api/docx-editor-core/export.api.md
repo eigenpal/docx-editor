@@ -182,6 +182,8 @@ export interface ExportSemanticLayout extends SemanticLayout {
 
 // @public
 export interface ExportSession {
+    // @internal
+    chartFallbackResource?(source: InlineDrawingRecord | AnchoredDrawingRecord): Promise<InlineDrawingRecord['resource'] | undefined>;
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;

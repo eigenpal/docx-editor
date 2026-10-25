@@ -199,7 +199,7 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 ## Custom unsupported-content components
 
-Register a component for unsupported inline or block content, or an existing drawing or equation fallback. Match the original OOXML namespace and element name without a fixed list of element kinds. Custom rendering preserves the canonical source and saved DOCX content.
+Register a component for unsupported inline or block content, or for the built-in placeholder of a drawing or equation. Match the original OOXML namespace and element name without a fixed list of element kinds. Custom rendering preserves the canonical source and saved DOCX content.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -244,13 +244,13 @@ Both packages export `UnsupportedElement` with these fields:
 - `namespaceUri` and `localName` identify the OOXML element.
 - `source` exposes the read-only canonical source. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
-- `label` contains the default fallback text.
-- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. Every chart drawing whose chart part can be read also has `drawing.chart`, with the chart's `title`, `plotTypes`, and `shownAs`, which says whether the page draws the chart (`chart`), shows its fallback (`fallback`), or shows the placeholder (`placeholder`).
+- `label` contains the text of the built-in placeholder.
+- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. Every chart drawing whose chart part can be read also has `drawing.chart`, with the chart's `title`, `plotTypes`, and `shownAs`, which says whether the page draws the chart (`chart`), shows its fallback (`fallback`), or shows the placeholder (`placeholder`). A declaration replaces only a placeholder, so inside a declaration `shownAs` is always `placeholder`. To tell a drawn chart from a chart shown by its fallback, read the layout records without an editor, as [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder) shows.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
-Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the fallback; it does not try the next declaration.
+Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the built-in placeholder; it does not try the next declaration.
 
-`layout` reserves width and height in document points before pagination for opaque content. Defaults are 120 × 24 points for inline content and 240 × 96 points for blocks. Dimensions must be finite, positive, and at most 100,000 points. Existing drawing and equation fallbacks retain their engine layout boxes. Unmatched opaque content retains its invisible behavior.
+`layout` reserves width and height in document points before pagination for opaque content. Defaults are 120 × 24 points for inline content and 240 × 96 points for blocks. Dimensions must be finite, positive, and at most 100,000 points. Drawing and equation placeholders retain their engine layout boxes. Unmatched opaque content retains its invisible behavior.
 
 Components retain declaration-local framework context and local state across same-page repaints. They can unmount when an occurrence leaves its page, is virtualized, or the document or registration changes. Keep durable annotations in application state. Controls own their keyboard, clipboard, context-menu, and drop events. Fit controls within the reserved box, or use scrolling or an external panel.
 

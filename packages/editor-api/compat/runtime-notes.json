@@ -141,7 +141,7 @@
   },
   "Word.InlinePicture#delete": {
     "status": "partial",
-    "notes": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use. A chart's saved fallback picture is not listed in inlinePictures; see InlinePicture#width."
+    "notes": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use. A chart is not listed in inlinePictures, whether the page draws it, shows its saved fallback picture, or shows a placeholder, so no InlinePicture.delete reaches it; see InlinePicture#width."
   },
   "Word.Range#insertTable": {
     "status": "partial",

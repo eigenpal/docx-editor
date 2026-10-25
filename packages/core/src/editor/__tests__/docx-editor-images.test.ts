@@ -35,7 +35,8 @@ const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawi
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-const CHART_URI = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+// A graphic the engine has no reader for. A chart selects as an object (chart-selection.test.ts).
+const UNKNOWN_GRAPHIC_URI = 'urn:example:unknown-graphic';
 
 const PNG_1X1 = Uint8Array.from(
   atob(
@@ -381,7 +382,7 @@ describe('docx-editor selected image context', () => {
   });
 
   test('derives null for non-picture graphic', () => {
-    const editor = mountEditor(inlinePictureDocument({ graphicDataUri: CHART_URI }));
+    const editor = mountEditor(inlinePictureDocument({ graphicDataUri: UNKNOWN_GRAPHIC_URI }));
     selectInlineDrawing(editor);
     expect(editor.snapshot().image).toBeNull();
   });

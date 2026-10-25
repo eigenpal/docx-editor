@@ -1,4 +1,9 @@
-import type { AnchoredDrawingRecord, InlineDrawingRecord } from '@docx-editor.dev/core/layout';
+import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
+import {
+  forEachSemanticDrawing,
+  type AnchoredDrawingRecord,
+  type InlineDrawingRecord,
+} from '@docx-editor.dev/core/layout';
 import type { MarkdownImageAsset, MarkdownImageOptions } from './media-types.ts';
 import type { MarkdownWarning } from './markdown-types.ts';
 import { escapeText } from './markdown-inline.ts';
@@ -16,13 +21,39 @@ export function drawingKey(drawing: Drawing): string {
   return `${drawing.ownerPartName}\0${drawing.drawingNodeId}`;
 }
 
+/** The fallback pictures of drawn charts, as their sessions resolved them. */
+const resolvedChartFallbacks = new WeakMap<Drawing, Drawing['resource']>();
+
+/**
+ * Resolve the fallback picture of each drawn chart in `layout`. Layout leaves it unread, so a
+ * drawn chart never waits for a picture the page does not show; Markdown reads it here.
+ */
+export async function resolveChartFallbacks(
+  layout: ExportSemanticLayout,
+  session: ExportSession
+): Promise<void> {
+  const resolve = session.chartFallbackResource?.bind(session);
+  if (!resolve) return;
+  const drawn: Drawing[] = [];
+  forEachSemanticDrawing(layout, ({ drawing }) => {
+    if (drawing.chart && drawing.chartFallbackResource?.kind === 'pending') drawn.push(drawing);
+  });
+  await Promise.all(
+    drawn.map(async (drawing) => {
+      const resource = await resolve(drawing);
+      if (resource) resolvedChartFallbacks.set(drawing, resource);
+    })
+  );
+}
+
 /**
  * The picture resource Markdown exports for a drawing. A chart exports the picture saved in
- * its `mc:Fallback`, whichever branch the page shows, and nothing without one; any other
+ * its `mc:Fallback`, whichever state the page shows, and nothing without one; any other
  * drawing exports its own picture.
  */
 export function exportedResource(drawing: Drawing): Drawing['resource'] | undefined {
-  return drawing.chart ? drawing.chartFallbackResource : drawing.resource;
+  if (!drawing.chart) return drawing.resource;
+  return resolvedChartFallbacks.get(drawing) ?? drawing.chartFallbackResource;
 }
 
 /**
