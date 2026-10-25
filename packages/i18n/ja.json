@@ -58,7 +58,8 @@
     "nothingToCopyFormatting": "書式のコピー元のテキストを選択してください",
     "nothingToPaint": "書式の適用先のテキストを選択してください",
     "pictureSelected": "画像が選択されています。画像を挿入するには、テキスト内にカーソルを置いてください。",
-    "chartDrawing": "これはグラフです。削除はできますが、画像として編集することはできません。"
+    "chartDrawing": "これはグラフです。削除はできますが、画像として編集することはできません。",
+    "chartClipboard": "選択範囲にグラフが含まれています。グラフはコピー、切り取り、貼り付けできません。"
   },
   "toolbar": {
     "ariaLabel": "書式設定ツールバー",
@@ -880,7 +881,15 @@
   },
   "image": {
     "unsupportedFormat": "サポートされていない画像形式（{format}）",
-    "nonPictureGraphic": "サポートされていないグラフィック（{kind}）",
+    "placeholder": {
+      "chart": "グラフは表示されません",
+      "diagram": "サポートされていない図表",
+      "shape": "サポートされていない図形",
+      "group": "サポートされていない図形グループ",
+      "textbox": "サポートされていないテキストボックス",
+      "canvas": "サポートされていない描画キャンバス",
+      "graphic": "サポートされていないグラフィック"
+    },
     "missingResource": "画像が見つかりません",
     "externalResource": "外部画像は読み込まれていません",
     "invalidResource": "無効な画像です",

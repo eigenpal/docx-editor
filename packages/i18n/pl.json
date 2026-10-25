@@ -611,7 +611,15 @@
     "externalResource": "Nie załadowano obrazu zewnętrznego",
     "invalidResource": "Nieprawidłowy obraz",
     "missingResource": "Brak obrazu",
-    "nonPictureGraphic": "Nieobsługiwana grafika ({kind})",
+    "placeholder": {
+      "chart": "Wykres niewyświetlany",
+      "diagram": "Nieobsługiwany diagram",
+      "shape": "Nieobsługiwany kształt",
+      "group": "Nieobsługiwana grupa kształtów",
+      "textbox": "Nieobsługiwane pole tekstowe",
+      "canvas": "Nieobsługiwana kanwa rysunku",
+      "graphic": "Nieobsługiwana grafika"
+    },
     "pendingResource": "Ładowanie obrazu",
     "resourceLimit": "Obraz przekracza limity rozmiaru",
     "unsupportedFormat": "Nieobsługiwany format obrazu ({format})"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "Ten dokument nie ma autorów recenzji",
     "suggestingNeedsAuthor": "Sugerowanie wymaga autora. Ustaw autora w konfiguracji edytora.",
     "pictureSelected": "Zaznaczono obraz. Umieść kursor w tekście, aby wstawić obraz.",
-    "chartDrawing": "To jest wykres. Możesz go usunąć, ale nie możesz edytować go jak obrazu."
+    "chartDrawing": "To jest wykres. Możesz go usunąć, ale nie możesz edytować go jak obrazu.",
+    "chartClipboard": "Zaznaczenie zawiera wykres. Wykresów nie można kopiować, wycinać ani wklejać."
   },
   "equationPopup": {
     "apply": "Zastosuj",

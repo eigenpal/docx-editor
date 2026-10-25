@@ -1,5 +1,8 @@
 import { equationPlainText } from './surface-equations.ts';
-import { selectionContainsClipboardObject } from './clipboard-object-selection.ts';
+import {
+  selectionContainsClipboardChart,
+  selectionContainsClipboardObject,
+} from './clipboard-object-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
@@ -277,7 +280,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             reason: 'unsupported-content',
           }) as TreeApplyResult
       );
-      return { text: '', html: null, reason: 'unsupported-content' };
+      const chart = selectionContainsClipboardChart(copyPart, ranges);
+      return { text: '', html: null, reason: chart ? 'chart-content' : 'unsupported-content' };
     }
     // Plain text is the proposed text: deleted words and deleted paragraph marks stay out, as
     // the HTML flavour already leaves them out. The Original view shows the text before the

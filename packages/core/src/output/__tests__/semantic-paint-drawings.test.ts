@@ -548,7 +548,28 @@ describe('paints non-fetching refusal cards', () => {
       null
     )!;
     expect(element.style.width).toBe(`${drawing.paintBounds.width}px`);
-    expect(element.textContent).toBe('Unsupported graphic (chart)');
+    expect(element.textContent).toBe('Chart not shown');
+  });
+
+  test('placeholder labels name each kind through the translated catalog', async () => {
+    const en = (await import('../../../../i18n/en.json')).default as {
+      image: { placeholder: Record<string, string> };
+    };
+    const { drawingPaintStringsFromTranslate } = await import('../drawing-paint-strings.ts');
+    const translated = drawingPaintStringsFromTranslate((key) => {
+      const [, group, kind] = key.split('.');
+      return group === 'placeholder' ? (en.image.placeholder[kind!] ?? key) : key;
+    });
+    const kinds = ['chart', 'diagram', 'shape', 'group', 'textbox', 'canvas', 'graphic'] as const;
+    for (const kind of kinds) {
+      expect(en.image.placeholder[kind]).toBeString();
+      expect(translated.nonPictureGraphic(kind)).toBe(en.image.placeholder[kind]!);
+      expect(DEFAULT_DRAWING_PAINT_STRINGS.nonPictureGraphic(kind)).toBe(
+        en.image.placeholder[kind]!
+      );
+    }
+    expect(translated.nonPictureGraphic('unknown')).toBe(en.image.placeholder.graphic!);
+    expect(en.image.placeholder.chart).toBe('Chart not shown');
   });
 });
 

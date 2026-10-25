@@ -56,18 +56,13 @@ export interface PaintImageUrlPort {
   revoke(url: string): void;
 }
 
-/** Localized refusal labels; adapters supply i18n-backed implementations. */
-export interface DrawingPaintStrings {
-  readonly unsupportedFormat: (format: string) => string;
-  readonly nonPictureGraphic: (kind: string) => string;
-  readonly missingResource: string;
-  readonly externalResource: string;
-  readonly invalidResource: string;
-  readonly contentMismatch: string;
-  readonly decodeFailed: string;
-  readonly resourceLimit: string;
-  readonly pendingResource: string;
-}
+import type { DrawingPaintStrings } from './drawing-paint-strings.ts';
+export type { DrawingPaintStrings } from './drawing-paint-strings.ts';
+export {
+  DEFAULT_DRAWING_PAINT_STRINGS,
+  drawingPaintStringsCacheToken,
+  drawingPaintStringsFromTranslate,
+} from './drawing-paint-strings.ts';
 
 export interface DrawingPaintContext {
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
@@ -950,47 +945,4 @@ export function collectUsedDrawingResourceKeys(layout: SemanticLayout): Readonly
 /** Shared read-only membership for this immutable layout. */
 export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
   return layoutDrawingKeys(layout).elementKeys;
-}
-
-export function drawingPaintStringsCacheToken(strings: DrawingPaintStrings): string {
-  return [
-    strings.missingResource,
-    strings.externalResource,
-    strings.invalidResource,
-    strings.contentMismatch,
-    strings.decodeFailed,
-    strings.resourceLimit,
-    strings.pendingResource,
-    strings.unsupportedFormat('probe'),
-    strings.nonPictureGraphic('probe'),
-  ].join('\0');
-}
-
-export const DEFAULT_DRAWING_PAINT_STRINGS: DrawingPaintStrings = Object.freeze({
-  unsupportedFormat: (format: string) => `Unsupported image format (${format})`,
-  nonPictureGraphic: (kind: string) => `Unsupported graphic (${kind})`,
-  missingResource: 'Image missing',
-  externalResource: 'External image not loaded',
-  invalidResource: 'Invalid image',
-  contentMismatch: 'Image content does not match its type',
-  decodeFailed: 'Image could not be decoded',
-  resourceLimit: 'Image exceeds size limits',
-  pendingResource: 'Loading image',
-});
-
-/** Build localized refusal strings from an i18n `t('image.*')` callback. */
-export function drawingPaintStringsFromTranslate(
-  t: (key: string, params?: Record<string, string | number>) => string
-): DrawingPaintStrings {
-  return Object.freeze({
-    unsupportedFormat: (format: string) => t('image.unsupportedFormat', { format }),
-    nonPictureGraphic: (kind: string) => t('image.nonPictureGraphic', { kind }),
-    missingResource: t('image.missingResource'),
-    externalResource: t('image.externalResource'),
-    invalidResource: t('image.invalidResource'),
-    contentMismatch: t('image.contentMismatch'),
-    decodeFailed: t('image.decodeFailed'),
-    resourceLimit: t('image.resourceLimit'),
-    pendingResource: t('image.pendingResource'),
-  });
 }

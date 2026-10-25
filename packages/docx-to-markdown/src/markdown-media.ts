@@ -26,7 +26,8 @@ const resolvedChartFallbacks = new WeakMap<Drawing, Drawing['resource']>();
 
 /**
  * Resolve the fallback picture of each drawn chart in `layout`. Layout leaves it unread, so a
- * drawn chart never waits for a picture the page does not show; Markdown reads it here.
+ * drawn chart never waits for a picture the page does not show; Markdown reads it here. A
+ * hidden chart exports nothing, so its fallback is never read.
  */
 export async function resolveChartFallbacks(
   layout: ExportSemanticLayout,
@@ -36,7 +37,13 @@ export async function resolveChartFallbacks(
   if (!resolve) return;
   const drawn: Drawing[] = [];
   forEachSemanticDrawing(layout, ({ drawing }) => {
-    if (drawing.chart && drawing.chartFallbackResource?.kind === 'pending') drawn.push(drawing);
+    if (
+      drawing.chart &&
+      !drawing.accessibility.hidden &&
+      drawing.chartFallbackResource?.kind === 'pending'
+    ) {
+      drawn.push(drawing);
+    }
   });
   await Promise.all(
     drawn.map(async (drawing) => {

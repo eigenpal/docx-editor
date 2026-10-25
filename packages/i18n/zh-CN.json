@@ -611,7 +611,15 @@
     "externalResource": "未加载外部图像",
     "invalidResource": "无效图像",
     "missingResource": "缺少图像",
-    "nonPictureGraphic": "不受支持的图形（{kind}）",
+    "placeholder": {
+      "chart": "图表未显示",
+      "diagram": "不受支持的示意图",
+      "shape": "不受支持的形状",
+      "group": "不受支持的形状组",
+      "textbox": "不受支持的文本框",
+      "canvas": "不受支持的绘图画布",
+      "graphic": "不受支持的图形"
+    },
     "pendingResource": "正在加载图像",
     "resourceLimit": "图像超出大小限制",
     "unsupportedFormat": "不受支持的图像格式（{format}）"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "此文档没有审阅作者",
     "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
     "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。",
-    "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。"
+    "chartDrawing": "这是一个图表。可以删除它，但不能像图片一样编辑它。",
+    "chartClipboard": "所选内容包含图表。无法复制、剪切或粘贴图表。"
   },
   "equationPopup": {
     "apply": "应用",

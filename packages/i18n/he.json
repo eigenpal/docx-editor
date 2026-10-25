@@ -611,7 +611,15 @@
     "externalResource": "תמונה חיצונית לא נטענה",
     "invalidResource": "תמונה לא חוקית",
     "missingResource": "תמונה חסרה",
-    "nonPictureGraphic": "גרפיקה לא נתמכת ({kind})",
+    "placeholder": {
+      "chart": "תרשים לא מוצג",
+      "diagram": "דיאגרמה לא נתמכת",
+      "shape": "צורה לא נתמכת",
+      "group": "קבוצת צורות לא נתמכת",
+      "textbox": "תיבת טקסט לא נתמכת",
+      "canvas": "בד ציור לא נתמך",
+      "graphic": "גרפיקה לא נתמכת"
+    },
     "pendingResource": "טוען תמונה",
     "resourceLimit": "התמונה חורגת ממגבלות הגודל",
     "unsupportedFormat": "תבנית תמונה לא נתמכת ({format})"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "אין במסמך זה מחברי סקירה",
     "suggestingNeedsAuthor": "מצב הצעות מחייב מחבר. הגדר את המחבר בתצורת העורך.",
     "pictureSelected": "תמונה נבחרה. מקמו את הסמן בטקסט כדי להוסיף תמונה.",
-    "chartDrawing": "זהו תרשים. אפשר למחוק אותו, אבל לא לערוך אותו כתמונה."
+    "chartDrawing": "זהו תרשים. אפשר למחוק אותו, אבל לא לערוך אותו כתמונה.",
+    "chartClipboard": "הבחירה מכילה תרשים. אי אפשר להעתיק, לגזור או להדביק תרשימים."
   },
   "equationPopup": {
     "apply": "החלה",

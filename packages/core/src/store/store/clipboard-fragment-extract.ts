@@ -641,8 +641,9 @@ export function extractFragmentPackage(
   );
 
   // Media: internal image targets travel byte-identical under their ORIGINAL names, so no
-  // target rewriting is needed. A drawing pointing at a non-media internal part (a chart,
-  // an embedded object) is dropped rather than shipped dangling (review finding 13).
+  // target rewriting is needed. Charts and embedded objects refused the whole transfer above
+  // (`containsClipboardObject`); any other drawing pointing at a non-media internal part is
+  // dropped rather than shipped dangling (review finding 13).
   // Droppable rel ids are tracked PER OWNER PART: rel-id namespaces are per part, and a
   // shared set let a dropped document rel id filter a valid footnote rel out of the zip.
   const mediaEntries = new Map<string, Uint8Array>();
@@ -670,7 +671,7 @@ export function extractFragmentPackage(
         continue;
       }
       // Styles/numbering/notes/theme rels are re-authored below; anything else internal
-      // (chart parts, embedded objects) cannot travel whole and its drawing degrades.
+      // cannot travel whole and its drawing degrades.
       droppable.add(record.id);
     }
     return droppable;

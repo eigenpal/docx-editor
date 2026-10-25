@@ -611,7 +611,15 @@
     "externalResource": "Externes Bild nicht geladen",
     "invalidResource": "Ungültiges Bild",
     "missingResource": "Bild fehlt",
-    "nonPictureGraphic": "Nicht unterstützte Grafik ({kind})",
+    "placeholder": {
+      "chart": "Diagramm wird nicht angezeigt",
+      "diagram": "Nicht unterstütztes Schaubild",
+      "shape": "Nicht unterstützte Form",
+      "group": "Nicht unterstützte Formgruppe",
+      "textbox": "Nicht unterstütztes Textfeld",
+      "canvas": "Nicht unterstützter Zeichenbereich",
+      "graphic": "Nicht unterstützte Grafik"
+    },
     "pendingResource": "Bild wird geladen",
     "resourceLimit": "Bild überschreitet die Größenbeschränkung",
     "unsupportedFormat": "Nicht unterstütztes Bildformat ({format})"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "Dieses Dokument enthält keine Überarbeitungsautoren",
     "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
     "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen.",
-    "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten."
+    "chartDrawing": "Dies ist ein Diagramm. Sie können es löschen, aber nicht wie ein Bild bearbeiten.",
+    "chartClipboard": "Die Auswahl enthält ein Diagramm. Diagramme können nicht kopiert, ausgeschnitten oder eingefügt werden."
   },
   "equationPopup": {
     "apply": "Übernehmen",

@@ -47,6 +47,7 @@
     "equationSuggestingDisplay": "In suggesting mode, remove the whole equation block instead of one equation",
     "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",
     "chartDrawing": "This is a chart. You can delete it, but you can't edit it as a picture.",
+    "chartClipboard": "This selection contains a chart. Charts can't be copied, cut, or pasted.",
     "invalidValue": "This value is not valid for the command",
     "unavailable": "This command is unavailable",
     "bodyOnlySectionBreak": "Section breaks go in the document body.",
@@ -889,7 +890,15 @@
   },
   "image": {
     "unsupportedFormat": "Unsupported image format ({format})",
-    "nonPictureGraphic": "Unsupported graphic ({kind})",
+    "placeholder": {
+      "chart": "Chart not shown",
+      "diagram": "Unsupported diagram",
+      "shape": "Unsupported shape",
+      "group": "Unsupported shape group",
+      "textbox": "Unsupported text box",
+      "canvas": "Unsupported drawing canvas",
+      "graphic": "Unsupported graphic"
+    },
     "missingResource": "Image missing",
     "externalResource": "External image not loaded",
     "invalidResource": "Invalid image",

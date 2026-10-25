@@ -30,7 +30,7 @@ export interface CopyFlavourInput {
 }
 
 export interface CopyFlavours {
-  readonly reason?: 'unsupported-content';
+  readonly reason?: 'unsupported-content' | 'chart-content';
   readonly text: string;
   /** The `text/html` flavour, or null when only plain text should be written. */
   readonly html: string | null;

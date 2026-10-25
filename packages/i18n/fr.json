@@ -614,7 +614,15 @@
     "externalResource": "Image externe non chargée",
     "invalidResource": "Image non valide",
     "missingResource": "Image manquante",
-    "nonPictureGraphic": "Graphique non pris en charge ({kind})",
+    "placeholder": {
+      "chart": "Graphique non affiché",
+      "diagram": "Diagramme non pris en charge",
+      "shape": "Forme non prise en charge",
+      "group": "Groupe de formes non pris en charge",
+      "textbox": "Zone de texte non prise en charge",
+      "canvas": "Zone de dessin non prise en charge",
+      "graphic": "Élément graphique non pris en charge"
+    },
     "pendingResource": "Chargement de l'image",
     "resourceLimit": "L'image dépasse les limites de taille",
     "unsupportedFormat": "Format d'image non pris en charge ({format})"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "Ce document ne contient aucun auteur de révision",
     "suggestingNeedsAuthor": "Les suggestions nécessitent un auteur. Définissez l’auteur dans la configuration de l’éditeur.",
     "pictureSelected": "Une image est sélectionnée. Placez le curseur dans le texte pour insérer une image.",
-    "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image."
+    "chartDrawing": "Ceci est un graphique. Vous pouvez le supprimer, mais pas le modifier comme une image.",
+    "chartClipboard": "La sélection contient un graphique. Les graphiques ne peuvent pas être copiés, coupés ni collés."
   },
   "equationPopup": {
     "apply": "Appliquer",

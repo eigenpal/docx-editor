@@ -56,6 +56,17 @@ test('the empty reviewer roster refusal is translatable', () => {
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
 
+test.each([
+  'this drawing is a chart; only delete applies, and it removes the whole chart',
+  'the selection contains a chart; a chart cannot be copied, cut or pasted',
+])('the chart refusal %s is translatable', (reason) => {
+  expect(localizeDisabledReason(reason, createT(en))).toBe(
+    reason.startsWith('the selection')
+      ? en.disabledReason.chartClipboard
+      : en.disabledReason.chartDrawing
+  );
+});
+
 test('the picture-selected insert refusal is translatable', () => {
   const reason = 'a picture is selected; place the caret in text to insert a picture';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);

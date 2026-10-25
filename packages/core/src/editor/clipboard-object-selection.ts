@@ -1,16 +1,31 @@
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
 import {
+  containsClipboardChart,
   containsClipboardObject,
+  isClipboardChart,
   isClipboardObject,
 } from '../store/store/clipboard-object-policy.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 
-/** Check canonical content, including unpainted atoms and stories outside the body. */
+/**
+ * The engine's reason for a refused copy, cut or paste of content that holds a chart. Adapters
+ * translate it through `DISABLED_REASON_KEYS` in `@docx-editor.dev/i18n`, so the two sentences
+ * must stay the same.
+ */
+export const CHART_CLIPBOARD_REASON =
+  'the selection contains a chart; a chart cannot be copied, cut or pasted';
+
+/**
+ * Check canonical content, including unpainted atoms and stories outside the body, for an
+ * embedded object or a chart (`isClipboardObject`). Pass `isClipboardChart` as `matches` to
+ * ask about charts alone.
+ */
 export function selectionContainsClipboardObject(
   part: OoxmlPart,
-  ranges: ReadonlyMap<string, { start: number; end: number }>
+  ranges: ReadonlyMap<string, { start: number; end: number }>,
+  matches: (node: OoxmlNode) => boolean = isClipboardObject
 ): boolean {
   for (const [id, range] of ranges) {
     const node = findNode(part, id);
@@ -22,7 +37,7 @@ export function selectionContainsClipboardObject(
       while (children.length) {
         const child = children.pop()!;
         if (child.kind === 'textValue') continue;
-        if (isClipboardObject(child)) {
+        if (matches(child)) {
           const span = index.spanOf(child);
           // Opaque objects have no span; a whole-paragraph transfer must still refuse them.
           if (
@@ -39,12 +54,24 @@ export function selectionContainsClipboardObject(
   return false;
 }
 
+/** Whether the selection holds a chart, for the chart's own refusal reason. */
+export function selectionContainsClipboardChart(
+  part: OoxmlPart,
+  ranges: ReadonlyMap<string, { start: number; end: number }>
+): boolean {
+  return selectionContainsClipboardObject(part, ranges, isClipboardChart);
+}
+
 /** Structural refusal also applies when the target supports only plain text. */
 export function fragmentContainsClipboardObject(bytes: Uint8Array): boolean {
+  return fragmentRefusalOf(bytes) !== null;
+}
+
+/** Why a fragment cannot paste: it holds a chart, another embedded object, or neither. */
+export function fragmentRefusalOf(bytes: Uint8Array): 'chart' | 'object' | null {
   const read = readOoxmlPackage(bytes);
-  if (!read.ok) return false;
-  for (const part of read.package.parts.values()) {
-    if (containsClipboardObject([part.root])) return true;
-  }
-  return false;
+  if (!read.ok) return null;
+  const roots = [...read.package.parts.values()].map((part) => part.root);
+  if (containsClipboardChart(roots)) return 'chart';
+  return containsClipboardObject(roots) ? 'object' : null;
 }

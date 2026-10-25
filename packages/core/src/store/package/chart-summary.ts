@@ -81,7 +81,8 @@ export type DrawingChartShownAs = 'chart' | 'fallback' | 'placeholder';
  * The title and plot types of a chart, as text, and how the page shows it.
  *
  * A drawing record carries it as `chart` whenever the drawing holds a chart whose chart part
- * can be read, in each of the three states that `shownAs` names.
+ * can be read, in each of the three states that `shownAs` names. A chart in an `mc:Choice`
+ * that the reader skips, with an empty `mc:Fallback`, has no drawing record.
  *
  * @public
  */
@@ -89,7 +90,8 @@ export interface DrawingChartSummary {
   /**
    * The title the chart shows, as plain text: its own title, typed or from a cell, or the name
    * of its only series for an automatic title. Null when it shows none, and when a title with
-   * no text of its own sits on a chart with several series.
+   * no text of its own sits on a chart with several series. Runs of white space collapse to one
+   * space, and the text is cut to at most 200 UTF-16 code units.
    *
    * A chartex chart (waterfall, funnel, histogram, Pareto, box and whisker, treemap, sunburst,
    * region map) reads only its own title text. Its title is null when the title element has

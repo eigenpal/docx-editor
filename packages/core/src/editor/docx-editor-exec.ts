@@ -1,7 +1,7 @@
 import { insertTextbox } from './textbox-commands.ts';
 import { execSetWatermark } from './docx-editor-watermark.ts';
 import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
-import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
+import { CHART_CLIPBOARD_REASON, fragmentRefusalOf } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
@@ -538,7 +538,7 @@ export function execEditorCommand(
     case 'copy': {
       // The gate already refused a collapsed selection, so this read is non-empty.
       const flavours = mounted.copyFlavours();
-      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
+      if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       return { ok: true, changed: false };
     }
@@ -546,7 +546,7 @@ export function execEditorCommand(
       // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
       const flavours = mounted.copyFlavours();
-      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
+      if (flavours.reason) return clipboardRefusal(flavours.reason);
       writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       mounted.deleteSelection();
       break;
@@ -555,8 +555,9 @@ export function execEditorCommand(
       // Same fidelity routing as the paste event; a text-only call is the plain lane.
       // A payload that lands on no lane (empty text, unusable HTML) changed nothing.
       const fragment = command.html ? fragmentFromHtml(command.html) : null;
-      if (fragment && fragmentContainsClipboardObject(fragment.bytes)) {
-        return { ok: false, code: 'unsupported', reason: 'unsupported-content' };
+      const refusal = fragment ? fragmentRefusalOf(fragment.bytes) : null;
+      if (refusal) {
+        return clipboardRefusal(refusal === 'chart' ? 'chart-content' : 'unsupported-content');
       }
       const result = mounted.pasteRich(command.text, command.html ?? null);
       if (!result) {
@@ -628,6 +629,15 @@ export function execEditorCommand(
 
 /** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
 /** The window whose clipboard a copy writes to: the editor's, a pop-out's when it is there. */
+/** A refused copy, cut or paste. A chart refuses with its own reason, which adapters translate. */
+function clipboardRefusal(reason: 'unsupported-content' | 'chart-content'): ExecResult {
+  return {
+    ok: false,
+    code: 'unsupported',
+    reason: reason === 'chart-content' ? CHART_CLIPBOARD_REASON : reason,
+  };
+}
+
 function clipboardWindow(editor: object | undefined): Window | undefined {
   return editor ? hostWindowOf(hostElementOfEditor(editor)) : undefined;
 }

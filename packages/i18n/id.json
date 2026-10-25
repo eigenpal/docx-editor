@@ -667,7 +667,15 @@
     "externalResource": "Gambar eksternal tidak dimuat",
     "invalidResource": "Gambar tidak valid",
     "missingResource": "Gambar hilang",
-    "nonPictureGraphic": "Grafik tidak didukung ({kind})",
+    "placeholder": {
+      "chart": "Bagan tidak ditampilkan",
+      "diagram": "Diagram tidak didukung",
+      "shape": "Bentuk tidak didukung",
+      "group": "Grup bentuk tidak didukung",
+      "textbox": "Kotak teks tidak didukung",
+      "canvas": "Kanvas gambar tidak didukung",
+      "graphic": "Grafik tidak didukung"
+    },
     "pendingResource": "Memuat gambar",
     "resourceLimit": "Gambar melebihi batas ukuran",
     "unsupportedFormat": "Format gambar tidak didukung ({format})"
@@ -995,7 +1003,8 @@
     "noReviewAuthors": "Dokumen ini tidak memiliki penulis tinjauan",
     "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor.",
     "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar.",
-    "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar."
+    "chartDrawing": "Ini adalah bagan. Anda dapat menghapusnya, tetapi tidak dapat mengeditnya sebagai gambar.",
+    "chartClipboard": "Pilihan berisi bagan. Bagan tidak dapat disalin, dipotong, atau ditempel."
   },
   "equationPopup": {
     "apply": "Terapkan",

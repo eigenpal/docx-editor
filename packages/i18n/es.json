@@ -58,7 +58,8 @@
     "nothingToCopyFormatting": "Selecciona texto para copiar su formato",
     "nothingToPaint": "Selecciona texto para aplicar el formato",
     "pictureSelected": "Hay una imagen seleccionada. Coloque el cursor en el texto para insertar una imagen.",
-    "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen."
+    "chartDrawing": "Esto es un gráfico. Puede eliminarlo, pero no editarlo como una imagen.",
+    "chartClipboard": "La selección contiene un gráfico. Los gráficos no se pueden copiar, cortar ni pegar."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -880,7 +881,15 @@
   },
   "image": {
     "unsupportedFormat": "Formato de imagen no compatible ({format})",
-    "nonPictureGraphic": "Gráfico no compatible ({kind})",
+    "placeholder": {
+      "chart": "Gráfico no mostrado",
+      "diagram": "Diagrama no compatible",
+      "shape": "Forma no compatible",
+      "group": "Grupo de formas no compatible",
+      "textbox": "Cuadro de texto no compatible",
+      "canvas": "Lienzo de dibujo no compatible",
+      "graphic": "Elemento gráfico no compatible"
+    },
     "missingResource": "Falta la imagen",
     "externalResource": "Imagen externa no cargada",
     "invalidResource": "Imagen no válida",

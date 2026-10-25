@@ -7,13 +7,16 @@ import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createFixedMeasurer, forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
 import { drawingRenderers } from '../../core/src/store/package/drawing-renderers.ts';
+import type { ImageDecodePort } from '../../core/src/store/package/image-resources.ts';
 import {
   chartexDocx,
   classicBarChartSpace,
   waterfallChartSpace,
 } from '../../core/src/store/__tests__/chartex-fixture.ts';
 import { installDrawing } from '../../pro/src/drawing/index.ts';
+import type { ExportSession } from '@docx-editor.dev/core/export';
 import { exportMarkdown, exportMarkdownFrom, openDocumentForExport } from '../src/index.ts';
+import { resolveChartFallbacks } from '../src/markdown-media.ts';
 
 installDrawing();
 
@@ -76,4 +79,80 @@ test("a drawn chart takes the fallback's description when the chart has none", a
   );
   const result = await exportMarkdown(zipSync(files), options);
   expect(result.markdown).toMatch(/^!\[Cash by quarter\]\(media\/[0-9a-f]+\.png\)$/);
+});
+
+/** A decode port that counts calls and never settles. */
+function hangingDecodePort(): { port: ImageDecodePort; calls: () => number } {
+  let calls = 0;
+  const port = Object.freeze({
+    decode: () => {
+      calls += 1;
+      return new Promise<never>(() => {});
+    },
+  }) as unknown as ImageDecodePort;
+  return { port, calls: () => calls };
+}
+
+test('a fallback picture that does not settle in time omits the chart with a warning', async () => {
+  const files = unzipSync(
+    chartexDocx(waterfallChartSpace({ title: 'Net cash' }), { alternateContent: true })
+  );
+  // Bytes no earlier test decoded, so no process-wide decode result answers for them.
+  const picture = files['word/media/fallback.png']!;
+  const unique = new Uint8Array(picture.byteLength + 8);
+  unique.set(picture);
+  unique.set(strToU8('timeout!'), picture.byteLength);
+  files['word/media/fallback.png'] = unique;
+  const bytes = zipSync(files);
+  const decode = hangingDecodePort();
+  const opened = await openDocumentForExport(bytes, {
+    measurer: createFixedMeasurer(),
+    imageDecodePort: decode.port,
+    resourceTimeoutMs: 20,
+  });
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    const result = await exportMarkdownFrom(opened.session, { images: true });
+    expect(decode.calls()).toBeGreaterThan(0);
+    expect(result.media).toHaveLength(0);
+    expect(result.warnings.map((warning) => warning.message)).toContain(
+      'The chart "Net cash" is omitted from Markdown because its saved fallback picture could not be read (unrenderable).'
+    );
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('a hidden drawn chart never reads its fallback picture', async () => {
+  const bytes = chartexDocx(waterfallChartSpace({ title: 'Net cash' }), {
+    alternateContent: true,
+  });
+  const opened = await openDocumentForExport(bytes, { measurer: createFixedMeasurer() });
+  if (!opened.ok) throw new Error(opened.reason);
+  try {
+    // A record that reserves space only (a wrap footprint) is hidden; a frozen layout cannot
+    // carry one for this chart, so a copy marks the drawn chart hidden.
+    const layout = structuredClone(await opened.session.layout());
+    let charts = 0;
+    forEachSemanticDrawing(layout, ({ drawing }) => {
+      if (!drawing.chart) return;
+      charts += 1;
+      (drawing as { accessibility: unknown }).accessibility = {
+        ...drawing.accessibility,
+        hidden: true,
+      };
+    });
+    expect(charts).toBe(1);
+    let reads = 0;
+    const session = {
+      chartFallbackResource: async () => {
+        reads += 1;
+        return undefined;
+      },
+    } as unknown as ExportSession;
+    await resolveChartFallbacks(layout, session);
+    expect(reads).toBe(0);
+  } finally {
+    opened.session.dispose();
+  }
 });

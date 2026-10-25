@@ -790,14 +790,14 @@ export interface PaginatedSurface {
   selectedText(): string;
   /**
    * Every clipboard flavour for the current selection: plain text, and the interop HTML
-   * carrying the embedded fragment when the selection is a body-story range. A cell
-   * rectangle answers grid text plus a flattened table; `html` is null where only plain
-   * text should be written. Unsupported object selections return a refusal reason.
+   * carrying the embedded fragment when the selection is a body-story range. A cell rectangle
+   * answers grid text plus a flattened table; `html` is null where only plain text should be
+   * written. A chart refuses as `'chart-content'`, another object as `'unsupported-content'`.
    */
   copyFlavours(): {
     readonly text: string;
     readonly html: string | null;
-    readonly reason?: 'unsupported-content';
+    readonly reason?: 'unsupported-content' | 'chart-content';
   };
   /**
    * Route one paste payload by fidelity: embedded fragment, then external HTML, then

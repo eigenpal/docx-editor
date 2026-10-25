@@ -748,16 +748,20 @@ export function openDocumentForExport(
       const state = activeState;
       if (!state || !source.chart || !source.chartFallbackResource) return undefined;
       if (source.chartFallbackResource.kind !== 'pending') return source.chartFallbackResource;
-      // The same bound as layout's resource settlement.
+      // The same bound as layout's resource settlement. A fallback that does not settle in time
+      // answers as unreadable, so the exporter leaves the chart out with its warning instead of
+      // failing the whole export.
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const timedOut = new Promise<never>((_resolve, reject) => {
+      const timedOut = new Promise<InlineDrawingRecord['resource']>((resolve) => {
         timer = setTimeout(
           () =>
-            reject(
-              new ExportResourceError(
-                'timedOut',
-                `Image resources did not settle within ${timeoutMs}ms`
-              )
+            resolve(
+              Object.freeze({
+                kind: 'unrenderable',
+                partName: null,
+                mime: 'unknown',
+                reason: 'decode-failed',
+              })
             ),
           timeoutMs
         );
