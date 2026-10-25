@@ -318,9 +318,10 @@ describe('the claims that are compiled rather than scanned', () => {
     () => {
       // The runtime's own files; core's bodies are core's typecheck. The neutral project above
       // keeps the whole program, because core code a server reaches must compile without DOM.
-      // This project has no Node or Bun types, so a whole-program check also kept the core code
-      // the browser entry reaches off host modules, globals, and `import.meta` members; the scan
-      // keeps those. It does not see Node-only members of shared types (`.unref()`).
+      // The core code the browser entry reaches must not name host modules, globals, or
+      // `import.meta` members. The project lists no Node types, but a dependency's own types
+      // bring them in, so the scan, not the lib setting, keeps that; it does not see Node-only
+      // members of shared types (`.unref()`).
       expect(typecheckProject(fullProject, { scope: 'project', forbidHost: true })).toEqual([]);
     },
     TYPECHECK_TIMEOUT_MS

@@ -13,8 +13,9 @@
  * `scope: 'program'` (the default) reports every file the program reaches. `scope: 'project'`
  * reports the files the tsconfig includes (syntactic, semantic, and declaration diagnostics,
  * plus option and global ones); the bodies of other files are not checked. `forbidHost` reports,
- * in every non-dependency file the program reaches, Node or Bun module imports, host
- * `import.meta` members, and `HOST_GLOBALS` names that resolve to no declaration.
+ * in every file the program reaches whose path has no `/node_modules/`, Node or Bun module
+ * imports and type references, host `import.meta` members, and `HOST_GLOBALS` names that resolve
+ * to no declaration or only to Node or Bun type packages.
  */
 export function typecheckProject(
   tsconfigPath: string,

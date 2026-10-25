@@ -35,11 +35,14 @@ export const TYPECHECK_TIMEOUT_MS = 120_000;
  *
  * `forbidHost: true` also reports, in every non-dependency file the program reaches and in either
  * scope, what only a server runtime provides: a Node or Bun module import (`node:fs`, `fs`,
- * `bun:test`), a `HOST_IMPORT_META` member of `import.meta`, and a `HOST_GLOBALS` name that
- * resolves to no declaration (a local `process` is fine, and so are `globalThis.process` and a
- * property named `Bun`). It reads syntax and resolves only those names, so it is cheap where a
- * whole-program check is not. Node-only members of shared types (`setTimeout(...).unref()`,
- * `Error.captureStackTrace`) are not covered; a whole-program check without Node types is.
+ * `bun:test`, `import fs = require('fs')`), a `/// <reference types>` to Node or Bun, a
+ * `HOST_IMPORT_META` member of `import.meta`, and a `HOST_GLOBALS` name that resolves to no
+ * declaration or only to Node or Bun type packages, which a dependency's own types can pull into
+ * any program (a local `process` is fine, and so are `globalThis.process` and a property named
+ * `Bun`). A non-dependency file is one whose path has no `/node_modules/`. The scan reads syntax
+ * and resolves only those names, so it is cheap where a whole-program check is not. Node-only
+ * members of shared types (`setTimeout(...).unref()`, `Error.captureStackTrace`) are not
+ * covered.
  */
 export function typecheckProject(tsconfigPath, { scope = 'program', forbidHost = false } = {}) {
   const configFile = ts.readConfigFile(tsconfigPath, (file) => fs.readFileSync(file, 'utf8'));
@@ -118,7 +121,13 @@ export const HOST_IMPORT_META = ['dir', 'dirname', 'filename', 'main', 'path', '
 
 const hostGlobals = new Set(HOST_GLOBALS);
 const hostImportMeta = new Set(HOST_IMPORT_META);
-const builtins = new Set(builtinModules);
+// The runtime's own list, less the npm packages Bun ships inside it.
+const builtins = new Set(
+  builtinModules.filter((name) => !name.startsWith('bun') && name !== 'ws' && name !== 'undici')
+);
+/** Type packages only a server runtime provides. */
+const HOST_TYPE_PACKAGES = new Set(['node', 'bun', 'bun-types']);
+const hostTypeFile = /\/node_modules\/(@types\/(node|bun)|bun-types)\//;
 
 function isHostModule(specifier) {
   return (
@@ -138,6 +147,10 @@ function hostReferences(program) {
     if (sourceFile.fileName.includes('/node_modules/')) continue;
     const report = (node, what) =>
       found.push(`${where(sourceFile, node.getStart(sourceFile))} - ${what}`);
+    for (const directive of sourceFile.typeReferenceDirectives) {
+      if (HOST_TYPE_PACKAGES.has(directive.fileName))
+        found.push(`${where(sourceFile, directive.pos)} - references types ${directive.fileName}`);
+    }
     const visit = (node) => {
       const specifier = moduleSpecifierOf(node);
       if (specifier !== null && isHostModule(specifier)) report(node, `imports ${specifier}`);
@@ -152,7 +165,7 @@ function hostReferences(program) {
         ts.isIdentifier(node) &&
         hostGlobals.has(node.text) &&
         isReference(node) &&
-        resolvesNowhere(checker, node)
+        isHostSymbol(checker, node)
       )
         report(node, `names the host global ${node.text}`);
       ts.forEachChild(node, visit);
@@ -162,7 +175,7 @@ function hostReferences(program) {
   return found;
 }
 
-/** The module an import, export, `import()` or `import("…")` type names, or null. */
+/** The module an import, export, `import()`, `import("…")` type or `require` names, or null. */
 function moduleSpecifierOf(node) {
   const literal =
     (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier
@@ -171,7 +184,9 @@ function moduleSpecifierOf(node) {
         ? node.arguments[0]
         : ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
           ? node.argument.literal
-          : undefined;
+          : ts.isExternalModuleReference(node)
+            ? node.expression
+            : undefined;
   return literal && ts.isStringLiteral(literal) ? literal.text : null;
 }
 
@@ -190,10 +205,16 @@ function isReference(node) {
   );
 }
 
-/** Whether a read resolves to no declaration: what a missing host global looks like. */
-function resolvesNowhere(checker, node) {
+/**
+ * Whether a read resolves to no declaration, or only to Node or Bun type packages: a host global,
+ * whether or not a dependency's types happened to declare it.
+ */
+function isHostSymbol(checker, node) {
   const symbol = ts.isShorthandPropertyAssignment(node.parent)
     ? checker.getShorthandAssignmentValueSymbol(node.parent)
     : checker.getSymbolAtLocation(node);
-  return symbol === undefined;
+  const declarations = symbol?.declarations ?? [];
+  return declarations.every((declaration) =>
+    hostTypeFile.test(declaration.getSourceFile().fileName)
+  );
 }
