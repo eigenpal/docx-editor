@@ -42,7 +42,8 @@ function caret(editor: Editor, offset: number) {
 function rtlRuns(editor: Editor): string[] {
   const xml = serializeOoxmlPart(mainPart(editor.surface!.session.currentPackage()));
   return [...xml.matchAll(/<w:r>(?:(?!<\/w:r>).)*?<w:rtl\/>(?:(?!<\/w:r>).)*?<\/w:r>/gs)].map(
-    (match) => match[0].replace(/<[^>]+>/g, '')
+    // The run's text is the content of its `w:t` elements.
+    (match) => [...match[0].matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((t) => t[1]).join('')
   );
 }
 
