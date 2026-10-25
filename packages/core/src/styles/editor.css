@@ -5475,6 +5475,26 @@ a.docx-hyperlink:focus-visible {
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
   box-shadow: var(--doc-shadow-lg);
+  /* A popover from its marker: it grows from the column's side, which is the right here. */
+  transform-origin: right center;
+  transition:
+    opacity 150ms var(--doc-motion-ease-out),
+    transform 150ms var(--doc-motion-ease-out);
+}
+
+@starting-style {
+  .docx-review__slot--compact .docx-review__card {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @starting-style {
+    .docx-review__slot--compact .docx-review__card {
+      transform: none;
+    }
+  }
 }
 
 /* The column's cards print BESIDE the sheet, which is harmless; the compact card floats
@@ -5490,10 +5510,11 @@ a.docx-hyperlink:focus-visible {
    already annotates the text being re-selected. On the edge there is nothing to collide
    with, and the affordance still reads as belonging to the selection it sits beside. */
 .docx-review__add {
-  /* Straddling the sheet's right edge — one rail gutter back, plus HALF the button's width.
-     Centred on the edge it belongs to both sides: attached to the text it will comment on,
-     and clear of the column where the cards live. */
-  margin-left: calc(-16px - 17px);
+  /* Straddling the sheet's right edge: one rail gutter back, HALF the button's width, and
+     7px more into the page. Attached to the text it will comment on, and 6px clear of a card
+     or a marker that starts one gutter off the edge. Centred exactly, it touched both. */
+  margin-left: var(--docx-review-add-offset);
+  --docx-review-add-offset: calc(-16px - 17px - 7px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5507,6 +5528,25 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-primary, #1a73e8);
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    transform 160ms var(--doc-motion-ease-out),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.docx-review__add:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-review__add {
+    transition: none;
+  }
+
+  .docx-review__add:active {
+    transform: none;
+  }
 }
 
 /* A right-to-left interface puts the column on the page's left. Markers and the button keep
@@ -5519,7 +5559,19 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor__scroll-container[data-review-side='left'] .docx-review__add {
   margin-left: 0;
-  margin-right: calc(-16px - 17px);
+  margin-right: var(--docx-review-add-offset);
+}
+
+/* The icon's tail points at the page, as the markers' do. */
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__add > svg {
+  transform: scaleX(-1);
+}
+
+/* The compact card grows from the column's side, which is then the left. */
+.docx-editor__scroll-container[data-review-side='left']
+  .docx-review__slot--compact
+  .docx-review__card {
+  transform-origin: left center;
 }
 
 /* The speech bubble's tail points at the page, which is then on its right. */
@@ -5540,11 +5592,13 @@ a.docx-hyperlink:focus-visible {
    for a control sitting on a flat surface and wrong for this one: it straddles the sheet's
    edge, so a see-through fill showed white paper through its left half and grey canvas
    through its right, split down the middle. Mixed into the surface colour it stays one
-   solid shape wherever it sits. */
-.docx-review__add:hover {
-  background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
-  border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
-  box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+   solid shape wherever it sits. Pointer hover only: a tap on a touch screen left it stuck. */
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__add:hover {
+    background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
+    border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
+    box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+  }
 }
 
 /* A card being composed reads as unfinished until it is committed. */
@@ -5593,6 +5647,9 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted, #8a8f98);
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
 /* `commentMarkers: 'initials'`: a comment thread's marker is a speech bubble in its author's colour —
@@ -6236,9 +6293,11 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.docx-review__marker:hover {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
-  color: var(--doc-text, #1f2328);
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__marker:hover {
+    background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+    color: var(--doc-text, #1f2328);
+  }
 }
 
 /* Host furniture: flow content at the top of the rail. It needs its pointer events back (the

@@ -306,17 +306,27 @@ export function useReviewGutter(): ReviewGutter {
     [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation, scroll]
   );
 
-  const [gutter, setGutter] = useState<ReviewGutter>(() =>
-    compute(viewport ? viewport.clientWidth : null)
-  );
+  // A changed input derives the gutter DURING render, not in an effect: the pane's own state
+  // and the padding it asks for then reach the DOM in one commit. Deriving it a render later
+  // painted one frame with the column open beside a page that had not moved yet.
+  const read = (): ReviewGutter => compute(viewport ? viewport.clientWidth : null);
+  const [state, setState] = useState(() => ({ compute, viewport, gutter: read() }));
+  let current = state;
+  if (state.compute !== compute || state.viewport !== viewport) {
+    current = { compute, viewport, gutter: read() };
+    setState(current);
+  }
   useEffect(() => {
-    const sync = () => setGutter(compute(viewport ? viewport.clientWidth : null));
-    sync();
     const Observer = viewport ? hostWindowOf(viewport).ResizeObserver : undefined;
     if (!viewport || typeof Observer === 'undefined') return undefined;
+    const sync = () =>
+      setState((previous) => {
+        const gutter = compute(viewport.clientWidth);
+        return gutter === previous.gutter ? previous : { compute, viewport, gutter };
+      });
     const observer = new Observer(sync);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [viewport, compute]);
-  return gutter;
+  return current.gutter;
 }
