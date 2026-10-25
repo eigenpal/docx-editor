@@ -304,7 +304,8 @@ export const NavigationHeadings = defineComponent({
                       intents.picked();
                     }}
                   >
-                    {item.heading.text}
+                    {/* Document text keeps its own direction inside the pane's (`bdi`). */}
+                    <bdi>{item.heading.text}</bdi>
                   </button>
                 </li>
               ))}
@@ -333,9 +334,11 @@ const ResultRow = defineComponent({
           onClick={props.onSelect}
         >
           <span class="docx-nav__result-text">
-            {props.match.contextBefore}
-            <mark class="docx-nav__result-hit">{props.match.text}</mark>
-            {props.match.contextAfter}
+            <bdi>
+              {props.match.contextBefore}
+              <mark class="docx-nav__result-hit">{props.match.text}</mark>
+              {props.match.contextAfter}
+            </bdi>
           </span>
         </button>
       </li>

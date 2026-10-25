@@ -82,7 +82,13 @@ export function beginEditorPreview(editor: DocxEditorInstance): {
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
 
 // @public
-export function blankDocumentBytes(): Uint8Array;
+export function blankDocumentBytes(options?: BlankDocumentOptions): Uint8Array;
+
+// @public
+export interface BlankDocumentOptions {
+    readonly bidiLanguage?: string;
+    readonly direction?: 'ltr' | 'rtl';
+}
 
 // @public
 export interface BookmarkChromeHandlers {
@@ -1819,7 +1825,12 @@ export interface FontUrlSource {
 export const formatInches: (twips: number) => string;
 
 // @public
-export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[];
+export function formattingBarChromeGroups(image: ImageContext | null, options?: FormattingBarOptions): readonly ChromeGroup[];
+
+// @public
+export interface FormattingBarOptions {
+    readonly direction?: boolean;
+}
 
 // @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
@@ -1979,6 +1990,9 @@ export interface HistoryShortcutKeys {
 
 // @public
 export function historyShortcutOf(event: HistoryShortcutKeys): 'undo' | 'redo' | null;
+
+// @internal
+export function hostDirectionOf(node: Element | null): 'ltr' | 'rtl';
 
 // @public
 export function hostDocumentOf(node: Node | null | undefined): Document;
@@ -2242,6 +2256,9 @@ export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId
 // @public
 export function isTextNode(value: unknown): value is Text;
 
+// @internal
+export function keepScrollAtInlineEnd(scroller: HTMLElement): () => void;
+
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 
@@ -2337,6 +2354,9 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 
 // @public
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
+
+// @internal
+export function observeHostDirection(node: Element, onChange: () => void): () => void;
 
 // @public
 export function observeUnsupportedElements(container: HTMLElement, listener: (hosts: readonly UnsupportedElementHost[]) => void): () => void;
@@ -2951,6 +2971,22 @@ export function parseIsoDate(value: string): Date | null;
 // @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
 
+// @internal
+export function placeSubmenu(row: {
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+}, panel: {
+    readonly height: number;
+    readonly width: number;
+}, view: {
+    readonly height: number;
+    readonly width: number;
+}, rtl: boolean): {
+    readonly left: number;
+    readonly top: number;
+};
+
 // @public
 export function pointsToEmu(points: number): number;
 
@@ -3393,6 +3429,16 @@ export interface RulerIndent {
 export type RulerIndentHandle = 'firstLine' | 'hanging' | 'left' | 'right';
 
 // @public
+export interface RulerMarginTick {
+    readonly height: number;
+    readonly label?: string;
+    readonly position: number;
+}
+
+// @public
+export function rulerMarginTicks(page: RulerPageMetrics, indent: Pick<RulerIndent, 'rtl'>, unit: RulerUnit): RulerMarginTick[];
+
+// @public
 export function rulerPageBox(pages: readonly {
     readonly box: {
         height: number;
@@ -3413,6 +3459,9 @@ export interface RulerPageMetrics {
     // (undocumented)
     readonly rightMargin: number;
 }
+
+// @public
+export function rulerTabPosition(tabTwips: number, page: RulerPageMetrics, indent: Pick<RulerIndent, 'rtl'>): number;
 
 // @public
 export interface RulerTick {
@@ -3716,6 +3765,12 @@ export function storyLabelTop(storyRect: {
     readonly bottom: number;
     readonly top: number;
 }, sheetTop: number | undefined, barHeight: number, clearance: number): number;
+
+// @internal
+export function submenuKeys(rtl: boolean): {
+    readonly close: string;
+    readonly open: string;
+};
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';

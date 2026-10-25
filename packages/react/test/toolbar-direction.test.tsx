@@ -13,13 +13,15 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import { en } from '@docx-editor.dev/i18n';
+import { ar, en, es, he } from '@docx-editor.dev/i18n';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
+import { DocxEditor } from '../src/components/DocxEditor.tsx';
+import { LocaleProvider } from '../src/i18n/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -137,5 +139,60 @@ describe('the paragraph direction buttons', () => {
     });
     expect(rtl.getAttribute('aria-pressed')).toBe('false');
     expect(ltr.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('a right-to-left interface language', () => {
+  test('the default toolbar shows the direction buttons after alignment', () => {
+    const { view } = mount(
+      <LocaleProvider i18n={ar}>
+        <DocxEditorToolbar />
+      </LocaleProvider>,
+      p('alpha')
+    );
+    const rtl = button(view, ar.toolbar!.rightToLeft!);
+    const ltr = button(view, ar.toolbar!.leftToRight!);
+    const alignment = view.container.querySelector('[data-slot="alignment"]')!;
+    expect(alignment.compareDocumentPosition(ltr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ltr.compareDocumentPosition(rtl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('composed chrome parts mirror under the provider without a wrapper', () => {
+    const { view } = mount(
+      <LocaleProvider i18n={ar}>
+        <DocxEditorToolbar />
+      </LocaleProvider>,
+      p('alpha')
+    );
+    expect(view.container.querySelector('.docx-toolbar')!.getAttribute('dir')).toBe('rtl');
+  });
+
+  test('the provider dir prop decides over the catalog', () => {
+    const { view } = mount(
+      <LocaleProvider i18n={es} dir="rtl">
+        <DocxEditorToolbar />
+      </LocaleProvider>,
+      p('alpha')
+    );
+    expect(view.container.querySelector('.docx-toolbar')!.getAttribute('dir')).toBe('rtl');
+    expect(button(view, es.toolbar!.rightToLeft!)).toBeDefined();
+  });
+
+  test('a left-to-right provider leaves chrome parts without dir', () => {
+    const { view } = mount(<DocxEditorToolbar />, p('alpha'));
+    expect(view.container.querySelector('.docx-toolbar')!.hasAttribute('dir')).toBe(false);
+  });
+
+  test('the packaged editor mirrors its chrome for Arabic and Hebrew', () => {
+    for (const catalog of [ar, he]) {
+      const view = render(<DocxEditor document={docx(p('alpha'))} i18n={catalog} />);
+      expect(view.container.querySelector('.docx-editor')!.getAttribute('dir')).toBe('rtl');
+      cleanup();
+    }
+  });
+
+  test('a left-to-right catalog leaves the host direction in charge', () => {
+    const view = render(<DocxEditor document={docx(p('alpha'))} i18n={es} />);
+    expect(view.container.querySelector('.docx-editor')!.hasAttribute('dir')).toBe(false);
   });
 });

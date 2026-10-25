@@ -33,7 +33,7 @@ function walkedText(xml: string): string[] {
         child.kind === 'textValue' ? child.value : text(child as unknown as OoxmlElement)
       )
       .join('');
-  return walkStoryParagraphs(blocks).map(text);
+  return walkStoryParagraphs(blocks, 8, true).map(text);
 }
 
 test('the walk skips paragraphs in a continuation cell below a merged cell', () => {

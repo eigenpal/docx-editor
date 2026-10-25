@@ -32,7 +32,7 @@ import {
   type VNode,
 } from 'vue';
 import type { TranslationKey } from '../i18n';
-import { LocaleProvider, useTranslation } from '../i18n';
+import { LocaleProvider, useChromeDir, useTranslation } from '../i18n';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
@@ -115,7 +115,8 @@ const RULER_ROW_STYLE: CSSProperties = {
 const VERTICAL_RULER_STYLE: CSSProperties = {
   position: 'absolute',
   top: '40px',
-  left: 0,
+  // The inline start of the wrapper's own `dir`: the right edge in a right-to-left interface.
+  insetInlineStart: 0,
   zIndex: 10,
   pointerEvents: 'none',
 };
@@ -384,6 +385,8 @@ const DocxEditorFrame = defineComponent({
 
     const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
     const translation = useTranslation();
+    // The chrome direction a provider decided; nothing keeps the host page direction.
+    const chromeDir = useChromeDir();
     const translate = computed(() => {
       const custom = props.t;
       const catalogT = translation.t;
@@ -441,7 +444,14 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
             rulers.value && chrome.value
-              ? h('div', { style: VERTICAL_RULER_STYLE }, [h(DocxEditorVerticalRuler)])
+              ? h(
+                  'div',
+                  {
+                    style: VERTICAL_RULER_STYLE,
+                    dir: chromeDir.value,
+                  },
+                  [h(DocxEditorVerticalRuler)]
+                )
               : null,
             slots.default?.(),
           ],
@@ -456,6 +466,9 @@ const DocxEditorFrame = defineComponent({
             {
               class: `docx-editor${isDark.value ? ' dark' : ''}${props.class ? ` ${props.class}` : ''}`,
               style: CONTAINER_STYLE,
+              // A right-to-left catalog mirrors the chrome. Otherwise the chrome inherits the
+              // host page direction; the viewport keeps a left-to-right base either way.
+              dir: chromeDir.value,
             },
             [
               h('div', { style: CHROME_BAND_STYLE }, [

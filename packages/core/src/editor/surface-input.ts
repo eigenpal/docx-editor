@@ -17,6 +17,11 @@ import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
 import { historyShortcutOf } from './history-shortcut.ts';
+import {
+  moveByTabInTable,
+  selectionHeadInTableCell,
+  tabTypesTabInCell,
+} from './surface-table-tab.ts';
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -301,13 +306,28 @@ export function createKeyDownHandler(
     }
     if (event.key === 'Tab') {
       // Form-fill mode: Tab / Shift+Tab move between editable content controls (tabIndex,
-      // then document order), skipping locked / bound ones. Explicit mode only — ordinary
-      // Tab keeps list indent / tab-character behaviour, including inside table cells.
+      // then document order), skipping locked / bound ones. Explicit mode only.
       if (surface.contentControls.formFill()) {
         if (surface.contentControls.navigate(event.shiftKey ? 'previous' : 'next')) {
           event.preventDefault();
           return;
         }
+      }
+      // In a table cell, Tab and Shift+Tab move between cells; Option+Tab (Ctrl+Tab) types a
+      // tab character there.
+      if (tabTypesTabInCell(event) && !event.isComposing) {
+        if (selectionHeadInTableCell(surface)) {
+          // Over several selected cells it does nothing: typing would clear them all.
+          if ((surface.state().cellSelection?.cellIds.length ?? 0) <= 1) surface.insertTab();
+          event.preventDefault();
+          return;
+        }
+      } else if (
+        !event.isComposing &&
+        moveByTabInTable(surface, event.shiftKey ? 'previous' : 'next')
+      ) {
+        event.preventDefault();
+        return;
       }
       // In a LIST, Tab demotes and Shift+Tab promotes — the list level, so the marker
       // changes with it. Outside one, Tab and Shift+Tab change the indent of a selection over

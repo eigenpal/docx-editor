@@ -14,6 +14,7 @@ import { projectBufferedRevisionMarkup } from './revision-markup-projection.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { ThemeFonts } from './run-style.ts';
 import { applyHAnsiFontSlots } from './hansi-font-slots.ts';
+import { applyComplexRunDigitFaces } from './complex-run-digits.ts';
 
 /** Finish a walked paragraph's pieces for display. */
 export function finishParagraphPieces(
@@ -52,5 +53,7 @@ export function finishParagraphPieces(
           options.authorFilter,
           options.changeSites
         );
-  return applyHAnsiFontSlots(applyEastAsiaFontSlots(shown, options.themeFonts), options.themeFonts);
+  return applyComplexRunDigitFaces(
+    applyHAnsiFontSlots(applyEastAsiaFontSlots(shown, options.themeFonts), options.themeFonts)
+  );
 }

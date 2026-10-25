@@ -583,6 +583,10 @@
   "headerFooter": {
     "header": "页眉",
     "footer": "页脚",
+    "addHeaderHint": "双击添加页眉",
+    "addFooterHint": "双击添加页脚",
+    "editHeaderHint": "双击编辑页眉",
+    "editFooterHint": "双击编辑页脚",
     "options": "选项",
     "insertPageNumber": "插入当前页码",
     "insertTotalPages": "插入总页数",

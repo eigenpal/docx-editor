@@ -6,6 +6,7 @@ import {
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { readGridSkip, readGridSpan, readVMerge } from './table-row-properties.ts';
 
+/** One cached row walk: its depth budget, the mode and skipped columns, and its paragraphs. */
 const rowParagraphs = new WeakMap<
   OoxmlNode,
   { remaining: number; skipped: string; paragraphs: readonly OoxmlElement[] }
@@ -13,13 +14,21 @@ const rowParagraphs = new WeakMap<
 
 const NO_COLUMNS: ReadonlySet<number> = new Set();
 
-/** Collect story paragraphs, preserving table depth limits across immutable row reuse. */
+/**
+ * Collect story paragraphs, preserving table depth limits across immutable row reuse.
+ *
+ * `skipMergedCells` leaves out the paragraphs of a cell that continues a vertical merge from
+ * the cell above it in the same grid column (`w:vMerge` without `restart`). Such a cell shows
+ * nothing, so list numbering skips it; a continuation with no merged cell above it starts its
+ * own merge and keeps its paragraphs.
+ */
 export function walkStoryParagraphs(
   blocks: readonly OoxmlElement[],
-  maxTableDepth = 8
+  maxTableDepth = 8,
+  skipMergedCells = false
 ): OoxmlElement[] {
   const out: OoxmlElement[] = [];
-  pushStoryParagraphs(blocks, maxTableDepth, out);
+  pushStoryParagraphs(blocks, maxTableDepth, out, skipMergedCells);
   return out;
 }
 
@@ -29,16 +38,17 @@ export function walkStoryParagraphs(
  */
 export function storyRowParagraphs(row: OoxmlElement, remaining: number): readonly OoxmlElement[] {
   const cached = rowParagraphs.get(row);
-  if (cached?.remaining === remaining && cached.skipped === '') return cached.paragraphs;
+  if (cached?.remaining === remaining && cached.skipped === '0|') return cached.paragraphs;
   const out: OoxmlElement[] = [];
-  pushRowParagraphs(row, remaining, NO_COLUMNS, out);
+  pushRowParagraphs(row, remaining, NO_COLUMNS, out, false);
   return out;
 }
 
 function pushStoryParagraphs(
   blocks: readonly OoxmlElement[],
   maxTableDepth: number,
-  out: OoxmlElement[]
+  out: OoxmlElement[],
+  skipMergedCells: boolean
 ): void {
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
@@ -46,12 +56,12 @@ function pushStoryParagraphs(
       continue;
     }
     if (block.kind !== 'table' || maxTableDepth <= 0) continue;
-    // Grid columns where the previous row has a `w:vMerge` cell. A continuation cell below
-    // one shows nothing, so its paragraphs neither paint nor take a list number.
+    // Grid columns where the previous row has a `w:vMerge` cell, when merged cells are skipped.
     let mergedAbove = NO_COLUMNS;
     for (const row of flattenContentControls(block.children)) {
-      if (row.kind === 'tableRow')
-        mergedAbove = pushRowParagraphs(row, maxTableDepth, mergedAbove, out);
+      if (row.kind !== 'tableRow') continue;
+      const merged = pushRowParagraphs(row, maxTableDepth, mergedAbove, out, skipMergedCells);
+      mergedAbove = skipMergedCells ? merged : NO_COLUMNS;
     }
   }
 }
@@ -97,10 +107,12 @@ function pushRowParagraphs(
   row: OoxmlElement,
   remaining: number,
   mergedAbove: ReadonlySet<number>,
-  out: OoxmlElement[]
+  out: OoxmlElement[],
+  skipMergedCells: boolean
 ): ReadonlySet<number> {
   const plan = rowMergePlan(row);
-  let key = '';
+  // The mode is part of the key: nested tables inside the row walk in the same mode.
+  let key = skipMergedCells ? '1|' : '0|';
   for (const entry of plan.cells) {
     if (entry.continues && mergedAbove.has(entry.column)) key += `${entry.column},`;
   }
@@ -114,7 +126,12 @@ function pushRowParagraphs(
     if (entry.continues && mergedAbove.has(entry.column)) continue;
     // Flatten cell SDTs under the shared content-control budget; table nesting still
     // uses the remaining depth for the table walk itself.
-    pushStoryParagraphs(collectFlowBlocks(entry.cell.children), remaining - 1, out);
+    pushStoryParagraphs(
+      collectFlowBlocks(entry.cell.children),
+      remaining - 1,
+      out,
+      skipMergedCells
+    );
   }
   if (out.length - start <= 256)
     rowParagraphs.set(row, { remaining, skipped: key, paragraphs: out.slice(start) });

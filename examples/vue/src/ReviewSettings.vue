@@ -44,6 +44,30 @@
         </button>
       </header>
       <div class="demo-settings__body">
+        <div class="demo-settings__group">
+          <label class="demo-settings__label" :for="`${uid}-language`">
+            {{ t('reviewSettings.language') }}
+          </label>
+          <select
+            :id="`${uid}-language`"
+            class="demo-settings__select"
+            :value="language"
+            :aria-describedby="`${uid}-language-help`"
+            @change="onLanguage"
+          >
+            <option
+              v-for="item in DEMO_LANGUAGES"
+              :key="item.code"
+              :value="item.code"
+              :lang="item.code"
+            >
+              {{ item.name }}
+            </option>
+          </select>
+          <p :id="`${uid}-language-help`" class="demo-settings__help">
+            {{ t('reviewSettings.languageHelp') }}
+          </p>
+        </div>
         <fieldset
           v-for="group in REVIEW_SETTINGS_GROUPS"
           :key="group.field"
@@ -112,6 +136,8 @@ import {
   storedReviewPane,
   type ReviewSettingsGroup,
 } from '../../shared/review-settings';
+import type { LocaleCode } from '@docx-editor.dev/i18n';
+import { DEMO_LANGUAGES, demoLanguage, switchDemoLanguage } from '../../shared/demo-language';
 import { DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 import '../../shared/review-settings.css';
 
@@ -134,6 +160,9 @@ const TRIGGER_STYLE: CSSProperties = {
 
 const editor = useDocxEditor();
 const pane = useEditorState((snapshot) => snapshot.reviewPane);
+const language = demoLanguage();
+const onLanguage = (event: Event) =>
+  switchDemoLanguage((event.target as HTMLSelectElement).value as LocaleCode);
 const open = ref(false);
 const rootRef = ref<HTMLDivElement | null>(null);
 const triggerRef = ref<HTMLButtonElement | null>(null);

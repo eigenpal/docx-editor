@@ -602,9 +602,11 @@ Returns typed state and actions for `text.color`, `font.size`, `font.family`, `t
 
 Returns the label for the active table border target.
 
-## `useTranslation` and `useChromeTranslate`
+## `useTranslation`, `useChromeTranslate`, and `useChromeDir`
 
 `useTranslation` returns `{ t, catalogue, lang }` for the active locale. `useChromeTranslate` resolves labels for chrome `t` props. Pass a `Map` to override selected labels.
+
+`useChromeDir` returns a read-only ref with the direction the editor chrome renders in: `'ltr'`, `'rtl'`, or `undefined` when the chrome inherits the host page direction. For more information, see [Right-to-left support](/docs/2.x/guides/right-to-left#choose-the-interface-direction).
 
 ## Toolbar helpers
 

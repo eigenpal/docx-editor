@@ -42,7 +42,6 @@ const lay = (body: string) => layoutSemanticDocument(load(body), 1, { measurer }
 
 const RUN_H = 10 * 1.15;
 const RUN_BL = 10 * 0.9;
-const MARK_H = 16 * 1.15;
 /** Auto 460/240 extras on a 10pt run line. */
 const AUTO_460_EXTRA = RUN_H * (460 / 240) - RUN_H;
 
@@ -251,7 +250,8 @@ test('small table text does not inherit a taller implicit cell-end mark', () => 
   const explicitLayout = lay(cell('<w:rPr><w:sz w:val="32"/></w:rPr>'));
   const explicit = linesOf(explicitLayout)[0]!;
   const table = explicitLayout.pages[0]!.fragments.find((block) => block.kind === 'table')!;
-  expect(table.rows[0]!.box.height).toBeCloseTo(MARK_H, 5);
+  // Under text, the explicit mark sets no row minimum either: the text line sizes the row.
+  expect(table.rows[0]!.box.height).toBeCloseTo(6 * 1.15, 5);
   expect(implicit.box.height).toBeCloseTo(6 * 1.15, 5);
   expect(explicit.box.height).toBeCloseTo(6 * 1.15, 5);
   expect(explicit.baseline).toBeCloseTo(implicit.baseline, 5);

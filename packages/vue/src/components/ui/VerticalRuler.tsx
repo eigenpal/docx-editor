@@ -2,7 +2,7 @@ import { defineComponent, ref, watch, type CSSProperties, type PropType, type VN
 import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { RulerPageSetup } from './HorizontalRuler';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
-import { useTranslation } from '../../i18n';
+import { useChromeDir, useTranslation } from '../../i18n';
 
 /** @public */
 export interface VerticalRulerProps {
@@ -54,6 +54,8 @@ export const VerticalRuler = defineComponent({
   },
   setup(props) {
     const translation = useTranslation();
+    // Ticks and margin markers face the page from the inline end of the chrome direction.
+    const chromeDir = useChromeDir();
     const dragging = ref<MarkerType | null>(null);
     const hoveredMarker = ref<MarkerType | null>(null);
     const rulerRef = ref<HTMLDivElement | null>(null);
@@ -148,6 +150,7 @@ export const VerticalRuler = defineComponent({
           ref={rulerRef}
           class={`docx-vertical-ruler ${props.className ?? ''}`}
           style={rulerStyle}
+          dir={chromeDir.value}
           role="group"
           aria-label={translation.t('ruler.vertical')}
         >
@@ -155,8 +158,8 @@ export const VerticalRuler = defineComponent({
             style={{
               position: 'absolute',
               top: 0,
-              left: 0,
-              right: 0,
+              insetInlineStart: 0,
+              insetInlineEnd: 0,
               bottom: 0,
               pointerEvents: 'none',
             }}
@@ -219,7 +222,7 @@ function VerticalTick(props: { tick: VerticalTickData }): VNode {
   const tickStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(props.tick.position),
-    right: 0,
+    insetInlineEnd: 0,
     height: '1px',
     width: formatPx(props.tick.width),
     backgroundColor: RULER_TICK_COLOR,
@@ -227,7 +230,7 @@ function VerticalTick(props: { tick: VerticalTickData }): VNode {
   const labelStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(props.tick.position),
-    left: '2px',
+    insetInlineStart: '2px',
     transform: 'translateY(-50%)',
     fontSize: '9px',
     color: RULER_TEXT_COLOR,
@@ -266,7 +269,7 @@ function VerticalMarginMarker(props: {
   const markerStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(props.position - 5),
-    right: 0,
+    insetInlineEnd: 0,
     width: formatPx(RULER_WIDTH),
     height: '10px',
     cursor: props.editable ? 'ns-resize' : 'default',
@@ -275,13 +278,13 @@ function VerticalMarginMarker(props: {
   const triangleStyle: CSSProperties = {
     position: 'absolute',
     top: 0,
-    right: '2px',
+    insetInlineEnd: '2px',
     width: 0,
     height: 0,
     borderTop: '5px solid transparent',
     borderBottom: '5px solid transparent',
-    borderRight: `8px solid ${color}`,
-    transition: 'border-right-color 0.1s',
+    borderInlineEnd: `8px solid ${color}`,
+    transition: 'border-inline-end-color 0.1s',
   };
   return (
     <div

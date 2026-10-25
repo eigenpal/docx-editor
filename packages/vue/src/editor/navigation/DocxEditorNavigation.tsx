@@ -34,6 +34,7 @@ import {
   NavigationTitle,
   NavigationToggle,
 } from './parts';
+import { useChromeDir } from '../../i18n';
 
 /** Props for `DocxEditor.Navigation`. @public */
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
@@ -103,6 +104,7 @@ const DocxEditorNavigationImpl = defineComponent({
   },
   setup(props, { slots }) {
     const scope = useScopeClassName();
+    const chromeDir = useChromeDir();
     const paneOptions = (): UseNavigationPaneOptions => ({
       ...(props.paneWidth !== undefined ? { paneWidth: props.paneWidth } : {}),
       ...(props.defaultOpen !== undefined ? { defaultOpen: props.defaultOpen } : {}),
@@ -161,6 +163,7 @@ const DocxEditorNavigationImpl = defineComponent({
       <div
         ref={focus.rootRef}
         class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${pane.overlay.value ? ' docx-nav--overlay' : ''}${props.className ? ` ${props.className}` : ''}`}
+        dir={chromeDir.value}
         data-open={pane.open.value ? 'true' : 'false'}
         onKeydown={focus.onKeyDown}
         style={{

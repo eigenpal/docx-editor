@@ -10,17 +10,22 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 //   rematerialization and page-visibility work. Without it the engine falls back to
 //   document scrolling and virtualization degrades.
 
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, claimsReviewGutter, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
+import {
+  REVIEW_MARKERS_GUTTER,
+  reviewGutterScrolls,
+  useReviewColumnSide,
+  useReviewGutter,
+} from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
-import { isElementNode } from '@docx-editor.dev/core/editor';
+import { isElementNode, keepScrollAtInlineEnd } from '@docx-editor.dev/core/editor';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -58,6 +63,10 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // and mirrors the marker strip onto both edges otherwise, so the sheet stays centred.
   // The stylesheet consumes it through `--docx-review-gutter`/`--docx-review-gutter-start`.
   const reviewGutter = useReviewGutter();
+  // A right-to-left interface puts the column on the page's left and the navigation pane on
+  // its right. The custom properties stay logical (start, end); the stylesheet maps them to
+  // physical edges under `data-chrome-dir`, because this element keeps a left-to-right base.
+  const side = useReviewColumnSide();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = claimsReviewGutter(rail);
@@ -68,10 +77,22 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // left, the other reserves a gutter on the right, and a document can have both open.
   const layout = useNavigationLayoutStore();
   const shift = useNavigationShift();
+  const element = useRef<HTMLDivElement | null>(null);
   const attach = useCallback(
-    (element: HTMLDivElement | null) => layout?.setViewport(element),
+    (node: HTMLDivElement | null) => {
+      element.current = node;
+      layout?.setViewport(node);
+    },
     [layout]
   );
+  // A column that does not fit scrolls sideways. On the left it starts in view, so the
+  // viewport keeps to its right end instead: the page first, the cards one scroll away,
+  // also while a navigation shift, zoom, or new pages widen the content.
+  const scrollsLeft = side === 'left' && reserve && reviewGutterScrolls(reviewGutter);
+  useLayoutEffect(() => {
+    const node = element.current;
+    return scrollsLeft && node ? keepScrollAtInlineEnd(node) : undefined;
+  }, [scrollsLeft]);
   // CAPTURE, not bubble: the engine's keymap is bound to the painted pages inside this
   // element and binds Word's subscript/superscript to the same Ctrl/Cmd+`=` chord. On the way
   // up it had already scripted the selection by the time zoom ran, so one keystroke both
@@ -101,6 +122,8 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       aria-label={t('editor.documentViewport')}
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
+      {...(side === 'left' ? { 'data-chrome-dir': 'rtl' } : {})}
+      {...(reserve && side === 'left' ? { 'data-review-side': 'left' } : {})}
       {...(fitting ? { 'data-zoom-fit': '' } : {})}
       className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''

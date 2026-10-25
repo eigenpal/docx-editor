@@ -22,7 +22,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { DocxEditorToolbar, ReviewRailContext } from '@docx-editor.dev/vue';
+import { DocxEditorToolbar, LocaleProvider, ReviewRailContext } from '@docx-editor.dev/vue';
 import { flush, selectAllWithPlacement, waitFor } from './review-vue-harness.ts';
 import {
   DocxEditorReview,
@@ -211,14 +211,16 @@ const DocumentedColumn = defineComponent({
   },
 });
 
-async function mount(children: () => VNode): Promise<MountedEditor> {
+async function mount(children: () => VNode, dir?: 'rtl'): Promise<MountedEditor> {
   const mounted = mountEditorTree(
     () => [
       h(DocxEditorToolbar, { preset: false }, { default: () => [h(DocxEditorToolbar.AddComment)] }),
     ],
     COMMENTED_SOURCE,
     () => [children()],
-    [reviewModule()]
+    [reviewModule()],
+    {},
+    dir ? (root) => h(LocaleProvider, { dir }, { default: () => [root] }) : undefined
   );
   await flush();
   await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
@@ -485,6 +487,24 @@ describe('useReviewRailMetrics (Vue)', () => {
     );
   });
 
+  test('a right-to-left interface puts the column on the left of the page', async () => {
+    const mounted = await mount(() => h(DocxEditorReview), 'rtl');
+    try {
+      const rail = () =>
+        mounted.container.querySelector('[data-testid="review-rail"]') as HTMLElement;
+      const viewport = scroller(mounted.container);
+      await waitFor(() => Boolean(rail()?.style.left));
+      expect(viewport.getAttribute('data-review-side')).toBe('left');
+      // The full column pads the left; the right keeps what the start would have had.
+      expect(viewport.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+      expect(viewport.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
+      // The page starts at x 300 in a frame at x 20: the column ends one gutter before it.
+      expect(rail().style.left).toBe(`${300 - 20 - 16 - rail().offsetWidth}px`);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('warns once in development when the column is not absolutely positioned', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -519,7 +539,14 @@ describe('useReviewRailMetrics (Vue)', () => {
         async (mounted) => {
           expect(
             readMetrics(mounted.container.querySelector('[data-testid="outside-probe"]'))
-          ).toEqual({ scale: 96 / 72, top: 0, left: null, compactCardLeft: null, compact: false });
+          ).toEqual({
+            scale: 96 / 72,
+            top: 0,
+            left: null,
+            side: 'right',
+            compactCardLeft: null,
+            compact: false,
+          });
           const messages = warn.mock.calls.map((call) => String(call[0]));
           expect(messages.some((text) => text.includes('without a railRef'))).toBe(true);
         }

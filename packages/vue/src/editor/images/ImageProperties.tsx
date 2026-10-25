@@ -755,6 +755,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                     updateDraft({ hyperlink: (event.target as HTMLInputElement).value })
                   }
                   placeholder={t('hyperlinkPopup.urlPlaceholder')}
+                  dir="ltr"
                 />
               </section>
               <section class="docx-dialog__section">

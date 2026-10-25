@@ -16,10 +16,15 @@ function parameters(text: string): string[] {
   return [...new Set(Array.from(text.matchAll(/\{(\w+)(?=[},])/g), (match) => match[1]!))].sort();
 }
 
+/** Optional catalog metadata that only some locales declare, such as `_dir: 'rtl'`. */
+const OPTIONAL_METADATA = new Set(['_dir']);
+
 const source = flatten(en);
 for (const [code, catalog] of Object.entries(locales)) {
   test(`${code} ships complete translations with working interpolation`, () => {
-    const strings = flatten(catalog);
+    const strings = Object.fromEntries(
+      Object.entries(flatten(catalog)).filter(([key]) => !OPTIONAL_METADATA.has(key))
+    );
     expect(Object.keys(strings).sort()).toEqual(Object.keys(source).sort());
     const t = createT(deepMerge(en, catalog) as LocaleStrings, code);
     for (const [key, value] of Object.entries(strings)) {

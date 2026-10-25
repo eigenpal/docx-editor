@@ -586,6 +586,10 @@
   "headerFooter": {
     "header": "हेडर",
     "footer": "फुटर",
+    "addHeaderHint": "हेडर जोड़ने के लिए डबल-क्लिक करें",
+    "addFooterHint": "फुटर जोड़ने के लिए डबल-क्लिक करें",
+    "editHeaderHint": "हेडर संपादित करने के लिए डबल-क्लिक करें",
+    "editFooterHint": "फुटर संपादित करने के लिए डबल-क्लिक करें",
     "options": "विकल्प",
     "insertPageNumber": "वर्तमान पेज नंबर डालें",
     "insertTotalPages": "कुल पेज संख्या डालें",

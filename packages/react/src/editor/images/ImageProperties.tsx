@@ -722,6 +722,7 @@ export function DocxEditorImagePropertiesDialog({
                 )
               }
               placeholder={t('hyperlinkPopup.urlPlaceholder')}
+              dir="ltr"
             />
           </section>
           <section className="docx-dialog__section">

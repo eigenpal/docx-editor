@@ -1,6 +1,6 @@
 ---
 title: '@docx-editor.dev/i18n'
-description: 'Locale data for editor controls in twelve languages.'
+description: 'Locale data for editor controls in 14 languages, including right-to-left Arabic and Hebrew.'
 category: 'Reference'
 order: 60
 ---
@@ -37,17 +37,21 @@ In Vue, use `locale="pl-PL"` and `:i18n="pl"` on `<DocxEditor>`. For composed ed
 | Code    | Language             | Named export |
 | ------- | -------------------- | ------------ |
 | `en`    | English              | `en`         |
+| `ar`    | Arabic               | `ar`         |
 | `pl`    | Polish               | `pl`         |
 | `de`    | German               | `de`         |
 | `es`    | Spanish              | `es`         |
 | `fr`    | French               | `fr`         |
 | `pt-BR` | Brazilian Portuguese | `ptBR`       |
+| `ru`    | Russian              | `ru`         |
 | `he`    | Hebrew               | `he`         |
 | `hi`    | Hindi                | `hi`         |
 | `id`    | Indonesian           | `id`         |
 | `ja`    | Japanese             | `ja`         |
 | `tr`    | Turkish              | `tr`         |
 | `zh-CN` | Chinese (Simplified) | `zhCN`       |
+
+Arabic (`ar`) and Hebrew (`he`) are right-to-left languages. Their catalogs declare `_dir: 'rtl'`, and the editor controls mirror for them, in the packaged editor and in composed editors under `LocaleProvider`. To mirror the controls for your own catalog, set `_dir: 'rtl'` in it or pass `dir="rtl"` to `LocaleProvider`. For more information, see [Show the interface in Arabic or Hebrew](/docs/2.x/guides/right-to-left#show-the-interface-in-arabic-or-hebrew).
 
 Choose an import style:
 

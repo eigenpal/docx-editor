@@ -110,6 +110,7 @@ import { validateReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
+  ADDITIVE_RUN_PROPERTIES,
   TREE_DOC_OP_KINDS,
   invalidRevisionAttribution,
   type OoxmlProperty,
@@ -117,7 +118,10 @@ import {
   type TreeOpRejection,
 } from './tree-op-types.ts';
 
-const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
+const RUN_PROPERTY_SET: ReadonlySet<string> = new Set([
+  ...ACCEPTED_RUN_PROPERTIES,
+  ...ADDITIVE_RUN_PROPERTIES,
+]);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
 
 function validateProperties(

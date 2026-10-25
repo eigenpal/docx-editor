@@ -316,7 +316,13 @@ describe('the claims that are compiled rather than scanned', () => {
   test(
     'the whole runtime, browser entry included, compiles with zero diagnostics',
     () => {
-      expect(typecheckProject(fullProject)).toEqual([]);
+      // The runtime's own files; core's bodies are core's typecheck. The neutral project above
+      // keeps the whole program, because core code a server reaches must compile without DOM.
+      // The core code the browser entry reaches must not name host modules, globals, or
+      // `import.meta` members. The project lists no Node types, but a dependency's own types
+      // bring them in, so the scan, not the lib setting, keeps that; it does not see Node-only
+      // members of shared types (`.unref()`).
+      expect(typecheckProject(fullProject, { scope: 'project', forbidHost: true })).toEqual([]);
     },
     TYPECHECK_TIMEOUT_MS
   );

@@ -33,6 +33,7 @@ Import only the catalogs your application uses from `@docx-editor.dev/i18n`. The
 | Export | Locale             |
 | ------ | ------------------ |
 | `en`   | English            |
+| `ar`   | Arabic             |
 | `de`   | German             |
 | `es`   | Spanish            |
 | `fr`   | French             |
@@ -42,6 +43,7 @@ Import only the catalogs your application uses from `@docx-editor.dev/i18n`. The
 | `ja`   | Japanese           |
 | `pl`   | Polish             |
 | `ptBR` | Portuguese, Brazil |
+| `ru`   | Russian            |
 | `tr`   | Turkish            |
 | `zhCN` | Simplified Chinese |
 
@@ -60,6 +62,10 @@ If a region's `t` overrides every label, return a useful string for every key it
 Changes to `Root.locale` apply to subsequent edits without replacing the editor instance. Existing stored date formats remain unchanged. Changes to `Root.translate` update generated labels without replacing the instance. Keep document bytes and font configuration stable when you change interface language.
 
 Interface language does not set paragraph direction. Use document formatting and the left-to-right or right-to-left controls for paragraph direction. Keep language-sensitive font shaping in the font configuration's `language` field. Use date fields and form controls to verify regional input behavior in your application.
+
+### Right-to-left interfaces
+
+The `ar` and `he` catalogs mirror the editor interface, including the review column, which moves to the left of the page. For direction rules, new right-to-left documents, and how the rendering engine lays out right-to-left text, see [Right-to-left support](/docs/2.x/guides/right-to-left).
 
 ## React and Vue reference
 

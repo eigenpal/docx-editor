@@ -34,21 +34,59 @@ const SYMBOL_TO_UNICODE: ReadonlyMap<number, string> = new Map([
   [0xde, '⇒'], // arrowdblright ⇒
 ]);
 
-/** Wingdings glyphs Word uses for bullets, by byte value. */
+/**
+ * Wingdings glyphs used for bullets and form check boxes, by byte value.
+ *
+ * Each entry was compared with the glyph the face itself draws for that byte.
+ */
 const WINGDINGS_TO_UNICODE: ReadonlyMap<number, string> = new Map([
-  [0x6c, '●'], // 'l' — black circle ●
-  [0x6e, '■'], // 'n' — black square ■
-  [0x6f, '□'], // 'o' — white square □
-  [0xa7, '▪'], // small black square ▪ — Word's default level-2 bullet
-  [0xd8, '➢'], // three-D arrowhead ➢
-  [0xfc, '✔'], // heavy check mark ✔
-  [0xfd, '✘'], // heavy ballot X ✘
+  [0x3f, '\u270d'], // writing hand ✍
+  [0x45, '\u261c'], // white left pointing index ☜
+  [0x6c, '\u25cf'], // 'l' — black circle ●
+  [0x6e, '\u25a0'], // 'n' — black square ■
+  [0x6f, '\u25a1'], // 'o' — white square □
+  [0x71, '\u2751'], // 'q' — lower right shadowed white square ❑
+  [0x72, '\u2752'], // 'r' — upper right shadowed white square ❒
+  [0xa7, '\u25aa'], // small black square ▪ — Word's default level-2 bullet
+  [0xa8, '\u25fb'], // white medium square ◻
+  [0xd8, '\u27a2'], // three-D arrowhead ➢
+  [0xfb, '\u2717'], // ballot X ✗
+  [0xfc, '\u2714'], // heavy check mark ✔
+  [0xfd, '\u2718'], // heavy ballot X ✘
+  [0xfe, '\u2611'], // ballot box with check ☑
 ]);
 
-/** Wingdings 2 bullets. */
+/** Wingdings 2 glyphs used for bullets and form check boxes, compared with the face. */
 const WINGDINGS2_TO_UNICODE: ReadonlyMap<number, string> = new Map([
-  [0xa7, '▪'], // small black square ▪
-  [0xb7, '•'], // bullet •
+  [0x2a, '\u25ab'], // white small square ▫
+  [0x30, '\u25af'], // white vertical rectangle ▯
+  [0x35, '\u25a2'], // white square with rounded corners ▢
+  [0x4f, '\u2717'], // ballot X ✗
+  [0x50, '\u2713'], // check mark ✓
+  [0x52, '\u2611'], // ballot box with check ☑
+  [0x53, '\u2612'], // ballot box with X ☒
+  [0x9a, '\u2b58'], // heavy circle ⭘
+  [0xa3, '\u25a1'], // white square □
+  [0xa7, '\u25a3'], // white square containing black small square ▣
+  [0xb7, '\u25c6'], // black diamond ◆
+]);
+
+/** Wingdings 3 arrows, compared with the face. */
+const WINGDINGS3_TO_UNICODE: ReadonlyMap<number, string> = new Map([
+  [0xa7, '\u2b05'], // leftwards black arrow ⬅
+]);
+
+/**
+ * Webdings glyphs, compared with the face. Its encoding is its own: the window buttons that
+ * forms use as check boxes sit on the digits.
+ */
+const WEBDINGS_TO_UNICODE: ReadonlyMap<number, string> = new Map([
+  [0x30, '\u{1f5d5}'], // minimize 🗕
+  [0x31, '\u{1f5d6}'], // maximize 🗖
+  [0x32, '\u{1f5d7}'], // overlap 🗗
+  [0x63, '\u25a1'], // white square □
+  [0x6e, '\u25cf'], // black circle ●
+  [0x72, '\u{1f5d9}'], // cancellation X 🗙
 ]);
 
 /**
@@ -60,8 +98,8 @@ const SYMBOL_FAMILIES: ReadonlyMap<string, ReadonlyMap<number, string>> = new Ma
   ['symbol', SYMBOL_TO_UNICODE],
   ['wingdings', WINGDINGS_TO_UNICODE],
   ['wingdings 2', WINGDINGS2_TO_UNICODE],
-  ['wingdings 3', WINGDINGS2_TO_UNICODE],
-  ['webdings', WINGDINGS_TO_UNICODE],
+  ['wingdings 3', WINGDINGS3_TO_UNICODE],
+  ['webdings', WEBDINGS_TO_UNICODE],
 ]);
 
 /** Longest family name we will even look up — the value is file-derived. */

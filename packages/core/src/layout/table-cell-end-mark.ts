@@ -5,6 +5,7 @@ import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.t
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
+import { hasShownRunContent } from './cell-end-paragraph-content.ts';
 
 const markStyles = new WeakMap<
   ParagraphLayoutInputs['markRunProperties'],
@@ -65,12 +66,21 @@ function endMarkBox(
   };
 }
 
-/** An end-of-cell glyph constrains the cell height, not the last printable line. */
+/**
+ * The row minimum an ordinary cell's end-of-cell mark sets: its line, but only when the end
+ * paragraph holds nothing else. Under text the mark sets no minimum. Measured with a 20pt
+ * mark under 5pt text and a 10pt mark under 1pt text, in left-to-right and right-to-left
+ * paragraphs, in compatibility modes 14 and 15 and with no mode: each row was as tall as its
+ * text line. An empty end paragraph takes the mark's line, 24pt for the 20pt mark, and so
+ * does one that holds only hidden or deleted runs.
+ */
 export function cellEndMarkHeight(
   cell: SemanticTableCell,
   width: number,
   deps: TableFlowDeps
 ): number {
+  const paragraph = cell.blocks.at(-1);
+  if (paragraph?.kind === 'paragraph' && hasShownRunContent(paragraph, deps.styleCascade)) return 0;
   return endMarkBox(cell, width, deps)?.linePt ?? 0;
 }
 

@@ -128,6 +128,8 @@ const editorRef = ref<DocxEditorRef | null>(null);
 </Framework>
 </FrameworkTabs>
 
+To start a right-to-left document, pass `{ direction: 'rtl' }` to `blankDocumentBytes()`. For more information, see [New right-to-left documents](/docs/2.x/guides/right-to-left#new-right-to-left-documents).
+
 Call `blankDocumentBytes()` in an event handler or store its result in state. Each call returns a new array. Calling it inline in `document` rebuilds the editor on every render.
 
 ### From a URL

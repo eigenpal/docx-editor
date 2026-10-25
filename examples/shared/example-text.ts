@@ -339,8 +339,11 @@ const messages = {
   'consumerApi.events': 'Recent events',
   'consumerApi.noEvents': 'No events are available.',
   'reviewSettings.open': 'Review settings',
-  'reviewSettings.title': 'Review display',
-  'reviewSettings.subtitle': 'How comments and tracked changes appear. Saved in this browser.',
+  'reviewSettings.title': 'Display settings',
+  'reviewSettings.subtitle': 'The interface language, and how comments and tracked changes appear.',
+  'reviewSettings.language': 'Interface language',
+  'reviewSettings.languageHelp':
+    'Arabic and Hebrew mirror the interface. The demo opens again in the new language.',
   'reviewSettings.close': 'Close review settings',
   'reviewSettings.reset': 'Reset to defaults',
   'reviewSettings.revisionsIn': 'Tracked changes',

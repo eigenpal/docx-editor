@@ -262,7 +262,7 @@ function expectSame(actual: unknown, expected: unknown, path: string): void {
     );
 }
 
-test('a row sized by its paragraph mark rebuilds exactly at new tops', () => {
+test('a row under a large paragraph mark rebuilds exactly at new tops', () => {
   const rowOf = (pPr: string) =>
     readTableStructure(
       tableNode(
@@ -282,14 +282,14 @@ test('a row sized by its paragraph mark rebuilds exactly at new tops', () => {
   const big = rowOf(BIG_MARK);
   const plain = rowOf('');
   const cols = big.columnWidthsPt;
-  // Assumption: the large mark leaves the paragraph's own box alone and raises the row: the
-  // floor, not the line, sizes it.
+  // The large mark leaves the paragraph's own box alone, and under text it sets no row
+  // minimum either: the text line sizes the row.
   const placedAtZero = (structure: typeof big) =>
     layoutRowFragment(structure.rows[0]!, cols, 0, 0, false, 0, cellDeps()).record;
   const bigRow = placedAtZero(big);
   const plainRow = placedAtZero(plain);
   expect(bigRow.cells[2]!.blocks[0]!.box.height).toBe(plainRow.cells[2]!.blocks[0]!.box.height);
-  expect(bigRow.box.height).toBeGreaterThan(plainRow.box.height);
+  expect(bigRow.box.height).toBe(plainRow.box.height);
   const row = big.rows[0]!;
   const deps = cellDeps();
   const base = layoutRowFragment(row, cols, 3.25, 41.3, false, 0, deps);

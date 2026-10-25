@@ -412,6 +412,9 @@
     ]
   },
   "@docx-editor.dev/i18n": {
+    "ar": [
+      "PartialLocaleStrings"
+    ],
     "de": [
       "PartialLocaleStrings"
     ],

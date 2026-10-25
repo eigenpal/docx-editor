@@ -132,6 +132,7 @@ import {
   type EditorCaret,
 } from '@docx-editor.dev/vue';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+import { demoCatalog, demoDirection } from '../../shared/demo-language';
 import BrandLogo from '../../shared/BrandLogo.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
 import SourceLink from '../../shared/SourceLink.vue';
@@ -203,8 +204,16 @@ function onFileSelected(event: Event): void {
   input.value = '';
 }
 
+// A right-to-left interface starts new documents right to left, in the interface language.
 function newDocument(): void {
-  editor.value?.load(blankDocumentBytes());
+  const language = demoCatalog()?._lang;
+  editor.value?.load(
+    blankDocumentBytes(
+      demoDirection() === 'rtl'
+        ? { direction: 'rtl', ...(typeof language === 'string' ? { bidiLanguage: language } : {}) }
+        : {}
+    )
+  );
 }
 
 function saveDocument(): void {

@@ -13,6 +13,7 @@ import {
   type PendingFormat,
 } from './caret-format-state.ts';
 import { CaretFormatHistory } from './caret-format-history.ts';
+import { createTypedDirectionOps } from './surface-typed-direction.ts';
 import {
   createSurfaceRevisionMarkup,
   revisionFacingPages,
@@ -22,7 +23,7 @@ import { createDrawingGestures } from './surface-drawing-gestures.ts';
 import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { storyOutsideTextbox, textboxOwnerDeps } from './surface-textbox-owner.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
-import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
+import { applySurfaceStrings } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
 import { UNEXPLAINED_WRITE_REFUSAL, writeBlockReason } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
@@ -453,7 +454,7 @@ export function mountPaginatedSurface(
   pagesLayer.spellcheck = false;
   pagesLayer.setAttribute('role', 'textbox');
   pagesLayer.setAttribute('aria-multiline', 'true');
-  setSurfaceAccessibleLabel(pagesLayer, options.translate);
+  applySurfaceStrings(pagesLayer, options.translate);
   pagesLayer.style.outline = 'none';
 
   // The one highlight the browser cannot draw. A SIBLING of the pages, never a child: the
@@ -990,6 +991,7 @@ export function mountPaginatedSurface(
     revisionDisplayMode,
     revisionFilter
   );
+  const typedDirectionOps = createTypedDirectionOps(session, revisionDisplayMode, revisionFilter);
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
     return revisionParagraphMarkVisible(part, paragraphId, revisionDisplayMode(), revisionFilter());
@@ -4540,10 +4542,12 @@ export function mountPaginatedSurface(
         text.length
       );
       const redoMark = { paragraphId: target.paragraphId, start: landing, end: landing };
+      // Letters in a right-to-left script start a `w:rtl` run, joined to the caret format.
+      const formatOps = typedDirectionOps(target, landing, text, pendingOps);
       commit(
         () =>
           withoutPendingOnRejection(
-            [...insertOps, ...pendingOps],
+            [...insertOps, ...formatOps],
             insertOps,
             selectionMark(),
             redoMark
@@ -5336,7 +5340,7 @@ export function mountPaginatedSurface(
     setTranslate: (next) => {
       if (translate === next) return;
       translate = next;
-      setSurfaceAccessibleLabel(pagesLayer, next);
+      applySurfaceStrings(pagesLayer, next);
       textFormInteraction?.update();
       const nextBreakStrings = breakMarkStringsFromTranslate(next);
       const labelsMoved =

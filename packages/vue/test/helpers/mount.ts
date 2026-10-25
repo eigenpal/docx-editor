@@ -35,7 +35,9 @@ export function mountEditorTree(
   source: Uint8Array = SOURCE,
   viewportChildren: () => VNode | VNode[] = () => [],
   modules?: readonly import('@docx-editor.dev/core/editor').EditorModule[],
-  rootProps: Record<string, unknown> = {}
+  rootProps: Record<string, unknown> = {},
+  /** Wraps the root, for example in a `LocaleProvider` from this package's source. */
+  wrap: (root: VNode) => VNode = (root) => root
 ): MountedEditor {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -51,23 +53,25 @@ export function mountEditorTree(
       return () => {
         void renderEpoch.value;
         const viewportNodes = viewportVisible.value ? slotChildren(viewportChildren()) : [];
-        return h(
-          DocxEditorRoot,
-          {
-            document: source,
-            ...(modules !== undefined ? { modules } : {}),
-            ...rootProps,
-            onReady: (editor: import('@docx-editor.dev/core/contracts/editor').Editor) =>
-              ready.push(editor as DocxEditorInstance),
-          },
-          {
-            default: () => [
-              ...slotChildren(rootChildren()),
-              h(DocxEditorViewport, null, {
-                default: () => [h(DocxEditorContent), ...viewportNodes],
-              }),
-            ],
-          }
+        return wrap(
+          h(
+            DocxEditorRoot,
+            {
+              document: source,
+              ...(modules !== undefined ? { modules } : {}),
+              ...rootProps,
+              onReady: (editor: import('@docx-editor.dev/core/contracts/editor').Editor) =>
+                ready.push(editor as DocxEditorInstance),
+            },
+            {
+              default: () => [
+                ...slotChildren(rootChildren()),
+                h(DocxEditorViewport, null, {
+                  default: () => [h(DocxEditorContent), ...viewportNodes],
+                }),
+              ],
+            }
+          )
         );
       };
     },

@@ -1228,7 +1228,7 @@ a.docx-hyperlink:focus-visible {
 .docx-content-control-menu-item {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   border: none;
@@ -1598,7 +1598,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   z-index: var(--doc-z-chrome);
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   min-width: 150px;
   background: var(--doc-surface);
   border: 1px solid var(--doc-border);
@@ -1665,7 +1665,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   font-size: 12px;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 
 .docx-table-chrome__width-row:hover:not(:disabled) {
@@ -2551,7 +2551,7 @@ a.docx-hyperlink:focus-visible {
   align-items: flex-start;
   justify-content: center;
   gap: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 /* The scroller keeps a left-to-right base whatever the host page declares. Under an
@@ -2563,6 +2563,23 @@ a.docx-hyperlink:focus-visible {
   display: flex;
   flex-direction: column;
   direction: ltr;
+}
+
+/* Controls that mount inside the scroller are chrome, not pages: they take back the
+ * direction the chrome declares with `dir`. `:dir()` follows the `dir` attribute, not the
+ * scroller's `direction`, so a right-to-left host or catalog still reaches them. Each one
+ * positions itself with physical coordinates, so mirroring its content moves nothing. */
+.docx-editor__scroll-container
+  :is(
+    .docx-contextmenu,
+    .docx-dialog-mount,
+    .docx-review,
+    .docx-hyperlink-popup,
+    .docx-equation-popup,
+    .docx-content-control-widget-popup,
+    .docx-note-properties__panel
+  ):dir(rtl) {
+  direction: rtl;
 }
 
 .docx-editor__content {
@@ -2679,8 +2696,15 @@ a.docx-hyperlink:focus-visible {
    scroller's `padding-right` (the review column) deliberately snaps, so a ruler easing
    its right padding for 0.2s measured a page that had already jumped. One edge per curve,
    both elements on the same one. */
+/* The frame's paddings are physical, like the scroller's: the navigation side glides, the
+   right one in a right-to-left interface. */
 .docx-ruler-frame {
-  transition: padding-inline-start 0.2s ease;
+  transition: padding-left 0.2s ease;
+}
+
+.docx-ruler-frame[data-chrome-dir='rtl'] {
+  /* The property only: the duration stays with the rules that turn it off. */
+  transition-property: padding-right;
 }
 
 /* A deferred open gives the loading overlay one frame before parsing. The parse blocks
@@ -2900,7 +2924,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor__launcher {
-  text-align: left;
+  text-align: start;
   padding: 5px 8px;
   border: 1px solid var(--doc-border);
   border-radius: 4px;
@@ -2996,7 +3020,7 @@ a.docx-hyperlink:focus-visible {
 .docx-editor__theme {
   display: inline-flex;
   align-items: center;
-  margin-left: 10px;
+  margin-inline-start: 10px;
   padding: 2px;
   border: 1px solid var(--doc-border);
   border-radius: 8px;
@@ -3041,8 +3065,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor__theme {
-  margin-left: 0;
-  margin-right: 4px;
+  margin-inline-start: 0;
+  margin-inline-end: 4px;
 }
 .docx-editor__theme-option {
   padding: 3px 8px;
@@ -3052,7 +3076,7 @@ a.docx-hyperlink:focus-visible {
 /* Retained so an existing consumer's selector still resolves; the region is indented by
  * default now that it lives inside the header row. */
 .docx-editor__title-region--indented {
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 /* Outline toggle: a circular button in the left gutter. */
@@ -3224,7 +3248,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Blank furniture: a page with no header/footer paints an empty band over that margin.
  * Invisible until hovered; the hover invites the double-click that creates the story.
- * The hint text stays in CSS (like the band itself it is screen-only chrome), and the
+ * The hint text comes from the interface language through `--docx-hf-*` properties the
+ * surface sets on the pages layer, with English as the fallback, and the
  * document canvas stays Word-faithful because nothing shows until the pointer asks. */
 .docx-pages .docx-hf--placeholder {
   display: flex;
@@ -3238,7 +3263,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf--placeholder:hover::after {
-  content: 'Double-click to add header';
+  content: var(--docx-hf-add-header, 'Double-click to add header');
   font-family:
     system-ui,
     -apple-system,
@@ -3250,7 +3275,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf--placeholder[data-docx-hf='footer']:hover::after {
-  content: 'Double-click to add footer';
+  content: var(--docx-hf-add-footer, 'Double-click to add footer');
 }
 
 /* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
@@ -3281,7 +3306,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf-edit-hint::after {
-  content: 'Double-click to edit header';
+  content: var(--docx-hf-edit-header, 'Double-click to edit header');
   font-family:
     system-ui,
     -apple-system,
@@ -3302,7 +3327,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer']::after {
-  content: 'Double-click to edit footer';
+  content: var(--docx-hf-edit-footer, 'Double-click to edit footer');
   margin-top: 0;
   margin-bottom: 4px;
 }
@@ -3856,14 +3881,14 @@ a.docx-hyperlink:focus-visible {
 /* Right-edge escape, matching the font-size menu below. */
 .docx-toolbar__more-panel .docx-toolbar__font-family-content,
 .docx-toolbar__more-panel .docx-toolbar__style-content {
-  right: 0;
-  left: auto;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
 
 /* Right-edge controls open toward the panel instead of beyond the viewport. */
 .docx-toolbar__more-panel .docx-toolbar__font-size-menu {
-  right: 0;
-  left: auto;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
 
 /* The lower controls have no room below them in a small scrollport. Their compact menus
@@ -3871,16 +3896,16 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__more-panel .docx-toolbar__alignment-popup,
 .docx-toolbar__more-panel .docx-toolbar__line-spacing-menu {
   top: auto;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 100%;
-  left: auto;
+  inset-inline-start: auto;
 }
 
 /* Table pickers can be the first row beneath a top-edge toolbar, so they keep their normal
  * downward placement and only align toward the panel's safe inline edge. */
 .docx-toolbar__more-panel .docx-table-chrome__panel {
-  right: 0;
-  left: auto;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
 
 .docx-toolbar__more-section + .docx-toolbar__more-section {
@@ -4000,7 +4025,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__table-insert-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
 }
@@ -4167,7 +4192,7 @@ a.docx-hyperlink:focus-visible {
   gap: 8px;
   width: 100%;
   min-width: 112px;
-  text-align: left;
+  text-align: start;
   padding: 7px 10px;
   border: none;
   border-radius: 4px;
@@ -4213,8 +4238,8 @@ a.docx-hyperlink:focus-visible {
 
 /* The selected row's ✓, pushed to the right edge. */
 .docx-toolbar__menu-check {
-  margin-left: auto;
-  padding-left: 16px;
+  margin-inline-start: auto;
+  padding-inline-start: 16px;
   font-size: 12px;
   color: var(--doc-text);
 }
@@ -4226,7 +4251,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__style-content {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 100%;
@@ -4268,7 +4293,7 @@ a.docx-hyperlink:focus-visible {
   display: flex;
   align-items: center;
   width: 100%;
-  text-align: left;
+  text-align: start;
   padding: 7px 10px;
   border: none;
   border-radius: 4px;
@@ -4374,7 +4399,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__font-size-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 72px;
@@ -4405,7 +4430,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__line-spacing-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 232px;
@@ -4442,7 +4467,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__zoom-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   /* Wide enough for "Automatic" above the percentages, which are narrower. */
@@ -4466,7 +4491,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__alignment-popup {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   display: flex;
@@ -4541,7 +4566,7 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__swatch-popup {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   padding: 10px;
@@ -4695,6 +4720,12 @@ a.docx-hyperlink:focus-visible {
 /* ── Scoped story chrome ──────────────────────────────────────────────────────────────
  * A quiet label rail follows the active header/footer/note story. React keeps it outside
  * the engine-painted subtree, while useScopedChromeAnchor places it at the story boundary. */
+/* The header, footer, and note bars are interface, not page: in a right-to-left interface
+   the label and the options swap sides, although the bar mounts inside the scroller. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] .docx-context-bar {
+  direction: rtl;
+}
+
 .docx-context-bar {
   position: absolute;
   display: flex;
@@ -4768,7 +4799,7 @@ a.docx-hyperlink:focus-visible {
 .docx-hf-chrome__options-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   min-width: 260px;
   padding: 6px 0;
   background: var(--doc-surface);
@@ -4819,7 +4850,7 @@ a.docx-hyperlink:focus-visible {
   padding: 6px 12px;
   font: inherit;
   font-size: 13px;
-  text-align: left;
+  text-align: start;
   color: var(--doc-text);
   background: transparent;
   border: none;
@@ -5056,7 +5087,7 @@ a.docx-hyperlink:focus-visible {
 .docx-editor-toolbar__alignment-popup {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   display: flex;
@@ -5415,7 +5446,11 @@ a.docx-hyperlink:focus-visible {
  * keeps the full column with the page's clearance at the start, and the viewport scrolls
  * sideways to the cards. The fallbacks — the full column while open, the strip while
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
- * it always did. */
+ * it always did.
+ *
+ * Both properties are LOGICAL: the end is the column's edge and the start the other one. A
+ * right-to-left interface puts the column on the page's left; the `data-chrome-dir` rules
+ * below the navigation pane rules map the two values to physical edges there. */
 .docx-editor__scroll-container[data-review-pane='open'] {
   padding-right: var(--docx-review-gutter, 316px);
 }
@@ -5452,6 +5487,26 @@ a.docx-hyperlink:focus-visible {
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
   box-shadow: var(--doc-shadow-lg);
+  /* A popover from its marker: it grows from the column's side, which is the right here. */
+  transform-origin: right center;
+  transition:
+    opacity 150ms var(--doc-motion-ease-out),
+    transform 150ms var(--doc-motion-ease-out);
+}
+
+@starting-style {
+  .docx-review__slot--compact .docx-review__card {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @starting-style {
+    .docx-review__slot--compact .docx-review__card {
+      transform: none;
+    }
+  }
 }
 
 /* The column's cards print BESIDE the sheet, which is harmless; the compact card floats
@@ -5467,10 +5522,11 @@ a.docx-hyperlink:focus-visible {
    already annotates the text being re-selected. On the edge there is nothing to collide
    with, and the affordance still reads as belonging to the selection it sits beside. */
 .docx-review__add {
-  /* Straddling the sheet's right edge — one rail gutter back, plus HALF the button's width.
-     Centred on the edge it belongs to both sides: attached to the text it will comment on,
-     and clear of the column where the cards live. */
-  margin-left: calc(-16px - 17px);
+  /* Straddling the sheet's right edge: one rail gutter back, HALF the button's width, and
+     7px more into the page. Attached to the text it will comment on, and 6px clear of a card
+     or a marker that starts one gutter off the edge. Centred exactly, it touched both. */
+  margin-left: var(--docx-review-add-offset);
+  --docx-review-add-offset: calc(-16px - 17px - 7px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5484,17 +5540,75 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-primary, #1a73e8);
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    transform 160ms var(--doc-motion-ease-out),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.docx-review__add:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-review__add {
+    transition: none;
+  }
+
+  .docx-review__add:active {
+    transform: none;
+  }
+}
+
+/* A right-to-left interface puts the column on the page's left. Markers and the button keep
+   to the column's page edge, which is then its right. */
+.docx-editor__scroll-container[data-review-side='left']
+  :is(.docx-review__markers > .docx-review__marker, .docx-review__add) {
+  left: auto;
+  right: 0;
+}
+
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__add {
+  margin-left: 0;
+  margin-right: var(--docx-review-add-offset);
+}
+
+/* The icon's tail points at the page, as the markers' do. */
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__add > svg {
+  transform: scaleX(-1);
+}
+
+/* The compact card grows from the column's side, which is then the left. */
+.docx-editor__scroll-container[data-review-side='left']
+  .docx-review__slot--compact
+  .docx-review__card {
+  transform-origin: left center;
+}
+
+/* The speech bubble's tail points at the page, which is then on its right. */
+.docx-editor__scroll-container[data-review-side='left']
+  .docx-review__marker[data-marker='initials'],
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__badge {
+  border-radius: 13px 13px 3px 13px;
+}
+
+/* The cards keep their 12px of air on the side away from the page, the compact one too. */
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__slot .docx-review__card {
+  margin: 0 0 0 12px;
 }
 
 /* The hover fill must be OPAQUE. `--doc-surface-hover` is a translucent wash, which is right
    for a control sitting on a flat surface and wrong for this one: it straddles the sheet's
    edge, so a see-through fill showed white paper through its left half and grey canvas
    through its right, split down the middle. Mixed into the surface colour it stays one
-   solid shape wherever it sits. */
-.docx-review__add:hover {
-  background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
-  border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
-  box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+   solid shape wherever it sits. Pointer hover only: a tap on a touch screen left it stuck. */
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__add:hover {
+    background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
+    border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
+    box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+  }
 }
 
 /* A card being composed reads as unfinished until it is committed. */
@@ -5543,6 +5657,9 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted, #8a8f98);
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
 /* `commentMarkers: 'initials'`: a comment thread's marker is a speech bubble in its author's colour —
@@ -5823,6 +5940,29 @@ a.docx-hyperlink:focus-visible {
    * specificity fight. */
   padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
   transition: padding-inline-start 0.2s ease;
+}
+
+/* A right-to-left interface (`data-chrome-dir`) mirrors both edges: the navigation pane opens
+ * at the right, so its shift and the review gutter's start value pad the right edge, and the
+ * review column pads the left. The custom properties keep their logical meaning (start, end),
+ * so every reader of them stays direction-free; only these rules know the physical edges.
+ * The scroller keeps a left-to-right base, so `padding-inline-start` is still the left. */
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
+  padding-left: 0;
+  padding-right: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
+  /* The property only: the duration stays with the rules that turn it off. */
+  transition-property: padding-right;
+}
+
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='open'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='open'] {
+  padding-left: var(--docx-review-gutter, 316px);
+}
+
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='closed'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='closed'] {
+  padding-left: var(--docx-review-gutter, 44px);
 }
 
 /* Under a fit the page width follows the padded box. Animating the padding would
@@ -6186,9 +6326,11 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.docx-review__marker:hover {
-  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
-  color: var(--doc-text, #1f2328);
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__marker:hover {
+    background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+    color: var(--doc-text, #1f2328);
+  }
 }
 
 /* Host furniture: flow content at the top of the rail. It needs its pointer events back (the
@@ -6290,7 +6432,7 @@ a.docx-hyperlink:focus-visible {
      text has to keep full contrast, and eight tinted slabs down a rail read as warnings.
      `--doc-review-author-current` is set per card by the review surface; `--doc-review-author-ink`
      is the chrome-side reading of it, lifted under `.dark` (see below). */
-  border-left: 3px solid var(--doc-review-author-ink, var(--doc-border, #e3e5e8));
+  border-inline-start: 3px solid var(--doc-review-author-ink, var(--doc-border, #e3e5e8));
   /* The card is CHROME, so it is themed; the document canvas beside it never is. */
   border-radius: 12px;
   background: var(--doc-surface, #fff);
@@ -6318,7 +6460,7 @@ a.docx-hyperlink:focus-visible {
      shorthand overwrote it — the open card was the one place a reader could not tell whose
      change they were deciding on. */
   border-top-color: var(--doc-border-strong, #c8ccd2);
-  border-right-color: var(--doc-border-strong, #c8ccd2);
+  border-inline-end-color: var(--doc-border-strong, #c8ccd2);
   border-bottom-color: var(--doc-border-strong, #c8ccd2);
   /* The faintest wash of the chrome's own accent, the same one the toolbar uses for a
      pressed control, so "open" reads as selection rather than as a fourth author colour. */
@@ -6593,6 +6735,9 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__text {
   overflow-wrap: anywhere;
+  /* Quoted and written text keeps its own direction: a left-to-right remark in a
+     right-to-left interface keeps its closing punctuation at its end. */
+  unicode-bidi: plaintext;
 }
 
 /* A REVISION's quote is clamped, not scrolled: it quotes text that is already on the page the
@@ -6629,6 +6774,8 @@ a.docx-hyperlink:focus-visible {
 .docx-review__input {
   min-width: 0;
   flex: 1 1 auto;
+  /* What is typed takes its direction from its first letter, as the posted text does. */
+  unicode-bidi: plaintext;
   padding: 7px 14px;
   border: 1px solid var(--doc-border, #e3e5e8);
   border-radius: 999px;
@@ -6841,7 +6988,7 @@ p.docx-review__refused {
 .docx-toolbar__mode-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: var(--doc-z-overlay);
   display: flex;
   min-width: 260px;
@@ -6863,7 +7010,7 @@ p.docx-review__refused {
   background: transparent;
   color: var(--doc-text, #1f2328);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -6903,7 +7050,7 @@ p.docx-review__refused {
 .docx-toolbar__reviewers-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: var(--doc-z-overlay);
   display: flex;
   min-width: 220px;
@@ -6930,7 +7077,7 @@ p.docx-review__refused {
   background: transparent;
   color: var(--doc-text);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -7350,7 +7497,7 @@ p.docx-review__refused {
 .docx-editor .docx-menubar__trigger-icon {
   display: inline-flex;
   align-items: center;
-  margin-right: 5px;
+  margin-inline-end: 5px;
   vertical-align: -2px;
   color: inherit;
 }
@@ -7370,7 +7517,7 @@ p.docx-review__refused {
 }
 
 .docx-editor .docx-menubar__menu-root[data-toolbar-more] .docx-menubar__trigger-icon {
-  margin-right: 0;
+  margin-inline-end: 0;
 }
 
 /* The "⋯" menu's panel is never wider than the viewport less its margins. */
@@ -7394,7 +7541,7 @@ p.docx-review__refused {
 .docx-editor .docx-menubar__menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 220px;
@@ -7418,25 +7565,53 @@ p.docx-review__refused {
 
 .docx-editor .docx-menubar__item-label {
   flex: 1;
-  text-align: left;
+  text-align: start;
 }
 
 .docx-editor .docx-menubar__item-shortcut,
 .docx-editor .docx-menubar__item-caret {
   flex: none;
-  margin-left: 24px;
+  margin-inline-start: 24px;
   color: var(--doc-text-muted);
   font-size: 12px;
 }
 
 .docx-editor .docx-menubar__item-caret {
-  margin-left: 16px;
+  margin-inline-start: 16px;
   font-size: 14px;
+}
+
+/* Key combinations read left to right in every interface language, so `⌘O` keeps its
+ * order in right-to-left chrome. */
+.docx-editor .docx-menubar__item-shortcut {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 /* An applied toggle row (Bold on bold text) reads as the checked one. */
 .docx-editor .docx-menubar__item[data-active] {
   background: var(--doc-primary-light);
+}
+
+/* ── Right-to-left chrome ─────────────────────────────────────────────────────────────
+ *
+ * The chrome follows the direction it inherits: the host page, or the `dir` that the
+ * packaged editor sets for a right-to-left catalog. Logical properties mirror the layout;
+ * these rules mirror the icons that point along the reading direction. The viewport keeps
+ * a left-to-right base, so nothing here reaches the painted pages. */
+.docx-editor
+  :is(
+    [data-slot='history.undo'],
+    [data-slot='history.redo'],
+    [data-slot='list.bullet'],
+    [data-slot='list.numbered'],
+    [data-slot='list.indent'],
+    [data-slot='list.outdent']
+  )
+  svg:dir(rtl),
+.docx-editor .docx-menubar__item-caret:dir(rtl),
+.docx-review__send > svg:dir(rtl) {
+  transform: scaleX(-1);
 }
 
 /* ── Submenus ──────────────────────────────────────────────────────────────────────── */
@@ -7448,18 +7623,18 @@ p.docx-review__refused {
   background: var(--doc-bg-hover);
 }
 
-/* Opens to the RIGHT of its parent row, top-aligned with it — Word's and Docs' geometry.
- * The small negative offset pulls the panel's padding back onto the row. */
+/* Opens on the end side of its parent row (the right in left-to-right chrome), top-aligned
+ * with it. The small negative offset pulls the panel's padding back onto the row. */
 .docx-editor .docx-menubar__submenu-panel {
   top: -4px;
-  left: 100%;
+  inset-inline-start: 100%;
   margin-top: 0;
   /* FLUSH against the parent panel, not offset by a gap. The panel is absolutely
    * positioned and out of flow, so the wrapper's hit box is the parent ROW only — a
    * pointer sample landing in a gap strip would hit the parent panel instead, fire the
    * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
    * separation comes from the card's own border and shadow. */
-  margin-left: 0;
+  margin-inline-start: 0;
   min-width: 240px;
 }
 
@@ -7703,7 +7878,7 @@ p.docx-review__refused {
 .docx-toolbar__image-wrap-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: var(--doc-z-overlay);
   min-width: 220px;
   padding: 4px 0;
@@ -7722,7 +7897,7 @@ p.docx-review__refused {
   background: transparent;
   color: var(--doc-text);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -7741,7 +7916,7 @@ p.docx-review__refused {
 .docx-toolbar__alt-text-panel {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: var(--doc-z-overlay);
   width: 280px;
   padding: 12px;
@@ -8247,7 +8422,7 @@ p.docx-review__refused {
     box-shadow 0.12s ease;
 }
 .docx-editor .docx-dialog__select {
-  padding-right: 4px;
+  padding-inline-end: 4px;
   cursor: pointer;
 }
 .docx-editor .docx-dialog__textarea {
@@ -8485,7 +8660,7 @@ p.docx-review__refused {
   margin: 0;
   padding: 6px 8px;
   font: inherit;
-  text-align: left;
+  text-align: start;
   color: var(--doc-text);
   background: transparent;
   border: 0;

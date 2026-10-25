@@ -294,7 +294,8 @@ export function NavigationHeadings({ className, style }: NavigationPartProps): R
                   intents.picked();
                 }}
               >
-                {item.heading.text}
+                {/* Document text keeps its own direction inside the pane's (`bdi`). */}
+                <bdi>{item.heading.text}</bdi>
               </button>
             </li>
           ))}
@@ -325,9 +326,11 @@ function ResultRow({
         onClick={onSelect}
       >
         <span className="docx-nav__result-text">
-          {match.contextBefore}
-          <mark className="docx-nav__result-hit">{match.text}</mark>
-          {match.contextAfter}
+          <bdi>
+            {match.contextBefore}
+            <mark className="docx-nav__result-hit">{match.text}</mark>
+            {match.contextAfter}
+          </bdi>
         </span>
       </button>
     </li>

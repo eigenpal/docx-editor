@@ -45,6 +45,7 @@ import {
 } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useEditorState } from '../useEditorState';
+import { useChromeDir } from '../../i18n';
 import { ToolbarContext, useToolbarLabelFor, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import { ParagraphDialogHost } from '../paragraph-dialog-host';
@@ -242,8 +243,11 @@ function iconPart(slot: ChromeSlotId): PartLike {
  * editing-mode picker (contextual slots stay available for composition) — with the
  * alignment group merged into ONE dropdown under the `'alignment'` key.
  */
-function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGroup[] {
-  return formattingBarChromeGroups(image).map((group) => {
+function buildDefaultGroups(
+  image: EditorSnapshot['image'],
+  direction: boolean
+): readonly DefaultGroup[] {
+  return formattingBarChromeGroups(image, { direction }).map((group) => {
     if (group.id === 'alignment') {
       return {
         id: group.id,
@@ -350,7 +354,13 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   const image = useEditorState(selectToolbarImage);
   const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const tableChromeVisible = useEditorState(selectTableChromeVisible);
-  const defaultGroups = useMemo(() => buildDefaultGroups(image), [image]);
+  // A right-to-left interface language puts the paragraph direction buttons in the bar.
+  const chromeDir = useChromeDir();
+  const directionButtons = chromeDir === 'rtl';
+  const defaultGroups = useMemo(
+    () => buildDefaultGroups(image, directionButtons),
+    [image, directionButtons]
+  );
   const defaultSlots = useMemo(
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),
     [defaultGroups]
@@ -524,6 +534,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           // so a composed toolbar is styled wherever the host puts it. Nesting under the
           // packaged wrapper is fine; the stylesheet re-applies dark tokens to nested roots.
           className={`${scopeClassName}docx-toolbar${className ? ` ${className}` : ''}`}
+          dir={chromeDir}
           // One row when the bar measures itself, wrapping when it does not: the stylesheet
           // reads this rather than guessing from a breakpoint.
           {...(measuring ? { 'data-overflow': '' } : {})}

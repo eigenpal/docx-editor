@@ -7,11 +7,13 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { h } from 'vue';
-import { en } from '@docx-editor.dev/i18n';
+import { createApp, h } from 'vue';
+import { ar, en, es, he } from '@docx-editor.dev/i18n';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
+import { DocxEditor } from '../src/components/DocxEditor';
+import { LocaleProvider } from '../src/i18n';
 import { docx, flush } from './helpers/fixtures';
 import { mountEditorTree, type MountedEditor } from './helpers/mount';
 
@@ -104,4 +106,60 @@ test('the default toolbar omits direction shortcuts', async () => {
   expect(
     mounted.container.querySelector('button[aria-label="' + en.toolbar.rightToLeft + '"]')
   ).toBeNull();
+});
+
+describe('a right-to-left interface language', () => {
+  test('the default toolbar shows the direction buttons after alignment', async () => {
+    mounted = mountEditorTree(
+      () => h(LocaleProvider, { i18n: ar }, { default: () => h(DocxEditorToolbar) }),
+      docx(p('alpha'))
+    );
+    await flush();
+    const rtl = button(mounted.container, ar.toolbar!.rightToLeft!);
+    const ltr = button(mounted.container, ar.toolbar!.leftToRight!);
+    const alignment = mounted.container.querySelector('[data-slot="alignment"]')!;
+    expect(alignment.compareDocumentPosition(ltr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ltr.compareDocumentPosition(rtl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('composed chrome parts mirror under the provider without a wrapper', async () => {
+    mounted = mountEditorTree(
+      () => h(LocaleProvider, { i18n: ar }, { default: () => h(DocxEditorToolbar) }),
+      docx(p('alpha'))
+    );
+    await flush();
+    expect(mounted.container.querySelector('.docx-toolbar')!.getAttribute('dir')).toBe('rtl');
+  });
+
+  test('the provider dir prop decides over the catalog', async () => {
+    mounted = mountEditorTree(
+      () => h(LocaleProvider, { i18n: es, dir: 'rtl' }, { default: () => h(DocxEditorToolbar) }),
+      docx(p('alpha'))
+    );
+    await flush();
+    expect(mounted.container.querySelector('.docx-toolbar')!.getAttribute('dir')).toBe('rtl');
+    expect(button(mounted.container, es.toolbar!.rightToLeft!)).toBeDefined();
+  });
+
+  /** The packaged editor's chrome wrapper direction for one catalog. */
+  async function sugarDirection(i18n: typeof ar): Promise<string | null> {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const app = createApp({ render: () => h(DocxEditor, { document: docx(p('alpha')), i18n }) });
+    app.mount(host);
+    await flush();
+    const dir = host.querySelector('.docx-editor')!.getAttribute('dir');
+    app.unmount();
+    host.remove();
+    return dir;
+  }
+
+  test('the packaged editor mirrors its chrome for Arabic and Hebrew', async () => {
+    expect(await sugarDirection(ar)).toBe('rtl');
+    expect(await sugarDirection(he)).toBe('rtl');
+  });
+
+  test('a left-to-right catalog leaves the host direction in charge', async () => {
+    expect(await sugarDirection(es)).toBeNull();
+  });
 });

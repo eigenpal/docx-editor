@@ -15,6 +15,7 @@ import { demoExporters } from '../../shared/menu-exporters';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   DocxEditor,
+  LocaleProvider,
   useDocxEditor,
   useDocxSource,
   useEditorCaret,
@@ -31,6 +32,7 @@ import { drawingModule } from '@docx-editor.dev/pro/drawing';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+import { demoCatalog, demoDirection, demoLanguage } from '../../shared/demo-language';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
@@ -385,8 +387,21 @@ function EditorChrome({
       editor?.load(new Uint8Array(buffer));
     });
   };
+  // A right-to-left interface starts new documents right to left, in the interface language.
   const newDocument = () => {
-    if (!collaborating) editor?.load(blankDocumentBytes());
+    const rtl = demoDirection() === 'rtl';
+    const language = DEMO_CATALOG?._lang;
+    if (!collaborating)
+      editor?.load(
+        blankDocumentBytes(
+          rtl
+            ? {
+                direction: 'rtl',
+                ...(typeof language === 'string' ? { bidiLanguage: language } : {}),
+              }
+            : {}
+        )
+      );
   };
   const saveDocument = () => {
     void editor?.save().then((buffer) => {
@@ -579,6 +594,11 @@ function RulerRow() {
 // The demo surface
 // ─────────────────────────────────────────────────────────────────────────────
 
+// `?lang=ar` (or any shipped locale code) translates the chrome; the settings panel sets it.
+// Under `LocaleProvider` the library parts mirror on their own for a right-to-left catalog;
+// the demo's own header is not a library part, so the wrapper takes the catalog direction.
+const DEMO_CATALOG = demoCatalog(demoLanguage());
+
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const showAdapterSwitcher =
     Boolean(import.meta.env.DEV) || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
@@ -643,141 +663,144 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const activeDocument = collaboration.document ?? bytes;
 
   return (
-    <div
-      className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
-      data-testid="composed-mount"
-    >
-      {loadError ? (
-        // A failed fetch is NOT a loading state: it is terminal, and routing it through
-        // the polite live region would announce it as progress. Its own assertive region.
-        <div className="demo-loading" role="alert">
-          {`Could not load the document: ${loadError.message}`}
-        </div>
-      ) : (
-        // Authoring is ambient: comments and tracked changes take their `@w:author` from
-        // `author`, the way the Office JS API sources it from context. A real app supplies
-        // the signed-in user; a demo supplies a name so replies can be written at all.
-        //
-        // In a room that name is the one the author typed when they joined. Two names for one
-        // person is a bug the document keeps: the room showed "Timur" while every comment they
-        // wrote was signed "Demo Reviewer", and `@w:author` is what a reviewer opening the file
-        // in Word reads months later.
-        <DocxEditor.Root
-          key={collaboration.session?.documentId ?? 'local-document'}
-          {...(activeDocument ? { document: activeDocument } : {})}
-          author={collaboration.session?.identity.name ?? 'Demo Reviewer'}
-          // The demo always opens ready to type: without an explicit mode, a document
-          // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
-          mode="edit"
-          modules={collaboration.modules}
-          {...(fonts ? { fonts } : {})}
-          onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
-        >
-          <EditorChrome
-            title={title}
-            onTitleChange={setTitle}
-            colorMode={colorMode}
-            onColorModeChange={setColorMode}
-            onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
-            showAdapterSwitcher={showAdapterSwitcher}
-            collaborating={collaboration.session !== null}
-            collaborationControl={
-              <CollaborationControl
-                session={collaboration.session}
-                pending={collaboration.pending}
-                connect={collaboration.connect}
-                leave={collaboration.leave}
-              />
-            }
-          />
-          <RulerRow />
-          {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
+    <LocaleProvider {...(DEMO_CATALOG ? { i18n: DEMO_CATALOG } : {})}>
+      <div
+        className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
+        data-testid="composed-mount"
+        dir={demoDirection()}
+      >
+        {loadError ? (
+          // A failed fetch is NOT a loading state: it is terminal, and routing it through
+          // the polite live region would announce it as progress. Its own assertive region.
+          <div className="demo-loading" role="alert">
+            {`Could not load the document: ${loadError.message}`}
+          </div>
+        ) : (
+          // Authoring is ambient: comments and tracked changes take their `@w:author` from
+          // `author`, the way the Office JS API sources it from context. A real app supplies
+          // the signed-in user; a demo supplies a name so replies can be written at all.
+          //
+          // In a room that name is the one the author typed when they joined. Two names for one
+          // person is a bug the document keeps: the room showed "Timur" while every comment they
+          // wrote was signed "Demo Reviewer", and `@w:author` is what a reviewer opening the file
+          // in Word reads months later.
+          <DocxEditor.Root
+            key={collaboration.session?.documentId ?? 'local-document'}
+            {...(activeDocument ? { document: activeDocument } : {})}
+            author={collaboration.session?.identity.name ?? 'Demo Reviewer'}
+            // The demo always opens ready to type: without an explicit mode, a document
+            // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
+            mode="edit"
+            modules={collaboration.modules}
+            {...(fonts ? { fonts } : {})}
+            onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
+          >
+            <EditorChrome
+              title={title}
+              onTitleChange={setTitle}
+              colorMode={colorMode}
+              onColorModeChange={setColorMode}
+              onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
+              showAdapterSwitcher={showAdapterSwitcher}
+              collaborating={collaboration.session !== null}
+              collaborationControl={
+                <CollaborationControl
+                  session={collaboration.session}
+                  pending={collaboration.pending}
+                  connect={collaboration.connect}
+                  leave={collaboration.leave}
+                />
+              }
+            />
+            <RulerRow />
+            {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
               child of the scroll container, pinned at left: 0) never moves. The
               navigation pane floats over the gutter to the LEFT of the centered
               page and moves the document only when the window is too narrow to
               hold both — it owns that measurement, so the demo supplies nothing
               but the positioned row it anchors to. */}
-          <div className="demo-main">
-            <DocxEditor.Navigation
-              open={showOutline}
-              onOpenChange={setShowOutline}
-              paneWidth={280}
-            />
-            <DocxEditor.Viewport className="demo-viewport">
-              {/* The vertical ruler rides INSIDE the scroll container as an
+            <div className="demo-main">
+              <DocxEditor.Navigation
+                open={showOutline}
+                onOpenChange={setShowOutline}
+                paneWidth={280}
+              />
+              <DocxEditor.Viewport className="demo-viewport">
+                {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
-              <div className="demo-vruler">
-                <DocxEditor.VerticalRuler />
-              </div>
-              {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
+                <div className="demo-vruler">
+                  <DocxEditor.VerticalRuler />
+                </div>
+                {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
                   composed tree must place them by name or enter/exit has no overlay UI. */}
-              <DocxEditor.HeaderFooterChrome />
-              <DocxEditor.NotesChrome />
-              <DocxEditor.Content />
-              {/* The right-click menu, with the PRO custom-node section on top: pointing
+                <DocxEditor.HeaderFooterChrome />
+                <DocxEditor.NotesChrome />
+                <DocxEditor.Content />
+                {/* The right-click menu, with the PRO custom-node section on top: pointing
                   at a citation chip shows its data and "Edit Citation" above the packaged
                   rows. Chips are content-locked, so the menu is the editing entry point. */}
-              <DocxEditor.ContextMenu>
-                <CustomNodeContextMenu
-                  onEditNode={(node) =>
-                    node.nodeId
-                      ? setCitationForm({
-                          mode: 'edit',
-                          nodeId: node.nodeId,
-                          data: node.data,
-                        })
-                      : setCitationCard(citationCardAt(node, 'open'))
-                  }
-                />
-              </DocxEditor.ContextMenu>
-              <DrawingsE2eBridge />
-              <ReviewWritesE2eBridge />
-              {/* Custom remote-caret labels (PRO): the engine positions and colours each
+                <DocxEditor.ContextMenu>
+                  <CustomNodeContextMenu
+                    onEditNode={(node) =>
+                      node.nodeId
+                        ? setCitationForm({
+                            mode: 'edit',
+                            nodeId: node.nodeId,
+                            data: node.data,
+                          })
+                        : setCitationCard(citationCardAt(node, 'open'))
+                    }
+                  />
+                </DocxEditor.ContextMenu>
+                <DrawingsE2eBridge />
+                <ReviewWritesE2eBridge />
+                {/* Custom remote-caret labels (PRO): the engine positions and colours each
                   label, the demo renders its content — name plus a live page count read
                   through `useEditorState`, proving the label runs inside the provider
                   tree with the opened document in reach. */}
-              <CollaborationCaretLabelDemo session={collaboration.session} />
-              {/* The link popover. Inside the viewport so it stays with the page while
+                <CollaborationCaretLabelDemo session={collaboration.session} />
+                {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
-              <DocxEditor.HyperLink />
-              <DocxEditor.Equation />
-              {/* The review rail (PRO): tracked changes and comments as cards beside the
+                <DocxEditor.HyperLink />
+                <DocxEditor.Equation />
+                {/* The review rail (PRO): tracked changes and comments as cards beside the
                   page, with accept / reject / reply. Imported from
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
                   Root. Inside the viewport for the same reason as the popover — it
                   scrolls with the document rather than chasing it. */}
-              <DocxEditorReview card={{ className: 'demo-review-card' }}>
-                {/* Host content inside every card: `useReviewItem()` scopes it to
+                <DocxEditorReview card={{ className: 'demo-review-card' }}>
+                  {/* Host content inside every card: `useReviewItem()` scopes it to
                     citation cards, the packaged parts stay. A custom node's card carries
                     `data-node-name`, so `demo-review-card[data-node-name='citation']`
                     styles citations without inspecting its own children to find them. */}
-                <CitationCardActions />
-              </DocxEditorReview>
-            </DocxEditor.Viewport>
-            {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
+                  <CitationCardActions />
+                </DocxEditorReview>
+              </DocxEditor.Viewport>
+              {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
                 still render into this row, so it never scrolls away with the pages. */}
-            <DocxEditor.PageNumber />
-            {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
+              <DocxEditor.PageNumber />
+              {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
                 the positioned ancestor). Zero conditions wired here: the engine opens a
                 big file behind one painted frame and reports `isOpening`, so picking a
                 large document through Open DOCX shows this screen instead of freezing
                 on the old one. It renders nothing while the document is on screen. */}
-            <DocxEditor.Loading overlay />
-            {/* Floating diagnostics chrome, above the overlay panels. */}
-            <PerfHud />
-            <CitationPopover
-              card={citationCard}
-              onOpen={setCitationCard}
-              onClose={closeCitationCard}
-            />
-            {citationForm ? (
-              <CitationDialog form={citationForm} onClose={closeCitationForm} />
-            ) : null}
-          </div>
-        </DocxEditor.Root>
-      )}
-    </div>
+              <DocxEditor.Loading overlay />
+              {/* Floating diagnostics chrome, above the overlay panels. */}
+              <PerfHud />
+              <CitationPopover
+                card={citationCard}
+                onOpen={setCitationCard}
+                onClose={closeCitationCard}
+              />
+              {citationForm ? (
+                <CitationDialog form={citationForm} onClose={closeCitationForm} />
+              ) : null}
+            </div>
+          </DocxEditor.Root>
+        )}
+      </div>
+    </LocaleProvider>
   );
 }

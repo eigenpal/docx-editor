@@ -400,6 +400,8 @@ describe('focus', () => {
     });
     const first = q(container, '#docx-nav-panel-headings .docx-nav__heading');
     expect(first.textContent).toBe('First');
+    // Heading text is isolated, so a left-to-right heading reads in order in a right-to-left pane.
+    expect(first.querySelector('bdi')?.textContent).toBe('First');
     expect(document.activeElement).toBe(first);
     act(() => {
       q(container, '.docx-nav__close').click();

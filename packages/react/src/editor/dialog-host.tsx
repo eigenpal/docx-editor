@@ -14,6 +14,7 @@ import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorSplitCellDialog } from './DocxEditorSplitCell';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
+import { useChromeDir } from '../i18n';
 
 type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark' | 'splitCell';
 interface DialogHost {
@@ -205,7 +206,7 @@ function returnFocusTarget(focused: Element | null): HTMLElement | null {
 /** The stable mount belongs to Content, outside the engine-owned DOM. */
 export function DialogMount() {
   const host = useDialogHost();
-  return <div className="docx-dialog-mount" ref={host?.setContainer} />;
+  return <div className="docx-dialog-mount" ref={host?.setContainer} dir={useChromeDir()} />;
 }
 
 /** Keep triggered popups outside menu containers that hosts can hide or clip. */

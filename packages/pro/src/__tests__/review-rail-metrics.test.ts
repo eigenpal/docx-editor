@@ -42,6 +42,8 @@ function fakeRail(options: {
   containerRect?: FakeRect;
   surfaceRect?: FakeRect | null;
   view?: object;
+  side?: 'left';
+  railWidth?: number;
 }) {
   const listeners = new Map<string, () => void>();
   const surface =
@@ -59,6 +61,7 @@ function fakeRail(options: {
     ...options.container,
     getBoundingClientRect: () => options.containerRect ?? { top: 40, left: 20, right: 1420 },
     children: [] as unknown[],
+    getAttribute: (name: string) => (name === 'data-review-side' ? (options.side ?? null) : null),
     querySelector: (selector: string) =>
       selector.startsWith('.docx-paginated-surface') ? surface : null,
     addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
@@ -66,6 +69,7 @@ function fakeRail(options: {
   };
   const rail = {
     offsetParent: container,
+    offsetWidth: options.railWidth ?? 300,
     ownerDocument: { defaultView: options.view ?? null },
   } as unknown as HTMLElement;
   return { rail, container, listeners };
@@ -78,6 +82,7 @@ describe('measureReviewRailMetrics', () => {
       scale: 2,
       top: 100,
       left: 1112,
+      side: 'right',
       compactCardLeft: 1400 - 1112 - 300 - 12,
     });
   });
@@ -95,24 +100,50 @@ describe('measureReviewRailMetrics', () => {
     expect(metrics.compactCardLeft).toBe(30 + 1400 - 1112 - 300 - 12);
   });
 
+  test('places the rail one gutter left of the page in a right-to-left interface', () => {
+    // Page box 300..1116 in a container at 20: the column ends 16px before x 280.
+    const open = fakeRail({ side: 'left' });
+    expect(measureReviewRailMetrics(open.rail, 1)).toEqual({
+      scale: 1,
+      top: 100,
+      left: 280 - 16 - 300,
+      side: 'left',
+      compactCardLeft: 12 - (280 - 16 - 300),
+    });
+    // The closed strip is narrower, and its right edge stays one gutter off the page.
+    const closed = fakeRail({ side: 'left', railWidth: 32 });
+    expect(measureReviewRailMetrics(closed.rail, 1).left).toBe(280 - 16 - 32);
+    // Scrolled sideways, the compact card follows the visible left edge.
+    const scrolled = fakeRail({
+      side: 'left',
+      container: { scrollLeft: 30 },
+      surfaceRect: { top: 140, left: 300 - 30, right: 1116 - 30 },
+    });
+    const metrics = measureReviewRailMetrics(scrolled.rail, 1);
+    expect(metrics.left).toBe(280 - 16 - 300);
+    expect(metrics.compactCardLeft).toBe(30 + 12 - (280 - 16 - 300));
+  });
+
   test('reports no horizontal placement before there is a page', () => {
     const { rail } = fakeRail({ surfaceRect: null });
     expect(measureReviewRailMetrics(rail, 1.5)).toEqual({
       scale: 1.5,
       top: 0,
       left: null,
+      side: 'right',
       compactCardLeft: null,
     });
   });
 
   test('compares every field', () => {
-    const base = { scale: 1, top: 2, left: 3, compactCardLeft: 4 };
+    const base = { scale: 1, top: 2, left: 3, side: 'right' as const, compactCardLeft: 4 };
     expect(isCompactReviewColumn(true, 32, 316)).toBe(true);
     expect(isCompactReviewColumn(true, 316, 316)).toBe(false);
     expect(isCompactReviewColumn(false, 32, 316)).toBe(false);
     expect(isCompactReviewColumn(true, 0, 316)).toBe(false);
     expect(sameReviewRailMetrics(base, { ...base })).toBe(true);
     expect(sameReviewRailMetrics(base, { ...base, compactCardLeft: null })).toBe(false);
+    expect(sameReviewRailMetrics(base, { ...base, side: 'left' })).toBe(false);
   });
 });
 

@@ -1330,7 +1330,9 @@ export type FontValidationResult = {
 export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
 
 // @public
-export function forEachSemanticSpan(layout: SemanticLayout, visitor: (visit: SemanticSpanVisit) => void): void;
+export function forEachSemanticSpan(layout: SemanticLayout, visitor: (visit: SemanticSpanVisit) => void, options?: {
+    readonly spanlessMarkers?: boolean;
+}): void;
 
 // @public
 export function forEachSemanticStory(layout: SemanticLayout, visit: (story: SemanticStoryVisit) => void): void;
@@ -3581,6 +3583,7 @@ export interface SectionColumns {
     // (undocumented)
     readonly equalWidth?: boolean;
     readonly gapTwips: number;
+    readonly rightToLeft?: true;
     // (undocumented)
     readonly separator?: boolean;
 }
@@ -4522,6 +4525,9 @@ export interface StyleSpanRecord {
 }
 
 // @public
+export const SYNTHETIC_BOLD_ADVANCE_EM: number;
+
+// @public
 export function syntheticSeparatorBox(contentWidth: number, flowHeight: number, kind?: 'separator' | 'continuationSeparator'): LayoutBox;
 
 // @public
@@ -5060,7 +5066,7 @@ export interface ViewportWindow {
 export const W15_NAMESPACE_URI = "http://schemas.microsoft.com/office/word/2012/wordml";
 
 // @public
-export function walkStoryParagraphs(blocks: readonly OoxmlElement[], maxTableDepth?: number): OoxmlElement[];
+export function walkStoryParagraphs(blocks: readonly OoxmlElement[], maxTableDepth?: number, skipMergedCells?: boolean): OoxmlElement[];
 
 // @public
 export function withDefaultTabInterval(tabs: ResolvedTabStops, defaultIntervalPt: number | undefined): ResolvedTabStops;

@@ -46,7 +46,7 @@ import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { ContextMenu as DocxEditorContextMenuCompound } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
-import { LocaleProvider, useTranslation } from '../i18n';
+import { LocaleProvider, useChromeDir, useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { ScopedByAncestorContext } from '../editor/scope-context';
@@ -141,7 +141,8 @@ const RULER_ROW_STYLE: CSSProperties = {
 const VERTICAL_RULER_STYLE: CSSProperties = {
   position: 'absolute',
   top: 40,
-  left: 0,
+  // The inline start of the wrapper's own `dir`: the right edge in a right-to-left interface.
+  insetInlineStart: 0,
   zIndex: 10,
   pointerEvents: 'none',
 };
@@ -312,6 +313,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     // union derived from `en.json`, while the prop takes a plain `string` so a host can
     // supply any resolver. Every key this component passes is a real catalogue key.
     const { t: catalogT } = useTranslation();
+    // A right-to-left catalog mirrors the chrome. Otherwise the chrome inherits the host
+    // page direction; the viewport keeps a left-to-right base either way.
+    const chromeDirection = useChromeDir();
     const translate = useCallback(
       (key: string, params?: Record<string, string | number>) =>
         t ? t(key, params) : catalogT(key as TranslationKey, params),
@@ -337,7 +341,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
           twin it belongs inside the scroller. Its margin handles remain accessible. */}
         {rulers && chrome ? (
-          <div style={VERTICAL_RULER_STYLE}>
+          <div style={VERTICAL_RULER_STYLE} dir={chromeDirection}>
             <DocxEditorVerticalRuler />
           </div>
         ) : null}
@@ -351,6 +355,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       <div
         className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
         style={CONTAINER_STYLE}
+        dir={chromeDirection}
       >
         {/* Title bar and toolbar share one surface, closed by the seam under the
           toolbar — see CHROME_BAND_STYLE. */}

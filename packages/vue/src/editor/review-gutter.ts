@@ -3,7 +3,9 @@ import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/
 import {
   REVIEW_MARKERS_GUTTER_PX,
   reviewPaneEntitledZoom,
+  hostDirectionOf,
   hostWindowOf,
+  observeHostDirection,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { claimsReviewGutter, useReviewRailRegistry } from './context';
@@ -13,6 +15,7 @@ import {
   useNavigationViewportElement,
 } from './navigation/navigation-layout';
 import { scopeDispose } from './scope-dispose';
+import { useChromeDir } from '../i18n';
 
 /** Full reservation for the card column and page-edge gap. @public */
 export const REVIEW_PANE_GUTTER = 316;
@@ -71,6 +74,51 @@ export function reviewGutterScrolls(gutter: ReviewGutter): boolean {
 export function visibleInlineEndReservation(gutter: ReviewGutter, measured: number): number {
   if (!reviewGutterScrolls(gutter)) return measured;
   return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
+}
+
+/**
+ * The side of the page the review column takes. It follows the interface: a right-to-left
+ * interface reads the page from the right, so its comments sit on the left. The scroll
+ * container keeps a left-to-right base for its scroll offsets, so the side is physical.
+ */
+export type ReviewColumnSide = 'left' | 'right';
+
+/**
+ * The side the review column takes, read during render: the left when the interface reads
+ * right to left. The direction a `LocaleProvider` decides comes first; without one, the
+ * `dir` attribute nearest the viewport decides, as it does for the toolbar.
+ */
+export function useReviewColumnSide(): () => ReviewColumnSide {
+  const chrome = useChromeDir();
+  const viewport = useNavigationViewportElement();
+  const host = shallowRef<'ltr' | 'rtl'>('ltr');
+  const stop = watch(
+    [viewport, chrome],
+    ([element, decided], _previous, onCleanup) => {
+      const around = element?.parentElement;
+      // A provider's decision wins, so the host needs no watching then.
+      if (decided || !around) return;
+      // `dir` attributes, not the computed style: see the React twin.
+      const read = () => {
+        host.value = hostDirectionOf(around);
+      };
+      read();
+      onCleanup(observeHostDirection(around, read));
+    },
+    { immediate: true, flush: 'post' }
+  );
+  scopeDispose(stop);
+  return () => ((chrome.value ?? host.value) === 'rtl' ? 'left' : 'right');
+}
+
+/** The physical paddings for `gutter` with the column on `side`. */
+export function physicalReviewGutter(
+  gutter: ReviewGutter,
+  side: ReviewColumnSide
+): { readonly left: number; readonly right: number } {
+  return side === 'left'
+    ? { left: gutter.inlineEnd, right: gutter.inlineStart }
+    : { left: gutter.inlineStart, right: gutter.inlineEnd };
 }
 
 /** Inputs for {@link reviewGutter}. @public */

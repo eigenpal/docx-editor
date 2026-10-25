@@ -11,7 +11,7 @@ import { Slot, useTranslation } from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
 import type { ReviewActionProps, ReviewPartProps } from './review-types.ts';
 import { ReviewItemContext, useRail, useReviewLabel } from './review-context.ts';
-import { COMPOSE_KEY, REVIEW_DATE_FORMAT, guardMousedown } from './review-shared.ts';
+import { COMPOSE_KEY, guardMousedown, reviewDateFormat } from './review-shared.ts';
 import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
 import { ACCEPT_ICON, DELETE_ICON, REJECT_ICON, icon } from './review-icons.tsx';
@@ -369,6 +369,7 @@ ReviewAuthor.docxReviewPart = 'Author' as const;
  */
 export function ReviewTime({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
+  const { lang } = useTranslation();
   if (hidden || !entry) return null;
   const raw = entry.date;
   if (!raw) return null;
@@ -384,7 +385,7 @@ export function ReviewTime({ className, asChild, hidden, children }: ReviewPartP
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   // Month, day and time — what a reviewer actually needs: two comments
   // on the same day are ordered by the clock, which a bare date hides.
-  return <time {...shared}>{children ?? REVIEW_DATE_FORMAT.format(when)}</time>;
+  return <time {...shared}>{children ?? reviewDateFormat(lang).format(when)}</time>;
 }
 ReviewTime.docxReviewPart = 'Time' as const;
 

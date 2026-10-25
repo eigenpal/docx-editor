@@ -3,6 +3,7 @@
 // where a `w:ptab` lands. Extracted from paragraph-flow so that module stays inside its line
 // budget; it is the only consumer.
 
+import { RIGHT_TO_LEFT_LETTER } from './rtl-letter.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
@@ -86,9 +87,6 @@ export function placeableContentSuffixes(
   }
   return suffixes;
 }
-
-/** Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and their presentation forms. */
-const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
 
 /**
  * The text after a tab, up to the next tab or break: its width, and where a decimal stop

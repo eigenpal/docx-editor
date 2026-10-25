@@ -133,16 +133,19 @@ test('the space floor and the expansion preference still decide for the last wor
   ]);
 });
 
-test('legacy, unspecified, left-aligned and right-to-left paragraphs keep the wrap', () => {
+test('legacy, unspecified and left-aligned paragraphs keep the wrap', () => {
   const body = paragraph(runs(['aa bb cc']));
   for (const mode of [undefined, 14]) expect(content(layout(body, mode))).toEqual(['aa bb', 'cc']);
   expect(content(modern(paragraph(runs(['aa bb cc']), 66, '<w:jc w:val="left"/>')))).toEqual([
     'aa bb',
     'cc',
   ]);
+});
+
+test('justified right-to-left paragraphs compress the last word like left-to-right ones', () => {
   const rtl = modern(paragraph(runs(['aa bb cc']), 66, '<w:bidi/><w:jc w:val="both"/>'));
-  expect(linesOf(rtl).length).toBe(2);
-  expect(compressed(rtl)).toBe(false);
+  expect(linesOf(rtl).length).toBe(1);
+  expect(compressed(rtl)).toBe(true);
 });
 
 test('retained layout publishes the same last-line geometry as a fresh one', () => {

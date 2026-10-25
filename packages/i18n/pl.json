@@ -583,6 +583,10 @@
   "headerFooter": {
     "header": "Nagłówek",
     "footer": "Stopka",
+    "addHeaderHint": "Kliknij dwukrotnie, aby dodać nagłówek",
+    "addFooterHint": "Kliknij dwukrotnie, aby dodać stopkę",
+    "editHeaderHint": "Kliknij dwukrotnie, aby edytować nagłówek",
+    "editFooterHint": "Kliknij dwukrotnie, aby edytować stopkę",
     "options": "Opcje",
     "insertPageNumber": "Wstaw numer bieżącej strony",
     "insertTotalPages": "Wstaw łączną liczbę stron",

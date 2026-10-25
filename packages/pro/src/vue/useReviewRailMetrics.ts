@@ -94,11 +94,11 @@ export interface UseReviewRailMetricsOptions {
   readonly trackScroll?: boolean;
   /**
    * With a `railRef`, reserve the review gutter beside the page while the column element is
-   * mounted, as `DocxEditorReview` does. The viewport then shifts the page left while the
-   * pane is open. The reservation does not show the comment controls in the toolbar and the
-   * context menu; see `ReviewRailContext` to serve them from your column. Set `false` when a
-   * mounted `DocxEditorReview` already reserves the gutter, or when your column overlays the
-   * page. Default: `true`.
+   * mounted, as `DocxEditorReview` does. The viewport then shifts the page away from the
+   * column while the pane is open. The reservation does not show the comment controls in the
+   * toolbar and the context menu; see `ReviewRailContext` to serve them from your column. Set
+   * `false` when a mounted `DocxEditorReview` already reserves the gutter, or when your
+   * column overlays the page. Default: `true`.
    */
   readonly reserveGutter?: boolean;
 }
@@ -164,6 +164,7 @@ const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? 
  *       position: 'absolute',
  *       top: '0px',
  *       left: `${metrics.left ?? 0}px`,
+ *       width: '300px',
  *       visibility: metrics.left === null ? 'hidden' : 'visible',
  *     }"
  *   >

@@ -25,11 +25,17 @@ import {
   isHTMLElementNode,
   hostWindowOf,
 } from '@docx-editor.dev/core/editor';
-import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/vue';
+import {
+  Slot,
+  useDocxEditor,
+  useEditorEvent,
+  useEditorState,
+  useTranslation,
+} from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   MARKER_STEP,
-  REVIEW_DATE_FORMAT,
+  reviewDateFormat,
   guardMousedown,
   idsOf,
   initialsOf,
@@ -327,12 +333,13 @@ const BalloonTime = defineComponent({
   name: 'BalloonTime',
   props: { raw: { type: String, required: true } },
   setup(props) {
+    const translation = useTranslation();
     return () => {
       const when = new Date(props.raw);
       if (Number.isNaN(when.getTime())) return null;
       return (
         <time class="docx-review__time" datetime={props.raw}>
-          {REVIEW_DATE_FORMAT.format(when)}
+          {reviewDateFormat(translation.lang).format(when)}
         </time>
       );
     };

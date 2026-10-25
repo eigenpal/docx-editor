@@ -307,9 +307,11 @@ describe('an ignored cell page break beside line-end spaces', () => {
   });
 
   test('a genuine run boundary before the space still hangs it', () => {
-    const bold = run(text('abc'), '<w:b/>');
-    const control = layout(cell(bidi, bold + run(text(' '))));
-    const result = layout(cell(bidi, bold + run(pageBreak + text(' '))));
+    // Right-to-left runs, so the paragraph-end space has the paragraph's direction and hangs.
+    // A left-to-right run's space takes room there instead.
+    const bold = run(text('abc'), '<w:b/><w:rtl/>');
+    const control = layout(cell(bidi, bold + run(text(' '), '<w:rtl/>')));
+    const result = layout(cell(bidi, bold + run(pageBreak + text(' '), '<w:rtl/>')));
     expect(geometry(result, control, fixed)).toEqual(geometry(control, control, fixed));
     expect(cellParagraph(result).lines[0]!.spans.at(-1)!.lineEndWhitespace).toBe(true);
   });

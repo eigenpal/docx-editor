@@ -211,19 +211,55 @@ const DOCUMENT =
   `</w:document>`;
 
 /**
+ * How a blank document starts.
+ *
+ * @public
+ */
+export interface BlankDocumentOptions {
+  /**
+   * `'rtl'` starts the document right to left: its paragraphs (`w:bidi` in the paragraph
+   * defaults) and its section (`w:sectPr/w:bidi`) read right to left, as a new document does
+   * when a right-to-left editing language is the default. `'ltr'` is the default.
+   */
+  readonly direction?: 'ltr' | 'rtl';
+  /**
+   * The language of right-to-left and complex-script text, as a BCP 47 tag such as `ar-SA`
+   * or `he-IL`, written as the run defaults' `w:lang/@w:bidi`. Layout follows it: European
+   * digits in an Arabic-script language draw in the Latin face. A value that is not a
+   * language tag is ignored.
+   */
+  readonly bidiLanguage?: string;
+}
+
+const LANGUAGE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,4}$/;
+
+/**
  * A blank document, freshly zipped per call (the caller may hand the
  * bytes to a loader that takes ownership). Calibri 11pt and Word's Normal paragraph
  * spacing are authored in `w:docDefaults`, Word's built-in style gallery in `styles.xml`,
  * and US Letter geometry in the section. Word opens the saved file.
  *
+ * A right-to-left interface usually wants `{ direction: 'rtl', bidiLanguage: 'ar-SA' }` (or
+ * the reader's own language), so the first paragraph is ready for right-to-left typing.
+ *
  * @public
  */
-export function blankDocumentBytes(): Uint8Array {
+export function blankDocumentBytes(options: BlankDocumentOptions = {}): Uint8Array {
+  const rtl = options.direction === 'rtl';
+  const language =
+    options.bidiLanguage !== undefined && LANGUAGE_TAG.test(options.bidiLanguage)
+      ? options.bidiLanguage
+      : null;
+  const styles = STYLES.replace(
+    '<w:sz w:val="22"/><w:szCs w:val="22"/>',
+    `<w:sz w:val="22"/><w:szCs w:val="22"/>${language ? `<w:lang w:bidi="${language}"/>` : ''}`
+  ).replace('<w:pPrDefault><w:pPr>', `<w:pPrDefault><w:pPr>${rtl ? '<w:bidi/>' : ''}`);
+  const document = rtl ? DOCUMENT.replace('</w:sectPr>', '<w:bidi/></w:sectPr>') : DOCUMENT;
   return zipSync({
     '[Content_Types].xml': strToU8(CONTENT_TYPES),
     '_rels/.rels': strToU8(ROOT_RELS),
     'word/_rels/document.xml.rels': strToU8(DOCUMENT_RELS),
-    'word/document.xml': strToU8(DOCUMENT),
-    'word/styles.xml': strToU8(STYLES),
+    'word/document.xml': strToU8(document),
+    'word/styles.xml': strToU8(styles),
   });
 }

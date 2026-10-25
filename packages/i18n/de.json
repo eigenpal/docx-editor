@@ -583,6 +583,10 @@
   "headerFooter": {
     "header": "Kopfzeile",
     "footer": "Fußzeile",
+    "addHeaderHint": "Doppelklicken, um eine Kopfzeile hinzuzufügen",
+    "addFooterHint": "Doppelklicken, um eine Fußzeile hinzuzufügen",
+    "editHeaderHint": "Doppelklicken, um die Kopfzeile zu bearbeiten",
+    "editFooterHint": "Doppelklicken, um die Fußzeile zu bearbeiten",
     "options": "Optionen",
     "insertPageNumber": "Aktuelle Seitenzahl einfügen",
     "insertTotalPages": "Gesamtseitenzahl einfügen",

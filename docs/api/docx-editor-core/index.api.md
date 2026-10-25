@@ -53,7 +53,13 @@ export interface AuthoredNoteNumbering {
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
 
 // @public
-export function blankDocumentBytes(): Uint8Array;
+export function blankDocumentBytes(options?: BlankDocumentOptions): Uint8Array;
+
+// @public
+export interface BlankDocumentOptions {
+    readonly bidiLanguage?: string;
+    readonly direction?: 'ltr' | 'rtl';
+}
 
 // @public
 export type Block = Paragraph | Table | ContentControl;

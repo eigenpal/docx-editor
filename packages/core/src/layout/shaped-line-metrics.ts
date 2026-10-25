@@ -8,6 +8,7 @@ import {
   type LayoutShapingEnvironment,
 } from './layout-run-shape.ts';
 import type { TextShaper } from './shaped-run.ts';
+import { faceLineGapPt, takesLegacyLineGap } from './times-new-roman-leading.ts';
 
 /** Cached face metrics, independent of the glyph fallback selected by a run. */
 export function createShapedLineMetrics(
@@ -29,7 +30,10 @@ export function createShapedLineMetrics(
       linesByFont.set(font, bySize);
     }
     const halfPoints = layoutRunHalfPointsOf(style);
-    const cached = bySize.get(halfPoints);
+    // The legacy gap depends on the run, not only the face, so it keys the cache too.
+    const legacyGap = takesLegacyLineGap(style);
+    const key = legacyGap ? halfPoints : -halfPoints;
+    const cached = bySize.get(key);
     if (cached) {
       return factor === 1
         ? cached
@@ -84,8 +88,9 @@ export function createShapedLineMetrics(
         const faceBoxCeiling = baseSizePt * maxFaceBoxEm;
         const squeeze = rawFaceBox > faceBoxCeiling ? faceBoxCeiling / rawFaceBox : 1;
         const faceBox = rawFaceBox * squeeze;
+        const ownGap = shaped.metrics.lineGap / baseEnvironment.fixedPointScale;
         const lineGap = Math.min(
-          Math.max(0, shaped.metrics.lineGap / baseEnvironment.fixedPointScale),
+          Math.max(0, faceLineGapPt(font.family, ascent, descent, ownGap, baseSizePt, legacyGap)),
           faceBox * maxLineGapFaceBoxes
         );
         const height = faceBox + lineGap;
@@ -109,7 +114,7 @@ export function createShapedLineMetrics(
     // Fallback answers are already at the drawn size; only face metrics shaped at the base
     // size are cached and rescaled.
     if (!scalable) return metrics;
-    bySize.set(halfPoints, metrics);
+    bySize.set(key, metrics);
     return factor === 1
       ? metrics
       : { height: metrics.height * factor, baseline: metrics.baseline * factor };

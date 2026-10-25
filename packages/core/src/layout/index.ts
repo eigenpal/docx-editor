@@ -625,6 +625,7 @@ export {
   type ParagraphLayoutCache,
   type ParagraphLayoutCacheOptions,
 } from './layout-cache.ts';
+export { SYNTHETIC_BOLD_ADVANCE_EM } from './synthetic-bold.ts';
 export {
   createLayoutScheduler,
   type LayoutScheduler,

@@ -1,6 +1,6 @@
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
 import { besideFloatWidth } from './legacy-inline-beside-float.ts';
-import { paragraphContinuationPieces } from './paragraph-continuation-pieces.ts';
+import { continuationPiecesWithRules } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
@@ -115,14 +115,10 @@ import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 import { rebreakForEarlierOwnBands } from './top-and-bottom-earlier-lines.ts';
 
-/**
- * Ignore subpixel rounding from absolute tab positions converted to line-local widths.
- * A tab ending exactly at the margin must not wrap because of floating-point error.
- */
+// Ignore subpixel rounding: a tab that ends exactly at the margin must not wrap.
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
 import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
-import { withRuleWidths } from './horizontal-rule.ts';
 export type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 
 export { propertiesOf };
@@ -239,10 +235,7 @@ export function breakParagraph(
   const markerAscent = slotOpen ? Math.max(0, flow?.firstLineMarkerAscent ?? 0) : 0;
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
   const visiblePieces = splitAtAutomaticSpacing(
-    withRuleWidths(
-      paragraphContinuationPieces(allPieces, startOffset, flow?.showFieldCodes),
-      available
-    ),
+    continuationPiecesWithRules(allPieces, startOffset, flow?.showFieldCodes, available),
     typography,
     measurer
   );
@@ -252,6 +245,7 @@ export function breakParagraph(
   const placeableSuffixes = placeableContentSuffixes(pieces, pageBreaksIgnored);
   const replayScope = cellTabReplayScope(flow?.cellAnchorScope, rawPieces);
   const endsParagraph = lineEndAt(pieces);
+  const endSpacesAt = lineEndSpaces.paragraphEndSpacesOf(pieces, paragraphRtl, measurer);
   const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const { opticalParagraph, opticalCompression, fitCjkOptically } = createParagraphCjkOpticalFitter(
     allPieces,
@@ -1349,7 +1343,11 @@ export function breakParagraph(
         protectedSeamAfter(cjkBreaks, pieces, pieceIndex, boundary, candidate);
       const protectedEnd =
         opticalParagraph && !sameParagraphAnchorStarts.length && groupContinues();
-      const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !protectedEnd;
+      const endSpaces = endSpacesAt(pieceIndex, boundary, candidate, lineAvailable());
+      // Spaces that take room still hang where they would not fit even on a fresh line.
+      const keepsEnd =
+        protectedEnd || (endSpaces.takesRoom && line.width + width <= lineAvailable() + 0.001);
+      const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !keepsEnd;
       const naturalWidth = width;
       const measureFace = (text: string) =>
         measurer.measure(displayText(text, faceStyle), faceStyle);
@@ -1404,7 +1402,7 @@ export function breakParagraph(
       if (opticalFit?.hangs) hangs = true;
       // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
-        !protectedEnd &&
+        !keepsEnd &&
         lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
         ((placeableSuffixes[pieceIndex]![boundary] !== 1 &&
           !(
@@ -1420,7 +1418,7 @@ export function breakParagraph(
       }
       // A bearing shared across a line break is lost, so fit at the natural advance.
       const baseFitWidth = opticalFit ? width : (seamNaturalWidths.get(piece) ?? width);
-      const fitWidth = baseFitWidth + automaticGap();
+      const fitWidth = baseFitWidth + automaticGap() + (lineEndWhitespace ? 0 : endSpaces.room);
       const overflows =
         !hangs &&
         // A space after a word that borrowed inter-word space hangs on its line.
@@ -1435,7 +1433,6 @@ export function breakParagraph(
         // that opened it, where the open decision is `continues`. The shrink test
         // still applies to the whole word: `wordStartSpan` says where it began.
         (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
-        !flow.paragraphRtl &&
         // Text after a right, center or decimal tab is placed against its stop, not justified.
         alignedTabRight === 0 &&
         !flow.pageExclusionZones?.length &&
@@ -1617,6 +1614,8 @@ export function breakParagraph(
           faceStyle,
           lineBandText(piece, displayText(remaining, faceStyle))
         );
+        if (consumed > 0 && line.spans.length > 0 && line.end === remainingStart)
+          line.width += lineEndSpaces.spaceKern(lastEmitted, remaining, faceStyle, measureFace);
         const gap = automaticGap(remaining, remainingStart);
         line.width += gap;
         const span: StyleSpanRecord = automaticTextSpan(
