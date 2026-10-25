@@ -42,7 +42,8 @@ function contextualMeasurer(pairAdjustment = -2): TextMeasurer {
 }
 function widths(content: string, measurer = contextualMeasurer()) {
   return paragraphContentWidthsPt(paragraph(content), {
-    context: { measurer, defaultTabStopPt: 24 },
+    // Compatibility mode 15, where a first-line indent counts toward the minimum.
+    context: { measurer, defaultTabStopPt: 24, compatibilityMode: 15 },
     view: {
       styleCascade: elevenPointDefaults(),
       displayMode: 'all-markup',

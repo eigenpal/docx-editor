@@ -398,11 +398,26 @@ describe('autofit layout', () => {
     );
   });
 
-  test('a first-line indent counts against the first word', () => {
+  test('a first-line indent counts against the first word in compatibility mode 15', () => {
     const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('ABCDEFGHIJ')}`;
-    const { widths } = columns(table('', indented));
-    expect(widths[1]).toBe(72);
-    expect(lines(table('', indented))).toEqual([1, 1, 1]);
+    const modern = columns(table('', indented), { compatibilityMode: 15 });
+    expect(modern.widths[1]).toBe(72);
+    expect(modern.lines).toEqual([1, 1, 1]);
+  });
+
+  test('earlier compatibility modes leave a first-line indent out of the minimum', () => {
+    // The word fits the column without the indent, so it breaks on the indented first line.
+    const indented = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run('ABCDEFGHIJ')}`;
+    const legacy = columns(table('', indented));
+    expect(legacy.widths[1]).toBe(60);
+    expect(legacy.lines[1]).toBe(2);
+  });
+
+  test('a widening column keeps the first-line indent of a word after leading spaces', () => {
+    // The word alone is wider than the column, so it widens, and the word keeps its indent on
+    // the first line. Without the need to widen, the word would start the next line instead.
+    const spaced = `<w:pPr><w:ind w:firstLine="240"/></w:pPr>${run(' ABCDEFGHIJ')}`;
+    expect(columns(table('', spaced), { compatibilityMode: 15 }).widths[1]).toBe(72);
   });
 
   test('cell spacing counts against the column', () => {

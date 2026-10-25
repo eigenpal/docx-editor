@@ -11,11 +11,15 @@ import {
 } from './table-cell-spacing.ts';
 import {
   MIN_COLUMN_PT,
+  autofitTargetPt,
   contentSizedWidths,
   sameOrComputed,
   spanAdjustedMinimums,
+  widenAutofitColumns,
   type SpanRequirement,
 } from './table-autofit-distribution.ts';
+
+export { autofitTargetPt, widenAutofitColumns } from './table-autofit-distribution.ts';
 // Autofit column minimums: a column is never narrower than the widest unbreakable segment
 // its cells hold.
 
@@ -47,6 +51,7 @@ import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { TocLinkRanges } from './toc-link-formatting.ts';
 import { cellStyleKey } from './autofit-value-token.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -61,7 +66,6 @@ import {
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { preferredSpreadWidths } from './table-autofit-spread.ts';
-import type { PreferredWidth } from './table-widths.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -80,6 +84,11 @@ export interface TableAutofitContext {
   readonly fields?: AutofitFieldContext;
   /** The document's default tab interval, where an unwrapped line's tabs advance to. */
   readonly defaultTabStopPt?: number;
+  /**
+   * The document's compatibility mode. Legacy modes leave a positive first-line indent out of
+   * a column's minimum. Callers that set it must also fold it into {@link passToken}.
+   */
+  readonly compatibilityMode?: number;
   /**
    * A token that changes whenever a paragraph's projected text can change: the same tokens
    * the paragraph break cache keys on. Minimums are cached only when this and
@@ -169,7 +178,7 @@ const paragraphMinimums = new WeakMap<
   TextMeasurer,
   WeakMap<
     OoxmlElement,
-    { readonly key: MinimumKey; readonly widths: ContentWidths; scope?: object }
+    { readonly key: MinimumKey; readonly widths: ParagraphWidths; scope?: object }
   >
 >();
 
@@ -177,6 +186,16 @@ const paragraphMinimums = new WeakMap<
 export interface ContentWidths {
   readonly min: number;
   readonly max: number;
+}
+
+/** {@link ContentWidths} with the minimum a column that has to widen keeps. */
+interface ParagraphWidths extends ContentWidths {
+  /**
+   * The minimum once the column has to widen anyway: the first word after spaces that open the
+   * paragraph keeps its first-line indent, so it stays on the first line. `min` lets that word
+   * start the next line, which decides whether the column widens at all.
+   */
+  readonly minWidened: number;
 }
 
 function minimumKey(paragraph: OoxmlElement, inputs: MinimumInputs): MinimumKey | null {
@@ -226,6 +245,11 @@ export function paragraphContentWidthsPt(
   paragraph: OoxmlElement,
   inputs: MinimumInputs
 ): ContentWidths {
+  const { min, max } = paragraphWidthsPt(paragraph, inputs);
+  return { min, max };
+}
+
+function paragraphWidthsPt(paragraph: OoxmlElement, inputs: MinimumInputs): ParagraphWidths {
   const { context, view } = inputs;
   const { measurer } = context;
   const { styleCascade, displayMode } = view;
@@ -301,9 +325,19 @@ export function paragraphContentWidthsPt(
   // item's hanging slot belongs to its marker; its text starts back at the left indent.
   const listItem = context.listItems?.get(paragraph.id);
   const firstShift = listItem ? Math.max(0, firstLine) : hanging > 0 ? -hanging : firstLine;
+  // In legacy modes a word too wide for the first line breaks there, so the minimum leaves a
+  // positive first-line indent out. A list item's marker slot still counts.
+  const minimumShift =
+    !listItem && hasCompatibilityRule(context.compatibilityMode, 'autofitMinimumSkipsFirstLine')
+      ? Math.min(0, firstShift)
+      : firstShift;
   let widest = 0;
+  let widestWidened = 0;
   let segment = 0;
   let first = true;
+  // Spaces opened the paragraph: the word after them starts the next line in `min`, but keeps
+  // the first-line indent in `minWidened`.
+  let firstAfterSpaces = false;
   // The unwrapped line: its full width so far, and the spaces it would hang at its end.
   let line = 0;
   let hung = 0;
@@ -324,9 +358,12 @@ export function paragraphContentWidthsPt(
   const close = (): void => {
     if (segment > 0) {
       // Indents are physical sides; the first-line shift moves whichever one leads.
-      const width = segment + Math.max(0, left + right + (first ? firstShift : 0));
+      const width = segment + Math.max(0, left + right + (first ? minimumShift : 0));
       if (width > widest) widest = width;
+      const shift = first || firstAfterSpaces ? minimumShift : 0;
+      widestWidened = Math.max(widestWidened, segment + Math.max(0, left + right + shift));
       first = false;
+      firstAfterSpaces = false;
     }
     segment = 0;
   };
@@ -350,6 +387,7 @@ export function paragraphContentWidthsPt(
       endLine();
       close();
       first = false;
+      firstAfterSpaces = false;
       continue;
     }
     // A picture or an equation is one box with a break opportunity on each side.
@@ -401,6 +439,7 @@ export function paragraphContentWidthsPt(
         // A tab uses up the first-line indent, and spaces after it no longer open the line.
         close();
         first = false;
+        firstAfterSpaces = false;
         continue;
       }
       const ink = withoutLineEndWhitespace(candidate);
@@ -410,7 +449,10 @@ export function paragraphContentWidthsPt(
       segment -= cjkBreaks?.shared(piece, to - candidate.length, to, continues) ?? 0;
       // Spaces that open the paragraph end its first line: the word after them may start the
       // next line, where the first-line indent no longer applies.
-      if (ink.length === 0 && segment === 0) first = false;
+      if (ink.length === 0 && segment === 0) {
+        firstAfterSpaces ||= first;
+        first = false;
+      }
       if (ink.length === candidate.length) segment += measure(candidate);
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
@@ -430,7 +472,8 @@ export function paragraphContentWidthsPt(
   endLine();
   // An empty paragraph still keeps its first line's indents (a list item's marker slot).
   const min = widest > 0 ? widest : Math.max(0, left + right + firstShift);
-  const widths = { min, max: Math.max(min, longest) };
+  const minWidened = Math.max(min, widestWidened);
+  const widths = { min, max: Math.max(minWidened, longest), minWidened };
   if (key) byParagraph.set(paragraph, { key, widths, scope });
   return widths;
 }
@@ -661,26 +704,30 @@ export function autofitColumnMinimumsPt(
       if (cell.gridSpan !== 1 && !content) continue;
       const measured = cachedAutofitCellWidths(cell, collapsed, context, view, () => {
         let least = -1;
+        let leastWidened = -1;
         let most = -1;
         const insets = cellContentInsets(cell, collapsed);
         for (const block of cell.blocks) {
           if (block.kind === 'table') {
             const nested = nestedTableMinimumPt(block, context, view);
             least = Math.max(least, nested);
+            leastWidened = Math.max(leastWidened, nested);
             most = Math.max(most, nested);
           }
           if (block.kind !== 'paragraph') continue;
-          const widths = paragraphContentWidthsPt(block, {
+          const widths = paragraphWidthsPt(block, {
             context,
             view,
             tableCellStyle: cell.styleFormatting,
           });
           least = Math.max(least, widths.min);
+          leastWidened = Math.max(leastWidened, widths.minWidened);
           most = Math.max(most, widths.max);
         }
         const widened = widenedCellInsets(cell, collapsed, insets, widenedRow?.cells[cellIndex]);
         return {
           least,
+          leastWidened,
           most,
           left: insets.left,
           right: insets.right,
@@ -688,7 +735,7 @@ export function autofitColumnMinimumsPt(
           wideRight: widened.right,
         };
       });
-      const { least, most } = measured;
+      const { least, leastWidened, most } = measured;
       if (least < 0) continue;
       // Widening an automatic-width table keeps its shared grid lines (`autoOuterRulePt`).
       const around = structure.autoOuterRulePt
@@ -700,7 +747,7 @@ export function autofitColumnMinimumsPt(
         content?.spans.push({
           from: cell.gridColumn,
           count: cell.gridSpan,
-          minimum: Math.max(0, least + around - covered),
+          minimum: Math.max(0, leastWidened + around - covered),
           current: Math.max(0, least + measured.left + measured.right - covered),
         });
         continue;
@@ -710,7 +757,7 @@ export function autofitColumnMinimumsPt(
         cell.noWrap && cell.preferredWidth.type === 'dxa' ? cell.preferredWidth.value : 0;
       const needed = Math.max(held, least + measured.left + measured.right);
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
-      const neededWide = Math.max(held, least + around);
+      const neededWide = Math.max(held, leastWidened + around);
       if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
       const neededMost = Math.max(held, most + around);
       if (neededMost > widest[cell.gridColumn]!) widest[cell.gridColumn] = neededMost;
@@ -744,80 +791,6 @@ export interface AutofitColumnContent {
   readonly verticalHolds: SpanRequirement[];
   /** What each cell spanning several columns needs across them. */
   readonly spans: SpanRequirement[];
-}
-
-/**
- * Widen autofit columns that are narrower than their minimum.
- *
- * A column below its minimum grows to it, and the table settles at `targetPt`: its own width
- * for an absolute `w:tblW`, the room it has in the text column for an automatic width, its
- * share of that room for a percentage. A table already narrower than an automatic target
- * grows only as far as its content needs. The other columns give the difference in
- * proportion to how far each one sits above its own minimum. When they reach their minimums,
- * the table grows past its target; when the minimums together are wider than `availablePt`,
- * every column is its minimum scaled down by the same factor. Widths that already hold their
- * content come back unchanged, by identity.
- */
-export function widenAutofitColumns(
-  widths: readonly number[],
-  minimums: readonly number[],
-  targetPt: number,
-  availablePt: number,
-  /** Also bring a table wider than `targetPt` down to it when no column widens. */
-  shrinkToTarget = false
-): readonly number[] {
-  let deficit = 0;
-  let total = 0;
-  for (const [index, width] of widths.entries()) {
-    deficit += Math.max(0, minimums[index]! - width);
-    total += width;
-  }
-  if (deficit <= WIDTH_EPSILON_PT && !(shrinkToTarget && total > targetPt + WIDTH_EPSILON_PT))
-    return widths;
-  // Nothing widens: every column gives way in proportion to its width.
-  if (deficit <= WIDTH_EPSILON_PT) return widths.map((width) => (width * targetPt) / total);
-  const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
-  const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
-  if (need <= WIDTH_EPSILON_PT) return grown;
-  // No column gives up its last hairline.
-  const slack = widths.map((width, index) =>
-    Math.max(0, width - Math.max(minimums[index]!, MIN_COLUMN_PT))
-  );
-  const totalSlack = slack.reduce((sum, value) => sum + value, 0);
-  if (need <= totalSlack) {
-    return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
-  }
-  // Every column keeps a hairline: a zero-width column would give its cell no box at all.
-  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
-  const needed = floor.reduce((sum, value) => sum + value, 0);
-  // Never narrower than the table already was: an indent can leave the text column no room.
-  const room = Math.max(
-    availablePt,
-    widths.reduce((sum, width) => sum + width, 0)
-  );
-  if (!Number.isFinite(room) || needed <= room) return floor;
-  // Scale only what each column holds above its hairline, so every hairline survives whole.
-  const hairlines = floor.length * MIN_COLUMN_PT;
-  const scale = Math.max(0, room - hairlines) / Math.max(needed - hairlines, WIDTH_EPSILON_PT);
-  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
-}
-
-/** The total an autofit table settles at once a column has to widen, in points. */
-export function autofitTargetPt(
-  tableWidth: PreferredWidth,
-  totalPt: number,
-  availablePt: number,
-  legacyContentAlignment = false,
-  /** What a percentage is a share of: the text column, as the width resolver reads it. */
-  percentBasisPt = availablePt
-): number {
-  // A legacy content-aligned table already spans the text column plus its outer margins.
-  if (legacyContentAlignment) return totalPt;
-  if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
-  if (tableWidth.type === 'pct' && tableWidth.value > 0)
-    // Never below the resolved total, so a column widening by a little never narrows the table.
-    return Math.max(totalPt, Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100));
-  return availablePt;
 }
 
 /**
