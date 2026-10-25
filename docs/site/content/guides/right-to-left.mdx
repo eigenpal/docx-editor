@@ -70,7 +70,7 @@ function ArabicEditor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-In Vue, wrap `DocxEditor.Root` in `<LocaleProvider :i18n="ar">` the same way. To read the direction the interface renders in, use `useChromeDir()` in either adapter.
+In Vue, wrap `DocxEditor.Root` in `<LocaleProvider :i18n="ar">` the same way. To read the direction a provider decides for the interface, use `useChromeDir()` in either adapter. It returns `undefined` when the interface inherits the host page direction.
 
 ### What mirrors
 
@@ -114,7 +114,7 @@ const persian: Translations = {
 };
 ```
 
-Your own controls inside the editor chrome inherit its direction through CSS, so they mirror without code. To read the direction in code, use `useChromeDir()` from the adapter package. It returns `'ltr'` or `'rtl'` when a provider decides the direction, and `undefined` when the chrome inherits the host page direction. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
+Your own controls inside the editor chrome inherit its direction through CSS, so they mirror without code. To read the direction in code, use `useChromeDir()` from the adapter package. It returns `'ltr'` or `'rtl'` when a provider decides the direction, and `undefined` when the chrome inherits the host page direction. In that case, read the computed `direction` of your own element. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
 
 ### New right-to-left documents
 

@@ -52,3 +52,38 @@ test('a dir change on the page is reported', async () => {
   expect(hostDirectionOf(element)).toBe('rtl');
   stop();
 });
+
+test('a dir change inside the element is not a host change', async () => {
+  const element = nested(null, null);
+  const inner = document.createElement('span');
+  element.append(inner);
+  let changes = 0;
+  const stop = observeHostDirection(element, () => {
+    changes += 1;
+  });
+  inner.setAttribute('dir', 'rtl');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(changes).toBe(0);
+  stop();
+});
+
+test('a dir change in an outer shadow tree is reported', async () => {
+  const outerHost = nested(null);
+  const outer = outerHost.attachShadow({ mode: 'open' });
+  const wrapper = document.createElement('div');
+  outer.append(wrapper);
+  const innerHost = document.createElement('div');
+  wrapper.append(innerHost);
+  const inner = innerHost.attachShadow({ mode: 'open' });
+  const element = document.createElement('div');
+  inner.append(element);
+  let changes = 0;
+  const stop = observeHostDirection(element, () => {
+    changes += 1;
+  });
+  wrapper.setAttribute('dir', 'rtl');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(changes).toBeGreaterThan(0);
+  expect(hostDirectionOf(element)).toBe('rtl');
+  stop();
+});

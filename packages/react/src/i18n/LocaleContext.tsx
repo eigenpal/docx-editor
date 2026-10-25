@@ -59,7 +59,7 @@ export function LocaleProvider({ i18n, dir, children }: LocaleProviderProps) {
  * The active catalogue's `t()`, the catalogue itself, its language tag (`_lang`, `en` by
  * default), which formats numbers the way the strings around them read, and the providers'
  * writing direction (`dir`). `dir` is `'ltr'` when the chrome inherits a right-to-left host
- * page; use `useChromeDir()` for the direction the chrome renders in.
+ * page; `useChromeDir()` returns the direction a provider decided, or `undefined` then.
  */
 export function useTranslation(): {
   t: TFunction;
