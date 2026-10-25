@@ -51,6 +51,10 @@ const legacy = (behavior: string, source: string): ModeRule => ({
 
 /** Rules that depend only on the mode. */
 export const MODE_RULES = {
+  autofitMinimumSkipsFirstLine: legacy(
+    'An autofit column minimum leaves out a positive first-line indent: a word too wide for the first line breaks there',
+    'ECMA-376 Part 1 §17.3.1.12 ind'
+  ),
   anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
     'ECMA-376 Part 1 §20.4.2.3 anchor'

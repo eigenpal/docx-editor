@@ -5,7 +5,11 @@ import { hardBreakKind } from '../store/package/hard-break.ts';
 import { paragraphBreaksBefore } from './paragraph-style.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
+import {
+  TABLE_WRAP_MIN_PASSAGE_PT,
+  type ExclusionZone,
+  type ExclusionColumnLayout,
+} from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import {
@@ -20,18 +24,18 @@ import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
   layoutTableFragment,
-  measureRowHeight,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
   type SemanticTableStructure,
   type TableAnchorFrames,
+  type TableFloatPosition,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { pinnedTableBreak } from './table-pinned-break.ts';
+import { openingRowsBottom } from './table-text-float-break.ts';
 import {
   noOverlapShift,
   tableRefusesOverlap,
@@ -124,7 +128,12 @@ function outerRuleWidths(fragment: TableFragmentRecord): {
 export function addFloatingTableExclusions(
   pages: readonly Pick<PageRecord, 'fragments'>[],
   drawingZones: ReadonlyMap<number, readonly ExclusionZone[]>,
-  columns: ExclusionColumnLayout
+  columns: ExclusionColumnLayout,
+  /**
+   * Whether the tables sit in the body flow they wrap, where a table that leaves no passage
+   * moves the earlier lines it covers. A header or footer table keeps the plain wrap.
+   */
+  inBodyFlow = true
 ): ReadonlyMap<number, readonly ExclusionZone[]> {
   let result: Map<number, readonly ExclusionZone[]> | undefined;
   for (const [pageIndex, page] of pages.entries()) {
@@ -149,24 +158,34 @@ export function addFloatingTableExclusions(
       const column = metadata.columnIndex;
       const left = columns.columnLefts?.[column] ?? 0;
       const width = columns.columnWidths?.[column] ?? columns.contentWidth;
-      const spans =
-        box.x - distances.left <= left && box.x + box.width + distances.right >= left + width;
-      // A page- or margin-framed table does not move with the flow, so its band also clears
-      // the lines before its anchor on the page. Only a column-spanning table in single-column
-      // flow reaches back, the case `pageFramedAnchorBand` prices.
-      const pageFramed =
-        spans && metadata.float.vertAnchor !== 'text' && Math.max(1, columns.columnCount) === 1;
+      const spans = leavesNoPassage(
+        grid.x - distances.left,
+        grid.x + grid.width + distances.right,
+        left,
+        width
+      );
+      const pageFramed = inBodyFlow && metadata.float.vertAnchor !== 'text';
+      // Only in one column: the anchor pricing that keeps a raised table's move on its page
+      // (`coveredLinesAnchorBand`) does not model column bottoms.
+      const reaches =
+        inBodyFlow &&
+        !pageFramed &&
+        spans &&
+        singleColumn(width, columns.contentWidth) &&
+        raisedAboveText(metadata.float);
       const zone: ExclusionZone = {
         sourceKind: 'table',
         drawingNodeId: `table:${block.tableId}`,
         anchorParagraphId: metadata.anchorId,
         anchorModelStart: 0,
-        ...(pageFramed ? { pageFramedBand: true } : {}),
         sourceOrder: metadata.sourceOrder,
         paintLayer: 'inFront',
         relativeHeight: 0,
         allowOverlap: true,
         columnIndex: column,
+        // A page- or margin-positioned table does not move with the text before it, so it also
+        // wraps or moves the earlier lines it covers on its page.
+        ...(pageFramed ? { pageFramedBand: true } : reaches ? { reachesEarlierLines: true } : {}),
         y: box.y,
         verticalBand: {
           x: box.x - distances.left,
@@ -175,7 +194,13 @@ export function addFloatingTableExclusions(
           height: box.height + distances.top + distances.bottom,
         },
         input: {
-          mode: spans ? 'topAndBottom' : 'square',
+          // A band that leaves no passage and moves earlier lines moves empty ones too.
+          mode:
+            (box.x - distances.left <= left &&
+              box.x + box.width + distances.right >= left + width) ||
+            (spans && (pageFramed || reaches))
+              ? 'topAndBottom'
+              : 'square',
           contentBounds: box,
           polygon: null,
           clipPolygon: null,
@@ -198,6 +223,33 @@ export function addFloatingTableExclusions(
 }
 
 const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+
+/**
+ * Whether a text-anchored table rises above its anchor: an offset more negative than the one
+ * twip of storage bias that an authored `w:tblpY="0"` carries, and no vertical alignment.
+ */
+function raisedAboveText(float: TableFloatPosition): boolean {
+  return float.vertAnchor === 'text' && !float.ySpec && float.yPt < -0.051;
+}
+
+/** Whether the column being filled is the whole text width: a single-column section. */
+function singleColumn(columnWidth: number, textWidth: number): boolean {
+  return columnWidth >= textWidth - 0.5;
+}
+
+/**
+ * Whether a table band from `bandLeft` to `bandRight` (its grid plus its side text distances)
+ * leaves no passage for text in the column: none wider than a quarter inch on either side.
+ */
+function leavesNoPassage(
+  bandLeft: number,
+  bandRight: number,
+  columnLeft: number,
+  columnWidth: number
+): boolean {
+  const passage = Math.max(bandLeft - columnLeft, columnLeft + columnWidth - bandRight);
+  return passage <= TABLE_WRAP_MIN_PASSAGE_PT;
+}
 const NO_SHIFT: { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } =
   Object.freeze({ dx: 0, dy: 0 });
 
@@ -228,7 +280,10 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
   return band;
 }
 
-/** Keep anchor page breaks, authored gaps, and shared anchors on the whole-table path. */
+/**
+ * Keep a page- or margin-positioned table whole when its anchor has a page break, an authored
+ * gap, or another table (`pinnedBreakAllowed`). A text-anchored table breaks whatever its anchor.
+ */
 export function anchorBreakPolicy(
   anchors: readonly PositionedTableAnchor[],
   blocks: readonly PreparedBlock[]
@@ -299,7 +354,8 @@ export function anchorFlowKeys(keys: string[], state: PositionedTableFlowPolicy)
 
 /** Where the body flow stands when it reaches a positioned table. */
 export interface FloatAdmissionFlow {
-  readonly allowBreak: boolean | undefined;
+  /** Single-column flow, where a text-anchored table may break across pages. */
+  readonly allowBreak: boolean;
   readonly zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
   readonly page: number;
   /** The narrowest column. The table must fit whichever column its anchor reaches. */
@@ -316,11 +372,10 @@ const flowTop = (flow: FloatAdmissionFlow): number => flow.verticalFrames.text.t
  * True when a positioned table waits for its anchor paragraph and is placed there whole.
  *
  * Row pagination places the table instead when earlier objects wrap its cells, or when its
- * band is taller than a page. It also places a text-relative table that spans its column
- * and does not fit the room left, when its opening rows do fit there. That table breaks at
- * the page bottom, and its remaining rows continue at the top of the next page. No text can
- * stand beside it, so the flow resumes below its last row. When the opening rows do not fit,
- * the table still moves whole with its anchor.
+ * band is taller than a page. It also places a text-relative table that does not fit the room
+ * left, when its opening rows do fit there. That table breaks between rows at the page bottom,
+ * and its remaining rows continue at the top of the next page (`table-text-float-break.ts`).
+ * When the opening rows do not fit, the table still moves whole with its anchor.
  */
 export function admitsAtAnchor(
   table: OoxmlElement,
@@ -329,8 +384,12 @@ export function admitsAtAnchor(
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
   if (breaksAcrossPages(table, deps, flow)) return false;
-  const band = floatingTableBand(table, flow.width, deps);
-  if (band > flow.bottom) return false;
+  // Rows that fit keep the table whole, even when its `w:bottomFromText` reaches past the room.
+  // Only rows taller than a page take row pagination: a table that a page holds stays whole
+  // although its `w:tblpY` pushes it past the bottom margin.
+  const float = floatTableStructure(table, flow.width, deps)?.float;
+  const band = floatingTableBand(table, flow.width, deps) - (float?.distances?.bottom ?? 0);
+  if (band - Math.max(0, float?.yPt ?? 0) > flow.bottom) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return (
     band <= flow.bottom - flowTop(flow) ||
@@ -373,33 +432,12 @@ function breaksAtPageBottom(
 ): boolean {
   const structure = floatTableStructure(table, flow.width, deps);
   const float = structure?.float;
-  // A negative offset collides with earlier text. Only anchor placement displaces it.
+  // A negative offset collides with earlier text. Only anchor placement displaces it. Space
+  // above the table keeps it whole too; space below it does not.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
-  const distances = float.distances ?? NO_DISTANCES;
-  if (distances.top > 0 || distances.bottom > 0) return false;
-  const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
-  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const column = flow.frames.text;
-  if (
-    left - distances.left > column.left ||
-    left + width + distances.right < column.left + column.width
-  )
-    return false;
-  // The opening rows are the header prefix, which moves as one group, and the first body row.
-  let top = flowTop(flow) + float.yPt;
-  for (const [index, row] of structure.rows.entries()) {
-    top += measureRowHeight(
-      row,
-      structure.columnWidthsPt,
-      left,
-      0,
-      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
-      structure.cellSpacingPt
-    );
-    if (top > flow.bottom + 0.001) return false;
-    if (!row.isHeader) return true;
-  }
-  return false;
+  if ((float.distances?.top ?? 0) > 0) return false;
+  const opening = openingRowsBottom(table, structure, flow.width, flowTop(flow) + float.yPt, deps);
+  return opening !== undefined && opening <= flow.bottom + 0.001;
 }
 
 function probeTableHeight(
@@ -419,18 +457,19 @@ function probeTableHeight(
 }
 
 /**
- * Room a page- or margin-framed table's anchor needs when the table lands on body lines
- * already placed on the anchor's page.
+ * Room an anchor needs when its table lands on body lines already placed on the anchor's page:
+ * a page- or margin-framed table, or a text-anchored one raised above its anchor.
  *
  * The table's box does not follow the flow, so the lines before its anchor on that page must
  * clear it too. Clearing moves them, and the anchor after them, below the table. When the
  * anchor then no longer fits, the band exceeds the page and the anchor opens the next page:
- * the table follows its anchor there, and the earlier lines keep their places.
+ * the table follows its anchor there, and the earlier lines keep their places. A raised table
+ * is priced where its anchor was before the lines it moved (`pushed`), as it is placed.
  *
  * Only a column-spanning table in single-column flow is priced. Lines beside a narrower table,
  * and earlier columns of the same sheet, are not modeled.
  */
-function pageFramedAnchorBand(
+function coveredLinesAnchorBand(
   anchor: PositionedTableAnchor,
   width: number,
   deps: TableFlowDeps,
@@ -440,38 +479,43 @@ function pageFramedAnchorBand(
     readonly frames: TableAnchorFrames;
     readonly verticalFrames: TableVerticalAnchorFrames;
     readonly earlier: readonly BlockFragmentRecord[];
-  }
+  },
+  pushed: number
 ): number {
   const column = placement.frames.text;
+  const raised = raisedAboveText(anchor.float);
   if (
-    anchor.float.vertAnchor === 'text' ||
+    (anchor.float.vertAnchor === 'text' && !raised) ||
     column.left > placement.frames.margin.left + 0.5 ||
-    column.width < placement.frames.margin.width - 0.5
+    !singleColumn(column.width, placement.frames.margin.width)
   )
     return 0;
+  // A raised table's band moves only paragraph lines: the flow never moves a table for it.
   const lineBoxes = placement.earlier.flatMap((block) => {
     if (isOutOfFlowFragment(block) || (block.kind === 'table' && block.floatingWrap)) return [];
-    return block.kind === 'table' ? [block.box] : block.lines.map((line) => line.box);
+    if (block.kind === 'table') return raised ? [] : [block.box];
+    return block.lines.map((line) => line.box);
   });
   if (lineBoxes.length === 0) return 0;
   const structure = floatTableStructure(anchor.table, width, deps);
   const float = structure?.float;
-  if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
+  if (!structure || !float || (float.vertAnchor === 'text' && !raised) || float.ySpec === 'inline')
+    return 0;
   const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, placement.frames, deps.compatibilityMode);
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const bandLeft = left - distances.left;
   const bandRight = left + tableWidth + distances.right;
-  if (bandLeft > column.left || bandRight < column.left + column.width) return 0;
+  if (!leavesNoPassage(bandLeft, bandRight, column.left, column.width)) return 0;
+  const topOf = (height: number) =>
+    raised
+      ? placement.anchorY - pushed + float.yPt
+      : tableFloatOriginY(float, height, placement.verticalFrames);
   // An offset top does not depend on the table height: skip the probe when no line reaches it.
   const inkBottom = lineBoxes.reduce((bottom, box) => Math.max(bottom, box.y + box.height), 0);
-  if (
-    !float.ySpec &&
-    inkBottom <= tableFloatOriginY(float, 0, placement.verticalFrames) - distances.top
-  )
-    return 0;
+  if (!float.ySpec && inkBottom <= topOf(0) - distances.top) return 0;
   const height = probeTableHeight(structure, anchor.table.id, deps);
-  const top = tableFloatOriginY(float, height, placement.verticalFrames);
+  const top = topOf(height);
   const bandTop = top - distances.top;
   const bandBottom = top + height + distances.bottom;
   let firstTop = Infinity;
@@ -485,7 +529,8 @@ function pageFramedAnchorBand(
       firstTop = Math.min(firstTop, box.y);
   }
   if (firstTop > placement.anchorY) return 0;
-  return bandBottom - firstTop + placement.anchorExtent;
+  // A raised table stays while the lines it moves fit below it; its anchor may move on alone.
+  return bandBottom - firstTop + (raised ? 0 : placement.anchorExtent);
 }
 
 export function requiredAnchorBand(
@@ -503,6 +548,8 @@ export function requiredAnchorBand(
     readonly earlier: readonly BlockFragmentRecord[];
     /** Anchors already laid on this page whose tables wait for the page flush. */
     readonly signals?: readonly PositionedTableAnchorSignal[];
+    /** How far a raised table's band pushed the lines before its anchor (`earlier-line-push.ts`). */
+    readonly pushOf?: (tableId: string) => number;
   }
 ): number {
   if (pending.size === 0) return 0;
@@ -513,8 +560,8 @@ export function requiredAnchorBand(
   const here = pendingOf(paragraphId);
   // Tables of earlier anchors on this page are placed first, at the flush, in anchor order.
   // Only in one column: a waiting table in another column is placed against other frames.
-  const singleColumn = placement.frames.text.width >= placement.frames.margin.width - 0.5;
-  const before = here.length > 0 && singleColumn ? (placement.signals ?? []) : [];
+  const oneColumn = singleColumn(placement.frames.text.width, placement.frames.margin.width);
+  const before = here.length > 0 && oneColumn ? (placement.signals ?? []) : [];
   const waiting = before.flatMap((signal) =>
     pendingOf(signal.anchorId).map((anchor) => ({ anchor, signal }))
   );
@@ -544,9 +591,10 @@ export function requiredAnchorBand(
     }
   }
   for (const anchor of here) {
+    const pushed = placement.pushOf?.(anchor.table.id) ?? 0;
     const clearedY = clearEarlierText(
       anchor.table,
-      placement.anchorY,
+      placement.anchorY - pushed,
       width,
       placement.frames,
       placement.earlier,
@@ -560,13 +608,17 @@ export function requiredAnchorBand(
         ])
       : NO_SHIFT;
     if (shift.band) prospective.push(shift.band);
+    // A text-anchored table's `w:bottomFromText` may reach past the page bottom; only the rows
+    // must fit. Other anchors have no band here.
+    const gap = anchor.float.vertAnchor === 'text' ? (anchor.float.distances?.bottom ?? 0) : 0;
     const band =
-      floatingTableBand(anchor.table, width, deps) +
+      floatingTableBand(anchor.table, width, deps) -
+      gap +
       clearedY +
       shift.dy -
       placement.anchorY +
       Math.min(0, anchor.float.yPt);
-    height = Math.max(height, band, pageFramedAnchorBand(anchor, width, deps, placement));
+    height = Math.max(height, band, coveredLinesAnchorBand(anchor, width, deps, placement, pushed));
   }
   return height;
 }
@@ -692,6 +744,16 @@ export function clearEarlierText(
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
+  // A raised table that leaves no passage beside it keeps its place: the earlier lines it
+  // covers move below it instead (`reachesEarlierLines`).
+  const right = left + tableWidth + distances.left + distances.right;
+  // In one column only, as `reachesEarlierLines` is: elsewhere the table clears the text.
+  if (
+    singleColumn(frames.text.width, frames.margin.width) &&
+    raisedAboveText(float) &&
+    leavesNoPassage(left, right, frames.text.left, frames.text.width)
+  )
+    return anchorY;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
   const ink = earlier
@@ -783,13 +845,22 @@ export function hasEarlierCellExclusions(
   return false;
 }
 
-/** Preserve body wrapping when external obstacles require immediate table placement. */
+/**
+ * Preserve body wrapping when external obstacles require immediate table placement, and beside
+ * the last fragment of a text-anchored table that broke across pages.
+ */
 export function withFloatingWrap(
   fragment: BlockFragmentRecord,
   positioned: PositionedTableAnchor | undefined,
-  columnIndex: number
+  columnIndex: number,
+  wrapsFollowingText = false
 ): BlockFragmentRecord {
-  if (!positioned || fragment.kind !== 'table' || !isOutOfFlowFragment(fragment)) return fragment;
+  if (
+    !positioned ||
+    fragment.kind !== 'table' ||
+    !(isOutOfFlowFragment(fragment) || wrapsFollowingText)
+  )
+    return fragment;
   return {
     ...fragment,
     floatingWrap: {

@@ -11,6 +11,8 @@ export interface TableFlowCursor {
   readonly positionTextTable?: boolean;
   /** How far such a table moved right to clear an earlier floating table (`table-float-overlap.ts`). */
   readonly positionShiftX?: number;
+  /** The top a table that stacks below another one starts at (`table-float-stack.ts`). */
+  readonly stackTop?: number;
   /** Points down the page content box. The paginator both reads and advances it. */
   cursorY: number;
   /** Column being filled in a multi-column section; absent with a single column. */
@@ -59,9 +61,10 @@ export interface TableFlowCursor {
    *
    * A sink rather than the array itself: completing a page REPLACES the story loop's
    * fragment list, so a reference taken when the table started would collect the rest of
-   * its fragments into an array nobody reads.
+   * its fragments into an array nobody reads. `wrapsFollowingText` marks the last fragment of a
+   * text-anchored table that broke across pages: the text after the table wraps around it.
    */
-  readonly publishFragment: (fragment: BlockFragmentRecord) => void;
+  readonly publishFragment: (fragment: BlockFragmentRecord, wrapsFollowingText?: boolean) => void;
   /**
    * Opening height of the body content after the table, which a kept last row needs beside
    * it with `room` left (`followingKeepOpening` in `pagination-keeps.ts`). `undefined` when

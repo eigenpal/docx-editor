@@ -14,10 +14,12 @@
 // the same room below that band.
 //
 // Positioned-table limit:
-// - Positioned (`w:tblpPr`) tables, except one breaking across pages from a page or margin
-//   anchor (`table-pinned-break.ts`).
+// - Positioned (`w:tblpPr`) tables, except one breaking across pages in the body flow
+//   (`table-pinned-break.ts`, `table-text-float-break.ts`).
 
-import type { SemanticTableRow } from './semantic-table.ts';
+import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
+import { cutRowContentDeps } from './table-fragment-content-insets.ts';
+import type { PinnedTableBreak } from './table-pinned-break.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
@@ -62,6 +64,33 @@ export function rowMinimumFits(
   return minimum === undefined || minimum <= availablePt + 0.001;
 }
 
+/**
+ * How the part of a row that does not fit the page whole is placed: its deps and the bottom it
+ * may reach. A first part ends its fragment at a cut, so its cells keep room for the inside rule
+ * that closes it (`cutRowContentDeps`). A continuation keeps its own insets, and its band stops
+ * that rule's width short of `bottom`: it either splits again or ends the page with its closing
+ * rule. A page-positioned break (`table-pinned-break.ts`) fills its band without either.
+ */
+export function cutPart(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  bottom: number,
+  continuation: boolean,
+  /** The page-positioned break this row belongs to, if any. */
+  pinned: PinnedTableBreak | undefined
+): { readonly deps: TableFlowDeps; readonly bottom: number } {
+  if (pinned) return { deps, bottom };
+  const cut = cutRowContentDeps(structure, row, deps);
+  if (!continuation) return { deps: cut, bottom };
+  let rule = 0;
+  for (const cell of row.cells) {
+    const own = (deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, true)).bottom;
+    rule = Math.max(rule, (cut.cellContentInsets?.get(cell.id)?.bottom ?? own) - own);
+  }
+  return { deps, bottom: bottom - rule };
+}
+
 /** Where a row would start in the column being filled, in page content coordinates. */
 export interface RowMinimumPlace {
   readonly top: number;
@@ -79,14 +108,21 @@ export interface RowMinimumPlace {
 /**
  * Whether the first fragment of `row` moves to the next column or page: content already sits
  * above `at.top` in the column, the minimum does not fit below it, and a fresh column holds it.
+ * A row whose `wholeHeight`, its closing rule included, fits the room never moves here. Otherwise
+ * the row ends its fragment, whole or split, so with `cut` its minimum is padded by the inside
+ * rule that closes it (`cutRowContentDeps`); a page-positioned break fills its band without one.
  */
 export function rowMinimumMoves(
   row: SemanticTableRow,
   deps: TableFlowDeps,
-  cellSpacingPt: number,
+  structure: SemanticTableStructure,
+  wholeHeight: number,
+  cut: boolean,
   at: RowMinimumPlace
 ): boolean {
   if (at.belowBandOnly || at.top <= at.columnTop + 0.001) return false;
+  if (wholeHeight <= at.bottom - at.top + 0.001) return false;
   const fresh = at.band - at.columnTop - at.repeat;
-  return !rowMinimumFits(row, deps, cellSpacingPt, fresh, at.bottom - at.top);
+  const closing = cut ? cutRowContentDeps(structure, row, deps) : deps;
+  return !rowMinimumFits(row, closing, structure.cellSpacingPt, fresh, at.bottom - at.top);
 }

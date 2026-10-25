@@ -59,6 +59,7 @@ import { planHeaderGroup } from './table-header-vmerge.ts';
 import { measureKeptMergeRows } from './table-kept-merge-measure.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
+import type { TableRowFragmentRecord } from './semantic-records.ts';
 
 /** Maximum rows measured for one table keep decision; paragraph lookahead is independent. */
 const MAX_TABLE_KEEP_ROWS = 256;
@@ -543,4 +544,19 @@ export function tableKeepFlow(
     opening: (block, columnWidth, pageHeight, deps) =>
       tableKeepOpening(block, { ...flow, width: columnWidth }, pageHeight, deps),
   };
+}
+
+/**
+ * Whether a fragment holds only header rows that open its page: repeats, or the authored group
+ * at the page top. A keep-together row that splits anyway gains no room by leaving them.
+ */
+export function onlyTopHeaderRows(
+  rows: readonly TableRowFragmentRecord[],
+  fragmentTop: number
+): boolean {
+  return (
+    rows.length > 0 &&
+    rows.every((placed) => placed.isHeaderRow) &&
+    (fragmentTop <= 0.001 || rows.every((placed) => placed.isHeaderRepeat))
+  );
 }

@@ -327,11 +327,11 @@ describe('w:tblW bounds the total', () => {
     expect(total(structure.columnWidthsPt)).toBeCloseTo(144, 6);
   });
 
-  test('a positive dxa table width can retain a grid wider than the text column', () => {
+  test('a dxa table width past the text column stretches a narrower grid up to it', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblW w:w="20000" w:type="dxa"/></w:tblPr>${wide}</w:tbl>`
     );
-    expect(total(structure.columnWidthsPt)).toBeCloseTo(720, 6);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(1000, 6);
   });
 
   test('a hostile w:tblW cannot crush every column to nothing', () => {

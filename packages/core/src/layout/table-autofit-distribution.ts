@@ -3,6 +3,7 @@
  * how a cell spanning several columns widens them. Pure arithmetic over points; the cell
  * measuring lives in `table-autofit-widths.ts`.
  */
+
 import type { PreferredWidth } from './table-widths.ts';
 
 const EPSILON_PT = 0.01;
@@ -222,6 +223,61 @@ export function sameOrComputed(
     : computed;
 }
 
+/**
+ * Widen autofit columns that are narrower than their minimum.
+ *
+ * A column below its minimum grows to it, and the table settles at `targetPt`: its own width
+ * for an absolute `w:tblW`, the room it has in the text column for an automatic width, its
+ * share of that room for a percentage. A table already narrower than an automatic target
+ * grows only as far as its content needs. The other columns give the difference in
+ * proportion to how far each one sits above its own minimum. When they reach their minimums,
+ * the table grows past its target; when the minimums together are wider than `availablePt`,
+ * every column is its minimum scaled down by the same factor. Widths that already hold their
+ * content come back unchanged, by identity.
+ */
+export function widenAutofitColumns(
+  widths: readonly number[],
+  minimums: readonly number[],
+  targetPt: number,
+  availablePt: number,
+  /** Also bring a table wider than `targetPt` down to it when no column widens. */
+  shrinkToTarget = false
+): readonly number[] {
+  let deficit = 0;
+  let total = 0;
+  for (const [index, width] of widths.entries()) {
+    deficit += Math.max(0, minimums[index]! - width);
+    total += width;
+  }
+  if (deficit <= EPSILON_PT && !(shrinkToTarget && total > targetPt + EPSILON_PT)) return widths;
+  // Nothing widens: every column gives way in proportion to its width.
+  if (deficit <= EPSILON_PT) return widths.map((width) => (width * targetPt) / total);
+  const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
+  const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
+  if (need <= EPSILON_PT) return grown;
+  // No column gives up its last hairline.
+  const slack = widths.map((width, index) =>
+    Math.max(0, width - Math.max(minimums[index]!, MIN_COLUMN_PT))
+  );
+  const totalSlack = slack.reduce((sum, value) => sum + value, 0);
+  if (need <= totalSlack) {
+    return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
+  }
+  // Every column keeps a hairline: a zero-width column would give its cell no box at all.
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  const needed = floor.reduce((sum, value) => sum + value, 0);
+  // Never narrower than the table already was: an indent can leave the text column no room.
+  const room = Math.max(
+    availablePt,
+    widths.reduce((sum, width) => sum + width, 0)
+  );
+  if (!Number.isFinite(room) || needed <= room) return floor;
+  // Scale only what each column holds above its hairline, so every hairline survives whole.
+  const hairlines = floor.length * MIN_COLUMN_PT;
+  const scale = Math.max(0, room - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
+  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+}
+
 /** The total an autofit table settles at once a column has to widen, in points. */
 export function autofitTargetPt(
   tableWidth: PreferredWidth,
@@ -238,27 +294,4 @@ export function autofitTargetPt(
     // Never below the resolved total, so a column widening by a little never narrows the table.
     return Math.max(totalPt, Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100));
   return availablePt;
-}
-
-/**
- * The room an autofit table may widen into for content no break can split, in points.
- *
- * A table whose stated `dxa` width already runs past the text column widens as far as such
- * content asks, even past the page edge; one that fits the column stops at the column
- * (78 to 95 unbreakable characters in a 553pt table on a 475pt column, measured).
- */
-export function autofitRoomPt(
-  tableWidth: PreferredWidth,
-  totalPt: number,
-  availablePt: number,
-  legacyContentAlignment = false
-): number {
-  if (
-    !legacyContentAlignment &&
-    tableWidth.type === 'dxa' &&
-    tableWidth.value > 0 &&
-    totalPt > availablePt + 0.001
-  )
-    return Number.POSITIVE_INFINITY;
-  return Math.max(0, availablePt);
 }

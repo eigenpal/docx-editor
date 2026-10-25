@@ -41,21 +41,48 @@ const MAX_DRAWING_EXCLUSION_SETTLING_PASSES = 64;
 /** Passes a settling reflow may run without a new low of changed zones. */
 const SETTLING_PASSES_WITHOUT_PROGRESS = 4;
 
+type OnePass = (
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions
+) => LayoutSteps<BlockLayoutResult>;
+
 /**
  * The converged layout of `bodies` under their exclusion zones, or null when nothing in them
- * produces zones (the caller then lays them out once). `layout` is one ordinary pass.
+ * produces zones (the caller then lays them out once). `layout` is one ordinary pass. An edit
+ * starts from the zones of the session's previous pages; see `settleExclusionLayout`.
  */
-export function* convergeExclusionLayout(
+export function convergeExclusionLayout(
   bodies: readonly OoxmlElement[],
   revision: number,
   options: BlockLayoutOptions,
   columns: ResolvedSectionColumns,
   contentWidthForReflow: number,
-  layout: (
-    bodies: readonly OoxmlElement[],
-    revision: number,
-    options: BlockLayoutOptions
-  ) => LayoutSteps<BlockLayoutResult>
+  layout: OnePass
+): LayoutSteps<BlockLayoutResult | null> {
+  return settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
+    seedFromPrevious: true,
+  });
+}
+
+/**
+ * `convergeExclusionLayout`, with pass zero laid out under the zones of the session's previous
+ * pages when `seedFromPrevious` holds. A seeded reflow that ends in a cycle, or runs out of
+ * passes, settles again from scratch: where a reflow enters a cycle decides which of its maps
+ * it publishes under, and an edit must lay out like a fresh layout. An edit that enters a
+ * cycle pays for that settle (measured on `page-framed-cycle.test.ts`: 7 passes, against 4 for
+ * a fresh layout); later edits that leave the cycle alone keep the one seeded pass. A seeded
+ * reflow that runs out of passes costs at most one seeded pass plus twice
+ * `MAX_DRAWING_EXCLUSION_SETTLING_PASSES` before the fresh settle throws.
+ */
+function* settleExclusionLayout(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions,
+  columns: ResolvedSectionColumns,
+  contentWidthForReflow: number,
+  layout: OnePass,
+  { seedFromPrevious }: { readonly seedFromPrevious: boolean }
 ): LayoutSteps<BlockLayoutResult | null> {
   if (
     !(
@@ -150,7 +177,11 @@ export function* convergeExclusionLayout(
     if (options.session && coldSession) replaceLayoutSession(options.session, coldSession);
     return fallback;
   }
-  const previousPages = options.session?.previous?.pages;
+  const previousPages = seedFromPrevious ? options.session?.previous?.pages : undefined;
+  const settleFresh = (): LayoutSteps<BlockLayoutResult | null> =>
+    settleExclusionLayout(bodies, revision, options, columns, contentWidthForReflow, layout, {
+      seedFromPrevious: false,
+    });
   if (previousPages) {
     zonesByPage = collectZones(previousPages, true);
     result = yield* layoutExclusionCandidate({
@@ -167,6 +198,8 @@ export function* convergeExclusionLayout(
     if (result.pages === previousPages) return result;
     const nextZones = collectZones(result.pages, true);
     if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
+    // A return to the seeded map is a cycle too.
+    exclusionPasses.remember(zonesByPage);
     zonesByPage = new Map(nextZones);
     exclusionPasses.remember(nextZones);
   }
@@ -216,6 +249,24 @@ export function* convergeExclusionLayout(
     } else passesSinceFewest += 1;
     settling = passesSinceFewest < SETTLING_PASSES_WITHOUT_PROGRESS;
   };
+  /**
+   * Compares the zones a pass collected with `zonesByPage`, moves `zonesByPage` on, updates
+   * `settling` (the stabilization loop's extension test), and says what the loop does next:
+   * publish the pass (`stable`), settle again from scratch (`fresh`, a seeded reflow that
+   * cycles), publish under `zonesByPage`, now the cycle's zones (`cycle`), or lay out once more
+   * under `zonesByPage`, now the collected zones (`continue`).
+   */
+  const applyTransition = (
+    nextZones: ReadonlyMap<number, readonly ExclusionZone[]>,
+    stabilization: boolean
+  ): 'stable' | 'fresh' | 'cycle' | 'continue' => {
+    const transition = exclusionPasses.advance(zonesByPage, nextZones, stabilization);
+    if (transition.kind === 'stable') return 'stable';
+    noteChanges(zonesByPage, nextZones);
+    if (transition.kind === 'cycle' && previousPages) return 'fresh';
+    zonesByPage = transition.kind === 'cycle' ? transition.zones : new Map(nextZones);
+    return transition.kind;
+  };
   for (let pass = 0; pass < exclusionPasses.maxPasses; pass += 1) {
     const candidateSession = options.session ? createLayoutSession() : undefined;
     result = yield* layoutExclusionCandidate({
@@ -234,11 +285,10 @@ export function* convergeExclusionLayout(
       }
       return yield* publishConverged(nextZones);
     }
-    const transition = exclusionPasses.advance(zonesByPage, nextZones);
-    if (transition === 'stable') return publishCandidate(result, candidateSession);
-    noteChanges(zonesByPage, nextZones);
-    zonesByPage = new Map(nextZones);
-    if (transition === 'cycle') {
+    const verdict = applyTransition(nextZones, false);
+    if (verdict === 'stable') return publishCandidate(result, candidateSession);
+    if (verdict === 'fresh') return yield* settleFresh();
+    if (verdict === 'cycle') {
       converged = true;
       break;
     }
@@ -261,19 +311,20 @@ export function* convergeExclusionLayout(
       const fallback = yield* fallbackUnplaceableFrames(result);
       if (fallback) return fallback;
       const nextZones = collectZones(result.pages);
-      const transition = exclusionPasses.advance(zonesByPage, nextZones, true);
-      if (transition === 'stable') return publishCandidate(result, candidateSession);
-      noteChanges(zonesByPage, nextZones);
-      zonesByPage = new Map(nextZones);
-      if (transition === 'cycle') {
+      const verdict = applyTransition(nextZones, true);
+      if (verdict === 'stable') return publishCandidate(result, candidateSession);
+      if (verdict === 'fresh') return yield* settleFresh();
+      if (verdict === 'cycle') {
         converged = true;
         break;
       }
     }
   }
   if (!converged) {
+    if (previousPages) return yield* settleFresh();
     throw new DrawingExclusionConvergenceError(
-      `wrap exclusion reflow did not converge within ${exclusionPasses.maxPasses} passes`
+      'wrap exclusion reflow did not converge ' +
+        `(settling limit ${MAX_DRAWING_EXCLUSION_SETTLING_PASSES} passes)`
     );
   }
   return yield* publishConverged(zonesByPage);

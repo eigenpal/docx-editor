@@ -22,6 +22,7 @@ export interface AutofitFlowDeps extends AutofitFieldContext {
   /** The pass producer the break cache keys on: note marks, display mode, author filter. */
   readonly producer?: string;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
 }
 
 /** One context per flow deps object, so every reader in a pass shares it. */
@@ -55,6 +56,7 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     deps.drawingLayoutToken ?? '',
     deps.inlineDrawingLayout ? 'drawings' : '',
     `tab:${deps.defaultTabStopPt ?? ''}`,
+    `mode:${deps.compatibilityMode ?? ''}`,
     // Saved field results break as text in the editable mode and stay whole in the default.
     `fields:${currentFieldResultsMode()}`,
   ].join('\0');
@@ -64,6 +66,7 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
     fields,
     ...(deps.defaultTabStopPt !== undefined ? { defaultTabStopPt: deps.defaultTabStopPt } : {}),
+    ...(deps.compatibilityMode !== undefined ? { compatibilityMode: deps.compatibilityMode } : {}),
     passToken,
     paragraphToken: (paragraph) =>
       [

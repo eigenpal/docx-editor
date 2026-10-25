@@ -8,11 +8,8 @@ import {
   wmlRevisionAttribute,
 } from './revision-cell-shading.ts';
 import { readTableAlignment } from './table-alignment.ts';
-import {
-  autoWidthOuterRulePt,
-  withSharedGridLineSideRules,
-  retargetSharedGridLineSideRules,
-} from './legacy-table-side-rules.ts';
+import { autoWidthOuterRulePt, withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
+import { widenedTableStructure } from './table-widened-structure.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
@@ -84,6 +81,7 @@ import {
   readTableIndentPt,
   readTablePreferredWidth,
   resolveColumnWidthsPt,
+  tableWidthPastTextColumn,
   type CellWidthClaim,
   type PreferredWidth,
 } from './table-widths.ts';
@@ -99,7 +97,8 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
-import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
+import { cellIgnoresEndMark, cellNoWrap } from './table-cell-hide-mark.ts';
+import { uniformRowCellSpacingPt } from './table-row-cell-spacing.ts';
 import { resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
@@ -223,6 +222,8 @@ export interface SemanticTableCell {
   readonly headsVerticalMerge?: true;
   /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
   readonly hideEndMark?: boolean;
+  /** `w:noWrap`: autofit never narrows the cell's column below its preferred width. */
+  readonly noWrap?: true;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
   /** `w:textDirection`; unsupported values keep horizontal layout. */
@@ -318,6 +319,11 @@ export interface SemanticTableStructure {
    * keeps inside its container, so its grid settles that much narrower than the room.
    */
   readonly autoOuterRulePt?: number;
+  /**
+   * Derived, never serialized: a top-level autofit table whose absolute `w:tblW` is wider than
+   * its text column. See `tableWidthPastTextColumn`.
+   */
+  readonly pastTextColumn?: true;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
   /**
@@ -364,16 +370,6 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
 }
-
-/**
- * Widened structures per base, by their widths. Readers that widen one base differently (two
- * measurers, two field contexts) keep separate entries instead of evicting each other.
- */
-const widenedStructureMemos = new WeakMap<
-  SemanticTableStructure,
-  Map<string, SemanticTableStructure>
->();
-const MAX_WIDENED_PER_BASE = 4;
 
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
@@ -448,43 +444,7 @@ export function readTableStructure(
     ),
   });
   if (widths === base.columnWidthsPt) return base;
-  const widthsKey = widths.join(',');
-  let widened = widenedStructureMemos.get(base);
-  const known = widened?.get(widthsKey);
-  if (known) return known;
-  const sideRules = retargetSharedGridLineSideRules(
-    base.rows,
-    {
-      compatibilityMode,
-      depth,
-      bidiVisual: base.bidiVisual === true,
-      floating: base.float !== undefined,
-      cellSpacingPt: base.cellSpacingPt,
-      widthType: base.tableWidth.type,
-      alignment: base.alignment,
-      layoutFixed: base.layoutFixed,
-      indentPt: base.indentPt,
-      columnWidthsPt: base.columnWidthsPt,
-      containerWidthPt: contentWidthPt,
-    },
-    widths
-  );
-  // Top-level fixed tables returned above; nested fixed tables have no legacy content offset.
-  const { outerRuleOffsetPt: _previousOffset, ...unchanged } = base;
-  const structure: SemanticTableStructure = {
-    ...unchanged,
-    columnWidthsPt: widths,
-    rows: sideRules.rows,
-    ...(sideRules.outerRuleOffsetPt === undefined
-      ? {}
-      : { outerRuleOffsetPt: sideRules.outerRuleOffsetPt }),
-  };
-  if (structure) {
-    if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
-    if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
-    widened.set(widthsKey, structure);
-  }
-  return structure;
+  return widenedTableStructure(base, widths, { compatibilityMode, depth, contentWidthPt });
 }
 
 function readTableStructureUncached(
@@ -777,6 +737,7 @@ function readTableStructureUncached(
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: vMerge === 'continue' && mergedAbove.has(gridColumn),
         hideEndMark: cellIgnoresEndMark(tableStyle, conditions, cellProperties),
+        ...(cellNoWrap(tableStyle, conditions, cellProperties) ? { noWrap: true as const } : {}),
         vAlign: readCellVerticalAlign(cellProperties),
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
@@ -884,6 +845,13 @@ function readTableStructureUncached(
   const { legacy, indentPt } = placement;
   const legacyWidth = legacy?.widthPt;
 
+  const pastTextColumn = tableWidthPastTextColumn({
+    tableWidth: placement.tableWidth,
+    textColumnPt: placement.contentWidthPt,
+    layoutFixed,
+    depth,
+    textBox,
+  });
   const columnWidthsPt = resolveColumnWidthsPt({
     gridCols,
     claims: placement.claims,
@@ -893,6 +861,7 @@ function readTableStructureUncached(
     layoutFixed,
     // A hidden revision row can still account for part of the authored grid.
     hasOmittedRows,
+    pastTextColumn,
   });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
@@ -955,6 +924,7 @@ function readTableStructureUncached(
     ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
     ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
     ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
+    ...(pastTextColumn ? { pastTextColumn: true as const } : {}),
     tableWidth,
     layoutFixed,
     indentPt,
@@ -974,26 +944,5 @@ function readTableStructureUncached(
       ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
       : defaultMargins,
   };
-}
-
-/**
- * `w:trPr/w:tblCellSpacing` (17.4.44) when every row states the same value and the table
- * states none. A value shared by all rows is the table's spacing; rows that differ are an
- * exception this layout does not model, so they keep the table's own spacing.
- */
-function uniformRowCellSpacingPt(table: OoxmlElement): number | undefined {
-  let spacing: number | undefined;
-  for (const rowNode of flattenContentControls(table.children)) {
-    if (rowNode.kind !== 'tableRow') continue;
-    const properties = wmlRevisionChild(rowNode, 'trPr');
-    const value = preferredLengthPt(
-      properties && childNamed(properties, 'tblCellSpacing'),
-      MAX_CELL_MARGIN_PT
-    );
-    if (value === undefined || (spacing !== undefined && Math.abs(value - spacing) > 0.001))
-      return undefined;
-    spacing = value;
-  }
-  return spacing;
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';

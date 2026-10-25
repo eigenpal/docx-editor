@@ -18,8 +18,15 @@ import {
   type PageFurniture,
 } from './page-furniture-insets.ts';
 import { pageBorderFrame } from './page-border-frame.ts';
+import type { ExclusionZone } from './drawing-exclusion.ts';
+import { furnitureDrawingExclusionsForPage } from './furniture-drawing-exclusion.ts';
 import type { SectionPageBorders } from './page-borders.ts';
-import type { HeaderFooterStoryRecord, LayoutBox, PageGeometry } from './semantic-records.ts';
+import type {
+  HeaderFooterStoryRecord,
+  LayoutBox,
+  PageGeometry,
+  PageRecord,
+} from './semantic-records.ts';
 
 export interface SectionPageFurnitureInputs {
   readonly furniture?: PageFurniture;
@@ -55,7 +62,20 @@ export interface SectionPageFurniture {
   ): HeaderFooterStoryRecord | undefined;
   /** Content box AND furniture for a sheet minted at a DOCUMENT index, placed on `box`. */
   overflowShellAt(documentPageIndex: number, box: LayoutBox): OverflowPageShell;
+  /**
+   * The page record of section-local page `index` before its body: its box, content box, page
+   * borders, header and footer. `index` is section-local, which is what `w:display` asks about.
+   */
+  pageShell(index: number): PageShell;
+  /** The wrap zones the header and footer of section-local page `index` lay over its body. */
+  furnitureZonesFor(index: number, omitHidden?: boolean): readonly ExclusionZone[];
 }
+
+/** A page record without its body fragments. */
+export type PageShell = Pick<
+  PageRecord,
+  'id' | 'index' | 'box' | 'contentBox' | 'pageBorders' | 'header' | 'footer'
+>;
 
 /** Everything a placed header or footer story reads, and nothing from the pass that placed it. */
 interface StoryPlacement {
@@ -200,5 +220,51 @@ export function createSectionPageFurniture(
     };
   };
 
-  return { pageBox, variantFor, furnitureFor, overflowShellAt };
+  /**
+   * The wrap zones the header and footer of local page `index` lay over its body, resolved on
+   * the page being filled so newly minted pages wrap too. `omitHidden` leaves out hidden
+   * records (`refusalYieldsHiddenFurniture`).
+   */
+  const furnitureZonesFor = (index: number, omitHidden = false): readonly ExclusionZone[] => {
+    const box = pageBox(index);
+    const insets = inputs.insetsFor(index);
+    return furnitureDrawingExclusionsForPage(
+      {
+        box,
+        contentBox: {
+          x: box.x + geometry.margin.left,
+          y: box.y + insets.top,
+          width: inputs.contentWidth,
+          height: insets.height,
+        },
+        header: furnitureFor('header', index, box),
+        footer: furnitureFor('footer', index, box),
+      },
+      omitHidden
+    );
+  };
+
+  const pageShell = (index: number): PageShell => {
+    const box = pageBox(index);
+    const header = furnitureFor('header', index, box);
+    const footer = furnitureFor('footer', index, box);
+    const insets = inputs.insetsFor(index);
+    const borderFrame = pageBorderFrame(inputs.pageBorders, geometry, index === 0);
+    return {
+      id: `page-${index}`,
+      index,
+      box,
+      contentBox: {
+        x: box.x + geometry.margin.left,
+        y: box.y + insets.top,
+        width: inputs.contentWidth,
+        height: insets.height,
+      },
+      ...(borderFrame ? { pageBorders: borderFrame } : {}),
+      ...(header ? { header } : {}),
+      ...(footer ? { footer } : {}),
+    };
+  };
+
+  return { pageBox, variantFor, furnitureFor, overflowShellAt, furnitureZonesFor, pageShell };
 }

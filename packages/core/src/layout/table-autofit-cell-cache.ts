@@ -6,6 +6,8 @@ import { listItemToken } from './list-marker-reuse.ts';
 
 export interface AutofitCellWidths {
   readonly least: number;
+  /** {@link least} once the column has to widen (`ContentWidths.minWidened`). */
+  readonly leastWidened: number;
   readonly most: number;
   readonly left: number;
   readonly right: number;

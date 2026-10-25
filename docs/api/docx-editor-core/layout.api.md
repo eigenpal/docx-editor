@@ -3990,6 +3990,7 @@ export interface SemanticTableCell {
         readonly bottom: number;
         readonly top: number;
     };
+    readonly noWrap?: true;
     readonly preferredWidth: PreferredWidth;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
@@ -4037,6 +4038,7 @@ export interface SemanticTableStructure {
     readonly legacyContentAlignment?: true;
     readonly legacyTrailingOuterEdge?: true;
     readonly outerRuleOffsetPt?: number;
+    readonly pastTextColumn?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
@@ -4548,6 +4550,7 @@ export type TableAlignment = 'left' | 'center' | 'right';
 
 // @public
 export interface TableAutofitContext {
+    readonly compatibilityMode?: number;
     readonly defaultTabStopPt?: number;
     readonly fields?: AutofitFieldContext;
     readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
