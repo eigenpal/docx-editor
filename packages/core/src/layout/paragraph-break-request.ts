@@ -47,7 +47,14 @@ export function prepareParagraphBreakInputs(
   dependencies: ParagraphBreakDependencies
 ): { readonly tabStops: ResolvedTabStops; readonly properties: readonly OoxmlProperty[] } {
   let tabStops = withDefaultTabInterval(inputs.tabStops, defaultTabStopPt);
-  // Word supplies a left tab at a hanging paragraph's text origin. An authored stop
+  // A `num` stop in a paragraph with no list number is an ordinary left stop.
+  if (!inputs.listItem && tabStops.stops.some((stop) => stop.numberingOnly)) {
+    tabStops = {
+      ...tabStops,
+      stops: tabStops.stops.map(({ numberingOnly: _num, ...stop }) => stop),
+    };
+  }
+  // A hanging paragraph has an implied left tab at its text origin. An authored stop
   // at that position takes precedence; later custom stops must not swallow this tab.
   // It stays marked as implied: the numbering suffix places the indent by its own rule.
   // Stops count from the leading margin, which is the right one in a right-to-left paragraph.

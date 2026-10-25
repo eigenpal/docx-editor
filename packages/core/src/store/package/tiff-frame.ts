@@ -38,7 +38,7 @@ export interface DecodedTiffFrame {
  * The declared extent is read from the first IFD and checked against the resource limits
  * before any pixel buffer is allocated, and the decoded buffer must match that extent
  * exactly — a decoder that reports one size and returns another is refused rather than
- * trusted. Only the first image is read: Word paints page one of a multi-page TIFF.
+ * trusted. Only the first image is read: a multi-page TIFF shows its first page.
  */
 export async function decodeTiffFrame(
   bytes: Uint8Array,
