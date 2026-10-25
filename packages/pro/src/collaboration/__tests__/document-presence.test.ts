@@ -26,6 +26,7 @@ import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from '../document-session.ts';
+import { collaborationParagraphScanRecorder } from '../../../../core/src/collaboration/paragraph-addresses.ts';
 
 const DOCUMENT_ID = 'presence-room';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -598,4 +599,35 @@ describe('full-document presence selection', () => {
       },
     ]);
   });
+});
+
+test('a remote caret on an unchanged long document resolves without reading its paragraphs', async () => {
+  const long = documentBytes(
+    Array.from({ length: 400 }, (_, index) => paragraph(`Paragraph ${index} Bravo`)).join('')
+  );
+  const alice = await createPeer('alice', long);
+  const bob = await joinPeer(alice, 'bob');
+  const target = alice.port.paragraphs()[300]!;
+  const at = { paragraphId: target.paragraphId, offset: 14 };
+  alice.room.session.setLocalSelection(range(at, at));
+  syncAwareness(alice, bob);
+  // Bob splits the paragraph Alice's caret names, so resolving it looks up her character by
+  // node id, the path that used to list every paragraph on every resolve.
+  const split = bob.store.transact({ kind: 'body' }, (context) => {
+    context.apply({
+      op: 'splitParagraph',
+      paragraphId: bob.port.paragraphByStableId(target.paragraphId)!.nodeId,
+      offset: 4,
+    });
+  });
+  if (!split.ok) throw new Error(split.detail ?? split.reason);
+  bob.port.flushPendingJournals();
+  const first = bob.room.session.remoteSelections()[0]?.head;
+  expect(first).toBeDefined();
+  const recorder = collaborationParagraphScanRecorder();
+  recorder.reset();
+  for (let resolve = 0; resolve < 100; resolve += 1) {
+    expect(bob.room.session.remoteSelections()[0]?.head).toEqual(first);
+  }
+  expect(recorder.enumerations).toBeLessThanOrEqual(1);
 });

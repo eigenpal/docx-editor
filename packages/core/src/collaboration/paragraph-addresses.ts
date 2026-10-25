@@ -13,8 +13,8 @@
 //     the part ROOT. A header nobody edits keeps its map for the life of that tree.
 //   - `createBodyParagraphLookup` keeps the reverse map, node id to paraId, for the LAST body
 //     root only: every edit makes a new body root, and the shared cache above would otherwise
-//     fill with body maps that undo history keeps alive. So an edit can cost two body walks,
-//     one per direction, when both lookups run on the new tree.
+//     fill with body maps that undo history keeps alive. Its walk also seeds the forward map
+//     for that tree, so the two lookups share one walk per edit.
 //   - `createParagraphAddressResolver` remembers where each paraId resolved last time, then
 //     re-checks the hint through the store's own node index, which is O(1). A paragraph
 //     that did not move survives every keystroke elsewhere in the document.
@@ -66,7 +66,8 @@ let paragraphVisits = 0;
 /**
  * @internal Warm-path recorder for collaboration paragraph enumerations.
  *
- * Presence address resolution must not enumerate paragraphs. This counts the enumerations
+ * Presence address resolution must not enumerate paragraphs per caret move: one walk per
+ * body tree, shared by every lookup on it, is the expected cost. This counts the enumerations
  * that do happen so a test can assert the caret path stays off them.
  */
 export function collaborationParagraphScanRecorder(): {
@@ -278,7 +279,12 @@ export function createBodyParagraphLookup(
     null;
   return (nodeId) => {
     const part = body();
-    if (last?.root !== part.root) last = { root: part.root, byNodeId: identityWalk(part).byNodeId };
+    if (last?.root !== part.root) {
+      const walked = identityWalk(part);
+      // The same walk answers `paragraphAddressesOf(body)` for this tree too.
+      if (!partAddresses.get(part.root)) partAddresses.set(part.root, walked.byParagraphId);
+      last = { root: part.root, byNodeId: walked.byNodeId };
+    }
     const paragraphId = last.byNodeId.get(nodeId);
     if (paragraphId === undefined) return null;
     const text = paragraphTextOf(part, nodeId);

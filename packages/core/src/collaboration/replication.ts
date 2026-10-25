@@ -70,9 +70,10 @@ export interface CollaborationDocumentPort {
   /**
    * The body paragraph with this canonical node id, exactly as `paragraphs()` lists it (the
    * same stable id, minted when the paragraph's own is missing, invalid, or claimed by an
-   * earlier paragraph), or null for a node that is not a listed body paragraph. Cheap on an
-   * unchanged document, so presence can ask it on every caret move. See `paragraphByStableId`
-   * for the one case where the two lookups disagree.
+   * earlier paragraph), or null for a node that is not a listed body paragraph. O(1) on an
+   * unchanged document, so presence can ask it on every caret move; the first call after an
+   * edit walks the body once. See `paragraphByStableId` for the one case where the two
+   * lookups disagree.
    */
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**
