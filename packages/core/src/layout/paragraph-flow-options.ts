@@ -17,8 +17,8 @@ export interface ParagraphFlowOptions {
   readonly justifySpaceShrink?: boolean;
   /** A left tab stop past the margin is honoured, and its text may run past the margin. */
   readonly leftTabsPastMargin?: boolean;
-  /** An inline object opening its line stays beside a floating table, however wide. */
-  readonly inlineObjectsBesideTables?: boolean;
+  /** An inline object opening its line stays on it beside a float, however wide. */
+  readonly inlineObjectsBesideFloats?: boolean;
   /** A body paragraph, where a column break ends its column. */
   readonly columnBreaksEndColumns?: boolean;
   /** The paragraph mark after a closing page break takes a line on the next page. */

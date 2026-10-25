@@ -248,9 +248,9 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
         paragraphAlignment(formatting.props) === 'both',
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
-      inlineObjectsBesideTables: hasCompatibilityRule(
+      inlineObjectsBesideFloats: hasCompatibilityRule(
         request.compatibilityMode,
-        'inlineObjectStaysBesideTable'
+        'inlineObjectStaysBesideFloat'
       ),
       cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,

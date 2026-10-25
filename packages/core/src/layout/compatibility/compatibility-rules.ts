@@ -115,9 +115,9 @@ export const MODE_RULES = {
     'A column break that opens a paragraph leaves no line in the column it ends',
     'ECMA-376 Part 1 §17.3.3.1 br'
   ),
-  inlineObjectStaysBesideTable: legacy(
-    'An inline object that opens its line stays beside a floating table even when it is wider than the gap there, and runs past the margin. In modern modes it moves below the table',
-    'ECMA-376 Part 1 §17.4.57 tblpPr'
+  inlineObjectStaysBesideFloat: legacy(
+    'An inline object that opens its line stays on it beside a float even when it is wider than the gap there, and runs past the margin or over the float. In modern modes it moves below the float',
+    'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
   leftTabStopsPastMargin: legacy(
     'A custom left tab stop past the margin is honoured, and the text after it may run past the margin. In modern modes the stop reaches the margin and its text wraps there',

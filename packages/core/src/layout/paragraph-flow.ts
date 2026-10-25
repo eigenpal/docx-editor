@@ -1,5 +1,5 @@
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
-import { besideTableWidth } from './legacy-inline-beside-table.ts';
+import { besideFloatWidth } from './legacy-inline-beside-float.ts';
 import { paragraphContinuationPieces } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
@@ -1089,7 +1089,7 @@ export function breakParagraph(
       const jumpedLine = line;
       // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
       const rule = !!piece.inlineDrawing.projection.horizontalRule;
-      const placeWidth = besideTableWidth(atomWidth, flow, holdsContent(), activeExclusionZones);
+      const placeWidth = besideFloatWidth(atomWidth, flow, holdsContent(), activeExclusionZones);
       if (!jumps && !rule) applyInlineObjectSkipIfNeeded(placeWidth, measure.lineContribution);
       if (!rule && !ensurePlacementWidth(placeWidth)) continue;
       if (jumps && line !== jumpedLine) {
