@@ -515,7 +515,9 @@ export function openDocumentForExport(
         finish();
         return;
       }
-      pollRevision();
+      // The first check waits one task, so a resource that settles in a microtask is not
+      // timed out when a slow layout pass already used up the deadline.
+      timer = setTimeout(pollRevision, 0);
     });
   };
 
