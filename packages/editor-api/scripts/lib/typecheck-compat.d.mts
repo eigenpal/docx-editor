@@ -8,13 +8,20 @@
 
 /**
  * Compile a `tsconfig.json` in-process and answer its diagnostics, one formatted string each.
- * An empty array means the project compiled clean. `scope: 'project'` reports only the files the
- * tsconfig includes (plus option and global diagnostics); the default reports every file the
- * program reaches.
+ * An empty array means the project compiled clean.
+ *
+ * `scope: 'program'` (the default) reports every file the program reaches. `scope: 'project'`
+ * reports the files the tsconfig includes (syntactic, semantic, and declaration diagnostics,
+ * plus option and global ones); the bodies of other files are not checked. `forbiddenGlobals`
+ * reports bare references to those host globals in every non-dependency file the program
+ * reaches, in either scope.
  */
 export function typecheckProject(
   tsconfigPath: string,
-  options?: { readonly scope?: 'program' | 'project' }
+  options?: {
+    readonly scope?: 'program' | 'project';
+    readonly forbiddenGlobals?: readonly string[];
+  }
 ): string[];
 
 /**

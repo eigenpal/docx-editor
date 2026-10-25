@@ -25,6 +25,7 @@ import { advanceClock, resetClock } from './scenario-clock.ts';
 import { TypedTokens } from './scenario-tokens.ts';
 import { DecisionOracle } from './scenario-decisions.ts';
 import { CaretWatch } from './scenario-presence.ts';
+import { sameShownState, shownStateOf, type ShownState } from './scenario-shown-state.ts';
 import * as Y from 'yjs';
 import {
   paragraphTextOf,
@@ -177,20 +178,8 @@ class Simulation {
   firstFailure = -1;
   /** Check every replica against its shared state after every action, not only at the end. */
   strict = false;
-  /** The shared-state version and tree each replica last passed `checkShown` with. */
-  private readonly passedAt = new Map<Replica, { readonly version: number; readonly tree: unknown }>();
-  /** Transactions each shared document has seen since `checkShown` first read it. */
-  private readonly sharedVersions = new Map<Y.Doc, { count: number }>();
-
-  private sharedVersion(ydoc: Y.Doc): number {
-    let entry = this.sharedVersions.get(ydoc);
-    if (!entry) {
-      const counter = { count: 0 };
-      ydoc.on('afterTransaction', () => (counter.count += 1));
-      this.sharedVersions.set(ydoc, (entry = counter));
-    }
-    return entry.count;
-  }
+  /** The shared state and tree each replica last passed `checkShown` with. */
+  private readonly passedAt = new Map<Replica, ShownState>();
   /**
    * With in-order delivery every edit sees every earlier one, so the editing replica must
    * hold exactly what one plain store holds after the same edits. The store follows each
@@ -208,16 +197,14 @@ class Simulation {
     for (const replica of this.replicas) {
       // A replica waiting for a held-back update keeps its last complete view on purpose.
       if (awaitingUpdates(replica.ydoc)) continue;
-      // A fresh build is a pure read of the shared state, so a replica whose shared state and
-      // tree are both unchanged since it last passed passes again: skip the rebuild.
-      const version = this.sharedVersion(replica.ydoc);
-      const tree = replica.store.currentPackage();
+      // An unchanged replica passes again; see `scenario-shown-state.ts` for why.
+      const now = shownStateOf(replica.ydoc, replica.store.currentPackage());
       const passed = this.passedAt.get(replica);
-      if (passed && passed.version === version && passed.tree === tree) continue;
+      if (passed && sameShownState(passed, now)) continue;
       const problem = withFreshBuild(replica.ydoc, replica.handle.session, (built, registry) =>
         built.ok ? this.shownDifference(replica, built.package, registry) : null
       );
-      if (!problem) this.passedAt.set(replica, { version, tree });
+      if (!problem) this.passedAt.set(replica, now);
       if (problem) {
         this.problems.push(`replica ${replica.index} ${when} ${problem}`);
         if (this.firstFailure < 0) this.firstFailure = this.performed;
