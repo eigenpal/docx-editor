@@ -4998,7 +4998,8 @@ export interface VectorShapeComponent {
     readonly strokeHex: string | null;
     readonly strokeInset?: boolean;
     // (undocumented)
-    readonly strokeJoin?: 'round' | 'bevel';
+    readonly strokeJoin?: 'round' | 'bevel' | 'miter';
+    readonly strokeMiterLimit?: number;
     readonly strokeOutsetEmu?: number;
     // (undocumented)
     readonly strokeWidthEmu: number;
