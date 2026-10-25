@@ -119,7 +119,15 @@ describe('body text wraps around a floating header or footer table', () => {
 
   test('a narrow table keeps body lines beside it', () => {
     withPages(docx({ header: floatingTable(150, 2000, 'left') + para('Header') }), (pages) => {
-      const beside = bodyLines(pages[0]!).filter(({ top, line }) => crosses(top, line, 150, 210));
+      // The default 1.08 multiple adds its extra below the text, and a band ignores that extra.
+      const beside = bodyLines(pages[0]!).filter(({ top, line }) =>
+        crosses(
+          top,
+          { ...line, box: { ...line.box, height: (line.box.height * 240) / 259 } },
+          150,
+          210
+        )
+      );
       expect(beside.length).toBeGreaterThan(0);
       // The table is 100pt wide with 9pt to its right.
       for (const { line } of beside) expect(line.contentX).toBeGreaterThanOrEqual(108.9);
