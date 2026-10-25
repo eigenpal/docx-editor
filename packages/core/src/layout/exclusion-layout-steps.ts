@@ -6,6 +6,7 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   createDrawingExclusionPasses,
+  cycleZones,
   exclusionZoneChangeCount,
 } from './drawing-exclusion-passes.ts';
 import {
@@ -237,11 +238,12 @@ export function* convergeExclusionLayout(
     const transition = exclusionPasses.advance(zonesByPage, nextZones);
     if (transition === 'stable') return publishCandidate(result, candidateSession);
     noteChanges(zonesByPage, nextZones);
-    zonesByPage = new Map(nextZones);
     if (transition === 'cycle') {
+      zonesByPage = cycleZones(exclusionPasses.cycleOf(nextZones));
       converged = true;
       break;
     }
+    zonesByPage = new Map(nextZones);
   }
   if (!converged) {
     for (
@@ -264,11 +266,12 @@ export function* convergeExclusionLayout(
       const transition = exclusionPasses.advance(zonesByPage, nextZones, true);
       if (transition === 'stable') return publishCandidate(result, candidateSession);
       noteChanges(zonesByPage, nextZones);
-      zonesByPage = new Map(nextZones);
       if (transition === 'cycle') {
+        zonesByPage = cycleZones(exclusionPasses.cycleOf(nextZones));
         converged = true;
         break;
       }
+      zonesByPage = new Map(nextZones);
     }
   }
   if (!converged) {

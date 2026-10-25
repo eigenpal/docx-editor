@@ -722,6 +722,23 @@ describe('autofit layout', () => {
     expect(columns(wide).widths).toEqual([100, 100, 100]);
   });
 
+  test('a table wider than its text column grows to hold its cells instead of sharing it', () => {
+    // A 350pt table in the 300pt text column: the three held 120pt cells keep their widths and
+    // the table grows to 360pt; without them the 240pt grid stretches to the table's 350pt.
+    const table = (tcPr: string, grid: number) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="7000" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+      `<w:gridCol w:w="${grid}"/>`.repeat(3) +
+      '</w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr>${tcPr}</w:tcPr><w:p>${run('ab')}</w:p></w:tc>`.repeat(3) +
+      '</w:tr></w:tbl>';
+    expect(columns(table('<w:tcW w:w="2400" w:type="dxa"/><w:noWrap/>', 2400)).widths).toEqual([
+      120, 120, 120,
+    ]);
+    const stretched = columns(table('', 1600)).widths;
+    expect(stretched.reduce((sum, width) => sum + width, 0)).toBeCloseTo(350, 1);
+  });
+
   test('an empty grid band gains no width when the table scales down', () => {
     const banded =
       '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +

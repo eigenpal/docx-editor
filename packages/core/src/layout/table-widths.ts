@@ -392,9 +392,10 @@ function applyWidthClaims(
  * The AutoFit content-growth limit does not shrink an already-authored wider table.
  *
  * A `pct` table width is a two-way instruction — it is Word's "AutoFit to Window", so a
- * table narrower than its stated percentage is stretched up to it as well as shrunk down.
- * An absolute or absent width only ever shrinks: a narrow autofit table is already showing
- * what Word shows, and stretching it would invent geometry no one authored.
+ * table narrower than its stated percentage is stretched up to it as well as shrunk down, and
+ * so is one whose absolute width is past the text column (`pastTextColumn`). Any other
+ * absolute or absent width only ever shrinks: a narrow autofit table is already showing what
+ * Word shows, and stretching it would invent geometry no one authored.
  */
 export function resolveColumnWidthsPt(input: {
   readonly gridCols: readonly OoxmlElement[];
@@ -404,6 +405,11 @@ export function resolveColumnWidthsPt(input: {
   readonly tableWidth: PreferredWidth;
   readonly layoutFixed: boolean;
   readonly hasOmittedRows?: boolean;
+  /**
+   * A top-level autofit table whose absolute width is wider than the text column: it is laid
+   * out at that width, so a narrower grid stretches up to it like a percentage.
+   */
+  readonly pastTextColumn?: boolean;
 }): readonly number[] {
   const { columnCount, tableWidth } = input;
   // A caller with a degenerate or non-finite content box has told us nothing about the page.
@@ -466,10 +472,52 @@ export function resolveColumnWidthsPt(input: {
     floor
   );
 
-  // Only a `pct` table width stretches a narrow table up to its target.
-  const stretches = tableWidth.type === 'pct' && statedTableWidth > 0;
+  // Only a `pct` table width, or one past the text column, stretches a narrow table up to it.
+  const stretches =
+    (tableWidth.type === 'pct' || input.pastTextColumn === true) && statedTableWidth > 0;
   if (total <= target + WIDTH_EPSILON_PT && !stretches) return resolved;
   if (Math.abs(total - target) <= WIDTH_EPSILON_PT) return resolved;
   const scale = target / total;
   return resolved.map((width) => width * scale);
 }
+
+/**
+ * Whether a table's absolute width is wider than the text column it sits in. Such a top-level
+ * autofit table is laid out at its own width, past the column: a narrower grid stretches up to
+ * it, and a column whose content needs more than its share widens the table rather than
+ * breaking its words, even past the page edge. A table no wider than the column fits its
+ * minimums into the column.
+ *
+ * Measured in a 451.3pt column with a 489.7pt grid, compatibility mode 15 and legacy alike:
+ * `w:tblW` 500pt and 700pt stretch the grid to 500pt and 700pt; `w:noWrap` cells holding
+ * 598.5pt keep it under a 500pt or 563pt width; a long URL widens a table only 10.8pt past the
+ * column (also with a negative indent) past the page, and breaks in a table exactly as wide
+ * as the column; a 450pt table fits everything into the column. In a 207pt section column, a
+ * 300pt table stretches a 150pt grid to 300pt. A floating table follows the same rule; the
+ * indent does not count. Nested, fixed-layout and text-box tables keep the column rule, for
+ * want of evidence.
+ */
+export function tableWidthPastTextColumn(table: {
+  readonly tableWidth: PreferredWidth;
+  readonly textColumnPt: number;
+  readonly layoutFixed: boolean;
+  readonly depth: number;
+  readonly textBox?: boolean;
+}): boolean {
+  const { tableWidth, textColumnPt } = table;
+  return (
+    !table.layoutFixed &&
+    table.depth === 0 &&
+    !table.textBox &&
+    tableWidth.type === 'dxa' &&
+    Number.isFinite(textColumnPt) &&
+    textColumnPt > 0 &&
+    tableWidth.value > textColumnPt + WIDTH_EPSILON_PT
+  );
+}
+
+/**
+ * The widest a table past its text column grows to hold its minimums: ~22", Word's widest
+ * page, the same bound as one grid column. Content that needs more breaks.
+ */
+export const MAX_TABLE_GROWTH_PT = 31_680 / 20;

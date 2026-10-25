@@ -2,6 +2,7 @@ import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell
 import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
+import { MAX_TABLE_GROWTH_PT } from './table-widths.ts';
 import {
   cellSpacingGapPt,
   cellSpacingScale,
@@ -940,7 +941,8 @@ export function autofitColumnWidthsPt(
   const availablePt = legacy ? Math.max(totalPt, contentWidthPt) : availableFor(roomWidthPt);
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
-  const roomPt = Math.max(0, availablePt - gaps);
+  // A table wider than its text column grows to hold its minimums instead of scaling them.
+  const roomPt = structure.pastTextColumn ? MAX_TABLE_GROWTH_PT : Math.max(0, availablePt - gaps);
   const ownWidth = structure.tableWidth.value > 0 && structure.tableWidth.type !== 'auto';
   const settle = (): readonly number[] =>
     sizedByContent

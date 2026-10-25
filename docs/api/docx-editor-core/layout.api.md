@@ -3968,6 +3968,7 @@ export interface SemanticTableStructure {
     readonly legacyContentAlignment?: true;
     readonly legacyTrailingOuterEdge?: true;
     readonly outerRuleOffsetPt?: number;
+    readonly pastTextColumn?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
