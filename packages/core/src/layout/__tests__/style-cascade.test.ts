@@ -359,7 +359,8 @@ describe('paragraph-mark rPr does not size content runs', () => {
     const table = buildStyleCascadeTable(loadStyles(styles));
     const listParagraph =
       `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>` +
-      `<w:rPr><w:sz w:val="52"/><w:b/></w:rPr></w:pPr><w:r><w:t>BIG</w:t></w:r></w:p>`;
+      `<w:rPr><w:sz w:val="52"/><w:b/><w:u w:val="single"/></w:rPr></w:pPr>` +
+      `<w:r><w:t>BIG</w:t></w:r></w:p>`;
     const part = loadDocument(listParagraph);
     const paragraph = part.root.children.find((child) => child.localName === 'body')!.children[0]!;
 
@@ -368,14 +369,17 @@ describe('paragraph-mark rPr does not size content runs', () => {
     )!;
     expect(fromMark.markerStyle.fontSizePt).toBe(26);
     expect(fromMark.markerStyle.bold).toBe(true);
+    // The mark's underline never reaches the number; only the level's own does.
+    expect(fromMark.markerStyle.underline?.variant ?? 'none').toBe('none');
 
     const fromLevel = resolveStoryListItems(
       [paragraph],
-      numberingWithLevelRpr('<w:rPr><w:sz w:val="20"/></w:rPr>'),
+      numberingWithLevelRpr('<w:rPr><w:sz w:val="20"/><w:u w:val="double"/></w:rPr>'),
       table
     ).get(paragraph.id)!;
     expect(fromLevel.markerStyle.fontSizePt).toBe(10);
     expect(fromLevel.markerStyle.bold).toBe(true);
+    expect(fromLevel.markerStyle.underline?.variant).toBe('double');
   });
 });
 

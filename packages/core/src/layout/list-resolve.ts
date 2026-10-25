@@ -352,7 +352,11 @@ function paragraphListPrelude(
     numPr && styleCascade && cascaded
       ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
       : { below: [], above: propertiesOf(pPr) };
-  const markProps = cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun);
+  // The number takes the mark's formatting except its underline; only the level's own
+  // `w:u` underlines it.
+  const markProps = (cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun)).filter(
+    (property) => property.localName !== 'u'
+  );
   // An admitted separator hides its mark, not its heading number. Content and level
   // visibility remain independent, so an actually hidden list keeps its hidden marker.
   const inheritedMarkProps = styleSeparatorMembersOf(paragraph)
