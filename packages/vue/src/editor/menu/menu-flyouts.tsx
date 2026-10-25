@@ -5,6 +5,9 @@ import {
   type ChromeMenuItemEntry,
   type ChromeSlotId,
   hostDocumentOf,
+  hostWindowOf,
+  placeSubmenu,
+  submenuKeys,
 } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -14,9 +17,6 @@ import { formatPx } from '../../lib/units';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { MenuItem } from './parts';
 import { TableSizeGrid } from '../toolbar/TableSizeGrid';
-
-/** How close a floating panel may come to the window edge, in px. */
-const EDGE_INSET = 8;
 
 /**
  * Props for `DocxEditor.Menu.Submenu`. Set `labelKey` or `label`. A submenu with neither has
@@ -77,16 +77,13 @@ export const MenuSubmenu = defineComponent({
         const panel = panelRef.value;
         const view = row?.ownerDocument.defaultView;
         if (!row || !panel || !view) return;
-        const rect = row.getBoundingClientRect();
-        const width = panel.offsetWidth;
-        const height = panel.offsetHeight;
-        const flip = rect.right + width > view.innerWidth - EDGE_INSET;
-        box.value = {
-          left: flip
-            ? Math.max(EDGE_INSET, rect.left - width)
-            : Math.min(rect.right, view.innerWidth - width - EDGE_INSET),
-          top: Math.max(EDGE_INSET, Math.min(rect.top - 4, view.innerHeight - height - EDGE_INSET)),
-        };
+        // The row's inline-end side first: see the React twin.
+        box.value = placeSubmenu(
+          row.getBoundingClientRect(),
+          { width: panel.offsetWidth, height: panel.offsetHeight },
+          { width: view.innerWidth, height: view.innerHeight },
+          view.getComputedStyle(row).direction === 'rtl'
+        );
       },
       { flush: 'post' }
     );
@@ -105,8 +102,12 @@ export const MenuSubmenu = defineComponent({
             open.value = false;
           }}
           onKeydown={(event) => {
+            const current = event.currentTarget as HTMLElement;
+            const keys = submenuKeys(
+              hostWindowOf(current).getComputedStyle(current).direction === 'rtl'
+            );
             if (
-              event.key === 'ArrowRight' &&
+              event.key === keys.open &&
               hostDocumentOf(parentRef.value).activeElement === parentRef.value
             ) {
               event.preventDefault();
@@ -114,7 +115,7 @@ export const MenuSubmenu = defineComponent({
               queueMicrotask(() => {
                 if (panelRef.value) focusEdge(panelItems(panelRef.value), 'first');
               });
-            } else if ((event.key === 'ArrowLeft' || event.key === 'Escape') && open.value) {
+            } else if ((event.key === keys.close || event.key === 'Escape') && open.value) {
               event.preventDefault();
               event.stopPropagation();
               open.value = false;

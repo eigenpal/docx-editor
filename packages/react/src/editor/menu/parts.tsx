@@ -23,6 +23,9 @@ import {
   chromeSlotIsToggle,
   commandForSlot,
   hostDocumentOf,
+  hostWindowOf,
+  placeSubmenu,
+  submenuKeys,
   type ChromeMenuEntry,
   type ChromeMenuId,
   type ChromeMenuItemEntry,
@@ -511,9 +514,6 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 // Submenu
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** How close a floating panel may come to the window edge, in px. */
-const EDGE_INSET = 8;
-
 /**
  * Props for `DocxEditor.Menu.Submenu`. Set `labelKey` or `label`. A submenu with neither has
  * no name, with a development warning. An interface, so a host can extend it.
@@ -575,19 +575,16 @@ export function MenuSubmenu({
     const panel = panelRef.current;
     const view = row?.ownerDocument.defaultView;
     if (!row || !panel || !view) return;
-    const rect = row.getBoundingClientRect();
-    const width = panel.offsetWidth;
-    const height = panel.offsetHeight;
-    // Right first, Word's geometry; left when the panel would not fit there.
-    const flip = rect.right + width > view.innerWidth - EDGE_INSET;
-    setBox({
-      left: flip
-        ? Math.max(EDGE_INSET, rect.left - width)
-        : Math.min(rect.right, view.innerWidth - width - EDGE_INSET),
-      // Top-aligned with the row, then clamped so a submenu on the last row of a tall menu
-      // does not hang below the fold.
-      top: Math.max(EDGE_INSET, Math.min(rect.top - 4, view.innerHeight - height - EDGE_INSET)),
-    });
+    // The row's inline-end side first, where its caret points; the other side when the
+    // panel would not fit there.
+    setBox(
+      placeSubmenu(
+        row.getBoundingClientRect(),
+        { width: panel.offsetWidth, height: panel.offsetHeight },
+        { width: view.innerWidth, height: view.innerHeight },
+        view.getComputedStyle(row).direction === 'rtl'
+      )
+    );
   }, [open]);
   return (
     <div
@@ -599,8 +596,12 @@ export function MenuSubmenu({
         // The APG's submenu keys, and the reason the panel is reachable at all without a
         // pointer: Right opens and steps in, Left and Escape close and come back to the
         // parent row. Escape is stopped so it closes THIS panel rather than the whole bar.
+        const keys = submenuKeys(
+          hostWindowOf(event.currentTarget).getComputedStyle(event.currentTarget).direction ===
+            'rtl'
+        );
         if (
-          event.key === 'ArrowRight' &&
+          event.key === keys.open &&
           hostDocumentOf(parentRef.current).activeElement === parentRef.current
         ) {
           event.preventDefault();
@@ -608,7 +609,7 @@ export function MenuSubmenu({
           queueMicrotask(() => {
             if (panelRef.current) focusEdge(panelItems(panelRef.current), 'first');
           });
-        } else if ((event.key === 'ArrowLeft' || event.key === 'Escape') && open) {
+        } else if ((event.key === keys.close || event.key === 'Escape') && open) {
           event.preventDefault();
           event.stopPropagation();
           setOpen(false);

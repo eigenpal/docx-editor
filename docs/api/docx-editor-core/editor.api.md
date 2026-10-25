@@ -2971,6 +2971,22 @@ export function parseIsoDate(value: string): Date | null;
 // @public
 export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
 
+// @internal
+export function placeSubmenu(row: {
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+}, panel: {
+    readonly height: number;
+    readonly width: number;
+}, view: {
+    readonly height: number;
+    readonly width: number;
+}, rtl: boolean): {
+    readonly left: number;
+    readonly top: number;
+};
+
 // @public
 export function pointsToEmu(points: number): number;
 
@@ -3749,6 +3765,12 @@ export function storyLabelTop(storyRect: {
     readonly bottom: number;
     readonly top: number;
 }, sheetTop: number | undefined, barHeight: number, clearance: number): number;
+
+// @internal
+export function submenuKeys(rtl: boolean): {
+    readonly close: string;
+    readonly open: string;
+};
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';

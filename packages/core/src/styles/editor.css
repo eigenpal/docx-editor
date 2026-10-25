@@ -4720,6 +4720,12 @@ a.docx-hyperlink:focus-visible {
 /* ── Scoped story chrome ──────────────────────────────────────────────────────────────
  * A quiet label rail follows the active header/footer/note story. React keeps it outside
  * the engine-painted subtree, while useScopedChromeAnchor places it at the story boundary. */
+/* The header, footer, and note bars are interface, not page: in a right-to-left interface
+   the label and the options swap sides, although the bar mounts inside the scroller. */
+.docx-editor__scroll-container[data-chrome-dir='rtl'] .docx-context-bar {
+  direction: rtl;
+}
+
 .docx-context-bar {
   position: absolute;
   display: flex;

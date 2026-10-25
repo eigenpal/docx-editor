@@ -317,7 +317,8 @@ const HyperLinkFields = defineComponent({
             data-testid="hyperlink-popup-url-input"
             class="docx-hyperlink-popup__input"
             value={state.url}
-            dir={state.url ? 'auto' : undefined}
+            // An address reads left to right in any interface: see the React twin.
+            dir="ltr"
             placeholder={t('hyperlinkPopup.urlPlaceholder')}
             onInput={(event) => popup.setUrl((event.target as HTMLInputElement).value)}
             onKeydown={onKeyDown}

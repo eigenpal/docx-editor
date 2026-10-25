@@ -505,7 +505,8 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
         data-testid="hyperlink-popup-url-input"
         className="docx-hyperlink-popup__input"
         value={state.url}
-        dir={state.url ? 'auto' : undefined}
+        // An address reads left to right in any interface, as in a browser's address bar.
+        dir="ltr"
         placeholder={t('hyperlinkPopup.urlPlaceholder')}
         onChange={(event) => setUrl(event.target.value)}
         onKeyDown={onKeyDown}
