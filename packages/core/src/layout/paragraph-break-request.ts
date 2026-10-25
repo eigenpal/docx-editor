@@ -248,6 +248,10 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
         paragraphAlignment(formatting.props) === 'both',
       leftTabsPastMargin: hasCompatibilityRule(request.compatibilityMode, 'leftTabStopsPastMargin'),
+      inlineObjectsBesideTables: hasCompatibilityRule(
+        request.compatibilityMode,
+        'inlineObjectStaysBesideTable'
+      ),
       cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),

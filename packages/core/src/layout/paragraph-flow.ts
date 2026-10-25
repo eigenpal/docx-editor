@@ -1,4 +1,5 @@
 import { appendUnsupportedContent } from './unsupported-content-flow.ts';
+import { besideTableWidth } from './legacy-inline-beside-table.ts';
 import { paragraphContinuationPieces } from './paragraph-continuation-pieces.ts';
 import { paragraphOwnAnchorStarts } from './paragraph-own-anchors.ts';
 import { cellTabReplayScope, tabClosesLine, tabDestinationForFlow } from './paragraph-tab-flow.ts';
@@ -1088,8 +1089,9 @@ export function breakParagraph(
       const jumpedLine = line;
       // A horizontal rule spans the line wherever it sits, so floats beside it do not move it.
       const rule = !!piece.inlineDrawing.projection.horizontalRule;
-      if (!jumps && !rule) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
-      if (!rule && !ensurePlacementWidth(atomWidth)) continue;
+      const placeWidth = besideTableWidth(atomWidth, flow, holdsContent(), activeExclusionZones);
+      if (!jumps && !rule) applyInlineObjectSkipIfNeeded(placeWidth, measure.lineContribution);
+      if (!rule && !ensurePlacementWidth(placeWidth)) continue;
       if (jumps && line !== jumpedLine) {
         // Placement refused the jump at the picture's own height and closed the line.
         applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
