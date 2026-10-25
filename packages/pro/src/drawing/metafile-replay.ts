@@ -19,6 +19,7 @@ import {
   type MetafileRaster,
   type RecordingBitmap,
 } from './metafile-recording.ts';
+import { emfWithCanvasMapping } from './metafile-emf-origin.ts';
 import { wmfBitmapCommands } from './metafile-wmf-bitmaps.ts';
 import { withWmfText } from './metafile-wmf-text-commands.ts';
 import { wmfTextRecords } from './metafile-wmf-text.ts';
@@ -144,7 +145,6 @@ async function replayAlone(
   }
   try {
     const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
-    const buffer = bytes.slice().buffer;
     const replayOptions = {
       dpiScale: 1,
       maxWidth: CANVAS_EDGE,
@@ -152,6 +152,9 @@ async function replayAlone(
       maxCanvasDimension: CANVAS_EDGE,
       maxRecords: MAX_RECORDS,
     };
+    const buffer = (
+      mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, replayOptions) : bytes
+    ).slice().buffer;
     const url =
       mime === 'image/x-emf'
         ? await convertEmfToDataUrl(buffer, replayOptions)

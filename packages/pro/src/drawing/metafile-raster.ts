@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { MetafileImageMime, MetafileRasterImage } from '@docx-editor.dev/core/store';
 import { withWmfTextCanvas } from './metafile-browser-text.ts';
+import { emfWithCanvasMapping } from './metafile-emf-origin.ts';
 
 /** EMF/WMF to PNG no larger than `maxEdge` pixels on a side, or null when it does not draw. */
 export async function rasterizeMetafile(
@@ -17,9 +18,9 @@ export async function rasterizeMetafile(
   options: Readonly<{ maxEdge: number }>
 ): Promise<MetafileRasterImage | null> {
   const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
-  const copy = new Uint8Array(bytes);
-  const buffer = copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength);
   const bounds = { maxWidth: options.maxEdge, maxHeight: options.maxEdge };
+  const copy = new Uint8Array(mime === 'image/x-emf' ? emfWithCanvasMapping(bytes, bounds) : bytes);
+  const buffer = copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength);
   const dataUrl =
     mime === 'image/x-emf'
       ? await convertEmfToDataUrl(buffer, bounds)

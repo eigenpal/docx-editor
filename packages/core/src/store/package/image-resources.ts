@@ -780,6 +780,10 @@ function mimeClassesMismatch(
   if (imageMimeClass(claimed) !== imageMimeClass(sniffed)) return true;
   // Raster signatures control validation, decoding, and the published MIME type.
   if (imageMimeClass(sniffed) === 'raster') return false;
+  // A metafile part named for the other metafile format (an EMF saved as `.wmf`) draws by
+  // its own bytes: the signature picks the converter.
+  const metafile = (mime: string) => mime === 'image/x-emf' || mime === 'image/x-wmf';
+  if (metafile(claimed) && metafile(sniffed)) return false;
   return claimed !== sniffed;
 }
 

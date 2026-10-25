@@ -74,3 +74,39 @@ export function dibWords(rows: readonly (readonly [number, number, number])[][])
 export function colorWords(r: number, g: number, b: number): [number, number] {
   return [r | (g << 8), b];
 }
+
+/** One EMF record: type and 32-bit signed parameters. */
+export interface EmfRecord {
+  readonly type: number;
+  readonly ints: readonly number[];
+}
+
+/** An EMF whose header bounds are `bounds` (left, top, right, bottom) in device pixels. */
+export function emf(
+  bounds: readonly [number, number, number, number],
+  records: readonly EmfRecord[]
+): Uint8Array {
+  const all = [...records, { type: 14, ints: [0, 16, 20] }];
+  const size = 88 + all.reduce((sum, record) => sum + 8 + record.ints.length * 4, 0);
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 1, true);
+  view.setUint32(4, 88, true);
+  bounds.forEach((value, index) => view.setInt32(8 + index * 4, value, true));
+  // The frame in 0.01 mm at 0.3125 mm per device pixel.
+  bounds.forEach((value, index) => view.setInt32(24 + index * 4, value * 31.25, true));
+  view.setUint32(40, 0x464d4520, true);
+  view.setUint32(44, 0x10000, true);
+  view.setUint32(48, size, true);
+  view.setUint32(52, all.length + 1, true);
+  view.setUint16(56, 2, true);
+  [1024, 768, 320, 240].forEach((value, index) => view.setInt32(72 + index * 4, value, true));
+  let at = 88;
+  for (const record of all) {
+    view.setUint32(at, record.type, true);
+    view.setUint32(at + 4, 8 + record.ints.length * 4, true);
+    record.ints.forEach((value, index) => view.setInt32(at + 8 + index * 4, value, true));
+    at += 8 + record.ints.length * 4;
+  }
+  return bytes;
+}
