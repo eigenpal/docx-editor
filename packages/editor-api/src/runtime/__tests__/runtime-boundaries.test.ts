@@ -301,20 +301,6 @@ describe('what the neutral modules may mention', () => {
   });
 });
 
-/** Server-runtime globals that code a browser runs must not name. */
-const HOST_GLOBALS = [
-  'process',
-  'Buffer',
-  'Bun',
-  'global',
-  'setImmediate',
-  'clearImmediate',
-  '__dirname',
-  '__filename',
-  'require',
-  'NodeJS',
-];
-
 describe('the claims that are compiled rather than scanned', () => {
   const neutralProject = join(RUNTIME, 'tsconfig.neutral.json');
   const fullProject = join(RUNTIME, 'tsconfig.json');
@@ -333,10 +319,9 @@ describe('the claims that are compiled rather than scanned', () => {
       // The runtime's own files; core's bodies are core's typecheck. The neutral project above
       // keeps the whole program, because core code a server reaches must compile without DOM.
       // This project has no Node or Bun types, so a whole-program check also kept the core code
-      // the browser entry reaches off host globals; the scan keeps that without the check.
-      expect(
-        typecheckProject(fullProject, { scope: 'project', forbiddenGlobals: HOST_GLOBALS })
-      ).toEqual([]);
+      // the browser entry reaches off host modules, globals, and `import.meta` members; the scan
+      // keeps those. It does not see Node-only members of shared types (`.unref()`).
+      expect(typecheckProject(fullProject, { scope: 'project', forbidHost: true })).toEqual([]);
     },
     TYPECHECK_TIMEOUT_MS
   );

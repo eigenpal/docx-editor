@@ -7,6 +7,7 @@
  */
 
 import fs from 'node:fs';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
 import ts from 'typescript';
 
@@ -32,11 +33,15 @@ export const TYPECHECK_TIMEOUT_MS = 120_000;
  * all of a whole-program check on core's own bodies, which core's typecheck covers: about ten times
  * the time and four times the memory, which under a loaded test pool runs past the timeout.
  *
- * `forbiddenGlobals` names host globals no file the program reaches may reference as a bare
- * identifier, in either scope (`globalThis.process` and a property named `Bun` are fine). It is
- * a parse-only scan, so a project can keep that guarantee for code it does not type-check.
+ * `forbidHost: true` also reports, in every non-dependency file the program reaches and in either
+ * scope, what only a server runtime provides: a Node or Bun module import (`node:fs`, `fs`,
+ * `bun:test`), a `HOST_IMPORT_META` member of `import.meta`, and a `HOST_GLOBALS` name that
+ * resolves to no declaration (a local `process` is fine, and so are `globalThis.process` and a
+ * property named `Bun`). It reads syntax and resolves only those names, so it is cheap where a
+ * whole-program check is not. Node-only members of shared types (`setTimeout(...).unref()`,
+ * `Error.captureStackTrace`) are not covered; a whole-program check without Node types is.
  */
-export function typecheckProject(tsconfigPath, { scope = 'program', forbiddenGlobals = [] } = {}) {
+export function typecheckProject(tsconfigPath, { scope = 'program', forbidHost = false } = {}) {
   const configFile = ts.readConfigFile(tsconfigPath, (file) => fs.readFileSync(file, 'utf8'));
   if (configFile.error) {
     return [ts.flattenDiagnosticMessageText(configFile.error.messageText, '\n')];
@@ -62,7 +67,7 @@ export function typecheckProject(tsconfigPath, { scope = 'program', forbiddenGlo
       }
       return message;
     }),
-    ...globalReferences(program, new Set(forbiddenGlobals)),
+    ...(forbidHost ? hostReferences(program) : []),
   ];
 }
 
@@ -93,23 +98,81 @@ function projectDiagnostics(program, fileNames) {
   return diagnostics;
 }
 
-/** Bare references to `names` in every non-dependency file of the program. */
-function globalReferences(program, names) {
-  if (names.size === 0) return [];
+/** Globals only a server runtime declares. */
+export const HOST_GLOBALS = [
+  'process',
+  'Buffer',
+  'Bun',
+  'global',
+  'setImmediate',
+  'clearImmediate',
+  '__dirname',
+  '__filename',
+  'require',
+  'module',
+  'NodeJS',
+];
+
+/** `import.meta` members only Node or Bun provide. */
+export const HOST_IMPORT_META = ['dir', 'dirname', 'filename', 'main', 'path', 'resolveSync'];
+
+const hostGlobals = new Set(HOST_GLOBALS);
+const hostImportMeta = new Set(HOST_IMPORT_META);
+const builtins = new Set(builtinModules);
+
+function isHostModule(specifier) {
+  return (
+    specifier.startsWith('node:') ||
+    specifier.startsWith('bun:') ||
+    specifier === 'bun' ||
+    builtins.has(specifier) ||
+    builtins.has(specifier.split('/')[0])
+  );
+}
+
+/** Server-runtime references in every non-dependency file of the program. */
+function hostReferences(program) {
+  const checker = program.getTypeChecker();
   const found = [];
   for (const sourceFile of program.getSourceFiles()) {
     if (sourceFile.fileName.includes('/node_modules/')) continue;
+    const report = (node, what) =>
+      found.push(`${where(sourceFile, node.getStart(sourceFile))} - ${what}`);
     const visit = (node) => {
-      if (ts.isIdentifier(node) && names.has(node.text) && isReference(node)) {
-        found.push(
-          `${where(sourceFile, node.getStart(sourceFile))} - names the host global ${node.text}`
-        );
-      }
+      const specifier = moduleSpecifierOf(node);
+      if (specifier !== null && isHostModule(specifier)) report(node, `imports ${specifier}`);
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isMetaProperty(node.expression) &&
+        node.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+        hostImportMeta.has(node.name.text)
+      )
+        report(node, `reads import.meta.${node.name.text}`);
+      if (
+        ts.isIdentifier(node) &&
+        hostGlobals.has(node.text) &&
+        isReference(node) &&
+        resolvesNowhere(checker, node)
+      )
+        report(node, `names the host global ${node.text}`);
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
   }
   return found;
+}
+
+/** The module an import, export, `import()` or `import("…")` type names, or null. */
+function moduleSpecifierOf(node) {
+  const literal =
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier
+      ? node.moduleSpecifier
+      : ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
+        ? node.arguments[0]
+        : ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
+          ? node.argument.literal
+          : undefined;
+  return literal && ts.isStringLiteral(literal) ? literal.text : null;
 }
 
 /** Whether an identifier is read, not a member, property, or declaration name. */
@@ -121,5 +184,16 @@ function isReference(node) {
   // `{ process }` reads the global even though it also names the property.
   if (ts.isShorthandPropertyAssignment(parent)) return true;
   // Declarations, property assignments and signatures, import and export specifiers.
-  return !('name' in parent && parent.name === node);
+  return (
+    !('name' in parent && parent.name === node) &&
+    !('propertyName' in parent && parent.propertyName === node)
+  );
+}
+
+/** Whether a read resolves to no declaration: what a missing host global looks like. */
+function resolvesNowhere(checker, node) {
+  const symbol = ts.isShorthandPropertyAssignment(node.parent)
+    ? checker.getShorthandAssignmentValueSymbol(node.parent)
+    : checker.getSymbolAtLocation(node);
+  return symbol === undefined;
 }

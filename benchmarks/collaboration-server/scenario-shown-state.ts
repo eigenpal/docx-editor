@@ -1,11 +1,12 @@
 // What a replica's strict check depends on, so a check whose inputs have not changed can be
 // skipped. The check compares the editor's tree, and the session's indexes and identity map,
 // against a fresh build of the replica's shared state. A fresh build is a pure read of that
-// state; the indexes change only in Yjs observers, which run inside transactions that change it,
-// and the identity map only on local edits, which give the editor a new tree. So a replica whose
-// shared state (state vector and delete set) and tree are both unchanged since it last passed
-// passes again. A future path that changed the indexes or the identity map without either would
-// need to join this key.
+// state, its binary parts included (they live in a map of the same document). The indexes change
+// only in Yjs observers, which run inside transactions that change the state, and the identity
+// map only on local edits, which give the editor a new tree. So a replica whose shared state
+// (state vector and delete set) and tree are both unchanged since it last passed passes again. A
+// future path that changed the indexes or the identity map without either would need to join
+// this key.
 
 import * as Y from 'yjs';
 

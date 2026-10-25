@@ -12,17 +12,20 @@
  *
  * `scope: 'program'` (the default) reports every file the program reaches. `scope: 'project'`
  * reports the files the tsconfig includes (syntactic, semantic, and declaration diagnostics,
- * plus option and global ones); the bodies of other files are not checked. `forbiddenGlobals`
- * reports bare references to those host globals in every non-dependency file the program
- * reaches, in either scope.
+ * plus option and global ones); the bodies of other files are not checked. `forbidHost` reports,
+ * in every non-dependency file the program reaches, Node or Bun module imports, host
+ * `import.meta` members, and `HOST_GLOBALS` names that resolve to no declaration.
  */
 export function typecheckProject(
   tsconfigPath: string,
-  options?: {
-    readonly scope?: 'program' | 'project';
-    readonly forbiddenGlobals?: readonly string[];
-  }
+  options?: { readonly scope?: 'program' | 'project'; readonly forbidHost?: boolean }
 ): string[];
+
+/** Globals only a server runtime declares; see `typecheckProject`'s `forbidHost`. */
+export const HOST_GLOBALS: readonly string[];
+
+/** `import.meta` members only Node or Bun provide. */
+export const HOST_IMPORT_META: readonly string[];
 
 /**
  * The per-test timeout a `typecheckProject` call needs. A compile of these projects is seconds,

@@ -17,4 +17,47 @@ describe('typecheckProject', () => {
     },
     TYPECHECK_TIMEOUT_MS
   );
+
+  // `own.ts` is the project; `dependency.ts` is only reached through an import.
+  const scoped = path.join(__dirname, '__fixtures__', 'scoped-project', 'tsconfig.json');
+  const located = (diagnostics: readonly string[]) =>
+    diagnostics.map((line) => {
+      const [, file, row, rest] = /([^/]+\.ts):(\d+):\d+ - (.*)/.exec(line) ?? [];
+      return `${file}:${row} ${rest?.split('\n')[0]}`;
+    });
+
+  test(
+    'the program scope reports every file the program reaches',
+    () => {
+      const found = located(typecheckProject(scoped));
+      expect(found.some((line) => line.startsWith('own.ts:4 '))).toBe(true);
+      expect(found.some((line) => line.startsWith('dependency.ts:6 '))).toBe(true);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
+
+  test(
+    'the project scope reports its own files and not the bodies of the files they import',
+    () => {
+      const found = located(typecheckProject(scoped, { scope: 'project' }));
+      expect(found.some((line) => line.startsWith('own.ts:4 '))).toBe(true);
+      expect(found.filter((line) => line.startsWith('dependency.ts'))).toEqual([]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
+
+  test(
+    'the host scan reports server-runtime references the project scope skips, and only those',
+    () => {
+      const found = located(typecheckProject(scoped, { scope: 'project', forbidHost: true }));
+      expect(found.filter((line) => line.startsWith('dependency.ts'))).toEqual([
+        'dependency.ts:3 imports fs',
+        'dependency.ts:4 imports node:path',
+        'dependency.ts:10 names the host global process',
+        'dependency.ts:11 reads import.meta.dir',
+        'dependency.ts:12 names the host global process',
+      ]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 });
