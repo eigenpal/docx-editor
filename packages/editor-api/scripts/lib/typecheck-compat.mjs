@@ -21,7 +21,15 @@ import ts from 'typescript';
  */
 export const TYPECHECK_TIMEOUT_MS = 120_000;
 
-export function typecheckProject(tsconfigPath) {
+/**
+ * `scope: 'program'` (the default) answers the diagnostics of every file the program reaches.
+ * `scope: 'project'` answers those of the files the tsconfig itself includes, plus the option and
+ * global diagnostics; the types they use from other files still resolve and are checked where
+ * used. A project that reaches core's sources spends nearly all of a whole-program check on
+ * core's own bodies, which core's typecheck already covers: about ten times the time and four
+ * times the memory, which under a loaded test pool runs past the timeout.
+ */
+export function typecheckProject(tsconfigPath, { scope = 'program' } = {}) {
   const configFile = ts.readConfigFile(tsconfigPath, (file) => fs.readFileSync(file, 'utf8'));
   if (configFile.error) {
     return [ts.flattenDiagnosticMessageText(configFile.error.messageText, '\n')];
@@ -34,7 +42,10 @@ export function typecheckProject(tsconfigPath) {
   }
 
   const program = ts.createProgram({ rootNames: parsed.fileNames, options: parsed.options });
-  const diagnostics = ts.getPreEmitDiagnostics(program);
+  const diagnostics =
+    scope === 'project'
+      ? projectDiagnostics(program, parsed.fileNames)
+      : ts.getPreEmitDiagnostics(program);
 
   return diagnostics.map((diagnostic) => {
     const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
@@ -44,4 +55,17 @@ export function typecheckProject(tsconfigPath) {
     }
     return message;
   });
+}
+
+function projectDiagnostics(program, fileNames) {
+  const own = new Set(fileNames.map((fileName) => path.resolve(fileName)));
+  const diagnostics = [...program.getOptionsDiagnostics(), ...program.getGlobalDiagnostics()];
+  for (const sourceFile of program.getSourceFiles()) {
+    if (!own.has(path.resolve(sourceFile.fileName))) continue;
+    diagnostics.push(
+      ...program.getSyntacticDiagnostics(sourceFile),
+      ...program.getSemanticDiagnostics(sourceFile)
+    );
+  }
+  return diagnostics;
 }

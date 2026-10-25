@@ -8,9 +8,14 @@
 
 /**
  * Compile a `tsconfig.json` in-process and answer its diagnostics, one formatted string each.
- * An empty array means the project compiled clean.
+ * An empty array means the project compiled clean. `scope: 'project'` reports only the files the
+ * tsconfig includes (plus option and global diagnostics); the default reports every file the
+ * program reaches.
  */
-export function typecheckProject(tsconfigPath: string): string[];
+export function typecheckProject(
+  tsconfigPath: string,
+  options?: { readonly scope?: 'program' | 'project' }
+): string[];
 
 /**
  * The per-test timeout a `typecheckProject` call needs. A compile of these projects is seconds,

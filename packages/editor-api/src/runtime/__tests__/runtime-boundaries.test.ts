@@ -316,7 +316,9 @@ describe('the claims that are compiled rather than scanned', () => {
   test(
     'the whole runtime, browser entry included, compiles with zero diagnostics',
     () => {
-      expect(typecheckProject(fullProject)).toEqual([]);
+      // The runtime's own files; core's bodies are core's typecheck. The neutral project above
+      // keeps the whole program, because core code a server reaches must compile without DOM.
+      expect(typecheckProject(fullProject, { scope: 'project' })).toEqual([]);
     },
     TYPECHECK_TIMEOUT_MS
   );

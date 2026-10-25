@@ -34,7 +34,10 @@ describe('the runtime satisfies the authored declarations', () => {
     'the assertions compile against the declarations, with zero diagnostics',
     () => {
       expect(existsSync(join(CONFORMANCE, 'tsconfig.json'))).toBe(true);
-      expect(typecheckProject(join(CONFORMANCE, 'tsconfig.json'))).toEqual([]);
+      // The assertions' own file; what they assert about resolves from the runtime and core.
+      expect(typecheckProject(join(CONFORMANCE, 'tsconfig.json'), { scope: 'project' })).toEqual(
+        []
+      );
     },
     TYPECHECK_TIMEOUT_MS
   );
@@ -42,7 +45,9 @@ describe('the runtime satisfies the authored declarations', () => {
   test(
     'and a wrong assertion does not compile, so the check above is doing work',
     () => {
-      const diagnostics = typecheckProject(join(CONFORMANCE, '__negative__', 'tsconfig.json'));
+      const diagnostics = typecheckProject(join(CONFORMANCE, '__negative__', 'tsconfig.json'), {
+        scope: 'project',
+      });
       // Failing is not enough: it has to fail ON the false assertion. A missing file or a broken
       // tsconfig also produces diagnostics, and either would make this control worthless.
       expect(diagnostics.some((line) => line.includes('mismatch.ts'))).toBe(true);
