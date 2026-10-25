@@ -13,6 +13,7 @@ import {
   useNavigationViewportElement,
 } from './navigation/navigation-layout';
 import { scopeDispose } from './scope-dispose';
+import { useChromeDir } from '../i18n';
 
 /** Full reservation for the card column and page-edge gap. @public */
 export const REVIEW_PANE_GUTTER = 316;
@@ -79,6 +80,29 @@ export function visibleInlineEndReservation(gutter: ReviewGutter, measured: numb
  * container keeps a left-to-right base for its scroll offsets, so the side is physical.
  */
 export type ReviewColumnSide = 'left' | 'right';
+
+/**
+ * The side the review column takes, read during render: the left when the interface reads
+ * right to left. The direction a `LocaleProvider` decides comes first; without one, the
+ * host page's direction around the viewport decides, as it does for the toolbar.
+ */
+export function useReviewColumnSide(): () => ReviewColumnSide {
+  const chrome = useChromeDir();
+  const viewport = useNavigationViewportElement();
+  const host = shallowRef<'ltr' | 'rtl'>('ltr');
+  const stop = watch(
+    viewport,
+    (element) => {
+      const around = element?.parentElement;
+      if (!around) return;
+      const direction = hostWindowOf(around).getComputedStyle(around).direction;
+      host.value = direction === 'rtl' ? 'rtl' : 'ltr';
+    },
+    { immediate: true, flush: 'post' }
+  );
+  scopeDispose(stop);
+  return () => ((chrome() ?? host.value) === 'rtl' ? 'left' : 'right');
+}
 
 /** The physical paddings for `gutter` with the column on `side`. */
 export function physicalReviewGutter(

@@ -6,6 +6,25 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 const LocaleContext = createContext<LocaleStrings>(en);
 const LangContext = createContext<string>('en');
 const DirContext = createContext<'ltr' | 'rtl'>('ltr');
+/** The direction a provider DECIDED for the chrome; `undefined` keeps the host page's. */
+const ChromeDirContext = createContext<'ltr' | 'rtl' | undefined>(undefined);
+
+/**
+ * The chrome direction a provider decides: its `dir` prop, the catalog's `_dir`, or a
+ * right-to-left `_lang`. A left-to-right `_lang` alone decides nothing, so the shipped
+ * left-to-right catalogs keep the host page direction, as before.
+ */
+function decidedChromeDir(
+  dir: 'ltr' | 'rtl' | undefined,
+  i18n: Translations | undefined,
+  inherited: 'ltr' | 'rtl' | undefined
+): 'ltr' | 'rtl' | undefined {
+  if (dir) return dir;
+  const declared = i18n?._dir;
+  if (declared === 'ltr') return 'ltr';
+  if (declared === 'rtl') return 'rtl';
+  return catalogDirection(i18n) === 'rtl' ? 'rtl' : inherited;
+}
 
 export interface LocaleProviderProps {
   i18n?: Translations;
@@ -26,8 +45,10 @@ export function LocaleProvider({ i18n, dir, children }: LocaleProviderProps) {
   const inherited = useContext(LocaleContext);
   const inheritedLang = useContext(LangContext);
   const inheritedDir = useContext(DirContext);
+  const inheritedChromeDir = useContext(ChromeDirContext);
   const lang = typeof i18n?._lang === 'string' ? i18n._lang : inheritedLang;
   const direction = dir ?? catalogDirection(i18n) ?? inheritedDir;
+  const chromeDir = decidedChromeDir(dir, i18n, inheritedChromeDir);
   const merged = useMemo(
     () =>
       deepMerge(inherited as Record<string, unknown>, i18n as Record<string, unknown> | undefined),
@@ -36,7 +57,11 @@ export function LocaleProvider({ i18n, dir, children }: LocaleProviderProps) {
   return (
     <LangContext.Provider value={lang}>
       <DirContext.Provider value={direction}>
-        <LocaleContext.Provider value={merged as LocaleStrings}>{children}</LocaleContext.Provider>
+        <ChromeDirContext.Provider value={chromeDir}>
+          <LocaleContext.Provider value={merged as LocaleStrings}>
+            {children}
+          </LocaleContext.Provider>
+        </ChromeDirContext.Provider>
       </DirContext.Provider>
     </LangContext.Provider>
   );
@@ -61,10 +86,11 @@ export function useTranslation(): {
 }
 
 /**
- * The `dir` attribute a chrome part sets on its root: `'rtl'` under a right-to-left
- * provider, otherwise nothing, so the part keeps the host page direction.
+ * The `dir` attribute a chrome part sets on its root: the direction a provider decided
+ * (its `dir` prop, the catalog's `_dir`, or a right-to-left `_lang`), otherwise nothing, so
+ * the part keeps the host page direction.
  * @internal
  */
-export function useChromeDir(): 'rtl' | undefined {
-  return useContext(DirContext) === 'rtl' ? 'rtl' : undefined;
+export function useChromeDir(): 'ltr' | 'rtl' | undefined {
+  return useContext(ChromeDirContext);
 }

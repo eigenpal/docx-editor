@@ -14,6 +14,21 @@ import { defineComponent, type PropType } from 'vue';
 const localeKey: InjectionKey<ShallowRef<LocaleStrings>> = Symbol('locale');
 const langKey: InjectionKey<ShallowRef<string>> = Symbol('lang');
 const dirKey: InjectionKey<ShallowRef<'ltr' | 'rtl'>> = Symbol('dir');
+/** The direction a provider DECIDED for the chrome; `undefined` keeps the host page's. */
+const chromeDirKey: InjectionKey<ShallowRef<'ltr' | 'rtl' | undefined>> = Symbol('chromeDir');
+
+/** The chrome direction a provider decides: see the React twin. */
+function decidedChromeDir(
+  dir: 'ltr' | 'rtl' | undefined,
+  i18n: Translations | undefined,
+  inherited: 'ltr' | 'rtl' | undefined
+): 'ltr' | 'rtl' | undefined {
+  if (dir) return dir;
+  const declared = i18n?._dir;
+  if (declared === 'ltr') return 'ltr';
+  if (declared === 'rtl') return 'rtl';
+  return catalogDirection(i18n) === 'rtl' ? 'rtl' : inherited;
+}
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -40,7 +55,11 @@ export const LocaleProvider = defineComponent({
     const inherited = inject(localeKey, shallowRef(en));
     const inheritedLang = inject(langKey, shallowRef('en'));
     const inheritedDir = inject(dirKey, shallowRef<'ltr' | 'rtl'>('ltr'));
+    const inheritedChromeDir = inject(chromeDirKey, shallowRef<'ltr' | 'rtl' | undefined>());
     const dir = computed(() => props.dir ?? catalogDirection(props.i18n) ?? inheritedDir.value);
+    const chromeDir = computed(() =>
+      decidedChromeDir(props.dir, props.i18n, inheritedChromeDir.value)
+    );
     const lang = computed(() =>
       typeof props.i18n?._lang === 'string' ? props.i18n._lang : inheritedLang.value
     );
@@ -53,14 +72,17 @@ export const LocaleProvider = defineComponent({
     const strings = shallowRef(merged.value as LocaleStrings);
     const langRef = shallowRef(lang.value);
     const dirRef = shallowRef(dir.value);
-    watch([merged, lang, dir], () => {
+    const chromeDirRef = shallowRef(chromeDir.value);
+    watch([merged, lang, dir, chromeDir], () => {
       strings.value = merged.value as LocaleStrings;
       langRef.value = lang.value;
       dirRef.value = dir.value;
+      chromeDirRef.value = chromeDir.value;
     });
     provide(localeKey, strings);
     provide(langKey, langRef);
     provide(dirKey, dirRef);
+    provide(chromeDirKey, chromeDirRef);
     return () => slots.default?.();
   },
 });
@@ -98,13 +120,14 @@ export function useTranslation(): {
 }
 
 /**
- * The `dir` attribute a chrome part sets on its root, read during render: `'rtl'` under a
- * right-to-left provider, otherwise nothing, so the part keeps the host page direction.
+ * The `dir` attribute a chrome part sets on its root, read during render: the direction a
+ * provider decided (its `dir` prop, the catalog's `_dir`, or a right-to-left `_lang`),
+ * otherwise nothing, so the part keeps the host page direction.
  * @internal
  */
-export function useChromeDir(): () => 'rtl' | undefined {
-  const dir = inject(dirKey, shallowRef<'ltr' | 'rtl'>('ltr'));
-  return () => (dir.value === 'rtl' ? 'rtl' : undefined);
+export function useChromeDir(): () => 'ltr' | 'rtl' | undefined {
+  const dir = inject(chromeDirKey, shallowRef<'ltr' | 'rtl' | undefined>());
+  return () => dir.value;
 }
 
 export type { TranslationKey };

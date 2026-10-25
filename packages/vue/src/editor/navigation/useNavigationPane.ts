@@ -167,9 +167,7 @@ export function useNavigationPane(
           const rtl = el.getAttribute('data-chrome-dir') === 'rtl';
           const padding = Number.parseFloat(rtl ? style.paddingLeft : style.paddingInlineEnd);
           inlineEndReservation.value = Number.isFinite(padding) ? padding : 0;
-          const strip = Number.parseFloat(
-            style.getPropertyValue(rtl ? '--docx-review-gutter' : '--docx-review-gutter-start')
-          );
+          const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
           inlineStartReservation.value = Number.isFinite(strip) ? strip : 0;
         };
         measure();

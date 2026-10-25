@@ -1,4 +1,4 @@
-import { useChromeDir, useTranslation } from '../i18n';
+import { useTranslation } from '../i18n';
 import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import {
   computed,
@@ -20,8 +20,8 @@ import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import {
   REVIEW_MARKERS_GUTTER,
-  physicalReviewGutter,
   reviewGutterScrolls,
+  useReviewColumnSide,
   useReviewGutter,
 } from './review-gutter';
 import { mergeHostClass } from '../lib/mergeHostClass';
@@ -57,36 +57,37 @@ export const DocxEditorViewport = defineComponent({
     const rail = useReviewRailRegistry();
     const reserve = computed(() => claimsReviewGutter(rail.value));
     const reviewGutter = useReviewGutter();
-    // A right-to-left interface puts the column on the page's left. The paddings are
-    // published physically, because this element keeps a left-to-right base.
-    const chromeDir = useChromeDir();
+    // A right-to-left interface puts the column on the page's left and the navigation pane on
+    // its right. The custom properties stay logical; the stylesheet maps them under
+    // `data-chrome-dir`, because this element keeps a left-to-right base.
+    const columnSide = useReviewColumnSide();
     const navShift = useNavigationShift();
     const layoutStore = useNavigationLayoutStore();
     let viewportEl: HTMLElement | null = null;
 
+    // A column that does not fit scrolls sideways. On the left it starts in view, so the
+    // viewport keeps to its right end instead: the page first, the cards one scroll away. A
+    // navigation shift on the right widens the content, so the right end is taken again then.
+    const scrollsLeft = computed(
+      () => columnSide() === 'left' && reserve.value && reviewGutterScrolls(reviewGutter.value)
+    );
+    const keepPageInView = () => {
+      if (scrollsLeft.value && viewportEl) {
+        viewportEl.scrollLeft = viewportEl.scrollWidth - viewportEl.clientWidth;
+      }
+    };
     onMounted(() => {
       if (viewportEl) layoutStore?.setViewport(viewportEl);
+      keepPageInView();
     });
     onUnmounted(() => {
       layoutStore?.setViewport(null);
     });
-    // A column that does not fit scrolls sideways. On the left it starts in view, so the
-    // viewport opens at its right end instead: the page first, the cards one scroll away.
-    const scrollsLeft = computed(
-      () => chromeDir() === 'rtl' && reserve.value && reviewGutterScrolls(reviewGutter.value)
-    );
-    watch(
-      scrollsLeft,
-      (scrolls) => {
-        if (scrolls && viewportEl)
-          viewportEl.scrollLeft = viewportEl.scrollWidth - viewportEl.clientWidth;
-      },
-      { flush: 'post' }
-    );
     watch(navShift, (shift) => {
       if (viewportEl) viewportEl.style.setProperty('--docx-nav-shift', `${shift}px`);
       layoutStore?.setViewport(viewportEl);
     });
+    watch([scrollsLeft, navShift], keepPageInView, { flush: 'post' });
     const onKeyDownCapture = (event: KeyboardEvent) => {
       const editor = editorRef.value;
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;
@@ -101,8 +102,7 @@ export const DocxEditorViewport = defineComponent({
     };
 
     return () => {
-      const side = chromeDir() === 'rtl' ? 'left' : 'right';
-      const padding = physicalReviewGutter(reviewGutter.value, side);
+      const side = columnSide();
       const attrs: Record<string, unknown> = {
         ref: (el: unknown) => {
           viewportEl = isHTMLElementNode(el) ? el : null;
@@ -126,8 +126,8 @@ export const DocxEditorViewport = defineComponent({
           '--docx-nav-shift': `${navShift.value}px`,
           ...(reserve.value
             ? {
-                '--docx-review-gutter': `${padding.right}px`,
-                '--docx-review-gutter-start': `${padding.left}px`,
+                '--docx-review-gutter': `${reviewGutter.value.inlineEnd}px`,
+                '--docx-review-gutter-start': `${reviewGutter.value.inlineStart}px`,
                 // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 '--docx-review-strip': `${2 * REVIEW_MARKERS_GUTTER}px`,

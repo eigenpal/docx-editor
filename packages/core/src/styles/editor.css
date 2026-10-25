@@ -2696,8 +2696,14 @@ a.docx-hyperlink:focus-visible {
    scroller's `padding-right` (the review column) deliberately snaps, so a ruler easing
    its right padding for 0.2s measured a page that had already jumped. One edge per curve,
    both elements on the same one. */
+/* The frame's paddings are physical, like the scroller's: the navigation side glides, the
+   right one in a right-to-left interface. */
 .docx-ruler-frame {
-  transition: padding-inline-start 0.2s ease;
+  transition: padding-left 0.2s ease;
+}
+
+.docx-ruler-frame[data-chrome-dir='rtl'] {
+  transition: padding-right 0.2s ease;
 }
 
 /* A deferred open gives the loading overlay one frame before parsing. The parse blocks
@@ -5435,10 +5441,9 @@ a.docx-hyperlink:focus-visible {
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
  * it always did.
  *
- * Both properties are PHYSICAL: this edge is the right, and the start is the left, because
- * the scroller keeps a left-to-right base. A right-to-left interface puts the column on the
- * page's left, so the viewport publishes the two values swapped and marks the scroller
- * `data-review-side='left'`. */
+ * Both properties are LOGICAL: the end is the column's edge and the start the other one. A
+ * right-to-left interface puts the column on the page's left; the `data-chrome-dir` rules
+ * below the navigation pane rules map the two values to physical edges there. */
 .docx-editor__scroll-container[data-review-pane='open'] {
   padding-right: var(--docx-review-gutter, 316px);
 }
@@ -5582,9 +5587,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The cards keep their 12px of air on the side away from the page, the compact one too. */
-.docx-editor__scroll-container[data-review-side='left']
-  :is(.docx-review__slot, .docx-review__slot--compact)
-  .docx-review__card {
+.docx-editor__scroll-container[data-review-side='left'] .docx-review__slot .docx-review__card {
   margin: 0 0 0 12px;
 }
 
@@ -5932,14 +5935,26 @@ a.docx-hyperlink:focus-visible {
   transition: padding-inline-start 0.2s ease;
 }
 
-/* A right-to-left interface opens the navigation pane at the right, so its shift pads the
- * right edge. The review paddings are physical already (see the review gutter rules), so the
- * left edge keeps only the review gutter's left value. */
+/* A right-to-left interface (`data-chrome-dir`) mirrors both edges: the navigation pane opens
+ * at the right, so its shift and the review gutter's start value pad the right edge, and the
+ * review column pads the left. The custom properties keep their logical meaning (start, end),
+ * so every reader of them stays direction-free; only these rules know the physical edges.
+ * The scroller keeps a left-to-right base, so `padding-inline-start` is still the left. */
 .docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'],
 .docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
-  padding-inline-start: var(--docx-review-gutter-start, 0px);
-  padding-right: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter, 0px));
+  padding-left: 0;
+  padding-right: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
   transition: padding-right 0.2s ease;
+}
+
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='open'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='open'] {
+  padding-left: var(--docx-review-gutter, 316px);
+}
+
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='closed'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'][data-review-pane='closed'] {
+  padding-left: var(--docx-review-gutter, 44px);
 }
 
 /* Under a fit the page width follows the padded box. Animating the padding would

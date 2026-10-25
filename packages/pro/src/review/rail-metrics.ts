@@ -39,6 +39,13 @@ export interface ReviewRailMetrics {
    */
   readonly left: number | null;
   /**
+   * The page side the column stands on: `'left'` in a right-to-left interface, otherwise
+   * `'right'`. On the left, give the column its width (300px for the packaged cards), because
+   * `left` keeps the column's RIGHT edge one gutter off the page; and keep each card's air on
+   * its left, away from the page.
+   */
+  readonly side: 'left' | 'right';
+  /**
    * The `left` value, relative to {@link ReviewRailMetrics.left}, that puts a 300px card
    * fully inside the visible area with a 12px inset from its edge on the column's side. Use it while
    * {@link ReviewRailMetrics.compact} is true. `null` until there is a page to measure.
@@ -60,6 +67,7 @@ export const INITIAL_REVIEW_RAIL_METRICS: ReviewRailMetrics = Object.freeze({
   scale: 96 / 72,
   top: 0,
   left: null,
+  side: 'right',
   compactCardLeft: null,
   compact: false,
 });
@@ -131,20 +139,30 @@ export function measureReviewRailMetrics(rail: HTMLElement, scale: number): Revi
   const surface = findReviewRailSurface(parent);
   const box = surface && parent ? surface.getBoundingClientRect() : null;
   const frame = box && parent ? parent.getBoundingClientRect() : null;
-  if (!box || !frame || !parent) return { scale, top: 0, left: null, compactCardLeft: null };
+  const side = reviewRailSide(parent);
+  if (!box || !frame || !parent) {
+    return { scale, top: 0, left: null, side, compactCardLeft: null };
+  }
   const origin = parent.scrollLeft - frame.left - parent.clientLeft;
   const top = box.top - frame.top - parent.clientTop + parent.scrollTop;
-  if (reviewRailSide(parent) === 'left') {
+  if (side === 'left') {
     // The column's own width, open or closed, so its right edge keeps one gutter off the page.
     const left = box.left + origin - RAIL_GUTTER - rail.offsetWidth;
     // The viewport's left edge in rail-local coordinates, plus the inset.
-    return { scale, top, left, compactCardLeft: parent.scrollLeft + COMPACT_CARD_INSET - left };
+    return {
+      scale,
+      top,
+      left,
+      side,
+      compactCardLeft: parent.scrollLeft + COMPACT_CARD_INSET - left,
+    };
   }
   const left = box.right + origin + RAIL_GUTTER;
   return {
     scale,
     top,
     left,
+    side,
     // The viewport's right edge in rail-local coordinates, minus a card and its inset.
     compactCardLeft:
       parent.scrollLeft + parent.clientWidth - left - COMPACT_CARD_WIDTH - COMPACT_CARD_INSET,
@@ -157,6 +175,7 @@ export function sameReviewRailMetrics(a: ReviewRailGeometry, b: ReviewRailGeomet
     a.scale === b.scale &&
     a.top === b.top &&
     a.left === b.left &&
+    a.side === b.side &&
     a.compactCardLeft === b.compactCardLeft
   );
 }

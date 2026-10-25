@@ -17,8 +17,12 @@ import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
-import { useChromeDir } from '../i18n';
-import { physicalReviewGutter, useReviewGutter, useViewportClientWidth } from './review-gutter';
+import {
+  physicalReviewGutter,
+  useReviewColumnSide,
+  useReviewGutter,
+  useViewportClientWidth,
+} from './review-gutter';
 import { formatPx, twipsToPixels } from '../lib/units';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
@@ -135,7 +139,7 @@ export const DocxEditorHorizontalRuler = defineComponent({
     const indentDrag = useIndentDrag();
     const shift = useNavigationShift();
     const reserved = useReviewGutter();
-    const chromeDir = useChromeDir();
+    const columnSide = useReviewColumnSide();
     const scrollLeft = ref(0);
     const viewport = useNavigationViewportElement();
     watch(
@@ -158,11 +162,13 @@ export const DocxEditorHorizontalRuler = defineComponent({
     return () => {
       if (documentAbsent.value) return null;
       // Physical sides, like the scroll container: see the React twin.
-      const rtl = chromeDir() === 'rtl';
-      const padding = physicalReviewGutter(reserved.value, rtl ? 'left' : 'right');
+      const side = columnSide();
+      const rtl = side === 'left';
+      const padding = physicalReviewGutter(reserved.value, side);
       return (
         <div
           class={`docx-ruler-frame${opening.value ? ' docx-ruler-frame--opening' : ''}`}
+          data-chrome-dir={rtl ? 'rtl' : undefined}
           style={{
             paddingLeft: formatPx((rtl ? 0 : shift.value) + padding.left),
             paddingRight: formatPx((rtl ? shift.value : 0) + padding.right),

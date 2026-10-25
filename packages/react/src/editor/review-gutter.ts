@@ -40,7 +40,7 @@
 // "cramped". Two components deciding independently is how a ruler ends up an inch off
 // the page it is measuring, so they all read `useReviewGutter`.
 
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import {
   hostWindowOf,
@@ -48,6 +48,7 @@ import {
   reviewPaneEntitledZoom,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
+import { useChromeDir } from '../i18n';
 import { ReviewRailContext, claimsReviewGutter } from './context';
 import { useEditorState } from './useEditorState';
 import {
@@ -127,6 +128,24 @@ export function visibleInlineEndReservation(gutter: ReviewGutter, measured: numb
  * container keeps a left-to-right base for its scroll offsets, so the side is physical.
  */
 export type ReviewColumnSide = 'left' | 'right';
+
+/**
+ * The side the review column takes: the left when the interface reads right to left. The
+ * direction a `LocaleProvider` decides comes first; without one, the host page's direction
+ * around the viewport decides, which is the direction the toolbar inherits too.
+ */
+export function useReviewColumnSide(): ReviewColumnSide {
+  const chrome = useChromeDir();
+  const viewport = useNavigationViewportElement();
+  const [host, setHost] = useState<'ltr' | 'rtl'>('ltr');
+  useLayoutEffect(() => {
+    const around = viewport?.parentElement;
+    if (chrome || !around) return;
+    const direction = hostWindowOf(around).getComputedStyle(around).direction;
+    setHost(direction === 'rtl' ? 'rtl' : 'ltr');
+  }, [chrome, viewport]);
+  return (chrome ?? host) === 'rtl' ? 'left' : 'right';
+}
 
 /** The physical paddings for `gutter` with the column on `side`. */
 export function physicalReviewGutter(

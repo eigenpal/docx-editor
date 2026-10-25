@@ -82,6 +82,7 @@ describe('measureReviewRailMetrics', () => {
       scale: 2,
       top: 100,
       left: 1112,
+      side: 'right',
       compactCardLeft: 1400 - 1112 - 300 - 12,
     });
   });
@@ -106,6 +107,7 @@ describe('measureReviewRailMetrics', () => {
       scale: 1,
       top: 100,
       left: 280 - 16 - 300,
+      side: 'left',
       compactCardLeft: 12 - (280 - 16 - 300),
     });
     // The closed strip is narrower, and its right edge stays one gutter off the page.
@@ -128,18 +130,20 @@ describe('measureReviewRailMetrics', () => {
       scale: 1.5,
       top: 0,
       left: null,
+      side: 'right',
       compactCardLeft: null,
     });
   });
 
   test('compares every field', () => {
-    const base = { scale: 1, top: 2, left: 3, compactCardLeft: 4 };
+    const base = { scale: 1, top: 2, left: 3, side: 'right' as const, compactCardLeft: 4 };
     expect(isCompactReviewColumn(true, 32, 316)).toBe(true);
     expect(isCompactReviewColumn(true, 316, 316)).toBe(false);
     expect(isCompactReviewColumn(false, 32, 316)).toBe(false);
     expect(isCompactReviewColumn(true, 0, 316)).toBe(false);
     expect(sameReviewRailMetrics(base, { ...base })).toBe(true);
     expect(sameReviewRailMetrics(base, { ...base, compactCardLeft: null })).toBe(false);
+    expect(sameReviewRailMetrics(base, { ...base, side: 'left' })).toBe(false);
   });
 });
 

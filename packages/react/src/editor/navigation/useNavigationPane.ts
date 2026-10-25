@@ -190,9 +190,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       // The review gutter's value on the SAME edge the shift pads. The custom property, not
       // the computed padding: that already contains this hook's own published shift, and
       // measuring it back would be circular.
-      const strip = Number.parseFloat(
-        style.getPropertyValue(rtl ? '--docx-review-gutter' : '--docx-review-gutter-start')
-      );
+      const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
       setInlineStartReservation(Number.isFinite(strip) ? strip : 0);
     };
     measure();

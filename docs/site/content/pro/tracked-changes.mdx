@@ -316,7 +316,8 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 | --- | --- |
 | `scale` | CSS pixels per layout point, including zoom. |
 | `top` | CSS pixels from the scroll container's top padding edge to the first page. Content above the pages is included. |
-| `left` | CSS pixels from the scroll container's left padding edge to the column, 16 pixels right of the page. `null` before layout. |
+| `left` | CSS pixels from the scroll container's left padding edge to the column, 16 pixels right of the page. In a right-to-left interface, the column ends 16 pixels left of the page. `null` before layout. |
+| `side` | `'right'`, or `'left'` in a right-to-left interface. The page side that the column stands on. |
 | `compact` | `true` when the pane is open but the viewport is too narrow for a full column. |
 | `compactCardLeft` | The `left` of a 300-pixel card, relative to the column, that keeps the card inside a narrow viewport. `null` before layout. |
 
@@ -332,10 +333,11 @@ For a column of your own, pass a ref to the column element. The column must meet
 - The element has `position: absolute`.
 - The element is a child of `DocxEditor.Viewport`, with no positioned element in between. Its offset parent must be the scroll container that holds the pages.
 - While `left` is `null`, the element uses `visibility: hidden`, not `display: none`.
+- The element has its width, such as `300px`. When `side` is `'left'`, `left` places the column's right edge beside the page, so a column without a width overlaps the page.
 
 Development builds print one warning when a condition fails.
 
-While the column element is mounted, it reserves the review gutter beside the page, as `DocxEditorReview` does. The page moves left while the pane is open. If a mounted `DocxEditorReview` already reserves the gutter, or your column covers the page, pass `{ reserveGutter: false }`.
+While the column element is mounted, it reserves the review gutter beside the page, as `DocxEditorReview` does. The page moves away from the column while the pane is open. If a mounted `DocxEditorReview` already reserves the gutter, or your column covers the page, pass `{ reserveGutter: false }`.
 
 While the pane is closed, the viewport reserves only a narrow marker strip. Read `paneOpen` from `useReview()`, and render no cards, or small markers, while it is `false`.
 
@@ -496,6 +498,7 @@ function MyReviewColumn() {
         position: 'absolute',
         top: 0,
         left: metrics.left ?? 0,
+        width: 300,
         visibility: metrics.left === null ? 'hidden' : 'visible',
       }}
     >
@@ -593,6 +596,7 @@ const topOf = (item: ReviewItemView) =>
       position: 'absolute',
       top: '0px',
       left: `${metrics.left ?? 0}px`,
+      width: '300px',
       visibility: metrics.left === null ? 'hidden' : 'visible',
     }"
   >

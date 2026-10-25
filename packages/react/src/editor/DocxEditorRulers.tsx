@@ -30,8 +30,12 @@ import { useNavigationShift, useNavigationViewportElement } from './navigation/n
 // The gutter the review pane reserves. Read from the shared measurement rather than a
 // local constant, because the ruler and the scroller must agree: two components deciding
 // independently is how a ruler ends up an inch off the page it is measuring.
-import { useChromeDir } from '../i18n';
-import { physicalReviewGutter, useReviewGutter, useViewportClientWidth } from './review-gutter';
+import {
+  physicalReviewGutter,
+  useReviewColumnSide,
+  useReviewGutter,
+  useViewportClientWidth,
+} from './review-gutter';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 const selectOpening = (snapshot: EditorSnapshot): boolean => snapshot.isOpening === true;
@@ -210,8 +214,9 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   // navigation pane displaces the page from the left, the review pane reserves a gutter on
   // the right. Same values, same easing, so the ticks stay over the page they measure.
   const shift = useNavigationShift();
-  const rtl = useChromeDir() === 'rtl';
-  const reserved = physicalReviewGutter(useReviewGutter(), rtl ? 'left' : 'right');
+  const side = useReviewColumnSide();
+  const rtl = side === 'left';
+  const reserved = physicalReviewGutter(useReviewGutter(), side);
   const scrollLeft = useViewportScrollLeft();
   if (documentAbsent) return null;
   return (
@@ -223,6 +228,7 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
     // (and its reduced-motion opt-out) so the ruler moves with the page rather than snaps.
     <div
       className={`docx-ruler-frame${opening ? ' docx-ruler-frame--opening' : ''}`}
+      {...(rtl ? { 'data-chrome-dir': 'rtl' } : {})}
       style={{
         // PHYSICAL sides, like the scroll container they mirror: it keeps a left-to-right
         // base, adds the navigation shift on the pane's side (the right in a right-to-left

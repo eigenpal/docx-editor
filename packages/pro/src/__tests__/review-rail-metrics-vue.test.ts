@@ -496,8 +496,8 @@ describe('useReviewRailMetrics (Vue)', () => {
       await waitFor(() => Boolean(rail()?.style.left));
       expect(viewport.getAttribute('data-review-side')).toBe('left');
       // The full column pads the left; the right keeps what the start would have had.
-      expect(viewport.style.getPropertyValue('--docx-review-gutter-start')).toBe('316px');
-      expect(viewport.style.getPropertyValue('--docx-review-gutter')).toBe('0px');
+      expect(viewport.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+      expect(viewport.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
       // The page starts at x 300 in a frame at x 20: the column ends one gutter before it.
       expect(rail().style.left).toBe(`${300 - 20 - 16 - rail().offsetWidth}px`);
     } finally {
@@ -539,7 +539,14 @@ describe('useReviewRailMetrics (Vue)', () => {
         async (mounted) => {
           expect(
             readMetrics(mounted.container.querySelector('[data-testid="outside-probe"]'))
-          ).toEqual({ scale: 96 / 72, top: 0, left: null, compactCardLeft: null, compact: false });
+          ).toEqual({
+            scale: 96 / 72,
+            top: 0,
+            left: null,
+            side: 'right',
+            compactCardLeft: null,
+            compact: false,
+          });
           const messages = warn.mock.calls.map((call) => String(call[0]));
           expect(messages.some((text) => text.includes('without a railRef'))).toBe(true);
         }

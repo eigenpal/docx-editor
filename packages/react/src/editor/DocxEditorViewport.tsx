@@ -1,4 +1,4 @@
-import { useChromeDir, useTranslation } from '../i18n';
+import { useTranslation } from '../i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // The scroll container around the painted pages.
 //
@@ -18,8 +18,8 @@ import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import {
   REVIEW_MARKERS_GUTTER,
-  physicalReviewGutter,
   reviewGutterScrolls,
+  useReviewColumnSide,
   useReviewGutter,
 } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
@@ -63,11 +63,10 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // and mirrors the marker strip onto both edges otherwise, so the sheet stays centred.
   // The stylesheet consumes it through `--docx-review-gutter`/`--docx-review-gutter-start`.
   const reviewGutter = useReviewGutter();
-  // A right-to-left interface puts the column on the page's left. The paddings are
-  // published physically, because this element keeps a left-to-right base.
-  // The navigation pane opens on the chrome's start side, so its shift pads the right then.
-  const side = useChromeDir() === 'rtl' ? 'left' : 'right';
-  const padding = physicalReviewGutter(reviewGutter, side);
+  // A right-to-left interface puts the column on the page's left and the navigation pane on
+  // its right. The custom properties stay logical (start, end); the stylesheet maps them to
+  // physical edges under `data-chrome-dir`, because this element keeps a left-to-right base.
+  const side = useReviewColumnSide();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = claimsReviewGutter(rail);
@@ -87,12 +86,13 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     [layout]
   );
   // A column that does not fit scrolls sideways. On the left it starts in view, so the
-  // viewport opens at its right end instead: the page first, the cards one scroll away.
+  // viewport keeps to its right end instead: the page first, the cards one scroll away. A
+  // navigation shift on the right widens the content, so the right end is taken again then.
   const scrollsLeft = side === 'left' && reserve && reviewGutterScrolls(reviewGutter);
   useLayoutEffect(() => {
     const node = element.current;
     if (scrollsLeft && node) node.scrollLeft = node.scrollWidth - node.clientWidth;
-  }, [scrollsLeft]);
+  }, [scrollsLeft, shift]);
   // CAPTURE, not bubble: the engine's keymap is bound to the painted pages inside this
   // element and binds Word's subscript/superscript to the same Ctrl/Cmd+`=` chord. On the way
   // up it had already scripted the selection by the time zoom ran, so one keystroke both
@@ -134,8 +134,8 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           ['--docx-nav-shift' as string]: `${shift}px`,
           ...(reserve
             ? {
-                ['--docx-review-gutter' as string]: `${padding.right}px`,
-                ['--docx-review-gutter-start' as string]: `${padding.left}px`,
+                ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
+                ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
                 // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,
