@@ -33,7 +33,7 @@ JPEG validation accepts large EXIF and ICC metadata segments before the frame he
 
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
 
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. EMF and WMF conversion requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. EMF and WMF conversion requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 

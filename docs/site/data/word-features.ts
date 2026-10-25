@@ -624,7 +624,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The browser decodes baseline TIFF and the editor paints it at the authored extent. A multi-page file shows its first page. A flavour that will not decode keeps its extent and shows a labelled placeholder. Inserting a new TIFF is not supported yet.',
+      'The browser decodes baseline TIFF and the editor paints it at the authored extent. PDF export decodes the same TIFF flavours, including CCITT Group 4 black and white scans, and embeds the picture. A multi-page file shows its first page. A flavour that will not decode keeps its extent and shows a labelled placeholder. Inserting a new TIFF is not supported yet.',
   },
   {
     id: 'images.tracked',

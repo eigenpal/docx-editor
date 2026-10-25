@@ -18,6 +18,7 @@ import { outlinePath, turnAbout } from './textbox-shape.ts';
 import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 import { MetafileForms } from './metafile-pdf.ts';
 import { gifToPng } from './gif-png.ts';
+import { embedPlainPng } from './png-passthrough.ts';
 import { reflectionMask, softEdgeMask } from './picture-effects.ts';
 
 const EMU_PER_POINT = 12_700;
@@ -40,7 +41,7 @@ async function embedRaster(doc: PDFDocument, mime: string, bytes: Uint8Array): P
   if (mime === 'image/jpeg') return doc.embedJpg(bytes);
   const png = mime === 'image/gif' ? gifToPng(bytes) : bytes;
   if (!png) throw new Error('GIF picture could not be decoded');
-  return doc.embedPng(png);
+  return (await embedPlainPng(doc, png)) ?? doc.embedPng(png);
 }
 
 /**

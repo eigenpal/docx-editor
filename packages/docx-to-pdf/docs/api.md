@@ -42,7 +42,7 @@ For both formats from one layout, see [Compare PDF and Markdown conversion](mark
 | `maxPages` | `10000` | Maximum pages; integer from `1` to `10000`. Checked after layout, before PDF painting. |
 | `maxOutputBytes` | `67108864` | Maximum encoded bytes; integer from `1` to `67108864`. Checked after encoding. |
 | `imageDecodePort` | Bounded built-in decoder | Supply image metadata through Core's decoder interface. |
-| `convertPreservedImage` | — | Convert a preserved image format through Core's converter interface. |
+| `convertPreservedImage` | Built-in TIFF conversion | Convert a preserved image format through Core's converter interface. A supplied converter replaces the built-in TIFF conversion. |
 
 Resource and font deadlines must be positive, finite numbers no greater than `2147483647`. The conversion deadline also applies during those phases. `measurer`, `producer`, and `reuseAcrossRevisions` are unsupported and cause `TypeError`. PDF conversion requires the fonts used during layout to encode the positioned glyphs.
 

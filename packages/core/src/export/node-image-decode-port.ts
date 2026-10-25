@@ -7,6 +7,21 @@ import {
   type SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import type { ImageResourceLimits } from '../store/runtime/limits.ts';
+import { decodeTiffFrame } from '../store/package/tiff-frame.ts';
+import { encodeRgbaPng } from './raster-png.ts';
+
+/** TIFF to PNG without a DOM. Metafiles decline here: the exporter draws them itself. */
+async function convertTiff(
+  bytes: Uint8Array,
+  mime: PreservedImageMime,
+  limits: ImageResourceLimits
+): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
+  if (mime !== 'image/tiff') return null;
+  const frame = await decodeTiffFrame(bytes, limits);
+  if (!frame) return null;
+  const png = encodeRgbaPng(frame.rgba, frame.pixelWidth, frame.pixelHeight);
+  return Object.freeze({ bytes: png, mime: 'image/png' as const });
+}
 
 /** Optional caller conversion for preserved formats such as EMF/WMF/TIFF. @public */
 export type PreservedImageConverter = (
@@ -19,8 +34,8 @@ export type PreservedImageConverter = (
 
 /**
  * Decode raster dimensions from validated headers, with no native image dependency or DOM.
- * SVG sizing is handled by the resource registry; preserved formats stay placeholders unless
- * the caller supplies `convertPreserved`.
+ * SVG sizing is handled by the resource registry. TIFF converts to PNG unless the caller
+ * supplies `convertPreserved`, which then handles every preserved format.
  * @public
  */
 export function createNodeImageDecodePort(
@@ -46,6 +61,6 @@ export function createNodeImageDecodePort(
         dpiY: header.dpiY ?? 96,
       });
     },
-    ...(options.convertPreserved ? { convertPreserved: options.convertPreserved } : {}),
+    convertPreserved: options.convertPreserved ?? convertTiff,
   });
 }
