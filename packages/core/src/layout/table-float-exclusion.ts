@@ -165,7 +165,14 @@ export function addFloatingTableExclusions(
         width
       );
       const pageFramed = inBodyFlow && metadata.float.vertAnchor !== 'text';
-      const reaches = inBodyFlow && !pageFramed && spans && raisedAboveText(metadata.float);
+      // Only in one column: the anchor pricing that keeps a raised table's move on its page
+      // (`coveredLinesAnchorBand`) does not model column bottoms.
+      const reaches =
+        inBodyFlow &&
+        !pageFramed &&
+        spans &&
+        columns.columnCount === 1 &&
+        raisedAboveText(metadata.float);
       const zone: ExclusionZone = {
         sourceKind: 'table',
         drawingNodeId: `table:${block.tableId}`,
@@ -734,7 +741,13 @@ export function clearEarlierText(
   // A raised table that leaves no passage beside it keeps its place: the earlier lines it
   // covers move below it instead (`reachesEarlierLines`).
   const right = left + tableWidth + distances.left + distances.right;
-  if (raisedAboveText(float) && leavesNoPassage(left, right, frames.text.left, frames.text.width))
+  // In one column only, as `reachesEarlierLines` is: elsewhere the table clears the text.
+  const oneColumn = frames.text.width >= frames.margin.width - 0.5;
+  if (
+    oneColumn &&
+    raisedAboveText(float) &&
+    leavesNoPassage(left, right, frames.text.left, frames.text.width)
+  )
     return anchorY;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;

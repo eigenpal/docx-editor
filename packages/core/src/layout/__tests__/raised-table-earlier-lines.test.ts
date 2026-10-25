@@ -142,7 +142,7 @@ test('near the page bottom the anchor and its table open the next page when they
 });
 
 test('a warm pass near the page bottom lays out like a cold one after an edit or a deletion', () => {
-  for (const count of [44, 46, 47]) {
+  for (let count = 40; count <= 50; count += 1) {
     for (const edited of [p('Z') + lines(count), lines(count - 1)]) {
       const session = createLayoutSession();
       const options = { measurer: createFixedMeasurer(), session };
@@ -167,6 +167,13 @@ test('earlier lines wrap beside a narrow page-positioned table', () => {
   const beside = lay(words + table(narrow, 2880) + p('Head'));
   expect(beside.pages[0]!.fragments[0]!.box.y).toBe(0);
   expect(lineCount(beside)).toBeGreaterThan(lineCount(lay(words + p('Head'))));
+});
+
+test('in two columns a raised table moves below the earlier text instead', () => {
+  const columns = '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>';
+  const raised = placed(lay(p('A') + p('B') + p('C') + table(RAISED, 4320) + p('Head') + columns));
+  expect(raised.slice(0, 3)).toEqual(['0:A@0.0', '0:B@12.7', '0:C@25.5']);
+  expect(raised).toContain('0:T@38.2');
 });
 
 test('an ordinary table between a raised table and its anchor does not count as moved', () => {

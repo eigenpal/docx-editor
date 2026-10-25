@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Floating tables now move the earlier text they cover below them, instead of painting over it.
+Floating tables that leave no room beside them now move the earlier text they cover below them, instead of painting over it.
