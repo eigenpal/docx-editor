@@ -66,7 +66,7 @@ export function loadFixture(options: FixtureOptions = {}) {
     `<w:document xmlns:w="${W}"><w:body><w:p>` +
       `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
       runs +
-      (options.underlineElsewhere ? '<w:r><w:rPr><w:u/></w:rPr><w:t>字</w:t></w:r>' : '') +
+      (options.underlineElsewhere ? '<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>字</w:t></w:r>' : '') +
       '</w:p></w:body></w:document>'
   );
   const face = options.defaultFace === undefined ? 'Yu Mincho' : options.defaultFace;
