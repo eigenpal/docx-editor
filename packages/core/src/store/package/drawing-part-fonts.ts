@@ -18,10 +18,24 @@ const MAX_NODES = 200_000;
 const MAX_FAMILIES = 32;
 const FACE_ELEMENTS = new Set(['latin', 'ea', 'cs']);
 
-/** The theme's Latin faces, for theme font tokens. */
+/** The theme's faces for theme font tokens, East Asian and complex script after language. */
 export interface DrawingPartThemeFonts {
   readonly major?: string | null;
   readonly minor?: string | null;
+  readonly majorEastAsia?: string | null;
+  readonly minorEastAsia?: string | null;
+  readonly majorBidi?: string | null;
+  readonly minorBidi?: string | null;
+}
+
+/** The face a theme font token (`+mn-lt`, `+mj-cs`, …) names, or undefined for none. */
+function themeTokenFace(typeface: string, theme: DrawingPartThemeFonts): string | null | undefined {
+  const match = /^\+(mn|mj)-(lt|ea|cs)$/.exec(typeface);
+  if (!match) return undefined;
+  const major = match[1] === 'mj';
+  if (match[2] === 'ea') return major ? theme.majorEastAsia : theme.minorEastAsia;
+  if (match[2] === 'cs') return major ? theme.majorBidi : theme.minorBidi;
+  return major ? theme.major : theme.minor;
 }
 
 /** The typefaces one part names, in order; parts are immutable, so this is kept per root. */
@@ -75,8 +89,7 @@ export function drawingPartFontFamilies(
     // Text that names no face takes the theme's body face.
     add(theme.minor);
     for (const typeface of partTypefaces(root)) {
-      if (typeface.startsWith('+mj')) add(theme.major);
-      else if (typeface.startsWith('+mn')) add(theme.minor);
+      if (typeface.startsWith('+')) add(themeTokenFace(typeface, theme));
       else add(typeface);
     }
   }

@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { categoryLabel } from './chart-number-format.ts';
 import type { Box } from './chart-axes.ts';
+import { dataLabelBlock } from './chart-data-label.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { children, childVal, type ChartPlot } from './chart-model.ts';
 import type { PieContext } from './chart-pie.ts';
@@ -117,11 +118,11 @@ export function paintOfPie(plot: ChartPlot, box: Box, context: PieContext): void
       series.formatCode,
       context.date1904
     );
-    const block = textBlock(text, style);
-    const lineBox = lineHeight(style) * block.lines;
-    const frame = block.width * 1.3 + style.sizePt * 2;
+    const block = dataLabelBlock(spec, text, style, null, resolve);
+    const lineBox = block.height;
+    const frame = block.frame;
     context.labels.push({
-      paragraphs: [[{ text, style }]],
+      paragraphs: block.paragraphs,
       align,
       x: align === 'ctr' ? x - frame / 2 : x,
       y: y - lineBox / 2,

@@ -1,26 +1,9 @@
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import { supportedFontFamilies } from '../layout/supported-font-families.ts';
-import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { drawingPartFontFamilies } from '../store/package/drawing-part-fonts.ts';
-import { packageThemeRoot } from '../store/package/theme-color-resolution.ts';
-import { collectThemeSchemeFaces } from '../store/package/theme-font-scheme.ts';
 import { fontResolverFamilies } from './font-availability.ts';
 import { MAX_RESOLVER_FAMILIES } from './font-composition.ts';
 import { resolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
-
-const THEME_FACES = new WeakMap<object, { major: string | null; minor: string | null }>();
-
-/** The theme's Latin faces; theme parts are immutable, so they are kept per theme root. */
-function themeFacesOf(pkg: OoxmlPackage): { major: string | null; minor: string | null } {
-  const root = packageThemeRoot(pkg);
-  const key = root ?? pkg;
-  const cached = THEME_FACES.get(key);
-  if (cached) return cached;
-  const faces = collectThemeSchemeFaces(root);
-  const result = { major: faces.major, minor: faces.minor };
-  THEME_FACES.set(key, result);
-  return result;
-}
 
 /**
  * The families to ask a font resolver for: the caret's family when it is not the default,
@@ -38,10 +21,7 @@ export function liveFontFamilies(
         ...(selected && selected !== defaultFamily ? [selected] : []),
         ...session.documentFonts(),
         // Chart and diagram labels name faces outside every story.
-        ...drawingPartFontFamilies(
-          session.currentPackage(),
-          themeFacesOf(session.currentPackage())
-        ),
+        ...drawingPartFontFamilies(session.currentPackage(), session.documentThemeFonts()),
       ]),
     ],
     resolverGlyphFontFamilies(session),

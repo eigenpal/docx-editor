@@ -15,6 +15,7 @@ import {
   type Box,
   type ValueInfo,
 } from './chart-axes.ts';
+import { dataLabelBlock } from './chart-data-label.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { child, type ChartModel, type ChartPlot } from './chart-model.ts';
 import { formatChartNumber } from './chart-number-format.ts';
@@ -25,7 +26,6 @@ import { mergeStroke, readChartShapeProperties, type ChartStroke } from './chart
 import {
   estimateTextWidth,
   lineHeight,
-  textBlock,
   type ChartLabel,
   type ChartTextStyle,
 } from './chart-text.ts';
@@ -173,11 +173,11 @@ export function paintRadar(plots: readonly ChartPlot[], box: Box, context: Radar
           series.formatCode,
           model.date1904
         );
-        const block = textBlock(text, style);
-        const height = lineHeight(style) * block.lines;
-        const frame = block.width * 1.3 + style.sizePt * 2;
+        const block = dataLabelBlock(spec, text, style, null, resolve);
+        const height = block.height;
+        const frame = block.frame;
         pending.push({
-          paragraphs: [[{ text, style }]],
+          paragraphs: block.paragraphs,
           align: 'ctr',
           x: point.x - frame / 2,
           y: point.y - height - 2,

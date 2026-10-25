@@ -136,6 +136,35 @@ export interface DataLabelSpec {
   readonly formatCode: string | null;
   readonly txPr: OoxmlElement | null;
   readonly spPr: OoxmlElement | null;
+  /** A point label's own `c:dLbl` when it carries its own text (`c:tx`), shown as written. */
+  readonly custom: OoxmlElement | null;
+  /** A point label moved by hand, as shares of the chart's width and height. */
+  readonly moved: DataLabelMove | null;
+}
+
+/**
+ * A point label's manual layout: by default an offset from where the label would sit, or with
+ * `edge` the position of its top left corner.
+ */
+export interface DataLabelMove {
+  readonly x: number;
+  readonly y: number;
+  readonly edge: boolean;
+}
+
+function readMove(element: OoxmlElement): DataLabelMove | null {
+  const manual = child(child(element, 'layout'), 'manualLayout');
+  const share = (name: string) => {
+    const raw = childVal(manual, name);
+    const value = raw !== undefined && raw.length <= 32 ? Number(raw) : NaN;
+    return Number.isFinite(value) && Math.abs(value) <= 10 ? value : null;
+  };
+  const x = share('x');
+  const y = share('y');
+  if (x === null && y === null) return null;
+  const edge = childVal(manual, 'xMode') === 'edge' && childVal(manual, 'yMode') === 'edge';
+  if (edge && (x === null || y === null)) return null;
+  return { x: x ?? 0, y: y ?? 0, edge };
 }
 
 function labelFlags(element: OoxmlElement, inherited: DataLabelSpec | null): DataLabelSpec | null {
@@ -162,6 +191,8 @@ function labelFlags(element: OoxmlElement, inherited: DataLabelSpec | null): Dat
         : (inherited?.formatCode ?? null),
     txPr: child(element, 'txPr') ?? inherited?.txPr ?? null,
     spPr: child(element, 'spPr') ?? inherited?.spPr ?? null,
+    custom: null,
+    moved: null,
   };
 }
 
@@ -176,11 +207,17 @@ export function dataLabelFor(
   let spec = own;
   for (const point of children(series.dLbls, 'dLbl')) {
     if (childVal(point, 'idx') !== String(index)) continue;
-    spec = labelFlags(point, own ?? group);
+    const flags = labelFlags(point, own ?? group);
+    spec = flags && {
+      ...flags,
+      custom: child(point, 'tx') ? point : null,
+      moved: readMove(point),
+    };
     break;
   }
   if (!spec) return null;
-  if (!(spec.showValue || spec.showPercent || spec.showCategory || spec.showSeries)) return null;
+  const shows = spec.showValue || spec.showPercent || spec.showCategory || spec.showSeries;
+  if (!shows && !spec.custom) return null;
   // Pie labels put each part on its own line unless the file names a separator.
   const round = plot.kind === 'pie' || plot.kind === 'doughnut' || plot.kind === 'ofPie';
   return spec.separator === null ? { ...spec, separator: round ? '\n' : ', ' } : spec;

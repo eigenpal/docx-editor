@@ -12,7 +12,8 @@ import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import type { ChartPlot } from './chart-model.ts';
 import { slice, type ChartScene, type Point } from './chart-scene.ts';
 import { seriesLook, variesByPoint, type LookContext } from './chart-series.ts';
-import { lineHeight, textBlock, type ChartLabel, type ChartTextStyle } from './chart-text.ts';
+import { dataLabelBlock, movedLabel } from './chart-data-label.ts';
+import { lineHeight, type ChartLabel, type ChartTextStyle } from './chart-text.ts';
 import type { Box } from './chart-axes.ts';
 import { child, children, childVal } from './chart-model.ts';
 import { mergeStroke, readChartShapeProperties, type ChartStroke } from './chart-style.ts';
@@ -203,9 +204,15 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
             item.formatCode,
             context.date1904
           );
-          const block = textBlock(text, style);
+          const block = dataLabelBlock(
+            spec,
+            text,
+            style,
+            context.bounds ? context.bounds.r - context.bounds.l : null,
+            context.look.resolveSchemeColor
+          );
           const width = block.width;
-          const height = lineHeight(style) * block.lines;
+          const height = block.height;
           const sin = Math.sin(radians);
           const cos = Math.cos(radians);
           const extent = (width / 2) * Math.abs(sin) + (height / 2) * Math.abs(cos);
@@ -219,12 +226,22 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
           }
           // Outside-end labels keep a little gap; best-fit ones that move out sit at the edge.
           const distance = outside ? outer + extent + (position === 'outEnd' ? 6 : 0) : inside;
-          const frame = width * 1.3 + style.sizePt * 2;
-          const lx = ox + distance * sin;
-          const ly = oy - distance * cos;
+          const frame = block.frame;
+          const placed = movedLabel(
+            spec.moved,
+            context.bounds,
+            ox + distance * sin,
+            oy - distance * cos,
+            width,
+            height
+          );
+          // A label moved by hand stays where it was put.
+          if (placed.moved) outside = false;
+          const lx = placed.x;
+          const ly = placed.y;
           pending.push({
             label: {
-              paragraphs: [[{ text, style }]],
+              paragraphs: block.paragraphs,
               align: 'ctr',
               x: lx - frame / 2,
               y: ly - height / 2,

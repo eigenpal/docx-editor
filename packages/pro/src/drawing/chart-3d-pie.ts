@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // 3-D pie plots: the pie as a disc a quarter of its radius thick, tilted by rotX and seen in
 // perspective, its slices clockwise from rotY. Tops keep the slice colour; the rim darkens
-// towards the right. The disc is scaled to fit the plot area.
+// towards the right. The disc is scaled to a share of the plot area, a little above its middle.
 
 import { categoryLabel } from './chart-number-format.ts';
 import { CHART_EYE, FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
@@ -14,7 +14,7 @@ import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { childVal, type ChartModel, type ChartPlot } from './chart-model.ts';
 import type { PieContext } from './chart-pie.ts';
 import { seriesLook, variesByPoint } from './chart-series.ts';
-import { lineHeight, textBlock } from './chart-text.ts';
+import { dataLabelBlock, keepInChart, movedLabel } from './chart-data-label.ts';
 
 /** World radius; the projection scales it to the plot. */
 const R = 100;
@@ -41,6 +41,32 @@ function explosionOf(plot: ChartPlot, pointIndex: number): number {
 function rimShade(degrees: number): number {
   const value = 0.55 - 0.17 * Math.sin((degrees * Math.PI) / 180);
   return Math.min(0.9, Math.max(0.3, value));
+}
+
+/** An automatic plot area keeps this share of the chart's size clear on each side. */
+const AUTO_PLOT_INSET = 1 / 16;
+/** The disc fills this share of the plot's width or height, whichever binds first. */
+const DISC_WIDTH = 0.93;
+const DISC_HEIGHT = 0.92;
+/** The disc's middle sits this far down the plot. */
+const DISC_MIDDLE = 0.47;
+
+/**
+ * The box the disc is fitted to: inside the plot area, which an automatic layout insets from
+ * the chart (`chart`) by a share of its size.
+ */
+function discBox(plot: Box, chart: Box | undefined): Box {
+  const insetX = chart ? (chart.r - chart.l) * AUTO_PLOT_INSET : 0;
+  const insetY = chart ? (chart.b - chart.t) * AUTO_PLOT_INSET : 0;
+  const l = plot.l + insetX;
+  const r = Math.max(l + 1, plot.r - insetX);
+  const t = plot.t + insetY;
+  const b = Math.max(t + 1, plot.b - insetY);
+  const halfW = ((r - l) * DISC_WIDTH) / 2;
+  const halfH = ((b - t) * DISC_HEIGHT) / 2;
+  const cx = (l + r) / 2;
+  const cy = t + (b - t) * DISC_MIDDLE;
+  return { l: cx - halfW, r: cx + halfW, t: cy - halfH, b: cy + halfH };
 }
 
 /** Paint a 3-D pie plot inside `box`. */
@@ -110,10 +136,14 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
   const projection = fitProjection(
     view,
     { w: 2 * R, h: t, d: 2 * R },
-    box,
+    discBox(box, context.placed ? undefined : bounds),
     bounds
-      ? { eyePoints: CHART_EYE * Math.max(bounds.r - bounds.l, bounds.b - bounds.t), corners }
-      : { eyeBase: PIE_EYE * R, corners }
+      ? {
+          eyePoints: CHART_EYE * Math.max(bounds.r - bounds.l, bounds.b - bounds.t),
+          corners,
+          exact: true,
+        }
+      : { eyeBase: PIE_EYE * R, corners, exact: true }
   );
 
   const faces = new FaceList();
@@ -187,20 +217,40 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
       series.formatCode,
       context.date1904
     );
-    const block = textBlock(text, style);
-    const height = lineHeight(style) * block.lines;
+    const block = dataLabelBlock(
+      spec,
+      text,
+      style,
+      context.bounds ? context.bounds.r - context.bounds.l : null,
+      context.look.resolveSchemeColor
+    );
+    const height = block.height;
     const middle = (slice.from + slice.to) / 2;
-    const outside = spec.position === 'outEnd';
-    const anchor = projection.point(at(slice, middle, outside ? R * 1.12 : R * 0.65, t));
-    const frame = block.width * 1.3 + style.sizePt * 2;
     const radians = (middle * Math.PI) / 180;
+    // An outside label touches the disc's outline with its nearest corner: the top rim on the
+    // far half, the bottom rim on the near half. A label moved by hand is moved from there.
+    const outside = spec.position === 'outEnd' || (spec.moved !== null && !spec.moved.edge);
+    const rim = Math.cos(radians) >= 0 ? t : 0;
+    const anchor = projection.point(
+      outside ? at(slice, middle, R, rim) : at(slice, middle, R * 0.65, t)
+    );
+    const frame = block.frame;
     const shiftX = outside ? (block.width / 2) * Math.sin(radians) : 0;
     const shiftY = outside ? (-height / 2) * Math.cos(radians) : 0;
+    const natural = movedLabel(
+      spec.moved,
+      context.bounds,
+      anchor.x + shiftX,
+      anchor.y + shiftY,
+      block.width,
+      height
+    );
+    const centre = keepInChart(spec, natural, block.width, height, context.bounds);
     context.labels.push({
-      paragraphs: [[{ text, style }]],
+      paragraphs: block.paragraphs,
       align: 'ctr',
-      x: anchor.x + shiftX - frame / 2,
-      y: anchor.y + shiftY - height / 2,
+      x: centre.x - frame / 2,
+      y: centre.y - height / 2,
       width: frame,
       height,
       rotation: 0,
