@@ -158,16 +158,14 @@ export const DocxEditorHorizontalRuler = defineComponent({
     return () => {
       if (documentAbsent.value) return null;
       // Physical sides, like the scroll container: see the React twin.
-      const padding = physicalReviewGutter(
-        reserved.value,
-        chromeDir() === 'rtl' ? 'left' : 'right'
-      );
+      const rtl = chromeDir() === 'rtl';
+      const padding = physicalReviewGutter(reserved.value, rtl ? 'left' : 'right');
       return (
         <div
           class={`docx-ruler-frame${opening.value ? ' docx-ruler-frame--opening' : ''}`}
           style={{
-            paddingLeft: formatPx(shift.value + padding.left),
-            paddingRight: formatPx(padding.right),
+            paddingLeft: formatPx((rtl ? 0 : shift.value) + padding.left),
+            paddingRight: formatPx((rtl ? shift.value : 0) + padding.right),
           }}
         >
           <HorizontalRuler

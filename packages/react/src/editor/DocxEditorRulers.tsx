@@ -210,10 +210,8 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   // navigation pane displaces the page from the left, the review pane reserves a gutter on
   // the right. Same values, same easing, so the ticks stay over the page they measure.
   const shift = useNavigationShift();
-  const reserved = physicalReviewGutter(
-    useReviewGutter(),
-    useChromeDir() === 'rtl' ? 'left' : 'right'
-  );
+  const rtl = useChromeDir() === 'rtl';
+  const reserved = physicalReviewGutter(useReviewGutter(), rtl ? 'left' : 'right');
   const scrollLeft = useViewportScrollLeft();
   if (documentAbsent) return null;
   return (
@@ -227,10 +225,10 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       className={`docx-ruler-frame${opening ? ' docx-ruler-frame--opening' : ''}`}
       style={{
         // PHYSICAL sides, like the scroll container they mirror: it keeps a left-to-right
-        // base, adds the navigation shift to its left padding, and pads the review column's
-        // side (the left in a right-to-left interface) by the full reservation.
-        paddingLeft: shift + reserved.left,
-        paddingRight: reserved.right,
+        // base, adds the navigation shift on the pane's side (the right in a right-to-left
+        // interface), and pads the review column's side by the full reservation.
+        paddingLeft: (rtl ? 0 : shift) + reserved.left,
+        paddingRight: (rtl ? shift : 0) + reserved.right,
       }}
     >
       <HorizontalRuler

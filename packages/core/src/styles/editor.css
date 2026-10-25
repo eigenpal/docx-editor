@@ -5581,9 +5581,9 @@ a.docx-hyperlink:focus-visible {
   border-radius: 13px 13px 3px 13px;
 }
 
-/* The column's cards keep their 12px of air on the side away from the page. */
+/* The cards keep their 12px of air on the side away from the page, the compact one too. */
 .docx-editor__scroll-container[data-review-side='left']
-  .docx-review__slot:not(.docx-review__slot--compact)
+  :is(.docx-review__slot, .docx-review__slot--compact)
   .docx-review__card {
   margin: 0 0 0 12px;
 }
@@ -5930,6 +5930,16 @@ a.docx-hyperlink:focus-visible {
    * specificity fight. */
   padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
   transition: padding-inline-start 0.2s ease;
+}
+
+/* A right-to-left interface opens the navigation pane at the right, so its shift pads the
+ * right edge. The review paddings are physical already (see the review gutter rules), so the
+ * left edge keeps only the review gutter's left value. */
+.docx-editor .docx-editor__scroll-container[data-chrome-dir='rtl'],
+.docx-editor.docx-editor__scroll-container[data-chrome-dir='rtl'] {
+  padding-inline-start: var(--docx-review-gutter-start, 0px);
+  padding-right: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter, 0px));
+  transition: padding-right 0.2s ease;
 }
 
 /* Under a fit the page width follows the padded box. Animating the padding would

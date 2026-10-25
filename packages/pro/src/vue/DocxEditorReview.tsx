@@ -112,7 +112,7 @@ import {
 } from './review-rail-parts.tsx';
 import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import { bindReviewRailMetrics, ReviewRailMetricsKey } from './useReviewRailMetrics.ts';
-import { isCompactReviewColumn } from '../review/rail-metrics.ts';
+import { isCompactReviewColumn, reviewRailSide } from '../review/rail-metrics.ts';
 
 function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): VNode {
   if (!(key in parts)) return fallback;
@@ -350,9 +350,13 @@ const ReviewRoot = defineComponent({
       trackScroll: () => compact.value,
       remeasure: () => items.value,
       beforeMeasure: (parent) => {
+        // The viewport publishes its paddings physically: the column's reservation is the
+        // left one when the column stands on the left.
+        const property =
+          reviewRailSide(parent) === 'left' ? '--docx-review-gutter-start' : '--docx-review-gutter';
         const reserved = parent
           ? Number.parseFloat(
-              hostWindowOf(parent).getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
+              hostWindowOf(parent).getComputedStyle(parent).getPropertyValue(property)
             )
           : Number.NaN;
         measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;

@@ -18,7 +18,12 @@ import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { REVIEW_MARKERS_GUTTER, physicalReviewGutter, useReviewGutter } from './review-gutter';
+import {
+  REVIEW_MARKERS_GUTTER,
+  physicalReviewGutter,
+  reviewGutterScrolls,
+  useReviewGutter,
+} from './review-gutter';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -65,6 +70,19 @@ export const DocxEditorViewport = defineComponent({
     onUnmounted(() => {
       layoutStore?.setViewport(null);
     });
+    // A column that does not fit scrolls sideways. On the left it starts in view, so the
+    // viewport opens at its right end instead: the page first, the cards one scroll away.
+    const scrollsLeft = computed(
+      () => chromeDir() === 'rtl' && reserve.value && reviewGutterScrolls(reviewGutter.value)
+    );
+    watch(
+      scrollsLeft,
+      (scrolls) => {
+        if (scrolls && viewportEl)
+          viewportEl.scrollLeft = viewportEl.scrollWidth - viewportEl.clientWidth;
+      },
+      { flush: 'post' }
+    );
     watch(navShift, (shift) => {
       if (viewportEl) viewportEl.style.setProperty('--docx-nav-shift', `${shift}px`);
       layoutStore?.setViewport(viewportEl);
@@ -118,6 +136,8 @@ export const DocxEditorViewport = defineComponent({
         } as CSSProperties,
       };
       if (reserve.value) attrs['data-review-pane'] = paneOpen.value ? 'open' : 'closed';
+      // The navigation pane opens on the chrome's start side, so its shift pads the right then.
+      if (side === 'left') attrs['data-chrome-dir'] = 'rtl';
       if (reserve.value && side === 'left') attrs['data-review-side'] = 'left';
       if (fitting.value) attrs['data-zoom-fit'] = '';
       return h('div', attrs, slots.default?.());

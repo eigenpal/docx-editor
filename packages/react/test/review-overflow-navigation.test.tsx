@@ -25,6 +25,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
 import { ReviewRailContext } from '../src/editor/context.ts';
+import { LocaleProvider } from '../src/i18n/LocaleContext.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -121,22 +122,24 @@ async function refit(editor: DocxEditorInstance) {
   }
 }
 
-async function mountBothPanes(overflow: ReviewPaneOverflow) {
+async function mountBothPanes(overflow: ReviewPaneOverflow, dir: 'ltr' | 'rtl' = 'ltr') {
   let editor: DocxEditorInstance | null = null;
   const view = render(
-    <DocxEditorRoot
-      document={SOURCE}
-      modules={[REVIEW_MODULE]}
-      onReady={(ready) => {
-        editor = ready as DocxEditorInstance;
-      }}
-    >
-      <DocxEditorNavigation defaultOpen />
-      <DocxEditorViewport>
-        <DocxEditorContent />
-      </DocxEditorViewport>
-      <RailStub />
-    </DocxEditorRoot>
+    <LocaleProvider dir={dir}>
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorNavigation defaultOpen />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <RailStub />
+      </DocxEditorRoot>
+    </LocaleProvider>
   );
   await settle();
   act(() => {
@@ -221,6 +224,47 @@ describe('the navigation pane beside a scrolling review column', () => {
       expect(nav.classList.contains('docx-nav--overlay')).toBe(true);
     } finally {
       scrollerWidth = VIEWPORT;
+      removeStyle();
+    }
+  });
+});
+
+describe('a right-to-left interface', () => {
+  /** The stylesheet's physical rule for a right-to-left interface: the column on the left. */
+  function withRightToLeftPadding(): () => void {
+    const style = document.createElement('style');
+    style.textContent =
+      '.docx-editor__scroll-container { padding-left: var(--docx-review-gutter-start); ' +
+      'padding-right: var(--docx-review-gutter); }';
+    document.head.append(style);
+    return () => style.remove();
+  }
+
+  test("'scroll' at 900px: the column pads the left and the pane docks on the right", async () => {
+    const removeStyle = withRightToLeftPadding();
+    try {
+      const { scroller, nav } = await mountBothPanes('scroll', 'rtl');
+      expect(scroller.getAttribute('data-chrome-dir')).toBe('rtl');
+      expect(scroller.getAttribute('data-review-side')).toBe('left');
+      // The full column stands on the left, and the page's clearance on the right.
+      expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('316px');
+      expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('24px');
+      // The pane measures the left edge as the other side, so it takes the same room as in
+      // the mirrored left-to-right layout.
+      expect(nav.getAttribute('data-open')).toBe('true');
+      expect(nav.classList.contains('docx-nav--overlay')).toBe(false);
+      const shift = px(scroller, '--docx-nav-shift');
+      cleanup();
+      removeStyle();
+      const removeLtrStyle = withGutterPadding();
+      try {
+        const mirrored = await mountBothPanes('scroll');
+        expect(shift).toBe(px(mirrored.scroller, '--docx-nav-shift'));
+        expect(shift).toBeGreaterThan(0);
+      } finally {
+        removeLtrStyle();
+      }
+    } finally {
       removeStyle();
     }
   });

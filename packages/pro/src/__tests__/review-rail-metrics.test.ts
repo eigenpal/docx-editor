@@ -184,11 +184,7 @@ describe('observeReviewRailMetrics', () => {
       { trackScroll: true }
     );
     expect(seen).toEqual([96 / 72]);
-    expect(resizeTargets).toEqual([
-      container,
-      rail,
-      container.querySelector('.docx-paginated-surface'),
-    ]);
+    expect(resizeTargets).toEqual([container, container.querySelector('.docx-paginated-surface')]);
     expect(mutationTargets).toEqual([container]);
 
     // A zoom change resizes the surface; the observer re-reads the engine's scale.

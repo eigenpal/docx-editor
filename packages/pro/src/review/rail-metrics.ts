@@ -212,11 +212,13 @@ export function observeReviewRailMetrics(
     resize?.disconnect();
     resize = null;
     if (!parent || typeof view.ResizeObserver !== 'function') return;
-    // The rail too: on the left side its own width, which opening the pane changes, places it.
-    const targets = new Set<Element>([parent, rail]);
+    const targets = new Set<Element>([parent]);
     for (const child of Array.from(parent.children)) {
-      if (isHTMLElementNode(child)) targets.add(child);
+      if (child !== rail && isHTMLElementNode(child)) targets.add(child);
     }
+    // The rail itself only on the left side, where its own width (which opening the pane
+    // changes) places it.
+    if (reviewRailSide(parent) === 'left') targets.add(rail);
     for (let node = surface; node && node !== parent; node = node.parentElement) {
       targets.add(node);
     }
@@ -233,7 +235,13 @@ export function observeReviewRailMetrics(
   const cleanups: Array<() => void> = [() => resize?.disconnect()];
   if (parent && typeof view.MutationObserver === 'function') {
     const mutations = new view.MutationObserver((records) => {
-      if (records.some((record) => record.type === 'childList')) bind();
+      if (
+        records.some(
+          (record) => record.type === 'childList' || record.attributeName === 'data-review-side'
+        )
+      ) {
+        bind();
+      }
       measure();
     });
     mutations.observe(parent, {

@@ -59,13 +59,21 @@ export function useRailMetrics(
       rail,
       editor,
       (next) => {
-        if (last && sameReviewRailMetrics(last, next)) return;
+        const previous = last;
+        if (previous && sameReviewRailMetrics(previous, next)) return;
         last = next;
         const update = () =>
-          setMetrics((previous) => (sameReviewRailMetrics(previous, next) ? previous : next));
+          setMetrics((current) => (sameReviewRailMetrics(current, next) ? current : next));
         // An observer reports after layout and before paint. A plain state update renders
-        // after that paint, so the column stood one frame where the page used to be.
-        if (bound) flushSync(update);
+        // after that paint, so the column stood one frame where the page used to be. Only a
+        // moved column pays for the synchronous render: a scroll that moves just the compact
+        // card's offset batches as before.
+        const moved =
+          !previous ||
+          previous.left !== next.left ||
+          previous.top !== next.top ||
+          previous.scale !== next.scale;
+        if (bound && moved) flushSync(update);
         else update();
       },
       { trackScroll }
