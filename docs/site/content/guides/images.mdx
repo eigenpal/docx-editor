@@ -18,7 +18,7 @@ Pass an `ImageDecodePort` through `imageDecodePort` on `DocxEditor` to use a cus
 | PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Original media preserved unless replaced |
 | BMP, WebP | No insert | Full decode at authored `wp:extent` | Original media preserved |
 | SVG | No insert | Painted at authored `wp:extent` | Original media preserved |
-| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise. EMF and WMF need the drawing module. | Preserved; no zero-click fetch |
+| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise. EMF and WMF in PDF export need the drawing module. | Preserved; no zero-click fetch |
 | External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
@@ -33,7 +33,7 @@ JPEG validation accepts large EXIF and ICC metadata segments before the frame he
 
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
 
-TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. EMF and WMF conversion requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The editor and PDF export convert TIFF without extra setup. The editor rasterizes EMF and WMF without extra setup. PDF export of EMF and WMF requires the drawing module from `@docx-editor.dev/pro/drawing`. For more information, see [Advanced drawing rendering](/docs/2.x/pro/drawing). The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 

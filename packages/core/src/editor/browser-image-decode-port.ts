@@ -23,7 +23,8 @@ type ConvertedRaster = Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }>
 /**
  * Decode raster headers in the browser via `createImageBitmap`, or null when unavailable.
  * Also converts the formats an `<img>` cannot render — EMF/WMF metafiles through the
- * installed metafile renderer, TIFF through a lazily loaded TIFF decoder — into PNG; the resource layer re-runs the converted bytes through the full raster
+ * installed metafile renderer or `emf-converter`, TIFF through a lazily loaded TIFF decoder —
+ * into PNG; the resource layer re-runs the converted bytes through the full raster
  * validation path before they can become a ready resource.
  */
 export function tryCreateBrowserImageDecodePort(ownerDocument: Document): ImageDecodePort | null {
@@ -71,9 +72,10 @@ export function tryCreateBrowserImageDecodePort(ownerDocument: Document): ImageD
 }
 
 /**
- * EMF/WMF → PNG through the installed metafile renderer's rasterizer. Null, which keeps the
- * labelled placeholder, when no renderer with a rasterizer is installed. Exported for direct
- * unit coverage — the port factory gates on `createImageBitmap`, which headless DOMs lack.
+ * EMF/WMF → PNG through the installed metafile renderer's rasterizer, or through the plain
+ * `emf-converter` rasterizer when no renderer is installed (Canvas-based, lazily imported so
+ * only documents that contain metafiles load it). Exported for direct unit coverage — the
+ * port factory gates on `createImageBitmap`, which headless DOMs lack.
  */
 export async function convertBrowserMetafile(
   bytes: Uint8Array,
@@ -81,9 +83,31 @@ export async function convertBrowserMetafile(
   _limits: ImageResourceLimits
 ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
   const rasterize = drawingRenderers().metafile?.rasterize;
-  if (!rasterize) return null;
+  if (!rasterize) return convertPlainMetafile(bytes, mime);
   const raster = await rasterize(bytes, mime, { maxEdge: MAX_METAFILE_RASTER_EDGE });
   return raster ? Object.freeze({ bytes: raster.bytes, mime: raster.mime }) : null;
+}
+
+async function convertPlainMetafile(
+  bytes: Uint8Array,
+  mime: MetafileImageMime
+): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null> {
+  const { convertEmfToDataUrl, convertWmfToDataUrl } = await import('emf-converter');
+  const copy = new Uint8Array(bytes);
+  const buffer = copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength);
+  const options = { maxWidth: MAX_METAFILE_RASTER_EDGE, maxHeight: MAX_METAFILE_RASTER_EDGE };
+  const dataUrl =
+    mime === 'image/x-emf'
+      ? await convertEmfToDataUrl(buffer, options)
+      : await convertWmfToDataUrl(buffer, options);
+  const prefix = 'data:image/png;base64,';
+  if (!dataUrl?.startsWith(prefix)) return null;
+  const binary = atob(dataUrl.slice(prefix.length));
+  const pngBytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    pngBytes[index] = binary.charCodeAt(index);
+  }
+  return Object.freeze({ bytes: pngBytes, mime: 'image/png' as const });
 }
 
 /**

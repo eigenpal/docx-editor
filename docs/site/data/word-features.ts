@@ -609,10 +609,10 @@ export const wordFeatures: WordFeature[] = [
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'full',
-    tier: 'premium',
+    tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Metafile pictures require the drawingModule from @docx-editor.dev/pro/drawing and the EigenPal Pro License. PDF export includes it. Without the module, a metafile picture keeps its extent and shows a labelled placeholder. The browser rasterizes the metafile and the editor paints it at the authored extent. PDF export draws the metafile as vector paths, text, and embedded bitmaps in the picture frame, with its crop and clip. Metafile text uses the named font when the document uses it, and the default font otherwise. A metafile that will not convert keeps its extent and shows a labelled placeholder. The original bytes round-trip untouched.',
+      'The browser rasterizes the metafile and the editor paints it at the authored extent. The drawingModule from @docx-editor.dev/pro/drawing, under the EigenPal Pro License, places metafiles that set their own drawing origin correctly. PDF export includes the module. Without it, a metafile picture in PDF export keeps its extent and shows a labelled placeholder. PDF export draws the metafile as vector paths, text, and embedded bitmaps in the picture frame, with its crop and clip. Metafile text uses the named font when the document uses it, and the default font otherwise. A metafile that will not convert keeps its extent and shows a labelled placeholder. The original bytes round-trip untouched.',
   },
   {
     id: 'images.tiff',

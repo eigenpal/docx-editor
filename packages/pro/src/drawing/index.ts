@@ -16,10 +16,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *   dark-edged bevel;
  * - WordArt: VML text paths outside a watermark, laid along arches, triangles and the other
  *   text path shapes, with gradient fills, shadows and 3-D extrusion;
- * - EMF and WMF pictures: a vector replay for PDF export and a raster in the browser editor.
+ * - EMF and WMF pictures: a vector replay for PDF export, and a browser raster that honours a
+ *   metafile's own drawing origin.
  *
- * Without it, a chart, an unlaid diagram, a WordArt drawing and a metafile picture keep their
- * labelled placeholders, and a shape paints without those effects.
+ * Without it, a chart, an unlaid diagram, a WordArt drawing and a metafile picture in PDF
+ * export keep their labelled placeholders, the editor rasterizes metafiles with the plain
+ * converter, and a shape paints without those effects.
  *
  * The renderers serve every editor and export in the process. Install them before any
  * document opens. The metafile replay and `emf-converter` load on first use, only when a
