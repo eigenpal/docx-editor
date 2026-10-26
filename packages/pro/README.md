@@ -17,7 +17,7 @@
 
 # @docx-editor.dev/pro
 
-Add review, collaboration, and custom content to the [docx-editor.dev](https://docx-editor.dev) React and Vue editors. The package provides these capabilities:
+Add advanced drawing rendering, review, collaboration, and custom content to the [docx-editor.dev](https://docx-editor.dev) React and Vue editors. The package provides these capabilities:
 
 - [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes): Suggesting mode, markup rendering, accept, and reject.
 - [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.

@@ -86,6 +86,8 @@ import { es } from '@docx-editor.dev/i18n';
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
 import { es } from '@docx-editor.dev/i18n';
+
+defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>
@@ -117,6 +119,8 @@ import { pl } from '@docx-editor.dev/i18n';
 <script setup lang="ts">
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/vue';
 import { pl } from '@docx-editor.dev/i18n';
+
+defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>

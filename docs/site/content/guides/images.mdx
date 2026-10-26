@@ -247,8 +247,13 @@ Both packages export `UnsupportedElement` with these fields:
 - `source` exposes the read-only canonical source, not an XML string. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the text of the built-in placeholder.
-- Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. Every chart drawing whose chart part can be read also has `drawing.chart`, with the chart's `title`, `plotTypes`, and `shownAs`, which says whether the page draws the chart (`chart`), shows its fallback (`fallback`), or shows the placeholder (`placeholder`). A declaration replaces only a placeholder, so inside a declaration `shownAs` is always `placeholder`. To tell a drawn chart from a chart shown by its fallback, read the layout records without an editor, as [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder) shows.
+- Optional `drawing` and `equation` records provide engine metadata.
+- `drawing.placeholderGraphicKind` identifies the graphic type. For its values, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
+- `drawing.accessibility.label` contains the drawing's alternative text.
+- `drawing.chart` provides `title`, `plotTypes`, and `shownAs` when the chart part can be read. Inside a chart placeholder declaration, `shownAs` is `placeholder`.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
+
+To inspect charts rendered directly or through saved fallbacks, read the layout records. For an example, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
 
 Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the built-in placeholder; it does not try the next declaration.
 
@@ -262,7 +267,7 @@ Properties, metadata, and private payloads inside owning drawing, equation, and 
 
 A document can store a modern drawing and a legacy copy inside `mc:AlternateContent`. Branch selection uses supported markup. The editor prefers a supported modern drawing, then a supported fallback. If neither has supported markup, a visible drawing produces one labeled placeholder.
 
-The placeholder keeps the drawing's authored bounds and wrapping. Hidden drawings and nonvisual metadata do not produce extra placeholders. A selected picture that later fails decoding also shows a placeholder. Missing or corrupt picture resources do not trigger another branch selection.
+The placeholder keeps the drawing's authored bounds and wrapping, subject to the header and footer exception described in this section. Hidden drawings and nonvisual metadata do not produce extra placeholders. A selected picture that later fails decoding also shows a placeholder. Missing or corrupt picture resources do not trigger another branch selection.
 
 The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. Its `source` contains the enclosing `mc:AlternateContent`, including its choice and fallback branches. Its `namespaceUri` and `localName` describe that wrapper. Its `nodeId` remains the projected drawing's identity; `source.id` identifies the wrapper. Use `element.drawing` to match drawing placeholders across direct and alternative content. Both branches remain in the saved document.
 
@@ -333,7 +338,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |
-| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. Alternative content (`mc:AlternateContent`) selects supported modern markup, then supported fallback markup. Unsupported visible drawings show one labeled placeholder. A later picture decoding failure also shows a placeholder without another branch selection. It retains its authored extent and wrap area |
+| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. Alternative content (`mc:AlternateContent`) selects supported modern markup, then supported fallback markup. Unsupported visible drawings show one labeled placeholder. A later picture decoding failure also shows a placeholder without another branch selection. It retains its authored extent and wrap area, subject to the [header and footer exception](#alternative-drawing-content) |
 | Anchored text boxes | Render clipped stories in the body, headers, and footers. Edit supported boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes | Render clipped stories on the line in the body, headers, and footers. Edit and resize supported boxes. They move only with their line |

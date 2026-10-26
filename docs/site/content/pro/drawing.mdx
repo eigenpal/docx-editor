@@ -176,13 +176,13 @@ A chart often comes with a fallback picture or drawing for older applications. W
 1. If the chart has a fallback picture or drawing that renders, they show the fallback. A fallback produces no PDF diagnostic, and it can differ from the chart's cached values.
 1. Otherwise, the editor shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic. This includes a fallback picture that does not load: a missing picture, a linked or external picture, or a picture that cannot be decoded. The placeholder keeps the fallback's size.
 
-A skipped `mc:Choice` can still supply bounds when its fallback is empty or has no usable bounds. The reader uses only the skipped drawing's geometry. It does not render unsupported content. Without usable drawing bounds, malformed or nonvisual alternatives can remain invisible.
+A skipped `mc:Choice` can still supply bounds when its fallback is empty or has no usable bounds. The reader retains drawing geometry and available chart metadata for the placeholder. It does not paint the skipped content. Without usable drawing bounds, malformed or nonvisual alternatives can remain invisible.
 
 In the editor and in PDF export, a drawn chart never reads its fallback picture, so a slow or broken fallback picture does not delay or fail them. Markdown export reads the fallback picture of each chart that is not hidden, because it exports the chart as that picture. If the fallback picture does not load within the session's resource timeout, or does not load at all, Markdown export leaves the chart out with a warning.
 
-The chart, its parts, and its fallback picture or drawing are saved unchanged. A hidden chart stays hidden, also when its fallback is visible.
+Saving preserves chart markup, related parts, and fallback content. XML serialization can normalize the markup. A hidden chart stays hidden, also when its fallback is visible.
 
-The SmartArt diagrams and WordArt in the list keep a labeled placeholder in the editor, and PDF export leaves them out with a `drawing` diagnostic.
+Unsupported SmartArt diagrams and inline WordArt keep a labeled placeholder in the editor. Floating WordArt that cannot render has no placeholder. PDF export omits unsupported drawings and reports a `drawing` diagnostic.
 
 ### Edit a chart
 
@@ -215,7 +215,7 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 ## Replace a placeholder
 
-You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. A chart that shows its fallback picture or drawing has no placeholder, so no declaration applies to it. Your component fills the drawing's box, and the document content stays unchanged through save.
+You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. A chart that shows its fallback picture or drawing has no placeholder, so no declaration applies to it. Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
 
 Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
 
