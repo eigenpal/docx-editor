@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Foreign XML properties could change table widths, cell margins, and row geometry.",
+  "after": "Only WordprocessingML properties control table widths, cell margins, and row geometry.",
+  "reason": "Only derived layout changes. Shared operations and document serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-property-namespaces.test.ts",
+    "packages/core/src/layout/__tests__/table-preferred-width.test.ts",
+    "packages/core/src/layout/__tests__/legacy-table-content-width.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-autofit.test.ts"
+  ],
+  "changeset": "table-width-property-namespaces",
+  "migration": null
+}

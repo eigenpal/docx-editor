@@ -23,6 +23,7 @@ import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // covering it across every row, not any one node visited here.
 import {
   flattenContentControls,
+  WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
@@ -362,13 +363,20 @@ export interface SemanticTableStructure {
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    )
+      return child;
   }
   return undefined;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 /**

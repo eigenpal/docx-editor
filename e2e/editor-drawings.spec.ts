@@ -78,11 +78,20 @@ async function bridgeSelectedImage(page: Page): Promise<SelectedImageSnapshot> {
   return image;
 }
 
+async function toolbarControl(page: Page, slot: string): Promise<Locator> {
+  const control = page.locator(`[data-slot="${slot}"]`);
+  if (!(await control.isVisible())) {
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+  }
+  await expect(control).toBeVisible();
+  return control;
+}
+
 async function selectSquareWrapAnchor(page: Page): Promise<Locator> {
   await page.waitForFunction(() => !!window.__docxDrawingsE2e);
   await page.evaluate(() => window.__docxDrawingsE2e!.selectDrawing(2, 0));
   await settle(page);
-  await expect(page.locator('[data-slot="image.wrap"]')).toBeVisible({ timeout: 10_000 });
+  await toolbarControl(page, 'image.wrap');
   await expect(page.locator('.docx-image-selection-overlay')).toHaveCount(1, { timeout: 10_000 });
   const selected = await bridgeSelectedImage(page);
   expect(selected.wrap).toBe('square');
@@ -116,7 +125,7 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
   const afterMoveImage = await bridgeSelectedImage(page);
   expect(afterMove.y - afterWrapOverlay.y).toBeCloseTo(NUDGE_PT, 3);
 
-  const altTrigger = page.locator('[data-slot="image.altText"]');
+  const altTrigger = await toolbarControl(page, 'image.altText');
   await expect(altTrigger).toBeEnabled();
   await altTrigger.click();
   const textarea = page.locator('.docx-toolbar__alt-text-panel textarea');
@@ -153,7 +162,9 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
   await page.evaluate(() => window.__docxDrawingsE2e!.selectDrawing(2, 0));
   await settle(page);
   expect((await bridgeSelectedImage(page)).wrap).toBe('square');
+  await toolbarControl(page, 'image.wrap');
   await expect(wrapTrigger).toHaveAttribute('title', /Square/i);
+  await page.keyboard.press('Escape');
 
   const redo = page.locator('[data-slot="history.redo"]');
   await expect(redo).toBeEnabled();
@@ -171,9 +182,10 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
   await settle(page);
   expect((await bridgeSelectedImage(page)).widthEmu).toBe(afterResize.widthEmu);
 
+  await page.locator('[data-menu="file"] .docx-menubar__trigger').click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Save', exact: true }).click(),
+    page.locator('[data-slot="file.save"]').click(),
   ]);
   const tmpDir = mkdtempSync(join(tmpdir(), 'docx-drawings-e2e-'));
   const savedPath = join(tmpDir, 'saved.docx');
@@ -181,15 +193,11 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
   const savedBytes = readFileSync(savedPath);
   expect(savedBytes.byteLength).toBeGreaterThan(1000);
 
-  await page
-    .locator('input[type="file"][accept*=".docx"]')
-    .first()
-    .setInputFiles(savedPath);
-  // Unlike the first open, this gate does NOT prove the reopen landed: `load()` keeps the
-  // outgoing document's pages mounted while the new bytes parse, and those pages match
-  // `PAINTED_PAGE` too. The `settle` + `materializeDocument` below are what make the
-  // assertions honest here. Left in place because it costs nothing and still excludes the
-  // skeleton; a real reopen gate needs a signal the painted DOM does not carry.
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Open DOCX', exact: true }).click();
+  await (await chooserPromise).setFiles(savedPath);
+  await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('saved');
+  await expect(undo).toBeDisabled();
   await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
   await settle(page);
   await materializeDocument(page);
@@ -202,6 +210,7 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
   expect((await bridgeSelectedImage(page)).description).toBe(altText);
   expect((await bridgeSelectedImage(page)).widthEmu).toBe(afterResize.widthEmu);
   expect((await bridgeSelectedImage(page)).verticalEmu).toBe(afterMoveImage.verticalEmu);
+  await toolbarControl(page, 'image.wrap');
   await expect(wrapTrigger).toHaveAttribute('title', /Top and Bottom/i);
 
   const screenshotDir = join(process.cwd(), '../screenshots/typed-drawings-word-comparison');

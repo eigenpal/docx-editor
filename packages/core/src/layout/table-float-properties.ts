@@ -1,8 +1,12 @@
 // Bounded positioning and text-distance properties for top-level floating tables.
-import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 /**
  * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
- * table's offsets are measured from. Absent means `text` for both.
+ * table's offsets are measured from. An absent horizontal anchor means `text`; an absent vertical anchor means `margin`.
  */
 export type TableFloatAnchor = 'text' | 'margin' | 'page';
 
@@ -39,13 +43,20 @@ export interface TableFloatPosition {
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    )
+      return child;
   }
   return undefined;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 /**
@@ -71,13 +82,14 @@ function readSignedTwipsPt(raw: string | undefined, encodedOffset = false): numb
 }
 
 /**
- * Read `w:tblpPr`. Absent anchors default to `text` (17.4.58/17.4.66); an unrecognised
+ * Read `w:tblpPr`. Absent anchors default to horizontal `text` and vertical `margin`; an unrecognised
  * spec is dropped rather than guessed at, which leaves the offset to place the table.
  */
 export function readTableFloatPosition(
   container: OoxmlElement | undefined
 ): TableFloatPosition | undefined {
-  const tblpPr = container && childNamed(container, 'tblpPr');
+  const tblpPr =
+    container?.namespaceUri === WML_NAMESPACE_URI ? childNamed(container, 'tblpPr') : undefined;
   if (!tblpPr) return undefined;
   const rawXSpec = attributeValue(tblpPr, 'tblpXSpec');
   const xSpec: TableFloatXSpec | undefined =

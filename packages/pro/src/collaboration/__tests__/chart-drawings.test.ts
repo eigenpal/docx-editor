@@ -12,6 +12,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { readOoxmlPackage, canonicalOoxmlFingerprint } from '@docx-editor.dev/core/store';
+import { projectDrawingsInPackage } from '../../../../core/src/store/package/drawing-projection.ts';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { installDrawing } from '../../drawing/index.ts';
@@ -38,6 +39,8 @@ const CHART_PART =
   '<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>Quarterly totals</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>' +
   '<c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>' +
   `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx>${cache(['Alpha'], false)}</c:tx>` +
+  '<c:spPr><a:solidFill><a:srgbClr val="ABCDEF"/></a:solidFill></c:spPr>' +
+  '<c:dPt><c:idx val="1"/><c:spPr><a:ln><a:solidFill><a:srgbClr val="123456"/></a:solidFill></a:ln></c:spPr></c:dPt>' +
   `<c:cat>${cache(['North', 'South'], false)}</c:cat><c:val>${cache([3, 5], true)}</c:val></c:ser>` +
   '<c:axId val="1"/><c:axId val="2"/></c:barChart>' +
   '<c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx>' +
@@ -60,7 +63,7 @@ function relationships(entries: readonly (readonly [string, string, string])[]):
   );
 }
 
-function fixture(): Uint8Array {
+function fixture(chartPart = CHART_PART): Uint8Array {
   const document =
     `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}"><w:body>` +
     '<w:p><w:r><w:t>Alpha paragraph</w:t></w:r></w:p>' +
@@ -82,12 +85,12 @@ function fixture(): Uint8Array {
       relationships([['rId10', `${R}/chart`, 'charts/chart1.xml']])
     ),
     'word/document.xml': strToU8(document),
-    'word/charts/chart1.xml': strToU8(CHART_PART),
+    'word/charts/chart1.xml': strToU8(chartPart),
   });
 }
 const FIXTURE = fixture();
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, bytes = FIXTURE) {
   const ydoc = new Y.Doc(),
     awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -96,7 +99,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'chart-drawings',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: FIXTURE },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: bytes },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -139,10 +142,15 @@ async function verify(a: Peer, b: Peer, drawings: number) {
   for (const pkg of [left, right]) {
     // The chart part travels with the package unchanged, whatever happens to the drawing.
     expect(pkg.parts.get('/word/charts/chart1.xml')).toBeTruthy();
+    const components = projectDrawingsInPackage(pkg)[0]?.vectorShape?.components ?? [];
+    expect(components.filter((component) => component.fillHex === 'ABCDEF')).toHaveLength(
+      drawings * 2
+    );
   }
   for (const client of [a, b]) {
     expect(client.container.querySelectorAll('.docx-drawing-shape').length).toBe(drawings);
     expect(client.container.querySelectorAll('.docx-drawing-placeholder').length).toBe(0);
+    expect(client.container.querySelectorAll('path[fill="#ABCDEF"]').length).toBe(drawings * 2);
   }
 }
 
@@ -215,4 +223,28 @@ test('two editors render a read-only chart through edits, deletion and reconnect
 test('the fixture holds the chart reference', () => {
   const files = unzipSync(FIXTURE);
   expect(strFromU8(files['word/document.xml']!)).toContain('c:chart');
+});
+
+test('two editors preserve oversized chart caches behind placeholders', async () => {
+  const chartPart = CHART_PART.replaceAll('<c:ptCount val="2"/>', '<c:ptCount val="4097"/>');
+  const a = await peer('Alice', undefined, fixture(chartPart));
+  const b = await peer('Bob', a);
+  try {
+    caretAt(a, 0, 0);
+    expect(a.editor.exec({ type: 'insertText', text: 'A' })).toMatchObject({ changed: true });
+    caretAt(b, 2, 0);
+    expect(b.editor.exec({ type: 'insertText', text: 'B' })).toMatchObject({ changed: true });
+    sync(a, b);
+    for (const client of [a, b]) {
+      expect(client.container.querySelectorAll('.docx-drawing-placeholder').length).toBe(1);
+      expect(client.container.querySelectorAll('.docx-drawing-shape').length).toBe(0);
+      const reopened = await saved(client);
+      expect(projectDrawingsInPackage(reopened)[0]!.vectorShape).toBeNull();
+      const files = unzipSync(new Uint8Array(await client.editor.save()));
+      expect(strFromU8(files['word/charts/chart1.xml']!)).toContain('<c:ptCount val="4097"/>');
+    }
+  } finally {
+    a.destroy();
+    b.destroy();
+  }
 });

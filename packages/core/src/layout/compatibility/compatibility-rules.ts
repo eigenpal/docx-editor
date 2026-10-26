@@ -60,7 +60,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
   anchorOnlyParagraphWrapExclusion: modern(
-    'An anchor-only paragraph wraps around its own anchors before it is placed',
+    'Anchor-only paragraphs and leading paragraph-relative anchors resolve their own wrap before first-fragment placement',
     'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
   anchorsLayOutInCell: modern(

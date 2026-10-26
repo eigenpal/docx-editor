@@ -94,6 +94,7 @@ import {
   useDocxSource,
 } from '@docx-editor.dev/vue';
 import { customNodesModule, reviewModule, type ActivatedCustomNode } from '@docx-editor.dev/pro';
+import { drawingModule } from '@docx-editor.dev/pro/drawing';
 import {
   CustomNodeChrome,
   CustomNodeContextMenu,
@@ -120,6 +121,7 @@ const showAdapterSwitcher =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
 
 const proModules = [
+  drawingModule(),
   // The review settings panel's saved choice, or the example's start: initials markers for
   // comments and tracked change balloons, as in the React example.
   reviewModule({ pane: storedReviewPane() }),

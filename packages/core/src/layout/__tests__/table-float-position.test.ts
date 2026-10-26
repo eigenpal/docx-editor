@@ -524,3 +524,14 @@ describe('a floated table lays out at its anchored position', () => {
     expect(paragraphNamed(layout, 'exam title').box.y).toBeCloseTo(0, 3);
   });
 });
+
+test('foreign position elements and attributes do not create or move a floating table', () => {
+  expect(
+    structureOf(floatingTable('<x:tblpPr xmlns:x="urn:extension" w:tblpY="2000"/>')).float
+  ).toBeUndefined();
+  const plain = structureOf(floatingTable('<w:tblpPr w:tblpY="200"/>')).float;
+  const extended = structureOf(
+    floatingTable('<w:tblpPr xmlns:x="urn:extension" x:tblpY="2000" w:tblpY="200"/>')
+  ).float;
+  expect(extended).toEqual(plain);
+});

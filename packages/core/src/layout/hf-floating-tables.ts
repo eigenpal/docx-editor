@@ -9,7 +9,7 @@
 // Only the top-level table floats. A table inside a cell keeps its `w:tblpPr` ignored, as in
 // the body (see `readTableStructure`).
 
-import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, TableFragmentRecord } from './semantic-records.ts';
 import type { TableAnchorFrames } from './semantic-table.ts';
@@ -39,7 +39,12 @@ export interface FloatingStoryTableFrames {
 
 function tableProperties(table: OoxmlElement): OoxmlElement | undefined {
   for (const child of table.children) {
-    if (child.kind !== 'textValue' && child.localName === 'tblPr') return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'tblPr'
+    )
+      return child;
   }
   return undefined;
 }

@@ -128,6 +128,13 @@ describe('explicit legacy full-width content alignment', () => {
     ['separated cells', fixture(properties + '<w:tblCellSpacing w:type="dxa" w:w="20"/>')],
     ['foreign width element', fixture(properties.replace('w:tblW', 'foreign:tblW'))],
     ['duplicate width', fixture(properties + '<w:tblW w:type="pct" w:w="5000"/>')],
+    ['foreign sibling width', fixture(properties + '<foreign:tblW w:type="auto" w:w="0"/>')],
+    [
+      'duplicate automatic width',
+      fixture(
+        properties.replace('w:type="pct"', 'w:type="auto"') + '<w:tblW w:type="auto" w:w="0"/>'
+      ),
+    ],
     [
       'varying outside margins',
       fixture(

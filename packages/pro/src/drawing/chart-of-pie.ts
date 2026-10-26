@@ -75,6 +75,10 @@ export function paintOfPie(plot: ChartPlot, box: Box, context: PieContext): void
   const positive = (value: number | null | undefined): value is number =>
     value !== null && value !== undefined && value > 0;
   const total = values.reduce<number>((sum, value) => sum + (positive(value) ? value : 0), 0);
+  if (!Number.isFinite(total)) {
+    context.scene.ok = false;
+    return;
+  }
   const otherTotal = [...second].reduce(
     (sum, index) => sum + (positive(values[index]) ? values[index]! : 0),
     0

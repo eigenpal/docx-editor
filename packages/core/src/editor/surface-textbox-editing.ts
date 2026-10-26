@@ -168,6 +168,14 @@ export function createTextboxEditing(deps: {
       exit();
       return;
     }
+    // The open story can move after pagination or viewport materialization changes.
+    // Keep the box's bindings and cached caret geometry on that same occurrence.
+    const owner = active?.owner;
+    const open = owner?.kind === 'headerFooter' ? deps.headerFooter.active() : null;
+    if (open && activePage !== open.pageIndex) {
+      activePage = open.pageIndex;
+      cached = null;
+    }
     for (const box of deps.pagesLayer.querySelectorAll<HTMLElement>('.docx-drawing-textbox')) {
       // A header or footer box repeats on every page of its story; only the copy on the page
       // it is edited on binds, so the native selection and focus stay with the engine caret.

@@ -164,6 +164,10 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
         (sum, value) => sum + (value !== null && value > 0 ? value : 0),
         0
       );
+      if (!Number.isFinite(total)) {
+        context.scene.ok = false;
+        return [];
+      }
       if (!(total > 0)) continue;
       const inner = doughnut ? hole + ringIndex * ringWidth : 0;
       const outer = doughnut ? inner + ringWidth : radius;

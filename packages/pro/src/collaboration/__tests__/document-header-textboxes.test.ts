@@ -50,10 +50,10 @@ function boxRun(text: string): string {
   );
 }
 
-async function pair(box = boxRun('Shared')) {
+async function pair(box = boxRun('Shared'), body = '<w:p><w:r><w:t>Body</w:t></w:r></w:p>') {
   const peers = await harness.pair(
     zipDocument(
-      '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+      body +
         '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/>' +
         '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" ' +
         'w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>',
@@ -351,4 +351,48 @@ describe('header text box', () => {
     const header = strFromU8(unzipSync(new Uint8Array(await bob.save()))['word/header1.xml']!);
     expect(header).toContain('width:144pt;height:48pt');
   });
+});
+
+test('a header box follows a surviving page after concurrent body deletion', async () => {
+  const { alice, bob, containers, peers, sync, converged, pause, resume } = await pair(
+    boxRun('Shared'),
+    '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:br w:type="page"/><w:t>Middle</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:br w:type="page"/><w:t>Last</w:t></w:r></w:p>'
+  );
+  expect(alice.surface!.layout().pages).toHaveLength(3);
+  expect(alice.surface!.enterHeaderFooter!({ rId: 'rHeader', pageIndex: 2 })).toBe(true);
+  enterBox(alice, 'Shared');
+  const first = bob.findMatches('Body')[0]!;
+  const last = bob.findMatches('Last')[0]!;
+  pause();
+  expect(alice.exec({ type: 'insertText', text: ' retained' }).ok).toBe(true);
+  bob.surface!.setSelection({
+    anchor: { paragraphId: first.blockId, offset: first.start + first.length },
+    head: { paragraphId: last.blockId, offset: last.start + last.length },
+  });
+  bob.surface!.deleteBackward();
+  sync();
+  resume();
+  converged();
+  expect(alice.surface!.layout().pages).toHaveLength(1);
+  const active = () =>
+    [
+      ...containers[0]!.querySelectorAll('.docx-drawing-textbox[data-docx-textbox-active="true"]'),
+    ].map((box) => box.closest<HTMLElement>('[data-page-index]')?.dataset.pageIndex);
+  expect(active()).toEqual(['0']);
+  expect(inBox(bob, 'Shared retained')).toHaveLength(1);
+  relayPresence(peers.alice, peers.bob);
+  expect(containers[1]!.querySelectorAll('.docx-remote-caret').length).toBeGreaterThan(0);
+  expect(bob.exec({ type: 'undo' }).ok).toBe(true);
+  converged();
+  expect(alice.surface!.layout().pages).toHaveLength(3);
+  expect(active()).toEqual(['0']);
+  expect(bob.exec({ type: 'redo' }).ok).toBe(true);
+  converged();
+  expect(alice.surface!.layout().pages).toHaveLength(1);
+  expect(active()).toEqual(['0']);
+  expect(alice.exec({ type: 'insertText', text: ' again' }).ok).toBe(true);
+  converged();
+  expect(inBox(bob, 'Shared retained again')).toHaveLength(1);
 });

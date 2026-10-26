@@ -6,19 +6,26 @@
 // override merges over the table's. Layout reads the answer; the table structure lane owns
 // the order the sources are consulted in.
 
-import { readTwipsMeasure } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 
 /** File-local element/attribute lookups, the same two `semantic-table.ts` keeps. */
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    )
+      return child;
   }
   return undefined;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 /**

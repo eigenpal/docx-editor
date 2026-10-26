@@ -22,7 +22,11 @@
 // a bounded share of what is left rather than zero, and no fit may scale a table below one
 // point per column — a zero-width column is unrecoverable downstream.
 
-import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
 
 export { MAX_TABLE_COLUMNS };
@@ -82,13 +86,20 @@ const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    )
+      return child;
   }
   return undefined;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 /**
@@ -130,7 +141,7 @@ function readMeasurementOrPercent(
  * states contradict each other, the measurement wins and the type is ignored.
  */
 export function readPreferredWidth(node: OoxmlElement | undefined, table = false): PreferredWidth {
-  if (!node) return AUTO_PREFERRED_WIDTH;
+  if (!node || node.namespaceUri !== WML_NAMESPACE_URI) return AUTO_PREFERRED_WIDTH;
   const rawType = attributeValue(node, 'type');
   if (rawType !== undefined && rawType !== 'pct' && rawType !== 'dxa') {
     return rawType === 'nil' ? { type: 'nil', value: 0 } : AUTO_PREFERRED_WIDTH;
@@ -202,7 +213,7 @@ export function readTableIndentPt(
   node: OoxmlElement | undefined,
   limit: number
 ): number | undefined {
-  if (!node) return undefined;
+  if (!node || node.namespaceUri !== WML_NAMESPACE_URI) return undefined;
   const type = attributeValue(node, 'type');
   if (type !== undefined && type !== 'dxa' && type !== 'pct') return undefined;
   const raw = attributeValue(node, 'w');
@@ -221,7 +232,11 @@ export function gridColumnElements(table: OoxmlElement): readonly OoxmlElement[]
   if (!grid) return [];
   const cols: OoxmlElement[] = [];
   for (const child of grid.children) {
-    if (child.kind !== 'textValue' && child.localName === 'gridCol') {
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'gridCol'
+    ) {
       cols.push(child);
       if (cols.length >= MAX_TABLE_COLUMNS) break;
     }

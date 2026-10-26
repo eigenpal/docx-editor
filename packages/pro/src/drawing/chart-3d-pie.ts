@@ -78,6 +78,10 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
     (sum, value) => sum + (value !== null && value > 0 ? value : 0),
     0
   );
+  if (!Number.isFinite(total)) {
+    context.scene.ok = false;
+    return;
+  }
   if (!(total > 0)) return;
   const authored = readView3D(context.model, 'pie');
   // Perspective does not bend the disc; it lowers the tilt the disc is seen at.

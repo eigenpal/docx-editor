@@ -36,7 +36,19 @@ export class ChartScene {
     stroke: ChartStroke | null,
     join?: 'round' | 'bevel'
   ): void {
+    if (!this.ok) return;
     if (!fill && !stroke) return;
+    for (const path of subpaths) {
+      for (const point of path) {
+        if (
+          !Number.isFinite(point.x * EMU_PER_POINT) ||
+          !Number.isFinite(point.y * EMU_PER_POINT)
+        ) {
+          this.ok = false;
+          return;
+        }
+      }
+    }
     if (stroke && stroke.dash && !closed && !fill) {
       this.dashed(subpaths, stroke, join);
       return;
@@ -172,7 +184,10 @@ export function slice(
   to: number
 ): Point[] {
   const sweep = Math.max(0, to - from);
-  const steps = Math.max(2, Math.ceil(sweep / 2));
+  if (!Number.isFinite(sweep) || sweep > 360 + 1e-6) {
+    throw new RangeError('Chart slice exceeds the angular limit');
+  }
+  const steps = Math.min(180, Math.max(2, Math.ceil(sweep / 2)));
   const at = (radius: number, degrees: number): Point => {
     const radians = (degrees * Math.PI) / 180;
     return { x: cx + radius * Math.sin(radians), y: cy - radius * Math.cos(radians) };

@@ -1,5 +1,9 @@
 // Bounded readers for the row and cell properties a table structure reads.
-import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
   MAX_TABLE_ROW_HEIGHT_PT,
@@ -10,13 +14,20 @@ import { MAX_TABLE_COLUMNS } from './table-widths.ts';
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    )
+      return child;
   }
   return undefined;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 export function readGridSpan(cellProperties: OoxmlElement | undefined): number {

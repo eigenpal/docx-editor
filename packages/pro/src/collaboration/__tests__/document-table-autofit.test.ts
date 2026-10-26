@@ -104,16 +104,29 @@ function renderedPageBreaks(pkg: OoxmlPackage): number {
   return count;
 }
 
-test.each(['whole rows', 'split rows'] as const)(
+test.each(['whole rows', 'split rows', 'foreign properties'] as const)(
   'AutoFit %s converge through typing, conflicts, history, presence, reconnect, and reopen',
   async (shape) => {
-    const xml =
+    let xml =
       shape === 'split rows'
         ? DOCUMENT.replace(
             cell('6'),
             cell('6').replace('</w:r>', '<w:br/><w:t>x</w:t>'.repeat(30) + '</w:r>')
           )
         : DOCUMENT;
+    if (shape === 'foreign properties') {
+      const end = xml.indexOf('</w:tbl>');
+      xml =
+        xml
+          .slice(0, end)
+          .replace('<w:tbl>', '<w:tbl xmlns:foreign="urn:not-word">')
+          .replaceAll(' w:w=', ' foreign:w="9000" w:w=')
+          .replace('<w:tblGrid>', '<w:tblGrid><foreign:gridCol w:w="9000"/>')
+          .replaceAll(
+            '<w:tc>',
+            '<w:tc><w:tcPr><foreign:gridSpan w:val="20"/><w:tcMar><foreign:left w:w="720"/><w:right foreign:w="720"/></w:tcMar></w:tcPr>'
+          ) + xml.slice(end);
+    }
     if (shape === 'split rows') splitRecorder = splitRowWidthTestRecorder();
     const peers = await harness.pair(zipDocument(xml));
     const containers: HTMLElement[] = [];

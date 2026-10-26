@@ -41,10 +41,13 @@ const covered = (layout: SemanticLayout): string[] =>
       page.fragments.flatMap((fragment) =>
         fragment.kind === 'paragraph'
           ? fragment.lines
-              .filter(
-                (line) =>
-                  line.box.y < box.y + box.height - 0.5 &&
-                  line.box.y + line.box.height > box.y + 0.5
+              .filter((line) =>
+                line.spans.some(
+                  (span) =>
+                    span.text.length > 0 &&
+                    span.box.y < box.y + box.height - 0.5 &&
+                    span.box.y + span.box.height > box.y + 0.5
+                )
               )
               .map(textOf)
           : []
@@ -172,11 +175,20 @@ describe('page-positioned pictures', () => {
     expect(covered(warm)).toEqual([]);
   });
 
-  // Known gaps, alike in fresh and edited layouts: a cycle publishes one place of a picture that
-  // follows its paragraph, and it can paint at another; a page-positioned text frame does not
-  // wrap the text before its anchor.
-  test.todo('a paragraph-positioned picture in a cycle keeps text from running under it');
-  test.todo('a page-positioned text frame wraps the text before its anchor');
+  test('a paragraph-positioned picture moves to a fresh page without covering its text', () => {
+    const relative = picture.replace(
+      'relativeFrom="page"><wp:posOffset>7620000',
+      'relativeFrom="paragraph"><wp:posOffset>0'
+    );
+    const session = createLayoutSession();
+    lay(body(45, relative), 0, session);
+    const warm = lay(body(46, relative), 1, session);
+    const cold = lay(body(46, relative), 1);
+    expect(placed(warm)).toEqual(placed(cold));
+    expect(covered(warm)).toEqual([]);
+    expect(covered(cold)).toEqual([]);
+  });
+  // Page-positioned paragraph frames have coverage in paragraph-frame-wrapping.test.ts.
 });
 
 test('an edit entering a cycle settles from scratch; a later edit away from it does not', () => {
@@ -198,4 +210,67 @@ test('an edit entering a cycle settles from scratch; a later edit away from it d
   const warm = countingPasses(() => layTables(tail, 2, session));
   expect(warm.passes).toBe(1);
   expect(placed(warm.result)).toEqual(placed(layTables(tail, 2)));
+});
+
+for (const width of [144, 468]) {
+  test(`a ${width}pt leading picture does not wrap continuation pages`, () => {
+    const lay = (words: number, revision: number, session?: LayoutSession) => {
+      const part = load(
+        squareAnchorAtLeft({ text: 'word '.repeat(words) }).replaceAll(
+          '1828800',
+          String(width * 12700)
+        )
+      );
+      return layoutSemanticDocument(part, revision, {
+        compatibilityMode: 15,
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: layoutContext(part),
+        session,
+      });
+    };
+    const session = createLayoutSession();
+    lay(2400, 0, session);
+    const layout = lay(2500, 1, session);
+    const cold = lay(2500, 1);
+    const spanBoxes = (value: SemanticLayout) =>
+      value.pages.map((page) =>
+        page.fragments.flatMap((fragment) =>
+          fragment.kind === 'paragraph'
+            ? fragment.lines.flatMap((line) => line.spans.map((span) => span.box))
+            : []
+        )
+      );
+    expect(spanBoxes(layout)).toEqual(spanBoxes(cold));
+    expect(layout.pages.length).toBeGreaterThan(2);
+    expect(layout.pages[0]!.anchoredDrawings).toHaveLength(1);
+    for (const page of layout.pages.slice(1)) {
+      expect(page.anchoredDrawings ?? []).toHaveLength(0);
+      const fragment = page.fragments.find((fragment) => fragment.kind === 'paragraph');
+      if (fragment?.kind !== 'paragraph') throw new Error('missing continuation');
+      const span = fragment.lines[0]!.spans.find((span) => span.text.length > 0)!;
+      expect(span.box.x).toBe(0);
+      expect(span.box.y).toBe(0);
+    }
+  });
+}
+
+test('a leading picture does not wrap continuation columns', () => {
+  const part = load(
+    squareAnchorAtLeft({ text: 'word '.repeat(2500) }).replace(
+      '</w:body>',
+      '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr></w:body>'
+    )
+  );
+  const layout = layoutSemanticDocument(part, 0, {
+    compatibilityMode: 15,
+    measurer: createFixedMeasurer(6, 14),
+    inlineDrawingLayout: layoutContext(part),
+  });
+  const continuation = layout.pages[0]!.fragments.find(
+    (fragment) => fragment.kind === 'paragraph' && fragment.box.x > 0
+  );
+  if (continuation?.kind !== 'paragraph') throw new Error('missing second column');
+  const span = continuation.lines[0]!.spans.find((span) => span.text.length > 0)!;
+  expect(span.box.x).toBe(252);
+  expect(span.box.y).toBe(0);
 });

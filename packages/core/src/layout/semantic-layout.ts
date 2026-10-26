@@ -1528,6 +1528,7 @@ function* layoutBlocksPass(
       paragraphStartY,
       columnX,
       columnX + columnWidth(),
+      startOffset,
       omittedAnchor
     );
     const exclusionToken = exclusionLayoutToken(localPageZones, contentHeight());

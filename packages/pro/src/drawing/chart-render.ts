@@ -262,5 +262,13 @@ export function renderChart(
   }
   if (legendLayout && legendStyle) paintLegend(legendLayout, legendStyle, scene, labels);
   if (!scene.ok) return null;
+  if (
+    labels.some((label) =>
+      [label.x, label.y, label.width, label.height, label.rotation].some(
+        (value) => !Number.isFinite(value * 12_700)
+      )
+    )
+  )
+    return null;
   return { scene, labels };
 }

@@ -1,4 +1,4 @@
-import { withOwnAnchorOnlyZones } from './empty-anchor-exclusion.ts';
+import { withOwnParagraphAnchorZones } from './empty-anchor-exclusion.ts';
 import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
 import type { RevisionDisplayMode, RevisionAuthorFilter } from './revision-projection.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
@@ -110,11 +110,12 @@ export function createParagraphDrawingWrap(options: {
       top: number,
       left: number,
       right: number,
+      startOffset: number,
       omittedAnchor?: string
     ): readonly ExclusionZone[] {
       const all = entry.frame
         ? []
-        : withOwnAnchorOnlyZones(
+        : withOwnParagraphAnchorZones(
             zones,
             entry.paragraph,
             options.drawingLayout,
@@ -123,6 +124,7 @@ export function createParagraphDrawingWrap(options: {
             left,
             right,
             columnIndex,
+            startOffset,
             options.compatibilityMode,
             options.displayMode ?? 'proposed',
             options.revisionAuthorFilter,

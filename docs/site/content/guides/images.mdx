@@ -172,6 +172,8 @@ Wrap changes are **layout-structural**: exclusion zones feed line breaking befor
 
 Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
 
+In compatibility mode 15 and later, a leading paragraph-relative picture resolves its wrapping again when its paragraph changes pages. This applies to nonnegative vertical offsets and keeps the paragraph text clear of the picture.
+
 When a floating picture splits a line into passages, each part of the line aligns inside its own passage. Centered text is centered on each side of the picture, right-aligned text ends at the right edge of each passage, and justified text fills each passage. This applies in the body, table cells, headers, footers, and text boxes. Right-to-left paragraphs align the line as a whole. A square wrap with `wrapText="largest"` keeps text on the wider side of the picture only.
 
 A line break (`w:br`) with `w:clear` restarts the text after it on the next line that the floating objects on one side do not interrupt. The picture keeps its position; only the restart line moves.
@@ -263,15 +265,15 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Drawing content | Status |
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
-| One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
+| Pictures in a shape group, below the group's shapes | Render in their own frames, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
 | Charts | Render read-only when you register `drawingModule()` from `@docx-editor.dev/pro/drawing`. A chart that does not render shows its saved fallback picture or drawing when it has one. Its fallback produces no PDF diagnostic and can differ from the chart's cached values. Otherwise, the editor preserves the extent and shows a labeled placeholder, and PDF export leaves the chart out with a `drawing` diagnostic, which fails the default strict export. A chart in an `mc:Choice` that the reader skips, with an empty `mc:Fallback`, does not show. Copy and cut of a selection that includes a chart are refused. With change tracking on, deleting a chart records one tracked deletion of the whole chart. Treemap, sunburst, and map charts, and charts that combine a pie or radar plot with other plot types, do not render. For the list, see [What renders](/docs/2.x/pro/drawing#what-renders). |
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |
 | Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, except charts, which show a placeholder. A chart in an `mc:Choice` that the reader skips, with an empty `mc:Fallback`, is not shown either. A floating drawing with a wrapping mode still reserves its wrap area |
-| Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
+| Anchored text boxes | Render clipped stories in the body, headers, and footers. Edit supported boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
-| Inline text boxes | Render clipped stories on the line and edit supported body text boxes. They move with their line, so they cannot be dragged or resized |
+| Inline text boxes | Render clipped stories on the line in the body, headers, and footers. Edit and resize supported boxes. They move only with their line |
 | Text boxes inside text boxes, linked chains, autofit, and rotation | Show a placeholder or clip |
 | Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
 | `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
@@ -281,26 +283,25 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 
 ## Pictures in shape groups
 
-A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape members. For example, a scanned letterhead page can sit behind the text with ruled lines drawn over it. The editor and PDF export render the picture in its own frame inside the group, then render the group's shapes over it.
+A DrawingML shape group (`wpg:wgp`) can contain several embedded pictures and supported shapes. Each picture keeps its own frame and crop. Pictures paint in document order below the group's shapes. Supported text-box members also show their text read-only.
 
-The picture renders only if all of these conditions are true:
+Each picture must meet these conditions:
 
-- The group holds exactly one picture, and the picture comes before every shape member.
-- The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
-- The picture is visible and has no image effects, visible outline, shape effects, or 3D properties.
+- It comes before every shape member that paints a fill or outline.
+- It is visible, unrotated, unflipped, and rectangular, with a fill that is not tiled.
+- It has no image effects, shape effects, or 3-D properties. Solid outlines are supported.
 - Its fill rectangle has no offsets. An omitted fill rectangle uses the full picture frame.
-- The picture frame overlaps the group's area and extends no more than one group width or height past it.
-- Every other member of the group is a supported solid shape.
+- Its frame overlaps the group and extends no more than one group width or height past it.
 
-If a condition is false, the group is an unsupported group. Word stores most groups in alternative content (`mc:AlternateContent`). An unsupported group in alternative content is not shown. Other unsupported groups show a labeled placeholder. Text boxes inside a group do not render, so a group with a text box member is an unsupported group.
+A text-box member without a fill or outline does not restrict picture order. Other members must meet the supported shape subset. For the full drawing subset, see [Word feature support](/docs/2.x/word-fidelity).
 
-An unsupported group in alternative content still takes part in layout if it floats with square, tight, through, or top-and-bottom wrapping. Text flows around its wrap area as it would around the group if it were shown. The hidden group paints nothing and cannot be selected, and exports do not include it. A group with no wrapping (`wp:wrapNone`) takes no space.
+If a picture or another member cannot render, the group is unsupported. Alternative content (`mc:AlternateContent`) can supply a fallback. If neither alternative renders, the group does not show. Other unsupported groups keep a labeled placeholder.
 
-A group renders completely or not at all. While the picture loads, the editor renders the group's shapes alone. If the picture cannot load, the editor and PDF export treat the group as an unsupported group. For example, the picture is missing, linked, damaged, or over a decode limit. PDF export embeds PNG and JPEG pictures only. If a group in alternative content holds a picture in another format, PDF export leaves the group out and reports an `information` diagnostic. PDF export reports other groups that it cannot render as `unsupported`.
+A hidden floating group still reserves its authored wrap area for square, tight, through, or top-and-bottom wrapping. It paints nothing and cannot be selected. A group with no wrapping (`wp:wrapNone`) reserves no space.
 
-The picture is clipped to the group's area. The group's shapes can extend into the effect extent (`wp:effectExtent`), as the shapes of a group without a picture can.
+The editor never fetches linked pictures. Missing, damaged, or oversized pictures can prevent the whole group from rendering. PDF export reports drawings that it cannot render through its [diagnostics](/docs/2.x/export/pdf/api#diagnostics).
 
-Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
+Each picture clips to the group's area. Shapes can extend into the effect extent (`wp:effectExtent`). Picture commands, such as resize and replace, do not address individual group members. Markdown export omits the group and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media.
 
 ## Insert and edit text boxes
 

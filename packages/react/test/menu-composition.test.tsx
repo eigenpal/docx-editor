@@ -595,6 +595,27 @@ describe('chrome contracts', () => {
     expect(document.activeElement).toBe(triggers[triggers.length - 1]!);
   });
 
+  test('RTL bar arrows follow the visual order and react to direction changes', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    const menuBar = bar(view);
+    const triggers = [...menuBar.querySelectorAll<HTMLElement>('.docx-menubar__trigger')];
+    menuBar.style.direction = 'rtl';
+    act(() => {
+      triggers[0]!.focus();
+      fireEvent.keyDown(triggers[0]!, { key: 'ArrowLeft' });
+    });
+    expect(document.activeElement === triggers[1]!).toBe(true);
+    expect(triggers[1]!.tabIndex).toBe(0);
+    act(() => {
+      fireEvent.keyDown(triggers[1]!, { key: 'ArrowRight' });
+      fireEvent.keyDown(triggers[0]!, { key: 'ArrowRight' });
+    });
+    expect(document.activeElement === triggers.at(-1)!).toBe(true);
+    menuBar.style.direction = 'ltr';
+    act(() => fireEvent.keyDown(triggers.at(-1)!, { key: 'ArrowRight' }));
+    expect(document.activeElement === triggers[0]!).toBe(true);
+  });
+
   test('ArrowDown opens a menu and lands focus on its first row; Escape returns it', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     const file = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__trigger')][0]!;

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Menu bar arrows used left-to-right item order in both interface directions.",
+  "after": "Menu bar arrows follow the visual item order in either interface direction.",
+  "reason": "Menu focus is local interface state. This change writes no document or collaboration state.",
+  "tests": [
+    "packages/react/test/menu-composition.test.tsx",
+    "packages/vue/test/menu-composition.test.ts"
+  ],
+  "changeset": "rtl-menubar-arrow-order",
+  "migration": null
+}

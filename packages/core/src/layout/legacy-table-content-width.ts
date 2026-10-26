@@ -135,6 +135,12 @@ export function legacyTableContentWidth(input: {
   const properties = child(table, 'tblPr');
   if (!properties) return undefined;
   const width = child(properties, 'tblW');
+  // A missing width permits automatic geometry; an ambiguous or foreign width does not.
+  if (
+    !width &&
+    properties.children.some((item) => item.kind !== 'textValue' && item.localName === 'tblW')
+  )
+    return undefined;
   const rawWidth = attr(width, 'w');
   // A percentage above 100 extends the same reference box past the text column. A table
   // without a usable width (none, auto, or a count past its range) shares the same box, and

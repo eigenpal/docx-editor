@@ -7,7 +7,7 @@ import {
   type Translations,
 } from '@docx-editor.dev/i18n';
 
-/** Every shipped catalog, named in its own language. */
+/** Catalogs offered by the demo, named in their own language. */
 export const DEMO_LANGUAGES: ReadonlyArray<{ readonly code: LocaleCode; readonly name: string }> = [
   { code: 'en', name: 'English' },
   { code: 'ar', name: 'العربية' },
@@ -20,7 +20,6 @@ export const DEMO_LANGUAGES: ReadonlyArray<{ readonly code: LocaleCode; readonly
   { code: 'ja', name: '日本語' },
   { code: 'pl', name: 'Polski' },
   { code: 'pt-BR', name: 'Português (Brasil)' },
-  { code: 'ru', name: 'Русский' },
   { code: 'tr', name: 'Türkçe' },
   { code: 'zh-CN', name: '简体中文' },
 ];

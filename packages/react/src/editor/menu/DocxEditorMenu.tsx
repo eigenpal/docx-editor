@@ -2,6 +2,7 @@ import {
   editorHostElement,
   editorInstanceScope,
   hostDocumentOf,
+  hostWindowOf,
   isDomNode,
   listenForOutsidePress,
 } from '@docx-editor.dev/core/editor';
@@ -612,7 +613,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           const index = triggers.indexOf(hostDocumentOf(bar).activeElement as HTMLElement);
           if (index === -1) return;
           event.preventDefault();
-          const step = event.key === 'ArrowRight' ? 1 : -1;
+          const rtl = hostWindowOf(bar).getComputedStyle(bar).direction === 'rtl';
+          const step = (event.key === 'ArrowRight' ? 1 : -1) * (rtl ? -1 : 1);
           const next = triggers[(index + step + triggers.length) % triggers.length];
           const id = next?.closest('[data-menu]')?.getAttribute('data-menu');
           if (!id) return;

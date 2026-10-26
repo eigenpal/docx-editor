@@ -5,23 +5,39 @@
 // without its own offset. Tables whose positions differ, or that have a paragraph between them,
 // keep their own placement and may overlap.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { BlockFragmentRecord, TableFragmentRecord } from './semantic-records.ts';
 import type { PositionedTableAnchor } from './table-float-position.ts';
 
 function tblpPr(table: OoxmlElement): OoxmlElement | undefined {
   for (const child of table.children) {
-    if (child.kind === 'textValue' || child.localName !== 'tblPr') continue;
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== WML_NAMESPACE_URI ||
+      child.localName !== 'tblPr'
+    )
+      continue;
     for (const property of child.children)
-      if (property.kind !== 'textValue' && property.localName === 'tblpPr') return property;
+      if (
+        property.kind !== 'textValue' &&
+        property.namespaceUri === WML_NAMESPACE_URI &&
+        property.localName === 'tblpPr'
+      )
+        return property;
   }
   return undefined;
 }
 
 function sameAttributes(a: OoxmlElement, b: OoxmlElement): boolean {
-  if (a.attributes.length !== b.attributes.length) return false;
-  return a.attributes.every((attribute) =>
-    b.attributes.some(
+  const attributesA = a.attributes.filter(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI
+  );
+  const attributesB = b.attributes.filter(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI
+  );
+  if (attributesA.length !== attributesB.length) return false;
+  return attributesA.every((attribute) =>
+    attributesB.some(
       (other) =>
         other.localName === attribute.localName &&
         other.namespaceUri === attribute.namespaceUri &&

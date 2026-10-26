@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Foreign XML properties could change floating table placement and stacking.",
+  "after": "Only WordprocessingML properties control floating table placement and stacking.",
+  "reason": "Only derived layout changes. Shared operations and document serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-float-position.test.ts",
+    "packages/core/src/layout/__tests__/table-float-stack.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-text-table-break.test.ts"
+  ],
+  "changeset": "floating-table-property-namespaces",
+  "migration": null
+}

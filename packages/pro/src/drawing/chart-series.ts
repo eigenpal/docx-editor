@@ -109,8 +109,9 @@ export function seriesLook(
   context: LookContext,
   point?: { readonly index: number; readonly count: number }
 ): SeriesLook {
-  const styleIndex = point ? point.index : series.index;
-  const count = point ? point.count : context.seriesCount;
+  const varied = point !== undefined && variesByPoint(plot);
+  const styleIndex = varied ? point.index : series.index;
+  const count = varied ? point.count : context.seriesCount;
   const color = styleSeriesColor(
     context.model.style,
     styleIndex,
@@ -123,7 +124,7 @@ export function seriesLook(
     ? readChartShapeProperties(child(pointElement, 'spPr'), context.resolveSchemeColor)
     : { fill: undefined, line: undefined };
   // A point that varies by colour ignores the series fill unless it names its own.
-  const seriesFill = point ? undefined : own.fill;
+  const seriesFill = varied ? undefined : own.fill;
   const lineKind = isLineKind(plot);
   const defaultLine: ChartStroke | null = lineKind
     ? { ...color, widthPt: 2.25, cap: 'round', dash: null }

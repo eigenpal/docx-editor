@@ -123,3 +123,23 @@ test('a warm pass lays out stacked tables like a cold one', () => {
   const cold = rows(layoutSemanticDocument(edited, 1, { measurer: createFixedMeasurer(6, 12) }));
   expect(warm).toEqual(cold);
 });
+
+test('foreign position properties cannot change table stacking', () => {
+  const foreign = '<x:tblpPr xmlns:x="urn:extension" w:tblpX="6000"/>';
+  const plain = lines(20) + table('R', 1) + table('S', 1) + p('Anchor');
+  const extended = lines(20) + table('R', 1, foreign + AT()) + table('S', 1) + p('Anchor');
+  expect(rows(lay(extended))).toEqual(rows(lay(plain)));
+});
+
+test('foreign table property containers and position attributes preserve stacking', () => {
+  const foreign = '<x:tblPr xmlns:x="urn:extension"><w:tblpPr w:tblpY="2000"/></x:tblPr>';
+  const first = table('R', 1).replace('<w:tblPr>', foreign + '<w:tblPr>');
+  const second = table(
+    'S',
+    1,
+    AT().replace('<w:tblpPr ', '<w:tblpPr xmlns:x="urn:extension" x:offset="different" ')
+  );
+  expect(rows(lay(lines(20) + first + second + p('Anchor')))).toEqual(
+    rows(lay(lines(20) + table('R', 1) + table('S', 1) + p('Anchor')))
+  );
+});

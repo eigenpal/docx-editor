@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A leading paragraph-relative picture could overlap text after its anchor moved to another page.",
+  "after": "Modern layout resolves the leading picture wrap on the destination page before placing its text.",
+  "reason": "Only derived layout changes. Shared operations, awareness payloads, and saved document formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/page-framed-cycle.test.ts",
+    "packages/core/src/layout/__tests__/empty-anchor-pagination.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-leading-picture-wrap.test.ts"
+  ],
+  "changeset": "leading-picture-page-wrap",
+  "migration": null
+}

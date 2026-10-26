@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A header text box on a removed page lost its editable DOM binding.",
+  "after": "The open header and text box move together to a surviving page.",
+  "reason": "The fix changes local page selection and caret binding. Canonical operations and shared document state remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/header-footer-textbox-editing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-header-textboxes.test.ts"
+  ],
+  "changeset": "header-textbox-page-reconcile",
+  "migration": null
+}

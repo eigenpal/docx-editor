@@ -373,3 +373,29 @@ test('direct menu actions remain tabbable and follow command state', async () =>
     view.unmount();
   }
 });
+
+test('RTL bar arrows follow the visual order and react to direction changes', async () => {
+  const view = mountEditorTree(() => h(DocxEditorMenu));
+  try {
+    await flush();
+    const menuBar = view.container.querySelector<HTMLElement>('[data-testid="docx-menubar"]')!;
+    const triggers = [...menuBar.querySelectorAll<HTMLElement>('.docx-menubar__trigger')];
+    const press = async (element: HTMLElement, key: string) => {
+      element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      await nextTick();
+    };
+    menuBar.style.direction = 'rtl';
+    triggers[0]!.focus();
+    await press(triggers[0]!, 'ArrowLeft');
+    expect(document.activeElement === triggers[1]!).toBe(true);
+    expect(triggers[1]!.tabIndex).toBe(0);
+    await press(triggers[1]!, 'ArrowRight');
+    await press(triggers[0]!, 'ArrowRight');
+    expect(document.activeElement === triggers.at(-1)!).toBe(true);
+    menuBar.style.direction = 'ltr';
+    await press(triggers.at(-1)!, 'ArrowRight');
+    expect(document.activeElement === triggers[0]!).toBe(true);
+  } finally {
+    view.unmount();
+  }
+});

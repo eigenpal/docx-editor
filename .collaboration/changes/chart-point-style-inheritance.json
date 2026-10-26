@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A chart point outline override can reset the series fill to a different automatic color.",
+  "after": "Chart point outline overrides preserve the series fill unless the chart varies colors by point.",
+  "reason": "Only read-only chart projection changes. Shared document state, operations, and messages remain unchanged.",
+  "tests": [
+    "packages/pro/src/drawing/__tests__/chart-point-style.test.ts",
+    "packages/pro/src/collaboration/__tests__/chart-drawings.test.ts"
+  ],
+  "changeset": "chart-point-style-inheritance",
+  "migration": null
+}

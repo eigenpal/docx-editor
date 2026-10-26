@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Oversized chart caches can render incomplete data or bypass the total point limit.",
+  "after": "Charts with invalid caches or numeric overflow keep a placeholder. Limits include padded categories and bubble sizes.",
+  "reason": "Only read-only chart admission changes. Shared document state, operations, and messages remain unchanged.",
+  "tests": [
+    "packages/pro/src/drawing/__tests__/chart-cache-bounds.test.ts",
+    "packages/pro/src/collaboration/__tests__/chart-drawings.test.ts"
+  ],
+  "changeset": "chart-cache-bounds",
+  "migration": null
+}

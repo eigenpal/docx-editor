@@ -740,3 +740,35 @@ for (const [name, change] of [
     }
   });
 }
+
+test('a header box follows its header when body deletion removes its page', () => {
+  const { editor, container, destroy } = open(
+    docx({ header: drawingBox('header box', 7, 457200), pages: 3 })
+  );
+  try {
+    const surface = editor.surface!;
+    const removed = [editor.findMatches('body 1')[0]!, editor.findMatches('body 2')[0]!];
+    expect(surface.setActiveScope({ kind: 'headerFooter', rId: 'rHeader' })).toBe(true);
+    const copy = [...container.querySelectorAll('.docx-drawing-textbox')].find(
+      (box) => pageOf(box) === '2'
+    )!;
+    press(boxText(copy));
+    expect(surface.activeScope().kind).toBe('frame');
+    expect(
+      surface.session.applyTreeOps(
+        removed.map((match) => ({
+          op: 'deleteBlock' as const,
+          blockId: match.blockId,
+        }))
+      ).committed
+    ).toBe(true);
+    expect(surface.layout().pages.length).toBe(1);
+    expect(
+      [...container.querySelectorAll('.docx-drawing-textbox[data-docx-textbox-active="true"]')].map(
+        pageOf
+      )
+    ).toEqual(['0']);
+  } finally {
+    destroy();
+  }
+});

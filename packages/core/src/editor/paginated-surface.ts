@@ -3460,7 +3460,7 @@ export function mountPaginatedSurface(
 
   hfScope = createHeaderFooterScopeController({
     session,
-    layout: editingLayout,
+    layout: () => currentLayout,
     sectionAtPage,
     revisionDisplayMode,
     revisionAuthorFilter: revisionFilter,
