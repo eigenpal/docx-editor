@@ -138,6 +138,23 @@ test('a family that falls back is still reported as substituted', () => {
   expect(admittedDocumentSubstitutions(fonts, plan, snapshot).has('lexington serif')).toBe(true);
 });
 
+test('a family the host maps itself is served, not reported as substituted', () => {
+  // The host serves Lexington Serif with the same face the plan's fallback reaches.
+  const document = documentWith('Lexington Serif');
+  const plan = documentFontSubstitutionPlan(document, ['Lexington Serif']);
+  const own = { family: 'Lexington Serif', weight: 400, style: 'normal' as const };
+  const hostSubstitutions = [
+    { from: own, to: { family: 'Liberation Serif', weight: 400, style: 'normal' as const } },
+  ];
+  const fonts = applyDocumentFontSubstitutions(
+    composeFontConfiguration({ ...hostFonts(), substitutions: hostSubstitutions }),
+    plan
+  );
+  const snapshot = { resolve: () => ({}) } as never;
+  const reported = admittedDocumentSubstitutions(fonts, plan, snapshot, hostSubstitutions);
+  expect(reported.has('lexington serif')).toBe(false);
+});
+
 test('paint and canvas measurement fall back through a stack of the same class', () => {
   expect(fallbackStackForFamily('Lexington Serif')).toContain('serif');
   expect(fallbackStackForFamily('Lexington Serif')).toContain('Liberation Serif');

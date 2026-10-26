@@ -38,9 +38,18 @@ export interface DocumentFontSubstitutionPlan {
 export function admittedDocumentSubstitutions(
   configuration: FontConfiguration,
   plan: DocumentFontSubstitutionPlan,
-  snapshot: FontResourceSnapshot
+  snapshot: FontResourceSnapshot,
+  /**
+   * The host's own substitutions, before the document plan joined them. A family the host
+   * maps itself (Helvetica to Liberation Sans) is served, not substituted by the document,
+   * even when the plan's fallback happens to reach the same face.
+   */
+  hostSubstitutions: FontConfiguration['substitutions'] = []
 ): ReadonlySet<string> {
   const families = new Set<string>();
+  const hostServed = new Set(
+    (hostSubstitutions ?? []).map((substitution) => substitution.from.family.trim().toLowerCase())
+  );
   // A document fallback named by its Word family reaches its face through the host's own
   // substitution (Times New Roman to Liberation Serif), so either name is the planned target.
   const hostTargets = new Map<string, string>();
@@ -63,6 +72,7 @@ export function admittedDocumentSubstitutions(
     });
     if (
       target !== key &&
+      !hostServed.has(key) &&
       documentTarget &&
       !(snapshot.resolve(substitution.from) instanceof FontResolutionError)
     ) {

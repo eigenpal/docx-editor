@@ -120,12 +120,15 @@ export interface LoadDefaultFontsOptions {
 }
 
 // @public
+export const PACKAGED_FAMILY_ALIASES: ReadonlyMap<string, DefaultFontFamily>;
+
+// @public
 export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsResolver;
 
 // @public
 export interface PackagedFontsFragment extends DefaultFontsFragment {
     readonly families: readonly DefaultFontFamily[];
-    readonly supportedFamilies?: readonly DefaultFontFamily[];
+    readonly supportedFamilies?: readonly string[];
 }
 
 // @public

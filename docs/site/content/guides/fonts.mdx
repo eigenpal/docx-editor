@@ -103,6 +103,8 @@ The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes
 
 The first five match advance widths for the glyphs they cover. Kerning differences can still change line breaks.
 
+Helvetica has the same advance widths as Arial. `packagedFonts()` serves a document's Helvetica text with the Liberation Sans faces it already loads for Arial. `defaultFonts()` does not map Helvetica.
+
 TeX Gyre Adventor has slightly narrower advance widths than Century Gothic. The measured difference stays within 1% in `bun run check:font-width-fidelity`, but can still change line breaks.
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor preserves native family fallback for missing glyphs. Exact metrics still depend on the available font for that script.

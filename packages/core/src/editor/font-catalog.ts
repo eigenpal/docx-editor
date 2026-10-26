@@ -1,8 +1,8 @@
 import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 // Selectable families are independent of the document and loaded font bytes.
 // The standard choices match the standalone FontPicker. Configured and document
-// families extend them; listing a choice does not request its font bytes.
-// This list does not assert that a family is installed or has been downloaded.
+// families extend them; listing a choice does not request its font bytes. A standard choice
+// no configured source serves is listed only where the platform has it installed.
 //
 // Loaded substitution targets are excluded unless a provider or the document lists them: `Carlito` exists to render "Calibri",
 // and listing both would offer the same metrics twice under two names — the stand-in is
@@ -53,7 +53,14 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
  */
 export function availableFontFamilies(
   configuration: FontCatalogConfiguration | undefined,
-  documentFonts: readonly string[]
+  documentFonts: readonly string[],
+  /**
+   * Whether this platform has a family installed. A standard choice that no configured
+   * source serves is offered only when it is installed: otherwise picking it draws the
+   * text in a generic fallback and raises the missing-font notice. Omitted, every standard
+   * choice is offered.
+   */
+  isInstalled?: (family: string) => boolean
 ): readonly string[] {
   const byFold = new Map<string, string>();
   const add = (family: string | undefined): void => {
@@ -71,7 +78,10 @@ export function availableFontFamilies(
     add(source.request.family);
   }
   for (const family of supportedFontFamilies([configuration?.supportedFamilies])) add(family);
-  for (const family of STANDARD_FONT_FAMILIES) add(family);
+  // After the configured families, so a served standard choice is already listed.
+  for (const family of STANDARD_FONT_FAMILIES) {
+    if (byFold.has(family.toLowerCase()) || !isInstalled || isInstalled(family)) add(family);
+  }
   for (const family of documentFonts) add(family);
 
   const fonts = [...byFold.values()];

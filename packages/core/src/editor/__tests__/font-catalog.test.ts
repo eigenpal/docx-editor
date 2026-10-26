@@ -143,3 +143,35 @@ test('every listed punctuated name is a valid font family command value', () => 
     });
   }
 });
+
+describe('standard choices the platform cannot draw', () => {
+  const installed = (names: readonly string[]) => (family: string) => names.includes(family);
+
+  test('an unserved standard choice is offered only where it is installed', () => {
+    const fonts = availableFontFamilies(undefined, [], installed(['Georgia']));
+    expect(fonts).toContain('Georgia');
+    expect(fonts).not.toContain('Verdana');
+    expect(fonts).not.toContain('Consolas');
+    // The default face is always offerable.
+    expect(fonts).toContain('Calibri');
+  });
+
+  test('a standard choice a configured source serves is offered without being installed', () => {
+    const fonts = availableFontFamilies(
+      { supportedFamilies: ['Helvetica', 'Times New Roman'] },
+      [],
+      installed([])
+    );
+    expect(fonts).toContain('Helvetica');
+    expect(fonts).toContain('Times New Roman');
+    expect(fonts).not.toContain('Garamond');
+  });
+
+  test('a family the document uses is offered whatever the platform has', () => {
+    expect(availableFontFamilies(undefined, ['Verdana'], installed([]))).toContain('Verdana');
+  });
+
+  test('without an installed check every standard choice stays', () => {
+    expect(availableFontFamilies(undefined, [])).toContain('Garamond');
+  });
+});

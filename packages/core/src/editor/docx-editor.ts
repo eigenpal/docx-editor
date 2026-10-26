@@ -468,6 +468,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * set, and headless (no container) honestly reports nothing substituted.
    */
   let localFontProbe: ((family: string) => boolean) | null = null;
+  const documentFontsNow = () => surface?.session.documentFonts() ?? [];
   const probeLocalFont = (family: string): boolean => {
     if (!localFontProbe) {
       localFontProbe = createLocalFontProbe(
@@ -966,8 +967,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
     if (late && lateFacesInstalled(late, resolvedFontConfiguration)) return;
-    // The first resolution of a load downloads the shaper alongside the faces, not after them.
-    // Failure reports where shaping needs it. Later resolutions find it loaded or failed.
+    // A load's first resolution fetches the shaper alongside the faces; failure reports at use.
     if (!late && !resolvedFontConfiguration) initializeHarfBuzz().catch(() => {});
     fontsResolving = true;
     bump();
@@ -1205,7 +1205,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         documentSubstitutedFamilies = admittedDocumentSubstitutions(
           fonts,
           documentFonts,
-          shaping.fonts
+          shaping.fonts,
+          explicit?.substitutions
         );
         // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
         // still name a locally installed browser face (Helvetica is the common macOS case):
@@ -2154,11 +2155,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     // Real derivations from the canonical trees (session-memoized), no longer stubs.
     getDocumentStyles: () => surface?.session.documentStyles() ?? [],
-    getDocumentFonts: () => surface?.session.documentFonts() ?? [],
-    // The picker's list: the configured catalog is offerable with no document at all,
-    // and the document's declared families join it once one is mounted.
+    getDocumentFonts: documentFontsNow,
+    // The picker's list: configured and document families, and presets this platform has.
     getAvailableFonts: () =>
-      availableFontFamilies(fontConfiguration(), surface?.session.documentFonts() ?? []),
+      availableFontFamilies(fontConfiguration(), documentFontsNow(), probeLocalFont),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],

@@ -11,7 +11,8 @@ const noFetch = (() => {
 
 test('packaged font support is independent of document content and respects allow', async () => {
   const fragment = await packagedFonts({ allow: ['Arial', 'Cambria'], fetcher: noFetch })(request);
-  expect(fragment.supportedFamilies).toEqual(['Cambria', 'Arial']);
+  // Helvetica rides on the allowed Arial bytes, so allowing Arial offers it too.
+  expect(fragment.supportedFamilies).toEqual(['Cambria', 'Arial', 'Helvetica']);
   expect(fragment.sources).toEqual([]);
   expect(fragment.families).toEqual([]);
 });

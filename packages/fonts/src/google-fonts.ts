@@ -134,7 +134,7 @@ export const GOOGLE_FONT_FAMILIES: readonly string[] = Object.freeze([
  *
  * Arial and Helvetica are absent on purpose. Their match is Arimo, which google/fonts now
  * ships variable-only, and the shaper refuses variation axes — a variable file would
- * render bold at regular weight. `defaultFonts()` still covers them from the bundle.
+ * render bold at regular weight. `packagedFonts()` covers both from the bundle.
  */
 export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Object.freeze({
   Calibri: 'Carlito',

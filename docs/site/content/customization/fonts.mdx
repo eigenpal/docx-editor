@@ -83,7 +83,9 @@ Use an application-owned family lookup to select remote assets. Do not turn docu
 
 ### Font picker customization
 
-Use `Toolbar.FontFamily` for the default picker. Use its `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
+Use `Toolbar.FontFamily` for the default picker. It lists the document's families, the families your font sources serve, and standard choices such as Georgia and Verdana. A standard choice that no font source serves appears only if the computer has the font installed. This keeps choices that would draw in a generic fallback font out of the list.
+
+Use the `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
 
 | Hook member        | Meaning                                                           |
 | ------------------ | ----------------------------------------------------------------- |

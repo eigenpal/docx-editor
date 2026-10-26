@@ -60,6 +60,32 @@ const EAGER_DEFAULT_BYTES = DEFAULT_FONT_FAMILIES.reduce(
 );
 
 describe('packagedFonts', () => {
+  test('serves Helvetica from the Liberation Sans faces it shares with Arial', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['helvetica', 'Arial'],
+      defaultFamily: 'No Such Family',
+    });
+    // The Arial plan loads once, for both names.
+    expect(fragment.families).toEqual(['Arial']);
+    expect(requested).toHaveLength(4);
+    expect(requested.every((url) => url.includes('LiberationSans'))).toBe(true);
+    const helvetica = fragment.substitutions.filter((entry) => entry.from.family === 'helvetica');
+    expect(helvetica).toHaveLength(4);
+    expect(helvetica.every((entry) => entry.to.family === 'Liberation Sans')).toBe(true);
+    expect(fragment.supportedFamilies).toContain('Helvetica');
+  });
+
+  test('Helvetica alone loads the Arial plan', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Helvetica'],
+      defaultFamily: 'No Such Family',
+    });
+    expect(fragment.families).toEqual(['Arial']);
+    expect(requested).toHaveLength(4);
+  });
+
   test('loads only the families the document names, plus its default family', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await packagedFonts({ fetcher, install: false })({

@@ -21,7 +21,7 @@ Load open-licensed substitutes for common document fonts. The docx-editor engine
 | Courier New     | Liberation Mono   | SIL OFL           |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
-The first five substitutes target matching advance widths for the glyphs they cover. TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`. Kerning and glyph differences can still change line breaks. For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
+Helvetica shares Arial's advance widths, so `packagedFonts()` also serves Helvetica with Liberation Sans. The first five substitutes target matching advance widths for the glyphs they cover. TeX Gyre Adventor is slightly narrower than Century Gothic; the measured difference stays within 1% in `bun run check:font-width-fidelity`. Kerning and glyph differences can still change line breaks. For the original glyphs, supply licensed font bytes through `loadFonts()` from `@docx-editor.dev/core/editor`.
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor keeps native family fallback available for missing glyphs. Exact metrics still depend on the font available for that script.
 
@@ -31,11 +31,11 @@ Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. 
 
 Use these names for the package's family lists and type:
 
-| Preferred name | Deprecated alias |
-| --- | --- |
-| `DefaultFontFamily` | `WordDefaultFamily` |
-| `DEFAULT_FONT_FAMILIES` | `WORD_DOCUMENT_DEFAULT_FAMILIES` |
-| `ALL_DEFAULT_FONT_FAMILIES` | `ALL_WORD_DEFAULT_FAMILIES` |
+| Preferred name              | Deprecated alias                 |
+| --------------------------- | -------------------------------- |
+| `DefaultFontFamily`         | `WordDefaultFamily`              |
+| `DEFAULT_FONT_FAMILIES`     | `WORD_DOCUMENT_DEFAULT_FAMILIES` |
+| `ALL_DEFAULT_FONT_FAMILIES` | `ALL_WORD_DEFAULT_FAMILIES`      |
 
 The deprecated names remain available. Both constant aliases reference the same arrays as their preferred names. The family lists and loaded font bytes do not change.
 
