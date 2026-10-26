@@ -14,10 +14,11 @@ import {
 
 export type Resolution = 'unwrap' | 'remove' | 'restore';
 
-/** Where the content of the last decided wrapper starts in the rebuilt child list. */
+/** Where the content of the last decided wrapper starts and ends in the rebuilt child list. */
 export interface DecidedSpan {
   readonly wrapper: OoxmlElement;
   readonly from: number;
+  readonly to: number;
 }
 
 /**
@@ -39,6 +40,7 @@ export function pushDecidedContent(
 ): DecidedSpan {
   const continues =
     before !== null &&
+    before.to === out.length &&
     before.wrapper.kind === wrapper.kind &&
     sameRevision(before.wrapper, wrapper);
   const from = continues ? before.from : out.length;
@@ -47,7 +49,7 @@ export function pushDecidedContent(
     const joined = previous === undefined ? [node] : joinedRuns(mint, previous, node);
     for (const entry of joined) out.push(entry);
   }
-  return { wrapper, from };
+  return { wrapper, from, to: out.length };
 }
 
 /** Run content a join may concatenate: characters, tabs and breaks, never atoms or fields. */

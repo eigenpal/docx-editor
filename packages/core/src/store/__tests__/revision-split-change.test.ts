@@ -89,8 +89,8 @@ test('a decision does not join runs of different formats or outside the change',
 test('typing between two wrappers of one insertion lands as typing inside one wrapper does', () => {
   const typed = (paragraph: string): string => {
     const source = part(paragraph);
-    const paragraphId = (source.root as { children: { children: { id: string }[] }[] })
-      .children[0]!.children[0]!.id;
+    const paragraphId = (source.root as { children: { children: { id: string }[] }[] }).children[0]!
+      .children[0]!.id;
     const result = applyTreeOp(source, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
     if (!result.ok || !result.part) throw new Error(result.reason);
     // Where the change's own runs and wrappers split is not what this asserts.
