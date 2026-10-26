@@ -12,6 +12,9 @@ import {
   namespaceScopeForNode,
   isMcAlternateContent,
   resolveRunLevelMcAtom,
+  projectRunLevelMcDrawing,
+  DEFAULT_DRAWING_PROJECTION_LIMITS,
+  DEFAULT_SUPPORTED_MC_REQUIRES,
   selectedRunLevelMcBranch,
   MAX_PART_SCAN_ELEMENTS,
 } from '../store/package/drawing-projection.ts';
@@ -75,6 +78,19 @@ function inspectPart(
     const alternateContent = isMcAlternateContent(node) ? node : undefined;
     if (alternateContent) {
       if (resolveRunLevelMcAtom(alternateContent, scope).drawing) continue;
+      const projection = projectRunLevelMcDrawing(alternateContent, {
+        ownerPartName: part.name,
+        namespaceScope: scope,
+        supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
+        limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+      });
+      if (projection) {
+        // The selected legacy drawing or recovered placeholder has a layout record.
+        // Page-level diagnostics report that occurrence with its location.
+        const story = projection.textboxStory?.content;
+        if (story) stack.push({ node: story, scope, depth: depth + 1, mcSelected: false });
+        continue;
+      }
       const selected = selectedRunLevelMcBranch(alternateContent, scope);
       if (selected.refused) codes.add('scan-limit');
       if (selected.branch)
@@ -82,7 +98,7 @@ function inspectPart(
       continue;
     }
     // Supported legacy atoms produce drawing records and are diagnosed by the exporter.
-    // Legacy atoms selected through MC are not projected by the modern drawing path.
+    // Unprojected MC branches retain source diagnostics for their legacy content.
     if (!mcSelected && isLegacyVmlAtom(node)) {
       // A laid-out text box story is scanned like a modern one: content it drops still warns.
       const story = projectLegacyVml(node, part.name)?.textboxStory?.content;

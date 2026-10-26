@@ -329,9 +329,9 @@ export class ImageWriter {
    * A shape group with picture members: the members drawn before the picture, the pictures in
    * document order, then the other vector members over them.
    *
-   * The group paints whole or not at all, as it does on screen. Layout already drops an
-   * `mc:AlternateContent` group whose picture resource fails, following the rule for MC
-   * payloads the engine cannot draw. A ready picture in a format this writer cannot embed
+   * The group paints whole or not at all, as it does on screen. A group with a failed
+   * picture resource reports unsupported content, including groups in alternative content.
+   * A ready picture in a format this writer cannot embed
    * gets the same rule here: the MC group is left out and reported at `information`, because
    * the editor draws it and only this output cannot. A bare group reports every refusal as
    * `unsupported`, as it reports an unsupported group.

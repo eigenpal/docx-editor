@@ -95,9 +95,7 @@ test('ignores inactive legacy branches when the selected branch has no drawing',
   expect(result.warnings).toEqual([]);
 });
 
-test('an MC group that cannot paint reserves space without an omission warning', async () => {
-  // Layout keeps this group's wrap band as a hidden record. It has no content to omit, so it
-  // reports nothing, as it did when layout left it out entirely.
+test('an unsupported visible MC group reports one omission warning', async () => {
   const namespaces =
     'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
     'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
@@ -131,7 +129,13 @@ test('an MC group that cannot paint reserves space without an omission warning',
     )
   );
   expect(result.markdown).toBe('Body');
-  expect(result.warnings).toEqual([]);
+  expect(result.warnings).toEqual([
+    {
+      code: 'omitted-drawing',
+      message: 'Images and shapes are omitted from Markdown.',
+      pageNumber: 1,
+    },
+  ]);
 });
 
 test('reports both supported and unsupported legacy images without duplicate source warnings', async () => {
@@ -174,7 +178,7 @@ test('reports both supported and unsupported legacy images without duplicate sou
       const fallback = await exportMarkdown(zipSync(entries));
       expect(fallback.warnings).toHaveLength(1);
       expect(fallback.warnings[0]?.code).toBe('omitted-drawing');
-      expect(fallback.warnings[0]?.partName).toBe('/word/document.xml');
+      expect(fallback.warnings[0]?.pageNumber).toBe(1);
     }
   }
 });

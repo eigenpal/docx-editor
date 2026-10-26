@@ -294,3 +294,28 @@ test('source diagnostics identify hidden paragraph joins outside the supported s
     );
   }
 });
+
+test('source diagnostics defer projected MC legacy fallbacks to page-level warnings', () => {
+  const pict = (style: string) =>
+    '<w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" ' +
+    `id="Fallback" style="${style}" path="unsupported"/></w:pict>`;
+  for (const [fallback, represented] of [
+    [pict('width:100pt;height:50pt'), true],
+    [pict('width:100pt;height:50pt;rotation:15'), true],
+    // Without usable drawing geometry, the source warning must remain.
+    [pict(''), false],
+    // Unsupported branch nesting does not create a layout record.
+    [`<w:r>${pict('width:100pt;height:50pt')}</w:r>`, false],
+  ] as const) {
+    const body =
+      '<w:p><w:r>' +
+      '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+      'xmlns:future="urn:unsupported-shape"><mc:Choice Requires="future"><w:drawing/></mc:Choice>' +
+      `<mc:Fallback>${fallback}</mc:Fallback></mc:AlternateContent></w:r></w:p>`;
+    const opened = openHeadlessDocument(docxBytes(body, false));
+    if (!opened.ok) throw new Error(opened.reason);
+    expect(collectExportContentWarnings(opened.view)).toEqual(
+      represented ? [] : [{ code: 'legacy-drawing', partName: '/word/document.xml' }]
+    );
+  }
+});
