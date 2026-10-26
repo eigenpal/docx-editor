@@ -101,7 +101,8 @@ test(
       const preview = await showcase.json();
       assert.ok(Buffer.from(preview.pdf, 'base64').subarray(0, 5).equals(Buffer.from('%PDF-')));
       assert.equal(preview.pageCount, 30);
-      assert.ok(preview.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
+      // The sample names only fonts the packaged set serves, so nothing is substituted.
+      assert.ok(!preview.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
 
       assert.equal(
         (await send(`${base}/api/convert?fidelityPolicy=invalid`, { method: 'POST', body: bytes }))
