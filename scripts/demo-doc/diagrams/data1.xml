@@ -1,0 +1,656 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <dgm:ptLst>
+    <dgm:pt modelId="{147BFF08-860D-4665-BB46-67391B7862A1}" type="doc">
+      <dgm:prSet loTypeId="urn:microsoft.com/office/officeart/2005/8/layout/target2" loCatId="relationship" qsTypeId="urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1" qsCatId="simple" csTypeId="urn:microsoft.com/office/officeart/2005/8/colors/colorful3" csCatId="colorful" phldr="1"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US"/>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{0AB04F30-5B47-4ACB-A955-980E2BEC6B8C}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Plan</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{6E181527-014A-4BD8-B248-16F9AF413E3C}" type="parTrans" cxnId="{917FA628-6F50-4835-9BE1-110EB3D255B7}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{50845BFD-388F-4DC6-A543-D0DE333528AF}" type="sibTrans" cxnId="{917FA628-6F50-4835-9BE1-110EB3D255B7}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{00A683DC-F5D9-45C8-8912-3B023965128E}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Scope</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{2507495C-C0E4-4E50-8099-E467DA67E99F}" type="parTrans" cxnId="{E70F0FE1-0760-4494-A632-5EED5674D388}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{695A160E-BFE7-4F83-8A37-FE87B4E228A3}" type="sibTrans" cxnId="{E70F0FE1-0760-4494-A632-5EED5674D388}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{6FE1863A-01B9-4644-BDAF-EC1995C1FA48}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Brief</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{5CFB9E2A-21E5-4090-903A-1E5104679879}" type="parTrans" cxnId="{E9FF5911-DB7C-420E-8926-3272B7D07DCC}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{A2873350-E6DF-4F80-86C6-B6ABDE430F6D}" type="sibTrans" cxnId="{E9FF5911-DB7C-420E-8926-3272B7D07DCC}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{67939A53-FF3A-4922-964E-FB26D481B44C}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Write</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{60FE862E-D42A-45F0-A6B2-B03B47BC9163}" type="parTrans" cxnId="{68829164-D6B9-4E3A-B41E-258C0ABCAD76}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{FE57115B-2339-42F3-8B33-3D4357BB3005}" type="sibTrans" cxnId="{68829164-D6B9-4E3A-B41E-258C0ABCAD76}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{8C7BA88D-76F4-47BF-963E-319EBC3C5C89}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Draft</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{F17D4BF0-D914-458E-B487-BE03070C87F7}" type="parTrans" cxnId="{69F974B0-8825-48E9-93B3-37DC4FB4E5C2}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{FD058C9C-B867-4F69-AF53-6260AEDD2777}" type="sibTrans" cxnId="{69F974B0-8825-48E9-93B3-37DC4FB4E5C2}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{784E43AB-2DA7-49A5-9C83-FF457019BB5C}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Art</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{C9DCB071-1ACD-4442-95F7-E74377CBDC56}" type="parTrans" cxnId="{0220EA17-D5E2-405B-9BB8-0F46A516F3FE}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{52BE1436-7548-4F8A-A099-E9D27FD27530}" type="sibTrans" cxnId="{0220EA17-D5E2-405B-9BB8-0F46A516F3FE}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{84FF9DD5-2BBE-4F4C-B41A-5320F18558FD}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Ship</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{74EF0857-76F4-4F2E-B9BD-DF3CD30BCCE2}" type="parTrans" cxnId="{FBBA0AD7-5503-4BBF-B197-3CE4DDD3F430}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{EAEAB3B9-11C0-4BF6-923F-542B580C3392}" type="sibTrans" cxnId="{FBBA0AD7-5503-4BBF-B197-3CE4DDD3F430}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{A2D8FAD4-A948-44D6-91C6-4328CE604ECA}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Check</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{B1E2F442-599A-4DC6-8C32-6819A2643C82}" type="parTrans" cxnId="{75AC22AD-266C-4201-B8EF-330F63F66B04}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{804D382E-444C-4186-B0D0-E5434DC6D855}" type="sibTrans" cxnId="{75AC22AD-266C-4201-B8EF-330F63F66B04}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{2F4814C1-2F65-4C94-B0A9-1D6DBE960222}">
+      <dgm:prSet phldrT="[Text]"/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US">
+              <a:solidFill>
+                <a:srgbClr val="EEECE1">
+                  <a:lumMod val="10000"/>
+                </a:srgbClr>
+              </a:solidFill>
+            </a:rPr>
+            <a:t>Send</a:t>
+          </a:r>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{1FCB7A8A-EE3A-4083-BA8F-F0D2790C04C6}" type="parTrans" cxnId="{BF2120EB-A1FA-4EEC-B96E-5FF8EFB14411}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{9B182459-D926-45BC-8D90-CDEECE1425B3}" type="sibTrans" cxnId="{BF2120EB-A1FA-4EEC-B96E-5FF8EFB14411}">
+      <dgm:prSet/>
+      <dgm:spPr/>
+      <dgm:t>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:endParaRPr lang="en-US">
+            <a:solidFill>
+              <a:srgbClr val="EEECE1">
+                <a:lumMod val="10000"/>
+              </a:srgbClr>
+            </a:solidFill>
+          </a:endParaRPr>
+        </a:p>
+      </dgm:t>
+    </dgm:pt>
+    <dgm:pt modelId="{E9B165BA-A475-4469-A48C-837BFC632FA9}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="Name0" presStyleCnt="0">
+        <dgm:presLayoutVars>
+          <dgm:chMax val="3"/>
+          <dgm:chPref val="1"/>
+          <dgm:dir/>
+          <dgm:animLvl val="lvl"/>
+          <dgm:resizeHandles/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{247A940D-6F5C-4665-B081-E6BD092B4E0C}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="outerBox" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{7429920A-22A7-4C36-A56E-7794431D8BBB}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="outerBoxParent" presStyleLbl="node1" presStyleIdx="0" presStyleCnt="3" custLinFactNeighborX="76940"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{4C518C4D-DCB6-4A58-98ED-EA72C135366D}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="outerBoxChildren" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{30043F8E-1E46-45E8-BAD2-3B65F927AF14}" type="pres">
+      <dgm:prSet presAssocID="{00A683DC-F5D9-45C8-8912-3B023965128E}" presName="oChild" presStyleLbl="fgAcc1" presStyleIdx="0" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{6F5C01F4-75ED-4B2B-A592-A4534D46D492}" type="pres">
+      <dgm:prSet presAssocID="{695A160E-BFE7-4F83-8A37-FE87B4E228A3}" presName="outerSibTrans" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{7F0BC841-DC22-41F9-86DF-567CDB5327AA}" type="pres">
+      <dgm:prSet presAssocID="{6FE1863A-01B9-4644-BDAF-EC1995C1FA48}" presName="oChild" presStyleLbl="fgAcc1" presStyleIdx="1" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{3281FE0A-E403-486F-82E6-A8AB0E577DE3}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="middleBox" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{018567D0-017A-46C5-96FD-6E4267BC25CC}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="middleBoxParent" presStyleLbl="node1" presStyleIdx="1" presStyleCnt="3"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{95B0353A-F9AE-44C0-A27B-30533BD5B5AD}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="middleBoxChildren" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{7136670A-BE91-46E7-AABD-7C2AD3DB69C5}" type="pres">
+      <dgm:prSet presAssocID="{8C7BA88D-76F4-47BF-963E-319EBC3C5C89}" presName="mChild" presStyleLbl="fgAcc1" presStyleIdx="2" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{0B4A8FB5-9768-4ADC-847C-33791CB0FF52}" type="pres">
+      <dgm:prSet presAssocID="{FD058C9C-B867-4F69-AF53-6260AEDD2777}" presName="middleSibTrans" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{AA180DA6-C3BA-40CF-951B-C949341AF0E3}" type="pres">
+      <dgm:prSet presAssocID="{784E43AB-2DA7-49A5-9C83-FF457019BB5C}" presName="mChild" presStyleLbl="fgAcc1" presStyleIdx="3" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{A65B23A9-5024-4E17-A06C-F83E23B930F6}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="centerBox" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{FCCEA717-5132-4AAB-8A8E-6B04419BE144}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="centerBoxParent" presStyleLbl="node1" presStyleIdx="2" presStyleCnt="3"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{2E1E82F8-C8B7-4064-B3AC-D2DA5312EC1C}" type="pres">
+      <dgm:prSet presAssocID="{147BFF08-860D-4665-BB46-67391B7862A1}" presName="centerBoxChildren" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{1F2B5462-B816-4FFB-B58C-C7169DA2D474}" type="pres">
+      <dgm:prSet presAssocID="{A2D8FAD4-A948-44D6-91C6-4328CE604ECA}" presName="cChild" presStyleLbl="fgAcc1" presStyleIdx="4" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{040741AA-B3FE-4750-97B3-6CE76DF519AA}" type="pres">
+      <dgm:prSet presAssocID="{804D382E-444C-4186-B0D0-E5434DC6D855}" presName="centerSibTrans" presStyleCnt="0"/>
+      <dgm:spPr/>
+    </dgm:pt>
+    <dgm:pt modelId="{576D55D9-2776-4DC5-AA89-CF9B99BEACBB}" type="pres">
+      <dgm:prSet presAssocID="{2F4814C1-2F65-4C94-B0A9-1D6DBE960222}" presName="cChild" presStyleLbl="fgAcc1" presStyleIdx="5" presStyleCnt="6">
+        <dgm:presLayoutVars>
+          <dgm:bulletEnabled val="1"/>
+        </dgm:presLayoutVars>
+      </dgm:prSet>
+      <dgm:spPr/>
+    </dgm:pt>
+  </dgm:ptLst>
+  <dgm:cxnLst>
+    <dgm:cxn modelId="{E9FF5911-DB7C-420E-8926-3272B7D07DCC}" srcId="{0AB04F30-5B47-4ACB-A955-980E2BEC6B8C}" destId="{6FE1863A-01B9-4644-BDAF-EC1995C1FA48}" srcOrd="1" destOrd="0" parTransId="{5CFB9E2A-21E5-4090-903A-1E5104679879}" sibTransId="{A2873350-E6DF-4F80-86C6-B6ABDE430F6D}"/>
+    <dgm:cxn modelId="{0220EA17-D5E2-405B-9BB8-0F46A516F3FE}" srcId="{67939A53-FF3A-4922-964E-FB26D481B44C}" destId="{784E43AB-2DA7-49A5-9C83-FF457019BB5C}" srcOrd="1" destOrd="0" parTransId="{C9DCB071-1ACD-4442-95F7-E74377CBDC56}" sibTransId="{52BE1436-7548-4F8A-A099-E9D27FD27530}"/>
+    <dgm:cxn modelId="{917FA628-6F50-4835-9BE1-110EB3D255B7}" srcId="{147BFF08-860D-4665-BB46-67391B7862A1}" destId="{0AB04F30-5B47-4ACB-A955-980E2BEC6B8C}" srcOrd="0" destOrd="0" parTransId="{6E181527-014A-4BD8-B248-16F9AF413E3C}" sibTransId="{50845BFD-388F-4DC6-A543-D0DE333528AF}"/>
+    <dgm:cxn modelId="{32438435-238B-494E-918E-EEB7AEA61FA5}" type="presOf" srcId="{8C7BA88D-76F4-47BF-963E-319EBC3C5C89}" destId="{7136670A-BE91-46E7-AABD-7C2AD3DB69C5}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{3E4C6E3F-EBEA-4C73-A82C-9FEB7DC28F94}" type="presOf" srcId="{0AB04F30-5B47-4ACB-A955-980E2BEC6B8C}" destId="{7429920A-22A7-4C36-A56E-7794431D8BBB}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{3B156A42-D76E-46EC-B2F0-C52D2BC7AB66}" type="presOf" srcId="{6FE1863A-01B9-4644-BDAF-EC1995C1FA48}" destId="{7F0BC841-DC22-41F9-86DF-567CDB5327AA}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{68829164-D6B9-4E3A-B41E-258C0ABCAD76}" srcId="{147BFF08-860D-4665-BB46-67391B7862A1}" destId="{67939A53-FF3A-4922-964E-FB26D481B44C}" srcOrd="1" destOrd="0" parTransId="{60FE862E-D42A-45F0-A6B2-B03B47BC9163}" sibTransId="{FE57115B-2339-42F3-8B33-3D4357BB3005}"/>
+    <dgm:cxn modelId="{27AC066C-D751-4E68-9AD5-1966D60E965B}" type="presOf" srcId="{784E43AB-2DA7-49A5-9C83-FF457019BB5C}" destId="{AA180DA6-C3BA-40CF-951B-C949341AF0E3}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{179EBB4F-47EE-473A-A423-F3F3E9EE4F55}" type="presOf" srcId="{2F4814C1-2F65-4C94-B0A9-1D6DBE960222}" destId="{576D55D9-2776-4DC5-AA89-CF9B99BEACBB}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{42515781-0D26-4741-A8A8-306922C599F0}" type="presOf" srcId="{147BFF08-860D-4665-BB46-67391B7862A1}" destId="{E9B165BA-A475-4469-A48C-837BFC632FA9}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{6E6D5282-8893-41A3-BCE3-FB63EFCA2974}" type="presOf" srcId="{67939A53-FF3A-4922-964E-FB26D481B44C}" destId="{018567D0-017A-46C5-96FD-6E4267BC25CC}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{75AC22AD-266C-4201-B8EF-330F63F66B04}" srcId="{84FF9DD5-2BBE-4F4C-B41A-5320F18558FD}" destId="{A2D8FAD4-A948-44D6-91C6-4328CE604ECA}" srcOrd="0" destOrd="0" parTransId="{B1E2F442-599A-4DC6-8C32-6819A2643C82}" sibTransId="{804D382E-444C-4186-B0D0-E5434DC6D855}"/>
+    <dgm:cxn modelId="{69F974B0-8825-48E9-93B3-37DC4FB4E5C2}" srcId="{67939A53-FF3A-4922-964E-FB26D481B44C}" destId="{8C7BA88D-76F4-47BF-963E-319EBC3C5C89}" srcOrd="0" destOrd="0" parTransId="{F17D4BF0-D914-458E-B487-BE03070C87F7}" sibTransId="{FD058C9C-B867-4F69-AF53-6260AEDD2777}"/>
+    <dgm:cxn modelId="{6090BBB4-AE4F-49D0-8508-F6B17CF32669}" type="presOf" srcId="{A2D8FAD4-A948-44D6-91C6-4328CE604ECA}" destId="{1F2B5462-B816-4FFB-B58C-C7169DA2D474}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{F615A4CE-E70D-4C7E-893E-F10E01FBF3E7}" type="presOf" srcId="{84FF9DD5-2BBE-4F4C-B41A-5320F18558FD}" destId="{FCCEA717-5132-4AAB-8A8E-6B04419BE144}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{FBBA0AD7-5503-4BBF-B197-3CE4DDD3F430}" srcId="{147BFF08-860D-4665-BB46-67391B7862A1}" destId="{84FF9DD5-2BBE-4F4C-B41A-5320F18558FD}" srcOrd="2" destOrd="0" parTransId="{74EF0857-76F4-4F2E-B9BD-DF3CD30BCCE2}" sibTransId="{EAEAB3B9-11C0-4BF6-923F-542B580C3392}"/>
+    <dgm:cxn modelId="{1EC901E1-8356-4A48-880C-5223448DE0FF}" type="presOf" srcId="{00A683DC-F5D9-45C8-8912-3B023965128E}" destId="{30043F8E-1E46-45E8-BAD2-3B65F927AF14}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{E70F0FE1-0760-4494-A632-5EED5674D388}" srcId="{0AB04F30-5B47-4ACB-A955-980E2BEC6B8C}" destId="{00A683DC-F5D9-45C8-8912-3B023965128E}" srcOrd="0" destOrd="0" parTransId="{2507495C-C0E4-4E50-8099-E467DA67E99F}" sibTransId="{695A160E-BFE7-4F83-8A37-FE87B4E228A3}"/>
+    <dgm:cxn modelId="{BF2120EB-A1FA-4EEC-B96E-5FF8EFB14411}" srcId="{84FF9DD5-2BBE-4F4C-B41A-5320F18558FD}" destId="{2F4814C1-2F65-4C94-B0A9-1D6DBE960222}" srcOrd="1" destOrd="0" parTransId="{1FCB7A8A-EE3A-4083-BA8F-F0D2790C04C6}" sibTransId="{9B182459-D926-45BC-8D90-CDEECE1425B3}"/>
+    <dgm:cxn modelId="{BE164728-C210-4DBF-9C3F-4D7BFFBD59D3}" type="presParOf" srcId="{E9B165BA-A475-4469-A48C-837BFC632FA9}" destId="{247A940D-6F5C-4665-B081-E6BD092B4E0C}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{39EE6E50-23C4-4E0C-953C-F49DE329F19C}" type="presParOf" srcId="{247A940D-6F5C-4665-B081-E6BD092B4E0C}" destId="{7429920A-22A7-4C36-A56E-7794431D8BBB}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{EA840C57-5D19-4A8C-A760-A4C80FE01D22}" type="presParOf" srcId="{247A940D-6F5C-4665-B081-E6BD092B4E0C}" destId="{4C518C4D-DCB6-4A58-98ED-EA72C135366D}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{F340BB87-B0C1-451A-BED0-ACEE5A3DAE2E}" type="presParOf" srcId="{4C518C4D-DCB6-4A58-98ED-EA72C135366D}" destId="{30043F8E-1E46-45E8-BAD2-3B65F927AF14}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{E9D62ADD-7B57-4CD7-A391-4507A82A06D1}" type="presParOf" srcId="{4C518C4D-DCB6-4A58-98ED-EA72C135366D}" destId="{6F5C01F4-75ED-4B2B-A592-A4534D46D492}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{7777A6D5-A918-4570-8478-55B68E76BB53}" type="presParOf" srcId="{4C518C4D-DCB6-4A58-98ED-EA72C135366D}" destId="{7F0BC841-DC22-41F9-86DF-567CDB5327AA}" srcOrd="2" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{872B1B26-59DE-45A1-80D7-0E86ED566D01}" type="presParOf" srcId="{E9B165BA-A475-4469-A48C-837BFC632FA9}" destId="{3281FE0A-E403-486F-82E6-A8AB0E577DE3}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{2BEBD70F-4582-40DF-91DB-81B03999619E}" type="presParOf" srcId="{3281FE0A-E403-486F-82E6-A8AB0E577DE3}" destId="{018567D0-017A-46C5-96FD-6E4267BC25CC}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{FAA4C4BB-2AE1-4D0E-B65A-21CCD9DFB591}" type="presParOf" srcId="{3281FE0A-E403-486F-82E6-A8AB0E577DE3}" destId="{95B0353A-F9AE-44C0-A27B-30533BD5B5AD}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{CCFCE3F0-4E7F-44C7-A505-81EA30669EFF}" type="presParOf" srcId="{95B0353A-F9AE-44C0-A27B-30533BD5B5AD}" destId="{7136670A-BE91-46E7-AABD-7C2AD3DB69C5}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{B73907AD-3809-407A-9789-CAC1B6E6DB43}" type="presParOf" srcId="{95B0353A-F9AE-44C0-A27B-30533BD5B5AD}" destId="{0B4A8FB5-9768-4ADC-847C-33791CB0FF52}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{88FBE015-3C76-4692-815E-7874E0DC67E0}" type="presParOf" srcId="{95B0353A-F9AE-44C0-A27B-30533BD5B5AD}" destId="{AA180DA6-C3BA-40CF-951B-C949341AF0E3}" srcOrd="2" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{5BD41AAF-316A-450A-9A27-26E17B3BDF61}" type="presParOf" srcId="{E9B165BA-A475-4469-A48C-837BFC632FA9}" destId="{A65B23A9-5024-4E17-A06C-F83E23B930F6}" srcOrd="2" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{64D5A25A-0986-4521-B74F-443A6C55D958}" type="presParOf" srcId="{A65B23A9-5024-4E17-A06C-F83E23B930F6}" destId="{FCCEA717-5132-4AAB-8A8E-6B04419BE144}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{F7F0B568-1154-4998-A650-C51E111E47DE}" type="presParOf" srcId="{A65B23A9-5024-4E17-A06C-F83E23B930F6}" destId="{2E1E82F8-C8B7-4064-B3AC-D2DA5312EC1C}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{3240531F-EEB5-4FD2-BE80-2B7069060169}" type="presParOf" srcId="{2E1E82F8-C8B7-4064-B3AC-D2DA5312EC1C}" destId="{1F2B5462-B816-4FFB-B58C-C7169DA2D474}" srcOrd="0" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{62CDEF10-51D9-4A7B-926F-08A623C13997}" type="presParOf" srcId="{2E1E82F8-C8B7-4064-B3AC-D2DA5312EC1C}" destId="{040741AA-B3FE-4750-97B3-6CE76DF519AA}" srcOrd="1" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+    <dgm:cxn modelId="{DF30DD9F-811B-423B-B37B-EC53002172B2}" type="presParOf" srcId="{2E1E82F8-C8B7-4064-B3AC-D2DA5312EC1C}" destId="{576D55D9-2776-4DC5-AA89-CF9B99BEACBB}" srcOrd="2" destOrd="0" presId="urn:microsoft.com/office/officeart/2005/8/layout/target2"/>
+  </dgm:cxnLst>
+  <dgm:bg/>
+  <dgm:whole/>
+  <dgm:extLst>
+    <a:ext uri="http://schemas.microsoft.com/office/drawing/2008/diagram">
+      <dsp:dataModelExt xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram" relId="rIdDemoDiagramDrawing1" minVer="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>
+    </a:ext>
+  </dgm:extLst>
+</dgm:dataModel>

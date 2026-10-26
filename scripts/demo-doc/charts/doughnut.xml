@@ -1,0 +1,192 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:lang val="en-US"/>
+  <c:chart>
+    <c:title>
+      <c:tx>
+        <c:rich>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:pPr>
+              <a:defRPr sz="1400" baseline="0">
+                <a:solidFill>
+                  <a:srgbClr val="25364A"/>
+                </a:solidFill>
+                <a:latin typeface="Aptos"/>
+              </a:defRPr>
+            </a:pPr>
+            <a:r>
+              <a:rPr lang="en-US" sz="1400" baseline="0">
+                <a:solidFill>
+                  <a:srgbClr val="25364A"/>
+                </a:solidFill>
+                <a:latin typeface="Aptos"/>
+              </a:rPr>
+              <a:t>Where effort goes</a:t>
+            </a:r>
+          </a:p>
+        </c:rich>
+      </c:tx>
+      <c:layout/>
+      <c:overlay val="0"/>
+    </c:title>
+    <c:plotArea>
+      <c:layout/>
+      <c:doughnutChart>
+        <c:varyColors val="1"/>
+        <c:ser>
+          <c:idx val="0"/>
+          <c:order val="0"/>
+          <c:tx>
+            <c:strRef>
+              <c:f>Data!$B$1</c:f>
+              <c:strCache>
+                <c:ptCount val="1"/>
+                <c:pt idx="0">
+                  <c:v>Effort</c:v>
+                </c:pt>
+              </c:strCache>
+            </c:strRef>
+          </c:tx>
+          <c:dPt>
+            <c:idx val="0"/>
+            <c:spPr>
+              <a:solidFill>
+                <a:srgbClr val="087F8C"/>
+              </a:solidFill>
+              <a:ln>
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+              </a:ln>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="1"/>
+            <c:spPr>
+              <a:solidFill>
+                <a:srgbClr val="48A9A6"/>
+              </a:solidFill>
+              <a:ln>
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+              </a:ln>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="2"/>
+            <c:spPr>
+              <a:solidFill>
+                <a:srgbClr val="7A8FB5"/>
+              </a:solidFill>
+              <a:ln>
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+              </a:ln>
+            </c:spPr>
+          </c:dPt>
+          <c:dPt>
+            <c:idx val="3"/>
+            <c:spPr>
+              <a:solidFill>
+                <a:srgbClr val="E49642"/>
+              </a:solidFill>
+              <a:ln>
+                <a:solidFill>
+                  <a:srgbClr val="FFFFFF"/>
+                </a:solidFill>
+              </a:ln>
+            </c:spPr>
+          </c:dPt>
+          <c:dLbls>
+            <c:showLegendKey val="0"/>
+            <c:showVal val="0"/>
+            <c:showCatName val="0"/>
+            <c:showSerName val="0"/>
+            <c:showPercent val="1"/>
+          </c:dLbls>
+          <c:cat>
+            <c:strRef>
+              <c:f>Data!$A$2:$A$5</c:f>
+              <c:strCache>
+                <c:ptCount val="4"/>
+                <c:pt idx="0">
+                  <c:v>Build</c:v>
+                </c:pt>
+                <c:pt idx="1">
+                  <c:v>Research</c:v>
+                </c:pt>
+                <c:pt idx="2">
+                  <c:v>Review</c:v>
+                </c:pt>
+                <c:pt idx="3">
+                  <c:v>Support</c:v>
+                </c:pt>
+              </c:strCache>
+            </c:strRef>
+          </c:cat>
+          <c:val>
+            <c:numRef>
+              <c:f>Data!$B$2:$B$5</c:f>
+              <c:numCache>
+                <c:formatCode>General</c:formatCode>
+                <c:ptCount val="4"/>
+                <c:pt idx="0">
+                  <c:v>42</c:v>
+                </c:pt>
+                <c:pt idx="1">
+                  <c:v>26</c:v>
+                </c:pt>
+                <c:pt idx="2">
+                  <c:v>20</c:v>
+                </c:pt>
+                <c:pt idx="3">
+                  <c:v>12</c:v>
+                </c:pt>
+              </c:numCache>
+            </c:numRef>
+          </c:val>
+        </c:ser>
+        <c:firstSliceAng val="270"/>
+        <c:holeSize val="58"/>
+      </c:doughnutChart>
+    </c:plotArea>
+    <c:legend>
+      <c:legendPos val="b"/>
+      <c:layout/>
+      <c:overlay val="0"/>
+      <c:txPr>
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr rtl="0">
+            <a:defRPr sz="1000" baseline="0">
+              <a:latin typeface="Aptos"/>
+            </a:defRPr>
+          </a:pPr>
+          <a:endParaRPr lang="en-US"/>
+        </a:p>
+      </c:txPr>
+    </c:legend>
+    <c:plotVisOnly val="1"/>
+  </c:chart>
+  <c:spPr>
+    <a:solidFill>
+      <a:srgbClr val="FFFFFF"/>
+    </a:solidFill>
+    <a:ln>
+      <a:noFill/>
+    </a:ln>
+  </c:spPr>
+  <c:externalData r:id="rIdWorkbook">
+    <c:autoUpdate val="0"/>
+  </c:externalData>
+  <c:printSettings>
+    <c:headerFooter/>
+    <c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/>
+    <c:pageSetup/>
+  </c:printSettings>
+</c:chartSpace>

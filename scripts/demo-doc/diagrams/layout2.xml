@@ -1,0 +1,225 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" uniqueId="urn:microsoft.com/office/officeart/2005/8/layout/lProcess2">
+  <dgm:title val=""/>
+  <dgm:desc val=""/>
+  <dgm:catLst>
+    <dgm:cat type="list" pri="10000"/>
+    <dgm:cat type="relationship" pri="13000"/>
+  </dgm:catLst>
+  <dgm:sampData>
+    <dgm:dataModel>
+      <dgm:ptLst>
+        <dgm:pt modelId="0" type="doc"/>
+        <dgm:pt modelId="1">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="11">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="12">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="2">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="21">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="22">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="3">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="31">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+        <dgm:pt modelId="32">
+          <dgm:prSet phldr="1"/>
+        </dgm:pt>
+      </dgm:ptLst>
+      <dgm:cxnLst>
+        <dgm:cxn modelId="4" srcId="0" destId="1" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="5" srcId="0" destId="2" srcOrd="1" destOrd="0"/>
+        <dgm:cxn modelId="13" srcId="1" destId="11" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="14" srcId="1" destId="12" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="23" srcId="2" destId="21" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="24" srcId="2" destId="22" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="33" srcId="3" destId="31" srcOrd="0" destOrd="0"/>
+        <dgm:cxn modelId="34" srcId="3" destId="32" srcOrd="0" destOrd="0"/>
+      </dgm:cxnLst>
+      <dgm:bg/>
+      <dgm:whole/>
+    </dgm:dataModel>
+  </dgm:sampData>
+  <dgm:styleData useDef="1">
+    <dgm:dataModel>
+      <dgm:ptLst/>
+      <dgm:bg/>
+      <dgm:whole/>
+    </dgm:dataModel>
+  </dgm:styleData>
+  <dgm:clrData useDef="1">
+    <dgm:dataModel>
+      <dgm:ptLst/>
+      <dgm:bg/>
+      <dgm:whole/>
+    </dgm:dataModel>
+  </dgm:clrData>
+  <dgm:layoutNode name="theList">
+    <dgm:varLst>
+      <dgm:dir/>
+      <dgm:animLvl val="lvl"/>
+      <dgm:resizeHandles val="exact"/>
+    </dgm:varLst>
+    <dgm:choose name="Name0">
+      <dgm:if name="Name1" func="var" arg="dir" op="equ" val="norm">
+        <dgm:alg type="lin"/>
+      </dgm:if>
+      <dgm:else name="Name2">
+        <dgm:alg type="lin">
+          <dgm:param type="linDir" val="fromR"/>
+        </dgm:alg>
+      </dgm:else>
+    </dgm:choose>
+    <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+      <dgm:adjLst/>
+    </dgm:shape>
+    <dgm:presOf/>
+    <dgm:constrLst>
+      <dgm:constr type="w" for="ch" forName="compNode" refType="w"/>
+      <dgm:constr type="h" for="ch" forName="compNode" refType="h"/>
+      <dgm:constr type="w" for="ch" forName="aSpace" refType="w" fact="0.075"/>
+      <dgm:constr type="h" for="des" forName="aSpace2" refType="h" fact="0.1"/>
+      <dgm:constr type="primFontSz" for="des" forName="textNode" op="equ"/>
+      <dgm:constr type="primFontSz" for="des" forName="childNode" op="equ"/>
+    </dgm:constrLst>
+    <dgm:ruleLst/>
+    <dgm:forEach name="aNodeForEach" axis="ch" ptType="node">
+      <dgm:layoutNode name="compNode">
+        <dgm:alg type="composite"/>
+        <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+          <dgm:adjLst/>
+        </dgm:shape>
+        <dgm:presOf/>
+        <dgm:constrLst>
+          <dgm:constr type="w" for="ch" forName="aNode" refType="w"/>
+          <dgm:constr type="h" for="ch" forName="aNode" refType="h"/>
+          <dgm:constr type="w" for="ch" forName="textNode" refType="w"/>
+          <dgm:constr type="h" for="ch" forName="textNode" refType="h" fact="0.3"/>
+          <dgm:constr type="ctrX" for="ch" forName="textNode" refType="w" fact="0.5"/>
+          <dgm:constr type="w" for="ch" forName="compChildNode" refType="w" fact="0.8"/>
+          <dgm:constr type="h" for="ch" forName="compChildNode" refType="h" fact="0.65"/>
+          <dgm:constr type="t" for="ch" forName="compChildNode" refType="h" fact="0.3"/>
+          <dgm:constr type="ctrX" for="ch" forName="compChildNode" refType="w" fact="0.5"/>
+        </dgm:constrLst>
+        <dgm:ruleLst/>
+        <dgm:layoutNode name="aNode" styleLbl="bgShp">
+          <dgm:alg type="sp"/>
+          <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="roundRect" r:blip="">
+            <dgm:adjLst>
+              <dgm:adj idx="1" val="0.1"/>
+            </dgm:adjLst>
+          </dgm:shape>
+          <dgm:presOf axis="self"/>
+          <dgm:constrLst/>
+          <dgm:ruleLst/>
+        </dgm:layoutNode>
+        <dgm:layoutNode name="textNode" styleLbl="bgShp">
+          <dgm:alg type="tx"/>
+          <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="rect" r:blip="" hideGeom="1">
+            <dgm:adjLst>
+              <dgm:adj idx="1" val="0.1"/>
+            </dgm:adjLst>
+          </dgm:shape>
+          <dgm:presOf axis="self"/>
+          <dgm:constrLst>
+            <dgm:constr type="primFontSz" val="65"/>
+            <dgm:constr type="lMarg" refType="primFontSz" fact="0.3"/>
+            <dgm:constr type="rMarg" refType="primFontSz" fact="0.3"/>
+            <dgm:constr type="tMarg" refType="primFontSz" fact="0.3"/>
+            <dgm:constr type="bMarg" refType="primFontSz" fact="0.3"/>
+          </dgm:constrLst>
+          <dgm:ruleLst>
+            <dgm:rule type="primFontSz" val="5" fact="NaN" max="NaN"/>
+          </dgm:ruleLst>
+        </dgm:layoutNode>
+        <dgm:layoutNode name="compChildNode">
+          <dgm:alg type="composite"/>
+          <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+            <dgm:adjLst/>
+          </dgm:shape>
+          <dgm:presOf/>
+          <dgm:constrLst>
+            <dgm:constr type="w" for="des" forName="childNode" refType="w"/>
+            <dgm:constr type="h" for="des" forName="childNode" refType="h"/>
+          </dgm:constrLst>
+          <dgm:ruleLst/>
+          <dgm:layoutNode name="theInnerList">
+            <dgm:alg type="lin">
+              <dgm:param type="linDir" val="fromT"/>
+            </dgm:alg>
+            <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+              <dgm:adjLst/>
+            </dgm:shape>
+            <dgm:presOf/>
+            <dgm:constrLst/>
+            <dgm:ruleLst/>
+            <dgm:forEach name="childNodeForEach" axis="ch" ptType="node">
+              <dgm:layoutNode name="childNode" styleLbl="node1">
+                <dgm:varLst>
+                  <dgm:bulletEnabled val="1"/>
+                </dgm:varLst>
+                <dgm:alg type="tx"/>
+                <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="roundRect" r:blip="">
+                  <dgm:adjLst>
+                    <dgm:adj idx="1" val="0.1"/>
+                  </dgm:adjLst>
+                </dgm:shape>
+                <dgm:presOf axis="desOrSelf" ptType="node"/>
+                <dgm:constrLst>
+                  <dgm:constr type="primFontSz" val="65"/>
+                  <dgm:constr type="tMarg" refType="primFontSz" fact="0.15"/>
+                  <dgm:constr type="bMarg" refType="primFontSz" fact="0.15"/>
+                  <dgm:constr type="lMarg" refType="primFontSz" fact="0.2"/>
+                  <dgm:constr type="rMarg" refType="primFontSz" fact="0.2"/>
+                </dgm:constrLst>
+                <dgm:ruleLst>
+                  <dgm:rule type="primFontSz" val="5" fact="NaN" max="NaN"/>
+                </dgm:ruleLst>
+              </dgm:layoutNode>
+              <dgm:choose name="Name3">
+                <dgm:if name="Name4" axis="self" ptType="node" func="revPos" op="equ" val="1"/>
+                <dgm:else name="Name5">
+                  <dgm:layoutNode name="aSpace2">
+                    <dgm:alg type="sp"/>
+                    <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+                      <dgm:adjLst/>
+                    </dgm:shape>
+                    <dgm:presOf/>
+                    <dgm:constrLst/>
+                    <dgm:ruleLst/>
+                  </dgm:layoutNode>
+                </dgm:else>
+              </dgm:choose>
+            </dgm:forEach>
+          </dgm:layoutNode>
+        </dgm:layoutNode>
+      </dgm:layoutNode>
+      <dgm:choose name="Name6">
+        <dgm:if name="Name7" axis="self" ptType="node" func="revPos" op="equ" val="1"/>
+        <dgm:else name="Name8">
+          <dgm:layoutNode name="aSpace">
+            <dgm:alg type="sp"/>
+            <dgm:shape xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:blip="">
+              <dgm:adjLst/>
+            </dgm:shape>
+            <dgm:presOf/>
+            <dgm:constrLst/>
+            <dgm:ruleLst/>
+          </dgm:layoutNode>
+        </dgm:else>
+      </dgm:choose>
+    </dgm:forEach>
+  </dgm:layoutNode>
+</dgm:layoutDef>

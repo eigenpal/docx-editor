@@ -24,6 +24,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
+import { addShowcase } from './showcase';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
@@ -65,6 +66,7 @@ const TEXT: Record<string, Array<[string, string]>> = {
     ['CONFIDENTIAL', 'Sample document'],
   ],
   'word/footer1.xml': [['QA Automation Department', 'docx-editor.dev']],
+  'word/header4.xml': [['Element Test Summary', 'Advanced document examples']],
   'word/comments.xml': [
     ['Legal Team', 'Docs Team'],
     [
@@ -449,6 +451,8 @@ async function main(): Promise<void> {
     xml = tightenTableCells(xml, path);
     source.file(path, xml, { date: ENTRY_DATE });
   }
+
+  await addShowcase(source, HERE);
 
   // Normalise every entry's timestamp, directories included: their headers
   // carry a date too, and leaving them live is enough to churn the output.
