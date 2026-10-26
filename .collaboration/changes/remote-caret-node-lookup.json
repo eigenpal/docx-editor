@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "paragraphByNodeId listed every body paragraph and its text on each call.",
-  "after": "paragraphByNodeId reads a node-id map built once per body tree by the paraId address walk, then that one paragraph's text.",
+  "after": "paragraphByNodeId reads a node-id map built once per body tree by the paraId address walk, then that one paragraph's text; paragraphByStableId drops a hint when a store change may give its id a new first claimant.",
   "reason": "The map applies the same paraId normalization as the paragraph snapshot, so every lookup returns the same paragraph, id, and text; shared state, operations, and serialization are unchanged.",
   "tests": [
     "packages/core/src/collaboration/__tests__/body-paragraph-lookup.fuzz.test.ts",

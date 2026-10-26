@@ -1,4 +1,4 @@
-// Differential fuzz for the port's body paragraph lookup by node id. A remote caret asks it on
+// Differential fuzz for the port's body paragraph lookups, by node id and by stable id. A remote caret asks it on
 // every caret move, so it reads a node id map built once per body tree instead of listing every
 // paragraph with its text. It must still answer exactly what that full list answers: through
 // typing, splits, joins, deletions, and paraIds that go missing, invalid, lowercase,
@@ -173,6 +173,16 @@ test('the body paragraph lookup answers what the full paragraph list answers, th
     for (let step = 0; step < 30; step += 1) {
       const part = store.bodyStore().part;
       const expected = new Map(paragraphSnapshot(part).map((p) => [p.nodeId, p]));
+      // The stable-id lookup keeps hints across steps, so a rename or move must drop them.
+      for (const listed of expected.values()) {
+        const found = port.paragraphByStableId(listed.paragraphId);
+        if (found?.nodeId !== listed.nodeId || found.text !== listed.text) {
+          throw new Error(
+            `seed ${seed} step ${step} id ${listed.paragraphId}: ${JSON.stringify(found)} != ${JSON.stringify(listed)}`
+          );
+        }
+        checked += 1;
+      }
       for (const nodeId of [...allNodeIds(part.root), `missing-${step}`]) {
         const actual = port.paragraphByNodeId(nodeId);
         const want = expected.get(nodeId) ?? null;
@@ -220,31 +230,26 @@ test('caret lookups walk the paragraphs once per tree, not once per lookup', () 
   expect(recorder.enumerations).toBe(2);
 });
 
-// `paragraphByStableId` re-checks a hint by the paragraph's own id only, so after an earlier
-// paragraph takes that id it can keep answering the later holder, while `paragraphs()` and
-// `paragraphByNodeId` follow the first claimant. Tracked in issue #1498.
-test.todo(
-  'paragraphByStableId follows the first claimant after an earlier paragraph takes its id',
-  () => {
-    const loaded = readOoxmlPackage(
-      bytes(paragraphXml('11111111', 'first') + paragraphXml('22222222', 'second'))
-    );
-    if (!loaded.ok) throw new Error(loaded.reason);
-    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    const store = new TreePackageStore(loaded.package, main);
-    const port = createCollaborationDocumentPort(store, { documentId: 'hint' });
-    const [first] = paragraphNodes(store.bodyStore().part.root);
-    expect(port.paragraphByStableId('22222222')?.text).toBe('second');
-    store.transact(BODY, (context) =>
-      context.applyPackage((pkg) => {
-        const body = pkg.parts.get(pkg.mainDocumentPart)!;
-        const renamed = replaceNode(body, first!.id, withParaId(first!, '22222222'), {
-          deferValidation: true,
-        });
-        return renamed.ok ? withPart(pkg, renamed.part) : pkg;
-      })
-    );
-    const listed = port.paragraphs().find((p) => p.paragraphId === '22222222');
-    expect(port.paragraphByStableId('22222222')?.nodeId).toBe(listed?.nodeId);
-  }
-);
+// Issue #1498: the hint used to survive an earlier paragraph taking its id.
+test('paragraphByStableId follows the first claimant after an earlier paragraph takes its id', () => {
+  const loaded = readOoxmlPackage(
+    bytes(paragraphXml('11111111', 'first') + paragraphXml('22222222', 'second'))
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const store = new TreePackageStore(loaded.package, main);
+  const port = createCollaborationDocumentPort(store, { documentId: 'hint' });
+  const [first] = paragraphNodes(store.bodyStore().part.root);
+  expect(port.paragraphByStableId('22222222')?.text).toBe('second');
+  store.transact(BODY, (context) =>
+    context.applyPackage((pkg) => {
+      const body = pkg.parts.get(pkg.mainDocumentPart)!;
+      const renamed = replaceNode(body, first!.id, withParaId(first!, '22222222'), {
+        deferValidation: true,
+      });
+      return renamed.ok ? withPart(pkg, renamed.part) : pkg;
+    })
+  );
+  const listed = port.paragraphs().find((p) => p.paragraphId === '22222222');
+  expect(port.paragraphByStableId('22222222')?.nodeId).toBe(listed?.nodeId);
+});

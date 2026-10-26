@@ -13,6 +13,7 @@ import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
 import {
   createBodyParagraphLookup,
   createParagraphAddressResolver,
+  forgetChangedParagraphIds,
   isStoryPart,
   paragraphSnapshot,
 } from './paragraph-addresses.ts';
@@ -229,6 +230,8 @@ export function createCollaborationDocumentPort(
   };
 
   const resolveAddress = createParagraphAddressResolver(storyParts);
+  // A hint survives typing, but not a change that can give its id a new first claimant.
+  store.subscribe((change) => forgetChangedParagraphIds(resolveAddress, storyParts(), change));
   const paragraphByNodeId = createBodyParagraphLookup(() => store.bodyStore().part);
 
   const applyParagraphTexts = (

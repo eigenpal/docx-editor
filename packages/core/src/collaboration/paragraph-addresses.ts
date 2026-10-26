@@ -23,13 +23,12 @@
 // dropped and the part maps decide. Presence painted on the wrong paragraph is worse than
 // presence that costs a rebuild.
 //
-// One nuance the hint does not reproduce. A full scan reads body first and story parts
-// after, so a paraId that two parts share resolves to the body copy. A hint that named a
-// header keeps naming it if the BODY later acquires the same id. Reaching that needs a
-// cross-part paraId collision minted after a resolution, presence is ephemeral, and the
-// cost is which of two same-named paragraphs a remote caret sits on.
+// The re-check cannot see that ANOTHER paragraph took the id first: an earlier paragraph
+// renamed to it, a pasted copy, or a body paragraph that now shadows a header's. So the owner
+// of the store tells the resolver what changed (`forgetIds`, `forgetAll`), and a hint whose
+// id may have a new first claimant is dropped before it is read; the part maps then decide.
 
-import { findNode, type OoxmlNode, type OoxmlPart } from '../store/package/index.ts';
+import { findNode, parentNodeOf, type OoxmlNode, type OoxmlPart } from '../store/package/index.ts';
 import { isValidParaId, normalizeParagraphIdentity, paraIdOf } from '../store/package/para-id.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
@@ -199,15 +198,29 @@ function sameRoots(left: readonly OoxmlPart[], right: readonly OoxmlNode[]): boo
   return true;
 }
 
+/** Stable paragraph id to address, with the hint invalidation its owner drives. */
+export interface ParagraphAddressResolver {
+  (paragraphId: string): ParagraphAddress | null;
+  /**
+   * These paragraphs now carry these ids. A hint for one of the ids that names another node
+   * may no longer name the first claimant, so it is dropped; a hint that names the same node
+   * (typing in it) stays.
+   */
+  forgetIds(claims: Iterable<{ readonly paragraphId: string; readonly nodeId: string }>): void;
+  /** Any id may have a new first claimant (a structural or package-wide change). */
+  forgetAll(): void;
+}
+
 /**
  * Resolve stable paragraph ids against the story parts a replica holds.
  *
  * `storyParts` returns body first and the remaining story parts after, which is the
- * precedence a duplicate id resolves by.
+ * precedence a duplicate id resolves by. The caller must report changes that can move an id
+ * to another paragraph through `forgetIds` or `forgetAll`; see the module header.
  */
 export function createParagraphAddressResolver(
   storyParts: () => readonly OoxmlPart[]
-): (paragraphId: string) => ParagraphAddress | null {
+): ParagraphAddressResolver {
   const hints = new Map<string, ParagraphAddressHint>();
   let absent: { readonly roots: readonly OoxmlNode[]; readonly ids: Set<string> } | null = null;
 
@@ -239,7 +252,7 @@ export function createParagraphAddressResolver(
     return { part, nodeId: hint.nodeId };
   };
 
-  return (paragraphId: string): ParagraphAddress | null => {
+  const resolve = (paragraphId: string): ParagraphAddress | null => {
     const parts = storyParts();
     const hinted = fromHint(paragraphId, parts);
     if (hinted) return hinted;
@@ -258,6 +271,53 @@ export function createParagraphAddressResolver(
     if (absent.ids.size < MAX_ADDRESS_HINTS) absent.ids.add(paragraphId);
     return null;
   };
+  return Object.assign(resolve, {
+    forgetIds(claims: Iterable<{ readonly paragraphId: string; readonly nodeId: string }>) {
+      for (const { paragraphId, nodeId } of claims) {
+        if (hints.get(paragraphId)?.nodeId !== nodeId) hints.delete(paragraphId);
+      }
+    },
+    forgetAll() {
+      hints.clear();
+    },
+  });
+}
+
+/**
+ * Tell `resolver` which stable ids one store change may have given a new first claimant. A
+ * paragraph the change dirtied or created may now carry any id, so a hint for its current id
+ * that names another paragraph is dropped; typing in the hinted paragraph keeps its hint. A
+ * change inside a paragraph (a run, its text) moves no id. Anything else, or a change that
+ * names no node (a package-wide write), may reorder or rename paragraphs anywhere, so every
+ * hint goes. The next lookup of a forgotten id walks that part once.
+ */
+export function forgetChangedParagraphIds(
+  resolver: ParagraphAddressResolver,
+  parts: readonly OoxmlPart[],
+  change: { readonly dirty: readonly string[]; readonly created: readonly string[] }
+): void {
+  const changed = [...change.dirty, ...change.created];
+  if (changed.length === 0) return resolver.forgetAll();
+  const claims: { paragraphId: string; nodeId: string }[] = [];
+  for (const nodeId of changed) {
+    const part = parts.find((candidate) => nodeId.startsWith(`${candidate.name}#`));
+    const node = part ? findNode(part, nodeId) : null;
+    if (!part || !node) continue;
+    if (node.kind === 'paragraph') {
+      const authoredId = paraIdOf(node);
+      if (authoredId) claims.push({ paragraphId: authoredId.toUpperCase(), nodeId });
+      continue;
+    }
+    if (!insideParagraph(part, nodeId)) return resolver.forgetAll();
+  }
+  resolver.forgetIds(claims);
+}
+
+function insideParagraph(part: OoxmlPart, nodeId: string): boolean {
+  for (let parent = parentNodeOf(part, nodeId); parent; parent = parentNodeOf(part, parent.id)) {
+    if (parent.kind === 'paragraph') return true;
+  }
+  return false;
 }
 
 /**
