@@ -66,6 +66,7 @@
     "src/__tests__/review-refusal-ui-vue.test.ts",
     "src/__tests__/review-compact-card-vue.test.ts",
     "src/__tests__/review-rail-metrics-vue.test.ts",
+    "src/__tests__/review-rail-window-vue.test.ts",
     "src/__tests__/review-reply-author-vue.test.ts",
     "src/__tests__/review-adopt-vue.test.ts",
     "src/__tests__/review-region-vue.test.ts",

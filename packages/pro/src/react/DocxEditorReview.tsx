@@ -59,12 +59,8 @@ import {
   useTranslation,
 } from '@docx-editor.dev/react';
 import { cloneReviewCard, listCardTemplate, partitionReviewChildren } from './review-composition';
-import {
-  COMPACT_CARD_WIDTH,
-  RAIL_OVERSCAN,
-  useRailMetrics,
-  useRailWindow,
-} from './use-rail-geometry';
+import { COMPACT_CARD_WIDTH, RAIL_OVERSCAN, useRailMetrics } from './use-rail-geometry';
+import { useRailWindow } from './use-rail-window';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
 import { useReview, type ReviewItemView } from './useReview';
 import { useReviewAuthorInfo } from './review-author-styles';
@@ -313,7 +309,7 @@ function ReviewRoot({
   const observeSlot = useReviewSlotSizing(measure);
 
   // Where the rail sits and which band of the scroller is on screen — the DOM-measurement
-  // half of the rail, in `use-rail-geometry.ts`.
+  // half of the rail, in `use-rail-geometry.ts` and `use-rail-window.ts`.
   const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden, compact);
   const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden);
   // What `useReviewRailMetrics()` reads inside the rail: the geometry plus the presentation.
@@ -612,7 +608,7 @@ function ReviewRoot({
       ? null
       : activeRoot.anchorY !== null
         ? metrics.top + activeRoot.anchorY * metrics.scale
-        : window_ !== null
+        : window_ !== null && Number.isFinite(window_.top)
           ? window_.top + RAIL_OVERSCAN + 24
           : null;
   // The same card resolution as ReviewList, from the same template: the List part's

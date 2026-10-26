@@ -82,7 +82,11 @@ export interface ReviewListProps {
   collapsed?: ReadonlySet<string>;
   scale?: number;
   offset?: number;
-  /** Visible band of the scroller; cards outside it are not mounted. Null renders all. */
+  /**
+   * Visible band of the scroller; cards outside it are not mounted. Null renders all. Before
+   * the rail measures its scroller the band is empty (`top` above `bottom`, both infinite), so
+   * no positioned card renders.
+   */
   window?: { top: number; bottom: number } | null;
   /**
    * A render prop takes over the card entirely, keeping the rail's subscription, anchoring

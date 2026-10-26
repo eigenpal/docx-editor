@@ -1193,6 +1193,11 @@ export function selectedDrawingOverlayTargetOf(
     (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset)
   )
     return null;
+  // Outside a text box, no drawing is selected unless something selected one, and that answer
+  // needs no layout. The overlay asks after every keystroke, so asking `layout()` first landed
+  // the pass that typing defers, once per key.
+  const selected = scope.kind === 'frame' ? null : resolveSelectedDrawingRecord(surface);
+  if (scope.kind !== 'frame' && !selected) return null;
   // `layout()`, not only `publishedLayout()`: the caller is about to act on this geometry —
   // place handles, stamp a drag session — so a pass still parked on the scheduler's timer must
   // land first. Nothing pending makes this a plain read.
@@ -1201,7 +1206,7 @@ export function selectedDrawingOverlayTargetOf(
     scope.kind === 'frame'
       ? editedTextboxOverlayFrame(layout, scope, surface.currentPage('caret') - 1)
       : null;
-  const record = scope.kind === 'frame' ? edited?.record : resolveSelectedDrawingRecord(surface);
+  const record = scope.kind === 'frame' ? edited?.record : selected;
   if (!record) return null;
   if (record.accessibility.hidden) return null;
   const frame = edited ?? findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);

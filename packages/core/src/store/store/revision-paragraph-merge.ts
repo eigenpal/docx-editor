@@ -87,6 +87,13 @@ export function mergeRevisionParagraphs(
   const blocks = children.filter(
     (n) => n.kind === 'paragraph' || n.kind === 'table' || isContentControl(n)
   );
+  // Read once, not per emptied paragraph or block: asking per node made a long body quadratic.
+  // A paragraph or control follows `index` when the last one sits after it.
+  let lastTextAt = -1;
+  for (const [index, n] of children.entries())
+    if (n.kind === 'paragraph' || isContentControl(n)) lastTextAt = index;
+  const keepsAParagraph = children.some((n) => n.kind === 'paragraph' && !marks.has(n.id));
+  const tail = lastTwoBlocks(children);
   const out: OoxmlNode[] = [];
   let carried: OoxmlNode[] = [];
   for (const [index, node] of children.entries()) {
@@ -103,9 +110,8 @@ export function mergeRevisionParagraphs(
         ((DROPS_LAST_PARAGRAPH.has(container) &&
           // A custom XML block every paragraph of which goes keeps its last one here, so the
           // block around it goes whole rather than staying hollow.
-          (container !== 'customXml' ||
-            children.some((n) => n.kind === 'paragraph' && !marks.has(n.id)))) ||
-          children.slice(index + 1).some((n) => n.kind === 'paragraph' || isContentControl(n)))
+          (container !== 'customXml' || keepsAParagraph)) ||
+          index < lastTextAt)
       )
         continue;
       if (marks.has(node.id) && sources.has(node.id)) {
@@ -129,7 +135,7 @@ export function mergeRevisionParagraphs(
     } else if (
       isNamed(node, 'customXml') &&
       emptiedBlock(node, marks) &&
-      endsWithKeptParagraph(children, node, marks)
+      endsWithKeptParagraph(tail, node, marks)
     ) {
       // A custom XML block the decision empties of every paragraph and mark goes whole, when
       // its container still ends with a paragraph that stays.
@@ -238,8 +244,10 @@ function joinedTables(before: readonly OoxmlNode[], after: OoxmlNode[]): OoxmlNo
   for (let i = 1; i < was.length; i += 1)
     if (was[i - 1]!.kind === 'table' && was[i]!.kind === 'table') adjacentBefore.add(was[i]!.id);
   const out: OoxmlNode[] = [];
+  // The last block in `out`, by index: looking it up again per node made a long body quadratic.
+  let previousAt = -1;
   for (const node of after) {
-    const previous = blocks(out).at(-1);
+    const previous = previousAt >= 0 ? out[previousAt] : undefined;
     if (
       node.kind === 'table' &&
       previous?.kind === 'table' &&
@@ -249,12 +257,13 @@ function joinedTables(before: readonly OoxmlNode[], after: OoxmlNode[]): OoxmlNo
       const rows = node.children.filter(
         (child) => !isNamed(child, 'tblPr') && !isNamed(child, 'tblGrid')
       );
-      out[out.lastIndexOf(previous)] = {
+      out[previousAt] = {
         ...previous,
         children: [...previous.children, ...rows],
       } as OoxmlNode;
       continue;
     }
+    if (node.kind !== 'textValue') previousAt = out.length;
     out.push(node);
   }
   return out;
@@ -292,20 +301,28 @@ function emptiedBlock(node: OoxmlNode, marks: ReadonlySet<string>): boolean {
 
 /** Whether, without `dropped`, the container's last block is a paragraph the decision keeps. */
 function endsWithKeptParagraph(
-  children: readonly OoxmlNode[],
+  tail: readonly OoxmlNode[],
   dropped: OoxmlNode,
   marks: ReadonlySet<string>
 ): boolean {
-  const blocks = children.filter(
-    (child) =>
-      child !== dropped &&
-      (child.kind === 'paragraph' ||
-        child.kind === 'table' ||
-        isContentControl(child) ||
-        isNamed(child, 'customXml'))
-  );
-  const last = blocks.at(-1);
+  const last = tail[0] === dropped ? tail[1] : tail[0];
   return last?.kind === 'paragraph' && !marks.has(last.id);
+}
+
+/** The last two blocks of `children`, last first: the end once any one of them is dropped. */
+function lastTwoBlocks(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
+  const tail: OoxmlNode[] = [];
+  for (let index = children.length - 1; index >= 0 && tail.length < 2; index -= 1) {
+    const child = children[index]!;
+    if (
+      child.kind === 'paragraph' ||
+      child.kind === 'table' ||
+      isContentControl(child) ||
+      isNamed(child, 'customXml')
+    )
+      tail.push(child);
+  }
+  return tail;
 }
 
 /** Containers whose emptied last paragraph goes with its content. */
