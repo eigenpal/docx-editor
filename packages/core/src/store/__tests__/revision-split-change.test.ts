@@ -96,11 +96,19 @@ test('typing between two wrappers of one insertion lands as typing inside one wr
     // Only the wrapper boundary is not asserted: one change, in one wrapper or two.
     return paragraphOf(serializeOoxmlPart(result.part)).replace(/<\/w:ins><w:ins [^>]*>/g, '');
   };
-  for (const format of ['', '<w:rPr><w:b/></w:rPr>']) {
+  const controls = [
+    (inner: string) => inner,
+    (inner: string) => `<w:sdt><w:sdtPr/><w:sdtContent>${inner}</w:sdtContent></w:sdt>`,
+  ];
+  for (const [format, inControl] of ['', '<w:rPr><w:b/></w:rPr>'].flatMap((format) =>
+    controls.map((control) => [format, control] as const)
+  )) {
     const tail = `<w:r>${format}<w:t>ef</w:t></w:r>`;
-    const one = typed(`<w:r><w:t>ab</w:t></w:r>${insertion(`<w:r><w:t>cd</w:t></w:r>${tail}`)}`);
+    const one = typed(
+      `<w:r><w:t>ab</w:t></w:r>${inControl(insertion(`<w:r><w:t>cd</w:t></w:r>${tail}`))}`
+    );
     const wrappers = typed(
-      `<w:r><w:t>ab</w:t></w:r>${insertion('<w:r><w:t>cd</w:t></w:r>')}${insertion(tail)}`
+      `<w:r><w:t>ab</w:t></w:r>${inControl(insertion('<w:r><w:t>cd</w:t></w:r>') + insertion(tail))}`
     );
     // The typed text takes the format of the run before it, inside the change.
     expect(one).toContain('<w:r><w:t>cdX</w:t></w:r>');

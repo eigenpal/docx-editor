@@ -329,8 +329,7 @@ export function leavesInlineContainer(
   const next = inlineContainerOf(paragraph, after.runId);
   if (next === held) return false;
   // Two adjacent wrappers of one change are one container: the caret stays in the change.
-  const holder = (inlineContainersOf(paragraph, held.id)[0] ?? paragraph) as OoxmlElement;
-  return next === null || !sameChangeAcross(holder, held, next);
+  return next === null || !sameChangeAcross(paragraph, held, next);
 }
 
 /** Innermost content-control ancestor of a node (the node itself when it is one). */

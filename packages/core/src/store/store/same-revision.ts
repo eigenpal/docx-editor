@@ -48,14 +48,33 @@ export function continuedRevisionRun(
 }
 
 /**
- * Whether `right` is the wrapper just after `left` in `holder` and the same change. Text at
- * the boundary between them is inside the change, as it is inside one wrapper.
+ * Whether `right` is the wrapper just after `left`, under one parent inside `root`, and the
+ * same change. Text at the boundary between them is inside the change, as inside one wrapper.
  */
-export function sameChangeAcross(holder: OoxmlElement, left: OoxmlNode, right: OoxmlNode): boolean {
+export function sameChangeAcross(
+  root: { readonly children: readonly OoxmlNode[] },
+  left: OoxmlNode,
+  right: OoxmlNode
+): boolean {
   if (left.kind === 'textValue' || right.kind === 'textValue') return false;
   if (!isContentRevisionKind(left.kind) || left.kind !== right.kind) return false;
+  if (!sameRevision(left, right)) return false;
+  const holder = parentIn(root, left.id);
+  if (!holder) return false;
   const index = holder.children.findIndex((child) => child.id === left.id);
-  return index >= 0 && holder.children[index + 1]?.id === right.id && sameRevision(left, right);
+  return holder.children[index + 1]?.id === right.id;
+}
+
+type Holder = { readonly children: readonly OoxmlNode[] };
+
+function parentIn(node: Holder, id: string): Holder | null {
+  for (const child of node.children) {
+    if (child.id === id) return node;
+    if (child.kind === 'textValue') continue;
+    const found = parentIn(child, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 function find(node: OoxmlNode, id: string): OoxmlNode | null {

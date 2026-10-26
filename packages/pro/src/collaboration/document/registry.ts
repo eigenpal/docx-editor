@@ -102,6 +102,8 @@ export class DocumentRegistry {
   readonly history = new RegistryHistory();
   /** Ids more than one parent lists. Their placement can move without their listings moving. */
   private contested = new Set<LogicalId>();
+  /** Structural batches seen: a move or delete can change which text is first in order. */
+  structureVersion = 0;
   /** Parents a contested child moved from or to since the materializer last asked. */
   private readonly reparented = new Set<LogicalId>();
   /** Every child-array listing. Derived, never replicated. */
@@ -884,7 +886,10 @@ export class DocumentRegistry {
     if (structural) for (const id of this.contested) changed.add(id);
     if (changed.size > 0) this.resolveParents(changed);
     // The holder that shows a contested copy is the last in document order.
-    if (structural) this.inline.orderChanged();
+    if (structural) {
+      this.structureVersion += 1;
+      this.inline.orderChanged();
+    }
   }
 
   /** The records that lost their last parent since the last call, and still have none. */

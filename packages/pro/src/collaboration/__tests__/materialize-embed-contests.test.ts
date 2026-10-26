@@ -16,7 +16,8 @@ const FIRST = 'first' as LogicalId;
 const SECOND = 'second' as LogicalId;
 
 test('a shared embed costs one full pass, not one per rebuild', () => {
-  const contests = new ListingContests({} as DocumentRegistry);
+  const registry = { structureVersion: 0 };
+  const contests = new ListingContests(registry as DocumentRegistry);
   const shownUnder = new Map<LogicalId, LogicalId>([[EMBED, FIRST]]);
   const rebuilt = new Set<LogicalId>([SECOND]);
 
@@ -33,6 +34,11 @@ test('a shared embed costs one full pass, not one per rebuild', () => {
     expect(contests.noteEmbed(EMBED, SECOND, shownUnder, rebuilt)).toBe(false);
     expect(contests.contested).toBe(false);
   }
+  // A move can put the second text first: the decision holds no longer.
+  registry.structureVersion += 1;
+  contests.reset();
+  expect(contests.noteEmbed(EMBED, SECOND, shownUnder, rebuilt)).toBe(true);
+  expect(contests.contested).toBe(true);
 });
 
 test('an embed shown nowhere, shown by this text, or shown by a rebuilt text is no contest', () => {

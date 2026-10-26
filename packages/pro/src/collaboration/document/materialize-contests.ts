@@ -51,6 +51,8 @@ export class ListingContests {
   private readonly embedsMet = new Set<LogicalId>();
   /** Where a full pass showed each embed an incremental pass had found contested. */
   private readonly embedWinners = new Map<LogicalId, LogicalId>();
+  /** The registry's structure version when `embedWinners` was decided. */
+  private embedsDecidedAt = -1;
 
   constructor(private readonly registry: DocumentRegistry) {}
 
@@ -118,7 +120,13 @@ export class ListingContests {
   ): boolean {
     const shownAt = shownUnder.get(id);
     if (shownAt === undefined || shownAt === paragraphId || rebuilt.has(shownAt)) return true;
-    if (this.embedWinners.get(id) === shownAt) return false;
+    // A decision holds while document order does: a move can put the rebuilt text first.
+    if (
+      this.embedWinners.get(id) === shownAt &&
+      this.embedsDecidedAt === this.registry.structureVersion
+    ) {
+      return false;
+    }
     this.contested = true;
     this.matchesResolution = false;
     this.embedsMet.add(id);
@@ -127,6 +135,8 @@ export class ListingContests {
 
   /** After a full pass: where each embed this pass contested shows. */
   recordEmbeds(shownUnder: ReadonlyMap<LogicalId, LogicalId>): void {
+    if (this.embedsDecidedAt !== this.registry.structureVersion) this.embedWinners.clear();
+    this.embedsDecidedAt = this.registry.structureVersion;
     for (const id of this.embedsMet) {
       const winner = shownUnder.get(id);
       if (winner === undefined) this.embedWinners.delete(id);
