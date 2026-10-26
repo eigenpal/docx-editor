@@ -231,14 +231,24 @@ export function createCollaborationDocumentPort(
 
   const resolveAddress = createParagraphAddressResolver(storyParts);
   // A hint survives typing, but not a change that can give its id a new first claimant. The
-  // listener holds the resolver weakly and unsubscribes once the port is gone, so a store that
-  // outlives its ports does not keep them, or the trees their hints name, alive.
-  const resolverRef = new WeakRef(resolveAddress);
-  const stopForgetting = store.subscribe((change) => {
-    const resolver = resolverRef.deref();
-    if (!resolver) return stopForgetting();
-    forgetChangedParagraphIds(resolver, storyParts(), change);
-  });
+  // lookup checks what changed since it last looked, rather than listening: a listener runs in
+  // subscription order, so a caller notified first read a hint not yet dropped, and a listener
+  // would keep every port the store ever had. One store change since then is read for what it
+  // touched; anything else, or a change the store did not publish, forgets every hint.
+  let hintsRevision = store.packageRevision;
+  let hintsChange = store.lastModelChange;
+  const syncHints = (): void => {
+    const revision = store.packageRevision;
+    const change = store.lastModelChange;
+    if (revision === hintsRevision && change === hintsChange) return;
+    if (revision === hintsRevision + 1 && change !== null && change !== hintsChange) {
+      forgetChangedParagraphIds(resolveAddress, storyParts(), change);
+    } else {
+      resolveAddress.forgetAll();
+    }
+    hintsRevision = revision;
+    hintsChange = change;
+  };
   const paragraphByNodeId = createBodyParagraphLookup(() => store.bodyStore().part);
 
   const applyParagraphTexts = (
@@ -314,6 +324,7 @@ export function createCollaborationDocumentPort(
     },
     paragraphByStableId(paragraphId: string) {
       const stableId = paragraphId.toUpperCase();
+      syncHints();
       const address = resolveAddress(stableId);
       if (!address) return null;
       const text = paragraphTextOf(address.part, address.nodeId);

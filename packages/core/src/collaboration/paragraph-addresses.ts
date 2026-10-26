@@ -25,9 +25,9 @@
 //
 // The re-check cannot see that ANOTHER paragraph took the id first: an earlier paragraph
 // renamed to it, a pasted copy, a text box added inside an earlier paragraph, or a body
-// paragraph that now shadows a header's. So the owner of the store reports each change
-// (`forgetChangedParagraphIds`), and every hint is dropped unless the change was typing that
-// could not move an id; the part maps then decide.
+// paragraph that now shadows a header's. So before each lookup the owner of the store passes the
+// change since the last one (`forgetChangedParagraphIds`), and every hint is dropped unless the
+// change was typing that could not move an id; the part maps then decide.
 
 import { findNode, type OoxmlNode, type OoxmlPart } from '../store/package/index.ts';
 import { isValidParaId, normalizeParagraphIdentity, paraIdOf } from '../store/package/para-id.ts';

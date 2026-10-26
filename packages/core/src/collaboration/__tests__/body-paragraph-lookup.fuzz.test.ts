@@ -375,3 +375,29 @@ test('a stable-id hint survives remote typing in its paragraph', () => {
     expect(recorder.enumerations).toBe(0);
   }
 });
+
+// A listener that subscribed before the port runs first, and still reads the change's result.
+test('paragraphByStableId answers a listener notified before the port', () => {
+  const loaded = readOoxmlPackage(
+    bytes(paragraphXml('11111111', 'first') + paragraphXml('22222222', 'second'))
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const store = new TreePackageStore(loaded.package, main);
+  let port: Port | null = null;
+  const seen: (string | undefined)[] = [];
+  store.subscribe(() => seen.push(port?.paragraphByStableId('22222222')?.text));
+  port = createCollaborationDocumentPort(store, { documentId: 'order' });
+  expect(port.paragraphByStableId('22222222')?.text).toBe('second');
+  const [first] = paragraphNodes(store.bodyStore().part.root);
+  store.transact(BODY, (context) =>
+    context.applyPackage((pkg) => {
+      const body = pkg.parts.get(pkg.mainDocumentPart)!;
+      const renamed = replaceNode(body, first!.id, withParaId(first!, '22222222'), {
+        deferValidation: true,
+      });
+      return renamed.ok ? withPart(pkg, renamed.part) : pkg;
+    })
+  );
+  expect(seen).toEqual(['first']);
+});
