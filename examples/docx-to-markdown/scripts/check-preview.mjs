@@ -41,8 +41,8 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`http://localhost:${address.port}/`);
-  // Verified against Word: the summary table and endnotes finish on page 27.
-  const expectedPages = 27;
+  // The showcase ends with the coverage summary and endnotes on page 30.
+  const expectedPages = 30;
   await page.waitForSelector(`#markdown-page-${expectedPages} .md-page-sheet`, {
     timeout: 60000,
   });
