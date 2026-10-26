@@ -790,9 +790,9 @@ describe('wps vector shape projection', () => {
     const atoms = indexInlineDrawingProjectionsInPart(part, {
       resolveSchemeColor: () => '4472C4',
     });
-    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    // Unsupported geometry keeps a visible placeholder with the authored extent.
     expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
-      [true, null],
+      [undefined, null],
     ]);
   });
 
@@ -950,21 +950,22 @@ describe('wps vector shape projection', () => {
     expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.extentEmu])).toEqual([
       [undefined, { cx: 914400, cy: 457200 }],
     ]);
+    expect(projectDrawingsInPart(part)).toHaveLength(1);
     const [projection] = projectDrawingsInPart(part);
     expect(projection?.picture).toBeNull();
     expect(drawingPaintFields(projection!).placeholderGraphicKind).toBe('chart');
   });
 
-  test('unsupported path verbs refuse vector geometry and stay invisible under MC', () => {
+  test('unsupported path verbs refuse vector geometry and keep a placeholder under MC', () => {
     const bezier = doubleRuleShapeDrawing().replace(
       '<a:lnTo><a:pt x="0" y="38100"/></a:lnTo>',
       '<a:spiralTo><a:pt x="1" y="1"/><a:pt x="0" y="38100"/></a:spiralTo>'
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(bezier)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
-    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    // Unsupported geometry keeps a visible placeholder with the authored extent.
     expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
-      [true, null],
+      [undefined, null],
     ]);
   });
 

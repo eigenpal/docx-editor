@@ -1,11 +1,7 @@
-// An anchored `mc:AlternateContent` payload the engine cannot draw (here a shape group with a
-// picture and a shadowed text box member) stays invisible. Its anchor still states where text must not
-// flow, so the layout index keeps a footprint: the authored extent, position and wrap, with
-// every paint payload removed. These tests pin which anchors get a footprint, what it keeps,
-// and that the public projection outputs do not change.
+// Unsupported MC drawings retain their authored geometry and one visible placeholder.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
+import { readOoxmlPart, serializeOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
 import {
   drawingAccessibility,
   indexInlineDrawingProjectionsInPart,
@@ -87,8 +83,8 @@ function partWith(run: string): OoxmlPart {
   return parsePart(`<w:p><w:r>${run}</w:r><w:r><w:t>First line</w:t></w:r></w:p>`);
 }
 
-describe('the wrap footprint of an MC payload that cannot paint', () => {
-  test('keeps the anchor geometry and drops every paint payload', () => {
+describe('the placeholder of an MC payload that cannot paint', () => {
+  test('keeps the anchor geometry and unsupported drawing identity', () => {
     const part = partWith(mcWrapped(groupAnchor()));
     const index = indexInlineDrawingProjectionsInPart(part);
     expect(index.size).toBe(1);
@@ -97,7 +93,7 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
     const wrapper = part.root.children[0]!.children[0]!.children[0]!.children[0]!;
     expect(wrapper.localName).toBe('AlternateContent');
     expect(atomId).toBe(wrapper.id);
-    expect(footprint!.footprintOnly).toBe(true);
+    expect(footprint!.footprintOnly).toBeUndefined();
     expect(footprint).toMatchObject({
       kind: 'anchored',
       wrap: 'topAndBottom',
@@ -113,12 +109,12 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
       relativeFrom: 'paragraph',
       offsetEmu: 304800,
     });
-    // Every output reads the record as hidden.
-    expect(drawingAccessibility(footprint!).hidden).toBe(true);
+    // Unsupported visible content stays available to every output.
+    expect(drawingAccessibility(footprint!).hidden).toBe(false);
   });
 
-  test('public projections do not list the footprint', () => {
-    expect(projectDrawingsInPart(partWith(mcWrapped(groupAnchor())))).toHaveLength(0);
+  test('public projections list the unsupported drawing', () => {
+    expect(projectDrawingsInPart(partWith(mcWrapped(groupAnchor())))).toHaveLength(1);
   });
 
   test('a group outside MC keeps its placeholder projection', () => {
@@ -139,10 +135,10 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
         '<wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>',
       'tight',
     ],
-    ['none', '<wp:wrapNone/>', null],
+    ['none', '<wp:wrapNone/>', 'inFront'],
   ];
   for (const [name, wrap, expected] of wraps) {
-    test(`wrap ${name} ${expected ? 'reserves' : 'reserves no'} space`, () => {
+    test(`wrap ${name} retains its projection`, () => {
       const index = indexInlineDrawingProjectionsInPart(partWith(mcWrapped(groupAnchor({ wrap }))));
       if (expected === null) {
         expect(index.size).toBe(0);
@@ -152,12 +148,14 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
     });
   }
 
-  test('behind the text, wrapNone reserves nothing and a wrapping mode still wraps', () => {
+  test('behind the text, placeholders retain the authored wrapping mode', () => {
     const behind = (wrap?: string) =>
       indexInlineDrawingProjectionsInPart(
         partWith(mcWrapped(groupAnchor({ behindDoc: '1', ...(wrap ? { wrap } : {}) })))
       );
-    expect(behind('<wp:wrapNone/>').size).toBe(0);
+    expect([...behind('<wp:wrapNone/>').values()].map((projection) => projection.wrap)).toEqual([
+      'behind',
+    ]);
     expect([...behind().values()].map((projection) => projection.wrap)).toEqual(['topAndBottom']);
   });
 
@@ -174,25 +172,24 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
     expect(footprint).toMatchObject({
       kind: 'inline',
       wrap: 'inline',
-      footprintOnly: true,
       extentEmu: { cx: 914400, cy: 457200 },
       groupPicture: null,
       vectorShape: null,
       textboxStory: null,
     });
-    expect(drawingAccessibility(footprint!).hidden).toBe(true);
-    expect(projectDrawingsInPart(part)).toHaveLength(0);
+    expect(drawingAccessibility(footprint!).hidden).toBe(false);
+    expect(projectDrawingsInPart(part)).toHaveLength(1);
     const hiddenInline = inline('<wp:docPr id="3" name="Group 3" hidden="1"/>');
     expect(indexInlineDrawingProjectionsInPart(partWith(mcWrapped(hiddenInline))).size).toBe(0);
   });
 
-  test('drops a drawing hyperlink, so the hidden area opens nothing', () => {
+  test('keeps unsupported content without an unresolved hyperlink', () => {
     const linked = groupAnchor({
       docPr: '<wp:docPr id="1" name="Group 1"><a:hlinkClick r:id="rIdLink"/></wp:docPr>',
     });
     const part = partWith(mcWrapped(linked));
     const [footprint] = [...indexInlineDrawingProjectionsInPart(part).values()];
-    expect(footprint!.footprintOnly).toBe(true);
+    expect(footprint!.footprintOnly).toBeUndefined();
     expect(footprint!.hyperlinkHref).toBeNull();
   });
 
@@ -238,4 +235,63 @@ test('an MC-wrapped anchor keeps its authored tight wrap polygon', () => {
     { x: 17000, y: 500 },
     { x: 5000, y: 500 },
   ]);
+});
+
+describe('MC drawing fallback selection', () => {
+  const legacy = (shape: string) =>
+    `<w:pict><v:shape id="Fallback" alt="Structure chart" style="width:120pt;height:60pt" ${shape}/></w:pict>`;
+
+  test('an unsupported selected VML fallback retains one placeholder and its label', () => {
+    const part = parsePart(
+      '<w:p xmlns:x="urn:example:unknown"><w:r>' +
+        mcWrapped(groupAnchor(), 'x', legacy('path="unsupported"')) +
+        '</w:r></w:p>'
+    );
+    const before = serializeOoxmlPart(part);
+    const projections = projectDrawingsInPart(part);
+    expect(projections).toHaveLength(1);
+    expect(projections[0]).toMatchObject({
+      description: 'Structure chart',
+      extentEmu: { cx: 1524000, cy: 762000 },
+      picture: null,
+      vectorShape: null,
+      ownerPartName: '/word/document.xml',
+    });
+    expect(drawingAccessibility(projections[0]!).hidden).toBe(false);
+    expect(indexInlineDrawingProjectionsInPart(part).size).toBe(1);
+    expect(serializeOoxmlPart(part)).toBe(before);
+    const reopened = readOoxmlPart(before, { name: part.name, contentType: part.contentType });
+    if (!reopened.ok) throw new Error(reopened.reason);
+    expect(projectDrawingsInPart(reopened.part)).toHaveLength(1);
+  });
+
+  test('a paintable VML fallback replaces an unsupported modern drawing', () => {
+    const fallback =
+      '<w:pict><v:rect id="Legacy" style="width:120pt;height:60pt" stroked="f" fillcolor="#123456"/></w:pict>';
+    const [projection] = projectDrawingsInPart(partWith(mcWrapped(groupAnchor(), 'wpg', fallback)));
+    expect(projection!.extentEmu).toEqual({ cx: 1524000, cy: 762000 });
+    expect(projection!.vectorShape ?? projection!.legacyGraphic).toBeTruthy();
+  });
+
+  test('an unsized fallback uses only the modern drawing geometry', () => {
+    const part = parsePart(
+      '<w:p xmlns:x="urn:example:unknown"><w:r>' + mcWrapped(groupAnchor(), 'x') + '</w:r></w:p>'
+    );
+    const [projection] = projectDrawingsInPart(part);
+    expect(projection).toMatchObject({
+      extentEmu: { cx: 3810000, cy: 762000 },
+      picture: null,
+      vectorShape: null,
+      groupPicture: null,
+      textboxStory: null,
+    });
+    expect(drawingAccessibility(projection!).hidden).toBe(false);
+    expect(indexInlineDrawingProjectionsInPart(part).size).toBe(1);
+  });
+
+  test('nonvisual selected content does not become a drawing placeholder', () => {
+    const part = partWith(mcWrapped('<w:rPr><w:b/></w:rPr>'));
+    expect(projectDrawingsInPart(part)).toHaveLength(0);
+    expect(indexInlineDrawingProjectionsInPart(part).size).toBe(0);
+  });
 });

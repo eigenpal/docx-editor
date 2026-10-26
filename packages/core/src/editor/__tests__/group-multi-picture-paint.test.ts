@@ -192,10 +192,10 @@ describe('a drawing group with two picture members', () => {
     });
   });
 
-  test('an MC-wrapped group whose second picture is missing is not shown', async () => {
+  test('an MC-wrapped group whose second picture is missing shows one placeholder', async () => {
     await withMounted(docx(MEMBERS, null), (surface, container) => {
-      expect(groupRecord(surface)).toBeUndefined();
-      expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+      expect(groupRecord(surface)).toBeDefined();
+      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
       expect(container.textContent).toContain('Title');
     });
   });

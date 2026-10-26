@@ -19,9 +19,8 @@ import type { PictureFrameEffects } from '../store/package/drawing-picture-frame
  */
 export interface DrawingGroupPictureRecord {
   /**
-   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`. An output
-   * that cannot draw the picture leaves such a group out, as it leaves out other MC content
-   * it cannot draw. A group without it shows the output's unsupported-drawing result.
+   * Whether the group is the chosen branch of a run-level `mc:AlternateContent`.
+   * Failed picture resources show one placeholder for the whole group.
    */
   readonly alternateContent: boolean;
 }

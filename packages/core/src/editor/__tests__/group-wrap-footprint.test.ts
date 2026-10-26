@@ -1,9 +1,5 @@
-// A shape group with a picture and a shadowed text box member cannot paint, so under
-// `mc:AlternateContent` it stays invisible. Its anchor still wraps text: a top-and-bottom band
-// 24pt below its paragraph pushed the rest of the page down, and without it every later line
-// sat 84pt too high. These tests mount real bytes and check that the hidden group moves text
-// exactly as the same group drawn as a placeholder does, that nothing paints, selects or links
-// through the hidden area, and that edits and save keep the authored XML.
+// Unsupported groups keep their authored geometry and expose one replaceable placeholder.
+// Text wrapping, selection, tracked changes, and save/reopen use the same drawing record.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -194,19 +190,19 @@ async function linesOf(options: DocxOptions): Promise<readonly (readonly number[
 }
 
 describe('an MC group that cannot paint', () => {
-  test('keeps its top-and-bottom band and paints nothing', async () => {
+  test('keeps its top-and-bottom band and paints one placeholder', async () => {
     await withMounted(docx(), (surface, container) => {
       const layout = surface.layout();
       const [record, ...rest] = anchored(layout.pages[0]!);
       expect(rest).toHaveLength(0);
-      expect(record!.accessibility.hidden).toBe(true);
+      expect(record!.accessibility.hidden).toBe(false);
       expect(record!.wrap).toBe('topAndBottom');
       const lines = bodyLines(layout);
       // The anchor's own first line stays at the top; the next line starts under the band,
       // 24pt + 60pt below the paragraph.
       expect(lines[0]![1]).toBeCloseTo(0, 1);
       expect(lines[1]![1]).toBeGreaterThanOrEqual(84);
-      expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
       expect(container.querySelector('img')).toBeNull();
       expect(container.textContent).not.toContain('Group label');
     });
@@ -228,7 +224,7 @@ describe('an MC group that cannot paint', () => {
   test('wrapNone still reserves nothing', async () => {
     const options = { group: { wrap: '<wp:wrapNone/>' } };
     await withMounted(docx(options), (surface) => {
-      expect(anchored(surface.layout().pages[0]!)).toHaveLength(0);
+      expect(anchored(surface.layout().pages[0]!)).toHaveLength(1);
       const lines = bodyLines(surface.layout());
       expect(lines[1]![1]).toBeLessThan(30);
     });
@@ -251,32 +247,30 @@ describe('an MC group that cannot paint', () => {
     expect(hidden.at(-1)![0]).toBe(1);
   });
 
-  test('cannot be hit, selected or followed as a link', async () => {
+  test('keeps selection and sanitized links on the visible placeholder', async () => {
     const docPrChildren = '<a:hlinkClick r:id="rIdLink"/>';
     await withMounted(docx({ group: { docPrChildren } }), (surface) => {
       const page = surface.layout().pages[0]!;
       const record = anchored(page)[0]!;
-      expect(record.hyperlinkHref).toBeNull();
+      expect(record.hyperlinkHref).toBe('https://example.invalid/');
       const box = record.hitBounds;
       const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-      expect(hitAnchoredDrawingAtPoint([record], center, page.index)).toBeNull();
-      expect(findDrawingOverlayFrameInLayout(surface.layout(), record.drawingNodeId)).toBeNull();
-      const before = surface.state().selection;
-      expect(surface.selectDrawing(record.drawingNodeId, record.paragraphId)).toBe(false);
-      expect(surface.state().selection).toEqual(before);
-      const at = { paragraphId: record.anchorParagraphId, offset: record.start };
-      surface.setSelection({ anchor: at, head: at });
-      expect(resolveSelectedDrawingRecord(surface)).toBeNull();
+      expect(hitAnchoredDrawingAtPoint([record], center, page.index)).not.toBeNull();
+      expect(
+        findDrawingOverlayFrameInLayout(surface.layout(), record.drawingNodeId)
+      ).not.toBeNull();
+      expect(surface.selectDrawing(record.drawingNodeId, record.paragraphId)).toBe(true);
+      expect(resolveSelectedDrawingRecord(surface)?.drawingNodeId).toBe(record.drawingNodeId);
     });
   });
 
-  test('a tracked insertion draws no change bar for the hidden group', async () => {
+  test('a tracked insertion retains its change bar on the visible group', async () => {
     await withMounted(docx({ group: { tracked: true } }), (surface, container) => {
       const page = surface.layout().pages[0]!;
-      expect(anchored(page)[0]!.accessibility.hidden).toBe(true);
+      expect(anchored(page)[0]!.accessibility.hidden).toBe(false);
       const first = page.fragments[0]!;
-      expect(first.kind === 'paragraph' && first.lines[0]!.anchorRevisions).toBeFalsy();
-      expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+      expect(first.kind === 'paragraph' && first.lines[0]!.anchorRevisions).toBeTruthy();
+      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
     });
   });
 
@@ -298,7 +292,7 @@ describe('an MC group that cannot paint', () => {
     expect(xml).toMatch(/<wpg:wgp>.*<pic:pic>.*<wps:txbx>.*Group label.*<\/wpg:wgp>/s);
     expect(xml).toContain('<mc:Fallback><w:pict><v:group id="Group 1"/></w:pict></mc:Fallback>');
     await withMounted(saved!, (surface) => {
-      expect(anchored(surface.layout().pages[0]!)[0]!.accessibility.hidden).toBe(true);
+      expect(anchored(surface.layout().pages[0]!)[0]!.accessibility.hidden).toBe(false);
       expect(bodyLines(surface.layout()).slice(1)).toEqual(before.slice(1));
     });
   });
@@ -316,8 +310,8 @@ describe('an MC group that cannot paint', () => {
     expect(hidden[0]![1]).toBeCloseTo(0, 1);
     expect(hidden[1]![1]).toBeCloseTo(150 - 72, 1);
     await withMounted(docx({ inHeader: true, group }), (surface, container) => {
-      expect(anchored(surface.layout().pages[0]!, true)[0]!.accessibility.hidden).toBe(true);
-      expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+      expect(anchored(surface.layout().pages[0]!, true)[0]!.accessibility.hidden).toBe(false);
+      expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
     });
   });
 });
@@ -349,11 +343,11 @@ describe('an MC group whose picture cannot render', () => {
       const group = { members: PICTURE_MEMBER, ...options.group };
       await withMounted(docx({ ...options, group }), (surface, container) => {
         const record = anchored(surface.layout().pages[0]!)[0]!;
-        expect(record.accessibility.hidden).toBe(true);
-        expect(record.groupPicture).toBeUndefined();
-        expect(record.resource.kind).toBe('unrenderable');
+        expect(record.accessibility.hidden).toBe(false);
+        expect(record.groupPicture).toBeDefined();
+        expect(record.resource.kind).not.toBe('ready');
         expect(bodyLines(surface.layout())).toEqual(ready);
-        expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+        expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
         expect(container.querySelector('img')).toBeNull();
       });
     });

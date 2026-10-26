@@ -1,3 +1,21 @@
+import { findNode, parentNodeOf, type OoxmlPart } from '@docx-editor.dev/core/store';
+
+/** Include both compatibility branches when a drawing needs a custom preview. */
+export function unsupportedSourceInPart(part: OoxmlPart, nodeId: string) {
+  const node = findNode(part, nodeId);
+  if (!node || node.kind === 'textValue') return null;
+  const parent = parentNodeOf(part, nodeId);
+  const mc = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+  if (
+    parent?.namespaceUri === mc &&
+    (parent.localName === 'Choice' || parent.localName === 'Fallback')
+  ) {
+    const wrapper = parentNodeOf(part, parent.id);
+    if (wrapper?.namespaceUri === mc && wrapper.localName === 'AlternateContent') return wrapper;
+  }
+  return node;
+}
+
 import type {
   UnsupportedElement,
   UnsupportedElementRule,

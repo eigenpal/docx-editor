@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Unsupported alternative drawings could be invisible.",
+  "after": "Unsupported alternative drawings expose a local replaceable placeholder.",
+  "reason": "Only local projection and rendering change. Canonical nodes, shared operations, and room formats remain unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts"
+  ],
+  "changeset": "unsupported-alternative-drawings",
+  "migration": null
+}

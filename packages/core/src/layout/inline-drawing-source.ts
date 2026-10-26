@@ -41,7 +41,6 @@ import {
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 import { packageDrawingProjectionContext } from '../store/package/drawing-projection-context.ts';
 import { diagramPartsToken } from '../store/package/diagram-parts.ts';
-import { wrapFootprintProjection } from '../store/package/drawing-wrap-footprint.ts';
 import { createPictureBulletResourceResolver } from './numbering-picture-bullet-resources.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -556,13 +555,8 @@ function createPartDrawingContextSlot(options: {
     return pending;
   };
 
-  // An MC-wrapped group with a picture that cannot render paints nothing, as an MC
-  // payload the projection cannot draw (`projectRunLevelMcDrawing`), and keeps only its wrap
-  // footprint. A linked picture settles at once; an embedded one counts only after its decode
-  // settles, so a pending group keeps its frame and paints its vector members.
-  //
-  // A chart shown by its fallback picture follows the same settlement: a picture that fails
-  // shows the chart placeholder instead (`drawing-chart-fallback.ts`).
+  // Failed groups retain one replaceable placeholder. Chart fallback pictures use
+  // their chart projection after resource failure, preserving chart metadata.
   const settledResource = (shown: DrawingProjection): ImageResourceState | undefined => {
     const picture = shown.picture ?? shown.groupPicture;
     return picture && !picture.embeddedRelationshipId
@@ -571,16 +565,9 @@ function createPartDrawingContextSlot(options: {
   };
   const projectionForAtom = (atomNodeId: string): DrawingProjection | null => {
     const projection = atomProjections.get(atomNodeId) ?? null;
-    if (projection?.chartFallbackPicture) {
-      return chartRecordProjection(projection, settledResource);
-    }
-    if (!projection?.groupPicture?.alternateContent) return projection;
-    const pictures = [projection.groupPicture, ...(projection.groupPictureLayers ?? [])];
-    const failed = pictures.some((picture) => {
-      const state = settledResource({ ...projection, groupPicture: picture });
-      return state && state.kind !== 'ready' && state.kind !== 'pending';
-    });
-    return failed ? wrapFootprintProjection(projection) : projection;
+    return projection?.chartFallbackPicture
+      ? chartRecordProjection(projection, settledResource)
+      : projection;
   };
 
   const context: InlineDrawingLayoutContext = Object.freeze({

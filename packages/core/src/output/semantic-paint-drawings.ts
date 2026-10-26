@@ -767,8 +767,7 @@ function paintDrawingRecordElement(
       : null;
   // A group paints whole or not at all. Its vector members paint alone only while the
   // picture is pending. A picture that cannot paint turns the whole group into the refusal
-  // card of an unsupported group. Layout drops an MC-wrapped group whose resource fails, so
-  // that group never reaches this card.
+  // card of an unsupported group, including groups in alternative content.
   const layerFailed = drawing.groupPictureLayers?.some(
     (layer) => layer.resource.kind !== 'pending' && layerUrl(layer, ctx, urlRegistry) === null
   );

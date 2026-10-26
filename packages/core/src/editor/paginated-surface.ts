@@ -1,5 +1,6 @@
 import {
   createUnsupportedElementProjection,
+  unsupportedSourceInPart,
   validateUnsupportedElementRules,
 } from './unsupported-element-state.ts';
 import { DocumentSelectionHistory } from './document-selection-history.ts';
@@ -2751,8 +2752,7 @@ export function mountPaginatedSurface(
           const part = ownerPartName
             ? session.currentPackage().parts.get(ownerPartName)
             : partOfNodeId(session, nodeId);
-          const node = part ? findNode(part, nodeId) : null;
-          return node && node.kind !== 'textValue' ? node : null;
+          return part ? unsupportedSourceInPart(part, nodeId) : null;
         },
         breakMarkStrings,
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),

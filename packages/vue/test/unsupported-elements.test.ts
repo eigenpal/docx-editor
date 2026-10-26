@@ -389,3 +389,66 @@ test('Vue declarations track dimensions mutated inside a reactive layout object'
   }
   expect(registry.current()).toEqual([]);
 });
+
+test('Vue exposes one unsupported drawing alternative and restores its fallback', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { unzipSync, zipSync, strFromU8, strToU8 } = await import('fflate');
+  const { DocxEditor } = await import('../src/components/DocxEditor');
+  const parts = unzipSync(
+    new Uint8Array(
+      readFileSync(
+        new URL('../../core/src/output/__tests__/fixtures/unsupported-chart.docx', import.meta.url)
+      )
+    )
+  );
+  parts['word/document.xml'] = strToU8(
+    strFromU8(parts['word/document.xml']!).replace(
+      /<w:drawing>[\s\S]*?<\/w:drawing>/,
+      (drawing) =>
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="wpc">${drawing}</mc:Choice><mc:Fallback><w:pict><v:group xmlns:v="urn:schemas-microsoft-com:vml" alt="Group structure chart" style="width:120pt;height:60pt"/></w:pict></mc:Fallback></mc:AlternateContent>`
+    )
+  );
+  const documentBytes = zipSync(parts);
+  const custom = ref(true);
+  let captured: UnsupportedElement | undefined;
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp({
+    render: () =>
+      h(
+        DocxEditor,
+        { document: documentBytes, chrome: false },
+        {
+          default: () =>
+            h(DocxEditorUnsupportedElement, null, {
+              default: ({ element }: { element: UnsupportedElement }) => {
+                captured = element;
+                return custom.value
+                  ? h('img', { alt: 'Server drawing preview', src: '/preview.png' })
+                  : null;
+              },
+            }),
+        }
+      ),
+  });
+  app.mount(container);
+  try {
+    await waitForElement(container, 'img[alt="Server drawing preview"]');
+    expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(1);
+    expect(captured?.source?.localName).toBe('AlternateContent');
+    expect(captured?.ownerPartName).toBe('/word/document.xml');
+    expect(captured?.drawing?.placeholderGraphicKind).toBe('chart');
+    expect(
+      captured?.source?.children.map((child) => (child.kind === 'textValue' ? '' : child.localName))
+    ).toEqual(['Choice', 'Fallback']);
+    const label = container.querySelector<HTMLElement>('.docx-drawing-placeholder-label')!;
+    expect(label.hidden).toBe(true);
+    custom.value = false;
+    await tick();
+    expect(label.hidden).toBe(false);
+    expect(container.querySelector('img[alt="Server drawing preview"]')).toBeNull();
+  } finally {
+    app.unmount();
+    container.remove();
+  }
+});

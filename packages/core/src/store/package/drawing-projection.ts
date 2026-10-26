@@ -8,6 +8,7 @@ import {
   paintableMcFallback,
   skippedChoiceChartProjection,
 } from './mc-fallback-projection.ts';
+import { unsupportedMcChoiceGeometry } from './mc-unsupported-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -17,7 +18,6 @@ import { sanitizeHref } from './sinks.ts';
 import { readDistances } from './drawing-distances.ts';
 import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
-import { wrapFootprintProjection } from './drawing-wrap-footprint.ts';
 import { hostsTextboxStory } from './group-textbox-projection.ts';
 import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
@@ -1551,7 +1551,7 @@ export function projectRunLevelMcDrawing(
     resolveSchemeColor?: ShapeSchemeColorResolver;
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
     resolveDiagramParts?: DiagramPartResolver;
-    /** Answer an anchored payload that cannot paint with its wrap footprint (layout index). */
+    /** @deprecated Unsupported drawings retain visible placeholders; this option has no effect. */
     retainWrapFootprint?: boolean;
   }>
 ): DrawingProjection | null {
@@ -1561,13 +1561,48 @@ export function projectRunLevelMcDrawing(
     context.supportedMcRequires,
     context.limits
   );
-  if (atom.drawing === null) return null;
+  if (atom.drawing === null) {
+    const state = createWalkState();
+    const selected = selectCompatibilityBranch(
+      wrapper,
+      state,
+      context.limits,
+      context.namespaceScope,
+      context.supportedMcRequires
+    );
+    const legacy = selected.branch
+      ? projectLegacyVml(selected.branch, context.ownerPartName)
+      : null;
+    if (legacy && selected.branch && isElement(selected.branch)) {
+      const skipped = skippedChoiceChartProjection(
+        wrapper,
+        selected.branch,
+        legacy,
+        context.resolveDiagramParts,
+        (anchor) => readDocPrMetadata(anchor, true)
+      );
+      return skipped ?? (legacy.hidden ? null : legacy);
+    }
+    if (state.refused) return null;
+    if (
+      selected.branch &&
+      (!isElement(selected.branch) ||
+        selected.branch.namespaceUri !== WML_NAMESPACE_URI ||
+        !['pict', 'object'].includes(selected.branch.localName))
+    )
+      return null;
+    return unsupportedMcChoiceGeometry(
+      wrapper,
+      context.limits.maxCompatibilityBranches,
+      (drawing) => projectDrawing(drawing, context)
+    );
+  }
   const projection = projectDrawing(atom.drawing, {
     ...context,
     namespaceScope: context.namespaceScope,
   });
-  if (!projection) return null;
-  // A chart in a Choice the reader skipped still names the chart its fallback stands for.
+  if (!projection) return paintableMcFallback(wrapper, context.ownerPartName);
+  // A chart in a skipped Choice still names the chart its fallback stands for.
   const skipped = skippedChoiceChartProjection(
     wrapper,
     atom.drawing,
@@ -1576,12 +1611,11 @@ export function projectRunLevelMcDrawing(
     (anchor) => readDocPrMetadata(anchor, true)
   );
   if (skipped) return skipped;
-  // An MC-wrapped payload the engine cannot draw (diagrams, unsupported groups) shows its VML
-  // fallback when that paints. Otherwise it stays invisible: a placeholder card over
-  // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
-  // story and pass through. A chart shows its fallback when that paints and otherwise keeps
-  // its labelled placeholder (`mc-fallback-projection.ts`). Layout still reserves the extent
-  // or the anchor's wrap area.
+  if (projection.hidden) {
+    return projection.chartSummary || holdsChartGraphic(atom.drawing) ? projection : null;
+  }
+  // Prefer a paintable fallback when the selected modern drawing cannot paint.
+  // Otherwise retain its geometry and diagnostic for the unsupported-content API.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
@@ -1605,7 +1639,7 @@ export function projectRunLevelMcDrawing(
     }
     const fallback = paintableMcFallback(wrapper, context.ownerPartName);
     if (fallback) return fallback;
-    return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
+    return projection;
   }
   // A drawn chart keeps the picture saved in its fallback, for an output that exports it,
   // and takes its author text by the same rule as a chart shown by its fallback.
@@ -1619,7 +1653,7 @@ export function projectRunLevelMcDrawing(
       });
     }
   }
-  // Layout applies the same rule to a group picture whose resource fails.
+  // Preserve compatibility provenance for group-picture resource handling.
   return withAlternateContentGroupPictures(projection);
 }
 
@@ -1737,7 +1771,6 @@ function collectDrawingsInPartBounded(
         resolveSchemeColor: ctx.resolveSchemeColor,
         resolveStyleMatrixReference: ctx.resolveStyleMatrixReference,
         resolveDiagramParts: ctx.resolveDiagramParts,
-        retainWrapFootprint: atomIndex !== undefined,
       });
       if (projected) {
         if (!projected.footprintOnly) out.push(projected);

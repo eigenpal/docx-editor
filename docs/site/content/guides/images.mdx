@@ -242,9 +242,9 @@ A default slot that renders nothing, such as a slot whose `v-if` is false, keeps
 
 Both packages export `UnsupportedElement` with these fields:
 
-- `nodeId` and `ownerPartName` identify the source element and its document part.
+- `nodeId` identifies the projected element. `ownerPartName` identifies its document part.
 - `namespaceUri` and `localName` identify the OOXML element.
-- `source` exposes the read-only canonical source. Treat document values as untrusted data.
+- `source` exposes the read-only canonical source, not an XML string. Treat document values as untrusted data.
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the text of the built-in placeholder.
 - Optional `drawing` and `equation` records provide engine metadata. `drawing.placeholderGraphicKind` names the kind of graphic: `chart` (a chart), `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or `graphic` (any other graphic). A picture placeholder, such as an EMF, WMF, or TIFF picture that does not convert, has `null`. `drawing.accessibility.label` holds the drawing's alternative text. Every chart drawing whose chart part can be read also has `drawing.chart`, with the chart's `title`, `plotTypes`, and `shownAs`, which says whether the page draws the chart (`chart`), shows its fallback (`fallback`), or shows the placeholder (`placeholder`). A declaration replaces only a placeholder, so inside a declaration `shownAs` is always `placeholder`. To tell a drawn chart from a chart shown by its fallback, read the layout records without an editor, as [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder) shows.
@@ -258,6 +258,67 @@ Components retain declaration-local framework context and local state across sam
 
 Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. These declarations replace placeholders only; they do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
 
+### Alternative drawing content
+
+A document can store a modern drawing and a legacy copy inside `mc:AlternateContent`. Branch selection uses supported markup. The editor prefers a supported modern drawing, then a supported fallback. If neither has supported markup, a visible drawing produces one labeled placeholder.
+
+The placeholder keeps the drawing's authored bounds and wrapping. Hidden drawings and nonvisual metadata do not produce extra placeholders. A selected picture that later fails decoding also shows a placeholder. Missing or corrupt picture resources do not trigger another branch selection.
+
+The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. Its `source` contains the enclosing `mc:AlternateContent`, including its choice and fallback branches. Its `namespaceUri` and `localName` describe that wrapper. Its `nodeId` remains the projected drawing's identity; `source.id` identifies the wrapper. Use `element.drawing` to match drawing placeholders across direct and alternative content. Both branches remain in the saved document.
+
+### Preview with your rendering service
+
+You can replace a drawing placeholder with an image from your rendering service. The editor does not upload documents or call a rendering service. Your application owns the request, authentication, image cache, and error state. Custom previews do not change the saved DOCX or PDF export.
+
+Pass the canonical `source` and `ownerPartName` to your service with the corresponding DOCX snapshot. The source fragment can refer to chart, diagram, image, theme, or relationship parts. A fragment alone does not contain those dependencies. Use the original DOCX only when the source and dependencies remain unchanged. After edits, use a saved snapshot that matches the preview request.
+
+Node identifiers belong to the editor session; they are not persistent XML identifiers. Your service must define how it locates the supplied fragment within that snapshot.
+
+Use these rules for asynchronous previews:
+
+1. Cache by document identity, snapshot revision, owner part, and source identity.
+2. Keep the cache outside the preview component because pagination can unmount it.
+3. Keep a labeled loading state inside the authored bounds.
+4. Cancel obsolete requests and ignore responses for an older snapshot.
+5. Show the fallback label and a retry control when rendering or image decoding fails.
+6. Release image object URLs when their cache entries expire.
+
+This React example reads application-owned preview state. `previewFor` and `requestPreview` are application functions, not editor methods. `requestPreview` manages cancellation and updates the cache for the supplied snapshot. Use an equivalent default slot in Vue.
+
+```tsx
+<DocxEditor document={bytes}>
+  <DocxEditor.UnsupportedElement match={(element) => !!element.drawing}>
+    {({ element }) => {
+      const preview = previewFor(snapshotRevision, element);
+      const label = element.drawing?.accessibility.label ?? element.label;
+      if (preview.status === 'ready') {
+        return (
+          <img
+            src={preview.objectUrl}
+            alt={label}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            onError={() => invalidatePreview(snapshotRevision, element)}
+          />
+        );
+      }
+      return (
+        <div aria-busy={preview.status === 'loading'}>
+          <p role="status">{element.label}</p>
+          <button
+            disabled={preview.status === 'loading'}
+            onClick={() => requestPreview(snapshotRevision, element)}
+          >
+            {preview.status === 'loading' ? 'Loading preview' : 'Load preview'}
+          </button>
+        </div>
+      );
+    }}
+  </DocxEditor.UnsupportedElement>
+</DocxEditor>
+```
+
+`invalidatePreview` marks a failed image as unavailable so the load control appears again. Localize the application controls and fit them within the drawing's box. Use a separate panel for controls that cannot fit small drawings. Render returned images as images; do not insert returned SVG or HTML strings into the document. Apply request limits and validate image types in your service. Do not resolve external document relationships automatically.
+
 ## Drawing limits
 
 The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments. It preserves image alpha and adjustment markup when you save. PDF export does not apply these adjustments.
@@ -270,7 +331,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | SmartArt | Render the saved diagram drawing read-only. A diagram saved without its drawing renders when you register `drawingModule()`. Without the module, it shows a labeled placeholder |
 | Glow, inner shadow, reflection, soft edge, and dark-edged bevel rim | Render when you register `drawingModule()`. Without the module, the shape or picture paints without these effects |
 | Drawing canvases | Render shapes, connectors, and text read-only |
-| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), a drawing that cannot render uses the fallback content. If neither renders, it is not shown, except charts, which show a placeholder. A chart in an `mc:Choice` that the reader skips, with an empty `mc:Fallback`, is not shown either. A floating drawing with a wrapping mode still reserves its wrap area |
+| Unsupported groups and drawings | Preserve the extent and show a labeled placeholder. Alternative content (`mc:AlternateContent`) selects supported modern markup, then supported fallback markup. Unsupported visible drawings show one labeled placeholder. A later picture decoding failure also shows a placeholder without another branch selection. It retains its authored extent and wrap area |
 | Anchored text boxes | Render clipped stories in the body, headers, and footers. Edit supported boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes | Render clipped stories on the line in the body, headers, and footers. Edit and resize supported boxes. They move only with their line |
@@ -295,9 +356,9 @@ Each picture must meet these conditions:
 
 A text-box member without a fill or outline does not restrict picture order. Other members must meet the supported shape subset. For the full drawing subset, see [Word feature support](/docs/2.x/word-fidelity).
 
-If a picture or another member cannot render, the group is unsupported. Alternative content (`mc:AlternateContent`) can supply a fallback. If neither alternative renders, the group does not show. Other unsupported groups keep a labeled placeholder.
+If a picture or another member cannot render, the group is unsupported. Alternative content (`mc:AlternateContent`) can supply supported fallback markup during branch selection. Otherwise, a visible unsupported group keeps one labeled placeholder. Missing or corrupt pictures also produce that placeholder without another branch selection.
 
-A hidden floating group still reserves its authored wrap area for square, tight, through, or top-and-bottom wrapping. It paints nothing and cannot be selected. A group with no wrapping (`wp:wrapNone`) reserves no space.
+A floating placeholder reserves its authored wrap area for square, tight, through, or top-and-bottom wrapping. A group with no wrapping (`wp:wrapNone`) reserves no wrap space. A drawing explicitly hidden in the document does not show a placeholder.
 
 The editor never fetches linked pictures. Missing, damaged, or oversized pictures can prevent the whole group from rendering. PDF export reports drawings that it cannot render through its [diagnostics](/docs/2.x/export/pdf/api#diagnostics).
 

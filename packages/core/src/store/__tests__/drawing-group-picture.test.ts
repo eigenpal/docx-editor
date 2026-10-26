@@ -156,13 +156,13 @@ describe('group picture projection', () => {
       '</a:prstGeom>',
       '</a:prstGeom><a:effectLst><a:outerShdw dist="38100"/></a:effectLst>'
     );
-    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + shadowed)))).toHaveLength(0);
+    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + shadowed)))).toHaveLength(1);
     // So does one whose theme effect the group cannot resolve.
     const themed = textboxMember().replace(
       '</wps:spPr>',
       '</wps:spPr><wps:style><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef></wps:style>'
     );
-    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + themed)))).toHaveLength(0);
+    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + themed)))).toHaveLength(1);
   });
 
   test('the picture frame maps through the group child offset and extent', () => {
@@ -249,7 +249,7 @@ describe('group picture projection', () => {
           '</wpg:grpSpPr>',
           `${property}</wpg:grpSpPr>`
         );
-        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
         const [bare] = projectionsOf(drawing);
         expect(bare!.groupPicture).toBeNull();
         expect(bare!.vectorShape).toBeNull();
@@ -263,7 +263,7 @@ describe('group picture projection', () => {
           '<wpg:cNvGrpSpPr/>',
           `<wpg:cNvPr id="99" name="Group" hidden="${hidden}"/><wpg:cNvGrpSpPr/>`
         );
-        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
         expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
         expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
       });
@@ -283,8 +283,8 @@ describe('group picture projection', () => {
         '<wpg:grpSpPr>',
         '<wpg:grpSpPr bwMode="gray">'
       );
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
-      expect(projectionsOf(mcWrapped(groupDrawing(members! + '<wpg:grpSp/>')))).toHaveLength(0);
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
+      expect(projectionsOf(mcWrapped(groupDrawing(members! + '<wpg:grpSp/>')))).toHaveLength(1);
     });
   }
 
@@ -296,21 +296,21 @@ describe('group picture projection', () => {
     ]) {
       test(`a group refuses a vector member with ${property}`, () => {
         const drawing = groupDrawing(members.replace('</wps:spPr>', `${property}</wps:spPr>`));
-        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
         expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
         expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
       });
     }
     test('a group refuses a hidden vector member', () => {
       const drawing = groupDrawing(members.replace('name="Bar"', 'name="Bar" hidden="1"'));
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
       expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
     });
   }
 
   test('a picture member refuses an unsupported color mode', () => {
     const drawing = groupDrawing(pictureMember().replace('<pic:spPr>', '<pic:spPr bwMode="gray">'));
-    expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+    expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
     expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
   });
 
@@ -360,11 +360,13 @@ describe('group picture projection', () => {
         const drawing = groupDrawing(members);
         const project = (xml: string) =>
           projectDrawingsInPart(parsePart(`<w:p><w:r>${xml}</w:r></w:p>`), theme);
-        expect(project(mcWrapped(drawing)).length > 0).toBe(admitted);
+        const [wrapped] = project(mcWrapped(drawing));
+        expect(Boolean(wrapped!.vectorShape || wrapped!.groupPicture)).toBe(admitted);
         const cleared = drawing
           .replace('</wps:spPr>', '<a:effectLst/></wps:spPr>')
           .replace('</pic:spPr>', '<a:effectLst/></pic:spPr>');
-        expect(project(mcWrapped(cleared)).length > 0).toBe(
+        const [clearedProjection] = project(mcWrapped(cleared));
+        expect(Boolean(clearedProjection!.vectorShape || clearedProjection!.groupPicture)).toBe(
           admitted || (theme === shadow && index === '1')
         );
         if (!admitted) {
@@ -487,8 +489,8 @@ describe('group picture projection', () => {
 
   for (const [name, drawing] of refused) {
     test(`${name} stays unpainted`, () => {
-      // Under MC the unpaintable group stays invisible, as it was before group pictures.
-      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+      // MC retains one unsupported drawing for the placeholder.
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
       // A bare drawing still projects, for its placeholder, but with no picture to paint.
       const [bare] = projectionsOf(drawing);
       expect(bare!.groupPicture).toBeNull();

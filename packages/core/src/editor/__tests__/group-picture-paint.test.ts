@@ -226,10 +226,11 @@ describe('a drawing group whose picture cannot render', () => {
       ['picture-only', picture],
       ['picture and vector', picture + BAR_MEMBER],
     ] as const) {
-      test(`an MC-wrapped ${shape} group with a ${name} picture is not shown`, async () => {
+      test(`an MC-wrapped ${shape} group with a ${name} picture shows one placeholder`, async () => {
         await withMounted(docx(members, options), (surface, container) => {
-          expect(groupRecord(surface)).toBeUndefined();
-          expect(container.querySelectorAll('.docx-drawing')).toHaveLength(0);
+          expect(groupRecord(surface)).toBeDefined();
+          expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(1);
+          expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(1);
           expect(container.textContent).toContain('Title');
         });
       });
