@@ -5,10 +5,10 @@ category: 'Guides'
 seoTitle: 'Right-to-left and bidirectional text: interface and rendering'
 ---
 
-You can open, edit, and export Arabic, Hebrew, Persian, and Urdu documents with right-to-left (RTL) or mixed-direction text. Right-to-left support has two parts, and you can use each part on its own:
+You can open, edit, and export documents with right-to-left (RTL) or mixed-direction text. Supported languages include Arabic, Hebrew, Persian, and Urdu. Interface direction and document direction work independently:
 
-- **Editor interface**: the toolbar, menus, dialogs, panes, rulers, and review column mirror for an RTL interface language. The interface is available in Arabic and Hebrew.
-- **Rendering engine**: the engine shapes and joins Arabic letters, orders mixed-direction text, and mirrors paragraph layout, lists, tables, and columns. It reads direction only from the document, so an RTL document renders the same way in an English interface.
+- Editor interface: controls mirror for an RTL interface language. The interface includes Arabic and Hebrew translations.
+- Rendering engine: the engine shapes Arabic letters and orders mixed-direction text. Paragraphs, lists, tables, and columns follow document direction. An English interface does not change RTL document layout.
 
 | Task | Section |
 | --- | --- |
@@ -26,7 +26,7 @@ You can open, edit, and export Arabic, Hebrew, Persian, and Urdu documents with 
 
 The `i18n` catalog controls translations and interface direction. Setting `locale="ar-SA"` alone does not select Arabic translations or mirror the interface. `locale` controls regional date input and generated document labels.
 
-Pass the `ar` or `he` catalog from `@docx-editor.dev/i18n`. These catalogs declare `_dir: 'rtl'`, and the editor's locale provider reads that flag. Each part of the editor chrome then sets `dir="rtl"` on itself. You don't need a wrapper element with `dir`, in either framework:
+Pass the `ar` or `he` catalog from `@docx-editor.dev/i18n`. These catalogs declare `_dir: 'rtl'`, and the editor's locale provider reads that flag. Editor controls then set `dir="rtl"`. Neither framework requires a wrapper element with `dir`:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -66,7 +66,9 @@ import { ar } from '@docx-editor.dev/i18n';
 function ArabicEditor({ bytes }: { bytes: Uint8Array }) {
   return (
     <LocaleProvider i18n={ar}>
-      <DocxEditor.Root document={bytes}>{/* Toolbar, viewport, and other parts */}</DocxEditor.Root>
+      <DocxEditor.Root document={bytes}>
+        {/* Add the toolbar, viewport, and other parts. */}
+      </DocxEditor.Root>
     </LocaleProvider>
   );
 }
@@ -89,7 +91,7 @@ In an RTL interface, the editor changes these parts:
 | Header and footer hints | The hover hints, such as **Double-click to edit header**, use the interface language. |
 | Page setup | The margin unit uses the interface language. |
 
-The pages take their direction from the document, not from the interface. The vertical scroll bar stays at the right edge, which differs from other right-to-left applications. The scroll container keeps a left-to-right base for its scroll offsets.
+The pages take their direction from the document, not from the interface. The vertical scroll bar stays at the right edge. The scroll container keeps a left-to-right base for its scroll offsets.
 
 ### Choose the interface direction
 
@@ -100,7 +102,7 @@ The provider decides the direction in this order:
 1. A right-to-left `_lang` tag in the catalog, such as `fa` or `ur`.
 1. The direction of an outer `LocaleProvider`.
 
-If none of these applies, the chrome inherits the host page direction. The shipped left-to-right catalogs, such as `en` and `de`, declare no `_dir`, so they inherit it too. To keep a left-to-right interface on a right-to-left host page, pass `dir="ltr"` to `LocaleProvider`.
+If none of these applies, the chrome inherits the host page direction. The shipped left-to-right catalogs, such as `en` and `de`, declare no `_dir`, so they inherit it too. If your host page reads right to left, pass `dir="ltr"` to `LocaleProvider` for a left-to-right interface.
 
 The review column and the navigation pane follow the same direction as the rest of the chrome, including an inherited one.
 
@@ -146,7 +148,7 @@ If you attach the editor to your own scroll container instead of `DocxEditor.Vie
 
 ### How the engine reads direction
 
-A DOCX file stores direction at two levels. The engine reads both levels:
+The engine reads paragraph and run direction from these properties:
 
 | Property | Scope | Effect |
 | --- | --- | --- |
@@ -205,7 +207,7 @@ In compatibility mode 15 and later modes, leading-aligned fixed-width RTL tables
 
 Arabic and Hebrew letters that you type into a run without `w:rtl` start a run with `<w:rtl/>`, so they use the complex-script properties. The first letter of the typed text decides: digits, spaces, and punctuation keep the direction of the run they join. Latin letters that you type into a right-to-left run stay in that run. The text and its direction form one undo step, and collaboration peers receive both.
 
-Clear Formatting keeps `w:rtl`, because it marks the direction of the text and not its formatting. The format painter does not copy it.
+**Clear Formatting** keeps `w:rtl` because this property sets text direction. The format painter does not copy it.
 
 Formatting commands use the effective `w:rtl` and `w:cs` values, including character styles, paragraph styles, table styles, and document defaults. Direct false values override inherited values. For complex-script runs, commands write both property variants. For example, **Bold** writes `<w:b/><w:bCs/>`. It writes `<w:b/>` on a left-to-right (LTR) run. Selection formatting, caret typing, paragraph marks, format painter, and automation font writes follow this rule.
 

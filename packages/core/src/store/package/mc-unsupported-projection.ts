@@ -1,5 +1,6 @@
 import type { DrawingProjection } from './drawing-projection.ts';
 import { isElement, isMcChoice } from './drawing-projection-walk.ts';
+import { chartPlaceholderProjection, holdsChartGraphic } from './mc-fallback-projection.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlDrawingNode,
@@ -24,8 +25,10 @@ export function unsupportedMcChoiceGeometry(
       drawing.localName !== 'drawing'
     )
       continue;
-    const projection = project(drawing as OoxmlDrawingNode);
+    let projection = project(drawing as OoxmlDrawingNode);
     if (!projection || projection.hidden) continue;
+    const chart = !!projection.chartSummary || holdsChartGraphic(drawing);
+    if (chart) projection = chartPlaceholderProjection(projection);
     // An unselected branch must never supply paint content or an editable text-box story.
     return Object.freeze({
       ...projection,
@@ -40,14 +43,16 @@ export function unsupportedMcChoiceGeometry(
       legacyGraphic: undefined,
       textArt: undefined,
       horizontalRule: undefined,
-      diagnostics: Object.freeze([
-        ...projection.diagnostics,
-        Object.freeze({
-          code: 'unsupported-graphic' as const,
-          nodeId: drawing.id,
-          detail: 'graphic',
-        }),
-      ]),
+      diagnostics: chart
+        ? projection.diagnostics
+        : Object.freeze([
+            ...projection.diagnostics,
+            Object.freeze({
+              code: 'unsupported-graphic' as const,
+              nodeId: drawing.id,
+              detail: 'graphic',
+            }),
+          ]),
     });
   }
   return null;

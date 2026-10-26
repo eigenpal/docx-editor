@@ -8,8 +8,9 @@
 // A chart (classic `c:chart` or chartex `cx:chart`) follows one rule: its chosen branch when
 // that paints (a chart renderer is installed and supports the chart), otherwise its fallback
 // when that paints (a DrawingML picture or drawable VML), otherwise its labelled `chart`
-// placeholder. A chart never paints nothing, except in a skipped Choice (below) whose fallback
-// is empty, and a hidden chart stays hidden whatever its fallback shows. The fallback that stands in carries the chart's summary. The renderer
+// placeholder. A skipped Choice can supply bounds for a placeholder when its fallback is
+// empty. A hidden chart stays hidden whatever its fallback shows. A rendered fallback
+// carries the chart's summary. The renderer
 // registry is process-wide and read when the drawing is projected, so install renderers
 // before opening a document. A Choice that the reader does not support (its `Requires` names
 // an unknown namespace) is skipped for the fallback; a chart in it still gives its summary.

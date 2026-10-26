@@ -24,8 +24,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * drawing shows that fallback. In every state a chart selects as an object: picture commands
  * are refused, and deleting it removes the chart with its fallback, as one tracked deletion
  * of the whole chart when change tracking is on. Copy and cut of a selection that includes a
- * chart are refused. The editor shows a labeled placeholder for any other chart (except a
- * chart in a skipped `mc:Choice` with an empty `mc:Fallback`, which does not show), a diagram
+ * chart are refused. The editor shows a labeled placeholder for other visible charts with
+ * usable bounds, including a skipped `mc:Choice` with an empty `mc:Fallback`, and a diagram
  * saved without its drawing, and inline WordArt; floating WordArt does not show. The editor still rasterizes
  * EMF and WMF pictures, and a shape paints without those effects. PDF export always includes
  * this module.

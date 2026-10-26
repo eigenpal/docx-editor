@@ -81,8 +81,9 @@ export type DrawingChartShownAs = 'chart' | 'fallback' | 'placeholder';
  * The title and plot types of a chart, as text, and how the page shows it.
  *
  * A drawing record carries it as `chart` whenever the drawing holds a chart whose chart part
- * can be read, in each of the three states that `shownAs` names. A chart in an `mc:Choice`
- * that the reader skips, with an empty `mc:Fallback`, has no drawing record.
+ * can be read, in each of the three states that `shownAs` names. A visible drawing in a
+ * skipped `mc:Choice` can retain a placeholder when its bounds are usable. Chart metadata
+ * is present only when the projection resolves the chart part.
  *
  * @public
  */
