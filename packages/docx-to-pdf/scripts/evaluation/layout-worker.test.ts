@@ -12,6 +12,8 @@ import { docx, paragraph } from '../../test/fixture.ts';
 for (const runtime of ['bun', 'node'] as const)
   test(`${runtime} worker isolates documents and continues after an invalid input`, async () => {
     const dir = await mkdtemp(join(tmpdir(), 'layout-worker-'));
+    let worker: ReturnType<typeof Bun.spawn> | undefined;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
       const first = join(dir, 'first.docx');
       const second = join(dir, 'second.docx');
@@ -23,16 +25,31 @@ for (const runtime of ['bun', 'node'] as const)
         runtime === 'bun'
           ? ['bun', '--tsconfig-override', new URL('../../tsconfig.json', import.meta.url).pathname]
           : ['node', '--import', new URL('./runtime-loader.mjs', import.meta.url).pathname];
-      const worker = Bun.spawn(
+      const child = Bun.spawn(
         [...command, new URL('./layout-worker.ts', import.meta.url).pathname],
-        { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' }
+        {
+          stdin: 'pipe',
+          stdout: 'pipe',
+          stderr: 'pipe',
+          // Exercise cold compilation without sharing cache state with other tests.
+          env: { ...process.env, DOCX_EVAL_TRANSPILE_CACHE: join(dir, 'compile-cache') },
+        }
       );
+      worker = child;
+      // Node compiles the source dependency graph before processing any requests.
+      // Keep a bounded startup allowance on contended CI workers.
+      deadline = setTimeout(() => child.kill(), 45_000);
+      const streams = Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
       const paths = [first, bad, second, first];
       for (const [index, input] of paths.entries())
-        worker.stdin.write(JSON.stringify({ input, output: join(dir, `${index}.json`) }) + '\n');
-      worker.stdin.end();
-      const output = await new Response(worker.stdout).text();
-      expect(await worker.exited).toBe(0);
+        child.stdin.write(JSON.stringify({ input, output: join(dir, `${index}.json`) }) + '\n');
+      child.stdin.end();
+      const [output, stderr, exitCode] = await streams;
+      expect(exitCode, `${runtime} worker failed or exceeded 45 seconds: ${stderr}`).toBe(0);
       expect(
         output
           .trim()
@@ -51,6 +68,11 @@ for (const runtime of ['bun', 'node'] as const)
         expect(result.pageCount).toBe(1);
       }
     } finally {
+      clearTimeout(deadline);
+      if (worker) {
+        worker.kill();
+        await worker.exited;
+      }
       await rm(dir, { recursive: true, force: true });
     }
-  }, 20_000);
+  }, 60_000);
