@@ -55,7 +55,13 @@ The font picker lists available choices. A listed family does not confirm that i
 
 A run can name one font for East Asian characters and another for Latin letters and numbers. The font picker shows the font of the selected characters. If the selection contains both kinds of characters with different fonts, the picker is blank. Spaces, punctuation, and numbers between words do not count, so a selection of Korean words reads their Korean font.
 
-If you choose an East Asian font, such as SimSun or MS Mincho, it applies to all selected characters. If you choose a Latin font, such as Arial, it applies only to Latin letters and numbers. East Asian characters keep their font, because a Latin font has no East Asian characters to draw them with. A font is East Asian when its name is a known East Asian font, such as Noto Sans SC or PingFang SC, when its name is written in East Asian characters, or when the document's font table declares an East Asian character set for it.
+If you choose an East Asian font, such as SimSun or MS Mincho, it applies to all selected characters. If you choose a Latin font, such as Arial, it applies only to Latin letters and numbers. East Asian characters keep their font, because a Latin font has no East Asian characters to draw them with.
+
+The editor treats a font as East Asian in any of these cases:
+
+- Its name is a known East Asian font, such as Noto Sans SC or PingFang SC.
+- Its name is written in East Asian characters.
+- The document's font table declares an East Asian character set for it.
 
 Use the same font configuration in React and Vue. For resolver examples, see [Load your own fonts](/docs/2.x/guides/fonts#load-your-own-fonts). For the document's East Asian font selection rules, see [Faces that no style names](/docs/2.x/guides/fonts#faces-that-no-style-names).
 

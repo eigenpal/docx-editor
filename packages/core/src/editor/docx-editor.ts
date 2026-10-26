@@ -449,6 +449,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
       lateFonts.settle(late); // before the install, which announces the change once
       if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
+      else if (late) (bump(), emitSelectionChange()); // nothing to install into: announce it
     }
   );
   let fontsResolving = false;

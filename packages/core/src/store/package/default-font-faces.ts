@@ -235,6 +235,12 @@ export function isEastAsianFace(
 const EAST_ASIAN_NAME_CHARACTERS = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
 
 /**
+ * Region words East Asian family names carry (`Noto Sans Mono CJK SC`, `BIZ UDGothic JP`).
+ * `SC` is not one: in Latin family names it means small caps (`Alegreya SC`).
+ */
+const EAST_ASIAN_NAME_TOKENS = /(?:^|\s)(?:cjk|jp|kr|hk|tc)(?:\s|$)/;
+
+/**
  * Prefixes of East Asian families a host commonly serves that no document font table names:
  * the regional Noto and Source Han families and the platform CJK faces. Lower-cased.
  */
@@ -252,6 +258,42 @@ const EAST_ASIAN_FAMILY_PREFIXES: readonly string[] = [
   'noto serif hk',
   'noto serif kr',
   'source han',
+  'lxgw',
+  'sarasa',
+  'ipaex',
+  'ipa gothic',
+  'ipa mincho',
+  'ipa p',
+  'wenquanyi',
+  'zen kaku',
+  'zen maru',
+  'zen old mincho',
+  'zen kurenaido',
+  'zen antique',
+  'm plus',
+  'kosugi',
+  'sawarabi',
+  'biz ud',
+  'klee',
+  'toppan',
+  'tsukushi',
+  'yu ',
+  'meiryo',
+  'microsoft yahei',
+  'microsoft jhenghei',
+  'apple sd',
+  'apple ligothic',
+  'lihei',
+  'lisong',
+  'baoli',
+  'hannotate',
+  'hanzipen',
+  'libian',
+  'weibei',
+  'xingkai',
+  'yuanti',
+  'wawati',
+  'lantinghei',
   'pingfang',
   'hiragino',
   'heiti',
@@ -277,6 +319,7 @@ export function isEastAsianFontFamily(
   return (
     isEastAsianFace(name, fontTableEastAsianFaces) ||
     EAST_ASIAN_NAME_CHARACTERS.test(name) ||
+    EAST_ASIAN_NAME_TOKENS.test(name) ||
     EAST_ASIAN_FAMILY_PREFIXES.some((prefix) => name.startsWith(prefix))
   );
 }

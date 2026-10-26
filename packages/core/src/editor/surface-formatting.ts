@@ -452,8 +452,33 @@ export type InheritedRunDefaults = (
   runProperties: readonly SurfaceProperty[]
 ) => { readonly fontFamily: string | null; readonly fontSizeHalfPoints: number | null };
 
-/** A letter of any script; a span without one does not decide the font box. */
-const LETTER = /\p{L}/u;
+/** A letter or digit of any script; a span without one does not decide the font box. */
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
+
+/**
+ * The part of `span` a range selection covers. Layout spans are not clipped to the selection, so a
+ * selection that starts on the trailing space of a Latin word must not count that word.
+ */
+function selectedTextOf(
+  span: StyleSpanRecord,
+  selection: SemanticSelection,
+  paragraphOrder: readonly string[] | undefined
+): string {
+  const { anchor, head } = selection;
+  const forward =
+    anchor.paragraphId === head.paragraphId
+      ? anchor.offset <= head.offset
+      : (paragraphOrder?.indexOf(anchor.paragraphId) ?? 0) <=
+        (paragraphOrder?.indexOf(head.paragraphId) ?? 0);
+  const [from, to] = forward ? [anchor, head] : [head, anchor];
+  if (from.paragraphId === to.paragraphId && from.offset === to.offset) return span.text;
+  const start = span.range.paragraphId === from.paragraphId ? from.offset : span.range.start;
+  const end = span.range.paragraphId === to.paragraphId ? to.offset : span.range.end;
+  return span.text.slice(
+    Math.max(0, start - span.range.start),
+    Math.max(0, end - span.range.start)
+  );
+}
 
 /** The formatting snapshot at a selection, for a toolbar to reflect. */
 export function formattingAt(
@@ -513,12 +538,17 @@ export function formattingAt(
   // `fontFamily` to its `w:cs` face. Chinese text in a Calibri+SimSun run reads SimSun; its
   // Latin letters alone read Calibri.
   //
-  // Spans without a letter (spaces, punctuation, digits) do not vote when letters are selected.
-  // Between Korean or Chinese words they paint through the Latin slot, and counting them made
-  // every multi-word East Asian selection read blank. Letters in two different faces still
-  // read blank, so a Latin font hidden in the selection is never reported as the other one.
-  const lettered = spans.filter((span) => LETTER.test(span.text));
-  const familySpans = lettered.length > 0 ? lettered : spans;
+  // Selected text without a letter or digit (spaces, punctuation) does not vote when some does.
+  // Between Korean or Chinese words it paints through the Latin slot, and counting it made
+  // every multi-word East Asian selection read blank. Words in two different faces still read
+  // blank, so a font hidden in the selection is never reported as the other one.
+  const worded =
+    cells && cells.length > 0
+      ? spans
+      : spans.filter((span) =>
+          WORD_CHARACTER.test(selectedTextOf(span, selection, paragraphOrder))
+        );
+  const familySpans = worded.length > 0 ? worded : spans;
   const familyOf = (span: (typeof spans)[number]): string | null =>
     styleForFontSlot(span.style, span.fontSlot).fontFamily ??
     inherited?.(span.range.paragraphId, span.props).fontFamily ??

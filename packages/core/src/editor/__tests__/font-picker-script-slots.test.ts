@@ -85,6 +85,27 @@ describe('the font box reads the face the text paints in', () => {
     editor.destroy();
   });
 
+  test('digits in a different font still make the selection read blank', () => {
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t xml:space="preserve">Total </w:t></w:r>' +
+        '<w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr><w:t>1234</w:t></w:r></w:p>'
+    );
+    select(editor, 0, 10);
+    expect(boxFamily(editor)).toBeNull();
+    editor.destroy();
+  });
+
+  test('only the selected part of a span counts', () => {
+    // The selection starts on the space after "Total", so the Calibri word is not selected.
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Malgun Gothic"/>' +
+        '</w:rPr><w:t xml:space="preserve">Total 문서는</w:t></w:r></w:p>'
+    );
+    select(editor, 5, 9);
+    expect(boxFamily(editor)).toBe('Malgun Gothic');
+    editor.destroy();
+  });
+
   test('a full-width comma does not take over a Latin selection', () => {
     const editor = mount(
       '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="DengXian"/>' +

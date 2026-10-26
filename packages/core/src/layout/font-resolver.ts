@@ -446,6 +446,10 @@ async function composeFontOriginsInternal(
         continue;
       }
       if (options.awaitDeferred) {
+        // The same placeholder rule as the editor's pass below, decided on the answer as
+        // given: export must not pick a different base, or its default font would differ.
+        const given = splitDeferredAnswer(answer);
+        if (given.later && holdsEverythingBack(given.now)) placeholders.add(originIndex);
         answer = await completeDeferredAnswer(
           answer,
           (cause) => reportOriginFailure(options, origin, originIndex, cause),
@@ -513,15 +517,7 @@ async function composeFontOriginsInternal(
       // as the default still made a Google fallback fetch Calibri while leaving Aptos unresolved.
       // An origin that holds everything back (`deferFonts`, a background CJK resolver) is a
       // placeholder, not the base: the next origin's default face and byte ceiling still apply.
-      if (
-        pendingLate !== undefined &&
-        (sampled.sources?.length ?? 0) === 0 &&
-        (sampled.substitutions?.length ?? 0) === 0 &&
-        !('defaultFont' in answer) &&
-        !('maxFontBytes' in answer)
-      ) {
-        placeholders.add(originIndex);
-      }
+      if (pendingLate !== undefined && holdsEverythingBack(answer)) placeholders.add(originIndex);
       const placeholder = placeholders.has(originIndex);
       if (!base && !placeholder && 'defaultFont' in sampled) {
         defaultFamily = configuredDefaultFontFamily(sampled as FontConfigurationBase);
@@ -593,6 +589,16 @@ async function composeFontOriginsInternal(
     : ({ ...merged, failures: Object.freeze(failures) } as FontConfigurationFragment & {
         readonly failures: readonly unknown[];
       });
+}
+
+/** An immediate answer with no faces and no settings: its origin holds everything back. */
+function holdsEverythingBack(answer: FontConfiguration | FontConfigurationFragment): boolean {
+  return (
+    (answer.sources?.length ?? 0) === 0 &&
+    (answer.substitutions?.length ?? 0) === 0 &&
+    !('defaultFont' in answer) &&
+    !('maxFontBytes' in answer)
+  );
 }
 
 type ObservedOriginOutcome =

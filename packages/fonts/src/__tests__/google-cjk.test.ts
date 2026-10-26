@@ -14,6 +14,7 @@ import {
 import { GOOGLE_CJK_FACES, googleCjkFaceFor } from '../google-cjk.ts';
 import {
   GOOGLE_FONT_CATALOG,
+  GOOGLE_FONT_FAMILIES,
   googleFonts,
   type CjkFontLoading,
   type GoogleFontsFragment,
@@ -196,4 +197,21 @@ test('the font picker list offers the English CJK names only when cjk is on', as
   expect(off.supportedFamilies).not.toContain('SimSun');
   expect(on.supportedFamilies).toContain('SimSun');
   expect(on.supportedFamilies).not.toContain('宋体');
+});
+
+test('a font pick tells the families this package serves apart by script', async () => {
+  // The editor writes a pick to w:eastAsia only for an East Asian family. A Latin family it
+  // can serve must never count, and every CJK family it can serve must.
+  const { isEastAsianFontFamily } =
+    await import('../../../core/src/store/package/default-font-faces.ts');
+  const latin = [...GOOGLE_FONT_FAMILIES, 'Calibri', 'Cambria', 'Century Gothic', 'Courier New'];
+  expect(latin.filter((family) => isEastAsianFontFamily(family, undefined))).toEqual([]);
+  const eastAsian = [
+    ...GOOGLE_CJK_FACES.map((face) => face.family),
+    ...CJK_SUBSTITUTED_FAMILIES,
+    ...LOCALIZED_CJK_FAMILIES.keys(),
+    'Noto Sans CJK JP',
+    'Noto Sans Mono CJK SC',
+  ];
+  expect(eastAsian.filter((family) => !isEastAsianFontFamily(family, undefined))).toEqual([]);
 });

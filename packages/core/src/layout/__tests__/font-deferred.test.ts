@@ -365,4 +365,37 @@ describe('deferred font faces', () => {
       true
     );
   });
+
+  test('export keeps the default font of the origin after a held-back one', async () => {
+    const aptos = { family: 'Aptos', sizeHalfPoints: 22 };
+    const composed = await composePreparedFontOrigins(
+      [
+        deferFonts({ sources: [source('Late', 'late')] }),
+        { sources: [source('Early', 'early')], defaultFont: aptos },
+      ],
+      request,
+      { awaitDeferred: true }
+    );
+    expect((composed as { defaultFont?: unknown }).defaultFont).toEqual(aptos);
+    expect(ids(composed)).toEqual(['early', 'late']);
+  });
+
+  test('a late answer never changes the default font', async () => {
+    const composed = await composeFontOrigins(
+      [
+        defineFontResolver(() => ({
+          sources: [source('Early', 'early')],
+          deferred: Promise.resolve({
+            sources: [source('Late', 'late')],
+            defaultFont: { family: 'Late', sizeHalfPoints: 30 },
+          } as FontConfigurationFragment),
+        })),
+      ],
+      request
+    );
+    const before = (composed as { defaultFont?: { family: string } }).defaultFont?.family;
+    const after = ((await composed!.deferred) as { defaultFont?: { family: string } }).defaultFont
+      ?.family;
+    expect(after).toBe(before);
+  });
 });
