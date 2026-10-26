@@ -89,7 +89,7 @@ Use `Toolbar.FontFamily` for the default picker. It lists these families:
 - The families your font sources serve, such as the packaged fonts and the Google catalog.
 - The standard choices: Arial, Calibri, Cambria, Consolas, Courier New, Garamond, Georgia, Helvetica, Open Sans, Roboto, Times New Roman, and Verdana.
 
-A standard choice that no font source serves appears only if the computer has the font installed. The editor tests this by measuring sample text in the browser. Browser privacy settings can hide installed fonts from that test. To offer a family on every computer, serve it from a font source, for example with `customFonts()` or `googleFonts()`.
+A standard choice that no font source serves appears only if the computer has the font installed. The editor tests this by measuring sample text in the browser. Browser privacy settings can hide installed fonts from that test. To offer a family on every computer, serve it from a font source, such as `customFonts()` or `googleFonts()`. For example, `googleFonts()` serves Open Sans and Roboto. The picker then lists them on every computer, and the editor downloads them only when a document or a pick uses them.
 
 Use the `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
 

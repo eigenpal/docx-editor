@@ -76,6 +76,10 @@ const PINNED_REVISIONS: readonly string[] = [
   GOOGLE_FONTS_REVISION,
   // Montserrat and Montserrat Light: the last revision that shipped static instances.
   '160c7fe82ecb74b108d886ed8d27762f6e346163',
+  // Open Sans: the last revision before its variable-only release.
+  'beaec0837bd21524b57ecb435158f9011fc03999',
+  // Roboto: the last revision that shipped its `static/` directory.
+  'ff11ed915971ee26c88f442f37308142d4217979',
 ];
 
 describe('catalog', () => {
@@ -138,6 +142,34 @@ describe('catalog', () => {
         'Montserrat-LightItalic.ttf',
         'Montserrat-SemiBold.ttf',
         'Montserrat-SemiBoldItalic.ttf',
+      ],
+    };
+    for (const [family, files] of Object.entries(expected)) {
+      const faces = GOOGLE_FONT_CATALOG.filter((face) => face.family === family);
+      expect(faces.map((face) => face.url.slice(face.url.lastIndexOf('/') + 1)).sort()).toEqual([
+        ...files,
+      ]);
+      expect(
+        faces.map((face) => `${family}: ${face.url.includes(`@${GOOGLE_FONTS_REVISION}/`)}`)
+      ).toEqual(faces.map(() => `${family}: false`));
+    }
+  });
+
+  test('Roboto and Open Sans are served from revisions that still ship static faces', () => {
+    // Both are variable-only upstream. The picker lists them wherever `googleFonts()` is
+    // configured, so each needs all four faces at a pinned commit, not at the catalog head.
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      'Open Sans': [
+        'OpenSans-Bold.ttf',
+        'OpenSans-BoldItalic.ttf',
+        'OpenSans-Italic.ttf',
+        'OpenSans-Regular.ttf',
+      ],
+      Roboto: [
+        'Roboto-Bold.ttf',
+        'Roboto-BoldItalic.ttf',
+        'Roboto-Italic.ttf',
+        'Roboto-Regular.ttf',
       ],
     };
     for (const [family, files] of Object.entries(expected)) {

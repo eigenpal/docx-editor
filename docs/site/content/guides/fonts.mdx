@@ -325,7 +325,7 @@ const fonts = useFonts(packagedFonts(), googleFonts());
 
 Every argument to `useFonts` takes the same union: a resolver, a fragment, a configuration, or a promise for one. Arguments compose first-wins, in order.
 
-`googleFonts()` uses a generated catalog. Each face is pinned to an immutable `google/fonts` commit and includes a checked `sha256:` value. Most faces share one commit. A family whose current upstream version ships variable-only files is pinned to the last commit that carried static instances, so the catalog records more than one revision.
+`googleFonts()` uses a generated catalog. Each face is pinned to an immutable `google/fonts` commit and includes a checked `sha256:` value. Most faces share one commit. A family whose current upstream version ships variable-only files, such as Montserrat, Open Sans, or Roboto, is pinned to the last commit that carried static instances. The catalog therefore records more than one revision.
 
 ```ts
 googleFonts({

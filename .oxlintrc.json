@@ -13,6 +13,8 @@
     "/*.config.js",
     "/*.config.ts",
     "packages/editor-api/compat/generated/**",
+    // Generated font catalog data; `bun run google:check` and the catalog tests guard it.
+    "packages/fonts/src/google-catalog.generated.ts",
     // Third-party vendored code (Extend UI PDF viewer + shadcn primitives, MIT), not ours to lint.
     "examples/docx-to-pdf/src/vendor/**"
   ],
@@ -503,12 +505,6 @@
       "files": ["packages/core/src/layout/semantic-layout.ts"],
       "rules": {
         "max-lines": ["error", { "max": 2900, "skipBlankLines": false, "skipComments": false }]
-      }
-    },
-    {
-      "files": ["packages/fonts/src/google-catalog.generated.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 3500, "skipBlankLines": false, "skipComments": false }]
       }
     },
     // The benchmark and scenario tools are command-line programs: their report is console output.
