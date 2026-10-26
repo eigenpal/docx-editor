@@ -11,7 +11,13 @@ import { strToU8, zipSync } from 'fflate';
 import { createCollaborationDocumentPort } from '../document-port.ts';
 import { collaborationParagraphScanRecorder, paragraphSnapshot } from '../paragraph-addresses.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { replaceNode, withPart, type OoxmlNode } from '../../store/package/index.ts';
+import { ORIGIN_IDS } from '../../store/registry/frozen-ids.ts';
+import {
+  replaceNode,
+  withPart,
+  type OoxmlNode,
+  type OoxmlPackage,
+} from '../../store/package/index.ts';
 import { paraIdOf } from '../../store/package/para-id.ts';
 import { TreePackageStore } from '../../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../../store/store/tree-ops.ts';
@@ -39,13 +45,33 @@ function paragraphXml(id: string | null, text: string): string {
   return `<w:p${attributes}><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 }
 
-function bytes(body: string): Uint8Array {
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** A package whose body holds `body`; with `header`, a default header part holds it. */
+function bytes(body: string, header?: string): Uint8Array {
+  const headerParts: Record<string, Uint8Array> = header
+    ? {
+        'word/_rels/document.xml.rels': strToU8(
+          '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`
+        ),
+        'word/header1.xml': strToU8(
+          '<?xml version="1.0"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+            `xmlns:w14="${W14}">${header}</w:hdr>`
+        ),
+      }
+    : {};
+  const sectPr = header
+    ? `<w:sectPr><w:headerReference xmlns:r="${R}" w:type="default" r:id="rId7"/></w:sectPr>`
+    : '<w:sectPr/>';
   return zipSync({
+    ...headerParts,
     '[Content_Types].xml': strToU8(
       '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -55,7 +81,7 @@ function bytes(body: string): Uint8Array {
     ),
     'word/document.xml': strToU8(
       '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
-        `xmlns:w14="${W14}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body}<w:sectPr/>` +
+        `xmlns:w14="${W14}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body}${sectPr}` +
         '</w:body></w:document>'
     ),
   });
@@ -125,12 +151,64 @@ function withParaId(node: OoxmlNode, id: string | null): OoxmlNode {
   return { ...node, attributes } as OoxmlNode;
 }
 
-function edit(store: TreePackageStore, rng: ReturnType<typeof random>): void {
+type Port = ReturnType<typeof createCollaborationDocumentPort>;
+
+function remote(step: number) {
+  return { origin: ORIGIN_IDS.mutationRemote, actorId: 'peer', operationId: `op-${step}` };
+}
+
+/** Append a run holding a VML text box whose one paragraph carries `id`. */
+function appendTextBox(node: OoxmlNode, id: string | null, text: string): OoxmlNode {
+  if (node.kind === 'textValue') return node;
+  const loaded = readOoxmlPackage(
+    bytes(
+      `<w:p><w:r><w:pict><v:shape><v:textbox><w:txbxContent>${paragraphXml(id, text)}` +
+        '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>'
+    )
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const donor = paragraphNodes(loaded.package.parts.get(loaded.package.mainDocumentPart)!.root)[0];
+  if (!donor || donor.kind === 'textValue') return node;
+  return { ...node, children: [...node.children, ...donor.children] } as OoxmlNode;
+}
+
+function edit(
+  store: TreePackageStore,
+  port: Port,
+  rng: ReturnType<typeof random>,
+  step: number
+): void {
   const part = store.bodyStore().part;
   const paragraphs = paragraphNodes(part.root);
   const target = rng.pick(paragraphs);
   const length = paragraphSnapshot(part).find((p) => p.nodeId === target.id)?.text.length ?? 0;
-  const choice = rng.int(7);
+  const choice = rng.int(12);
+  if (choice === 7) {
+    store.undo();
+    return;
+  }
+  if (choice === 8) {
+    store.redo();
+    return;
+  }
+  if (choice === 9 || choice === 10) {
+    // A peer's package: a rename, or a text box added inside the target with a pool id.
+    const node =
+      choice === 9
+        ? withParaId(target, rng.pick(IDS))
+        : appendTextBox(target, rng.pick(IDS), `remote box ${step}`);
+    const pkg = store.currentPackage();
+    const body = pkg.parts.get(pkg.mainDocumentPart)!;
+    const replaced = replaceNode(body, target.id, node, { deferValidation: true });
+    if (replaced.ok) port.applyRemotePackage(withPart(pkg, replaced.part), remote(step));
+    return;
+  }
+  if (choice === 11) {
+    // A peer's narrowed text edit.
+    const listed = paragraphSnapshot(part).find((p) => p.nodeId === target.id);
+    if (listed) port.applyParagraphText(listed.paragraphId, `${listed.text}r`, remote(step));
+    return;
+  }
   if (choice >= 5) {
     // Rename: often to an id an EARLIER paragraph's lookup would now claim.
     const id = rng.pick(IDS);
@@ -193,7 +271,7 @@ test('the body paragraph lookup answers what the full paragraph list answers, th
         }
         checked += 1;
       }
-      edit(store, rng);
+      edit(store, port, rng, step);
     }
   }
   expect(checked).toBeGreaterThan(50_000);
@@ -252,4 +330,48 @@ test('paragraphByStableId follows the first claimant after an earlier paragraph 
   );
   const listed = port.paragraphs().find((p) => p.paragraphId === '22222222');
   expect(port.paragraphByStableId('22222222')?.nodeId).toBe(listed?.nodeId);
+});
+
+// The body comes first, so a body paragraph that takes a header paragraph's id shadows it.
+test('paragraphByStableId follows a body paragraph that takes a header paragraph id', () => {
+  for (const channel of ['local', 'remote'] as const) {
+    const loaded = readOoxmlPackage(
+      bytes(paragraphXml('11111111', 'body'), paragraphXml('22222222', 'header'))
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const store = new TreePackageStore(loaded.package, main);
+    const port = createCollaborationDocumentPort(store, { documentId: `shadow-${channel}` });
+    expect(port.paragraphByStableId('22222222')?.text).toBe('header');
+    const [body] = paragraphNodes(store.bodyStore().part.root);
+    const rename = (pkg: OoxmlPackage) => {
+      const part = pkg.parts.get(pkg.mainDocumentPart)!;
+      const renamed = replaceNode(part, body!.id, withParaId(body!, '22222222'), {
+        deferValidation: true,
+      });
+      return renamed.ok ? withPart(pkg, renamed.part) : pkg;
+    };
+    if (channel === 'local') store.transact(BODY, (context) => context.applyPackage(rename));
+    else port.applyRemotePackage(rename(store.currentPackage()), remote(0));
+    expect(port.paragraphByStableId('22222222')).toMatchObject({ nodeId: body!.id, text: 'body' });
+  }
+});
+
+// Typing never moves an id, so a peer typing in the paragraph keeps the hint: no walk.
+test('a stable-id hint survives remote typing in its paragraph', () => {
+  const loaded = readOoxmlPackage(
+    bytes(paragraphXml('11111111', 'first') + paragraphXml('22222222', 'second'))
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const store = new TreePackageStore(loaded.package, main);
+  const port = createCollaborationDocumentPort(store, { documentId: 'typing' });
+  expect(port.paragraphByStableId('22222222')?.text).toBe('second');
+  const recorder = collaborationParagraphScanRecorder();
+  for (let key = 0; key < 20; key += 1) {
+    expect(port.applyParagraphText('22222222', `second ${key}`, remote(key)).ok).toBe(true);
+    recorder.reset();
+    expect(port.paragraphByStableId('22222222')?.text).toBe(`second ${key}`);
+    expect(recorder.enumerations).toBe(0);
+  }
 });

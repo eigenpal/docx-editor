@@ -24,11 +24,12 @@
 // presence that costs a rebuild.
 //
 // The re-check cannot see that ANOTHER paragraph took the id first: an earlier paragraph
-// renamed to it, a pasted copy, or a body paragraph that now shadows a header's. So the owner
-// of the store tells the resolver what changed (`forgetIds`, `forgetAll`), and a hint whose
-// id may have a new first claimant is dropped before it is read; the part maps then decide.
+// renamed to it, a pasted copy, a text box added inside an earlier paragraph, or a body
+// paragraph that now shadows a header's. So the owner of the store reports each change
+// (`forgetChangedParagraphIds`), and every hint is dropped unless the change was typing that
+// could not move an id; the part maps then decide.
 
-import { findNode, parentNodeOf, type OoxmlNode, type OoxmlPart } from '../store/package/index.ts';
+import { findNode, type OoxmlNode, type OoxmlPart } from '../store/package/index.ts';
 import { isValidParaId, normalizeParagraphIdentity, paraIdOf } from '../store/package/para-id.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
@@ -209,6 +210,8 @@ export interface ParagraphAddressResolver {
   forgetIds(claims: Iterable<{ readonly paragraphId: string; readonly nodeId: string }>): void;
   /** Any id may have a new first claimant (a structural or package-wide change). */
   forgetAll(): void;
+  /** Whether any hint is held, so a change listener can skip work when none is. */
+  hasHints(): boolean;
 }
 
 /**
@@ -280,44 +283,43 @@ export function createParagraphAddressResolver(
     forgetAll() {
       hints.clear();
     },
+    hasHints() {
+      return hints.size > 0;
+    },
   });
 }
 
 /**
- * Tell `resolver` which stable ids one store change may have given a new first claimant. A
- * paragraph the change dirtied or created may now carry any id, so a hint for its current id
- * that names another paragraph is dropped; typing in the hinted paragraph keeps its hint. A
- * change inside a paragraph (a run, its text) moves no id. Anything else, or a change that
- * names no node (a package-wide write), may reorder or rename paragraphs anywhere, so every
- * hint goes. The next lookup of a forgotten id walks that part once.
+ * Tell `resolver` which stable ids one store change may have given a new first claimant.
+ *
+ * Only a text-local change (typing, IME, a narrowed remote text edit) keeps hints, and only
+ * when every node it names is a paragraph: text moves no paraId, so a hint stays unless that
+ * paragraph now carries a hinted id another node held. Anything else forgets every hint:
+ * structure, properties, drawings, undo and redo, and a change whose node lists cannot be
+ * trusted to be complete (a package-channel write reports none, and may rename or add any
+ * paragraph, a text box's included). The next lookup of a forgotten id walks that part once.
  */
 export function forgetChangedParagraphIds(
   resolver: ParagraphAddressResolver,
   parts: readonly OoxmlPart[],
-  change: { readonly dirty: readonly string[]; readonly created: readonly string[] }
+  change: {
+    readonly impact: string;
+    readonly dirty: readonly string[];
+    readonly created: readonly string[];
+  }
 ): void {
+  if (!resolver.hasHints()) return;
   const changed = [...change.dirty, ...change.created];
-  if (changed.length === 0) return resolver.forgetAll();
+  if (change.impact !== 'text-local' || changed.length === 0) return resolver.forgetAll();
   const claims: { paragraphId: string; nodeId: string }[] = [];
   for (const nodeId of changed) {
     const part = parts.find((candidate) => nodeId.startsWith(`${candidate.name}#`));
     const node = part ? findNode(part, nodeId) : null;
-    if (!part || !node) continue;
-    if (node.kind === 'paragraph') {
-      const authoredId = paraIdOf(node);
-      if (authoredId) claims.push({ paragraphId: authoredId.toUpperCase(), nodeId });
-      continue;
-    }
-    if (!insideParagraph(part, nodeId)) return resolver.forgetAll();
+    const authoredId = node?.kind === 'paragraph' ? paraIdOf(node) : null;
+    if (!authoredId) return resolver.forgetAll();
+    claims.push({ paragraphId: authoredId.toUpperCase(), nodeId });
   }
   resolver.forgetIds(claims);
-}
-
-function insideParagraph(part: OoxmlPart, nodeId: string): boolean {
-  for (let parent = parentNodeOf(part, nodeId); parent; parent = parentNodeOf(part, parent.id)) {
-    if (parent.kind === 'paragraph') return true;
-  }
-  return false;
 }
 
 /**

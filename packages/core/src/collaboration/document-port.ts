@@ -230,8 +230,15 @@ export function createCollaborationDocumentPort(
   };
 
   const resolveAddress = createParagraphAddressResolver(storyParts);
-  // A hint survives typing, but not a change that can give its id a new first claimant.
-  store.subscribe((change) => forgetChangedParagraphIds(resolveAddress, storyParts(), change));
+  // A hint survives typing, but not a change that can give its id a new first claimant. The
+  // listener holds the resolver weakly and unsubscribes once the port is gone, so a store that
+  // outlives its ports does not keep them, or the trees their hints name, alive.
+  const resolverRef = new WeakRef(resolveAddress);
+  const stopForgetting = store.subscribe((change) => {
+    const resolver = resolverRef.deref();
+    if (!resolver) return stopForgetting();
+    forgetChangedParagraphIds(resolver, storyParts(), change);
+  });
   const paragraphByNodeId = createBodyParagraphLookup(() => store.bodyStore().part);
 
   const applyParagraphTexts = (
