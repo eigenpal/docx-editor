@@ -53,7 +53,7 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [Right-to-left support](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) | Use a mirrored Arabic or Hebrew interface and edit mixed-direction documents. |
 | [Chinese, Japanese, and Korean text](https://www.docx-editor.dev/docs/2.x/guides/cjk) | Configure interface translations, document fonts, and PDF fonts. |
 | [DrawingML rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing) | Configure charts, SmartArt, and drawing effects. Check rendering and interface limits. |
-| [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls in 13 languages with locale catalogs and custom strings. |
+| [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls in 14 languages with locale catalogs and custom strings. |
 | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
 | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) | Send anonymous diagnostics and metrics to Sentry, OpenTelemetry, Prometheus, or a log service. No document content or personal data is sent. |
@@ -187,6 +187,7 @@ See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor Licens
 | `ja`    | Japanese             |
 | `pl`    | Polish               |
 | `pt-BR` | Portuguese (Brazil)  |
+| `ru`    | Russian              |
 | `tr`    | Turkish              |
 | `zh-CN` | Chinese (Simplified) |
 

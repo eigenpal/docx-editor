@@ -18,7 +18,7 @@
 
 # @docx-editor.dev/i18n
 
-Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides 13 languages and falls back to English for missing translations.
+Translate [docx-editor.dev](https://docx-editor.dev) controls with locale strings, types, and runtime helpers. The package provides 14 languages and falls back to English for missing translations.
 
 ## Quick start
 
@@ -86,6 +86,7 @@ For custom translations, set `_dir: 'rtl'` in your catalog or pass `dir="rtl"` t
 | `ja`    | `ja`   | Japanese            |
 | `pl`    | `pl`   | Polish              |
 | `pt-BR` | `ptBR` | Portuguese (Brazil) |
+| `ru`    | `ru`   | Russian             |
 | `tr`    | `tr`   | Turkish             |
 | `zh-CN` | `zhCN` | Simplified Chinese  |
 

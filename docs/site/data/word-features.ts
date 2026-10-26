@@ -1282,14 +1282,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.i18n',
-    name: 'Editor UI in 13 languages',
+    name: 'Editor UI in 14 languages',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'ar, de, en, es, fr, he, hi, id, ja, pl, pt-BR, tr, and zh-CN via @docx-editor.dev/i18n. The ar and he catalogs declare _dir: rtl, and every chrome part under LocaleProvider mirrors for them: toolbar, menus, dialogs, context menu, navigation, rulers, and review cards, and the review column moves to the left of the page. LocaleProvider accepts a dir prop for other catalogs.',
+      'ar, de, en, es, fr, he, hi, id, ja, pl, pt-BR, ru, tr, and zh-CN via @docx-editor.dev/i18n. The ar and he catalogs declare _dir: rtl, and every chrome part under LocaleProvider mirrors for them: toolbar, menus, dialogs, context menu, navigation, rulers, and review cards, and the review column moves to the left of the page. LocaleProvider accepts a dir prop for other catalogs.',
     docsLink: '/docs/2.x/i18n',
   },
   {
