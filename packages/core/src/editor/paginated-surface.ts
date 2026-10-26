@@ -1802,12 +1802,12 @@ export function mountPaginatedSurface(
     },
   });
 
-  // A settled image resource must reach the screen on its own — nothing else may ever
-  // touch the document (a letterhead the user only reads). The flush is queued, not
-  // immediate, so a burst of settles (every image of a page decoding) lays out once; after
-  // destroy the scheduler is cancelled and the queued flush finds nothing pending.
+  // A settled image resource reaches the screen on its own through a queued flush, so a burst
+  // lays out once. A sliced opening's later slices and closing full layout read it anyway; a
+  // flush then would finish the paused slice and relay the prefix in one task.
   let resourceFlushQueued = false;
   onDrawingResourcesChanged = () => {
+    if (openingBlockLimit !== null) return;
     scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
     if (resourceFlushQueued) return;
     resourceFlushQueued = true;

@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A picture that finished loading while a document opened in slices laid the opened pages out again at once.",
+  "after": "A picture that finishes loading during a sliced open is laid out by the later slices and the full layout that ends the open.",
+  "reason": "Only when one editor lays out its own pages changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/progressive-open-drawing-resources.test.ts"
+  ],
+  "changeset": "drawing-resources-during-open",
+  "migration": null
+}
