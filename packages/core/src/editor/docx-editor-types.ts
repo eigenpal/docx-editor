@@ -29,6 +29,7 @@ import type {
   FontConfiguration,
   Unsubscribe,
   ZoomMode,
+  TableInteractionLabelKey,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
 import type { EditorCollaborationSession } from '../collaboration/index.ts';
@@ -192,7 +193,7 @@ export interface DocxEditorConfig {
   zoomMode?: ZoomMode | 'auto';
   onFontError?: (error: EditorFontError) => void;
   /** Localized labels for table insertion furniture on the painted surface. */
-  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+  tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
 }
 
 /**

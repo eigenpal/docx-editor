@@ -1555,7 +1555,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Table interaction furniture (core-owned, semantic geometry). */
-.docx-table-furniture {
+.docx-table-furniture,
+.docx-table-select-layer {
   z-index: 3;
   pointer-events: none;
 }
@@ -1572,7 +1573,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-table-insert-row,
-.docx-table-insert-column {
+.docx-table-insert-column,
+.docx-table-select-handle {
   pointer-events: auto;
   width: 16px;
   height: 16px;

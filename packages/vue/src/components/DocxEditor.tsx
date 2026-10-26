@@ -79,6 +79,7 @@ import type { DocxEditorContextMenuProps } from '../editor/contextmenu';
 import type { DocxEditorMenuProps } from '../editor/menu';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { createDocxEditorRefApi } from './DocxEditor/useDocxEditorRefApi';
+import type { TableInteractionLabelKey } from '@docx-editor.dev/core/contracts/editor';
 
 const CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
@@ -394,8 +395,7 @@ const DocxEditorFrame = defineComponent({
         custom ? custom(key, params) : catalogT(key as TranslationKey, params);
     });
 
-    const tableInteractionLabel = (key: 'table.insertRowBelow' | 'table.insertColumnRight') =>
-      translate.value(key);
+    const tableInteractionLabel = (key: TableInteractionLabelKey) => translate.value(key);
 
     provide(PageNumberTranslationContext, (key) => translate.value(key));
 

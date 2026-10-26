@@ -20,6 +20,7 @@ import type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
 import type { TextMeasurer } from '@docx-editor.dev/core/layout';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import type { PaginatedSurfaceState, SurfaceEditingMode } from './paginated-surface-contract.ts';
+import type { TableInteractionLabelKey } from '../contracts/editor.ts';
 
 /**
  * How the caret moves through an inline content control whose effective lock is
@@ -222,9 +223,7 @@ export interface PaginatedSurfaceOptions {
    * Localized accessible names for core-owned table insertion furniture.
    * Defaults to English from `@docx-editor.dev/i18n` when omitted.
    */
-  readonly tableInteractionLabel?: (
-    key: 'table.insertRowBelow' | 'table.insertColumnRight'
-  ) => string;
+  readonly tableInteractionLabel?: (key: TableInteractionLabelKey) => string;
   /** Localized drawing refusal labels; defaults to English when omitted. */
   readonly drawingStrings?: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings;
   /** Override raster decode for package image intents; defaults to browser/headless. */

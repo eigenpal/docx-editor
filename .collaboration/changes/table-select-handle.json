@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Suggesting mode deleted a whole table with an untracked deleteBlock, and selectTableRegion was refused.",
+  "after": "Suggesting mode refuses whole-table deletion and strikes the cell text of tables a range encloses. selectTableRegion selects every cell of a table, and Backspace on that selection deletes the table.",
+  "reason": "Edits use existing operations: deleteBlock outside suggesting mode and tracked deleteText inside it. Selection is local state. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/whole-table-selection.test.ts",
+    "packages/core/src/editor/__tests__/surface-table-select-handle.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-whole-table.test.ts"
+  ],
+  "changeset": "table-select-handle",
+  "migration": null
+}

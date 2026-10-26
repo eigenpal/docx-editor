@@ -826,13 +826,16 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'mergeCells':
     case 'splitCell':
     case 'toggleHeaderRow':
-    case 'selectTableRegion':
     case 'setTableProperties': {
       const tableSupport = tableCommandCanSupport(command);
       return tableSupport.supported
         ? { supported: true, mutating: true }
         : { supported: false, reason: tableSupport.reason ?? 'unsupported table command' };
     }
+    case 'selectTableRegion':
+      return command.region === 'table'
+        ? { supported: true, mutating: false }
+        : { supported: false, reason: `selecting a table ${command.region} is not supported yet` };
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
