@@ -19,6 +19,9 @@ import {
  * ```
  *
  * A document export that receives this origin waits for its faces, so exported pages use them.
+ * The faces never change the configuration settings, such as `defaultFont` or `maxFontBytes`:
+ * those come from the first origin that answers at once, so the document does not change its
+ * default font after it paints.
  *
  * @public
  */

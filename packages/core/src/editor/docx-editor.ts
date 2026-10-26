@@ -447,18 +447,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     async (families, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
-      try {
-        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
-      } finally {
-        lateFonts.settle(late);
-      }
+      lateFonts.settle(late); // before the install, which announces the change once
+      if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
     }
   );
   let fontsResolving = false;
   /** Faces an origin delivers after the first paint, until they install for this load. */
   const lateFonts = createLateFontArrival({
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
-    changed: () => bump(),
+    changed: () => (bump(), emitSelectionChange()),
     report: (cause) => reportFontError(toEditorFontError(cause)),
   });
   /**
@@ -886,6 +883,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewAuthorSlots = createStableReviewAuthorSlots();
       reviewAuthorVisibility.showAll();
       forgetFonts();
+      lateFonts.clear();
       // BEFORE the mount, so the initial paint materializes the pages actually in view.
       // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
       // function for the SAME document and must keep the reader's place.
@@ -916,7 +914,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     disposeShapedFonts();
     disposeShapedFonts = () => {};
     fontsResolving = false;
-    lateFonts.clear();
   }
 
   /** {@link forgetFonts}, then measure the mounted document with the fallback measurer. */
@@ -964,7 +961,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
-    if (late && lateFacesInstalled(late, resolvedFontConfiguration)) return;
+    if (late && lateFacesInstalled(late, resolvedFontConfiguration))
+      return void (bump(), emitSelectionChange());
     // The first resolution of a load downloads the shaper alongside the faces, not after them.
     // Failure reports where shaping needs it. Later resolutions find it loaded or failed.
     if (!late && !resolvedFontConfiguration) initializeHarfBuzz().catch(() => {});
@@ -2545,6 +2543,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       refreshHost?.invalidate();
       destroyed = true;
       fontLifetime.dispose();
+      lateFonts.clear();
       suggestingReporter.dispose();
       openScheduler.cancel();
       zoomLane.detach();

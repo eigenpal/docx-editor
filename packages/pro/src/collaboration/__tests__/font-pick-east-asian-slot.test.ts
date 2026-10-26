@@ -6,9 +6,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { linesOf } from '@docx-editor.dev/core/layout';
+import { linesOf, styleForFontSlot } from '@docx-editor.dev/core/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import { styleForFontSlot } from '../../../../core/src/layout/script-itemization.ts';
+
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support.ts';
 
@@ -63,7 +63,7 @@ test('a font pick on Chinese text converges, undoes, and survives reconnect and 
         type: 'setMarkAttr',
         mark: 'fontFamily',
         attr: 'family',
-        value: 'Georgia',
+        value: 'Microsoft YaHei',
       }).ok
     ).toBe(true);
     select(right.editor, 6);
@@ -71,18 +71,18 @@ test('a font pick on Chinese text converges, undoes, and survives reconnect and 
     resume();
     expect(text()).toBe('中文DOCX!');
     expect(await xml(right.editor)).toBe(await xml(left.editor));
-    expect(faceOf(left.editor, '中')).toBe('Georgia');
-    expect(faceOf(right.editor, '中')).toBe('Georgia');
+    expect(faceOf(left.editor, '中')).toBe('Microsoft YaHei');
+    expect(faceOf(right.editor, '中')).toBe('Microsoft YaHei');
     expect(faceOf(right.editor, 'D')).toBe('Calibri');
     select(right.editor, 0, 2);
-    expect(box(right.editor)).toBe('Georgia');
+    expect(box(right.editor)).toBe('Microsoft YaHei');
 
     expect(left.editor.exec({ type: 'undo' }).ok).toBe(true);
     expect(await xml(right.editor)).toBe(await xml(left.editor));
     expect(faceOf(right.editor, '中')).toBe('SimSun');
     expect(left.editor.exec({ type: 'redo' }).ok).toBe(true);
     expect(await xml(right.editor)).toBe(await xml(left.editor));
-    expect(faceOf(right.editor, '中')).toBe('Georgia');
+    expect(faceOf(right.editor, '中')).toBe('Microsoft YaHei');
 
     // Deleting the picked text while the other peer edits the Latin part.
     pause();
@@ -100,7 +100,7 @@ test('a font pick on Chinese text converges, undoes, and survives reconnect and 
     harness.leave(bob);
     const reconnected = mount(await harness.join(alice, 'bob-reconnected'));
     expect(await xml(reconnected.editor)).toBe(await xml(left.editor));
-    expect(faceOf(reconnected.editor, '文')).toBe('Georgia');
+    expect(faceOf(reconnected.editor, '文')).toBe('Microsoft YaHei');
 
     const container = document.createElement('div');
     document.body.append(container);
@@ -110,8 +110,8 @@ test('a font pick on Chinese text converges, undoes, and survives reconnect and 
     });
     views.push({ editor: reopened, container });
     expect(await xml(reopened)).toBe(await xml(left.editor));
-    expect(faceOf(reopened, '文')).toBe('Georgia');
-    expect((await xml(reopened)).includes('w:eastAsia="Georgia"')).toBe(true);
+    expect(faceOf(reopened, '文')).toBe('Microsoft YaHei');
+    expect((await xml(reopened)).includes('w:eastAsia="Microsoft YaHei"')).toBe(true);
   } finally {
     for (const view of views) {
       view.editor.destroy();

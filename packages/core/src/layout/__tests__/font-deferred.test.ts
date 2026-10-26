@@ -304,4 +304,65 @@ describe('deferred font faces', () => {
       'early',
     ]);
   });
+
+  test('a held-back origin stays out of the base when its faces arrive', async () => {
+    const aptos = { family: 'Aptos', sizeHalfPoints: 22 };
+    const composed = await composeFontOrigins(
+      [
+        deferFonts({ sources: [source('Late', 'late')] }),
+        { sources: [source('Early', 'early')], defaultFont: aptos },
+      ],
+      request
+    );
+    expect((composed as { defaultFont?: unknown }).defaultFont).toEqual(aptos);
+    const full = await composed!.deferred;
+    expect((full as { defaultFont?: unknown }).defaultFont).toEqual(aptos);
+    expect(ids(full)).toEqual(['early', 'late']);
+  });
+
+  test('deferFonts alone still installs its faces when they arrive', async () => {
+    const composed = await composeFontOrigins(
+      [deferFonts({ sources: [source('Late', 'late')] })],
+      request
+    );
+    expect(ids(await composed!.deferred)).toEqual(['late']);
+  });
+
+  test('export reports the immediate failures of an origin that also defers', async () => {
+    const failures: FontOriginFailure[] = [];
+    await composePreparedFontOrigins(
+      [
+        defineFontResolver(() => ({
+          sources: [source('Early', 'early')],
+          failures: [new Error('one face missing')],
+          deferred: Promise.resolve({ sources: [source('Late', 'late')] }),
+        })),
+      ],
+      request,
+      { awaitDeferred: true, onOriginFailure: (failure) => failures.push(failure) }
+    );
+    expect(failures.map((failure) => String(failure.cause))).toContain('Error: one face missing');
+  });
+
+  test('an origin skipped as invalid does not merge its late faces, and says so', async () => {
+    const failures: FontOriginFailure[] = [];
+    const composed = await composeFontOrigins(
+      [
+        { sources: [source('Early', 'early')] },
+        defineFontResolver(
+          () =>
+            ({
+              sources: 'not a list',
+              deferred: Promise.resolve({ sources: [source('Late', 'late')] }),
+            }) as never
+        ),
+      ],
+      request,
+      { onOriginFailure: (failure) => failures.push(failure) }
+    );
+    expect(composed?.deferred).toBeUndefined();
+    expect(failures.some((failure) => String(failure.cause).includes('background faces'))).toBe(
+      true
+    );
+  });
 });

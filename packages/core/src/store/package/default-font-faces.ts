@@ -231,6 +231,56 @@ export function isEastAsianFace(
   return fontTableEastAsianFaces?.includes(name) ?? false;
 }
 
+/** Characters only an East Asian family name contains: kana, ideographs, Hangul, full width. */
+const EAST_ASIAN_NAME_CHARACTERS = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
+
+/**
+ * Prefixes of East Asian families a host commonly serves that no document font table names:
+ * the regional Noto and Source Han families and the platform CJK faces. Lower-cased.
+ */
+const EAST_ASIAN_FAMILY_PREFIXES: readonly string[] = [
+  'noto sans cjk',
+  'noto serif cjk',
+  'noto sans jp',
+  'noto sans sc',
+  'noto sans tc',
+  'noto sans hk',
+  'noto sans kr',
+  'noto serif jp',
+  'noto serif sc',
+  'noto serif tc',
+  'noto serif hk',
+  'noto serif kr',
+  'source han',
+  'pingfang',
+  'hiragino',
+  'heiti',
+  'songti',
+  'stheiti',
+  'stsong',
+  'stkaiti',
+  'stfangsong',
+  'nanum',
+];
+
+/**
+ * Whether a family a user PICKS is an East Asian font, so the pick also applies to East Asian
+ * text. {@link isEastAsianFace}, plus a family named in CJK or full-width characters, plus
+ * the common East Asian families a host serves that a document font table rarely lists.
+ */
+export function isEastAsianFontFamily(
+  family: string,
+  fontTableEastAsianFaces: readonly string[] | undefined
+): boolean {
+  const name = family.trim().toLowerCase();
+  if (!name || name.startsWith('@')) return false;
+  return (
+    isEastAsianFace(name, fontTableEastAsianFaces) ||
+    EAST_ASIAN_NAME_CHARACTERS.test(name) ||
+    EAST_ASIAN_FAMILY_PREFIXES.some((prefix) => name.startsWith(prefix))
+  );
+}
+
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
 }

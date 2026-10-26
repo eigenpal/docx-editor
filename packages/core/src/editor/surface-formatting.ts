@@ -47,6 +47,7 @@ import { paragraphFormattingEntry } from './surface-formatting-index.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
 import { paragraphLineSpacing } from '../layout/paragraph-style.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
   cascadedParagraphAttributes,
   paragraphBreaksBefore,
@@ -451,23 +452,8 @@ export type InheritedRunDefaults = (
   runProperties: readonly SurfaceProperty[]
 ) => { readonly fontFamily: string | null; readonly fontSizeHalfPoints: number | null };
 
-/**
- * Whether a font pick at this selection must also set `w:eastAsia`: the selected text, or the
- * span beside a collapsed caret, paints East Asian characters through that slot. Without it
- * the pick changes nothing on screen and the font box keeps the old face. A complex-script
- * run needs no help here: the store writes its `w:cs` companion per run.
- */
-export function fontPickReachesEastAsia(
-  layout: SemanticLayout,
-  selection: SemanticSelection,
-  cells?: readonly string[],
-  paragraphOrder?: readonly string[],
-  caretSpan = true
-): boolean {
-  const spans = caretSpan ? selectionSpans(layout, selection, cells, paragraphOrder) : [];
-  // No text to read, such as an empty paragraph: East Asian text typed next takes the pick too.
-  return spans.length === 0 || spans.some((span) => span.fontSlot === 'eastAsia');
-}
+/** A letter of any script; a span without one does not decide the font box. */
+const LETTER = /\p{L}/u;
 
 /** The formatting snapshot at a selection, for a toolbar to reflect. */
 export function formattingAt(
@@ -522,14 +508,19 @@ export function formattingAt(
   // docDefaults, theme fonts). A caret in an empty paragraph inherits too.
   const hasDirect = (span: (typeof spans)[number], localName: string): boolean =>
     span.props.some((property) => property.localName === localName);
-  // The face the span's text PAINTS in: East Asian text answers its `w:eastAsia` face, and a
-  // complex-script run already resolves `fontFamily` to its `w:cs` face. A selection of
-  // Chinese text in a Calibri+SimSun run reads SimSun; its Latin letters read Calibri, so a
-  // selection over both disagrees to blank. A font pick writes the same slot
-  // (`fontPickReachesEastAsia`), so the box reflects the pick.
+  // The face the span's text PAINTS in, by the painter's own rule (`styleForFontSlot`): East
+  // Asian text answers its `w:eastAsia` face, and a complex-script run already resolves
+  // `fontFamily` to its `w:cs` face. Chinese text in a Calibri+SimSun run reads SimSun; its
+  // Latin letters alone read Calibri.
+  //
+  // Spans without a letter (spaces, punctuation, digits) do not vote when letters are selected.
+  // Between Korean or Chinese words they paint through the Latin slot, and counting them made
+  // every multi-word East Asian selection read blank. Letters in two different faces still
+  // read blank, so a Latin font hidden in the selection is never reported as the other one.
+  const lettered = spans.filter((span) => LETTER.test(span.text));
+  const familySpans = lettered.length > 0 ? lettered : spans;
   const familyOf = (span: (typeof spans)[number]): string | null =>
-    (span.fontSlot === 'eastAsia' ? span.style.fontFamilyEastAsia : null) ??
-    span.style.fontFamily ??
+    styleForFontSlot(span.style, span.fontSlot).fontFamily ??
     inherited?.(span.range.paragraphId, span.props).fontFamily ??
     null;
   const sizeOf = (span: (typeof spans)[number]): number =>
@@ -705,7 +696,9 @@ export function formattingAt(
     superscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'superscript'),
     subscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'subscript'),
     fontFamily:
-      spans.length > 0 ? agreedOver(spans.map(familyOf)) : (caretInherited?.fontFamily ?? null),
+      spans.length > 0
+        ? agreedOver(familySpans.map(familyOf))
+        : (caretInherited?.fontFamily ?? null),
     fontSizeHalfPoints:
       spans.length > 0
         ? agreedOver(spans.map(sizeOf))

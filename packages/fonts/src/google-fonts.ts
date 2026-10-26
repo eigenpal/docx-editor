@@ -712,8 +712,11 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       Promise.all([...wanted.values()].flat().map((face) => fetchInto(face, sources, failures))),
     ]);
     // Background CJK downloads start once the first-paint faces are in, so 4-8 MB faces never
-    // compete with them for bandwidth.
-    const cjkLater = deferCjk ? immediate.then(loadCjk, loadCjk) : undefined;
+    // compete with them for bandwidth. A resolution that failed downloads none: nobody would
+    // receive them.
+    const cjkLater = deferCjk
+      ? immediate.then(loadCjk, () => ({ sources: [], substitutions: [], failures: [] }))
+      : undefined;
     const [, cjkNow] = await Promise.all([
       immediate,
       cjkWanted.size > 0 && !deferCjk ? loadCjk() : undefined,

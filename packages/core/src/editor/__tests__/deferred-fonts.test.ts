@@ -173,4 +173,17 @@ describe('deferred font faces in the editor', () => {
       editor.destroy();
     }
   });
+
+  test('setFonts with only background faces keeps waiting for them', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Late', 'text')),
+    });
+    try {
+      await editor.setFonts(() => ({ sources: [], deferred: new Promise(() => {}) }));
+      expect(editor.fontMeasurement().resolving).toBe(true);
+    } finally {
+      editor.destroy();
+    }
+  });
 });

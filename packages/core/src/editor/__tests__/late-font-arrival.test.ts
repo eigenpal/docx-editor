@@ -45,7 +45,18 @@ test('pending holds until the delivered faces install', async () => {
   expect(delivered).toHaveLength(1);
   // Downloaded but not installed: `resolving` must still read true.
   expect(arrival.pending()).toBe(true);
+  // Settled just before the install, quietly: the install announces the change once.
   arrival.settle(delivered[0]);
+  expect(arrival.pending()).toBe(false);
+  expect(changes()).toBe(0);
+});
+
+test('a late answer that is not an object ends the wait without an error', async () => {
+  const { arrival, delivered, reported, changes } = arrivalFor();
+  arrival.track(Promise.resolve(true as never), undefined, 1, () => true);
+  await tick();
+  expect(delivered).toEqual([]);
+  expect(reported).toEqual([]);
   expect(arrival.pending()).toBe(false);
   expect(changes()).toBe(1);
 });
@@ -144,4 +155,14 @@ test('a late answer already installed is recognized, so it lays nothing out agai
   expect(lateFacesInstalled(someFaces, someFaces)).toBe(true);
   expect(lateFacesInstalled(someFaces, { substitutions: [] })).toBe(false);
   expect(lateFacesInstalled(someFaces, undefined)).toBe(false);
+});
+
+test('a malformed late answer is reported and ends the wait', async () => {
+  const { arrival, delivered, reported } = arrivalFor();
+  const malformed = { sources: { length: 1 } } as unknown as FontConfigurationFragment;
+  arrival.track(Promise.resolve(malformed), { sources: [] }, 1, () => true);
+  await tick();
+  expect(delivered).toEqual([]);
+  expect(reported).toHaveLength(1);
+  expect(arrival.pending()).toBe(false);
 });

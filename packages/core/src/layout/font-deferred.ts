@@ -119,11 +119,16 @@ export async function completeDeferredAnswer<T extends OriginAnswer>(
   onFailure: (cause: unknown) => void,
   signal?: AbortSignal
 ): Promise<T> {
+  // The merges below drop `failures`, which is right for late answers (reported here as they
+  // arrive) but not for the immediate one: the composition reports those from the result.
+  const immediate = 'failures' in answer ? (answer as { failures?: unknown }).failures : undefined;
+  const finish = (result: OriginAnswer): T =>
+    (immediate === undefined ? result : { ...result, failures: immediate }) as T;
   let current: OriginAnswer = answer;
   // Bounded: one step per late arrival, and a composition has at most this many origins.
   for (let step = 0; step < MAX_DEFERRED_STEPS; step += 1) {
     const { now, later } = splitDeferredAnswer(current);
-    if (!later) return now as T;
+    if (!later) return finish(now);
     let arrived: FontConfigurationFragment | undefined;
     try {
       // A host promise may ignore the signal; an export must not wait past its own deadline.
@@ -131,13 +136,13 @@ export async function completeDeferredAnswer<T extends OriginAnswer>(
     } catch (cause) {
       if (signal?.aborted) throw signal.reason;
       onFailure(cause);
-      return now as T;
+      return finish(now);
     }
     for (const cause of lateAnswerFailures(arrived)) onFailure(cause);
     current = mergeDeferredAnswer(now, arrived) ?? now;
   }
   onFailure(new RangeError(`Font loading stopped after ${MAX_DEFERRED_STEPS} deferred steps`));
-  return splitDeferredAnswer(current).now as T;
+  return finish(splitDeferredAnswer(current).now);
 }
 
 /** The longest chain of late answers an export waits through before it reports and stops. */

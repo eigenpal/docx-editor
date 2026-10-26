@@ -39,6 +39,9 @@ export interface FontConfigurationFragment {
    * with `sources` and `substitutions`, then lays it out again once this settles. Use it
    * for large faces, such as CJK fonts, that would otherwise hold back the first paint.
    *
+   * Late faces add faces only: the configuration settings (`defaultFont`, `maxFontBytes`) come
+   * from the origins that answer at once, so the default font never changes after the paint.
+   *
    * It must never reject: report failures and settle with what loaded, or `undefined`.
    * `composeFontOrigins()` keeps it on the merged result. A synchronous merge, such as
    * `composeFontConfiguration()`, drops it.

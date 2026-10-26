@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A font pick over East Asian text wrote the picked family to w:eastAsia, also for a Latin font.",
+  "after": "A font pick writes w:eastAsia only when the picked family is an East Asian font, through the same w:rFonts merge.",
+  "reason": "The write keeps the existing slot-wise w:rFonts merge operation, and released participants read w:eastAsia with the same meaning. Background font loading changes only local measurement.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/font-pick-east-asian-slot.test.ts",
+    "packages/core/src/editor/__tests__/font-picker-script-slots.test.ts"
+  ],
+  "changeset": "font-pick-east-asian-fonts-only",
+  "migration": null
+}

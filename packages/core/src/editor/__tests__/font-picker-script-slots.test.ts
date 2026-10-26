@@ -1,9 +1,10 @@
-// The font box answers the face the selected text paints in, and a pick changes that face.
+// The font box answers the face the selected text paints in, and a pick reaches the text the
+// picked font can draw.
 //
 // A run names a face per script: `w:ascii`/`w:hAnsi` for Latin, `w:eastAsia` for Chinese,
-// Japanese and Korean, `w:cs` for a complex-script run. The box used to read and write the
-// Latin slot only, so Chinese text in a Calibri+SimSun run read "Calibri", and picking a font
-// for it changed nothing on screen.
+// Japanese and Korean, `w:cs` for a complex-script run. The box reads the face each span paints
+// in. A pick of an East Asian font also sets `w:eastAsia`; a Latin font does not, because it
+// has no ideographs and would draw them in a fallback face.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -43,20 +44,23 @@ function select(editor: DocxEditorInstance, from: number, to: number): void {
 
 const boxFamily = (editor: DocxEditorInstance) => editor.snapshot().formatting?.fontFamily ?? null;
 
-/** Every run's own `w:rFonts` in the first paragraph, with its text. */
+const pick = (editor: DocxEditorInstance, value: string) =>
+  editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value });
+
+/** Every run's own `w:rFonts` in the first paragraph. */
 function runFonts(editor: DocxEditorInstance) {
   const part = editor.surface!.session.part();
   const paragraph = findNode(part, editor.surface!.session.paragraphIds()[0]!);
   if (!paragraph || paragraph.kind === 'textValue') throw new Error('no paragraph');
   return paragraph.children
     .filter((child) => child.kind === 'run')
-    .map((run) => ({
-      text: editor.surface!.session.textOf?.(run) ?? '',
-      fonts: authoredProperties(
-        propertyContainer(run, 'runProperties', 'rPr'),
-        AUTHORABLE_RUN_PROPERTIES
-      ).find((property) => property.localName === 'rFonts')?.attributes,
-    }));
+    .map(
+      (run) =>
+        authoredProperties(
+          propertyContainer(run, 'runProperties', 'rPr'),
+          AUTHORABLE_RUN_PROPERTIES
+        ).find((property) => property.localName === 'rFonts')?.attributes
+    );
 }
 
 describe('the font box reads the face the text paints in', () => {
@@ -74,9 +78,40 @@ describe('the font box reads the face the text paints in', () => {
     editor.destroy();
   });
 
-  test('a selection over both scripts disagrees to blank', () => {
+  test('Chinese and Latin letters in different faces read blank', () => {
     const editor = mount(MIXED);
     select(editor, 0, 6);
+    expect(boxFamily(editor)).toBeNull();
+    editor.destroy();
+  });
+
+  test('a full-width comma does not take over a Latin selection', () => {
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="DengXian"/>' +
+        '</w:rPr><w:t>Hello，world</w:t></w:r></w:p>'
+    );
+    select(editor, 0, 11);
+    expect(boxFamily(editor)).toBe('Calibri');
+    editor.destroy();
+  });
+
+  test('Korean words with spaces and punctuation between them read the Korean face', () => {
+    // The spaces and the period paint through the Latin slot; they must not blank the box.
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Malgun Gothic"/>' +
+        '<w:lang w:val="en-US" w:eastAsia="ko-KR"/></w:rPr><w:t xml:space="preserve">문서는 한국어 예제입니다. 텍스트</w:t></w:r></w:p>'
+    );
+    select(editor, 0, 19);
+    expect(boxFamily(editor)).toBe('Malgun Gothic');
+    editor.destroy();
+  });
+
+  test('East Asian text in two different faces reads blank', () => {
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:eastAsia="SimSun"/></w:rPr><w:t>中文</w:t></w:r>' +
+        '<w:r><w:rPr><w:rFonts w:eastAsia="SimHei"/></w:rPr><w:t>中文</w:t></w:r></w:p>'
+    );
+    select(editor, 0, 4);
     expect(boxFamily(editor)).toBeNull();
     editor.destroy();
   });
@@ -96,27 +131,37 @@ describe('the font box reads the face the text paints in', () => {
   });
 });
 
-describe('a font pick changes the face the box shows', () => {
-  test('picking a font for Chinese text sets its East Asian face', () => {
+describe('a font pick reaches the text that font can draw', () => {
+  test('an East Asian font picked for Chinese text sets its East Asian face', () => {
     const editor = mount(MIXED);
     select(editor, 0, 2);
-    expect(
-      editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' }).ok
-    ).toBe(true);
-    const fonts = runFonts(editor).map((run) => run.fonts);
-    expect(fonts[0]).toMatchObject({ ascii: 'Georgia', hAnsi: 'Georgia', eastAsia: 'Georgia' });
+    expect(pick(editor, 'Microsoft YaHei').ok).toBe(true);
+    const fonts = runFonts(editor);
+    expect(fonts[0]).toMatchObject({
+      ascii: 'Microsoft YaHei',
+      hAnsi: 'Microsoft YaHei',
+      eastAsia: 'Microsoft YaHei',
+    });
     // The Latin letters outside the selection keep their run's faces.
     expect(fonts.at(-1)).toMatchObject({ ascii: 'Calibri', eastAsia: 'SimSun' });
     select(editor, 0, 2);
-    expect(boxFamily(editor)).toBe('Georgia');
+    expect(boxFamily(editor)).toBe('Microsoft YaHei');
     editor.destroy();
   });
 
-  test('picking a font for Latin letters leaves the East Asian face alone', () => {
+  test('a localized East Asian name counts too', () => {
     const editor = mount(MIXED);
-    select(editor, 2, 6);
-    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
-    expect(runFonts(editor).at(-1)!.fonts).toMatchObject({
+    select(editor, 0, 2);
+    pick(editor, '游ゴシック');
+    expect(runFonts(editor)[0]).toMatchObject({ eastAsia: '游ゴシック' });
+    editor.destroy();
+  });
+
+  test('a Latin font picked for Chinese text leaves the East Asian face alone', () => {
+    const editor = mount(MIXED);
+    select(editor, 0, 2);
+    pick(editor, 'Georgia');
+    expect(runFonts(editor)[0]).toMatchObject({
       ascii: 'Georgia',
       hAnsi: 'Georgia',
       eastAsia: 'SimSun',
@@ -126,31 +171,52 @@ describe('a font pick changes the face the box shows', () => {
     editor.destroy();
   });
 
-  test('picking a font for a right-to-left run sets its complex-script face', () => {
-    const editor = mount(RTL);
-    select(editor, 0, 4);
-    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
-    expect(runFonts(editor)[0]!.fonts).toMatchObject({ cs: 'Georgia', ascii: 'Georgia' });
+  test('a Latin font picked for Latin letters changes them', () => {
+    const editor = mount(MIXED);
+    select(editor, 2, 6);
+    pick(editor, 'Georgia');
+    select(editor, 2, 6);
     expect(boxFamily(editor)).toBe('Georgia');
     editor.destroy();
   });
 
-  test('a pick in an empty paragraph applies to Chinese typed next', () => {
-    const editor = mount('<w:p/>');
-    select(editor, 0, 0);
-    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
-    editor.exec({ type: 'insertText', text: '中文' });
-    expect(runFonts(editor)[0]!.fonts).toMatchObject({ ascii: 'Georgia', eastAsia: 'Georgia' });
+  test('a font picked for a right-to-left run sets its complex-script face', () => {
+    const editor = mount(RTL);
+    select(editor, 0, 4);
+    pick(editor, 'Georgia');
+    expect(runFonts(editor)[0]).toMatchObject({ cs: 'Georgia', ascii: 'Georgia' });
+    expect(boxFamily(editor)).toBe('Georgia');
     editor.destroy();
   });
 
-  test('a pick at a caret in Chinese text applies to the Chinese typed next', () => {
+  test('a Latin font picked in an empty paragraph writes no East Asian face', () => {
+    const editor = mount('<w:p/>');
+    select(editor, 0, 0);
+    pick(editor, 'Georgia');
+    editor.exec({ type: 'insertText', text: '中文' });
+    const fonts = runFonts(editor).find((entry) => entry?.ascii === 'Georgia');
+    expect(fonts).toBeDefined();
+    expect(fonts!.eastAsia).toBeUndefined();
+    editor.destroy();
+  });
+
+  test('a regional Noto CJK family counts as an East Asian font', () => {
     const editor = mount(MIXED);
-    select(editor, 1, 1);
-    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
+    select(editor, 0, 2);
+    pick(editor, 'Noto Sans SC');
+    expect(runFonts(editor)[0]).toMatchObject({ eastAsia: 'Noto Sans SC' });
+    select(editor, 0, 2);
+    expect(boxFamily(editor)).toBe('Noto Sans SC');
+    editor.destroy();
+  });
+
+  test('an East Asian font picked at a caret applies to the Chinese typed next', () => {
+    const editor = mount(MIXED);
+    // After the Latin letters: the pick depends on the font, not on the text before the caret.
+    select(editor, 6, 6);
+    pick(editor, 'SimHei');
     editor.exec({ type: 'insertText', text: '字' });
-    const typed = runFonts(editor).find((run) => run.fonts?.eastAsia === 'Georgia');
-    expect(typed).toBeDefined();
+    expect(runFonts(editor).some((fonts) => fonts?.eastAsia === 'SimHei')).toBe(true);
     editor.destroy();
   });
 });

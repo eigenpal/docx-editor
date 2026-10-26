@@ -78,12 +78,13 @@ export function createLateFontArrival(options: {
   readonly waitMs?: number;
 }) {
   const timers = new Map<object, ReturnType<typeof globalThis.setTimeout>>();
-  const settle = (token: object): void => {
+  /** Stop waiting for `token`; `quiet` when the caller announces the change itself. */
+  const settle = (token: object, quiet = false): void => {
     const timer = timers.get(token);
     if (timer === undefined) return;
     globalThis.clearTimeout(timer);
     timers.delete(token);
-    options.changed();
+    if (!quiet) options.changed();
   };
   return {
     pending: (): boolean => timers.size > 0,
@@ -92,9 +93,12 @@ export function createLateFontArrival(options: {
       for (const timer of timers.values()) globalThis.clearTimeout(timer);
       timers.clear();
     },
-    /** The installation of `delivery` finished, or never will. */
+    /**
+     * Stop waiting for `delivery`, quietly: call it just BEFORE installing it, so the one
+     * announcement the installation makes already reads `resolving` and the notice correctly.
+     */
     settle: (delivery: LateFontDelivery | undefined): void => {
-      if (delivery) settle(delivery.token);
+      if (delivery) settle(delivery.token, true);
     },
     /**
      * Queue `later` for installation once it lands, unless the load moved on (`current`). It
@@ -117,9 +121,19 @@ export function createLateFontArrival(options: {
       later.then(
         (arrived) => {
           if (!current()) return settle(token);
-          for (const cause of lateAnswerFailures(arrived)) options.report(cause);
-          if (!lateAnswerHasFaces(arrived)) return settle(token);
-          const full = mergeDeferredAnswer(installed, arrived) as FontConfigurationFragment;
+          let full: FontConfigurationFragment;
+          try {
+            // A raw resolver's late answer is untrusted shape: anything but an object is
+            // nothing arriving, and one that cannot merge is a failure to report, never an
+            // unhandled rejection with the wait left holding.
+            if (typeof arrived !== 'object' || arrived === null) return settle(token);
+            for (const cause of lateAnswerFailures(arrived)) options.report(cause);
+            if (!lateAnswerHasFaces(arrived)) return settle(token);
+            full = mergeDeferredAnswer(installed, arrived) as FontConfigurationFragment;
+          } catch (cause) {
+            options.report(cause);
+            return settle(token);
+          }
           options.deliver(generation, { full, token });
         },
         () => settle(token)
