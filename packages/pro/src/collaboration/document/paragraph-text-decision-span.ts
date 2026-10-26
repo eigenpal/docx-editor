@@ -15,7 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * character is outside it, as everywhere else the decision reached.
  */
 import type * as Y from 'yjs';
-import { REVISION_PREFIX } from './paragraph-text-revisions.ts';
+import { REVISION_PREFIX, SUPERSEDED_KEY } from './paragraph-text-revisions.ts';
 import type { Step, Token } from './paragraph-text-diff.ts';
 
 type Changes = Readonly<Record<string, string | null>>;
@@ -65,14 +65,22 @@ export function formatDecidedDeletions(
     while (end < marks.length && marks[end] === 'del') end += 1;
     const left = index > 0 ? marks[index - 1] : null;
     const right = end < marks.length ? marks[end] : null;
-    const changes = left && left !== 'del' ? left : right && right !== 'del' ? right : null;
-    if (changes) {
+    const beside = left && left !== 'del' ? left : right && right !== 'del' ? right : null;
+    if (beside) {
+      // The deleted text leaves every revision it was in, a nested one included: text a peer
+      // typed into it at the same time is in none of the revisions the decision removed.
+      const changes: Record<string, string | null> = { ...beside };
+      for (let at = index; at < end; at += 1) {
+        for (const key of Object.keys(before[at]!.attributes)) {
+          if (key.startsWith(REVISION_PREFIX) || key === SUPERSEDED_KEY) changes[key] = null;
+        }
+      }
       // Only adjacent positions: a hidden character between two deleted ones keeps its own.
       let start = index;
       for (let at = index + 1; at <= end; at += 1) {
         if (at < end && before[at]!.position === before[at - 1]!.position! + 1) continue;
         const first = before[start]!.position!;
-        text.format(first, before[at - 1]!.position! - first + 1, { ...changes });
+        text.format(first, before[at - 1]!.position! - first + 1, changes);
         start = at;
       }
     }

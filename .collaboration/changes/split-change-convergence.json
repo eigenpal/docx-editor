@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A decision unwrapped each run of a change separately, typing between two wrappers of one change left the change, a shared-text decision formatted only the text it kept, the view could split a surrogate pair between two runs, the typing write counted only characters that carry a text element, and an incremental rebuild could show an embed twice or miss one that could show again.",
+  "after": "A decision joins same-format runs of one change across its wrappers, typing between two wrappers of one change stays inside it, a shared-text decision writes its removal across the text it deletes, a repaired low surrogate takes its pair's run, typing in a paragraph with repaired characters takes the general write path, and a rebuild falls back to a full pass for a shared embed and rebuilds the follow targets of a node that can show again.",
+  "reason": "Shared state keys and values are unchanged. Each peer reads the same shared state into the same tree, so older peers keep working with these peers, and a decision written by either converges.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-split-change.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-concurrent-decision-span.test.ts",
+    "packages/pro/src/collaboration/__tests__/paragraph-text-repair-surrogate.test.ts"
+  ],
+  "changeset": "collaboration-split-change-convergence",
+  "migration": null
+}
