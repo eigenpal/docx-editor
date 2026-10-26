@@ -208,7 +208,7 @@ test('a font pick tells the families this package serves apart by script', async
     ...GOOGLE_FONT_FAMILIES,
     ...['Calibri', 'Cambria', 'Century Gothic', 'Courier New', 'HK Grotesk', 'Alegreya SC'],
   ];
-  expect(latin.filter((family) => isEastAsianFontFamily(family, undefined))).toEqual([]);
+  expect(latin.filter((family) => isEastAsianFontFamily(family))).toEqual([]);
   const eastAsian = [
     ...GOOGLE_CJK_FACES.map((face) => face.family),
     ...CJK_SUBSTITUTED_FAMILIES,
@@ -216,5 +216,5 @@ test('a font pick tells the families this package serves apart by script', async
     'Noto Sans CJK JP',
     'Noto Sans Mono CJK SC',
   ];
-  expect(eastAsian.filter((family) => !isEastAsianFontFamily(family, undefined))).toEqual([]);
+  expect(eastAsian.filter((family) => !isEastAsianFontFamily(family))).toEqual([]);
 });

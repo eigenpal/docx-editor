@@ -66,7 +66,8 @@ export function mergeDeferredAnswer(
     substitutions: complete
       ? (later.substitutions ?? [])
       : [...(later.substitutions ?? []), ...(base?.substitutions ?? [])],
-    ...(catalogs.length > 0 ? { supportedFamilies: [...new Set(catalogs)] } : {}),
+    // A complete answer's catalog replaces the immediate one, even when it is empty.
+    supportedFamilies: catalogs.length > 0 ? [...new Set(catalogs)] : undefined,
     ...next,
   };
 }

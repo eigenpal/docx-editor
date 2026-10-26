@@ -305,17 +305,16 @@ const EAST_ASIAN_FAMILY_PREFIXES: readonly string[] = [
 
 /**
  * Whether a family a user PICKS is an East Asian font, so the pick also applies to East Asian
- * text. {@link isEastAsianFace}, plus a family named in CJK or full-width characters, plus
- * the common East Asian families a host serves that a document font table rarely lists.
+ * text: a known East Asian face, a family named in CJK or full-width characters, or a common
+ * East Asian family a host serves. By NAME only, never by the font table's `w:charset`:
+ * CJK-locale files give Latin fonts an East Asian charset too, and a Latin pick that reached
+ * `w:eastAsia` would redraw the ideographs in a fallback face.
  */
-export function isEastAsianFontFamily(
-  family: string,
-  fontTableEastAsianFaces: readonly string[] | undefined
-): boolean {
+export function isEastAsianFontFamily(family: string): boolean {
   const name = family.trim().toLowerCase();
   if (!name || name.startsWith('@')) return false;
   return (
-    isEastAsianFace(name, fontTableEastAsianFaces) ||
+    isEastAsianFace(name, undefined) ||
     [...name].some((character) => isEastAsianCodePoint(character.codePointAt(0)!)) ||
     EAST_ASIAN_NAME_TOKENS.test(name) ||
     EAST_ASIAN_FAMILY_PREFIXES.some((prefix) => name.startsWith(prefix))

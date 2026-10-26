@@ -159,8 +159,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   // A font pick (`w:ascii` and `w:hAnsi` set to one family, nothing else) of an EAST ASIAN
   // font also sets `w:eastAsia`, so the pick reaches Chinese, Japanese, and Korean text. A
   // Latin font leaves `w:eastAsia` alone: it has no CJK glyphs, and writing it there would
-  // repaint the ideographs in a fallback face. The font is East Asian by its known name, a
-  // name in CJK characters, or the East Asian character set the font table declares for it.
+  // repaint the ideographs in a fallback face. The font is East Asian by its name only.
   const withEastAsianSlot = (
     attributes: Record<string, string> | undefined
   ): Record<string, string> | undefined => {
@@ -168,10 +167,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     if (!family || attributes.hAnsi !== family || Object.keys(attributes).length !== 2) {
       return attributes;
     }
-    const tableFaces = session.documentThemeFonts().eastAsianFontTableFaces;
-    return isEastAsianFontFamily(family, tableFaces)
-      ? { ...attributes, eastAsia: family }
-      : attributes;
+    return isEastAsianFontFamily(family) ? { ...attributes, eastAsia: family } : attributes;
   };
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],

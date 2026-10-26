@@ -447,9 +447,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     async (families, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
-      lateFonts.settle(late); // quietly; every install exit announces below, refused or not
-      if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
-      if (late && !destroyed) (bump(), emitSelectionChange());
+      lateFonts.settle(late); // quietly; every install exit announces below, refused or thrown
+      try {
+        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
+      } finally {
+        if (late && !destroyed) (bump(), emitSelectionChange());
+      }
     }
   );
   let fontsResolving = false;

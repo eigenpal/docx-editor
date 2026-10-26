@@ -531,22 +531,23 @@ export function formattingAt(
   // `fontFamily` to its `w:cs` face. Chinese text in a Calibri+SimSun run reads SimSun; its
   // Latin letters alone read Calibri.
   //
-  // Selected text without a letter (spaces, punctuation, digits) does not vote when some does.
-  // Between or inside Korean and Chinese words it paints through the Latin slot (`2024년`), and
-  // counting it made every multi-word East Asian selection read blank. Letters in two
-  // different faces still read blank, so a font hidden among letters is never reported as the
-  // other one.
-  // Ordered once, not per span; a range that cannot be ordered reads whole spans.
-  const range = cells?.length
-    ? null
-    : orderPositions(selection, paragraphOrder ?? everyStoryOrder(layout));
-  const collapsed =
-    range !== null &&
-    range.from.paragraphId === range.to.paragraphId &&
-    range.from.offset === range.to.offset;
-  const lettered = spans.filter((span) =>
-    LETTER.test(range && !collapsed ? selectedTextOf(span, range.from, range.to) : span.text)
-  );
+  // In a selection with East Asian text, selected text without a letter (spaces, punctuation,
+  // digits) does not vote. Between or inside Korean and Chinese words it paints through the
+  // Latin slot (`2024년`), and counting it made every such selection read blank. Elsewhere
+  // every span votes, so digits in another font still make a Latin selection read blank.
+  const eastAsian = spans.some((span) => span.fontSlot === 'eastAsia');
+  const { anchor, head } = selection;
+  const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
+  // Ordered once, only when it matters; a range that cannot be ordered reads whole spans.
+  const range =
+    !eastAsian || collapsed || cells?.length
+      ? null
+      : orderPositions(selection, paragraphOrder ?? everyStoryOrder(layout));
+  const lettered = eastAsian
+    ? spans.filter((span) =>
+        LETTER.test(range ? selectedTextOf(span, range.from, range.to) : span.text)
+      )
+    : [];
   const familySpans = lettered.length > 0 ? lettered : spans;
   const familyOf = (span: (typeof spans)[number]): string | null =>
     styleForFontSlot(span.style, span.fontSlot).fontFamily ??

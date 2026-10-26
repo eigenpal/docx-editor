@@ -96,6 +96,17 @@ describe('the font box reads the face the text paints in', () => {
     editor.destroy();
   });
 
+  test('digits in another font still blank a Latin selection', () => {
+    // Outside East Asian text every span votes, so a hidden font is never reported as another.
+    const editor = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t xml:space="preserve">Total: </w:t></w:r>' +
+        '<w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/></w:rPr><w:t>1234</w:t></w:r></w:p>'
+    );
+    select(editor, 0, 11);
+    expect(boxFamily(editor)).toBeNull();
+    editor.destroy();
+  });
+
   test('only the selected part of a span counts', () => {
     // The selection starts on the space after "Total", so the Calibri word is not selected.
     const editor = mount(

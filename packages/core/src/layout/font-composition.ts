@@ -41,6 +41,7 @@ export interface FontConfigurationFragment {
    *
    * Late faces add faces only: the configuration settings (`defaultFont`, `maxFontBytes`) come
    * from the origins that answer at once, so the default font never changes after the paint.
+   * Settings on a late answer are ignored.
    *
    * It must never reject: report failures and settle with what loaded, or `undefined`.
    * `composeFontOrigins()` keeps it on the merged result. A synchronous merge, such as
