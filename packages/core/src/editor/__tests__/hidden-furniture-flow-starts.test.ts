@@ -1,9 +1,6 @@
-// A hidden header footprint (an MC group that cannot paint) must never make a document refuse
-// to lay out, whatever block meets the blocked page first. A table row that cannot fit refuses
-// through the table paginator, not the paragraph guard, and a first-page, even-page or
-// second-section header blocks only some sheets. In every case the flow lays out once more
-// without hidden header and footer zones, and a visible drawing that leaves no room still
-// refuses. Each case compares against the same file with nothing in the header.
+// A full-height unsupported header placeholder cannot prevent body content from opening.
+// The bounded retry yields its exclusion while retaining smaller bands and supported drawings.
+// These cases cover table-first flows, header variants, floating tables, and continued sections.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -72,10 +69,10 @@ function groupRun({ top, height, visible }: Group, id: number): string {
 }
 
 /** Covers the whole A4 body (72pt to 769.9pt): 60pt to 840pt on the page. */
-const HIDDEN_FULL: Group = { top: 60, height: 780, visible: false };
-const VISIBLE_FULL: Group = { ...HIDDEN_FULL, visible: true };
+const UNSUPPORTED_FULL: Group = { top: 60, height: 780, visible: false };
+const SUPPORTED_FULL: Group = { ...UNSUPPORTED_FULL, visible: true };
 /** 90pt to 150pt: leaves room for body text above and below. */
-const HIDDEN_BAND: Group = { top: 90, height: 60, visible: false };
+const UNSUPPORTED_BAND: Group = { top: 90, height: 60, visible: false };
 
 const header = (...groups: Group[]) =>
   `<w:p>${groups.map((group, index) => groupRun(group, 10 + index)).join('')}` +
@@ -207,13 +204,13 @@ interface Case {
 
 const cases: readonly Case[] = [
   {
-    name: 'a table first under a hidden default header',
-    blocked: header(HIDDEN_FULL),
+    name: 'a table first under an unsupported default header',
+    blocked: header(UNSUPPORTED_FULL),
     build: (h) => docx({ rIdH: h }, table(3) + lines(2, 'After') + sectPr({ default: 'rIdH' })),
   },
   {
-    name: 'a table first under a hidden first-page header only',
-    blocked: header(HIDDEN_FULL),
+    name: 'a table first under an unsupported first-page header only',
+    blocked: header(UNSUPPORTED_FULL),
     build: (h) =>
       docx(
         { rIdF: h, rIdH: header() },
@@ -221,8 +218,8 @@ const cases: readonly Case[] = [
       ),
   },
   {
-    name: 'a table on an even page under a hidden even-page header',
-    blocked: header(HIDDEN_FULL),
+    name: 'a table on an even page under an unsupported even-page header',
+    blocked: header(UNSUPPORTED_FULL),
     build: (h) =>
       docx(
         { rIdE: h, rIdH: header() },
@@ -234,8 +231,8 @@ const cases: readonly Case[] = [
       ),
   },
   {
-    name: 'a second section that opens with a table under its hidden header',
-    blocked: header(HIDDEN_FULL),
+    name: 'a second section that opens with a table under its unsupported header',
+    blocked: header(UNSUPPORTED_FULL),
     build: (h) =>
       docx(
         { rIdA: header(), rIdB: h },
@@ -246,8 +243,8 @@ const cases: readonly Case[] = [
       ),
   },
   {
-    name: 'a floating table under a hidden default header',
-    blocked: header(HIDDEN_FULL),
+    name: 'a floating table under an unsupported default header',
+    blocked: header(UNSUPPORTED_FULL),
     build: (h) =>
       docx(
         { rIdH: h },
@@ -256,7 +253,7 @@ const cases: readonly Case[] = [
   },
 ];
 
-describe('a hidden header footprint that leaves no room', () => {
+describe('an unsupported header footprint that leaves no room', () => {
   for (const { name, build, blocked } of cases) {
     test(`${name} lays out as the file without it`, async () => {
       const plain = build(header());
@@ -266,12 +263,12 @@ describe('a hidden header footprint that leaves no room', () => {
     });
   }
 
-  test('every hidden header zone yields together, a band that leaves room included', async () => {
+  test('a smaller unsupported header band keeps its wrap during the retry', async () => {
     const build = (h: string) =>
       docx({ rIdH: h }, table(3) + lines(2, 'After') + sectPr({ default: 'rIdH' }));
-    const withBoth = await mounted(build(header(HIDDEN_FULL, HIDDEN_BAND)));
-    // The yielding layout leaves out every hidden header and footer zone of the flow.
-    expect(withBoth).toEqual(await mounted(build(header())));
+    const withBoth = await mounted(build(header(UNSUPPORTED_FULL, UNSUPPORTED_BAND)));
+    // Only the full-height placeholder yields; the smaller band retains its wrap.
+    expect(withBoth).toEqual(await mounted(build(header(UNSUPPORTED_BAND))));
   });
 
   test('edits keep laying out after the table-first flow yields', async () => {
@@ -295,14 +292,14 @@ describe('a hidden header footprint that leaves no room', () => {
     };
     const build = (h: string) =>
       docx({ rIdH: h }, table(3) + lines(2, 'After') + sectPr({ default: 'rIdH' }));
-    expect(await typed(build(header(HIDDEN_FULL)))).toEqual(await typed(build(header())));
+    expect(await typed(build(header(UNSUPPORTED_FULL)))).toEqual(await typed(build(header())));
   });
 });
 
 // Known difference: the yield is decided per section. Section 1 yields on its sheet, but a
 // continuous section 2 on that sheet still sees the host header's hidden zone, advances once,
 // and starts on the next sheet. Nothing refuses and no content is lost.
-test('a continuous section on a host sheet whose hidden header yields keeps all content', async () => {
+test('a continuous section on a host sheet whose unsupported header yields keeps all content', async () => {
   const build = (h: string) =>
     docx(
       { rIdA: h, rIdB: header() },
@@ -314,21 +311,21 @@ test('a continuous section on a host sheet whose hidden header yields keeps all 
   const count = (out: readonly string[]) =>
     out.filter((entry) => entry.startsWith('  line')).length;
   const plain = await mounted(build(header()));
-  expect(count(await mounted(build(header(HIDDEN_FULL))))).toBe(count(plain));
-  expect(count(await exported(build(header(HIDDEN_FULL))))).toBe(count(plain));
+  expect(count(await mounted(build(header(UNSUPPORTED_FULL))))).toBe(count(plain));
+  expect(count(await exported(build(header(UNSUPPORTED_FULL))))).toBe(count(plain));
 });
 
-describe('a visible header drawing that leaves no room', () => {
+describe('a supported header drawing that leaves no room', () => {
   const build = (h: string) =>
     docx({ rIdH: h }, table(3) + lines(2, 'After') + sectPr({ default: 'rIdH' }));
 
   test('still refuses a table-first body', async () => {
-    await expect(mountWithImages(build(header(VISIBLE_FULL)))).rejects.toThrow(/cannot fit/);
-    await expect(exported(build(header(VISIBLE_FULL)))).rejects.toThrow();
+    await expect(mountWithImages(build(header(SUPPORTED_FULL)))).rejects.toThrow(/cannot fit/);
+    await expect(exported(build(header(SUPPORTED_FULL)))).rejects.toThrow();
   });
 
-  test('still refuses when a hidden group is also present', async () => {
-    const bytes = build(header(VISIBLE_FULL, HIDDEN_BAND));
+  test('still refuses when an unsupported group is also present', async () => {
+    const bytes = build(header(SUPPORTED_FULL, UNSUPPORTED_BAND));
     await expect(mountWithImages(bytes)).rejects.toThrow(/cannot fit/);
     await expect(exported(bytes)).rejects.toThrow();
   });

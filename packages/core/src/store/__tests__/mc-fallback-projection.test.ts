@@ -129,14 +129,15 @@ describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
     expect(projectDrawingsInPart(source)).toHaveLength(0);
   });
 
-  test('without a fallback that paints, keeps the hidden extent of the chosen branch', () => {
+  test('without a fallback that paints, keeps one visible placeholder at the chosen extent', () => {
     const unpaintable = '<w:pict><v:group style="width:10pt;height:10pt"/></w:pict>';
     const source = part(alternate(NESTED_GROUP, unpaintable));
     const [projection] = [...indexInlineDrawingProjectionsInPart(source).values()];
     expect(projection).toMatchObject({
-      footprintOnly: true,
+      hidden: false,
       extentEmu: { cx: CX, cy: CY },
     });
-    expect(projectDrawingsInPart(source)).toHaveLength(0);
+    expect(projection!.footprintOnly).toBeUndefined();
+    expect(projectDrawingsInPart(source)).toHaveLength(1);
   });
 });

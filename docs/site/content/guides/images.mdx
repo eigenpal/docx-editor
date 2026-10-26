@@ -266,6 +266,8 @@ The placeholder keeps the drawing's authored bounds and wrapping. Hidden drawing
 
 The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. Its `source` contains the enclosing `mc:AlternateContent`, including its choice and fallback branches. Its `namespaceUri` and `localName` describe that wrapper. Its `nodeId` remains the projected drawing's identity; `source.id` identifies the wrapper. Use `element.drawing` to match drawing placeholders across direct and alternative content. Both branches remain in the saved document.
 
+If a header or footer placeholder blocks the entire body, layout retries without that placeholder's wrap exclusion. The placeholder stays visible at its authored position. Smaller placeholders and supported drawings keep their wrapping.
+
 ### Preview with your rendering service
 
 You can replace a drawing placeholder with an image from your rendering service. The editor does not upload documents or call a rendering service. Your application owns the request, authentication, image cache, and error state. Custom previews do not change the saved DOCX or PDF export.

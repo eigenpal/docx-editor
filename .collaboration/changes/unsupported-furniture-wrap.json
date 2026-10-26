@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Full-height unsupported header and footer placeholders could prevent document layout.",
+  "after": "A bounded layout retry yields blocking placeholder exclusions while preserving the placeholders and source.",
+  "reason": "Only local layout changes. Shared operations, canonical source, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/hidden-furniture-footprint.test.ts",
+    "packages/core/src/editor/__tests__/hidden-furniture-flow-starts.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts"
+  ],
+  "changeset": "unsupported-furniture-wrap",
+  "migration": null
+}

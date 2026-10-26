@@ -1,8 +1,6 @@
-// A header or footer can hold an MC shape group that cannot paint. Its wrap footprint moves
-// body text, but a hidden payload must never make a document refuse to lay out. When hidden
-// header or footer footprints leave no room for body text, layout lays the flow out once more
-// without them. Visible drawings keep their zones, so a visible drawing that leaves no room
-// still refuses, and a hidden footprint that leaves room still wraps.
+// Unsupported header/footer placeholders keep their authored wrap when body content fits.
+// If a full-height placeholder prevents layout, one retry yields its exclusion only.
+// The placeholder and source remain visible and unchanged. Supported drawings still refuse.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -20,6 +18,10 @@ import {
 } from './image-decode-harness.ts';
 import { ExportResourceError, openDocumentForExport } from '../../export/export-session.ts';
 import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
+import {
+  observeUnsupportedElements,
+  type UnsupportedElementHost,
+} from '../../output/unsupported-elements.ts';
 import type { SemanticLayout } from '../../layout/semantic-records.ts';
 
 const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
@@ -48,12 +50,16 @@ interface Group {
   /** A picture-only group paints; a picture beside a shadowed text box cannot. */
   readonly visible: boolean;
   readonly id: number;
+  readonly missingPicture?: boolean;
 }
 
 /** A 300pt-wide top-and-bottom MC group, page-relative, at the left of the column. */
-function groupRun({ top, height, visible, id }: Group): string {
+function groupRun({ top, height, visible, id, missingPicture }: Group): string {
   const cy = Math.round(height * EMU);
-  const members = visible ? PICTURE_MEMBER : PICTURE_MEMBER + TEXTBOX_MEMBER;
+  const picture = missingPicture
+    ? PICTURE_MEMBER.replace('r:embed="rIdImg"', 'r:link="rIdMissing"')
+    : PICTURE_MEMBER;
+  const members = visible ? picture : picture + TEXTBOX_MEMBER;
   return (
     '<w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing>' +
     '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
@@ -159,21 +165,25 @@ async function exportedLines(bytes: Uint8Array): Promise<readonly (readonly numb
 }
 
 /** Covers the whole body, 72pt to 769.9pt: 60pt to 840pt on the page. */
-const HIDDEN_FULL: Group = { top: 60, height: 780, visible: false, id: 11 };
-const VISIBLE_FULL: Group = { ...HIDDEN_FULL, visible: true, id: 12 };
+const UNSUPPORTED_FULL: Group = { top: 60, height: 780, visible: false, id: 11 };
+const SUPPORTED_FULL: Group = { ...UNSUPPORTED_FULL, visible: true, id: 12 };
 /** A 60pt band at 90pt to 150pt: the first body line fits above it. */
-const HIDDEN_BAND: Group = { top: 90, height: 60, visible: false, id: 13 };
-const VISIBLE_BAND: Group = { ...HIDDEN_BAND, visible: true, id: 14 };
+const UNSUPPORTED_BAND: Group = { top: 90, height: 60, visible: false, id: 13 };
+const SUPPORTED_BAND: Group = { ...UNSUPPORTED_BAND, visible: true, id: 14 };
 /** The same area, anchored in the footer. */
-const HIDDEN_FOOTER_FULL: Group = { ...HIDDEN_FULL, id: 15 };
+const UNSUPPORTED_FOOTER_FULL: Group = { ...UNSUPPORTED_FULL, id: 15 };
 
-describe('hidden header and footer footprints that leave no room', () => {
+describe('unsupported header and footer footprints that leave no room', () => {
   const plain = docx([]);
 
   for (const [name, header, footer] of [
-    ['a hidden header group', [HIDDEN_FULL], []],
-    ['a hidden footer group', [], [HIDDEN_FOOTER_FULL]],
-    ['two overlapping hidden groups', [HIDDEN_FULL, { ...HIDDEN_BAND, top: 300 }], []],
+    ['an unsupported header group', [UNSUPPORTED_FULL], []],
+    ['an unsupported footer group', [], [UNSUPPORTED_FOOTER_FULL]],
+    [
+      'two overlapping unsupported groups',
+      [UNSUPPORTED_FULL, { ...UNSUPPORTED_BAND, top: 300 }],
+      [],
+    ],
   ] as const) {
     test(`${name} yields, so the document opens and exports`, async () => {
       const expected = await mountedLines(plain);
@@ -183,7 +193,43 @@ describe('hidden header and footer footprints that leave no room', () => {
     });
   }
 
-  test('edits keep laying out after the hidden group yields', async () => {
+  test('the yielded placeholder retains its geometry, source, and saved content', async () => {
+    const { surface, container } = await mountWithImages(docx([UNSUPPORTED_FULL]));
+    let disconnect = () => {};
+    let saved: Uint8Array;
+    const expected = bodyLines(surface.layout());
+    try {
+      let hosts: readonly UnsupportedElementHost[] = [];
+      disconnect = observeUnsupportedElements(container, (next) => {
+        hosts = next;
+      });
+      expect(hosts).toHaveLength(1);
+      const drawing = hosts[0]!.unsupported.drawing!;
+      expect(drawing.accessibility.hidden).toBe(false);
+      expect(drawing.width).toBe(300);
+      expect(drawing.height).toBe(780);
+      expect(hosts[0]!.unsupported.source?.localName).toBe('AlternateContent');
+      expect(
+        hosts[0]!.unsupported.source?.children.map((node) =>
+          node.kind === 'textValue' ? '' : node.localName
+        )
+      ).toEqual(['Choice', 'Fallback']);
+      saved = surface.save();
+    } finally {
+      disconnect();
+      surface.destroy();
+      container.remove();
+    }
+    expect(await mountedLines(saved!)).toEqual(expected);
+  });
+
+  test('a full-height group with a settled missing picture yields its placeholder wrap', async () => {
+    const bytes = docx([{ ...SUPPORTED_FULL, missingPicture: true }]);
+    expect(await mountedLines(bytes)).toEqual(await mountedLines(plain));
+    expect(await exportedLines(bytes)).toEqual(await exportedLines(plain));
+  });
+
+  test('edits keep laying out after the unsupported group yields', async () => {
     const typed = async (bytes: Uint8Array) => {
       const { surface, container } = await mountWithImages(bytes);
       try {
@@ -199,12 +245,12 @@ describe('hidden header and footer footprints that leave no room', () => {
         container.remove();
       }
     };
-    expect(await typed(docx([HIDDEN_FULL]))).toEqual(await typed(plain));
+    expect(await typed(docx([UNSUPPORTED_FULL]))).toEqual(await typed(plain));
   });
 
-  test('a visible band still wraps when a hidden group beside it yields', async () => {
-    const withVisible = docx([HIDDEN_FULL, VISIBLE_BAND]);
-    const visibleOnly = docx([VISIBLE_BAND]);
+  test('a supported band still wraps when an unsupported group beside it yields', async () => {
+    const withVisible = docx([UNSUPPORTED_FULL, SUPPORTED_BAND]);
+    const visibleOnly = docx([SUPPORTED_BAND]);
     const lines = await mountedLines(withVisible);
     expect(lines).toEqual(await mountedLines(visibleOnly));
     // The first body line ends above the band; the second starts under it, 150pt - 72pt down.
@@ -212,9 +258,9 @@ describe('hidden header and footer footprints that leave no room', () => {
     expect(await exportedLines(withVisible)).toEqual(await exportedLines(visibleOnly));
   });
 
-  test('a hidden band that leaves room still wraps', async () => {
-    const lines = await mountedLines(docx([HIDDEN_BAND]));
-    expect(lines).toEqual(await mountedLines(docx([VISIBLE_BAND])));
+  test('an unsupported band that leaves room still wraps', async () => {
+    const lines = await mountedLines(docx([UNSUPPORTED_BAND]));
+    expect(lines).toEqual(await mountedLines(docx([SUPPORTED_BAND])));
     expect(lines).not.toEqual(await mountedLines(plain));
   });
 });
@@ -230,7 +276,7 @@ test('hidden furniture does not retry or replace a hostile host failure', async 
   });
   let failures = 0;
   const fallback = createFixedMeasurer();
-  const opened = openDocumentForExport(docx([HIDDEN_BAND]), {
+  const opened = openDocumentForExport(docx([UNSUPPORTED_BAND]), {
     measurer: {
       measure(text, style) {
         if (text.includes('Body')) {
@@ -255,14 +301,14 @@ test('hidden furniture does not retry or replace a hostile host failure', async 
   }
 });
 
-describe('visible header drawings that leave no room', () => {
+describe('supported header drawings that leave no room', () => {
   test('still refuse to lay out', async () => {
-    await expect(mountWithImages(docx([VISIBLE_FULL]))).rejects.toThrow(/no room/);
-    await expect(exportedLines(docx([VISIBLE_FULL]))).rejects.toThrow();
+    await expect(mountWithImages(docx([SUPPORTED_FULL]))).rejects.toThrow(/no room/);
+    await expect(exportedLines(docx([SUPPORTED_FULL]))).rejects.toThrow();
   });
 
-  test('still refuse when a hidden group is also present', async () => {
-    const bytes = docx([VISIBLE_FULL, HIDDEN_BAND]);
+  test('still refuse when an unsupported group is also present', async () => {
+    const bytes = docx([SUPPORTED_FULL, UNSUPPORTED_BAND]);
     await expect(mountWithImages(bytes)).rejects.toThrow(/no room for body content/);
     await expect(exportedLines(bytes)).rejects.toThrow();
   });

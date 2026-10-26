@@ -10,7 +10,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { caretAt, type UnsupportedElementRule } from '@docx-editor.dev/core/layout';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { collaborationModule } from '../collaboration-module.ts';
-import { createPeerHarness, zipDocument } from './document-peer-support.ts';
+import { createPeerHarness, zipDocument, W, R, REL } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -25,10 +25,31 @@ afterEach(() => {
 });
 const XML_NAMESPACE = 'urn:collaboration-widgets';
 const drawingAlternatives = `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"><mc:Choice Requires="wpc"><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="1524000" cy="762000"/><wp:docPr id="1" name="Unavailable diagram"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="urn:unsupported-diagram"><x:diagram xmlns:x="urn:unsupported-diagram"/></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:pict><v:group xmlns:v="urn:schemas-microsoft-com:vml" alt="Diagram fallback" style="width:120pt;height:60pt"/></w:pict></mc:Fallback></mc:AlternateContent>`;
+const headerDrawing = drawingAlternatives
+  .replace(
+    '<wp:inline ',
+    '<wp:anchor behindDoc="1" simplePos="0" relativeHeight="0" allowOverlap="1" layoutInCell="1" '
+  )
+  .replace(
+    '<wp:extent',
+    '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent'
+  )
+  .replace('cy="762000"', 'cy="12700000"')
+  .replace('<wp:docPr', '<wp:wrapTopAndBottom/><wp:docPr')
+  .replace('</wp:inline>', '</wp:anchor>');
 const bytes = zipDocument(
   `<w:p><w:r><w:t xml:space="preserve">Alpha </w:t><x:chip xmlns:x="${XML_NAMESPACE}" x:id="inline-42"><x:token>LEGAL-42</x:token></x:chip><w:t> tail</w:t>${drawingAlternatives}</w:r></w:p>` +
     `<x:widget xmlns:x="${XML_NAMESPACE}" x:id="block-42"><x:status>pending</x:status></x:widget>` +
-    '<w:p><w:r><w:t>Bravo</w:t></w:r></w:p>'
+    '<w:p><w:r><w:t>Bravo</w:t></w:r></w:p>' +
+    '<w:sectPr><w:headerReference w:type="default" r:id="rIdHeader"/></w:sectPr>',
+  {
+    overrides:
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+    documentRels: `<Relationships xmlns="${REL}"><Relationship Id="rIdHeader" Type="${R}/header" Target="header1.xml"/></Relationships>`,
+    extraXml: {
+      'word/header1.xml': `<w:hdr xmlns:w="${W}"><w:p><w:r>${headerDrawing}</w:r></w:p></w:hdr>`,
+    },
+  }
 );
 const rules = (height = 30): readonly UnsupportedElementRule[] => [
   { match: (element) => element.namespaceUri === XML_NAMESPACE, layout: { width: 90, height } },
@@ -38,11 +59,15 @@ function normalize(node: OoxmlNode): unknown {
   return {
     namespaceUri: node.namespaceUri,
     localName: node.localName,
-    attributes: node.attributes.map(({ namespaceUri, localName, value }) => ({
-      namespaceUri,
-      localName,
-      value,
-    })),
+    attributes: node.attributes
+      .map(({ namespaceUri, localName, value }) => ({
+        namespaceUri,
+        localName,
+        value,
+      }))
+      .sort((a, b) =>
+        `${a.namespaceUri}:${a.localName}`.localeCompare(`${b.namespaceUri}:${b.localName}`)
+      ),
     children: node.children.map(normalize),
   };
 }
@@ -59,7 +84,7 @@ function source(editor: Editor): unknown[] {
     }
     for (const child of node.children) visit(child);
   }
-  visit(editor.surface!.session.part().root);
+  for (const part of editor.surface!.session.currentPackage().parts.values()) visit(part.root);
   return found;
 }
 function mount(options: Parameters<typeof createDocxEditor>[0]): Editor {
@@ -94,7 +119,7 @@ test('opaque content and drawing alternatives retain source through concurrent e
     peers.bob.room.session.flushPendingJournals();
   };
   const originalSource = source(alice);
-  expect(originalSource).toHaveLength(3);
+  expect(originalSource).toHaveLength(4);
   const converge = () => {
     flush();
     const left = surface(alice).session.currentPackage();
@@ -104,7 +129,7 @@ test('opaque content and drawing alternatives retain source through concurrent e
     expect(source(alice)).toEqual(originalSource);
     expect(source(bob)).toEqual(originalSource);
     for (const container of containers) {
-      expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(3);
+      expect(container.querySelectorAll('[data-docx-unsupported]')).toHaveLength(4);
     }
   };
   converge();
@@ -172,5 +197,5 @@ test('opaque content and drawing alternatives retain source through concurrent e
   expect(saveReopenDigest(surface(reopened).session.currentPackage())).toEqual(
     saveReopenDigest(surface(alice).session.currentPackage())
   );
-  expect(containers.at(-1)!.querySelectorAll('[data-docx-unsupported]')).toHaveLength(3);
+  expect(containers.at(-1)!.querySelectorAll('[data-docx-unsupported]')).toHaveLength(4);
 });

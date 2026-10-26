@@ -226,7 +226,7 @@ import { sectionFlowKeys } from './section-flow-keys.ts';
 export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
   readonly disabledParagraphFrameIds?: ReadonlySet<string>;
   readonly paragraphFrameFallbackRound?: number;
-  /** Set by the one retry of `layoutBlocksWithGeometry`: hidden furniture zones yield. */
+  /** Set by the one retry of `layoutBlocksWithGeometry`: blocking unsupported furniture zones yield. */
   readonly yieldHiddenFurnitureZones?: boolean;
 };
 
@@ -632,8 +632,13 @@ function* layoutBlocksPass(
   });
   const { pageBox, overflowShellAt, furnitureZonesFor, pageShell } = sectionFurniture;
 
+  // After a retry, derive admission from retained zones, including first/even/default variants.
+  const sectionHasFurnitureWrap =
+    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones) &&
+    (!options.yieldHiddenFurnitureZones ||
+      [0, 1, 2].some((index) => furnitureZonesFor(index, true).length > 0));
   const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
-    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones),
+    sectionHasFurnitureWrap,
     continuedZones
   );
   let exclusionPageIndex = -1;

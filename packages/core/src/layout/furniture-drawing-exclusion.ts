@@ -49,30 +49,52 @@ export function hasFurnitureDrawingExclusions(
   );
 }
 
-const hiddenWrap = (drawing: AnchoredDrawingRecord): boolean =>
-  drawing.accessibility.hidden && wraps(drawing);
+// A non-picture drawing with no paint payload is a visible unsupported-content placeholder.
+// Pending picture resources and supported vector/text drawings retain their authored wrap.
+function unsupportedPlaceholder(drawing: AnchoredDrawingRecord): boolean {
+  if (drawing.groupPicture) {
+    const failed = (resource: AnchoredDrawingRecord['resource']) =>
+      resource.kind !== 'ready' && resource.kind !== 'pending';
+    return (
+      failed(drawing.resource) ||
+      (drawing.groupPictureLayers?.some((layer) => failed(layer.resource)) ?? false)
+    );
+  }
+  return (
+    drawing.placeholderGraphicKind !== null &&
+    !drawing.vectorShape &&
+    !drawing.groupPicture &&
+    !drawing.textboxStory &&
+    !drawing.groupTextboxStories?.length &&
+    !drawing.textArt &&
+    drawing.resource.kind !== 'ready'
+  );
+}
+
+const retryableWrap = (drawing: AnchoredDrawingRecord): boolean =>
+  wraps(drawing) && (drawing.accessibility.hidden || unsupportedPlaceholder(drawing));
 
 /**
- * Whether a hidden record (the wrap footprint of a payload that cannot paint) wraps body text
+ * Whether hidden or unsupported placeholder furniture wraps body text
  * in any header or footer variant of the section, or on the host sheet it continues on.
  *
- * A hidden payload must never make a document refuse to lay out. When a flow with such a
- * record refuses, the block layout lays it out once more without hidden furniture zones.
+ * When a flow with such a record refuses, layout retries once without hidden zones or
+ * full-height unsupported placeholder zones. The placeholder itself remains visible.
  */
 export function furnitureHasHiddenWrap(
   furniture: PageFurniture | undefined,
   host: ContinuedPageFurniture | undefined
 ): boolean {
-  if (anyFurnitureDrawing(furniture, hiddenWrap)) return true;
+  if (anyFurnitureDrawing(furniture, retryableWrap)) return true;
   const stories: readonly (HeaderFooterStoryRecord | undefined)[] = [host?.header, host?.footer];
-  return stories.some((story) => story?.anchoredDrawings?.some(hiddenWrap) ?? false);
+  return stories.some((story) => story?.anchoredDrawings?.some(retryableWrap) ?? false);
 }
 
 /**
- * Whether a refused flow lays out once more without hidden header and footer zones.
+ * Whether a refused flow retries without blocking unsupported header and footer zones.
  *
  * Only a layout refusal (wrap exclusion, table pagination) of the outermost call, not yet
- * yielding, with a hidden wrapping record in its furniture. Visible zones stay in the retry,
+ * yielding, with hidden or unsupported furniture. Supported drawing zones stay in the retry,
  * so a refusal they cause repeats and propagates; any other error propagates at once.
  */
 export function refusalYieldsHiddenFurniture(
@@ -133,7 +155,7 @@ export function furnitureZonesOnPage(
 
 export function furnitureDrawingExclusionsForPage(
   page: Pick<PageRecord, 'header' | 'footer' | 'box' | 'contentBox'>,
-  /** Leave out hidden records: the bounded retry of {@link refusalYieldsHiddenFurniture}. */
+  /** Yield hidden zones and full-height unsupported zones during the bounded retry. */
   omitHidden = false
 ): readonly ExclusionZone[] {
   const added: ExclusionZone[] = [];
@@ -170,6 +192,16 @@ export function furnitureDrawingExclusionsForPage(
         !localized ||
         localized.verticalBand.y >= page.contentBox.height ||
         localized.verticalBand.y + localized.verticalBand.height <= 0
+      )
+        continue;
+      // A full-height unsupported placeholder must not prevent the body from opening.
+      // Yield only its exclusion on the cold retry; keep its visible paint record and source.
+      // Smaller placeholder bands still wrap, even when another drawing caused the retry.
+      if (
+        omitHidden &&
+        unsupportedPlaceholder(drawing) &&
+        localized.verticalBand.y <= 0 &&
+        localized.verticalBand.y + localized.verticalBand.height >= page.contentBox.height
       )
         continue;
       added.push(
