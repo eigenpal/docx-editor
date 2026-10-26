@@ -1,18 +1,16 @@
 import { expect, test } from '@playwright/test';
 
+// The standard choices the demos serve on every computer: the packaged set, its Helvetica
+// alias, and the pinned Google Fonts families. The others appear only where installed.
 const STANDARD_FONTS = [
   'Arial',
   'Calibri',
   'Cambria',
-  'Consolas',
   'Courier New',
-  'Garamond',
-  'Georgia',
   'Helvetica',
   'Open Sans',
   'Roboto',
   'Times New Roman',
-  'Verdana',
 ];
 
 for (const adapter of ['react', 'vue'] as const) {

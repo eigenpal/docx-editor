@@ -108,7 +108,8 @@ test('one conversion at a time per instance, then a PDF with diagnostics', { ski
   assert.equal(result.json.ok, true);
   assert.equal(result.json.pageCount, 30);
   assert.ok(result.json.pdf.startsWith('JVBER'), 'base64 PDF');
-  assert.ok(result.json.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
+  // The sample names only fonts the packaged set serves, so nothing is substituted.
+  assert.ok(!result.json.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
 });
 
 test(

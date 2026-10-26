@@ -148,12 +148,14 @@ const citationForm = ref<CitationFormState | null>(null);
 // the rest, so composing the two never downloads the same face twice. The catalog IS a
 // third party: naming a family the bundle does not carry costs a request to jsdelivr, and
 // a failed fetch reaches `onFontError` below and degrades to the fixed measurer.
+// `cjk: true` serves the East Asian families the sample names, in the background, as the
+// React demo does.
 const {
   document: bytes,
   fonts,
   error: loadError,
 } = useDocxSource(props.fixtureUrl, {
-  fonts: [packagedFonts(), googleFonts()],
+  fonts: [packagedFonts(), googleFonts({ cjk: true })],
 });
 
 function onFontError(error: { code: string; message: string }): void {

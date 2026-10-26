@@ -41,8 +41,9 @@ def google_font_families() -> list[str]:
     """Families ``google_fonts=True`` can fetch, in alphabetical order.
 
     The catalog is a pinned, closed set of families that ship four static faces.
-    Variable-only families such as Roboto, Open Sans, and Lato are not in it; supply
-    those as files with :func:`font_family`.
+    Roboto and Open Sans come from the last upstream revisions with static faces. Other
+    variable-only families, such as Inter, are not in it; supply those as files with
+    :func:`font_family`.
     """
     return sorted(_google_catalog()["families"])
 

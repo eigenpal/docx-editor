@@ -12,8 +12,9 @@ def test_google_catalog_is_shipped():
     assert len(families) > 50
     assert families == sorted(families)
     assert "Fira Sans" in families
-    # Variable-only on google/fonts, so outside the pinned static catalog.
-    assert "Roboto" not in families
+    # Variable-only upstream, so pinned to the last revisions that ship static faces.
+    assert "Roboto" in families
+    assert "Open Sans" in families
 
 
 def test_google_substitutes_cover_word_defaults():
