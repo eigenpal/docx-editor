@@ -40,6 +40,12 @@ For deployment examples, see [Integrate PDF conversion](../docx-to-pdf/docs/inte
 
 ## Use the font in the editor
 
+For a browser editor, install this package alongside your existing editor dependencies:
+
+```bash
+npm install @docx-editor.dev/fonts-cjk
+```
+
 The `@docx-editor.dev/fonts-cjk/browser` entry exports `cjkFonts()`, a font resolver with the same shape as `packagedFonts()` and `googleFonts()` from `@docx-editor.dev/fonts`. Put it after the origins whose fonts you prefer:
 
 ```ts

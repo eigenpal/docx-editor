@@ -113,6 +113,12 @@ installDrawing({ licenseKey: process.env.DOCX_LICENSE });
 
 `@docx-editor.dev/docx-to-pdf` installs the module when you call it, so PDF export renders the drawings on this page without extra setup. A drawing that cannot render produces a diagnostic, and the default strict fidelity policy rejects the export. For the codes and the best-effort policy, see [PDF diagnostics](/docs/2.x/export/pdf/api#diagnostics). The install applies to the whole process. If one process also opens documents through other packages, such as `@docx-editor.dev/editor-api` or `@docx-editor.dev/docx-to-markdown`, add `@docx-editor.dev/pro` as a direct dependency and call `installDrawing()` at startup, before you open any document. A session that opens before the install shows its charts as their saved fallback pictures or drawings, or as placeholders, and a strict PDF export from that session is refused when a chart has no fallback picture.
 
+## Chart format boundary
+
+Chart rendering reads the classic DrawingML chart namespace, `http://schemas.openxmlformats.org/drawingml/2006/chart`. Extended charts in `http://schemas.microsoft.com/office/drawing/2014/chartex` do not render through the module. This includes waterfall and funnel charts stored in that extended format.
+
+Extended charts retain their original parts on save. Do not assume they expose the classic chart title or plot-type metadata to a placeholder component. Check the drawing's actual placeholder kind before choosing a replacement.
+
 ## What renders
 
 - Charts render read-only from the values cached in the chart part. The embedded workbook is never read, and external data is never loaded.

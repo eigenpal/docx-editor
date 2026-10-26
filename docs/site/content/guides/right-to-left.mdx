@@ -116,7 +116,9 @@ const persian: Translations = {
 };
 ```
 
-Your own controls inside the editor chrome inherit its direction through CSS, so they mirror without code. To read the direction in code, use `useChromeDir()` from the adapter package. Its value is `'ltr'` or `'rtl'` when a provider decides the direction. An `undefined` value means the chrome inherits the host page direction. In that case, read the computed `direction` of your own element. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
+Your own controls inside the editor chrome inherit its text direction through CSS. Use logical properties such as `margin-inline-start`, `padding-inline`, and `inset-inline-end` for direction-aware spacing and positioning. Physical `left` and `right` properties and custom directional icons do not automatically mirror. Check those controls in both interface directions.
+
+To read the direction in code, use `useChromeDir()` from the adapter package. Its value is `'ltr'` or `'rtl'` when a provider decides the direction. An `undefined` value means the chrome inherits the host page direction. In that case, read the computed `direction` of your own element. To compute a catalog's direction outside the editor, use `chromeDirection()`, `catalogDirection(catalog)`, or `localeDirection(tag)` from `@docx-editor.dev/i18n`.
 
 ### New right-to-left documents
 

@@ -77,7 +77,7 @@ The package supplies Noto Sans CJK JP Regular as an OpenType font with CFF outli
 
 The package contains the Japanese regional face, without separate Chinese or Korean regional faces. Substitution can change glyph forms, line breaks, and page counts. Supply your own font through `fonts` when you need a specific regional face or designed style.
 
-The package reads its font from disk without network access. It does not bundle the font into JavaScript or install a browser font.
+The Node.js entry reads its font from disk without network access. It does not bundle the font into JavaScript. For browser loading, use the separate [CJK browser resolver](../../fonts-cjk/README.md#use-the-font-in-the-editor).
 
 The package code uses the Apache License 2.0. The font uses the SIL Open Font License, Version 1.1. The PDF converter uses the separate EigenPal Pro License.
 
