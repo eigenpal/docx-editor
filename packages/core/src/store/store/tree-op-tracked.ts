@@ -41,6 +41,7 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
+import { sameRevision } from './same-revision.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
@@ -879,7 +880,7 @@ function splitRunAndInsert(
  * valid, and read identically by anything that concatenates, but it accumulates one element
  * per keystroke and is not what Word writes.
  */
-function coalesced(mint: () => string, nodes: readonly OoxmlNode[]): OoxmlNode[] {
+export function coalesced(mint: () => string, nodes: readonly OoxmlNode[]): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   for (const node of nodes) {
     const previous = out[out.length - 1];
@@ -970,21 +971,6 @@ function mergeableTextRun(run: OoxmlElement): boolean {
   return (
     content.length > 0 &&
     content.every((child) => child.kind === 'text' || child.kind === 'deletedText')
-  );
-}
-
-/** Two wrappers are the same revision when their `CT_TrackChange` triple agrees. */
-function sameRevision(a: OoxmlElement, b: OoxmlElement): boolean {
-  const read = (node: OoxmlElement, localName: string): string | undefined =>
-    node.attributes.find(
-      (attribute) =>
-        attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
-    )?.value;
-  return (
-    read(a, 'id') !== undefined &&
-    read(a, 'id') === read(b, 'id') &&
-    read(a, 'author') === read(b, 'author') &&
-    read(a, 'date') === read(b, 'date')
   );
 }
 

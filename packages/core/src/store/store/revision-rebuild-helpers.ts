@@ -2,6 +2,9 @@
 
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import { declaredLockOf } from './tree-op-nodes.ts';
+import { coalesced, isRunProperties } from './tree-op-tracked.ts';
+import { equivalentNodes } from './ooxml-node-equality.ts';
+import { sameRevision } from './same-revision.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -10,6 +13,65 @@ import {
 } from '../package/ooxml-tree.ts';
 
 export type Resolution = 'unwrap' | 'remove' | 'restore';
+
+/** Where the content of the last decided wrapper starts in the rebuilt child list. */
+export interface DecidedSpan {
+  readonly wrapper: OoxmlElement;
+  readonly from: number;
+}
+
+/**
+ * Push the content one decision keeps from `wrapper`, with adjacent same-format text runs
+ * joined, and return where it starts.
+ *
+ * Shared text can hold one change as several runs, or several adjacent wrappers, split where
+ * another edit once fell, while a peer holds the same change as one run. Inside the change the
+ * split means nothing. Once the decision makes the content ordinary text, the split would show
+ * and differ between peers, so every peer joins the runs the same way. `before` is the span of
+ * the wrapper just before this one, if it was decided too: the same change joins across it.
+ */
+export function pushDecidedContent(
+  out: OoxmlNode[],
+  wrapper: OoxmlElement,
+  kept: readonly OoxmlNode[],
+  before: DecidedSpan | null,
+  mint: () => string
+): DecidedSpan {
+  const continues =
+    before !== null &&
+    before.wrapper.kind === wrapper.kind &&
+    sameRevision(before.wrapper, wrapper);
+  const from = continues ? before.from : out.length;
+  for (const node of [...out.splice(from), ...kept]) {
+    const previous = out.length > from ? out.pop() : undefined;
+    const joined = previous === undefined ? [node] : joinedRuns(mint, previous, node);
+    for (const entry of joined) out.push(entry);
+  }
+  return { wrapper, from };
+}
+
+/** Run content a join may concatenate: characters, tabs and breaks, never atoms or fields. */
+const JOINABLE_CONTENT = new Set(['text', 'deletedText', 'tab', 'hardBreak']);
+
+/** One run for two adjacent runs of the same format that hold only joinable content. */
+function joinedRuns(mint: () => string, left: OoxmlNode, right: OoxmlNode): OoxmlNode[] {
+  if (left.kind !== 'run' || right.kind !== 'run') return [left, right];
+  const leftContent = left.children.filter((child) => !isRunProperties(child));
+  const rightContent = right.children.filter((child) => !isRunProperties(child));
+  const joinable =
+    leftContent.length > 0 &&
+    rightContent.length > 0 &&
+    [...leftContent, ...rightContent].every((child) => JOINABLE_CONTENT.has(child.kind)) &&
+    equivalentNodes(left.children.filter(isRunProperties), right.children.filter(isRunProperties));
+  if (!joinable) return [left, right];
+  const properties = left.children.filter(isRunProperties);
+  return [
+    {
+      ...left,
+      children: [...properties, ...coalesced(mint, [...leftContent, ...rightContent])],
+    } as OoxmlNode,
+  ];
+}
 
 /**
  * The controls a removal must keep: a control locked against removal (`sdtLocked`,

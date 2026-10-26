@@ -56,6 +56,7 @@ import {
   type TextIdentities,
 } from './paragraph-text-identity.ts';
 import { rebaseRevisions } from './paragraph-text-revisions.ts';
+import { formatDecidedDeletions } from './paragraph-text-decision-span.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
@@ -236,6 +237,13 @@ function writeParagraphText(
     }
     return change;
   };
+  formatDecidedDeletions(
+    text,
+    before,
+    after,
+    steps,
+    (from, to) => changeOf(from, to)?.changes ?? null
+  );
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index]!;
     if (block.kind === 'eq') {

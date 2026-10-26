@@ -64,6 +64,8 @@ import {
   resolutionOf,
   withDeletedTextRestored,
   type Resolution,
+  pushDecidedContent,
+  type DecidedSpan,
   lockedControlShells,
 } from './revision-rebuild-helpers.ts';
 import {
@@ -536,7 +538,10 @@ function rebuildChildren(
   container = ''
 ): OoxmlNode[] {
   const out: OoxmlNode[] = [];
+  let decided: DecidedSpan | null = null;
   for (const child of children) {
+    const before = decided;
+    decided = null;
     if (child.kind !== 'textValue' && !plan.reach.has(child.id)) {
       out.push(child);
       continue;
@@ -559,9 +564,10 @@ function rebuildChildren(
       // The wrapper goes; its content stays and is rebuilt under the same plan, so an inner
       // revision that survives is preserved verbatim rather than resolved on its author's
       // behalf — and one that does not survive is still resolved.
-      for (const kept of rebuildChildren(child.children, plan)) {
-        out.push(action === 'restore' ? withDeletedTextRestored(kept) : kept);
-      }
+      const kept = rebuildChildren(child.children, plan).map((node) =>
+        action === 'restore' ? withDeletedTextRestored(node) : node
+      );
+      decided = pushDecidedContent(out, child, kept, before, plan.mint);
       continue;
     }
 
