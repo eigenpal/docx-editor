@@ -50,7 +50,9 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration) | Edit together with remote cursors, shared changes, and personal undo. |
 | [Custom UI](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots) | Build controls with shared commands, components, and styles. |
 | [React and Vue](https://www.docx-editor.dev/docs/2.x/installation) | Use either adapter with the same document engine. |
-| [Right-to-left and CJK text](https://www.docx-editor.dev/docs/2.x/word-fidelity#language-support) | Edit Arabic, Hebrew, Persian, Urdu, Chinese, Japanese, and Korean documents. The interface mirrors for Arabic and Hebrew. |
+| [Right-to-left support](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) | Use a mirrored Arabic or Hebrew interface and edit mixed-direction documents. |
+| [Chinese, Japanese, and Korean text](https://www.docx-editor.dev/docs/2.x/guides/cjk) | Configure interface translations, document fonts, and PDF fonts. |
+| [DrawingML rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing) | Configure charts, SmartArt, and drawing effects. Check rendering and interface limits. |
 | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls in 13 languages with locale catalogs and custom strings. |
 | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
@@ -69,7 +71,7 @@ Review, collaboration, the Editor API, PDF export, and telemetry require separat
 | [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts) | Open-licensed substitutes for Word fonts. | [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
 | [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output. | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) |
 | [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) | Convert DOCX to PDF on Node.js. | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) |
-| [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) |
+| [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for the editor and PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, and custom nodes. | [Review and collaboration](https://www.docx-editor.dev/docs/2.x/pro) |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
 | [`@docx-editor.dev/telemetry`](https://www.npmjs.com/package/@docx-editor.dev/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers. | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) |

@@ -1,0 +1,95 @@
+---
+title: 'Chinese, Japanese, and Korean text'
+description: 'Configure interface translations, document fonts, and PDF fonts for Chinese, Japanese, and Korean documents.'
+category: 'Guides'
+---
+
+Chinese, Japanese, and Korean (CJK) document text uses the same editor in React and Vue. Configure interface translations and document fonts separately.
+
+## Interface language
+
+The shipped catalogs include Japanese (`ja`) and Simplified Chinese (`zhCN`). They translate editor controls. They do not translate document text or install document fonts.
+
+These examples show Japanese controls and regional date input:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { ja } from '@docx-editor.dev/i18n';
+
+<DocxEditor document={bytes} i18n={ja} locale="ja-JP" />;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { ja } from '@docx-editor.dev/i18n';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :i18n="ja" locale="ja-JP" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+For Simplified Chinese controls, use `zhCN` with `locale="zh-CN"`.
+
+A Korean interface catalog is not included. You can edit Korean document text with another interface language or supply a custom catalog. For catalog setup and fallback behavior, see [Interface translations](/docs/2.x/i18n).
+
+Setting `locale` alone changes regional behavior, not interface translations. In composed editors, pass translations to `LocaleProvider`, rather than `DocxEditor.Root`.
+
+## Document fonts
+
+Choose fonts that cover the document's characters and regional glyph forms. Chinese, Japanese, and Korean fonts can draw the same Unicode character differently.
+
+The font picker lists available choices; a listed family does not prove that its font bytes loaded. If the font notice reports a missing family, supply its files or choose an appropriate substitute.
+
+Use the same font configuration in React and Vue. For resolver examples, see [Load your own fonts](/docs/2.x/guides/fonts#load-your-own-fonts). For the document's East Asian font selection rules, see [Faces that no style names](/docs/2.x/guides/fonts#faces-that-no-style-names).
+
+### Packaged browser fallback
+
+Install `@docx-editor.dev/fonts-cjk` and use `cjkFonts()` from its browser entry when the document's CJK fonts are unavailable:
+
+```ts
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
+
+const fontResolvers = [packagedFonts(), cjkFonts()];
+```
+
+Pass these resolvers to `useFonts()` or the `fonts` option of `useDocxSource()` in either adapter. Keep preferred font sources first. For a complete hook example, see [Render Chinese, Japanese, and Korean text](/docs/2.x/customization/fonts#render-chinese-japanese-and-korean-text).
+
+The resolver fetches the font asset only when the document requests a supported family. The font is about 16 MB. Your bundler emits the asset; the resolver makes no third-party request.
+
+This fallback uses the Japanese regional face. Supply your own fonts when regional glyph forms or designed styles matter.
+
+## Input and typography
+
+Use your operating system's input method to compose text. Keep custom keyboard handlers from intercepting composition keystrokes in the document surface.
+
+Document language, fonts, and typography properties determine line breaking and mixed-script spacing. Changing the interface language does not change these document properties.
+
+The interface has no dedicated controls for East Asian typography settings. For vertical-text limits and individual spacing, punctuation, and line-breaking rules, see [Word feature support](/docs/2.x/word-fidelity#language-support).
+
+## PDF export
+
+Browser font configuration does not configure a separate PDF server. Supply suitable server fonts or install the optional `@docx-editor.dev/fonts-cjk` package.
+
+The converter discovers the package without resolver configuration. Browser loading requires the separate `cjkFonts()` setup described here. Substitution can change regional glyph forms and pagination.
+
+For installation, regional font limits, and missing-glyph diagnostics, see [Add Chinese, Japanese, and Korean text to PDF export](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text).
+
+## Check your integration
+
+Open the default example document and find **Chinese Japanese and Korean text**. Compare its Chinese, Japanese, and Korean paragraphs with their Latin names and numbers.
+
+Check input, font notices, save and reopen, and exported PDF output with your deployment's fonts. For Arabic or Hebrew controls and mixed-direction text, see [Right-to-left support](/docs/2.x/guides/right-to-left).

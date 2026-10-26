@@ -28,6 +28,16 @@ Without the module, the editor renders pictures, shapes with fills, gradients, p
 
 Text watermarks are a page feature, so they render without the module.
 
+## Drawing controls in the interface
+
+Registering the module adds rendering, not a chart or SmartArt authoring toolbar. Charts and SmartArt remain read-only. You cannot edit chart values, change chart types, or rearrange SmartArt nodes through editor controls.
+
+Picture controls are separate. For insertion, wrapping, crop, alternative text, and selection capabilities, see [Images and drawings](/docs/2.x/guides/images). Individual pictures inside a group do not expose those picture commands.
+
+The React and Vue examples load a default document with two DrawingML pages. Open **DrawingML diagrams and charts** to inspect nested and grouped SmartArt, a combination chart, and a doughnut chart. Both examples register `drawingModule()` alongside `reviewModule()`.
+
+If a chart shows a placeholder, check module registration before the document opens. If it still shows a placeholder, check the supported subset and the document's cached chart data. The editor does not refresh chart values from an embedded workbook or external source.
+
 ## Register the module
 
 Pass `drawingModule()` to the editor through `modules`. Build the module array once: outside render in React, and in `<script setup>` or a module file in Vue.

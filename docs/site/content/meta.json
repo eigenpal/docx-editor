@@ -16,6 +16,7 @@
     "frameworks/astro",
     "word-fidelity",
     "guides/right-to-left",
+    "guides/cjk",
     "examples",
     "build-a-docx-agent",
     "collaboration",

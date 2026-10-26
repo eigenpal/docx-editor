@@ -2,6 +2,7 @@
   "title": "Guides",
   "pages": [
     "right-to-left",
+    "cjk",
     "loading-and-saving",
     "open-failures",
     "diagnostics",

@@ -24,6 +24,8 @@ You can open, edit, and export Arabic, Hebrew, Persian, and Urdu documents with 
 
 ### Show the interface in Arabic or Hebrew
 
+The `i18n` catalog controls translations and interface direction. Setting `locale="ar-SA"` alone does not select Arabic translations or mirror the interface. `locale` controls regional date input and generated document labels.
+
 Pass the `ar` or `he` catalog from `@docx-editor.dev/i18n`. These catalogs declare `_dir: 'rtl'`, and the editor's locale provider reads that flag. Each part of the editor chrome then sets `dir="rtl"` on itself. You don't need a wrapper element with `dir`, in either framework:
 
 <FrameworkTabs>
