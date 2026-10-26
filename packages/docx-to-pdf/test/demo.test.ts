@@ -12,15 +12,15 @@ import { docx, paragraph } from './fixture.ts';
 const source = new Uint8Array(
   readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
 );
-test('the editor demo exports with explicit font substitution diagnostics and multilingual drawings', async () => {
+test('the editor demo exports with only packaged fonts and multilingual drawings', async () => {
   const original = source.slice();
   const result = await exportPdf(source, {
     useSystemFonts: false,
     fidelityPolicy: 'best-effort',
   });
   expect(source).toEqual(original);
-  expect(result.diagnostics.map((entry) => entry.code)).toEqual(['font-substitution']);
-  expect(result.diagnostics[0]?.message).toContain('Aptos');
+  // The demo names only fonts the packaged set serves, so nothing is substituted.
+  expect(result.diagnostics.map((entry) => entry.code)).toEqual([]);
   expect(result.pageCount).toBe(30);
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
   try {
@@ -31,8 +31,8 @@ test('the editor demo exports with explicit font substitution diagnostics and mu
     }
     const text = pages.join(' ').normalize('NFC');
     for (const required of [
-      'Georgia',
-      'Verdana',
+      'Cambria',
+      'Century Gothic',
       'SMALL CAPS',
       '☐',
       '☑',
