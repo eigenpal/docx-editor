@@ -49,6 +49,18 @@ export function hasFurnitureDrawingExclusions(
   );
 }
 
+/** After a retry, inspect retained exclusions across first, even, and default page variants. */
+export function retainedFurnitureWrap(
+  furniture: PageFurniture | undefined,
+  omitHidden: boolean | undefined,
+  zonesFor: (pageIndex: number, omitHidden?: boolean) => readonly ExclusionZone[]
+): boolean {
+  return (
+    hasFurnitureDrawingExclusions(furniture, omitHidden) &&
+    (!omitHidden || [0, 1, 2].some((index) => zonesFor(index, true).length > 0))
+  );
+}
+
 // A non-picture drawing with no paint payload is a visible unsupported-content placeholder.
 // Pending picture resources and supported vector/text drawings retain their authored wrap.
 function unsupportedPlaceholder(drawing: AnchoredDrawingRecord): boolean {

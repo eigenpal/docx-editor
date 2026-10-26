@@ -21,7 +21,7 @@ import {
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
 import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
-import { hasFurnitureDrawingExclusions } from './furniture-drawing-exclusion.ts';
+import { retainedFurnitureWrap } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
@@ -632,13 +632,8 @@ function* layoutBlocksPass(
   });
   const { pageBox, overflowShellAt, furnitureZonesFor, pageShell } = sectionFurniture;
 
-  // After a retry, derive admission from retained zones, including first/even/default variants.
-  const sectionHasFurnitureWrap =
-    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones) &&
-    (!options.yieldHiddenFurnitureZones ||
-      [0, 1, 2].some((index) => furnitureZonesFor(index, true).length > 0));
   const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
-    sectionHasFurnitureWrap,
+    retainedFurnitureWrap(furniture, options.yieldHiddenFurnitureZones, furnitureZonesFor),
     continuedZones
   );
   let exclusionPageIndex = -1;
