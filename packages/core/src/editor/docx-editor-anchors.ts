@@ -32,9 +32,19 @@ export function createAnchorIndex(): (
   layout: SemanticLayout
 ) => Map<string, ReviewParagraphAnchor> {
   const cache = new WeakMap<SemanticLayout, Map<string, ReviewParagraphAnchor>>();
+  let last: {
+    readonly pages: PagesWeakRef;
+    readonly index: IndexWeakRef;
+  } | null = null;
   return (layout) => {
     const cached = cache.get(layout);
     if (cached) return cached;
+    const carried = last && carriedIndex(last, layout);
+    if (carried) {
+      cache.set(layout, carried);
+      last = { pages: new WeakRef(layout.pages), index: new WeakRef(carried) };
+      return carried;
+    }
     // The projection is passed as a STABLE reference, not an inline arrow: the index caches
     // each page's anchors under the projection that produced them, and a fresh closure per
     // call would miss that cache on every commit.
@@ -59,8 +69,80 @@ export function createAnchorIndex(): (
       }
     }
     cache.set(layout, index);
+    last = { pages: new WeakRef(layout.pages), index: new WeakRef(index) };
     return index;
   };
+}
+
+/**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here, as `recent-root-cache.ts` does.
+ */
+interface PagesWeakRef {
+  deref(): SemanticLayout['pages'] | undefined;
+}
+interface IndexWeakRef {
+  deref(): Map<string, ReviewParagraphAnchor> | undefined;
+}
+declare const WeakRef: {
+  new (target: SemanticLayout['pages']): PagesWeakRef;
+  new (target: Map<string, ReviewParagraphAnchor>): IndexWeakRef;
+};
+
+function sameKeys(a: ReadonlyMap<string, unknown>, b: ReadonlyMap<string, unknown>): boolean {
+  if (a.size !== b.size) return false;
+  for (const key of a.keys()) if (!b.has(key)) return false;
+  return true;
+}
+
+/** One page's note anchors, registered as the full index registers them. */
+function noteAnchorsOf(page: SemanticLayout['pages'][number]): Map<string, ReviewParagraphAnchor> {
+  const anchors = new Map<string, ReviewParagraphAnchor>();
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) register(anchors, note.fragments, page.index, note.box.y);
+  }
+  return anchors;
+}
+
+/** One page's body anchors, from the per-page cache the full index reads. */
+const bodyAnchorsOf = (page: SemanticLayout['pages'][number]) =>
+  reviewAnchorIndex({ pages: [page] }, bodyFragmentsOf);
+
+/**
+ * The previous index with each changed page's anchors swapped in, when nothing else can have
+ * moved. A keystroke publishes a new layout whose pages are the previous objects but the one it
+ * landed on, and the whole index was built again per keystroke. A changed page qualifies when
+ * its header and footer are the same objects and its body and note areas anchor the same
+ * paragraphs; an entry is replaced only where the previous index took it from that page, since
+ * the first page wins.
+ */
+function carriedIndex(
+  last: { readonly pages: PagesWeakRef; readonly index: IndexWeakRef },
+  layout: SemanticLayout
+): Map<string, ReviewParagraphAnchor> | null {
+  const previous = last.pages.deref();
+  const lastIndex = last.index.deref();
+  if (!previous || !lastIndex || previous.length !== layout.pages.length) return null;
+  let index: Map<string, ReviewParagraphAnchor> | null = null;
+  for (const [position, page] of layout.pages.entries()) {
+    const before = previous[position]!;
+    if (page === before) continue;
+    if (page.header !== before.header || page.footer !== before.footer) return null;
+    const anchors = bodyAnchorsOf(page);
+    const was = bodyAnchorsOf(before);
+    if (!sameKeys(anchors, was)) return null;
+    // A pass lays the page's note areas out again; their paragraphs must be the ones it held.
+    const notes = noteAnchorsOf(page);
+    if (!sameKeys(notes, noteAnchorsOf(before))) return null;
+    index ??= new Map(lastIndex);
+    for (const [id, anchor] of anchors)
+      if (lastIndex.get(id) === was.get(id)) index.set(id, anchor);
+    // A note entry came from this page when it names this page; an earlier page's stays.
+    for (const [id, anchor] of notes)
+      if (lastIndex.get(id)?.pageIndex === page.index) index.set(id, anchor);
+  }
+  return index ?? lastIndex;
 }
 
 function register(

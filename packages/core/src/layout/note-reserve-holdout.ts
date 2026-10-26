@@ -654,13 +654,21 @@ function stacksInOneColumn(page: PageRecord): boolean {
  * outside the flow and do not end it.
  */
 function endsWithPageBreak(page: PageRecord): boolean {
-  for (let index = page.fragments.length - 1; index >= 0; index -= 1) {
-    const fragment = page.fragments[index]!;
-    if (fragment.kind !== 'paragraph') return false;
-    const last = fragment.lines[fragment.lines.length - 1];
-    const breaks = last?.spans.some((span) => span.text === PAGE_BREAK_CHAR) ?? false;
-    if (!breaks && (fragment.positionedFrame || fragment.outOfFlow)) continue;
-    return breaks;
+  let ends = pageBreakEnds.get(page);
+  if (ends === undefined) {
+    ends = false;
+    for (let index = page.fragments.length - 1; index >= 0; index -= 1) {
+      const fragment = page.fragments[index]!;
+      if (fragment.kind !== 'paragraph') break;
+      const last = fragment.lines[fragment.lines.length - 1];
+      const breaks = last?.spans.some((span) => span.text === PAGE_BREAK_CHAR) ?? false;
+      if (!breaks && (fragment.positionedFrame || fragment.outOfFlow)) continue;
+      ends = breaks;
+      break;
+    }
+    pageBreakEnds.set(page, ends);
   }
-  return false;
+  return ends;
 }
+/** Per page: each pass asks for every page, and a page an edit left alone keeps its object. */
+const pageBreakEnds = new WeakMap<PageRecord, boolean>();

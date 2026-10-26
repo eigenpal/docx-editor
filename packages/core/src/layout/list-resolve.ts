@@ -805,6 +805,21 @@ interface LastStoryResolve {
 }
 const lastStoryResolvesByAnchor = new WeakMap<OoxmlElement, LastStoryResolve>();
 const lastStoryResolvesBySession = new WeakMap<LayoutSession, LastStoryResolve>();
+/**
+ * The last session resolve per block list. A session with none of its own starts from another
+ * session's resolve of the same blocks: the result is a function of its inputs alone, and a
+ * background pass in a fresh session otherwise resolved every list of the story in one task.
+ */
+const lastStoryResolvesByBlocks = new WeakMap<readonly OoxmlElement[], LastStoryResolve>();
+
+function rememberSessionResolve(
+  memoOwner: LayoutSession,
+  blocks: readonly OoxmlElement[],
+  next: LastStoryResolve
+): void {
+  lastStoryResolvesBySession.set(memoOwner, next);
+  lastStoryResolvesByBlocks.set(blocks, next);
+}
 
 function sameNumberedParagraph(paragraph: OoxmlElement, previous: OoxmlElement | undefined) {
   if (!previous || paragraph.id !== previous.id) return false;
@@ -832,8 +847,14 @@ function resolveStoryListItemsStable(
 ): ReadonlyMap<string, ResolvedListItem> {
   const first = blocks[0];
   const lastBlock = blocks[blocks.length - 1];
+  // A session never shares another session's map; a seeded one starts from a copy of it.
+  const seed =
+    memoOwner && !lastStoryResolvesBySession.has(memoOwner)
+      ? lastStoryResolvesByBlocks.get(blocks)
+      : undefined;
   const last = memoOwner
-    ? lastStoryResolvesBySession.get(memoOwner)
+    ? (lastStoryResolvesBySession.get(memoOwner) ??
+      (seed && { ...seed, listItems: new Map(seed.listItems) }))
     : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
       (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
   const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;
@@ -844,6 +865,8 @@ function resolveStoryListItemsStable(
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable
   ) {
+    // Its blocks are an earlier list's, which a seeded session compares block by block.
+    lastStoryResolvesByBlocks.set(blocks, last);
     return last.listItems;
   }
 
@@ -885,7 +908,7 @@ function resolveStoryListItemsStable(
   }
   if (last && numberedSequenceUnchanged) {
     const next = { ...last, blocks, numberedByBlock };
-    if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+    if (memoOwner) rememberSessionResolve(memoOwner, blocks, next);
     else {
       if (first) lastStoryResolvesByAnchor.set(first, next);
       if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);
@@ -927,7 +950,7 @@ function resolveStoryListItemsStable(
     listItems,
     walk,
   };
-  if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+  if (memoOwner) rememberSessionResolve(memoOwner, blocks, next);
   else {
     if (first) lastStoryResolvesByAnchor.set(first, next);
     if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);

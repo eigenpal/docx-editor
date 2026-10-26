@@ -28,8 +28,10 @@ export function subscribeDocumentChanges(
     };
     // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
     // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
-    // hook. Guarded on the authored page width, so a keystroke pays one comparison.
-    hooks.refitIfPageResized();
+    // hook. Guarded on the authored page width. Reading that width enumerates the sections,
+    // and a text-local change edits only run content, never a `w:sectPr`, so a keystroke
+    // skips it.
+    if (change.impact !== 'text-local') hooks.refitIfPageResized();
     // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
     hooks.bump();
     hooks.emit(documentChange);

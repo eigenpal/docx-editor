@@ -72,9 +72,9 @@ describe('detectBodyTocs memoization', () => {
     expect(edited.ok).toBe(true);
     if (!edited.ok) return;
 
+    // Plain text outside any field cannot change the answer, so the whole answer stands.
     const after = detectBodyTocs(edited.part);
-    expect(after).not.toBe(before);
-    expect(after).toEqual(before);
+    expect(after).toBe(before);
     expect(after[0]).toBe(before[0]);
   });
 

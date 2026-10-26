@@ -276,3 +276,34 @@ export function ordinaryMoveInsertionSites(root: OoxmlNode): ReadonlySet<string>
       .flatMap((r) => r.content.filter((n) => n.kind === 'revisionMoveTo').map((n) => n.id))
   );
 }
+
+const moveParagraphs = new WeakMap<OoxmlNode, ReadonlySet<string>>();
+
+/**
+ * Ids of the paragraphs that hold an ordinary move range. Ordinary ranges are paragraph-local,
+ * so a change in any other paragraph cannot be decided as part of a move.
+ */
+export function paragraphsWithOrdinaryMoves(root: OoxmlNode): ReadonlySet<string> {
+  const cached = moveParagraphs.get(root);
+  if (cached) return cached;
+  const ids = new Set<string>();
+  const ranges = ordinaryMoveRanges(root);
+  // A range lives in one paragraph, usually as its direct children. One nested in an inline
+  // container (a hyperlink, a control) is found by a walk.
+  const nested = new Set<OoxmlNode>();
+  for (const range of ranges) {
+    if (range.parent.kind === 'paragraph') ids.add(range.parent.id);
+    else nested.add(range.parent);
+  }
+  if (nested.size > 0) {
+    const visit = (node: OoxmlNode, paragraph: string | null): void => {
+      if (node.kind === 'textValue') return;
+      const here = node.kind === 'paragraph' ? node.id : paragraph;
+      if (nested.has(node) && here) ids.add(here);
+      for (const child of node.children) visit(child, here);
+    };
+    visit(root, null);
+  }
+  moveParagraphs.set(root, ids);
+  return ids;
+}

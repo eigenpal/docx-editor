@@ -440,6 +440,145 @@ function numberingIdentity(index?: NumberingIndex): number {
   return id;
 }
 /**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here, as `recent-root-cache.ts` does.
+ */
+interface ChildrenWeakRef {
+  deref(): readonly OoxmlNode[] | undefined;
+}
+interface BlocksWeakRef {
+  deref(): OoxmlElement[] | undefined;
+}
+declare const WeakRef: {
+  new (target: OoxmlElement[]): BlocksWeakRef;
+  new (target: readonly OoxmlNode[]): ChildrenWeakRef;
+};
+
+/** A story's last block list, with the children it came from (weakly) and block positions. */
+interface LastBlocks {
+  /** Both weakly: a kept list must not keep a closed or reloaded document's tree alive. */
+  readonly children: ChildrenWeakRef;
+  readonly blocks: BlocksWeakRef;
+  positions?: Map<string, number>;
+}
+const lastBlocks = new Map<string, LastBlocks>();
+const MAX_LAST_BLOCKS = 32;
+
+function rememberBlocks(
+  key: string,
+  children: readonly OoxmlNode[],
+  blocks: OoxmlElement[],
+  positions?: Map<string, number>
+): void {
+  lastBlocks.delete(key);
+  lastBlocks.set(key, {
+    children: new WeakRef(children),
+    blocks: new WeakRef(blocks),
+    ...(positions ? { positions } : {}),
+  });
+  if (lastBlocks.size > MAX_LAST_BLOCKS) lastBlocks.delete(lastBlocks.keys().next().value!);
+}
+
+const paragraphProperties = (paragraph: OoxmlElement): OoxmlNode | undefined =>
+  paragraph.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'pPr'
+  );
+
+/** Mark properties that let a paragraph join, leave or vanish from the flow by its neighbours. */
+const FLOW_MARK_RULES: ReadonlySet<string> = new Set([
+  'vanish',
+  'specVanish',
+  'webHidden',
+  'del',
+  'ins',
+  'moveFrom',
+  'moveTo',
+]);
+
+/** Whether a paragraph's mark carries a rule that depends on the blocks around it. */
+function markReachesNeighbours(properties: OoxmlNode | undefined): boolean {
+  if (!properties || properties.kind === 'textValue') return false;
+  const mark = properties.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'rPr'
+  );
+  if (!mark || mark.kind === 'textValue') return false;
+  return mark.children.some(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      FLOW_MARK_RULES.has(child.localName)
+  );
+}
+
+/** Changed children past this many lay the story's blocks out again. */
+const MAX_CARRIED_CHANGES = 8;
+
+/**
+ * The previous block list with each edited paragraph's block swapped in, when the edit cannot
+ * have changed anything else. A keystroke makes a new story root whose children are the
+ * previous objects but the edited paragraph, and the whole list was built again per keystroke.
+ *
+ * Every rule that reaches past one paragraph (a removed mark merging into the next, a style
+ * separator, a hidden mark leaving the flow when a block follows) reads the paragraph's mark
+ * from its `w:pPr`. An edited paragraph qualifies only with the same `w:pPr` object and a mark
+ * that carries none of those rules. Its old and new block must each be what the paragraph
+ * produces on its own, and the old one must stand unmerged in the previous list. Anything
+ * else builds the list again.
+ */
+function carriedBlocks(
+  key: string,
+  children: readonly OoxmlNode[],
+  flow: (children: readonly OoxmlNode[]) => OoxmlElement[]
+): OoxmlElement[] | undefined {
+  const last = lastBlocks.get(key);
+  const previous = last?.children.deref();
+  const lastList = last?.blocks.deref();
+  if (!last || !previous || !lastList || previous.length !== children.length) return undefined;
+  const changed: number[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    if (children[index] === previous[index]) continue;
+    if (changed.length >= MAX_CARRIED_CHANGES) return undefined;
+    changed.push(index);
+  }
+  if (changed.length === 0) return lastList;
+  let positions = last.positions;
+  if (!positions) {
+    positions = new Map();
+    for (const [index, block] of lastList.entries()) positions.set(block.id, index);
+    last.positions = positions;
+  }
+  const blocks = [...lastList];
+  for (const index of changed) {
+    const before = previous[index]!;
+    const after = children[index]!;
+    if (
+      before.kind !== 'paragraph' ||
+      after.kind !== 'paragraph' ||
+      before.id !== after.id ||
+      paragraphProperties(before) !== paragraphProperties(after) ||
+      markReachesNeighbours(paragraphProperties(after))
+    )
+      return undefined;
+    const position = positions.get(before.id);
+    if (position === undefined) return undefined;
+    const alone = flow([before]);
+    if (alone.length !== 1 || alone[0] !== lastList[position]) return undefined;
+    const replacement = flow([after]);
+    if (replacement.length !== 1 || replacement[0]!.id !== after.id) return undefined;
+    blocks[position] = replacement[0]!;
+  }
+  // The ids stand at the same places, so the positions carry over.
+  rememberBlocks(key, children, blocks, positions);
+  return blocks;
+}
+
+/**
  * Return story blocks in document order, flattening block-level content controls.
  * Compatible hidden paragraph marks join in body stories using the supplied styles and numbering.
  * Repeated calls with the same part and projection inputs share one array. Treat it as read-only.
@@ -458,9 +597,11 @@ export function storyBlocks(
   const cached = perMode?.get(key);
   if (cached) return cached;
   const root = storyRootOf(part);
-  const blocks = root
-    ? mergedFlowBlocks(
-        root.children,
+  let blocks: OoxmlElement[] = [];
+  if (root) {
+    const flow = (children: readonly OoxmlNode[]) =>
+      mergedFlowBlocks(
+        children,
         displayMode,
         authorFilter,
         styles,
@@ -472,8 +613,12 @@ export function storyBlocks(
             ...tocFieldChromeParagraphIds(part),
             ...emptyTocSuppressedResultParagraphIds(part),
           ])
-      )
-    : [];
+      );
+    const lastKey = `${part.name}\u0000${key}`;
+    const carried = carriedBlocks(lastKey, root.children, flow);
+    blocks = carried ?? flow(root.children);
+    if (!carried) rememberBlocks(lastKey, root.children, blocks);
+  }
   if (perMode) cacheProjection(perMode, key, blocks);
   else storyBlocksCache.set(part, new Map([[key, blocks]]));
   return blocks;

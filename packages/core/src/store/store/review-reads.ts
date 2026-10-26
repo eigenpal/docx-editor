@@ -248,11 +248,12 @@ function computeRevisionItemsOf(
     // A change inside a complex field's result sits where the field does: the field reads as
     // one character, as a simple field does.
     const own = located.get(site.node.id);
-    const field = own && own.start === own.end ? segments.fieldOf(site.node.id) : undefined;
+    const field =
+      own && own.start === own.end ? segments.fieldOf(site.node.id, site.parent) : undefined;
     const start =
       (field ? located.get(field) : undefined) ??
       own ??
-      located.get(segments.equationOf(site.node.id) ?? '');
+      located.get(segments.equationOf(site.node.id, site.parent) ?? '');
     const end = moveRange?.end && located.get(moveRange.end.id);
     const where =
       start && end && start.paragraphId === end.paragraphId ? { ...start, end: end.end } : start;
@@ -282,8 +283,8 @@ function computeRevisionItemsOf(
     // A wrapper's edge or a field character ends a change: fragments on either side are two.
     const segment =
       kind === 'paragraphMark'
-        ? segments.markSegmentOf(site.node.id)
-        : segments.segmentOf(site.node.id);
+        ? segments.markSegmentOf(site.node.id, site.parent)
+        : segments.segmentOf(site.node.id, site.parent);
     const sourceKey = `${sourceKeyOf(site.node, kind, address)}\u0000${segment}`;
     // Same attributes do not join text across an unchanged character.
     let key = currentInlineGroup.get(sourceKey) ?? sourceKey;

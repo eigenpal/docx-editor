@@ -59,10 +59,63 @@ function pageOrder(page: PageRecord): readonly string[] {
   return order;
 }
 
+/**
+ * The last order built, with the page orders it came from. A keystroke publishes a new layout
+ * whose pages are the previous objects but the one it landed on, and that page usually lists
+ * the same paragraphs; the order, and its index, then stand.
+ */
+/**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here, as `recent-root-cache.ts` does.
+ */
+interface PagesWeakRef {
+  deref(): readonly PageRecord[] | undefined;
+}
+declare const WeakRef: new (target: readonly PageRecord[]) => PagesWeakRef;
+
+let lastOrder: {
+  /** Weakly: the order must not keep a closed document's layout alive. */
+  readonly pages: PagesWeakRef;
+  readonly orders: readonly (readonly string[])[];
+  readonly order: string[];
+  index?: Map<string, number>;
+} | null = null;
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+  return true;
+}
+
+/** The previous order when `layout`'s pages list the same paragraphs, page by page. */
+function carriedOrder(layout: SemanticLayout): string[] | null {
+  const last = lastOrder;
+  const pages = last?.pages.deref();
+  if (!last || !pages || pages.length !== layout.pages.length) return null;
+  const orders: (readonly string[])[] = [];
+  for (const [index, page] of layout.pages.entries()) {
+    if (page === pages[index]) {
+      orders.push(last.orders[index]!);
+      continue;
+    }
+    const order = pageOrder(page);
+    if (!sameIds(order, last.orders[index]!)) return null;
+    orders.push(order);
+  }
+  lastOrder = { pages: new WeakRef(layout.pages), orders, order: last.order, index: last.index };
+  return last.order;
+}
+
 /** Paragraph ids in document order, deduplicated across fragments. */
 export function documentOrder(layout: SemanticLayout): string[] {
   const cached = documentOrderCache.get(layout);
   if (cached) return cached;
+  const carried = carriedOrder(layout);
+  if (carried) {
+    documentOrderCache.set(layout, carried);
+    return carried;
+  }
   const seen = new Set<string>();
   const order: string[] = [];
   for (const page of layout.pages) {
@@ -75,6 +128,7 @@ export function documentOrder(layout: SemanticLayout): string[] {
     }
   }
   documentOrderCache.set(layout, order);
+  lastOrder = { pages: new WeakRef(layout.pages), orders: layout.pages.map(pageOrder), order };
   return order;
 }
 
@@ -82,8 +136,14 @@ export function documentOrder(layout: SemanticLayout): string[] {
 export function documentOrderIndex(layout: SemanticLayout): Map<string, number> {
   const cached = documentOrderIndexCache.get(layout);
   if (cached) return cached;
-  const index = new Map<string, number>();
-  for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
+  const order = documentOrder(layout);
+  // The same order is the same index; see `lastOrder`.
+  let index = lastOrder?.order === order ? lastOrder.index : undefined;
+  if (!index) {
+    index = new Map<string, number>();
+    for (const [position, id] of order.entries()) index.set(id, position);
+    if (lastOrder?.order === order) lastOrder.index = index;
+  }
   documentOrderIndexCache.set(layout, index);
   return index;
 }

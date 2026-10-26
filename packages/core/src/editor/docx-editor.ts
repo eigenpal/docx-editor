@@ -9,6 +9,7 @@ import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.t
 import { endEditorPreview, registerEditorPreviewHost } from './editor-preview.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
+import { createPlacementKeeper, createReviewRanker } from './review-ranking.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
@@ -46,7 +47,6 @@ import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 import {
   anchorLineY,
   firstReviewRange,
-  reviewItemGeometry,
   reviewItemKey,
   type ReviewItem,
   type ReviewParagraphAnchor,
@@ -1609,16 +1609,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return surface?.activeReviewKey() ?? null;
   }
 
-  /** Per narrowed queue, weakly: the rail's and the commands' queries keep separate ranks. */
-  const rankings = new WeakMap<
-    readonly ReviewItem[],
-    {
-      readonly anchors: Map<string, ReviewParagraphAnchor> | null;
-      readonly revision: number;
-      readonly geometries: readonly ({ readonly pageIndex: number; readonly y: number } | null)[];
-      readonly order: readonly number[];
-    }
-  >();
+  const rankReviewItems = createReviewRanker();
+  const keepPlacements = createPlacementKeeper<ReviewItemPlacement>();
 
   /** The queue plus geometry, per call; the session memoizes the queue per revision. */
   function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
@@ -1643,42 +1635,26 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const home = furnitureHomeOf(item);
       return home === null ? 1 : home.kind === 'header' ? 0 : 2;
     };
-    // Geometry and rank depend on the queue, the layout, and the package alone; a commit's
-    // several reads (rail, commands, highlights) share them instead of sorting every card.
     const revision = surface?.session.packageRevision() ?? -1;
-    let ranking = rankings.get(items);
-    if (!ranking || ranking.anchors !== anchors || ranking.revision !== revision) {
-      const geometries = items.map((item) => (anchors ? reviewItemGeometry(item, anchors) : null));
-      const ranked = items.map((item, position) => ({
-        position,
-        pageIndex: geometries[position]?.pageIndex ?? null,
-        group: groupOf(item),
-      }));
-      ranked.sort((a, b) => {
-        const aPage = a.pageIndex ?? Number.MAX_SAFE_INTEGER;
-        const bPage = b.pageIndex ?? Number.MAX_SAFE_INTEGER;
-        if (aPage !== bPage) return aPage - bPage;
-        if (a.group !== b.group) return a.group - b.group;
-        return a.position - b.position;
-      });
-      ranking = { anchors, revision, geometries, order: ranked.map((entry) => entry.position) };
-      rankings.set(items, ranking);
-    }
+    const ranking = rankReviewItems(items, anchors, revision, groupOf);
     const { geometries, order } = ranking;
     const locked = reviewChangesLocked(surface);
-    return order.map((position) => {
-      const item = items[position]!;
-      return reviewItemPlacement(item, {
-        anchorY: geometries[position]?.y ?? null,
-        pageIndex: geometries[position]?.pageIndex ?? null,
-        // A paired replacement opens through its deletion, so both halves must be openable.
-        activatable: reviewItemWithHalves(item).every(reviewItemActivatable),
-        isActive:
-          activeKeys.size > 0 &&
-          reviewItemWithHalves(item).some((part) => activeKeys.has(reviewItemKey(part))),
-        locked,
-      });
-    });
+    return keepPlacements(
+      items,
+      order.map((position) => {
+        const item = items[position]!;
+        return reviewItemPlacement(item, {
+          anchorY: geometries[position]?.y ?? null,
+          pageIndex: geometries[position]?.pageIndex ?? null,
+          // A paired replacement opens through its deletion, so both halves must be openable.
+          activatable: reviewItemWithHalves(item).every(reviewItemActivatable),
+          isActive:
+            activeKeys.size > 0 &&
+            reviewItemWithHalves(item).some((part) => activeKeys.has(reviewItemKey(part))),
+          locked,
+        });
+      })
+    );
   }
 
   /** What the OPEN document asks for, or nothing when no document is mounted. */

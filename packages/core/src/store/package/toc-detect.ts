@@ -48,6 +48,17 @@ function bodyOf(part: OoxmlPart): OoxmlElement | null {
 }
 
 const fieldTokensByParagraph = new WeakMap<OoxmlElement, readonly OoxmlNode[]>();
+const fieldBoundaries = new WeakMap<OoxmlElement, boolean>();
+
+/** Whether a paragraph holds a field character or instruction, not only text and tabs. */
+function holdsFieldBoundary(paragraph: OoxmlElement): boolean {
+  let holds = fieldBoundaries.get(paragraph);
+  if (holds === undefined) {
+    holds = fieldTokens(paragraph).some((token) => token.kind !== 'text' && token.kind !== 'tab');
+    fieldBoundaries.set(paragraph, holds);
+  }
+  return holds;
+}
 
 function fieldTokens(paragraph: OoxmlElement): readonly OoxmlNode[] {
   const cached = fieldTokensByParagraph.get(paragraph);
@@ -102,6 +113,11 @@ function detectTocsInContainer(
 ): readonly DetectedToc[] {
   const cached = detectedTocsByContainer.get(container);
   if (cached) return cached;
+  const carried = carriedTocs(container);
+  if (carried) {
+    detectedTocsByContainer.set(container, carried);
+    return carried;
+  }
   const stack: OpenField[] = [];
   let overflowDepth = 0;
   const completed: ContainerTocResult[] = [];
@@ -209,7 +225,9 @@ function detectTocsInContainer(
 
   for (const child of container.children) {
     if (child.kind === 'paragraph') {
-      processParagraph(child);
+      // Outside a field, a paragraph of plain text changes nothing: its text only joins an
+      // open field's result. Skipping it keeps a long body's walk cheap after each edit.
+      if (stack.length > 0 || holdsFieldBoundary(child)) processParagraph(child);
       continue;
     }
     if (!isContentControl(child) || depth >= TOC_MAX_FIELD_NESTING) continue;
@@ -240,7 +258,52 @@ function detectTocsInContainer(
   });
   const immutable = result.length > 0 ? Object.freeze(result) : EMPTY_TOCS;
   detectedTocsByContainer.set(container, immutable);
+  rememberDetection(container, immutable);
   return immutable;
+}
+
+/** A container's last detection per id: an edit makes a new container that keeps its id. */
+/**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here, as `recent-root-cache.ts` does.
+ */
+interface ChildrenWeakRef {
+  deref(): readonly OoxmlNode[] | undefined;
+}
+declare const WeakRef: new (target: readonly OoxmlNode[]) => ChildrenWeakRef;
+
+const lastDetections = new Map<
+  string,
+  { children: ChildrenWeakRef; tocs: readonly DetectedToc[] }
+>();
+const MAX_LAST_DETECTIONS = 32;
+
+function rememberDetection(container: OoxmlElement, tocs: readonly DetectedToc[]): void {
+  lastDetections.delete(container.id);
+  lastDetections.set(container.id, { children: new WeakRef(container.children), tocs });
+  if (lastDetections.size > MAX_LAST_DETECTIONS)
+    lastDetections.delete(lastDetections.keys().next().value!);
+}
+
+/**
+ * The previous answer for a container whose edit cannot have changed it: every child that
+ * changed is a paragraph without a field character or instruction, before and after. Plain
+ * text only joins an open field's result by paragraph id, and the id stays.
+ */
+function carriedTocs(container: OoxmlElement): readonly DetectedToc[] | undefined {
+  const last = lastDetections.get(container.id);
+  const previous = last?.children.deref();
+  if (!last || !previous || previous.length !== container.children.length) return undefined;
+  for (let index = 0; index < container.children.length; index += 1) {
+    const child = container.children[index]!;
+    const before = previous[index]!;
+    if (child === before) continue;
+    if (child.kind !== 'paragraph' || before.kind !== 'paragraph' || child.id !== before.id)
+      return undefined;
+    if (holdsFieldBoundary(child) || holdsFieldBoundary(before)) return undefined;
+  }
+  rememberDetection(container, last.tocs);
+  return last.tocs;
 }
 
 /** Memoized per immutable part identity for repeated reads within one revision. */

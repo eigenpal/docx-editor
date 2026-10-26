@@ -128,7 +128,7 @@ export function patchLocalReviewItems(
   filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
     items,
   part?: OoxmlPart
-): ReviewItem[] | null {
+): readonly ReviewItem[] | null {
   // Comments anchored in the paragraph keep their cards, at the offsets its markers now hold.
   const comments = part ? remappedComments(cached, part, dirtyParagraphId) : new Map();
   if (!comments) return null;
@@ -136,7 +136,7 @@ export function patchLocalReviewItems(
   // With no revision of its own the cached queue still holds; with one, the caller derives the
   // whole queue instead.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
-  if (dirtyRank === undefined) return localRevisions.length === 0 ? [...cached] : null;
+  if (dirtyRank === undefined) return localRevisions.length === 0 ? cached : null;
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;
@@ -199,7 +199,12 @@ export function patchLocalReviewItems(
   // answering it, so a keystroke in that paragraph tore the reply out into a card of its own —
   // and the next full re-derive put it back. The pass is over the patched list and costs
   // nothing when no comment answers a change.
-  return linkRevisionReplies(patched);
+  const linked = linkRevisionReplies(patched);
+  // The same cards in the same order are the same queue: every cache keyed on the queue (rail
+  // order, placements, highlights) then holds across a keystroke that changed no card.
+  return linked.length === cached.length && linked.every((item, index) => item === cached[index])
+    ? cached
+    : linked;
 }
 
 /**
