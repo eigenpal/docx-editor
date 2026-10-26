@@ -402,7 +402,17 @@ export class InlineIndex {
   /** A record a text embeds arrived after the text: the paragraphs holding it read again. */
   recordArrived(id: LogicalId): void {
     if (!this.built) return;
-    for (const holder of this.holders.get(id) ?? []) this.affected.add(holder);
+    for (const holder of this.holders.get(id) ?? []) this.holderAffected(holder);
+  }
+
+  /**
+   * A paragraph whose text holds a node that can now show, or no longer can, reads again, and
+   * so does each paragraph that shows part of its text where it follows a move: the node may
+   * be in that part, though neither text changed.
+   */
+  private holderAffected(holder: LogicalId): void {
+    this.affected.add(holder);
+    for (const target of this.follow.placedTargetsFor(holder)) this.affected.add(target);
   }
 
   /**
@@ -412,7 +422,7 @@ export class InlineIndex {
   listingChanged(paragraphId: LogicalId): void {
     if (!this.built) return;
     // A text embeds only a node no child array lists, so a listing decides where it shows.
-    for (const holder of this.holders.get(paragraphId) ?? []) this.affected.add(holder);
+    for (const holder of this.holders.get(paragraphId) ?? []) this.holderAffected(holder);
     if (!this.textOf(paragraphId)) return;
     this.noteOthers(this.follow.paragraphChanged(paragraphId));
     this.affected.add(paragraphId);

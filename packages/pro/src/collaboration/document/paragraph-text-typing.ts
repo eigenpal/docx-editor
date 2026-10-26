@@ -99,6 +99,9 @@ export function typedInsertOf(
     const opAttributes = op.attributes ?? {};
     if (!encodesBack(registry, paragraphId, opAttributes)) return null;
     const decoded = decodeAttributes(opAttributes, registry.limits, paragraphId);
+    // A character with no run or text element shows in a neighbor's, which the view lends it
+    // (`repairItems`), so the element's offsets count characters that do not carry it.
+    if (typeof op.insert === 'string' && (!decoded.run || !decoded.text)) return null;
     // A shell that shows again apart from where it first showed is renamed by the view.
     const ids = new Set<string>();
     for (const id of [
