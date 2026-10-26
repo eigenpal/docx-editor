@@ -83,7 +83,13 @@ Use an application-owned family lookup to select remote assets. Do not turn docu
 
 ### Font picker customization
 
-Use `Toolbar.FontFamily` for the default picker. It lists the document's families, the families your font sources serve, and standard choices such as Georgia and Verdana. A standard choice that no font source serves appears only if the computer has the font installed. This keeps choices that would draw in a generic fallback font out of the list.
+Use `Toolbar.FontFamily` for the default picker. It lists these families:
+
+- The families the document uses.
+- The families your font sources serve, such as the packaged fonts and the Google catalog.
+- The standard choices: Arial, Calibri, Cambria, Consolas, Courier New, Garamond, Georgia, Helvetica, Open Sans, Roboto, Times New Roman, and Verdana.
+
+A standard choice that no font source serves appears only if the computer has the font installed. The editor tests this by measuring sample text in the browser. Browser privacy settings can hide installed fonts from that test. To offer a family on every computer, serve it from a font source, for example with `customFonts()` or `googleFonts()`.
 
 Use the `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
 
@@ -234,7 +240,7 @@ export function useDocumentFonts(brandFonts: FontOrigin) {
 }
 ```
 
-`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A late answer adds faces only: return settings such as `defaultFont` and `maxFontBytes` in the immediate answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
+`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A late answer adds faces only: return settings such as `defaultFont`, `maxFontBytes`, and `language` in the immediate answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
 
 ## React and Vue reference
 

@@ -456,7 +456,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   );
   let fontsResolving = false;
-  /** Faces an origin delivers after the first paint, until they install for this load. */
   const lateFonts = createLateFontArrival({
     deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
     changed: () => (bump(), emitSelectionChange()),
@@ -469,6 +468,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   let localFontProbe: ((family: string) => boolean) | null = null;
   const documentFontsNow = () => surface?.session.documentFonts() ?? [];
+  // Unfiltered until an on-demand answer says what is served; installed-only after that.
+  const listable = (f: string) => (!!configuredFonts && !fontConfiguration()) || probeLocalFont(f);
   const probeLocalFont = (family: string): boolean => {
     if (!localFontProbe) {
       localFontProbe = createLocalFontProbe(
@@ -967,7 +968,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
     if (late && lateFacesInstalled(late, resolvedFontConfiguration)) return;
-    // A load's first resolution fetches the shaper alongside the faces; failure reports at use.
     if (!late && !resolvedFontConfiguration) initializeHarfBuzz().catch(() => {});
     fontsResolving = true;
     bump();
@@ -2158,7 +2158,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getDocumentFonts: documentFontsNow,
     // The picker's list: configured and document families, and presets this platform has.
     getAvailableFonts: () =>
-      availableFontFamilies(fontConfiguration(), documentFontsNow(), probeLocalFont),
+      availableFontFamilies(fontConfiguration(), documentFontsNow(), listable),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],

@@ -206,13 +206,22 @@ test('a font pick tells the families this package serves apart by script', async
     await import('../../../core/src/store/package/default-font-faces.ts');
   const latin = [
     ...GOOGLE_FONT_FAMILIES,
-    ...['Calibri', 'Cambria', 'Century Gothic', 'Courier New', 'HK Grotesk', 'Alegreya SC'],
+    ...[
+      'Calibri',
+      'Cambria',
+      'Century Gothic',
+      'Courier New',
+      'HK Grotesk',
+      'Alegreya SC',
+      'M PLUS Code Latin',
+    ],
   ];
   expect(latin.filter((family) => isEastAsianFontFamily(family))).toEqual([]);
   const eastAsian = [
     ...GOOGLE_CJK_FACES.map((face) => face.family),
     ...CJK_SUBSTITUTED_FAMILIES,
     ...LOCALIZED_CJK_FAMILIES.keys(),
+    'M PLUS 1p',
     'Noto Sans CJK JP',
     'Noto Sans Mono CJK SC',
   ];

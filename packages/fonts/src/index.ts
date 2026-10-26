@@ -508,17 +508,19 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map
 
 /**
  * Families with the same advance widths as a packaged family, served from its bytes under
- * their own name. Helvetica and Arial share every advance width, so Liberation Sans stands in
- * for both. Keyed by the case-folded name a document or a font pick writes.
+ * their own name, each mapped to that family. Helvetica and Arial share every advance width,
+ * so Liberation Sans stands in for both. Documents match these names case-insensitively.
  *
  * @public
  */
-export const PACKAGED_FAMILY_ALIASES: ReadonlyMap<string, DefaultFontFamily> = new Map([
-  ['helvetica', 'Arial'],
-]);
+export const PACKAGED_FAMILY_ALIASES: Readonly<Record<string, DefaultFontFamily>> = Object.freeze({
+  Helvetica: 'Arial',
+});
 
-/** The spelling a packaged alias is listed under, for the font picker. */
-const ALIAS_NAMES: readonly string[] = Object.freeze(['Helvetica']);
+/** {@link PACKAGED_FAMILY_ALIASES} by case-folded name; a `Map`, as the key is file-derived. */
+const aliasesByFoldedName: ReadonlyMap<string, DefaultFontFamily> = new Map(
+  Object.entries(PACKAGED_FAMILY_ALIASES).map(([alias, family]) => [alias.toLowerCase(), family])
+);
 
 /**
  * The packaged substitutes, served ON DEMAND: an editor-shaped font resolver that loads
@@ -552,8 +554,9 @@ const ALIAS_NAMES: readonly string[] = Object.freeze(['Helvetica']);
  * this package.
  *
  * The families are file-derived, so they are matched case-insensitively against the closed
- * {@link ALL_DEFAULT_FONT_FAMILIES} list and never used to build a path. A name outside it
- * resolves to nothing here; pair with `googleFonts()` to cover more.
+ * {@link ALL_DEFAULT_FONT_FAMILIES} list and {@link PACKAGED_FAMILY_ALIASES}, and never used
+ * to build a path. A name outside both resolves to nothing here; pair with `googleFonts()`
+ * to cover more.
  */
 export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFontsResolver {
   const allowed = options.allow
@@ -562,12 +565,12 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
 
   const supportedFamilies = Object.freeze([
     ...ALL_DEFAULT_FONT_FAMILIES.filter((family) => !allowed || allowed.has(family.toLowerCase())),
-    ...ALIAS_NAMES.filter(
-      (alias) =>
-        !allowed ||
-        allowed.has(alias.toLowerCase()) ||
-        allowed.has(PACKAGED_FAMILY_ALIASES.get(alias.toLowerCase())!.toLowerCase())
-    ),
+    ...Object.entries(PACKAGED_FAMILY_ALIASES)
+      .filter(
+        ([alias, family]) =>
+          !allowed || allowed.has(alias.toLowerCase()) || allowed.has(family.toLowerCase())
+      )
+      .map(([alias]) => alias),
   ]);
 
   async function resolvePackagedFonts(request: FontOriginRequest): Promise<PackagedFontsFragment> {
@@ -603,7 +606,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     const aliasesDeclared = new Map<string, DefaultFontFamily>();
     for (const declared of [request.defaultFamily, ...request.families]) {
       const fold = declared.toLowerCase();
-      const aliasOf = PACKAGED_FAMILY_ALIASES.get(fold);
+      const aliasOf = aliasesByFoldedName.get(fold);
       if (aliasOf) {
         if (allowed && !allowed.has(fold) && !allowed.has(aliasOf.toLowerCase())) continue;
         aliasesDeclared.set(declared, aliasOf);
@@ -634,20 +637,23 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
       }
       wanted.add(family);
     }
-    // Stable order regardless of how the document happened to declare them, so the same
-    // file composes to the same configuration on every load.
-    // Every face of a declared alias points at its family's substitute, like the family itself.
+    // Every face of a declared alias points where its family's face is painted: at bytes an
+    // earlier origin supplies under the family's own name (a host's real Arial), or else at
+    // the packaged substitute this resolver loads.
     for (const [alias, family] of aliasesDeclared) {
       const plan = FAMILY_PLANS.get(family)!;
       for (const face of FACES) {
         const lineMetrics = planLineBox(plan, face.weight);
+        const own = already.has(faceKey(family, face.weight, face.style));
         aliasOnly.push({
           from: { family: alias, weight: face.weight, style: face.style },
-          to: { family: plan.substitute, weight: face.weight, style: face.style },
+          to: { family: own ? family : plan.substitute, weight: face.weight, style: face.style },
           ...(lineMetrics ? { lineMetrics } : {}),
         });
       }
     }
+    // Stable order regardless of how the document happened to declare them, so the same
+    // file composes to the same configuration on every load.
     const families = ALL_DEFAULT_FONT_FAMILIES.filter((family) => wanted.has(family));
     if (families.length === 0)
       return { sources: [], substitutions: aliasOnly, failures: [], families, supportedFamilies };

@@ -542,7 +542,11 @@ export function formattingAt(
   const range =
     !eastAsian || collapsed || cells?.length
       ? null
-      : orderPositions(selection, paragraphOrder ?? everyStoryOrder(layout));
+      : orderPositions(
+          selection,
+          // One paragraph is ordered by offset alone; skip the document-wide order walk.
+          anchor.paragraphId === head.paragraphId ? [] : (paragraphOrder ?? everyStoryOrder(layout))
+        );
   const lettered = eastAsian
     ? spans.filter((span) =>
         LETTER.test(range ? selectedTextOf(span, range.from, range.to) : span.text)

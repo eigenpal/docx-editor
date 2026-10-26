@@ -120,7 +120,7 @@ export interface LoadDefaultFontsOptions {
 }
 
 // @public
-export const PACKAGED_FAMILY_ALIASES: ReadonlyMap<string, DefaultFontFamily>;
+export const PACKAGED_FAMILY_ALIASES: Readonly<Record<string, DefaultFontFamily>>;
 
 // @public
 export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsResolver;

@@ -76,6 +76,25 @@ describe('packagedFonts', () => {
     expect(fragment.supportedFamilies).toContain('Helvetica');
   });
 
+  test("Helvetica follows a host's own Arial bytes when an earlier origin supplies them", async () => {
+    const { fetcher, requested } = countingFetcher();
+    const arialFaces = FACES.map((face) => ({
+      family: 'Arial',
+      weight: face.weight,
+      style: face.style,
+    }));
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Helvetica'],
+      defaultFamily: 'No Such Family',
+      resolvedFaces: arialFaces,
+    });
+    expect(requested).toEqual([]);
+    const targets = fragment.substitutions
+      .filter((entry) => entry.from.family === 'Helvetica')
+      .map((entry) => entry.to.family);
+    expect(targets).toEqual(['Arial', 'Arial', 'Arial', 'Arial']);
+  });
+
   test('Helvetica alone loads the Arial plan', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await packagedFonts({ fetcher, install: false })({
