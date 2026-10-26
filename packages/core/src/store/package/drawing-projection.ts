@@ -1,14 +1,7 @@
 import { stylesPartOf } from './ooxml-indexes.ts';
 import type { DrawingChartSummary } from './chart-summary.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
-import {
-  chartAuthorText,
-  holdsChartGraphic,
-  paintableMcChartFallback,
-  paintableMcFallback,
-  skippedChoiceChartProjection,
-} from './mc-fallback-projection.ts';
-import { unsupportedMcChoiceGeometry } from './mc-unsupported-projection.ts';
+import { projectMcDrawingContent } from './mc-drawing-content.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -62,10 +55,7 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
-import {
-  withAlternateContentGroupPictures,
-  type GroupPictureProjection,
-} from './drawing-group-picture.ts';
+import type { GroupPictureProjection } from './drawing-group-picture.ts';
 import { createDiagramPartResolver, type DiagramPartResolver } from './diagram-parts.ts';
 import { CHARTEX_MC_NAMESPACES } from './chartex-parts.ts';
 import { projectDrawingContent, withPictureClip } from './drawing-content-projection.ts';
@@ -1561,112 +1551,23 @@ export function projectRunLevelMcDrawing(
     context.supportedMcRequires,
     context.limits
   );
-  if (atom.drawing === null) {
-    const state = createWalkState();
-    const selected = selectCompatibilityBranch(
-      wrapper,
-      state,
-      context.limits,
-      context.namespaceScope,
-      context.supportedMcRequires
-    );
-    const legacy = selected.branch
-      ? projectLegacyVml(selected.branch, context.ownerPartName)
-      : null;
-    if (legacy && selected.branch && isElement(selected.branch)) {
-      const skipped = skippedChoiceChartProjection(
-        wrapper,
-        selected.branch,
-        legacy,
-        context.resolveDiagramParts,
-        (anchor) => readDocPrMetadata(anchor, true)
-      );
-      return skipped ?? (legacy.hidden ? null : legacy);
-    }
-    if (state.refused) return null;
-    if (
-      selected.branch &&
-      (!isElement(selected.branch) ||
-        selected.branch.namespaceUri !== WML_NAMESPACE_URI ||
-        !['pict', 'object'].includes(selected.branch.localName))
-    )
-      return null;
-    return unsupportedMcChoiceGeometry(
-      wrapper,
-      context.limits.maxCompatibilityBranches,
-      (drawing) => projectDrawing(drawing, context)
-    );
-  }
-  const projection = projectDrawing(atom.drawing, {
-    ...context,
-    namespaceScope: context.namespaceScope,
-  });
-  if (!projection) return paintableMcFallback(wrapper, context.ownerPartName);
-  // A chart in a skipped Choice still names the chart its fallback stands for.
-  const skipped = skippedChoiceChartProjection(
+  return projectMcDrawingContent(
     wrapper,
+    context,
     atom.drawing,
-    projection,
-    context.resolveDiagramParts,
+    () => {
+      const state = createWalkState();
+      const selected = selectCompatibilityBranch(
+        wrapper,
+        state,
+        context.limits,
+        context.namespaceScope,
+        context.supportedMcRequires
+      );
+      return { branch: selected.branch, refused: state.refused };
+    },
+    projectDrawing,
     (anchor) => readDocPrMetadata(anchor, true)
-  );
-  if (skipped) return skipped;
-  if (projection.hidden) {
-    return projection.chartSummary || holdsChartGraphic(atom.drawing) ? projection : null;
-  }
-  // Prefer a paintable fallback when the selected modern drawing cannot paint.
-  // Otherwise retain its geometry and diagnostic for the unsupported-content API.
-  if (
-    projection.picture === null &&
-    projection.vectorShape === null &&
-    projection.groupPicture === null &&
-    !hostsTextboxStory(projection)
-  ) {
-    if (projection.chartSummary || holdsChartGraphic(atom.drawing)) {
-      // A hidden chart stays hidden, whatever its fallback shows.
-      const chartFallback = projection.hidden ? null : chartFallbackOf(wrapper, context);
-      if (chartFallback) {
-        return Object.freeze({
-          ...chartFallback,
-          ...chartAuthorText(projection, chartFallback),
-          ...(projection.chartSummary
-            ? { chartSummary: { ...projection.chartSummary, shownAs: 'fallback' as const } }
-            : {}),
-          ...(chartFallback.picture ? { chartFallbackPicture: chartFallback.picture } : {}),
-        });
-      }
-      return withAlternateContentGroupPictures(projection);
-    }
-    const fallback = paintableMcFallback(wrapper, context.ownerPartName);
-    if (fallback) return fallback;
-    return projection;
-  }
-  // A drawn chart keeps the picture saved in its fallback, for an output that exports it,
-  // and takes its author text by the same rule as a chart shown by its fallback.
-  if (projection.chartSummary && !projection.hidden) {
-    const fallback = chartFallbackOf(wrapper, context);
-    if (fallback?.picture) {
-      return Object.freeze({
-        ...projection,
-        ...chartAuthorText(projection, fallback),
-        chartFallbackPicture: fallback.picture,
-      });
-    }
-  }
-  // Preserve compatibility provenance for group-picture resource handling.
-  return withAlternateContentGroupPictures(projection);
-}
-
-/** The fallback content that stands for a chart in `wrapper`, when it paints. */
-function chartFallbackOf(
-  wrapper: OoxmlGenericElementNode,
-  context: Parameters<typeof projectRunLevelMcDrawing>[1]
-): DrawingProjection | null {
-  return paintableMcChartFallback(
-    wrapper,
-    context.namespaceScope,
-    context.ownerPartName,
-    (drawing, namespaceScope) => projectDrawing(drawing, { ...context, namespaceScope })
   );
 }
 
