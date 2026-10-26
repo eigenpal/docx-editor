@@ -19,6 +19,7 @@ import {
   type OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
+import { sameChangeAcross } from './same-revision.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 export const TEXT_DEPS = [DEPENDENCY_KEY_IDS.story];
@@ -324,7 +325,12 @@ export function leavesInlineContainer(
 ): boolean {
   const held = inlineContainerOf(paragraph, before.runId);
   if (held === null) return false;
-  return after === undefined || inlineContainerOf(paragraph, after.runId) !== held;
+  if (after === undefined) return true;
+  const next = inlineContainerOf(paragraph, after.runId);
+  if (next === held) return false;
+  // Two adjacent wrappers of one change are one container: the caret stays in the change.
+  const holder = (inlineContainersOf(paragraph, held.id)[0] ?? paragraph) as OoxmlElement;
+  return next === null || !sameChangeAcross(holder, held, next);
 }
 
 /** Innermost content-control ancestor of a node (the node itself when it is one). */

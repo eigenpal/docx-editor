@@ -301,6 +301,7 @@ export class PackageMaterializer {
     }
     const second = this.materializePass(dirty, packageChanged, false);
     this.contests.record(this.lastDuplicateParents);
+    this.contests.recordEmbeds(this.shownUnder);
     return second;
   }
 
@@ -564,8 +565,11 @@ export class PackageMaterializer {
         // A text embeds only a node no child array lists. A peer's text that names a listed
         // node, or a part root, would give it a second parent: it shows where it is listed.
         if (this.registry.listingParents(id).length > 0 || this.partRoots.has(id)) return null;
-        if (!this.claimsWholeSubtrees)
-          this.contests.noteEmbed(id, logicalId, this.shownUnder, this.lastDirty);
+        if (
+          !this.claimsWholeSubtrees &&
+          !this.contests.noteEmbed(id, logicalId, this.shownUnder, this.lastDirty)
+        )
+          return null;
         const node = this.materialize(id, placed, path, incremental);
         if (node) this.shownUnder.set(id, logicalId);
         return node;

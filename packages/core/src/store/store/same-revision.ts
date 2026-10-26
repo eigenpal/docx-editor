@@ -21,29 +21,49 @@ export function sameRevision(a: OoxmlElement, b: OoxmlElement): boolean {
 }
 
 /**
- * Whether `wrapper` continues the change of the wrapper just before it in `holder`, and that
- * wrapper holds `nodeId`.
+ * The run of the wrapper just before `wrapper` in `holder`, when that wrapper is the same change
+ * and holds the run `runId`; otherwise null.
  *
  * One change can sit in two adjacent wrappers, split where another edit once fell, while a peer
- * holds it in one. A caret between the two is inside the change, as it is inside one wrapper.
+ * holds it in one. A caret between the two is inside the change, at the end of the earlier
+ * run, as it is between two runs of one wrapper: typing there takes that run's format.
  */
-export function continuesRevisionOf(
+export function continuedRevisionRun(
   holder: OoxmlElement,
   wrapper: OoxmlElement,
-  nodeId: string
-): boolean {
-  if (!isContentRevisionKind(wrapper.kind)) return false;
+  runId: string
+): OoxmlElement | null {
+  if (!isContentRevisionKind(wrapper.kind)) return null;
   const index = holder.children.findIndex((child) => child.id === wrapper.id);
   const previous = index > 0 ? holder.children[index - 1] : undefined;
-  return (
-    previous !== undefined &&
-    previous.kind === wrapper.kind &&
-    sameRevision(previous as OoxmlElement, wrapper) &&
-    holds(previous, nodeId)
-  );
+  if (
+    previous === undefined ||
+    previous.kind !== wrapper.kind ||
+    !sameRevision(previous as OoxmlElement, wrapper)
+  ) {
+    return null;
+  }
+  const run = find(previous, runId);
+  return run?.kind === 'run' ? (run as OoxmlElement) : null;
 }
 
-function holds(node: OoxmlNode, id: string): boolean {
-  if (node.id === id) return true;
-  return node.kind !== 'textValue' && node.children.some((child) => holds(child, id));
+/**
+ * Whether `right` is the wrapper just after `left` in `holder` and the same change. Text at
+ * the boundary between them is inside the change, as it is inside one wrapper.
+ */
+export function sameChangeAcross(holder: OoxmlElement, left: OoxmlNode, right: OoxmlNode): boolean {
+  if (left.kind === 'textValue' || right.kind === 'textValue') return false;
+  if (!isContentRevisionKind(left.kind) || left.kind !== right.kind) return false;
+  const index = holder.children.findIndex((child) => child.id === left.id);
+  return index >= 0 && holder.children[index + 1]?.id === right.id && sameRevision(left, right);
+}
+
+function find(node: OoxmlNode, id: string): OoxmlNode | null {
+  if (node.id === id) return node;
+  if (node.kind === 'textValue') return null;
+  for (const child of node.children) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
 }

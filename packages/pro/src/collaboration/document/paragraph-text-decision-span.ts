@@ -68,7 +68,9 @@ export function formatDecidedDeletions(
     const beside = left && left !== 'del' ? left : right && right !== 'del' ? right : null;
     if (beside) {
       // The deleted text leaves every revision it was in, a nested one included: text a peer
-      // typed into it at the same time is in none of the revisions the decision removed.
+      // typed into it at the same time is in none of the revisions the decision removed. It
+      // also takes the kept neighbor's other changes, a text element's kind among them, so the
+      // peer's text reads as the text around it does after the decision.
       const changes: Record<string, string | null> = { ...beside };
       for (let at = index; at < end; at += 1) {
         for (const key of Object.keys(before[at]!.attributes)) {

@@ -14,6 +14,7 @@ import { decodeItems, encodeItems } from '../document/paragraph-text.ts';
 import { DEFAULT_DOCUMENT_LIMITS } from '../document/limits.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 function paragraphOf(xml: string): OoxmlElement {
   const parsed = readOoxmlPart(
@@ -33,7 +34,8 @@ function textValues(node: OoxmlNode, into: string[] = []): string[] {
   return into;
 }
 
-test('a repaired surrogate pair stays in one text element', () => {
+/** The text values of a paragraph whose shared text gains a peer's emoji with no run. */
+function repairedValues(split: (text: Y.Text) => void): string[] {
   const paragraph = paragraphOf(
     '<w:r><w:t>ab</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>cd</w:t></w:r>'
   );
@@ -45,17 +47,22 @@ test('a repaired surrogate pair stays in one text element', () => {
     text.insert(at, op.insert, { ...op.attributes });
     at += op.insert.length;
   }
-  // A peer's emoji, with no run and no text element, between the two runs.
   text.insert(2, ' \u{1F603}', {});
-  for (const key of Object.keys(text.toDelta()[0].attributes ?? {})) {
-    text.format(2, 3, { [key]: null });
-  }
+  split(text);
   const items = decodeItems(text.toDelta(), () => null, DEFAULT_DOCUMENT_LIMITS, paragraph.id);
-  const values = textValues(materializeParagraph({ shell: linear.shell, items }));
-  expect(values.join('')).toBe('ab \u{1F603}cd');
-  for (const value of values) {
-    expect(value).not.toMatch(
-      /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/
-    );
-  }
-});
+  return textValues(materializeParagraph({ shell: linear.shell, items }));
+}
+
+const CASES: readonly (readonly [string, (text: Y.Text) => void])[] = [
+  ['with one set of attributes', () => {}],
+  // A format over the pair and its neighbor gives it attributes of its own.
+  ['with attributes of its own', (text) => text.format(2, 3, { x: '1' })],
+];
+
+for (const [name, split] of CASES) {
+  test(`a repaired surrogate pair stays in one text element, ${name}`, () => {
+    const values = repairedValues(split);
+    expect(values.join('')).toBe('ab \u{1F603}cd');
+    for (const value of values) expect(value).not.toMatch(LONE_SURROGATE);
+  });
+}

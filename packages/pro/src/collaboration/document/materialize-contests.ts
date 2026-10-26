@@ -32,6 +32,8 @@ export function dedupeIssues(issues: readonly RepairIssue[]): RepairIssue[] {
   return kept;
 }
 
+const MAX_EMBED_WINNERS = 4096;
+
 export class ListingContests {
   /** Whether this pass placed a child that another parent also lists. */
   contested = false;
@@ -45,6 +47,10 @@ export class ListingContests {
    * cannot grow it past the contests it actually keeps alive.
    */
   private lastResolution = new Map<LogicalId, LogicalId | null>();
+  /** Embeds an incremental pass found two texts showing, until a full pass decides them. */
+  private readonly embedsMet = new Set<LogicalId>();
+  /** Where a full pass showed each embed an incremental pass had found contested. */
+  private readonly embedWinners = new Map<LogicalId, LogicalId>();
 
   constructor(private readonly registry: DocumentRegistry) {}
 
@@ -99,20 +105,37 @@ export class ListingContests {
   }
 
   /**
-   * Note an embedded node a rebuilt paragraph is about to show. When an unchanged paragraph
-   * the pass reuses already shows it, two texts show one node, and only a full pass can say
-   * which shows it first: the reused one still holds it, and the pass would show it twice.
+   * Whether a rebuilt paragraph may show an embedded node. When an unchanged paragraph the
+   * pass reuses already shows it, two texts show one node, and only a full pass can say which
+   * shows it first: the reused one still holds it, and the pass would show it twice. Once a
+   * full pass has said the reused one does, the rebuilt one leaves it out with no new pass.
    */
   noteEmbed(
     id: LogicalId,
     paragraphId: LogicalId,
     shownUnder: ReadonlyMap<LogicalId, LogicalId>,
     rebuilt: ReadonlySet<LogicalId>
-  ): void {
+  ): boolean {
     const shownAt = shownUnder.get(id);
-    if (shownAt === undefined || shownAt === paragraphId || rebuilt.has(shownAt)) return;
+    if (shownAt === undefined || shownAt === paragraphId || rebuilt.has(shownAt)) return true;
+    if (this.embedWinners.get(id) === shownAt) return false;
     this.contested = true;
     this.matchesResolution = false;
+    this.embedsMet.add(id);
+    return true;
+  }
+
+  /** After a full pass: where each embed this pass contested shows. */
+  recordEmbeds(shownUnder: ReadonlyMap<LogicalId, LogicalId>): void {
+    for (const id of this.embedsMet) {
+      const winner = shownUnder.get(id);
+      if (winner === undefined) this.embedWinners.delete(id);
+      else this.embedWinners.set(id, winner);
+    }
+    this.embedsMet.clear();
+    // A peer that names one node in many texts cannot grow this past a bound; a dropped
+    // decision only costs one more full pass.
+    if (this.embedWinners.size > MAX_EMBED_WINNERS) this.embedWinners.clear();
   }
 
   /** Whether the incremental pass already gives the answer the last full pass decided. */

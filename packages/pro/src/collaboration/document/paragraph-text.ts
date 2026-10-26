@@ -745,12 +745,12 @@ function repairItems(
       return;
     }
     // The second half of a surrogate pair goes where its first half went: split between two
-    // text elements, neither half is a character XML can hold.
+    // text elements, neither half is a character XML can hold. Shared text never holds the
+    // halves apart, it replaces a pair a format splits, so the first half is repaired too.
     const previous = items[at - 1];
     if (
       item.kind === 'char' &&
       previous?.kind === 'char' &&
-      previous.attributes === item.attributes &&
       isLowSurrogate(item.value) &&
       isHighSurrogate(previous.value)
     ) {

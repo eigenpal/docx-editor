@@ -38,7 +38,7 @@ import {
   isContentControlNode,
 } from './tree-op-nodes.ts';
 import { afterTrailingFieldEnd, directParentOf } from './tree-op-field-end-site.ts';
-import { continuesRevisionOf } from './same-revision.ts';
+import { continuedRevisionRun } from './same-revision.ts';
 import {
   besideRestrictedControl,
   holdsContentControl,
@@ -673,14 +673,14 @@ function rawInsertionSite(
       const container = containers[index]!;
       if (!isInlineRunContainer(container) || offsets.spanOf(container)?.start !== offset) continue;
       const precedingId = preceding?.end === offset ? segmentAncestryNodeId(preceding) : null;
+      const holder = directParentOf(paragraph, container.id) ?? paragraph;
+      const continued =
+        precedingId !== null && !containsNode(container, precedingId)
+          ? continuedRevisionRun(holder, container, preceding!.runId)
+          : null;
+      if (continued) return { kind: 'appendToRun', run: continued };
       const followsContentInSameWrapper =
-        precedingId !== null &&
-        (containsNode(container, precedingId) ||
-          continuesRevisionOf(
-            directParentOf(paragraph, container.id) ?? paragraph,
-            container,
-            precedingId
-          ));
+        precedingId !== null && containsNode(container, precedingId);
       if (!followsContentInSameWrapper) outermostWrapper = index;
     }
     const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;

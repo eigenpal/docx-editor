@@ -93,19 +93,17 @@ test('typing between two wrappers of one insertion lands as typing inside one wr
       .children[0]!.id;
     const result = applyTreeOp(source, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
     if (!result.ok || !result.part) throw new Error(result.reason);
-    // Where the change's own runs and wrappers split is not what this asserts.
-    return paragraphOf(serializeOoxmlPart(result.part))
-      .replace(/<\/w:ins><w:ins [^>]*>/g, '')
-      .replace(/<\/w:t><\/w:r><w:r><w:t>/g, '');
+    // Only the wrapper boundary is not asserted: one change, in one wrapper or two.
+    return paragraphOf(serializeOoxmlPart(result.part)).replace(/<\/w:ins><w:ins [^>]*>/g, '');
   };
-  const one = typed(
-    `<w:r><w:t>ab</w:t></w:r>${insertion('<w:r><w:t>cd</w:t></w:r><w:r><w:t>ef</w:t></w:r>')}`
-  );
-  const wrappers = typed(
-    `<w:r><w:t>ab</w:t></w:r>${insertion('<w:r><w:t>cd</w:t></w:r>')}${insertion(
-      '<w:r><w:t>ef</w:t></w:r>'
-    )}`
-  );
-  expect(one).toContain('cdX');
-  expect(wrappers).toBe(one);
+  for (const format of ['', '<w:rPr><w:b/></w:rPr>']) {
+    const tail = `<w:r>${format}<w:t>ef</w:t></w:r>`;
+    const one = typed(`<w:r><w:t>ab</w:t></w:r>${insertion(`<w:r><w:t>cd</w:t></w:r>${tail}`)}`);
+    const wrappers = typed(
+      `<w:r><w:t>ab</w:t></w:r>${insertion('<w:r><w:t>cd</w:t></w:r>')}${insertion(tail)}`
+    );
+    // The typed text takes the format of the run before it, inside the change.
+    expect(one).toContain('<w:r><w:t>cdX</w:t></w:r>');
+    expect(wrappers).toBe(one);
+  }
 });

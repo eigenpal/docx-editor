@@ -44,7 +44,7 @@ export function pushDecidedContent(
     before.wrapper.kind === wrapper.kind &&
     sameRevision(before.wrapper, wrapper);
   const from = continues ? before.from : out.length;
-  for (const node of [...out.splice(from), ...kept]) {
+  for (const node of kept) {
     const previous = out.length > from ? out.pop() : undefined;
     const joined = previous === undefined ? [node] : joinedRuns(mint, previous, node);
     for (const entry of joined) out.push(entry);
