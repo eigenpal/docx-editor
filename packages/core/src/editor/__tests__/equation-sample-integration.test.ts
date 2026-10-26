@@ -1,3 +1,4 @@
+import { waitForDocumentSurface } from './wait-for-document.fixture.ts';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
@@ -206,13 +207,12 @@ describe('sample.docx equation integration', () => {
     expect(converged.pages.every((page, index) => page === incremental.pages[index])).toBe(true);
   });
 
-  test('moves ArrowRight across one atom and reports the painted activation rect', () => {
+  test('moves ArrowRight across one atom and reports the painted activation rect', async () => {
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({ container, document: sample() });
     mountedEditors.push(editor);
-    const surface = editor.surface;
-    if (!surface) throw new Error('sample.docx surface did not mount');
+    const surface = await waitForDocumentSurface(editor);
 
     const source = equationsOf(surface.session.part())[0]!;
     const equation = surface.equations.equationById(source.id);

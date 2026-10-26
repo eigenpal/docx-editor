@@ -1,3 +1,4 @@
+import { waitForDocumentSurface } from './wait-for-document.fixture.ts';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
@@ -58,8 +59,7 @@ test('a resize in a multi-section document publishes the new frame synchronously
     document: SAMPLE,
     imageDecodePort: testDecodePort(),
   });
-  if (!editor.surface) throw new Error('surface failed to mount');
-  const surface = editor.surface;
+  const surface = await waitForDocumentSurface(editor);
 
   // Let drawing resources settle the way the browser does, so the pass under test starts
   // from a fully settled layout instead of a resource-invalidation churn.
@@ -77,7 +77,7 @@ test('a resize in a multi-section document publishes the new frame synchronously
       if (fragment.kind !== 'paragraph') continue;
       for (const line of fragment.lines) {
         for (const drawing of line.drawings ?? []) {
-          if (drawing.width > 150) {
+          if (drawing.width > 150 && !drawing.chart && drawing.placeholderGraphicKind === null) {
             drawingId = drawing.drawingNodeId;
             paragraphId = drawing.paragraphId;
             start = drawing.start;

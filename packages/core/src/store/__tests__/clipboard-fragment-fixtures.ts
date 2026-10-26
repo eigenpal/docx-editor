@@ -6,6 +6,9 @@ import type { FragmentCoverage } from '../store/clipboard-fragment-extract.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { paragraphLength } from '../store/tree-op-segments.ts';
 
+/** Fixed rich document with clipboard-supported content; independent of the demo showcase. */
+export const RICH_CLIPBOARD_FIXTURE = `${import.meta.dir}/fixtures/clipboard-rich.docx`;
+
 export const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 export const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 export const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';

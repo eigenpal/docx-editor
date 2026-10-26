@@ -1,3 +1,4 @@
+import { waitForDocumentSurface } from './wait-for-document.fixture.ts';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
@@ -21,8 +22,7 @@ test('overlay sheet box matches the painted wrap-square drawing', async () => {
     document: SAMPLE,
     imageDecodePort: decodePort(),
   });
-  if (!editor.surface) throw new Error('surface failed to mount');
-  const surface = editor.surface;
+  const surface = await waitForDocumentSurface(editor);
 
   for (let attempt = 0; attempt < 80; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));

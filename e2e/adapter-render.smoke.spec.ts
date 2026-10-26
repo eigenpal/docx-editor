@@ -18,7 +18,7 @@ for (const adapter of ADAPTERS) {
 
     await expect(page.getByTestId('composed-mount')).toBeVisible();
     await expect(page.locator(PAINTED_PAGE).first()).toBeVisible();
-    await expect(page.locator(PAINTED_PAGE)).toHaveCount(27);
+    await expect(page.locator(PAINTED_PAGE)).toHaveCount(30);
     await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('sample');
 
     const link = page.getByRole('button', { name: /^Insert link/ });

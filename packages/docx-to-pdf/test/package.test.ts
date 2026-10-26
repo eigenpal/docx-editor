@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { PDFDocument } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
+import { docx, paragraph } from './fixture.ts';
 
 test('package supports public releases and the encoder does not reshape text', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -20,13 +21,15 @@ test('package supports public releases and the encoder does not reshape text', (
     .join('\n');
   expect(source).not.toMatch(/\.drawText\(|\.widthOfTextAtSize\(|\.layout\(/);
 });
-test('sample exports in strict mode and uses physical page geometry', async () => {
-  const source = new Uint8Array(
-    readFileSync(new URL('../../../examples/vite/public/sample.docx', import.meta.url))
+test('strict export preserves explicit physical page geometry', async () => {
+  const source = docx(
+    paragraph('Physical page geometry', '<w:rPr><w:rFonts w:ascii="Arial"/></w:rPr>') +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
   );
-  const result = await exportPdf(source);
+  const result = await exportPdf(source, { useSystemFonts: false });
   const pdf = await PDFDocument.load(result.bytes);
-  expect(result.pageCount).toBe(27);
+  expect(result.diagnostics).toEqual([]);
+  expect(result.pageCount).toBe(1);
   expect(pdf.getPage(0).getSize()).toEqual({ width: 612, height: 792 });
 });
 

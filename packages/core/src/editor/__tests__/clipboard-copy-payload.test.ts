@@ -5,15 +5,17 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import {
+  extractFragmentPackage,
   readOoxmlPackage,
   type FragmentCoverage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
+import { RICH_CLIPBOARD_FIXTURE } from '../../store/__tests__/clipboard-fragment-fixtures.ts';
 import { paragraphLength } from '../../store/store/tree-op-segments.ts';
 import { buildCopyFlavours } from '../clipboard-copy-payload.ts';
 import { fragmentFromHtml } from '../clipboard-fragment-codec.ts';
 
-const SAMPLE = `${import.meta.dir}/../../../../../examples/vite/public/sample.docx`;
+const SAMPLE = RICH_CLIPBOARD_FIXTURE;
 
 function samplePackage(): OoxmlPackage {
   const result = readOoxmlPackage(new Uint8Array(readFileSync(SAMPLE)));
@@ -131,4 +133,26 @@ describe('copy degrade tiers', () => {
     expect(flavours.html).not.toBeNull();
     expect(fragmentFromHtml(flavours.html!)).not.toBeNull();
   });
+});
+
+test('the drawing showcase reports unsupported content instead of silently omitting its charts', () => {
+  const loaded = readOoxmlPackage(
+    new Uint8Array(
+      readFileSync(`${import.meta.dir}/../../../../../examples/vite/public/sample.docx`)
+    )
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const pkg = loaded.package;
+  const coverage = fullBodyCoverage(pkg);
+  expect(extractFragmentPackage(pkg, coverage)).toEqual({
+    ok: false,
+    reason: 'unsupported-content',
+  });
+  expect(buildCopyFlavours({ pkg, coverage, text: 'selected text', cellRectangle: false })).toEqual(
+    {
+      text: 'selected text',
+      html: null,
+      reason: 'unsupported-content',
+    }
+  );
 });

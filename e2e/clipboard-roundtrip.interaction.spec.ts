@@ -1,6 +1,6 @@
 // The rich-clipboard north star, on the real keyboard path (rich-clipboard-fidelity 4.6).
 //
-// Select-all on the demo's default sample document, copy, New (blank document), paste —
+// Select-all on the fixed rich clipboard document, copy, New (blank document), paste —
 // through the browser's own clipboard, not a synthesized DataTransfer. The VERBATIM
 // comparison is the store-level oracle in
 // `packages/core/src/store/__tests__/clipboard-fragment.test.ts`; this spec proves the
@@ -10,6 +10,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { unzipSync, strFromU8 } from 'fflate';
+import { fileURLToPath } from 'node:url';
 
 const DEMO_URL = 'http://localhost:5273/?e2e=1';
 const PAGE = '.docx-page';
@@ -23,7 +24,10 @@ async function hookReady(page: Page): Promise<void> {
 }
 
 async function focusPages(page: Page): Promise<void> {
-  await page.locator(PAGE).first().click({ position: { x: 200, y: 120 } });
+  await page
+    .locator(PAGE)
+    .first()
+    .click({ position: { x: 200, y: 120 } });
 }
 
 async function savedEntries(page: Page): Promise<Record<string, Uint8Array>> {
@@ -46,14 +50,23 @@ async function newBlankDocument(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/sample.docx', (route) =>
+    route.fulfill({
+      path: fileURLToPath(
+        new URL(
+          '../packages/core/src/store/__tests__/fixtures/clipboard-rich.docx',
+          import.meta.url
+        )
+      ),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+  );
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector(PAGE, { timeout: 30_000 });
   await hookReady(page);
 });
 
-test('a select-all copy of the whole sample stays inside its latency budget', async ({
-  page,
-}) => {
+test('a select-all copy of the whole sample stays inside its latency budget', async ({ page }) => {
   // The copy-side sibling of the `huge-paste-50k` gate: flavour assembly (fragment zip,
   // interop HTML, base64) runs synchronously in the copy handler, so a whole-document
   // copy is the worst case. Generous ceiling — this is a regression tripwire, not a tuned
@@ -127,9 +140,7 @@ test('paste without formatting forces the plain lane on the same payload', async
     window.__DOCX_EDITOR_E2E__!.getEditor()!.exec({ type: 'pasteWithoutFormatting', text });
   });
 
-  await expect
-    .poll(async () => page.locator(PAGE).count(), { timeout: 30_000 })
-    .toBeGreaterThan(1);
+  await expect.poll(async () => page.locator(PAGE).count(), { timeout: 30_000 }).toBeGreaterThan(1);
 
   const entries = await savedEntries(page);
   const documentXml = strFromU8(entries['word/document.xml']!);

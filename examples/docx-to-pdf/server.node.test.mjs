@@ -5,6 +5,23 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { createPdfDemo } from './server.mjs';
+import { zipSync, strToU8 } from 'fflate';
+
+// Fixed test font names only; this helper does not accept document input.
+function fontDocument(font) {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}"/></w:rPr><w:t>Text</w:t></w:r></w:p></w:body></w:document>`
+    ),
+  });
+}
 
 // The worker imports `@docx-editor.dev/docx-to-pdf`, which resolves to the package's `dist/`.
 // Without a build the import fails inside the worker and every conversion answers 500, which
@@ -58,7 +75,7 @@ test(
     await once(app.server, 'listening');
     const base = `http://127.0.0.1:${app.server.address().port}`;
     try {
-      const bytes = await readFile(new URL('../vite/public/sample.docx', import.meta.url));
+      const bytes = fontDocument('Arial');
       const invalid = await send(`${base}/api/convert`, { method: 'POST', body: 'bad docx' });
       assert.equal(invalid.status, 400);
       // A fixed message: the open error's own text names the zip entry that failed, which is
@@ -71,8 +88,21 @@ test(
       assert.equal(result.status, 200);
       const json = await result.json();
       assert.ok(Buffer.from(json.pdf, 'base64').subarray(0, 5).equals(Buffer.from('%PDF-')));
-      assert.equal(json.pageCount, 27);
+      assert.equal(json.pageCount, 1);
       assert.deepEqual(json.diagnostics, []);
+      // The UI requests best effort for the showcase, which includes optional fonts.
+      // Keep strict success independent of changes to the shared sample document.
+      const sample = await readFile(new URL('../vite/public/sample.docx', import.meta.url));
+      const showcase = await send(`${base}/api/convert?fidelityPolicy=best-effort`, {
+        method: 'POST',
+        body: sample,
+      });
+      assert.equal(showcase.status, 200);
+      const preview = await showcase.json();
+      assert.ok(Buffer.from(preview.pdf, 'base64').subarray(0, 5).equals(Buffer.from('%PDF-')));
+      assert.equal(preview.pageCount, 30);
+      assert.ok(preview.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
+
       assert.equal(
         (await send(`${base}/api/convert?fidelityPolicy=invalid`, { method: 'POST', body: bytes }))
           .status,
@@ -231,19 +261,7 @@ test(
     skip: skipUnbuilt,
   },
   async () => {
-    const { zipSync, strToU8 } = await import('fflate');
-    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-    const unknownFont = zipSync({
-      '[Content_Types].xml': strToU8(
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
-      ),
-      '_rels/.rels': strToU8(
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="Sagona" w:hAnsi="Sagona"/></w:rPr><w:t>Text</w:t></w:r></w:p></w:body></w:document>`
-      ),
-    });
+    const unknownFont = fontDocument('Sagona');
     const app = await createPdfDemo({ production: true });
     app.server.listen(0, '127.0.0.1');
     await once(app.server, 'listening');

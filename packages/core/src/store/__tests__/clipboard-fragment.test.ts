@@ -1,6 +1,6 @@
 // Clipboard fragment extract + insert: the rich-clipboard-fidelity store lane.
 //
-// The north-star oracle lives here: extract the demo sample's full body, land it in a
+// The north-star oracle lives here: extract the fixed rich fixture's full body, land it in a
 // blank document sharing the sample's docDefaults, and compare normalized block
 // signatures. Normalization strips `w:sectPr`, revision-save noise and comment markers,
 // and maps every remapped identifier namespace (numbering, notes, bookmarks, rels,
@@ -26,6 +26,7 @@ import { normalizedBodySignatures, referencedNoteSignatures } from './clipboard-
 import { paragraphLength } from '../store/tree-op-segments.ts';
 import { attributeValueOf } from '../store/tree-op-nodes.ts';
 import {
+  RICH_CLIPBOARD_FIXTURE,
   bodyOf,
   buildPackage,
   fullBodyCoverage,
@@ -41,7 +42,7 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-const SAMPLE = `${import.meta.dir}/../../../../../examples/vite/public/sample.docx`;
+const SAMPLE = RICH_CLIPBOARD_FIXTURE;
 
 const samplePackage = (): OoxmlPackage => loadPackage(new Uint8Array(readFileSync(SAMPLE)));
 

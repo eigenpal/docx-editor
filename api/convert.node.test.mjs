@@ -94,16 +94,21 @@ test('one conversion at a time per instance, then a PDF with diagnostics', { ski
   const { default: handler } = await import('./convert.ts');
   const origin = { origin: `https://${HOST}` };
   const sample = await readFile(new URL('../examples/vite/public/sample.docx', import.meta.url));
-  const first = call(handler, { headers: origin, body: sample });
+  const options = {
+    url: '/api/convert?fidelityPolicy=best-effort',
+    headers: origin,
+    body: sample,
+  };
+  const first = call(handler, options);
   // Arrives while the first request is still reading its body.
-  const second = await call(handler, { headers: origin, body: sample });
+  const second = await call(handler, options);
   assert.equal(second.status, 503);
   const result = await first;
   assert.equal(result.status, 200);
   assert.equal(result.json.ok, true);
-  assert.equal(result.json.pageCount, 27);
+  assert.equal(result.json.pageCount, 30);
   assert.ok(result.json.pdf.startsWith('JVBER'), 'base64 PDF');
-  assert.ok(Array.isArray(result.json.diagnostics));
+  assert.ok(result.json.diagnostics.some((diagnostic) => diagnostic.code === 'font-substitution'));
 });
 
 test(
