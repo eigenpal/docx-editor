@@ -16,7 +16,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-DOCX Editor provides a visual document editor, a headless layout engine, and PDF export. You can edit documents with real-time collaboration and tracked changes in React or Vue. The same engine lays out documents in browsers and on servers.
+**DOCX Editor** is a complete document ecosystem featuring a **WYSIWYG editor** with real-time collaboration, tracked changes, and rich editing capabilities, a **headless layout engine** that runs on both client and server, and a **PDF generation engine**. Together, they provide a unified foundation for document editing, rendering, and export.
 
 [Live demo](https://docx-editor.dev/editor) | [Documentation](https://www.docx-editor.dev/docs) | [Roadmap](https://github.com/orgs/eigenpal/projects/2)
 
@@ -58,34 +58,6 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
 | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) | Send anonymous diagnostics and metrics to Sentry, OpenTelemetry, Prometheus, or a log service. No document content or personal data is sent. |
 
-Advanced drawing rendering, review, collaboration, the Editor API, PDF export, and telemetry require packages under the EigenPal Pro License.
-
-### Right-to-left and CJK text
-
-Use Arabic or Hebrew translations to mirror the editor interface in React and Vue. Toolbars, menus, dialogs, navigation, and review controls follow the interface direction. Document text keeps its own direction, including mixed Arabic, Hebrew, and Latin text.
-
-Pass the `ar` or `he` catalog through `i18n` to select translations and interface direction. The `locale` prop alone does not select translations or mirror controls.
-
-Chinese, Japanese, and Korean (CJK) text uses document fonts independently of the interface language. Configure fonts for the browser and PDF export separately.
-
-For setup and limits, see [Right-to-left support](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) and [Chinese, Japanese, and Korean text](https://www.docx-editor.dev/docs/2.x/guides/cjk).
-
-### DrawingML and SmartArt
-
-Core renders supported DrawingML shapes, connectors, groups, drawing canvases, and SmartArt diagrams with saved drawings. Add `drawingModule()` for charts, SmartArt layout without saved drawings, advanced effects, WordArt, and metafile rendering.
-
-Create the module before you open documents, and pass it through the editor's `modules` prop:
-
-```ts
-import { drawingModule } from '@docx-editor.dev/pro/drawing';
-
-const modules = [drawingModule({ licenseKey })];
-```
-
-The module requires the EigenPal Pro License. Supported drawings render in the editor. Unsupported visible drawings use saved fallback content or a placeholder. In React and Vue, use `DocxEditor.UnsupportedElement` to provide a custom preview.
-
-Rendering support does not imply diagram editing support. For setup, supported formats, and limits, see [Advanced drawing rendering](https://www.docx-editor.dev/docs/2.x/pro/drawing).
-
 ## Packages
 
 | Package | Description | Docs |
@@ -98,7 +70,7 @@ Rendering support does not imply diagram editing support. For setup, supported f
 | [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output. | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) |
 | [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) | Convert DOCX to PDF on Node.js. | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) |
 | [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for the editor and PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/guides/cjk#packaged-browser-fallback) |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Advanced drawing rendering, tracked changes, comments, collaboration, and custom nodes. | [Pro modules](https://www.docx-editor.dev/docs/2.x/pro) |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, custom nodes, and advanced drawing rendering. | [Pro modules](https://www.docx-editor.dev/docs/2.x/pro) |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
 | [`@docx-editor.dev/telemetry`](https://www.npmjs.com/package/@docx-editor.dev/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers. | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) |
 
