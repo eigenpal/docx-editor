@@ -98,6 +98,23 @@ export class ListingContests {
     }
   }
 
+  /**
+   * Note an embedded node a rebuilt paragraph is about to show. When an unchanged paragraph
+   * the pass reuses already shows it, two texts show one node, and only a full pass can say
+   * which shows it first: the reused one still holds it, and the pass would show it twice.
+   */
+  noteEmbed(
+    id: LogicalId,
+    paragraphId: LogicalId,
+    shownUnder: ReadonlyMap<LogicalId, LogicalId>,
+    rebuilt: ReadonlySet<LogicalId>
+  ): void {
+    const shownAt = shownUnder.get(id);
+    if (shownAt === undefined || shownAt === paragraphId || rebuilt.has(shownAt)) return;
+    this.contested = true;
+    this.matchesResolution = false;
+  }
+
   /** Whether the incremental pass already gives the answer the last full pass decided. */
   decided(): boolean {
     if (!this.matchesResolution) return false;
