@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Data label rules shared by every chart type: a point label's own text, the wrap at a fifth
-// of the chart's width, and labels moved by hand; and the 3-D pie's automatic plot area.
+// of the chart's width, and labels moved by hand; and the 3-D pie's plot area and tilt.
 
 import { expect, test } from 'bun:test';
 import {
@@ -53,7 +53,7 @@ function pie(
   values: readonly number[],
   names: readonly string[],
   points: Readonly<Record<number, PointLabel>> = {},
-  threeD = false
+  threeD: boolean | { readonly rotX: number; readonly perspective: number } = false
 ): DrawingProjection {
   const own = Object.entries(points)
     .map(([index, label]) => pointLabel(Number(index), label))
@@ -67,10 +67,12 @@ function pie(
     `<c:${kind}><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>` +
     `<c:tx>${strCache(['Share'])}</c:tx>${labels}<c:cat>${strCache([...names])}</c:cat>` +
     `<c:val>${numCache(values)}</c:val></c:ser></c:${kind}>`;
+  const view = threeD === true ? { rotX: 30, perspective: 30 } : threeD || null;
   const space = chartSpace(plot).replace(
     '<c:chart>',
-    threeD
-      ? '<c:chart><c:view3D><c:rotX val="30"/><c:perspective val="30"/></c:view3D>'
+    view
+      ? `<c:chart><c:view3D><c:rotX val="${view.rotX}"/><c:perspective val="${view.perspective}"/>` +
+          '</c:view3D>'
       : '<c:chart>'
   );
   const projections = projectDrawingsInPackage(chartPackage(space));
@@ -125,16 +127,18 @@ test('a label moved by hand keeps its offset, as shares of the chart size', () =
   }
 });
 
-test('an automatic 3-D pie plot keeps a sixteenth of the chart clear and the disc a share of it', () => {
-  const projection = pie([60, 40], ['Alpha', 'Bravo'], {}, true);
+/** The disc's outline points in points: every coloured fill but the chart's white background. */
+function discPoints(projection: DrawingProjection) {
   const points = projection
-    // The chart space's white background is not part of the disc.
     .vectorShape!.components.filter(
       (component) => component.fillHex !== null && component.fillHex !== 'FFFFFF'
     )
     .flatMap((component) => component.subpathsEmu.flat());
-  const ys = points.map((point) => point.y / EMU);
-  const xs = points.map((point) => point.x / EMU);
+  return { xs: points.map((point) => point.x / EMU), ys: points.map((point) => point.y / EMU) };
+}
+
+test('an automatic 3-D pie plot keeps a sixteenth of the chart clear and the disc a share of it', () => {
+  const { xs, ys } = discPoints(pie([60, 40], ['Alpha', 'Bravo'], {}, true));
   // The chart box is 11 points in from the edge, the plot a further sixteenth of the chart.
   const plotTop = 11 + HEIGHT / 16;
   const plotHeight = HEIGHT - 22 - HEIGHT / 8;
@@ -150,4 +154,19 @@ test('an automatic 3-D pie plot keeps a sixteenth of the chart clear and the dis
   );
   expect((Math.max(...ys) + Math.min(...ys)) / 2).toBeCloseTo(plotTop + 0.47 * plotHeight, 0);
   expect((Math.max(...xs) + Math.min(...xs)) / 2).toBeCloseTo(WIDTH / 2, 0);
+});
+
+test('perspective lowers the tilt a 3-D pie is seen at, as measured', () => {
+  // Measured height-to-width ratios of the whole disc, top face and rim.
+  for (const [rotX, perspective, ratio] of [
+    [10, 30, 0.265],
+    [30, 0, 0.585],
+    [30, 30, 0.57],
+    [30, 80, 0.495],
+    [50, 30, 0.81],
+  ] as const) {
+    const { xs, ys } = discPoints(pie([60, 40], ['Alpha', 'Bravo'], {}, { rotX, perspective }));
+    const shown = (Math.max(...ys) - Math.min(...ys)) / (Math.max(...xs) - Math.min(...xs));
+    expect(Math.abs(shown - ratio)).toBeLessThan(0.01);
+  }
 });

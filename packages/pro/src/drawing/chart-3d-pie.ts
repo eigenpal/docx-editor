@@ -3,12 +3,12 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// 3-D pie plots: the pie as a disc a quarter of its radius thick, tilted by rotX and seen in
-// perspective, its slices clockwise from rotY. Tops keep the slice colour; the rim darkens
+// 3-D pie plots: the pie as a disc a fifth of its radius thick, tilted by rotX less a share for
+// perspective and seen square on, its slices clockwise from rotY. Tops keep the slice colour; the rim darkens
 // towards the right. The disc is scaled to a share of the plot area, a little above its middle.
 
 import { categoryLabel } from './chart-number-format.ts';
-import { CHART_EYE, FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
+import { FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
 import type { Box } from './chart-axes.ts';
 import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
 import { childVal, type ChartModel, type ChartPlot } from './chart-model.ts';
@@ -19,9 +19,9 @@ import { dataLabelBlock, keepInChart, movedLabel } from './chart-data-label.ts';
 /** World radius; the projection scales it to the plot. */
 const R = 100;
 /** Disc thickness, as a share of the radius. */
-const THICKNESS = 0.24;
-/** Eye distance at perspective 30, as a multiple of the radius. */
-const PIE_EYE = 5;
+const THICKNESS = 0.196;
+/** The tilt shown is rotX times the cosine of this many degrees per perspective unit. */
+const PERSPECTIVE_FLATTEN = 0.46;
 /** Degrees per rim segment. */
 const STEP = 3;
 
@@ -78,8 +78,12 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
     0
   );
   if (!(total > 0)) return;
-  const view = { ...readView3D(context.model, 'pie'), rotY: 0, rightAngles: false };
-  const start = readView3D(context.model, 'pie').rotY;
+  const authored = readView3D(context.model, 'pie');
+  // Perspective does not bend the disc; it lowers the tilt the disc is seen at.
+  const tilt =
+    authored.rotX * Math.cos((authored.perspective * PERSPECTIVE_FLATTEN * Math.PI) / 180);
+  const view = { ...authored, rotX: tilt, rotY: 0, rightAngles: false, perspective: 0 };
+  const start = authored.rotY;
   const t = R * THICKNESS;
   const centre = { x: R, z: R };
   const count = series.values.length;
@@ -132,18 +136,11 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
       });
     }
   }
-  const bounds = context.bounds;
   const projection = fitProjection(
     view,
     { w: 2 * R, h: t, d: 2 * R },
-    discBox(box, context.placed ? undefined : bounds),
-    bounds
-      ? {
-          eyePoints: CHART_EYE * Math.max(bounds.r - bounds.l, bounds.b - bounds.t),
-          corners,
-          exact: true,
-        }
-      : { eyeBase: PIE_EYE * R, corners, exact: true }
+    discBox(box, context.placed ? undefined : context.bounds),
+    { corners, exact: true }
   );
 
   const faces = new FaceList();
