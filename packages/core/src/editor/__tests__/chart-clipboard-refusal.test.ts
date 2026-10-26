@@ -120,6 +120,8 @@ describe('copy and cut of a selection with a chart', () => {
             html: null,
             reason: 'chart-content',
           });
+          // The keyboard path reports the same sentence hosts translate.
+          expect(editor.snapshot().lastRejection).toBe(CHART_CLIPBOARD_REASON);
         }
         expect(written).toEqual([]);
       } finally {
@@ -195,6 +197,10 @@ describe('fragments with a chart', () => {
           code: 'unsupported',
           reason: CHART_CLIPBOARD_REASON,
         });
+        expect(texts(editor)).toEqual(before);
+        // The paste event path refuses with the same sentence.
+        expect(editor.surface!.pasteRich('AZ', html)).toBe(false);
+        expect(editor.snapshot().lastRejection).toBe(CHART_CLIPBOARD_REASON);
         expect(texts(editor)).toEqual(before);
       } finally {
         editor.destroy();

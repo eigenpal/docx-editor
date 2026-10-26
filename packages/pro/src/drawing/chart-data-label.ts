@@ -13,7 +13,14 @@ import {
   type ShapeSchemeColorResolver,
 } from '@docx-editor.dev/core/store';
 import type { Box } from './chart-axes.ts';
-import { titleParagraphs, type DataLabelMove, type DataLabelSpec } from './chart-labels.ts';
+import {
+  dataLabelField,
+  dataLabelText,
+  titleParagraphs,
+  type DataLabelMove,
+  type DataLabelSpec,
+  type DataLabelValues,
+} from './chart-labels.ts';
 import { child } from './chart-model.ts';
 import {
   estimateTextWidth,
@@ -35,7 +42,7 @@ export interface DataLabelBlock {
   /** Estimated width of the widest line once wrapped. */
   readonly width: number;
   readonly height: number;
-  /** Width of the frame the text is set in: never wider than the wrap width. */
+  /** Width of the frame the text is set in: the wrap width when the text wraps. */
   readonly frame: number;
 }
 
@@ -82,11 +89,11 @@ function linesOf(paragraphs: readonly (readonly ChartTextRun[])[]): ChartTextRun
   return out.slice(0, MAX_LINES);
 }
 
-/** Lines one line of runs wraps into at `limit`, and the widest of them. */
+/** Lines one line of runs wraps into at `limit`, the widest of them, and the widest word. */
 function wrapLine(
   runs: readonly ChartTextRun[],
   limit: number | null
-): { count: number; widest: number } {
+): { count: number; widest: number; word: number } {
   const words: { width: number; space: number }[] = [];
   for (const run of runs) {
     for (const piece of run.text.match(/\S+|\s+/g) ?? []) {
@@ -98,12 +105,14 @@ function wrapLine(
       }
     }
   }
-  if (words.length === 0) return { count: 1, widest: 0 };
+  if (words.length === 0) return { count: 1, widest: 0, word: 0 };
   let count = 1;
   let widest = 0;
   let line = 0;
   let pending = 0;
+  let longest = 0;
   for (const word of words) {
+    longest = Math.max(longest, word.width);
     if (line > 0 && limit !== null && line + pending + word.width > limit) {
       widest = Math.max(widest, line);
       count += 1;
@@ -113,41 +122,52 @@ function wrapLine(
     }
     pending = word.space;
   }
-  return { count, widest: Math.max(widest, line) };
+  return { count, widest: Math.max(widest, line), word: longest };
 }
 
-/** A data label's paragraphs and size: its own text, or `text` in `style`. */
+/**
+ * A data label's paragraphs and size: its own text, with its fields filled from `values`, or
+ * the parts it shows in `style`.
+ */
 export function dataLabelBlock(
   spec: DataLabelSpec,
-  text: string,
+  values: DataLabelValues,
   style: ChartTextStyle,
   chartWidth: number | null,
   resolveSchemeColor?: ShapeSchemeColorResolver
 ): DataLabelBlock {
+  const text = dataLabelText(spec, values);
   const paragraphs: readonly (readonly ChartTextRun[])[] = spec.custom
-    ? titleParagraphs(spec.custom, style, text, resolveSchemeColor)
+    ? titleParagraphs(
+        spec.custom,
+        style,
+        text,
+        resolveSchemeColor,
+        (type, saved) => dataLabelField(spec, values, type) ?? saved
+      )
     : [[{ text, style }]];
   const limit = wrapWidth(spec, chartWidth);
   let width = 0;
   let height = 0;
+  let wraps = false;
+  let word = 0;
   for (const line of linesOf(paragraphs)) {
     const wrapped = wrapLine(line, limit);
     width = Math.max(width, wrapped.widest);
+    word = Math.max(word, wrapped.word);
+    wraps ||= wrapped.count > 1;
     const tallest = Math.max(lineHeight(style), ...line.map((run) => lineHeight(run.style)));
     height += wrapped.count * tallest;
   }
-  const natural = width * 1.3 + style.sizePt * 2;
-  return {
-    paragraphs,
-    width,
-    height,
-    frame: limit === null ? natural : Math.min(natural, limit),
-  };
+  // A label that fits keeps a frame wider than its estimate, so a misestimate never breaks
+  // a line; one that wraps is set at the wrap width, never narrower than its widest word.
+  const frame = limit !== null && wraps ? Math.max(limit, word) : width * 1.3 + style.sizePt * 2;
+  return { paragraphs, width, height, frame };
 }
 
 /**
- * The centre of a label moved by hand: an offset of shares of the chart's size from its
- * natural centre (`x`, `y`), or with `edge` its top left corner at those shares.
+ * The centre of a label moved by hand, per axis: an offset of shares of the chart's size from
+ * its natural centre (`x`, `y`), or in edge mode its left or top side at that share.
  */
 export function movedLabel(
   move: DataLabelMove | null,
@@ -160,14 +180,11 @@ export function movedLabel(
   if (!move || !chart) return { x, y, moved: false };
   const w = chart.r - chart.l;
   const h = chart.b - chart.t;
-  if (move.edge) {
-    return {
-      x: chart.l + move.x * w + width / 2,
-      y: chart.t + move.y * h + height / 2,
-      moved: true,
-    };
-  }
-  return { x: x + move.x * w, y: y + move.y * h, moved: true };
+  return {
+    x: move.xEdge ? chart.l + move.x * w + width / 2 : x + move.x * w,
+    y: move.yEdge ? chart.t + move.y * h + height / 2 : y + move.y * h,
+    moved: true,
+  };
 }
 
 /** A label centre moved so that its text and side insets stay inside the chart. */

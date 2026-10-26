@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { categoryLabel } from './chart-number-format.ts';
 import type { Box } from './chart-axes.ts';
 import { dataLabelBlock } from './chart-data-label.ts';
-import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
+import { dataLabelFor, elementText, type DataLabelValues } from './chart-labels.ts';
 import { children, childVal, type ChartPlot } from './chart-model.ts';
 import type { PieContext } from './chart-pie.ts';
 import { slice, type Point } from './chart-scene.ts';
@@ -21,7 +21,6 @@ import {
   styleSeriesColor,
   type ChartStroke,
 } from './chart-style.ts';
-import { lineHeight, textBlock } from './chart-text.ts';
 import { child } from './chart-model.ts';
 
 const DEFAULT_SERIES_LINE: ChartStroke = {
@@ -105,20 +104,21 @@ export function paintOfPie(plot: ChartPlot, box: Box, context: PieContext): void
   const secondLeft = left + diameter * (1 + gapRatio);
   const resolve = context.look.resolveSchemeColor;
 
+  // The combined slice (index `count`) is "Other" and has no cell of its own.
+  const valuesOf = (index: number, value: number): DataLabelValues => ({
+    value,
+    percent: value / total,
+    category: index < count ? categoryLabel(series, index, context.date1904) : 'Other',
+    seriesName: series.name,
+    seriesFormat: series.formatCode,
+    date1904: context.date1904,
+    cell: index < count ? (series.labelRange?.[index] ?? null) : null,
+  });
   const label = (index: number, value: number, x: number, y: number, align: 'ctr' | 'l') => {
     const spec = dataLabelFor(plot, series, index);
     if (!spec) return;
     const style = elementText(context.baseText, spec.txPr, resolve);
-    const text = dataLabelText(
-      spec,
-      value,
-      value / total,
-      index < count ? categoryLabel(series, index, context.date1904) : 'Other',
-      series.name,
-      series.formatCode,
-      context.date1904
-    );
-    const block = dataLabelBlock(spec, text, style, null, resolve);
+    const block = dataLabelBlock(spec, valuesOf(index, value), style, null, resolve);
     const lineBox = block.height;
     const frame = block.frame;
     context.labels.push({
@@ -143,13 +143,11 @@ export function paintOfPie(plot: ChartPlot, box: Box, context: PieContext): void
     if (!spec) return;
     const radians = (middle * Math.PI) / 180;
     const style = elementText(context.baseText, spec.txPr, resolve);
-    const block = textBlock(
-      dataLabelText(spec, value, value / total, null, null, series.formatCode, context.date1904),
-      style
-    );
+    // Measured from the text the label paints.
+    const block = dataLabelBlock(spec, valuesOf(index, value), style, null, resolve);
     const extent =
       (block.width / 2) * Math.abs(Math.sin(radians)) +
-      ((lineHeight(style) * block.lines) / 2) * Math.abs(Math.cos(radians));
+      (block.height / 2) * Math.abs(Math.cos(radians));
     const distance = Math.max(r * 0.3, r - extent - 4);
     label(
       index,

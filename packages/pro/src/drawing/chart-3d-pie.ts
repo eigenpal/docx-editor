@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { categoryLabel } from './chart-number-format.ts';
 import { FaceList, fitProjection, readView3D, shade, type Vec3 } from './chart-3d.ts';
 import type { Box } from './chart-axes.ts';
-import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
+import { dataLabelFor, elementText } from './chart-labels.ts';
 import { childVal, type ChartModel, type ChartPlot } from './chart-model.ts';
 import type { PieContext } from './chart-pie.ts';
 import { seriesLook, variesByPoint } from './chart-series.ts';
@@ -22,6 +22,7 @@ const R = 100;
 const THICKNESS = 0.196;
 /** The tilt shown is rotX times the cosine of this many degrees per perspective unit. */
 const PERSPECTIVE_FLATTEN = 0.46;
+const MAX_PERSPECTIVE = 80;
 /** Degrees per rim segment. */
 const STEP = 3;
 
@@ -80,8 +81,9 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
   if (!(total > 0)) return;
   const authored = readView3D(context.model, 'pie');
   // Perspective does not bend the disc; it lowers the tilt the disc is seen at.
-  const tilt =
-    authored.rotX * Math.cos((authored.perspective * PERSPECTIVE_FLATTEN * Math.PI) / 180);
+  // Measured up to perspective 80; a larger one is seen as 80, so the tilt never turns over.
+  const perspective = Math.min(authored.perspective, MAX_PERSPECTIVE);
+  const tilt = authored.rotX * Math.cos((perspective * PERSPECTIVE_FLATTEN * Math.PI) / 180);
   const view = { ...authored, rotX: tilt, rotY: 0, rightAngles: false, perspective: 0 };
   const start = authored.rotY;
   const t = R * THICKNESS;
@@ -205,18 +207,18 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
     const spec = dataLabelFor(plot, series, slice.index);
     if (!spec) continue;
     const style = elementText(context.baseText, spec.txPr, context.look.resolveSchemeColor);
-    const text = dataLabelText(
-      spec,
-      slice.value,
-      slice.value / total,
-      categoryLabel(series, slice.index, context.date1904),
-      series.name,
-      series.formatCode,
-      context.date1904
-    );
+    const values = {
+      value: slice.value,
+      percent: slice.value / total,
+      category: categoryLabel(series, slice.index, context.date1904),
+      seriesName: series.name,
+      seriesFormat: series.formatCode,
+      date1904: context.date1904,
+      cell: series.labelRange?.[slice.index] ?? null,
+    };
     const block = dataLabelBlock(
       spec,
-      text,
+      values,
       style,
       context.bounds ? context.bounds.r - context.bounds.l : null,
       context.look.resolveSchemeColor
@@ -226,7 +228,9 @@ export function paintPie3D(plot: ChartPlot, box: Box, context: Pie3DContext): vo
     const radians = (middle * Math.PI) / 180;
     // An outside label touches the disc's outline with its nearest corner: the top rim on the
     // far half, the bottom rim on the near half. A label moved by hand is moved from there.
-    const outside = spec.position === 'outEnd' || (spec.moved !== null && !spec.moved.edge);
+    const outside =
+      spec.position === 'outEnd' ||
+      (spec.moved !== null && !(spec.moved.xEdge && spec.moved.yEdge));
     const rim = Math.cos(radians) >= 0 ? t : 0;
     const anchor = projection.point(
       outside ? at(slice, middle, R, rim) : at(slice, middle, R * 0.65, t)

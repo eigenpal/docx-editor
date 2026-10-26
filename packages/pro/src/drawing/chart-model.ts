@@ -96,6 +96,8 @@ export interface ChartSeries {
   readonly trendlines: readonly OoxmlElement[];
   /** `c:errBars` elements, in order. */
   readonly errorBars: readonly OoxmlElement[];
+  /** Cached text of the cells the data labels show (the 2012 label range extension). */
+  readonly labelRange: readonly (string | null)[] | null;
 }
 
 export interface ChartPlot {
@@ -395,7 +397,25 @@ function readSeries(ser: OoxmlElement, kind: ChartPlotKind, budget: Budget): Cha
       kind === 'bubble' ? (readData(child(ser, 'bubbleSize'), budget).numbers ?? null) : null,
     trendlines: children(ser, 'trendline').slice(0, 8),
     errorBars: children(ser, 'errBars').slice(0, 2),
+    labelRange: cachePoints(labelRangeCache(ser), budget),
   };
+}
+
+/** The element of `parent` named `localName` in any namespace: extension elements. */
+function anyChild(parent: OoxmlElement | null | undefined, localName: string): OoxmlElement | null {
+  for (const node of parent?.children ?? []) {
+    if (isElement(node) && node.localName === localName) return node;
+  }
+  return null;
+}
+
+/** `c15:dlblRangeCache` of a series: the cached cells its data labels show. */
+function labelRangeCache(ser: OoxmlElement): OoxmlElement | null {
+  for (const ext of children(child(ser, 'extLst'), 'ext')) {
+    const cache = anyChild(anyChild(ext, 'datalabelsRange'), 'dlblRangeCache');
+    if (cache) return cache;
+  }
+  return null;
 }
 
 const GROUPINGS = new Set(['clustered', 'stacked', 'percentStacked', 'standard']);

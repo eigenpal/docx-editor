@@ -16,7 +16,7 @@ import {
   type ValueInfo,
 } from './chart-axes.ts';
 import { dataLabelBlock } from './chart-data-label.ts';
-import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
+import { dataLabelFor, elementText } from './chart-labels.ts';
 import { child, type ChartModel, type ChartPlot } from './chart-model.ts';
 import { formatChartNumber } from './chart-number-format.ts';
 import { autoValueScale } from './chart-scale.ts';
@@ -164,16 +164,16 @@ export function paintRadar(plots: readonly ChartPlot[], box: Box, context: Radar
         const spec = point ? dataLabelFor(plot, series, index) : null;
         if (!spec || !point) continue;
         const style = elementText(context.baseText, spec.txPr, resolve);
-        const text = dataLabelText(
-          spec,
-          series.values[index]!,
-          null,
-          categories.labels[index] ?? null,
-          series.name,
-          series.formatCode,
-          model.date1904
-        );
-        const block = dataLabelBlock(spec, text, style, null, resolve);
+        const values = {
+          value: series.values[index]!,
+          percent: null,
+          category: categories.labels[index] ?? null,
+          seriesName: series.name,
+          seriesFormat: series.formatCode,
+          date1904: model.date1904,
+          cell: series.labelRange?.[index] ?? null,
+        };
+        const block = dataLabelBlock(spec, values, style, null, resolve);
         const height = block.height;
         const frame = block.frame;
         pending.push({

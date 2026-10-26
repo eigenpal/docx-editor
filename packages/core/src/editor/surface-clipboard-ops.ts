@@ -1,8 +1,11 @@
 import { equationPlainText } from './surface-equations.ts';
 import {
+  CHART_CLIPBOARD_REASON,
+  fragmentRefusalOf,
   selectionContainsClipboardChart,
   selectionContainsClipboardObject,
 } from './clipboard-object-selection.ts';
+import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
@@ -271,16 +274,17 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         ? session.part()
         : partOfNodeId(session, selected[0] ?? range.from.paragraphId);
     if (copyPart && selectionContainsClipboardObject(copyPart, ranges)) {
+      const chart = selectionContainsClipboardChart(copyPart, ranges);
+      // A chart refuses with the sentence hosts translate, as the copy and cut commands do.
       deps.commit(
         () =>
           ({
             committed: false,
             rejected: true,
             opCount: 0,
-            reason: 'unsupported-content',
+            reason: chart ? CHART_CLIPBOARD_REASON : 'unsupported-content',
           }) as TreeApplyResult
       );
-      const chart = selectionContainsClipboardChart(copyPart, ranges);
       return { text: '', html: null, reason: chart ? 'chart-content' : 'unsupported-content' };
     }
     // Plain text is the proposed text: deleted words and deleted paragraph marks stay out, as
@@ -420,13 +424,16 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       { html, text, forcePlain }
     );
     if (lane === 'unsupported-content') {
+      // Read again only on refusal: a chart refuses with the sentence hosts translate.
+      const fragment = html ? fragmentFromHtml(html) : null;
+      const chart = fragment !== null && fragmentRefusalOf(fragment.bytes) === 'chart';
       deps.commit(
         () =>
           ({
             committed: false,
             rejected: true,
             opCount: 0,
-            reason: 'unsupported-content',
+            reason: chart ? CHART_CLIPBOARD_REASON : 'unsupported-content',
           }) as TreeApplyResult
       );
       return false;

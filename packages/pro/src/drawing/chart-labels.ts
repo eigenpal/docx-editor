@@ -68,14 +68,16 @@ export function elementText(
 }
 
 /**
- * The paragraphs of a title (`c:title`): its rich text, its cached reference text, or
- * `fallback` when it holds neither.
+ * The paragraphs of a title (`c:title`) or data label (`c:dLbl`): its rich text, its cached
+ * reference text, or `fallback` when it holds neither. `field` gives a field's (`a:fld`) text
+ * from its type and saved text.
  */
 export function titleParagraphs(
   title: OoxmlElement,
   style: ChartTextStyle,
   fallback: string | null,
-  resolveSchemeColor?: ShapeSchemeColorResolver
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  field?: (type: string | undefined, saved: string) => string
 ): ChartTextRun[][] {
   const tx = child(title, 'tx');
   const rich = child(tx, 'rich');
@@ -105,6 +107,9 @@ export function titleParagraphs(
         const t = findDirectChild(run.children, { namespaceUri: A, localName: 't' });
         let text = '';
         for (const node of t?.children ?? []) if (node.kind === 'textValue') text += node.value;
+        if (run.localName === 'fld' && field) {
+          text = field(schemaAttributeValue(run.attributes, 'type'), text);
+        }
         current.push({ text, style: applyRunLayer(paragraphStyle, rPr, resolveSchemeColor) });
       }
       paragraphs.push(current);
@@ -143,13 +148,14 @@ export interface DataLabelSpec {
 }
 
 /**
- * A point label's manual layout: by default an offset from where the label would sit, or with
- * `edge` the position of its top left corner.
+ * A point label's manual layout, per axis: by default an offset from where the label would sit,
+ * or in edge mode the position of its left or top side.
  */
 export interface DataLabelMove {
   readonly x: number;
   readonly y: number;
-  readonly edge: boolean;
+  readonly xEdge: boolean;
+  readonly yEdge: boolean;
 }
 
 function readMove(element: OoxmlElement): DataLabelMove | null {
@@ -162,9 +168,10 @@ function readMove(element: OoxmlElement): DataLabelMove | null {
   const x = share('x');
   const y = share('y');
   if (x === null && y === null) return null;
-  const edge = childVal(manual, 'xMode') === 'edge' && childVal(manual, 'yMode') === 'edge';
-  if (edge && (x === null || y === null)) return null;
-  return { x: x ?? 0, y: y ?? 0, edge };
+  // An edge position needs its value; a missing offset is no offset.
+  const xEdge = childVal(manual, 'xMode') === 'edge' && x !== null;
+  const yEdge = childVal(manual, 'yMode') === 'edge' && y !== null;
+  return { x: x ?? 0, y: y ?? 0, xEdge, yEdge };
 }
 
 function labelFlags(element: OoxmlElement, inherited: DataLabelSpec | null): DataLabelSpec | null {
@@ -223,29 +230,62 @@ export function dataLabelFor(
   return spec.separator === null ? { ...spec, separator: round ? '\n' : ', ' } : spec;
 }
 
-/** The text of one data label. */
-export function dataLabelText(
+/** What one point's data label can show, before formatting. */
+export interface DataLabelValues {
+  readonly value: number;
+  /** The point's share of its series, or null where shares do not apply. */
+  readonly percent: number | null;
+  readonly category: string | null;
+  readonly seriesName: string | null;
+  readonly seriesFormat: string | null;
+  readonly date1904: boolean;
+  /** The cached cell text the label range extension gives this point. */
+  readonly cell?: string | null;
+}
+
+/**
+ * The text a data label field (`a:fld` type) stands for, or null for a type with no generated
+ * text, which keeps the text saved in the field.
+ */
+export function dataLabelField(
   spec: DataLabelSpec,
-  value: number,
-  percent: number | null,
-  category: string | null,
-  seriesName: string | null,
-  seriesFormat: string | null,
-  date1904: boolean
-): string {
+  values: DataLabelValues,
+  type: string | undefined
+): string | null {
+  switch (type) {
+    case 'VALUE':
+      return formatChartNumber(
+        values.value,
+        spec.formatCode ?? values.seriesFormat,
+        values.date1904
+      );
+    case 'PERCENTAGE':
+      return values.percent === null
+        ? ''
+        : formatChartNumber(
+            values.percent,
+            spec.formatCode && spec.formatCode.includes('%') ? spec.formatCode : '0%',
+            values.date1904
+          );
+    case 'CATEGORYNAME':
+      return values.category ?? '';
+    case 'SERIESNAME':
+      return values.seriesName ?? '';
+    case 'CELLRANGE':
+      return values.cell ?? '';
+    default:
+      return null;
+  }
+}
+
+/** The text of one data label: the parts it shows, joined by its separator. */
+export function dataLabelText(spec: DataLabelSpec, values: DataLabelValues): string {
   const parts: string[] = [];
-  if (spec.showSeries && seriesName) parts.push(seriesName);
-  if (spec.showCategory && category) parts.push(category);
-  if (spec.showValue)
-    parts.push(formatChartNumber(value, spec.formatCode ?? seriesFormat, date1904));
-  if (spec.showPercent && percent !== null) {
-    parts.push(
-      formatChartNumber(
-        percent,
-        spec.formatCode && spec.formatCode.includes('%') ? spec.formatCode : '0%',
-        date1904
-      )
-    );
+  if (spec.showSeries && values.seriesName) parts.push(values.seriesName);
+  if (spec.showCategory && values.category) parts.push(values.category);
+  if (spec.showValue) parts.push(dataLabelField(spec, values, 'VALUE')!);
+  if (spec.showPercent && values.percent !== null) {
+    parts.push(dataLabelField(spec, values, 'PERCENTAGE')!);
   }
   return parts.join(spec.separator ?? ', ');
 }

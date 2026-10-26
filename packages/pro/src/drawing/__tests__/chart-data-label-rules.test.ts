@@ -13,6 +13,7 @@ import {
 } from '../../../../core/src/store/package/drawing-projection.ts';
 import type { OoxmlElement, OoxmlNode } from '../../../../core/src/store/package/ooxml-tree.ts';
 import {
+  CATEGORY_VALUE_AXES,
   chartPackage,
   chartSpace,
   numCache,
@@ -28,20 +29,29 @@ const WIDTH = 432;
 const HEIGHT = 252;
 
 interface PointLabel {
+  /** Own text, one paragraph per line. */
   readonly text?: string;
-  readonly move?: { readonly x: number; readonly y: number };
+  /** Own text as raw `a:p` paragraphs, for fields. */
+  readonly rich?: string;
+  /** Shares of the chart size; `edge` places the left and top sides instead of moving. */
+  readonly move?: { readonly x: number; readonly y: number; readonly edge?: boolean };
 }
 
 function pointLabel(index: number, label: PointLabel): string {
+  const modes = label.move?.edge ? '<c:xMode val="edge"/><c:yMode val="edge"/>' : '';
   const layout = label.move
-    ? `<c:layout><c:manualLayout><c:x val="${label.move.x}"/><c:y val="${label.move.y}"/>` +
-      '</c:manualLayout></c:layout>'
+    ? `<c:layout><c:manualLayout>${modes}<c:x val="${label.move.x}"/>` +
+      `<c:y val="${label.move.y}"/></c:manualLayout></c:layout>`
     : '';
-  const tx = label.text
-    ? `<c:tx><c:rich><a:bodyPr/><a:lstStyle/>${label.text
-        .split('\n')
-        .map((line) => `<a:p><a:r><a:t>${line}</a:t></a:r></a:p>`)
-        .join('')}</c:rich></c:tx>`
+  const paragraphs =
+    label.rich ??
+    (label.text
+      ?.split('\n')
+      .map((line) => `<a:p><a:r><a:t>${line}</a:t></a:r></a:p>`)
+      .join('') ||
+      null);
+  const tx = paragraphs
+    ? `<c:tx><c:rich><a:bodyPr/><a:lstStyle/>${paragraphs}</c:rich></c:tx>`
     : '';
   return (
     `<c:dLbl><c:idx val="${index}"/>${layout}${tx}<c:dLblPos val="outEnd"/>` +
@@ -53,7 +63,8 @@ function pie(
   values: readonly number[],
   names: readonly string[],
   points: Readonly<Record<number, PointLabel>> = {},
-  threeD: boolean | { readonly rotX: number; readonly perspective: number } = false
+  threeD: boolean | { readonly rotX: number; readonly perspective: number } = false,
+  extra: { readonly serExt?: string; readonly widthPt?: number } = {}
 ): DrawingProjection {
   const own = Object.entries(points)
     .map(([index, label]) => pointLabel(Number(index), label))
@@ -66,7 +77,7 @@ function pie(
   const plot =
     `<c:${kind}><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>` +
     `<c:tx>${strCache(['Share'])}</c:tx>${labels}<c:cat>${strCache([...names])}</c:cat>` +
-    `<c:val>${numCache(values)}</c:val></c:ser></c:${kind}>`;
+    `<c:val>${numCache(values)}</c:val>${extra.serExt ?? ''}</c:ser></c:${kind}>`;
   const view = threeD === true ? { rotX: 30, perspective: 30 } : threeD || null;
   const space = chartSpace(plot).replace(
     '<c:chart>',
@@ -75,7 +86,8 @@ function pie(
           '</c:view3D>'
       : '<c:chart>'
   );
-  const projections = projectDrawingsInPackage(chartPackage(space));
+  const size = extra.widthPt ? { cx: extra.widthPt * EMU, cy: HEIGHT * EMU } : {};
+  const projections = projectDrawingsInPackage(chartPackage(space, size));
   expect(projections).toHaveLength(1);
   return projections[0]!;
 }
@@ -169,4 +181,66 @@ test('perspective lowers the tilt a 3-D pie is seen at, as measured', () => {
     const shown = (Math.max(...ys) - Math.min(...ys)) / (Math.max(...xs) - Math.min(...xs));
     expect(Math.abs(shown - ratio)).toBeLessThan(0.01);
   }
+});
+
+const C15 = 'http://schemas.microsoft.com/office/drawing/2012/chart';
+
+test("a label's own text fills its fields from the point and keeps unknown ones", () => {
+  const rich =
+    '<a:p><a:r><a:t>Share </a:t></a:r><a:fld id="{1}" type="VALUE"><a:t>[VALUE]</a:t></a:fld>' +
+    '<a:r><a:t> of </a:t></a:r>' +
+    '<a:fld id="{2}" type="CATEGORYNAME"><a:t>[CATEGORY NAME]</a:t></a:fld>' +
+    '<a:fld id="{3}" type="SOMEDAY"><a:t> (kept)</a:t></a:fld></a:p>';
+  const texts = labels(pie([80, 20], ['Alpha', 'Bravo'], { 1: { rich } })).map(
+    (label) => label.text
+  );
+  expect(texts).toContain('Share 20 of Bravo (kept)');
+});
+
+test('a cell range field shows the cached cell the label range names', () => {
+  const serExt =
+    `<c:extLst><c:ext uri="{02D57815-91ED-43cb-92C2-25804820EDAC}" xmlns:c15="${C15}">` +
+    '<c15:datalabelsRange><c15:f>Sheet1!$C$2:$C$3</c15:f><c15:dlblRangeCache>' +
+    '<c:ptCount val="2"/><c:pt idx="0"><c:v>North</c:v></c:pt><c:pt idx="1"><c:v>South</c:v></c:pt>' +
+    '</c15:dlblRangeCache></c15:datalabelsRange></c:ext></c:extLst>';
+  const rich = '<a:p><a:fld id="{1}" type="CELLRANGE"><a:t>[CELLRANGE]</a:t></a:fld></a:p>';
+  const texts = labels(pie([80, 20], ['Alpha', 'Bravo'], { 0: { rich } }, false, { serExt })).map(
+    (label) => label.text
+  );
+  expect(texts).toContain('North');
+  expect(texts.some((text) => text.includes('[CELLRANGE]'))).toBe(false);
+});
+
+test('an edge-mode label puts its top side at the share of the chart height', () => {
+  const placed = labels(
+    pie([80, 20], ['Alpha', 'Bravo'], { 1: { text: 'E', move: { x: 0.1, y: 0.2, edge: true } } })
+  ).find((label) => label.text === 'E')!;
+  expect(placed.y - placed.height / 2).toBeCloseTo(0.2 * HEIGHT, 1);
+});
+
+test('a word wider than the wrap width keeps a frame wide enough not to break it', () => {
+  // A 150 point chart wraps at 24 points; the category name alone is wider.
+  const placed = labels(pie([80, 20], ['Administration', 'B'], {}, false, { widthPt: 150 })).find(
+    (label) => label.text.startsWith('Administration')
+  )!;
+  expect(placed.width).toBeGreaterThan(50);
+});
+
+test('a bar label shows its own text and keeps its manual offset', () => {
+  const bar = (move: boolean) => {
+    const own = pointLabel(0, { text: 'Own', ...(move ? { move: { x: 0.05, y: -0.04 } } : {}) });
+    const plot =
+      '<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:ser><c:idx val="0"/>' +
+      `<c:order val="0"/><c:tx>${strCache(['Sales'])}</c:tx><c:dLbls>${own}` +
+      '<c:showVal val="1"/></c:dLbls>' +
+      `<c:cat>${strCache(['Q1', 'Q2'])}</c:cat><c:val>${numCache([5, 7])}</c:val></c:ser>` +
+      `<c:axId val="1"/><c:axId val="2"/></c:barChart>${CATEGORY_VALUE_AXES}`;
+    const projections = projectDrawingsInPackage(chartPackage(chartSpace(plot)));
+    return labels(projections[0]!).find((label) => label.text === 'Own')!;
+  };
+  const still = bar(false);
+  const moved = bar(true);
+  expect(still).toBeDefined();
+  expect(moved.x - still.x).toBeCloseTo(0.05 * WIDTH, 0);
+  expect(moved.y - still.y).toBeCloseTo(-0.04 * HEIGHT, 0);
 });

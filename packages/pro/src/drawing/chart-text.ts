@@ -212,15 +212,6 @@ function splitLines(paragraphs: readonly (readonly ChartTextRun[])[]): (readonly
   return out.slice(0, MAX_LINES);
 }
 
-/** Lines of a label text and the widest line's estimated width. */
-export function textBlock(text: string, style: ChartTextStyle): { lines: number; width: number } {
-  const lines = text.split(/\r\n|\r|\n/).slice(0, MAX_LINES);
-  return {
-    lines: lines.length,
-    width: Math.max(...lines.map((line) => estimateTextWidth(line, style))),
-  };
-}
-
 export type ChartTextAlign = 'l' | 'ctr' | 'r';
 
 /** Label frame and text in chart points; the projection converts to EMU. */

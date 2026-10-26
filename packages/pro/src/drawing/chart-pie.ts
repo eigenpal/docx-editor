@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { categoryLabel } from './chart-number-format.ts';
 import { isElement, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { dataLabelFor, dataLabelText, elementText } from './chart-labels.ts';
+import { dataLabelFor, elementText } from './chart-labels.ts';
 import type { ChartPlot } from './chart-model.ts';
 import { slice, type ChartScene, type Point } from './chart-scene.ts';
 import { seriesLook, variesByPoint, type LookContext } from './chart-series.ts';
@@ -195,18 +195,18 @@ export function paintPie(plot: ChartPlot, box: Box, context: PieContext): void {
         const spec = dataLabelFor(plot, item, index);
         if (spec) {
           const style = elementText(context.baseText, spec.txPr, context.look.resolveSchemeColor);
-          const text = dataLabelText(
-            spec,
-            value,
-            value / total,
-            categoryLabel(item, index, context.date1904),
-            item.name,
-            item.formatCode,
-            context.date1904
-          );
+          const values = {
+            value: value,
+            percent: value / total,
+            category: categoryLabel(item, index, context.date1904),
+            seriesName: item.name,
+            seriesFormat: item.formatCode,
+            date1904: context.date1904,
+            cell: item.labelRange?.[index] ?? null,
+          };
           const block = dataLabelBlock(
             spec,
-            text,
+            values,
             style,
             context.bounds ? context.bounds.r - context.bounds.l : null,
             context.look.resolveSchemeColor

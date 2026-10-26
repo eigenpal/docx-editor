@@ -79,17 +79,17 @@ export function paintSeries(
     if (!spec) return;
     const style = elementText(context.baseText, spec.txPr, look.resolveSchemeColor);
     const category = map.categories?.labels[index] ?? null;
-    const text = dataLabelText(
-      spec,
+    const values = {
       value,
-      percent ? value / totals[index]! : null,
+      percent: percent ? value / totals[index]! : null,
       category,
-      series.name,
-      series.formatCode,
-      context.model.date1904
-    );
-    if (text === '' && !spec.custom) return;
-    const block = dataLabelBlock(spec, text, style, context.chartWidth, look.resolveSchemeColor);
+      seriesName: series.name,
+      seriesFormat: series.formatCode,
+      date1904: context.model.date1904,
+      cell: series.labelRange?.[index] ?? null,
+    };
+    if (!spec.custom && dataLabelText(spec, values) === '') return;
+    const block = dataLabelBlock(spec, values, style, context.chartWidth, look.resolveSchemeColor);
     const width = block.width;
     const height = block.height;
     const frame = block.frame;
