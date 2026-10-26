@@ -48,6 +48,7 @@ import { paragraphAlignment } from '../layout/paragraph-flow.ts';
 import { paragraphLineSpacing } from '../layout/paragraph-style.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
+import { orderPositions } from '../layout/semantic-interaction.ts';
 import {
   cascadedParagraphAttributes,
   paragraphBreaksBefore,
@@ -452,26 +453,18 @@ export type InheritedRunDefaults = (
   runProperties: readonly SurfaceProperty[]
 ) => { readonly fontFamily: string | null; readonly fontSizeHalfPoints: number | null };
 
-/** A letter or digit of any script; a span without one does not decide the font box. */
-const WORD_CHARACTER = /[\p{L}\p{N}]/u;
+/** A letter of any script; selected text without one does not decide the font box. */
+const LETTER = /\p{L}/u;
 
 /**
- * The part of `span` a range selection covers. Layout spans are not clipped to the selection, so a
- * selection that starts on the trailing space of a Latin word must not count that word.
+ * The part of `span` the ordered range `from`-`to` covers. Layout spans are not clipped to the
+ * selection, so a selection that starts on the space after a Latin word must not count it.
  */
 function selectedTextOf(
   span: StyleSpanRecord,
-  selection: SemanticSelection,
-  paragraphOrder: readonly string[] | undefined
+  from: SemanticPosition,
+  to: SemanticPosition
 ): string {
-  const { anchor, head } = selection;
-  const forward =
-    anchor.paragraphId === head.paragraphId
-      ? anchor.offset <= head.offset
-      : (paragraphOrder?.indexOf(anchor.paragraphId) ?? 0) <=
-        (paragraphOrder?.indexOf(head.paragraphId) ?? 0);
-  const [from, to] = forward ? [anchor, head] : [head, anchor];
-  if (from.paragraphId === to.paragraphId && from.offset === to.offset) return span.text;
   const start = span.range.paragraphId === from.paragraphId ? from.offset : span.range.start;
   const end = span.range.paragraphId === to.paragraphId ? to.offset : span.range.end;
   return span.text.slice(
@@ -538,17 +531,23 @@ export function formattingAt(
   // `fontFamily` to its `w:cs` face. Chinese text in a Calibri+SimSun run reads SimSun; its
   // Latin letters alone read Calibri.
   //
-  // Selected text without a letter or digit (spaces, punctuation) does not vote when some does.
-  // Between Korean or Chinese words it paints through the Latin slot, and counting it made
-  // every multi-word East Asian selection read blank. Words in two different faces still read
-  // blank, so a font hidden in the selection is never reported as the other one.
-  const worded =
-    cells && cells.length > 0
-      ? spans
-      : spans.filter((span) =>
-          WORD_CHARACTER.test(selectedTextOf(span, selection, paragraphOrder))
-        );
-  const familySpans = worded.length > 0 ? worded : spans;
+  // Selected text without a letter (spaces, punctuation, digits) does not vote when some does.
+  // Between or inside Korean and Chinese words it paints through the Latin slot (`2024년`), and
+  // counting it made every multi-word East Asian selection read blank. Letters in two
+  // different faces still read blank, so a font hidden among letters is never reported as the
+  // other one.
+  // Ordered once, not per span; a range that cannot be ordered reads whole spans.
+  const range = cells?.length
+    ? null
+    : orderPositions(selection, paragraphOrder ?? everyStoryOrder(layout));
+  const collapsed =
+    range !== null &&
+    range.from.paragraphId === range.to.paragraphId &&
+    range.from.offset === range.to.offset;
+  const lettered = spans.filter((span) =>
+    LETTER.test(range && !collapsed ? selectedTextOf(span, range.from, range.to) : span.text)
+  );
+  const familySpans = lettered.length > 0 ? lettered : spans;
   const familyOf = (span: (typeof spans)[number]): string | null =>
     styleForFontSlot(span.style, span.fontSlot).fontFamily ??
     inherited?.(span.range.paragraphId, span.props).fontFamily ??

@@ -5,6 +5,7 @@
 // one run per case, the face read back from each drawn glyph. Keep them together so layout,
 // font discovery and the notice read one answer.
 
+import { isEastAsianCodePoint } from './east-asian-code-points.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 
 /** The face of a Latin slot (`w:ascii`, `w:hAnsi`) that no level names, under an authored `w:rPrDefault`. */
@@ -231,14 +232,11 @@ export function isEastAsianFace(
   return fontTableEastAsianFaces?.includes(name) ?? false;
 }
 
-/** Characters only an East Asian family name contains: kana, ideographs, Hangul, full width. */
-const EAST_ASIAN_NAME_CHARACTERS = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
-
 /**
  * Region words East Asian family names carry (`Noto Sans Mono CJK SC`, `BIZ UDGothic JP`).
- * `SC` is not one: in Latin family names it means small caps (`Alegreya SC`).
+ * Not `SC`, `TC`, or `HK`: Latin names use them too (`Alegreya SC`, `HK Grotesk`).
  */
-const EAST_ASIAN_NAME_TOKENS = /(?:^|\s)(?:cjk|jp|kr|hk|tc)(?:\s|$)/;
+const EAST_ASIAN_NAME_TOKENS = /(?:^|\s)(?:cjk|jp|kr)(?:\s|$)/;
 
 /**
  * Prefixes of East Asian families a host commonly serves that no document font table names:
@@ -318,7 +316,7 @@ export function isEastAsianFontFamily(
   if (!name || name.startsWith('@')) return false;
   return (
     isEastAsianFace(name, fontTableEastAsianFaces) ||
-    EAST_ASIAN_NAME_CHARACTERS.test(name) ||
+    [...name].some((character) => isEastAsianCodePoint(character.codePointAt(0)!)) ||
     EAST_ASIAN_NAME_TOKENS.test(name) ||
     EAST_ASIAN_FAMILY_PREFIXES.some((prefix) => name.startsWith(prefix))
   );

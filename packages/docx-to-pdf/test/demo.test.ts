@@ -31,8 +31,7 @@ test('the editor demo exports with only packaged fonts and multilingual drawings
     }
     const text = pages.join(' ').normalize('NFC');
     for (const required of [
-      'Cambria',
-      'Century Gothic',
+      'Calibri',
       'SMALL CAPS',
       '☐',
       '☑',

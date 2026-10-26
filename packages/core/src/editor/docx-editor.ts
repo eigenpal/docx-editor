@@ -447,9 +447,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     async (families, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
-      lateFonts.settle(late); // before the install, which announces the change once
+      lateFonts.settle(late); // quietly; every install exit announces below, refused or not
       if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
-      else if (late) (bump(), emitSelectionChange()); // nothing to install into: announce it
+      if (late && !destroyed) (bump(), emitSelectionChange());
     }
   );
   let fontsResolving = false;
@@ -962,8 +962,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
-    if (late && lateFacesInstalled(late, resolvedFontConfiguration))
-      return void (bump(), emitSelectionChange());
+    if (late && lateFacesInstalled(late, resolvedFontConfiguration)) return;
     // The first resolution of a load downloads the shaper alongside the faces, not after them.
     // Failure reports where shaping needs it. Later resolutions find it loaded or failed.
     if (!late && !resolvedFontConfiguration) initializeHarfBuzz().catch(() => {});

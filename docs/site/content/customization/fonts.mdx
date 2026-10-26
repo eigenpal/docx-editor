@@ -232,7 +232,7 @@ export function useDocumentFonts(brandFonts: FontOrigin) {
 }
 ```
 
-`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
+`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A late answer adds faces only: return settings such as `defaultFont` and `maxFontBytes` in the immediate answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
 
 ## React and Vue reference
 
