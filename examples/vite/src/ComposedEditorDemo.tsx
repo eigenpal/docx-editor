@@ -35,7 +35,6 @@ import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { demoCatalog, demoDirection, demoLanguage } from '../../shared/demo-language';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
-import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
@@ -644,9 +643,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   // key against a closed, commit-pinned catalog — and a failed fetch degrades to the fixed
   // measurer rather than breaking the document.
   //
-  // `cjkFonts()` comes last. Its one face stands in for the East Asian families (SimSun,
-  // MS Mincho, and their localized names) that the two origins before it cannot serve, and
-  // it downloads only when a document names one of them.
+  // `cjk: true` serves the East Asian families (SimSun, MS Mincho, Malgun Gothic, and their
+  // localized names) with one regional Noto Sans face each, only when the document names
+  // one. They load in the background: the first paint never waits for 4-8 MB faces, and
+  // the document lays out again when they arrive.
   //
   // The trade is one reflow. Nothing can know the families before the parse, so the
   // document opens on the fixed measurer and re-paginates when the faces land; the eager
@@ -657,7 +657,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: [packagedFonts(), googleFonts(), cjkFonts()],
+    fonts: [packagedFonts(), googleFonts({ cjk: true })],
   });
 
   const activeDocument = collaboration.document ?? bytes;

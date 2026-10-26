@@ -172,11 +172,24 @@ The toolbar font picker applies the selected family to selected text. Google Fon
 
 ## Render Chinese, Japanese, and Korean text
 
-Documents often name East Asian fonts such as SimSun or MS Mincho, which most hosts do not have. The `@docx-editor.dev/fonts-cjk` package supplies Noto Sans CJK JP for them. Its `cjkFonts()` resolver points every face of those families at that font, including their localized names.
+Documents often name East Asian fonts such as SimSun, MS Mincho, or Malgun Gothic, which most hosts do not have. Choose one of these sources for them:
 
-The font file is about 16 MB. The resolver downloads it from where your bundler emits it, and only when a document names one of these families. No request goes to a third party.
+- `googleFonts({ cjk: true })` loads one regional Noto Sans face from a pinned Google Fonts revision: JP, SC, TC, or KR. Each face is 4.6 to 8.5 MB, and a document loads only the regions it names.
+- `cjkFonts()` from `@docx-editor.dev/fonts-cjk` loads one pan-CJK face, Noto Sans CJK JP, from where your bundler emits it. The file is about 16 MB. No request goes to a third party.
 
-Put `cjkFonts()` after the origins whose fonts you prefer:
+Both sources recognize English and localized family names, and download nothing for a document that names no East Asian family. Use one of them. If you list both, both fonts download and the source listed first paints the text.
+
+```tsx
+import { useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+export function useDocumentFonts() {
+  return useFonts(packagedFonts(), googleFonts({ cjk: true }));
+}
+```
+
+To keep CJK font downloads on your own origin, use `cjkFonts()` instead. Keep `googleFonts()` without the `cjk` option for the other families:
 
 ```tsx
 import { useFonts } from '@docx-editor.dev/react';
@@ -189,7 +202,37 @@ export function useDocumentFonts() {
 }
 ```
 
-The font has one weight and one style. Substituting it can change glyph forms, line breaks, and page counts. The `CJK_SUBSTITUTED_FAMILIES` and `LOCALIZED_CJK_FAMILIES` exports list the families it covers. Use the `onFailure` option to report a failed download; the document then opens without the font.
+Each face has one weight and one style. Substituting it can change glyph forms, line breaks, and page counts. The `CJK_SUBSTITUTED_FAMILIES` and `LOCALIZED_CJK_FAMILIES` exports list the families `cjkFonts()` covers. Use the `onFailure` option to report a failed download; the document then keeps its other fonts.
+
+Both sources load CJK faces in the background by default. For more information, see [Choose when large fonts load](#choose-when-large-fonts-load).
+
+## Choose when large fonts load
+
+Each font origin either waits or loads in the background:
+
+- _Wait_: the origin's faces install in the same step as the other waiting faces. A large document, over about 512 KB of uncompressed content, waits up to 2 seconds for them before its first paint. If they arrive later, the document lays out again then. A small document paints at once and lays out again when its fonts arrive.
+- _Background_: the first paint never waits for the origin's faces. They install in a separate step when they arrive, and the document lays out again. Text in those faces can move at that point.
+
+| Source                       | Default    | To wait                                     |
+| ---------------------------- | ---------- | ------------------------------------------- |
+| `googleFonts({ cjk: true })` | Background | `googleFonts({ cjk: { loading: 'wait' } })` |
+| `cjkFonts()`                 | Background | `cjkFonts({ loading: 'wait' })`             |
+| Any other origin             | Wait       | Leave it unwrapped                          |
+
+While background faces are on their way, `editor.fontMeasurement().resolving` is `true`. It changes to `false` after their layout, or after 10 seconds if a download stalls. Faces that arrive later still install.
+
+To load any other origin in the background, wrap it in `deferFonts()`:
+
+```tsx
+import { deferFonts, useFonts, type FontOrigin } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+export function useDocumentFonts(brandFonts: FontOrigin) {
+  return useFonts(packagedFonts(), deferFonts(brandFonts));
+}
+```
+
+`deferFonts()` is exported from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/core`. A custom resolver can also return its large faces on the `deferred` field of its answer. A document export that receives these resolvers, such as a PDF conversion, waits for every face.
 
 ## React and Vue reference
 

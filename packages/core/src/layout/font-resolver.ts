@@ -51,6 +51,12 @@ import {
 } from './font-composition.ts';
 import { configuredDefaultFontFamily } from './font-composition.ts';
 import {
+  completeDeferredAnswer,
+  composeLateOrigins,
+  splitDeferredAnswer,
+  withoutReportedFailures,
+} from './font-deferred.ts';
+import {
   HARD_MAX_AGGREGATE_FONT_BYTES,
   HARD_MAX_FONT_BYTES,
   HARD_MAX_FONT_SOURCES,
@@ -348,6 +354,8 @@ export interface ComposePreparedFontOriginsOptions extends ComposeFontOriginsOpt
   readonly maxExecutionFontBytes?: number;
   readonly reserveOwnedBytes?: (byteLength: number) => () => void;
   readonly instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>;
+  /** Wait for every origin's late faces and answer once, for callers that need all faces now. */
+  readonly awaitDeferred?: boolean;
 }
 
 async function composeFontOriginsInternal(
@@ -378,6 +386,9 @@ async function composeFontOriginsInternal(
   const failures: unknown[] = [];
   const inherited = request.resolvedFaces ?? [];
   let defaultFamily = request.defaultFamily;
+  // Per origin position: the immediate answer as given, and its late faces.
+  const answered: (FontConfiguration | FontConfigurationFragment | undefined)[] = [];
+  const late: (Promise<FontConfigurationFragment | undefined> | undefined)[] = [];
 
   for (let originIndex = 0; originIndex < origins.length; originIndex += 1) {
     throwIfFontResolutionAborted(request.signal);
@@ -426,6 +437,17 @@ async function composeFontOriginsInternal(
           )
         );
         continue;
+      }
+      if (options.awaitDeferred) {
+        answer = await completeDeferredAnswer(
+          answer,
+          (cause) => reportOriginFailure(options, origin, originIndex, cause),
+          request.signal
+        );
+      } else {
+        const split = splitDeferredAnswer(answer);
+        answer = split.now;
+        if (split.later) late[originIndex] = split.later;
       }
       const answerFailures = 'failures' in answer ? answer.failures : undefined;
       // A partial origin can keep its usable faces while reporting failed fetches. Snapshot
@@ -482,10 +504,18 @@ async function composeFontOriginsInternal(
       // The first origin is the composition base, so its configured default face is also the
       // default later on-demand origins must try to cover. Without this, a caller choosing Aptos
       // as the default still made a Google fallback fetch Calibri while leaving Aptos unresolved.
-      if (!base && 'defaultFont' in sampled) {
+      // An origin that holds everything back (`deferFonts`, a background CJK resolver) is a
+      // placeholder, not the base: the next origin's default face and byte ceiling still apply.
+      const placeholder =
+        late[originIndex] !== undefined &&
+        (sampled.sources?.length ?? 0) === 0 &&
+        (sampled.substitutions?.length ?? 0) === 0 &&
+        !('defaultFont' in answer) &&
+        !('maxFontBytes' in answer);
+      if (!base && !placeholder && 'defaultFont' in sampled) {
         defaultFamily = configuredDefaultFontFamily(sampled as FontConfigurationBase);
       }
-      if (!base) base = sampled;
+      if (!base && !placeholder) base = sampled;
       const newlyDirect = new Set(sampledOrigin.sourceKeys);
       if (newlyDirect.size > 0) {
         substitutions = substitutions.filter(
@@ -501,6 +531,8 @@ async function composeFontOriginsInternal(
         substitutions.push(substitution);
         committedSubstitutionKeys.add(fontRequestKey(substitution.from));
       }
+      // The validated answer, so composing it again with late faces reports no drop twice.
+      answered[originIndex] = withoutReportedFailures(sampled);
     } catch (cause) {
       // A validated answer that fails after its reservation but before it commits must hand
       // the reserved bytes back, or the lease leaks them for its whole lifetime.
@@ -517,16 +549,25 @@ async function composeFontOriginsInternal(
     }
   }
 
-  if (!base) return undefined;
-  const { epoch: _perLoad, ...merged } = composeFontConfiguration({
+  const deferred = late.some(Boolean)
+    ? composeLateOrigins(answered, late, request.signal, {
+        compose: (merged) => composeFontOriginsInternal(merged, request, options),
+        report: (index, cause) => reportOriginFailure(options, origins[index], index, cause),
+      })
+    : undefined;
+  if (!base) return deferred ? { sources: [], deferred } : undefined;
+  const { epoch: _perLoad, ...composed } = composeFontConfiguration({
     ...base,
     supportedFamilies: supportedFontFamilies(catalogs),
     sources: winningSources,
     substitutions,
   });
+  const merged = deferred ? { ...composed, deferred } : composed;
   return failures.length === 0
     ? merged
-    : ({ ...merged, failures: Object.freeze(failures) } as FontConfigurationFragment);
+    : ({ ...merged, failures: Object.freeze(failures) } as FontConfigurationFragment & {
+        readonly failures: readonly unknown[];
+      });
 }
 
 type ObservedOriginOutcome =

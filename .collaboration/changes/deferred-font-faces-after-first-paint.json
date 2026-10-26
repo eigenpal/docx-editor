@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Each editor resolved its fonts once per load and laid out the document with them.",
+  "after": "Each editor can install large faces after the first paint and lay out its own pages again.",
+  "reason": "Fonts load per participant and change only local measurement. No document tree, operation, or synchronization message carries font bytes or font timing.",
+  "tests": [
+    "packages/core/src/editor/__tests__/deferred-fonts.test.ts",
+    "packages/core/src/editor/__tests__/live-font-resolution.test.ts"
+  ],
+  "changeset": "deferred-font-faces-after-first-paint",
+  "migration": null
+}

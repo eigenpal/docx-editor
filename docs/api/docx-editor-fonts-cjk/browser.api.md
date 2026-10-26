@@ -22,6 +22,9 @@ export interface CjkFontLoadFailure {
 }
 
 // @public
+export type CjkFontLoading = 'background' | 'wait';
+
+// @public
 export interface CjkFontResolverMark {
     readonly 'docx-editor.dev/font-resolver': true;
 }
@@ -31,6 +34,7 @@ export function cjkFonts(options?: CjkFontsOptions): CjkFontsResolver;
 
 // @public
 export interface CjkFontsFragment {
+    readonly deferred?: Promise<CjkFontsFragment>;
     readonly sources: readonly CjkFontSource[];
     readonly substitutions: readonly {
         readonly from: CjkFontFaceRequest;
@@ -41,6 +45,7 @@ export interface CjkFontsFragment {
 // @public
 export interface CjkFontsOptions {
     readonly fetcher?: typeof fetch;
+    readonly loading?: CjkFontLoading;
     readonly onFailure?: (failure: CjkFontLoadFailure) => void;
 }
 

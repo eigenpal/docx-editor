@@ -5,6 +5,9 @@
 ```ts
 
 // @public
+export type CjkFontLoading = 'background' | 'wait';
+
+// @public
 export interface DefaultFontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -67,6 +70,11 @@ export const GOOGLE_FONTS_REVISION = "ea14f3c4c462af1d847b1abe96fcb3c3a8a66f97";
 export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>>;
 
 // @public
+export interface GoogleCjkOptions {
+    readonly loading?: CjkFontLoading;
+}
+
+// @public
 export interface GoogleFontFace {
     readonly byteLength: number;
     readonly family: string;
@@ -90,6 +98,7 @@ export function googleFonts(options?: GoogleFontsOptions): GoogleFontsResolver;
 
 // @public
 export interface GoogleFontsFragment {
+    readonly deferred?: Promise<GoogleFontsFragment>;
     // (undocumented)
     readonly failures: readonly GoogleFontLoadFailure[];
     // (undocumented)
@@ -102,6 +111,7 @@ export interface GoogleFontsFragment {
 // @public
 export interface GoogleFontsOptions {
     readonly allow?: readonly string[];
+    readonly cjk?: boolean | GoogleCjkOptions;
     readonly fetcher?: typeof fetch;
     readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
     readonly substitute?: Readonly<Record<string, string>>;

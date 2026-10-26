@@ -435,6 +435,8 @@ export async function acquireDocumentExportShaping(
             onOriginFailure: (failure) => originFailures.push(failure),
             reserveOwnedBytes: fontByteLease.reserve,
             maxExecutionFontBytes: executionPolicy.maxFontBytes,
+            // Export writes every page once, so it waits for faces an editor paints late.
+            awaitDeferred: true,
           }
         );
         throwIfAborted(controller.signal);

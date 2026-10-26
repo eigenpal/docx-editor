@@ -75,6 +75,7 @@ import {
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
+import { GOOGLE_CJK_FAMILY_NAMES, googleCjkFaceFor } from './google-cjk.ts';
 import { loadDefaultFonts } from './index.ts';
 import type {
   DefaultFontSource,
@@ -183,6 +184,47 @@ export interface GoogleFontsOptions {
   readonly fetcher?: typeof fetch;
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
+  /**
+   * Serve Chinese, Japanese, and Korean families, such as SimSun, MS Mincho, and Malgun
+   * Gothic, with the regional Noto Sans face for each: JP, SC, TC, or KR. Off by default.
+   *
+   * `true` (or `{}`) loads them in the background: the first paint never waits for these
+   * 4.6-8.5 MB faces, and the document lays out again when they arrive. Pass
+   * `{ loading: 'wait' }` to install them with the document's other fonts instead. See
+   * {@link CjkFontLoading}. A document export that receives this resolver waits for them.
+   *
+   * The face covers the family's text, not its metrics, so line breaks can differ. Use
+   * this or `cjkFonts()` from `@docx-editor.dev/fonts-cjk`, not both: both would download.
+   */
+  readonly cjk?: boolean | GoogleCjkOptions;
+}
+
+/**
+ * Whether a large CJK font download may delay the first paint.
+ *
+ * - `'background'`: the faces install in a separate step, after the document's other fonts.
+ *   The first paint never waits for them, and text in them can move once when they arrive.
+ * - `'wait'`: the faces install in the same step as the document's other fonts. A large
+ *   document (over about 512 KB of uncompressed content) waits up to 2 seconds for them
+ *   before its first paint. A small document paints at once and lays out again when all
+ *   of its fonts arrive.
+ *
+ * Either way, a document export that receives this resolver waits for the faces.
+ *
+ * The same type as `CjkFontLoading` in `@docx-editor.dev/fonts-cjk/browser`.
+ *
+ * @public
+ */
+export type CjkFontLoading = 'background' | 'wait';
+
+/**
+ * How `googleFonts({ cjk })` loads Chinese, Japanese, and Korean faces.
+ *
+ * @public
+ */
+export interface GoogleCjkOptions {
+  /** Defaults to `'background'`. See {@link CjkFontLoading}. */
+  readonly loading?: CjkFontLoading;
 }
 
 /**
@@ -200,6 +242,8 @@ export interface GoogleFontsFragment {
   readonly sources: readonly DefaultFontSource[];
   readonly substitutions: readonly DefaultFontSubstitution[];
   readonly failures: readonly GoogleFontLoadFailure[];
+  /** With `cjk` loading in the background: the CJK faces, settled after they download. */
+  readonly deferred?: Promise<GoogleFontsFragment>;
 }
 
 /** Case-insensitive family lookup, built once for the module's lifetime. */
@@ -226,6 +270,11 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
  */
 const MAX_CACHED_FONT_BYTES = 16 * 1024 * 1024;
 const MAX_CACHED_FONT_FACES = 64;
+/**
+ * CJK faces cache apart, under a budget that holds all four regions (23.6 MB). In the shared
+ * 16 MB cache one Chinese face would evict every Latin face, and two regions would never fit.
+ */
+const MAX_CACHED_CJK_FONT_BYTES = 24 * 1024 * 1024;
 
 interface PendingFontFetch {
   /** Signal-scoped waiters still racing this fetch; the last aborting one cancels it. */
@@ -241,15 +290,19 @@ interface FontByteCache {
   /** In-flight state per URL; absent once the entry holds settled bytes. */
   readonly pending: Map<string, PendingFontFetch>;
   totalBytes: number;
+  readonly maxBytes: number;
 }
 
 const byteCaches = new WeakMap<object, FontByteCache>();
+const cjkByteCaches = new WeakMap<object, FontByteCache>();
 
-function cacheFor(fetcher: typeof fetch): FontByteCache {
-  let cache = byteCaches.get(fetcher);
+function cacheFor(fetcher: typeof fetch, cjk: boolean): FontByteCache {
+  const caches = cjk ? cjkByteCaches : byteCaches;
+  let cache = caches.get(fetcher);
   if (!cache) {
-    cache = { entries: new Map(), sizes: new Map(), pending: new Map(), totalBytes: 0 };
-    byteCaches.set(fetcher, cache);
+    const maxBytes = cjk ? MAX_CACHED_CJK_FONT_BYTES : MAX_CACHED_FONT_BYTES;
+    cache = { entries: new Map(), sizes: new Map(), pending: new Map(), totalBytes: 0, maxBytes };
+    caches.set(fetcher, cache);
   }
   return cache;
 }
@@ -259,11 +312,11 @@ function cacheSuccess(cache: FontByteCache, url: string, bytes: Uint8Array): voi
   cache.entries.delete(url);
   cache.sizes.delete(url);
   cache.totalBytes -= previous;
-  if (bytes.byteLength > MAX_CACHED_FONT_BYTES) return;
+  if (bytes.byteLength > cache.maxBytes) return;
   cache.entries.set(url, Promise.resolve(bytes));
   cache.sizes.set(url, bytes.byteLength);
   cache.totalBytes += bytes.byteLength;
-  while (cache.entries.size > MAX_CACHED_FONT_FACES || cache.totalBytes > MAX_CACHED_FONT_BYTES) {
+  while (cache.entries.size > MAX_CACHED_FONT_FACES || cache.totalBytes > cache.maxBytes) {
     // Evict oldest SETTLED entries only. A pending entry has no recorded bytes to reclaim,
     // and dropping its cache reference would both orphan the downloaded bytes (the settle
     // handler declines to record a replaced entry) and break single-flight for new callers.
@@ -284,9 +337,10 @@ function cacheSuccess(cache: FontByteCache, url: string, bytes: Uint8Array): voi
 async function fetchFace(
   face: GoogleFontFace,
   fetcher: typeof fetch,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  cjk = false
 ): Promise<Uint8Array> {
-  const byteCache = cacheFor(fetcher);
+  const byteCache = cacheFor(fetcher, cjk);
   const inFlight = byteCache.entries.get(face.url);
   const inFlightState = inFlight ? byteCache.pending.get(face.url) : undefined;
   // Reuse a settled entry, or join a shared in-flight fetch. The one refusal: a signal-scoped
@@ -439,6 +493,9 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
+  const cjk = options.cjk
+    ? { background: options.cjk === true || options.cjk.loading !== 'wait' }
+    : null;
 
   const supportedFamilies = Object.freeze(
     [
@@ -447,15 +504,27 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         ...PACKAGED_ONLY_FAMILIES,
         ...Object.keys({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }),
       ]),
-    ].filter((family) => {
-      const target = substitutes.get(family.toLowerCase());
-      const bundled =
-        target === undefined ? PACKAGED_ONLY_BY_NAME.get(family.toLowerCase()) : undefined;
-      const resolved = bundled
-        ? FAMILY_PLANS.get(bundled)?.substitute
-        : catalogByFamily.get((target ?? family).toLowerCase())?.[0]?.family;
-      return resolved !== undefined && (!allowed || allowed.has(resolved.toLowerCase()));
-    })
+    ]
+      .filter((family) => {
+        const target = substitutes.get(family.toLowerCase());
+        const bundled =
+          target === undefined ? PACKAGED_ONLY_BY_NAME.get(family.toLowerCase()) : undefined;
+        const resolved = bundled
+          ? FAMILY_PLANS.get(bundled)?.substitute
+          : catalogByFamily.get((target ?? family).toLowerCase())?.[0]?.family;
+        return resolved !== undefined && (!allowed || allowed.has(resolved.toLowerCase()));
+      })
+      .concat(
+        // The East Asian families `cjk` serves, so a font picker can offer them too. English
+        // names only: a localized name is the same font listed twice.
+        cjk
+          ? GOOGLE_CJK_FAMILY_NAMES.filter(
+              (entry) =>
+                /^[\x20-\x7e]+$/.test(entry.family) &&
+                (!allowed || allowed.has(entry.face.toLowerCase()))
+            ).map((entry) => entry.family)
+          : []
+      )
   );
 
   async function resolveGoogleFonts(request: FontOriginRequest): Promise<GoogleFontsFragment> {
@@ -473,6 +542,8 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     const failures: GoogleFontLoadFailure[] = [];
     /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
     const packaged = new Map<string, DefaultFontFamily>();
+    /** Regional CJK faces to load, with the declared names each one stands in for. */
+    const cjkWanted = new Map<GoogleFontFace, string[]>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
       const target = substitutes.get(declared.toLowerCase());
@@ -500,7 +571,19 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         continue;
       }
       const faces = catalogByFamily.get((target ?? declared).toLowerCase());
-      if (!faces) continue;
+      if (!faces) {
+        const regional = cjk ? googleCjkFaceFor(target ?? declared) : undefined;
+        if (
+          regional &&
+          (!allowed || allowed.has(regional.family.toLowerCase())) &&
+          // Every face, or none, as on the catalog path: a covered regular must not leave the
+          // bold and italic with neither bytes nor a substitution.
+          !FACES.every((face) => already.has(faceKey(declared, face.weight, face.style)))
+        ) {
+          cjkWanted.set(regional, [...(cjkWanted.get(regional) ?? []), declared]);
+        }
+        continue;
+      }
       if (allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
       // EVERY catalogued face, or none. A family is fetched whole, so skipping one whose
       // regular is covered but whose bold is not would leave the bold with neither bytes
@@ -561,35 +644,96 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
         else console.warn(`[fonts] ${record.family} (${record.url}): ${record.diagnostic}`);
       }
     };
-    await Promise.all([
+    const fetchInto = async (
+      face: GoogleFontFace,
+      into: DefaultFontSource[],
+      failed: GoogleFontLoadFailure[],
+      cjkFace = false
+    ): Promise<void> => {
+      try {
+        const bytes = await fetchFace(face, fetcher, request.signal, cjkFace);
+        into.push({
+          request: { family: face.family, weight: face.weight, style: face.style },
+          id: `google-fonts:${face.family}#${face.weight}#${face.style}`,
+          bytes,
+          hash: face.hash,
+          faceIndex: 0,
+        });
+      } catch (error) {
+        // A cancelled load is the document moving on, not a failed face.
+        if (request.signal?.aborted) return;
+        const failure = {
+          family: face.family,
+          url: face.url,
+          diagnostic: error instanceof Error ? error.message : String(error),
+        };
+        failed.push(failure);
+        if (options.onFailure) options.onFailure(failure);
+        else console.warn(`[fonts] ${face.family} (${face.url}): ${failure.diagnostic}`);
+      }
+    };
+    // CJK faces have one weight and style, so every face of a declared family points at it.
+    const loadCjk = async (): Promise<GoogleFontsFragment> => {
+      const cjkSources: DefaultFontSource[] = [];
+      const cjkFailures: GoogleFontLoadFailure[] = [];
+      // A regional face an earlier origin already paints needs only the redirects, not a
+      // second third-party download of the same bytes.
+      const painted = (face: GoogleFontFace) =>
+        already.has(faceKey(face.family, face.weight, face.style));
+      await Promise.all(
+        [...cjkWanted.keys()]
+          .filter((face) => !painted(face))
+          .map((face) => fetchInto(face, cjkSources, cjkFailures, true))
+      );
+      const loaded = new Set([
+        ...cjkSources.map((source) => source.request.family),
+        ...[...cjkWanted.keys()].filter(painted).map((face) => face.family),
+      ]);
+      const cjkSubstitutions = [...cjkWanted].flatMap(([face, declaredNames]) =>
+        loaded.has(face.family)
+          ? declaredNames.flatMap((declared) =>
+              FACES.filter(
+                // The face itself needs bytes, not a redirect; its bold and italic need one.
+                ({ weight, style }) =>
+                  declared !== face.family || weight !== 400 || style !== 'normal'
+              ).map(({ weight, style }) => ({
+                from: { family: declared, weight, style },
+                to: { family: face.family, weight: 400, style: 'normal' as const },
+              }))
+            )
+          : []
+      );
+      cjkSources.sort((left, right) => left.id.localeCompare(right.id));
+      return { sources: cjkSources, substitutions: cjkSubstitutions, failures: cjkFailures };
+    };
+    const deferCjk = cjk?.background === true && cjkWanted.size > 0;
+    const immediate = Promise.all([
       packagedJob(),
-      ...[...wanted.values()].flat().map(async (face) => {
-        try {
-          const bytes = await fetchFace(face, fetcher, request.signal);
-          sources.push({
-            request: { family: face.family, weight: face.weight, style: face.style },
-            id: `google-fonts:${face.family}#${face.weight}#${face.style}`,
-            bytes,
-            hash: face.hash,
-            faceIndex: 0,
-          });
-        } catch (error) {
-          const failure = {
-            family: face.family,
-            url: face.url,
-            diagnostic: error instanceof Error ? error.message : String(error),
-          };
-          failures.push(failure);
-          if (options.onFailure) options.onFailure(failure);
-          else console.warn(`[fonts] ${face.family} (${face.url}): ${failure.diagnostic}`);
-        }
-      }),
+      Promise.all([...wanted.values()].flat().map((face) => fetchInto(face, sources, failures))),
     ]);
+    // Background CJK downloads start once the first-paint faces are in, so 4-8 MB faces never
+    // compete with them for bandwidth.
+    const cjkLater = deferCjk ? immediate.then(loadCjk, loadCjk) : undefined;
+    const [, cjkNow] = await Promise.all([
+      immediate,
+      cjkWanted.size > 0 && !deferCjk ? loadCjk() : undefined,
+    ]);
+    if (cjkNow) {
+      sources.push(...cjkNow.sources);
+      substitutions.push(...cjkNow.substitutions);
+      failures.push(...cjkNow.failures);
+    }
 
     // Deterministic regardless of which response landed first, so the same document
     // composes to the same configuration fingerprint on every load.
     sources.sort((left, right) => left.id.localeCompare(right.id));
-    return { sources, substitutions, failures, supportedFamilies };
+    return {
+      sources,
+      substitutions,
+      failures,
+      supportedFamilies,
+      ...(cjkLater ? { deferred: cjkLater } : {}),
+    };
   }
 
   const descriptor = { value: true, enumerable: false, configurable: true } as const;

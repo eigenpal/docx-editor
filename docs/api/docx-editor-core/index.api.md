@@ -1193,6 +1193,9 @@ export const DEFAULT_REVIEW_PANE: ResolvedReviewPane;
 export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
 
 // @public
+export function deferFonts(origin: FontOrigin): MarkedFontResolver;
+
+// @public
 export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
@@ -2595,6 +2598,7 @@ export interface FontConfigurationBase extends FontConfigurationFragment {
 
 // @public
 export interface FontConfigurationFragment {
+    readonly deferred?: Promise<FontConfigurationFragment | undefined>;
     // (undocumented)
     readonly sources?: readonly FontSource[];
     // (undocumented)

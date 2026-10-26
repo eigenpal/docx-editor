@@ -9,6 +9,9 @@ const sources = JSON.parse(
 
 const BYTES = new Uint8Array([1, 2, 3]);
 
+/** Most tests check the download itself, so they answer with the face at once. */
+const WAIT = { loading: 'wait' } as const;
+
 /** A fetcher that answers with `BYTES` and records each URL it was asked for. */
 function recordingFetcher() {
   const urls: string[] = [];
@@ -41,14 +44,14 @@ test('the resolver carries the mark the editor reads', () => {
 
 test('a document without an East Asian family fetches nothing', async () => {
   const { fetcher, urls } = recordingFetcher();
-  const fragment = await cjkFonts({ fetcher })(request(['Calibri', 'Times New Roman']));
+  const fragment = await cjkFonts({ ...WAIT, fetcher })(request(['Calibri', 'Times New Roman']));
   expect(fragment).toEqual({ sources: [], substitutions: [] });
   expect(urls).toEqual([]);
 });
 
 test('English and localized East Asian names point every face at the packaged face', async () => {
   const { fetcher, urls } = recordingFetcher();
-  const fragment = await cjkFonts({ fetcher })(request(['ms mincho', '宋体', 'Calibri']));
+  const fragment = await cjkFonts({ ...WAIT, fetcher })(request(['ms mincho', '宋体', 'Calibri']));
   expect(urls).toHaveLength(1);
   expect(urls[0]).toEndWith('/assets/NotoSansCJKjp-Regular.otf');
   expect(fragment.sources).toHaveLength(1);
@@ -68,7 +71,7 @@ test('English and localized East Asian names point every face at the packaged fa
 
 test('a family an earlier origin already paints is left to that origin', async () => {
   const { fetcher, urls } = recordingFetcher();
-  const fragment = await cjkFonts({ fetcher })(
+  const fragment = await cjkFonts({ ...WAIT, fetcher })(
     request(['SimSun'], { resolvedFaces: [{ family: 'simsun', weight: 400, style: 'normal' }] })
   );
   expect(fragment).toEqual({ sources: [], substitutions: [] });
@@ -77,7 +80,7 @@ test('a family an earlier origin already paints is left to that origin', async (
 
 test('a name that is an object property is no family at all', async () => {
   const { fetcher, urls } = recordingFetcher();
-  const fragment = await cjkFonts({ fetcher })(request(['constructor', '__proto__']));
+  const fragment = await cjkFonts({ ...WAIT, fetcher })(request(['constructor', '__proto__']));
   expect(fragment).toEqual({ sources: [], substitutions: [] });
   expect(urls).toEqual([]);
 });
@@ -89,7 +92,11 @@ test('a failed fetch is reported, the document opens without the face, and the n
     calls += 1;
     return calls === 1 ? new Response(null, { status: 404 }) : new Response(BYTES);
   }) as unknown as typeof fetch;
-  const resolver = cjkFonts({ fetcher, onFailure: (failure) => failures.push(failure.diagnostic) });
+  const resolver = cjkFonts({
+    ...WAIT,
+    fetcher,
+    onFailure: (failure) => failures.push(failure.diagnostic),
+  });
   expect(await resolver(request(['SimSun']))).toEqual({ sources: [], substitutions: [] });
   expect(failures).toEqual(['HTTP 404']);
   expect((await resolver(request(['SimSun']))).sources).toHaveLength(1);
@@ -113,7 +120,7 @@ test('cancellation rejects at once and stops a download no other request waits f
   const { fetcher, signals } = stalledFetcher();
   const controller = new AbortController();
   const failures: unknown[] = [];
-  const pending = cjkFonts({ fetcher, onFailure: (failure) => failures.push(failure) })(
+  const pending = cjkFonts({ ...WAIT, fetcher, onFailure: (failure) => failures.push(failure) })(
     request(['SimSun'], { signal: controller.signal })
   );
   controller.abort(new Error('closed'));
@@ -127,14 +134,14 @@ test('an already cancelled request downloads nothing', async () => {
   const controller = new AbortController();
   controller.abort(new Error('closed'));
   await expect(
-    cjkFonts({ fetcher })(request(['SimSun'], { signal: controller.signal }))
+    cjkFonts({ ...WAIT, fetcher })(request(['SimSun'], { signal: controller.signal }))
   ).rejects.toThrow('closed');
   expect(urls).toEqual([]);
 });
 
 test('one cancelled request leaves the shared download to the others', async () => {
   const { fetcher, signals, release } = stalledFetcher();
-  const resolver = cjkFonts({ fetcher });
+  const resolver = cjkFonts({ ...WAIT, fetcher });
   const controller = new AbortController();
   const cancelled = resolver(request(['SimSun'], { signal: controller.signal }));
   const kept = resolver(request(['MS Mincho']));
@@ -155,12 +162,36 @@ test('resolvers without an injected fetcher share one download', async () => {
   }) as unknown as typeof fetch;
   try {
     const [first, second] = await Promise.all([
-      cjkFonts()(request(['SimSun'])),
-      cjkFonts()(request(['MS Gothic'])),
+      cjkFonts(WAIT)(request(['SimSun'])),
+      cjkFonts(WAIT)(request(['MS Gothic'])),
     ]);
     expect(first.sources[0]!.bytes).toBe(second.sources[0]!.bytes);
     expect(calls).toBe(1);
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('by default the face loads in the background and arrives on deferred', async () => {
+  const { fetcher, urls } = recordingFetcher();
+  const fragment = await cjkFonts({ fetcher })(request(['SimSun']));
+  expect(fragment.sources).toEqual([]);
+  expect(fragment.substitutions).toEqual([]);
+  const late = await fragment.deferred;
+  expect(late?.sources).toHaveLength(1);
+  expect(late?.substitutions).toHaveLength(4);
+  expect(urls).toHaveLength(1);
+});
+
+test('a background load that is cancelled settles with nothing', async () => {
+  const { fetcher } = stalledFetcher();
+  const controller = new AbortController();
+  const fragment = await cjkFonts({ fetcher })(request(['SimSun'], { signal: controller.signal }));
+  controller.abort(new Error('closed'));
+  expect(await fragment.deferred).toEqual({ sources: [], substitutions: [] });
+});
+
+test('a document without an East Asian family defers nothing', async () => {
+  const fragment = await cjkFonts({ fetcher: recordingFetcher().fetcher })(request(['Calibri']));
+  expect(fragment.deferred).toBeUndefined();
 });

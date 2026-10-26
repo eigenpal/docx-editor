@@ -199,10 +199,6 @@ export default defineConfig(async (): Promise<UserConfig> => {
               replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
             },
             {
-              find: '@docx-editor.dev/fonts-cjk/browser',
-              replacement: path.join(monorepoRoot, 'packages/fonts-cjk/src/browser.ts'),
-            },
-            {
               find: '@docx-editor.dev/fonts/google',
               replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
             },

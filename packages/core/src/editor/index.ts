@@ -46,6 +46,7 @@ export {
   type FontResolverMark,
   type MarkedFontResolver,
 } from './font-resolver.ts';
+export { deferFonts } from '../layout/defer-fonts.ts';
 export { blankDocumentBytes, type BlankDocumentOptions } from './blank-document.ts';
 export { keepScrollAtInlineEnd } from './scroll-inline-end.ts';
 export { placeSubmenu, submenuKeys } from './submenu-placement.ts';

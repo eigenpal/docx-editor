@@ -108,7 +108,28 @@ export interface CjkFontsFragment {
     readonly from: CjkFontFaceRequest;
     readonly to: CjkFontFaceRequest;
   }[];
+  /**
+   * With `loading: 'background'`, the face and its substitutions, settled after the
+   * download. The editor paints the document first and lays it out again on arrival.
+   */
+  readonly deferred?: Promise<CjkFontsFragment>;
 }
+
+/**
+ * Whether a large CJK font download may delay the first paint.
+ *
+ * - `'background'`: the face installs in a separate step, after the document's other fonts.
+ *   The first paint never waits for it, and text in it can move once when it arrives.
+ * - `'wait'`: the face installs in the same step as the document's other fonts. A large
+ *   document (over about 512 KB of uncompressed content) waits up to 2 seconds for them
+ *   before its first paint. A small document paints at once and lays out again when all
+ *   of its fonts arrive.
+ *
+ * Either way, a document export that receives this resolver waits for the face.
+ *
+ * @public
+ */
+export type CjkFontLoading = 'background' | 'wait';
 
 /**
  * A fetch of the packaged face that failed for a reason other than cancellation.
@@ -132,8 +153,13 @@ export interface CjkFontLoadFailure {
 export interface CjkFontsOptions {
   /** Injectable for tests; defaults to the global `fetch`. */
   readonly fetcher?: typeof fetch;
-  /** Fetch failures. Defaults to a console warning. The document then opens without the face. */
+  /** Fetch failures. Defaults to a console warning. The document keeps its other fonts. */
   readonly onFailure?: (failure: CjkFontLoadFailure) => void;
+  /**
+   * Whether the download may delay the document. Defaults to `'background'`, because the
+   * face is about 16 MB. See {@link CjkFontLoading}.
+   */
+  readonly loading?: CjkFontLoading;
 }
 
 /**
@@ -274,12 +300,17 @@ function loadFace(fetcher: typeof fetch, url: string, signal?: AbortSignal): Pro
  * A document without one never downloads the 16 MB face.
  *
  * The face has one weight and one style, so every face of a named family points at it. Put
- * it after the origins whose faces you prefer: a family an earlier origin already paints is
- * left to that origin.
+ * it after the origins whose faces you prefer. A family an earlier origin paints by the time
+ * this resolver runs is left to that origin. A face an earlier origin loads in the background
+ * is not painted yet, so this face still downloads.
+ *
+ * The download does not delay the first paint by default: the document paints with its other
+ * fonts and lays out again when this face arrives. See {@link CjkFontLoading} for
+ * `loading: 'wait'`. A document export that receives this resolver waits for the face.
  *
  * The face is the file inside this package, fetched from where your bundler emits it. Nothing
- * comes from a third party. A failed fetch reports through `onFailure` and the document opens
- * without the face; cancellation rejects with `signal.reason`.
+ * comes from a third party. A failed fetch reports through `onFailure` and the document keeps
+ * its other fonts; cancellation rejects with `signal.reason`.
  *
  * @public
  */
@@ -301,6 +332,17 @@ export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
     if (painted.has(NOTO_SANS_CJK_JP_FAMILY.toLowerCase())) {
       return { sources: [], substitutions: substitutionsFor(planned) };
     }
+    if ((options.loading ?? 'background') === 'background') {
+      // Settles, never rejects: a cancelled load answers nothing instead.
+      const deferred = downloadFace(planned, request).catch(() => EMPTY);
+      return { sources: [], substitutions: [], deferred };
+    }
+    return downloadFace(planned, request);
+  }
+  async function downloadFace(
+    planned: readonly string[],
+    request: CjkFontsRequest
+  ): Promise<CjkFontsFragment> {
     const fetcher = options.fetcher ?? defaultFetch;
     let url = '';
     let bytes: Uint8Array;
@@ -338,6 +380,8 @@ export function cjkFonts(options: CjkFontsOptions = {}): CjkFontsResolver {
   Object.defineProperty(resolveCjkFonts, FONT_RESOLVER_MARK_KEY, descriptor);
   return resolveCjkFonts as CjkFontsResolver;
 }
+
+const EMPTY: CjkFontsFragment = Object.freeze({ sources: [], substitutions: [] });
 
 function substitutionsFor(families: readonly string[]): CjkFontsFragment['substitutions'] {
   return families.flatMap((family) =>

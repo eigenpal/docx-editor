@@ -34,6 +34,16 @@ export interface FontConfigurationFragment {
   readonly supportedFamilies?: readonly string[];
   readonly sources?: readonly FontSource[];
   readonly substitutions?: readonly FontSourceSubstitution[];
+  /**
+   * Faces that arrive after the document first paints. The editor lays the document out
+   * with `sources` and `substitutions`, then lays it out again once this settles. Use it
+   * for large faces, such as CJK fonts, that would otherwise hold back the first paint.
+   *
+   * It must never reject: report failures and settle with what loaded, or `undefined`.
+   * `composeFontOrigins()` keeps it on the merged result. A synchronous merge, such as
+   * `composeFontConfiguration()`, drops it.
+   */
+  readonly deferred?: Promise<FontConfigurationFragment | undefined>;
 }
 
 /**

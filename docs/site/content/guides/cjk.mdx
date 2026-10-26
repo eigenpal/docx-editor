@@ -55,9 +55,22 @@ The font picker lists available choices. A listed family does not confirm that i
 
 Use the same font configuration in React and Vue. For resolver examples, see [Load your own fonts](/docs/2.x/guides/fonts#load-your-own-fonts). For the document's East Asian font selection rules, see [Faces that no style names](/docs/2.x/guides/fonts#faces-that-no-style-names).
 
+### Google-hosted regional fonts
+
+If the document's CJK fonts are unavailable and your app can load fonts from a third party, use `googleFonts()` with the `cjk` option:
+
+```ts
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const fontResolvers = [packagedFonts(), googleFonts({ cjk: true })];
+```
+
+The resolver loads one Noto Sans face for each region the document's families belong to: Japanese, Simplified Chinese, Traditional Chinese, or Korean. Each face is 4.6 to 8.5 MB and keeps that region's glyph forms. Files come from a pinned Google Fonts revision and are checked against a recorded hash.
+
 ### Packaged browser fallback
 
-If the document's CJK fonts are unavailable, install `@docx-editor.dev/fonts-cjk`. Use `cjkFonts()` from its browser entry:
+To keep every font download on your own origin, install `@docx-editor.dev/fonts-cjk`. Use `cjkFonts()` from its browser entry:
 
 ```ts
 import { packagedFonts } from '@docx-editor.dev/fonts';
@@ -66,11 +79,15 @@ import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
 const fontResolvers = [packagedFonts(), cjkFonts()];
 ```
 
-Pass these resolvers to `useFonts()` or the `fonts` option of `useDocxSource()` in either adapter. Keep preferred font sources first. For a complete hook example, see [Render Chinese, Japanese, and Korean text](/docs/2.x/customization/fonts#render-chinese-japanese-and-korean-text).
+The font is about 16 MB. Your bundler emits the asset; the resolver makes no third-party request. This fallback supplies one regular Japanese regional face for every supported family.
 
-The resolver fetches the font asset only when the document requests a supported family. The font is about 16 MB. Your bundler emits the asset; the resolver makes no third-party request.
+### Common behavior
 
-This fallback supplies one regular Japanese regional face. It substitutes that face for supported families, including their bold and italic variants. If you need other regional glyph forms, weights, or styles, supply the corresponding font files.
+Pass these resolvers to `useFonts()` or the `fonts` option of `useDocxSource()` in either adapter. Keep preferred font sources first. Use one CJK source. If you list both, both fonts download and the source listed first paints the text. For a complete hook example, see [Render Chinese, Japanese, and Korean text](/docs/2.x/customization/fonts#render-chinese-japanese-and-korean-text).
+
+Both resolvers fetch fonts only when the document requests a supported family. Both substitute one regular face for the family's bold and italic variants. If you need other weights or styles, supply the corresponding font files.
+
+Both resolvers load in the background by default. The first paint does not wait for the CJK faces, and the document lays out again when they arrive. To install them with the document's other fonts instead, use `googleFonts({ cjk: { loading: 'wait' } })` or `cjkFonts({ loading: 'wait' })`. For more information, see [Choose when large fonts load](/docs/2.x/customization/fonts#choose-when-large-fonts-load).
 
 ## Input and typography
 

@@ -277,6 +277,23 @@ test('strict font policy still refuses an export when no origin admits a source'
   }
 });
 
+test('export waits for faces an origin delivers after the first paint', async () => {
+  let coverage: string | undefined;
+  const opened = await openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: defineFontResolver(() => ({
+      sources: [],
+      deferred: Promise.resolve(fontFragment('Body Face')),
+    })),
+    onFontResolution: (report) => {
+      coverage = report.families.find((family) => family.family === 'Body Face')?.coverage;
+    },
+  });
+  expect(opened.ok).toBe(true);
+  // Only the deferred answer supplies Body Face, so it counts only if export awaited it.
+  expect(coverage).not.toBe('none');
+  if (opened.ok) opened.session.dispose();
+});
+
 test('supplied bytes materially drive published line measurement', async () => {
   const bytes = fontCatalogDocx();
   const shaped = await openFontBackedDocumentForExport(bytes, {

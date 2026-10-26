@@ -454,6 +454,7 @@ export {
   composeFontConfiguration,
   composeFontOrigins,
   createFontSource,
+  deferFonts,
   defineFontResolver,
   isFontResolver,
   loadFonts,

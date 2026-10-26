@@ -40,6 +40,7 @@ import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
 import { DEFAULT_FONT } from '@docx-editor.dev/core/editor';
+import { deferFonts } from '@docx-editor.dev/core/editor';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
@@ -486,6 +487,8 @@ export { DEFAULT_FONT }
 
 // @public
 export const DEFAULT_WATERMARK_PRESETS: readonly string[];
+
+export { deferFonts }
 
 export { defineFontResolver }
 

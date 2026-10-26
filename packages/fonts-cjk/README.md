@@ -56,9 +56,13 @@ import { cjkFonts } from '@docx-editor.dev/fonts-cjk/browser';
 const fonts = [packagedFonts(), googleFonts(), cjkFonts()];
 ```
 
+The first paint does not wait for this download. The editor paints the document with its other fonts, then lays it out again when this font arrives. To install it with the other fonts instead, pass `cjkFonts({ loading: 'wait' })`. A document export that receives this resolver always waits for the font.
+
+If you can load fonts from a third party, `googleFonts({ cjk: true })` from `@docx-editor.dev/fonts/google` is an alternative. It loads a smaller regional face for each language a document uses. Do not combine `cjk: true` with `cjkFonts()`: both fonts would download, and the origin listed first would paint.
+
 The resolver downloads the font only when a document names one of the `CJK_SUBSTITUTED_FAMILIES`, or one of their localized names in `LOCALIZED_CJK_FAMILIES`. Your bundler emits the font file as an asset, and the resolver fetches it from there. No request goes to a third party. The browser entry is ECMAScript modules only, because it finds the file through `import.meta.url`.
 
-A failed download calls the `onFailure` option, or writes a console warning. The document then opens without the font.
+A failed download calls the `onFailure` option, or writes a console warning. The document then keeps its other fonts.
 
 ## Use the font directly
 
@@ -75,10 +79,7 @@ Use the exported URL to read the font without constructing a package path:
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import {
-  NOTO_SANS_CJK_JP_FAMILY,
-  NOTO_SANS_CJK_JP_URL,
-} from '@docx-editor.dev/fonts-cjk';
+import { NOTO_SANS_CJK_JP_FAMILY, NOTO_SANS_CJK_JP_URL } from '@docx-editor.dev/fonts-cjk';
 
 const bytes = await readFile(NOTO_SANS_CJK_JP_URL);
 console.log(NOTO_SANS_CJK_JP_FAMILY, bytes.byteLength);

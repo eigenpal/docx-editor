@@ -92,6 +92,7 @@ export {
   FONT_RESOLVER_MARK_KEY,
   composeFontConfiguration,
   composeFontOrigins,
+  deferFonts,
   defineFontResolver,
   isFontResolver,
   type ComposeFontOriginsOptions,

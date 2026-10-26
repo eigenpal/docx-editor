@@ -176,7 +176,16 @@ import {
   composeFontConfiguration,
   normalizeFontResolverResult,
   type FontConfigurationBase,
+  type FontConfigurationFragment,
 } from './font-composition.ts';
+import { splitDeferredAnswer } from '../layout/font-deferred.ts';
+import {
+  createLateFontArrival,
+  lateFacesInstalled,
+  lateFontOrigins,
+  type LateFontDelivery,
+} from './late-font-arrival.ts';
+import { initializeHarfBuzz } from '../layout/harfbuzz-shaper.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
 import {
   documentFontResolutionRequest,
@@ -436,12 +445,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
       };
     },
-    async (families) => {
+    async (families, late?: LateFontDelivery) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
-      if (target) await resolveDocumentFonts(loadSeq, target, families);
+      try {
+        if (target) await resolveDocumentFonts(loadSeq, target, families, late?.full);
+      } finally {
+        lateFonts.settle(late);
+      }
     }
   );
   let fontsResolving = false;
+  /** Faces an origin delivers after the first paint, until they install for this load. */
+  const lateFonts = createLateFontArrival({
+    deliver: (generation, delivery) => liveFonts.deliver(generation, delivery),
+    changed: () => bump(),
+    report: (cause) => reportFontError(toEditorFontError(cause)),
+  });
   /**
    * Local-resolution probe for the compatibility notice, created against the attached
    * container's document and dropped with it — a probe answers for ONE platform's font
@@ -473,7 +492,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * combines admitted document aliases with platform and metric-twin checks.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
-    if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
+    if (!surface || fontsResolving || lateFonts.pending()) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
       surface.session.renderedFontFamilies(),
       fontFamilyCovered,
@@ -897,6 +916,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     disposeShapedFonts();
     disposeShapedFonts = () => {};
     fontsResolving = false;
+    lateFonts.clear();
   }
 
   /** {@link forgetFonts}, then measure the mounted document with the fallback measurer. */
@@ -933,7 +953,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   async function resolveDocumentFonts(
     seq: number,
     mounted: { readonly session: preparedOpen.FontSession },
-    families: readonly string[]
+    families: readonly string[],
+    late?: FontConfigurationFragment
   ): Promise<void> {
     const lifetime = fontLifetime.capture();
     const current = () => !destroyed && seq === loadSeq && lifetime.current();
@@ -943,6 +964,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
+    if (late && lateFacesInstalled(late, resolvedFontConfiguration)) return;
+    // The first resolution of a load downloads the shaper alongside the faces, not after them.
+    // Failure reports where shaping needs it. Later resolutions find it loaded or failed.
+    if (!late && !resolvedFontConfiguration) initializeHarfBuzz().catch(() => {});
     fontsResolving = true;
     bump();
     try {
@@ -964,18 +989,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const fallbacks = canProbe
         ? fallbacksForMissingFamilies(documentFonts.fallbacks, probeLocalFont)
         : documentFonts.fallbacks;
-      const raw =
-        typeof configured !== 'function'
+      const onOriginFailure = ({ cause }: { cause: unknown }) =>
+        reportForLoad(toEditorFontError(cause));
+      const answer = late
+        ? await composeFontOrigins(lateFontOrigins(late, resolvedFontConfiguration), request, {
+            onOriginFailure,
+          })
+        : typeof configured !== 'function'
           ? configured
           : resolvedFontConfiguration
             ? await composeFontOrigins(
                 [resolvedFontConfiguration, defineFontResolver((next) => configured(next))],
                 request,
-                { onOriginFailure: ({ cause }) => reportForLoad(toEditorFontError(cause)) }
+                { onOriginFailure }
               )
             : await configured(request);
+      const { now: raw, later } = answer ? splitDeferredAnswer(answer) : { now: answer };
       const explicit: FontConfigurationBase | undefined =
-        typeof configured === 'function' ? normalizeFontResolverResult(raw) : raw;
+        typeof configured === 'function' || late ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
       // destroyed) while the resolver ran; installing its answer would overwrite newer fonts.
       if (!current()) {
@@ -983,6 +1014,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       resolvedFontConfiguration = raw;
+      if (later) lateFonts.track(later, raw, lifetime.generation, current);
       if (
         embedded.length === 0 &&
         (!explicit || (raw?.supportedFamilies?.length && !normalizeFontResolverResult(raw)))
@@ -1803,7 +1835,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     fontMeasurement: () => ({
       measurer: shapedMeasurer && !stillOpening() ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving || stillOpening(),
+      resolving: fontsResolving || lateFonts.pending() || stillOpening(),
       ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
@@ -1819,6 +1851,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         configuredFonts = fonts;
         resolvedFontConfiguration = undefined;
         fontsResolving = false;
+        lateFonts.clear();
         // Removal drops the host faces now. A replacement keeps the current faces painted
         // until the new ones install, so the pages lay out once, not twice.
         if (!fonts) fallBackToDefaultFonts();
