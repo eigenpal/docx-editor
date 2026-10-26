@@ -451,6 +451,24 @@ export type InheritedRunDefaults = (
   runProperties: readonly SurfaceProperty[]
 ) => { readonly fontFamily: string | null; readonly fontSizeHalfPoints: number | null };
 
+/**
+ * Whether a font pick at this selection must also set `w:eastAsia`: the selected text, or the
+ * span beside a collapsed caret, paints East Asian characters through that slot. Without it
+ * the pick changes nothing on screen and the font box keeps the old face. A complex-script
+ * run needs no help here: the store writes its `w:cs` companion per run.
+ */
+export function fontPickReachesEastAsia(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  cells?: readonly string[],
+  paragraphOrder?: readonly string[],
+  caretSpan = true
+): boolean {
+  const spans = caretSpan ? selectionSpans(layout, selection, cells, paragraphOrder) : [];
+  // No text to read, such as an empty paragraph: East Asian text typed next takes the pick too.
+  return spans.length === 0 || spans.some((span) => span.fontSlot === 'eastAsia');
+}
+
 /** The formatting snapshot at a selection, for a toolbar to reflect. */
 export function formattingAt(
   layout: SemanticLayout,
@@ -504,13 +522,16 @@ export function formattingAt(
   // docDefaults, theme fonts). A caret in an empty paragraph inherits too.
   const hasDirect = (span: (typeof spans)[number], localName: string): boolean =>
     span.props.some((property) => property.localName === localName);
-  // The LATIN (ascii/hAnsi) face, deliberately, even for a span whose text paints through
-  // the eastAsia slot: a span's `style` carries the run's full resolution, so a mixed
-  // CJK+Latin run answers ONE family here, and it is the same slot the font picker writes
-  // (`w:ascii`/`w:hAnsi`) — pick a font and this readback reflects it. Word's single font
-  // box behaves the same way; a per-slot readback needs a per-slot control first.
+  // The face the span's text PAINTS in: East Asian text answers its `w:eastAsia` face, and a
+  // complex-script run already resolves `fontFamily` to its `w:cs` face. A selection of
+  // Chinese text in a Calibri+SimSun run reads SimSun; its Latin letters read Calibri, so a
+  // selection over both disagrees to blank. A font pick writes the same slot
+  // (`fontPickReachesEastAsia`), so the box reflects the pick.
   const familyOf = (span: (typeof spans)[number]): string | null =>
-    span.style.fontFamily ?? inherited?.(span.range.paragraphId, span.props).fontFamily ?? null;
+    (span.fontSlot === 'eastAsia' ? span.style.fontFamilyEastAsia : null) ??
+    span.style.fontFamily ??
+    inherited?.(span.range.paragraphId, span.props).fontFamily ??
+    null;
   const sizeOf = (span: (typeof spans)[number]): number =>
     hasDirect(span, 'sz')
       ? Math.round(span.style.fontSizePt * 2)

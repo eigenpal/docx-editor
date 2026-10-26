@@ -17,6 +17,7 @@ import {
 import {
   directParagraphMarkProperties,
   directParagraphProperties,
+  fontPickReachesEastAsia,
   formattingAt,
   hasAuthoredRunProperties,
   isAuthorableRunProperty,
@@ -154,6 +155,26 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       },
       caretSpan: true,
     };
+  };
+  // A font pick (`w:ascii` and `w:hAnsi` set to one family, nothing else) also sets
+  // `w:eastAsia` when the selected text paints through it. Without it, picking a font for
+  // Chinese text changed nothing on screen, and the font box kept showing the old face.
+  const withScriptSlots = (
+    attributes: Record<string, string> | undefined
+  ): Record<string, string> | undefined => {
+    const family = attributes?.ascii;
+    if (!family || attributes.hAnsi !== family || Object.keys(attributes).length !== 2) {
+      return attributes;
+    }
+    const read = formattingSelection(selectionNow.value);
+    const eastAsian = fontPickReachesEastAsia(
+      currentLayout.value,
+      read.selection,
+      deps.selectedCells?.(),
+      deps.paragraphOrder(),
+      read.caretSpan
+    );
+    return eastAsian ? { ...attributes, eastAsia: family } : attributes;
   };
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
@@ -447,7 +468,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     setRunProperty(localName, attributes) {
       const refused = refuseRunFormat();
       if (refused) return refused;
-      const incoming = { localName, ...(attributes ? { attributes } : {}) };
+      const widened = localName === 'rFonts' ? withScriptSlots(attributes) : attributes;
+      const incoming = { localName, ...(widened ? { attributes: widened } : {}) };
       const cells = deps.selectedCells?.();
       if (cells && cells.length > 0) return writeRunPropertyOverCells(cells, incoming);
       const { from, to } = orderedRange();

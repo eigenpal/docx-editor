@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A font pick wrote w:ascii and w:hAnsi only, and the font picker read the Latin face of every run.",
+  "after": "A font pick over East Asian text also writes w:eastAsia through the same w:rFonts merge, and the picker reads the face each span paints in.",
+  "reason": "The write uses the existing slot-wise w:rFonts merge operation. Released participants read w:eastAsia with the same meaning, so shared data and updates keep their interpretation.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/font-pick-east-asian-slot.test.ts",
+    "packages/core/src/editor/__tests__/font-picker-script-slots.test.ts"
+  ],
+  "changeset": "font-picker-east-asian-text",
+  "migration": null
+}
