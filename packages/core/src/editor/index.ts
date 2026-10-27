@@ -678,4 +678,7 @@ export type {
 } from '../store/package/drawing-support.ts';
 
 export { drawingPreviewDocx } from './drawing-preview.ts';
-export type { DrawingPreviewPackageResult } from '../store/package/drawing-preview-package.ts';
+export type {
+  DrawingPreviewPackageLimits,
+  DrawingPreviewPackageResult,
+} from '../store/package/drawing-preview-package.ts';

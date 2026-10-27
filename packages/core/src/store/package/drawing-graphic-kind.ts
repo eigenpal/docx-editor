@@ -3,7 +3,10 @@ import { drawingSourceSelection } from './drawing-support-issues.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tree.ts';
 
 /**
- * The kind of graphic a drawing holds, read from its source: `picture`, `chart` (a chart),
+ * The kind of graphic a drawing holds. Note: `textbox` names every DrawingML shape, with or
+ * without text, and `shape` names only legacy VML drawings.
+ *
+ * Read from its source: `picture`, `chart` (a chart),
  * `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape
  * group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or
  * `graphic` (any other graphic). It does not say whether the engine renders the graphic.

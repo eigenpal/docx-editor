@@ -30,7 +30,8 @@ export interface UnsupportedElement {
   readonly drawingIssues?: readonly DrawingSupportIssue[];
   /**
    * The graphic a drawing holds, such as `picture`, `chart`, or `diagram`, from its source.
-   * `textbox` names any DrawingML shape, with or without text, after its markup.
+   * Note: `textbox` names every DrawingML shape, with or without text, and `shape` names only
+   * legacy VML drawings.
    */
   readonly graphicKind?: DrawingGraphicKind;
   /** The node the occurrence comes from, in the editor's current document. */
@@ -44,9 +45,10 @@ export interface UnsupportedElement {
   /**
    * Lossless canonical source. Treat this value as read-only and untrusted. It stays the same
    * object until the content itself changes, so use it as the dependency of work you derive
-   * from the content, such as a preview request. A change in a related part only, such as
-   * chart data, an image, or the theme, keeps the same object; to catch those too, compare a
-   * hash of the `drawingPreviewDocx` bytes.
+   * from the content, such as a preview request. Every editor edit to a drawing gives a new
+   * object, including a replaced picture, which gets a new relationship. The editor does not
+   * edit chart data, diagram data, or the theme, so `source` alone tells you when to ask for a
+   * new preview.
    */
   readonly source: OoxmlElement | null;
   /** `inline` inside a line of text, or `block` between paragraphs. */
@@ -81,7 +83,8 @@ export interface UnsupportedElementRule {
    * Also offer drawings that the editor renders without some features (`support` is
    * `partial`), so a component can fill the gap, for example with an image from your own
    * renderer. Fully supported drawings are never offered, and neither are shapes whose text
-   * the editor edits.
+   * the editor edits. Hidden drawings and drawings without a layout position have no box,
+   * so they are never offered either.
    */
   readonly includePartial?: boolean;
   /**

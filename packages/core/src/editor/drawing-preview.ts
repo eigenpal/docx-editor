@@ -1,6 +1,7 @@
 import type { UnsupportedElement } from '../layout/unsupported-content-types.ts';
 import {
   createDrawingPreviewPackage,
+  type DrawingPreviewPackageLimits,
   type DrawingPreviewPackageResult,
 } from '../store/package/drawing-preview-package.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
@@ -12,14 +13,16 @@ import type { DocxEditorInstance } from './docx-editor-types.ts';
  * on the document as a save would write it now. The call is synchronous, so make it in an
  * effect keyed on `element.source`, not during render. Get the editor with `useDocxEditor()`.
  * Before the editor is attached, the result is `drawing-not-found`; try again after it is.
+ * By default a package copies at most 64 parts and 64 MiB; pass `limits` to change that.
  *
  * @public
  */
 export function drawingPreviewDocx(
   editor: DocxEditorInstance,
-  element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>
+  element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>,
+  limits?: DrawingPreviewPackageLimits
 ): DrawingPreviewPackageResult {
   const session = editor.surface?.session;
   if (!session) return { ok: false, reason: 'drawing-not-found' };
-  return createDrawingPreviewPackage(session.currentPackage(), element);
+  return createDrawingPreviewPackage(session.currentPackage(), element, limits);
 }

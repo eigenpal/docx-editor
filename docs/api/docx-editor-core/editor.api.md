@@ -1564,7 +1564,13 @@ export interface DrawingPositionInput {
 }
 
 // @public
-export function drawingPreviewDocx(editor: DocxEditorInstance, element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>): DrawingPreviewPackageResult;
+export function drawingPreviewDocx(editor: DocxEditorInstance, element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>, limits?: DrawingPreviewPackageLimits): DrawingPreviewPackageResult;
+
+// @public
+export interface DrawingPreviewPackageLimits {
+    readonly maxBytes?: number;
+    readonly maxParts?: number;
+}
 
 // @public
 export type DrawingPreviewPackageResult = {
