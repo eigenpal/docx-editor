@@ -67,9 +67,10 @@ export type DrawingPreviewPackageResult =
        * True when the page has the drawing's size, so the first page is the preview image.
        * False when the size is unknown, such as a legacy VML drawing without a width and height
        * in its style. Then the page has the document's page size and no margins, and the
-       * drawing starts at its top left corner. Crop from (0, 0) to `bounds.width * dpi / 72`
-       * by `bounds.height * dpi / 72` pixels; `bounds.x` and `bounds.y` are page positions,
-       * not crop offsets. Send this flag and the `bounds` size to your renderer with the bytes.
+       * drawing starts at its top left corner. With the occurrence's `element.bounds`, crop
+       * from (0, 0) to `bounds.width * dpi / 72` by `bounds.height * dpi / 72` pixels;
+       * `bounds.x` and `bounds.y` are page positions, not crop offsets. Send this flag and the
+       * `bounds` size to your renderer with the bytes.
        * Without `bounds`, such as for a report entry, trim the white space instead.
        */
       readonly pageFitsDrawing: boolean;

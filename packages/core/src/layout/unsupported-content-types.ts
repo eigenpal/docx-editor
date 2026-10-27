@@ -26,7 +26,8 @@ export interface UnsupportedElement {
    * The features of this drawing that the editor does not show as authored, read from its
    * own XML. Chart and diagram parts, inherited theme effects, and image bytes are not read,
    * so an empty list does not prove fidelity.
-   * Never holds `unplaced-drawing` or `projection-diagnostic`, which only a report lists.
+   * Never holds `unplaced-drawing` or `projection-diagnostic`, which only a report lists. For
+   * a placeholder, `graphicKind` names the graphic that the editor cannot draw.
    */
   readonly drawingIssues?: readonly DrawingSupportIssue[];
   /**
