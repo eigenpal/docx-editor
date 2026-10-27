@@ -30,7 +30,10 @@ export interface DrawingSupportIssue {
     | 'unplaced-drawing'
     | 'inspection-limit'
     | 'projection-diagnostic';
-  /** The source node with the feature, in the package that was inspected. */
+  /**
+   * The source node with the feature: in the inspected package for a report, or in the
+   * editor's current document for an occurrence's `drawingIssues`.
+   */
   readonly nodeId: string;
   /** The namespace of the node with the feature. */
   readonly namespaceUri: string;
@@ -52,7 +55,8 @@ export interface DrawingSupportIssue {
  * authored, which is not at all.
  *
  * Charts and SmartArt diagrams that the editor draws report `native`, because the check does
- * not read their chart or diagram parts.
+ * not read their chart or diagram parts. Inherited theme effects and image bytes are not
+ * checked either.
  *
  * @public
  */

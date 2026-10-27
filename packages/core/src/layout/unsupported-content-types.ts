@@ -24,7 +24,8 @@ export interface UnsupportedElement {
   readonly support?: Exclude<DrawingSupport, 'native'>;
   /**
    * The features of this drawing that the editor does not show as authored, read from its
-   * own XML. Chart and diagram parts are not read, so an empty list does not prove fidelity.
+   * own XML. Chart and diagram parts, inherited theme effects, and image bytes are not read,
+   * so an empty list does not prove fidelity.
    * Never holds `unplaced-drawing` or `projection-diagnostic`, which only a report lists.
    */
   readonly drawingIssues?: readonly DrawingSupportIssue[];
@@ -51,7 +52,8 @@ export interface UnsupportedElement {
    * new preview. A component usually stays mounted when its occurrence changes and receives
    * the new element; it remounts when the occurrence moves to another page or scrolls back
    * into view. Keep previews outside the component, for example in a `WeakMap` keyed on
-   * `source`, so a remount reuses them, and clear an old image in the effect cleanup. Never
+   * `source`, so a remount reuses them. Cache the `Blob` or bytes rather than an object URL:
+   * create the URL in the effect, and revoke it and clear the image in the cleanup. Never
    * `null` for an occurrence in the editor; only a standalone painter without a source lookup
    * gives `null`.
    */
@@ -89,8 +91,9 @@ export interface UnsupportedElementRule {
    * Also offer drawings that the editor renders without some features (`support` is
    * `partial`). Default `false`. Use it so a component can fill the gap, for example with an
    * image from your own renderer. Fully supported drawings are never offered, and neither are
-   * shapes whose text the editor edits. Hidden drawings and drawings without a layout position
-   * have no box, so they are never offered either.
+   * shapes with text that the editor edits; a partial shape without text is offered. Hidden
+   * drawings and drawings without a layout position have no box, so they are never offered
+   * either.
    */
   readonly includePartial?: boolean;
   /**

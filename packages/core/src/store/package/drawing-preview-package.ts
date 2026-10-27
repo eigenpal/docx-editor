@@ -67,8 +67,9 @@ export type DrawingPreviewPackageResult =
        * True when the page has the drawing's size, so the first page is the preview image.
        * False when the size is unknown, such as a legacy VML drawing without a width and height
        * in its style. Then the page has the document's page size and no margins, and the
-       * drawing starts at its top left corner: crop the image to the occurrence's `bounds`.
-       * Send this flag and the `bounds` width and height to your renderer with the bytes.
+       * drawing starts at its top left corner. Crop from (0, 0) to `bounds.width * dpi / 72`
+       * by `bounds.height * dpi / 72` pixels; `bounds.x` and `bounds.y` are page positions,
+       * not crop offsets. Send this flag and the `bounds` size to your renderer with the bytes.
        * Without `bounds`, such as for a report entry, trim the white space instead.
        */
       readonly pageFitsDrawing: boolean;
@@ -356,16 +357,20 @@ function relsPartName(partName: string): string {
 }
 
 /**
- * Build a small DOCX that holds one drawing and the parts it needs: chart and diagram parts,
- * images, styles, theme, settings, and fonts. Send it to a rendering service that draws the
- * first page as an image. Use a different renderer from this library: its own exporters show
- * the same placeholder. The bytes come from the document, so treat them as untrusted: run the
- * renderer in a sandbox without network access, with time and memory limits. The page has the drawing's size, including its effect extent, so it
- * matches the occurrence's `bounds`. It has no margins, and a floating drawing is placed on the
- * line, so the first page is the preview. A legacy VML drawing takes
- * its size from its style. When the size is unknown, the page has the document's page size and
- * no margins, with the drawing at its top left corner. Relationships to external targets and to embedded objects, macros, or templates
- * are dropped, so the package never points outside itself.
+ * Build a small DOCX that holds one drawing for an external renderer.
+ *
+ * Contents: one paragraph with the drawing, plus the chart and diagram parts, images, styles,
+ * theme, settings, and fonts it needs. Relationships to external targets, embedded objects,
+ * macros, and templates are dropped, so the package never points outside itself.
+ *
+ * Page: the first page is the preview. It has the drawing's size, including its effect
+ * extent, so it matches the occurrence's `bounds`, and it has no margins. A floating drawing
+ * is placed on the line, and a legacy VML drawing takes its size from its style. When the
+ * size is unknown, `pageFitsDrawing` is false; see that field for how to crop.
+ *
+ * Renderer: use one other than this library, whose own exporters show the same placeholder.
+ * The bytes come from the document, so run the renderer in a sandbox without network access,
+ * with time and memory limits.
  *
  * Pass the package that the target comes from: an `inspectDrawingSupport` entry with the
  * parsed package it inspected, or an editor occurrence with the editor's current package.

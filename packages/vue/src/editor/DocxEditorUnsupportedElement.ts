@@ -18,8 +18,8 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
   /**
    * Also offer drawings that render without some features (`element.support` is `partial`),
    * not only placeholders. Default `false`. Fully supported drawings are never offered, and
-   * neither are shapes whose text the editor edits, hidden drawings, or drawings without a
-   * layout position.
+   * neither are shapes with text that the editor edits, hidden drawings, or drawings without
+   * a layout position. A partial shape without text is offered.
    */
   includePartial?: UnsupportedElementRule['includePartial'];
 }
@@ -34,6 +34,8 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
  * `@docx-editor.dev/core/editor`.
  * Layout uses points and only sizes content without an existing layout box. Custom content
  * gets the occurrence's box (`element.bounds`); size it to 100% of the width and height.
+ * Over a partly rendered drawing, presses on your content select the drawing below it, so
+ * it can still be moved, resized, and deleted; links, buttons, and form fields keep theirs.
  * Components can remount when pagination or virtualization removes an occurrence.
  * @public
  */
