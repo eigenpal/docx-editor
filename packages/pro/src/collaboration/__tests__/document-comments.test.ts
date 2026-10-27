@@ -546,28 +546,42 @@ describe('resolving a comment replicates commentsExtended.xml, not only the stor
 });
 
 describe('deleting a comment replicates the stripped markers and the comments part', () => {
-  test('large-document deletion survives concurrent text, reconnect, undo, redo, and reopen', async () => {
+  test('large batch deletion survives concurrent text, reconnect, undo, redo, and reopen', async () => {
+    const ids = Array.from({ length: 20 }, (_, index) => String(index + 1));
     const bytes = documentBytes(
-      '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>' + '<w:p><w:r><w:t>x</w:t></w:r></w:p>'.repeat(12_500)
+      ids
+        .map(
+          (id) =>
+            `<w:p><w:commentRangeStart w:id="${id}"/><w:r><w:t>Alpha</w:t></w:r><w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r></w:p>`
+        )
+        .join('') + '<w:p><w:r><w:t>x</w:t></w:r></w:p>'.repeat(12_500),
+      {
+        comments: `<w:comments xmlns:w="${W}">${ids.map((id) => `<w:comment w:id="${id}" w:author="Alice"><w:p><w:r><w:t>remark</w:t></w:r></w:p></w:comment>`).join('')}</w:comments>`,
+      }
     );
     const { alice, bob } = await pair(bytes);
-    const commentId = addCommentOn(alice, 0, 'remark', 'Alice');
+    const commentId = '1';
     const wire = wires.get(bob)!;
     wire.pause();
-    expect(deletePackageComments(alice.store, [{ commentId }])).toBe(true);
+    expect(
+      deletePackageComments(
+        alice.store,
+        ids.map((commentId) => ({ commentId }))
+      )
+    ).toBe(true);
     alice.port.flushPendingJournals();
     apply(bob, [{ op: 'insertText', paragraphId: paragraphIdAt(bob, 0), offset: 5, text: '!' }]);
     wire.resume();
     alice.port.flushPendingJournals();
     bob.port.flushPendingJournals();
     expectConverged(alice, bob);
-    expect(commentTextOf(packageOf(bob), commentId)).toBeNull();
+    for (const id of ids) expect(commentTextOf(packageOf(bob), id)).toBeNull();
     expect(findText(packageOf(bob), 'Alpha!').value).toBe('Alpha!');
     expect(alice.room.session.undo()).toBe(true);
-    expectCommentOnPeer(bob, commentId, 'remark');
+    for (const id of ids) expectCommentOnPeer(bob, id, 'remark');
     expectConverged(alice, bob);
     expect(alice.room.session.redo()).toBe(true);
-    expect(commentTextOf(packageOf(bob), commentId)).toBeNull();
+    for (const id of ids) expect(commentTextOf(packageOf(bob), id)).toBeNull();
     expectConverged(alice, bob);
     const joined = await joinPeer(alice, 'carol');
     expect(commentTextOf(packageOf(joined), commentId)).toBeNull();
@@ -600,6 +614,31 @@ describe('deleting a comment replicates the stripped markers and the comments pa
     expect(commentTextOf(packageOf(bob), replyId)).toBe(null);
     expect(markerIds(packageOf(bob), 'commentReference')).not.toContain(replyId);
     expect(findText(packageOf(bob), 'Alpha').value).toBe('Alpha');
+    expectConverged(alice, bob);
+  });
+
+  test('a mixed batch replicates reply reparenting and an unrelated thread deletion', async () => {
+    const { alice, bob } = await pair(EMPTY);
+    const parentId = addCommentOn(alice, 0, 'parent', 'Alice');
+    const replyId = replyOn(alice, parentId, 0, 'reply');
+    const descendantId = replyOn(alice, replyId, 0, 'descendant');
+    const otherId = addCommentOn(alice, 1, 'other', 'Alice');
+    expect(
+      deletePackageComments(alice.store, [
+        { commentId: replyId, parentCommentId: parentId },
+        { commentId: otherId },
+      ])
+    ).toBe(true);
+    alice.port.flushPendingJournals();
+    expectCommentOnPeer(bob, parentId, 'parent');
+    expectCommentOnPeer(bob, descendantId, 'descendant');
+    expect(commentTextOf(packageOf(bob), replyId)).toBeNull();
+    expect(commentTextOf(packageOf(bob), otherId)).toBeNull();
+    expectConverged(alice, bob);
+    // Removing the retained parent must still reach its reparented descendant on both peers.
+    expect(deletePackageComments(bob.store, [{ commentId: parentId }])).toBe(true);
+    bob.port.flushPendingJournals();
+    expect(commentTextOf(packageOf(alice), descendantId)).toBeNull();
     expectConverged(alice, bob);
   });
 });

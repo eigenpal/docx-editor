@@ -18,7 +18,9 @@ import {
   metadataPartNamesFor,
   MAX_COMMENT_SCAN_DEPTH,
   type CommentRecord,
+  type CommentRecordIndex,
   type CommentScanBudget,
+  type KeyedMetadataEntry,
   W15_NAMESPACE_URI,
   W16CID_NAMESPACE_URI,
 } from './comment-lifecycle-scan.ts';
@@ -111,7 +113,11 @@ export function threadChildrenOf(
   pkg: OoxmlPackage,
   owner: CommentDeletionOwner,
   budget: CommentScanBudget,
-  inferCoincident: boolean
+  inferCoincident: boolean,
+  scanned?: {
+    readonly records: CommentRecordIndex;
+    readonly metadata: KeyedMetadataEntry[];
+  }
 ): {
   readonly childrenOf: Map<string, string[]>;
   readonly records: Map<string, CommentRecord>;
@@ -124,9 +130,10 @@ export function threadChildrenOf(
 } {
   const commentsPart = commentsPartNameForStory(pkg, owner.storyPartName);
   const indexed =
-    commentsPart === null
+    scanned?.records ??
+    (commentsPart === null
       ? { byId: new Map<string, CommentRecord>(), duplicateIds: new Set<string>() }
-      : indexCommentRecords(pkg, commentsPart, budget);
+      : indexCommentRecords(pkg, commentsPart, budget));
   const records = indexed.byId;
   const childrenOf = new Map<string, string[]>();
   const linkedChildren = new Map<string, Set<string>>();
@@ -200,7 +207,7 @@ export function threadChildrenOf(
   const seenEx = new Set<string>();
   const seenIdPara = new Set<string>();
   const seenDurable = new Set<string>();
-  const metadata = keyedMetadataIn(pkg, [meta.extended, meta.ids], budget);
+  const metadata = scanned?.metadata ?? keyedMetadataIn(pkg, [meta.extended, meta.ids], budget);
   if (budget.truncated) return { ...empty, malformed: false };
   if (keyedMetadataMisplaced(pkg, metadata)) return { ...empty, malformed: true };
   for (const entry of metadata) {

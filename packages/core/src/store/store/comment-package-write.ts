@@ -15,7 +15,7 @@ import {
   packageTransactionPublished,
   runObservedStoreTransaction,
 } from '../package/canonical-primitive-capture.ts';
-import { deleteCommentReply, deleteCommentThreadInStory } from '../package/comment-lifecycle.ts';
+import { deleteCommentBatch } from '../package/comment-batch-delete.ts';
 import {
   addComment,
   setCommentResolved,
@@ -152,19 +152,12 @@ export function deletePackageComments(
       const result = store.transact((transaction) => {
         const ctx = commentPackageContext(transaction);
         ctx.applyPackage((current) => {
-          let next = current;
-          for (const comment of comments) {
-            const deleted =
-              comment.parentCommentId === undefined
-                ? deleteCommentThreadInStory(next, comment.commentId, owner)
-                : deleteCommentReply(next, comment.commentId, comment.parentCommentId, owner);
-            if (deleted === null) {
-              refused = true;
-              return current;
-            }
-            removed ||= deleted !== next;
-            next = deleted;
+          const next = deleteCommentBatch(current, comments, owner);
+          if (next === null) {
+            refused = true;
+            return current;
           }
+          removed = next !== current;
           return next;
         });
       });
