@@ -11,6 +11,7 @@ import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { themeFontFamilyOf, type ThemeSchemeFaces } from '../store/package/theme-font-scheme.ts';
 import { symbolFontFamily } from '../store/package/run-defaults.ts';
+import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 /**
  * The same shape `semantic-paint.ts` enforces at the CSS sink (its `FONT_NAME`):
@@ -100,18 +101,9 @@ const COMPOSE_CHILD_THRESHOLD = 16;
 const MAX_COMPOSE_DEPTH = 32;
 
 /** One wide container's composition, kept for its next revision; see {@link composedFonts}. */
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface ChildrenWeakRef {
-  deref(): readonly OoxmlNode[] | undefined;
-}
-declare const WeakRef: new (target: readonly OoxmlNode[]) => ChildrenWeakRef;
-
 interface FontComposition {
   /** Weakly: a kept composition must not keep a closed document's tree alive. */
-  readonly children: ChildrenWeakRef;
+  readonly children: WeakRefOf<readonly OoxmlNode[]>;
   readonly parts: readonly (ReadonlyMap<string, string> | null)[];
   readonly byFold: ReadonlyMap<string, string>;
   readonly themeFonts: ThemeSchemeFaces | undefined;
@@ -177,7 +169,7 @@ function composedFonts(
     byFold = merged;
   }
   fontCompositions.delete(subtree.id);
-  fontCompositions.set(subtree.id, { children: new WeakRef(children), parts, byFold, themeFonts });
+  fontCompositions.set(subtree.id, { children: weakRefOf(children), parts, byFold, themeFonts });
   if (fontCompositions.size > MAX_FONT_COMPOSITIONS)
     fontCompositions.delete(fontCompositions.keys().next().value!);
   return byFold;

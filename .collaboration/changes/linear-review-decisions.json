@@ -2,13 +2,14 @@
   "impact": "compatible",
   "fields": [],
   "before": "Joining paragraphs after a tracked-change decision looked up the rest of the body for each block, and each decision indexed the whole part to find content controls.",
-  "after": "The join reads each block once, and a part without content controls skips the control lookup. Both build the same tree.",
+  "after": "The join reads each block once, a part without content controls skips the control lookup, and a decision that removes records from a few paragraphs patches their cards instead of deriving the whole queue. The tree and the queue are the same.",
   "reason": "Only the cost of a decision changes. The resulting tree, node ids, operations, and package serialization are the same.",
   "tests": [
     "packages/core/src/store/__tests__/revision-paragraph-merge-scaling.test.ts",
     "packages/core/src/store/__tests__/decision-control-restore-index.test.ts",
     "packages/pro/src/collaboration/__tests__/document-revisions.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-concurrent-decision-span.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-concurrent-decision-span.test.ts",
+    "packages/core/src/editor/__tests__/review-decision-patch.test.ts"
   ],
   "changeset": "linear-review-decisions",
   "migration": null

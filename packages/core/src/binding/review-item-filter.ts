@@ -130,7 +130,7 @@ function settled(before: HiddenReviewSites, next: HiddenReviewSites): HiddenRevi
  * so they hold only while it is true. A numbering change alone keeps them when the previous
  * queue holds no property change the filter could have decided differently. `publish` records
  * which sites the final queue leaves out: a full derivation's own, or, for a queue patched from
- * `previous.items`, the earlier ones updated by the last list `filtered` saw. A set with the
+ * `previous.items`, the earlier ones updated by each list `filtered` saw. A set with the
  * same contents keeps its identity, so filters built from it stay cached.
  */
 export function reviewItemFiltering(
@@ -162,7 +162,8 @@ export function reviewItemFiltering(
     touched: string[];
     kept: string[];
   };
-  let last: Pass | null = null;
+  // Every list `filtered` saw: a decision patches several paragraphs, one pass each.
+  const passes: Pass[] = [];
   const sameFilter =
     previous !== null &&
     previous.stylesPart === current.stylesPart &&
@@ -175,21 +176,26 @@ export function reviewItemFiltering(
       // By id: relinking replies after the filter gives kept items new objects.
       const keptIds = new Set(kept.map((item) => item.id));
       const removed = unlistedSitesOf(list.filter((item) => !keptIds.has(item.id)));
-      last = {
+      passes.push({
         result: kept,
         removed: removed.sites,
         paragraphs: removed.paragraphs,
         spanning: removed.spanning,
         touched: paragraphsTouchedBy(list),
         kept: unlistedSitesOf(kept).sites,
-      };
+      });
       return kept;
     },
     sameFilter,
     patchable: (paragraphId) => sameFilter && !before.spanning.has(paragraphId),
     publish: (items) => {
-      if (!filter || hiddenSites.has(items)) return items;
-      const local = last as Pass | null;
+      if (!filter) return items;
+      // A patch that changes no card hands back the queue it started from; its passes can
+      // still have changed which records that queue leaves out.
+      // A queue published before, other than the one patched, already holds its own record.
+      if (hiddenSites.has(items) && (passes.length === 0 || items !== previous?.items))
+        return items;
+      const local = passes.at(-1);
       if (local?.result === items) {
         const fresh = {
           sites: new Set(local.removed),
@@ -206,22 +212,25 @@ export function reviewItemFiltering(
       }
       if (
         before.key === key &&
-        local.removed.length === 0 &&
-        !local.kept.some((id) => before.sites.has(id))
+        passes.every(
+          (pass) => pass.removed.length === 0 && !pass.kept.some((id) => before.sites.has(id))
+        )
       ) {
         hiddenSites.set(items, before);
         return items;
       }
       const sites = new Set(before.sites);
-      for (const id of local.kept) sites.delete(id);
-      for (const id of local.removed) sites.add(id);
-      // The patched paragraph's entries are its own walk's answer now.
       const paragraphs = new Map(before.paragraphs);
-      for (const id of local.touched) paragraphs.delete(id);
-      for (const [id, value] of local.paragraphs) paragraphs.set(id, value);
       const spanning = new Set(before.spanning);
-      for (const id of local.touched) spanning.delete(id);
-      for (const id of local.spanning) spanning.add(id);
+      for (const pass of passes) {
+        for (const id of pass.kept) sites.delete(id);
+        for (const id of pass.removed) sites.add(id);
+        // The patched paragraph's entries are its own walk's answer now.
+        for (const id of pass.touched) paragraphs.delete(id);
+        for (const [id, value] of pass.paragraphs) paragraphs.set(id, value);
+        for (const id of pass.touched) spanning.delete(id);
+        for (const id of pass.spanning) spanning.add(id);
+      }
       hiddenSites.set(items, settled(before, { sites, paragraphs, key, spanning }));
       return items;
     },

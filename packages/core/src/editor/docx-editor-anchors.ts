@@ -19,6 +19,7 @@ import {
   type SemanticLayout,
 } from '@docx-editor.dev/core/layout';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
+import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 /**
  * Paragraph anchors for every story on a layout, memoized on the layout OBJECT.
@@ -33,8 +34,8 @@ export function createAnchorIndex(): (
 ) => Map<string, ReviewParagraphAnchor> {
   const cache = new WeakMap<SemanticLayout, Map<string, ReviewParagraphAnchor>>();
   let last: {
-    readonly pages: PagesWeakRef;
-    readonly index: IndexWeakRef;
+    readonly pages: WeakRefOf<SemanticLayout['pages']>;
+    readonly index: WeakRefOf<Map<string, ReviewParagraphAnchor>>;
   } | null = null;
   return (layout) => {
     const cached = cache.get(layout);
@@ -42,7 +43,7 @@ export function createAnchorIndex(): (
     const carried = last && carriedIndex(last, layout);
     if (carried) {
       cache.set(layout, carried);
-      last = { pages: new WeakRef(layout.pages), index: new WeakRef(carried) };
+      last = { pages: weakRefOf(layout.pages), index: weakRefOf(carried) };
       return carried;
     }
     // The projection is passed as a STABLE reference, not an inline arrow: the index caches
@@ -69,25 +70,10 @@ export function createAnchorIndex(): (
       }
     }
     cache.set(layout, index);
-    last = { pages: new WeakRef(layout.pages), index: new WeakRef(index) };
+    last = { pages: weakRefOf(layout.pages), index: weakRefOf(index) };
     return index;
   };
 }
-
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface PagesWeakRef {
-  deref(): SemanticLayout['pages'] | undefined;
-}
-interface IndexWeakRef {
-  deref(): Map<string, ReviewParagraphAnchor> | undefined;
-}
-declare const WeakRef: {
-  new (target: SemanticLayout['pages']): PagesWeakRef;
-  new (target: Map<string, ReviewParagraphAnchor>): IndexWeakRef;
-};
 
 function sameKeys(a: ReadonlyMap<string, unknown>, b: ReadonlyMap<string, unknown>): boolean {
   if (a.size !== b.size) return false;
@@ -118,7 +104,10 @@ const bodyAnchorsOf = (page: SemanticLayout['pages'][number]) =>
  * the first page wins.
  */
 function carriedIndex(
-  last: { readonly pages: PagesWeakRef; readonly index: IndexWeakRef },
+  last: {
+    readonly pages: WeakRefOf<SemanticLayout['pages']>;
+    readonly index: WeakRefOf<Map<string, ReviewParagraphAnchor>>;
+  },
   layout: SemanticLayout
 ): Map<string, ReviewParagraphAnchor> | null {
   const previous = last.pages.deref();

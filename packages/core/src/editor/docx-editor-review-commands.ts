@@ -842,14 +842,19 @@ function acceptEmptiesTableCell(part: OoxmlPart, item: ReviewRevisionItem): bool
   );
 }
 
-/** Whether a card sits in a paragraph that holds part of an ordinary move range. */
+/**
+ * Whether a card can decide together with an ordinary move range. A card with no range has no
+ * paragraph to rule it out.
+ */
 function touchesOrdinaryMove(part: OoxmlPart, item: ReviewRevisionItem): boolean {
   const paragraphs = paragraphsWithOrdinaryMoves(part.root);
+  if (paragraphs === 'everywhere') return true;
   return (
     paragraphs.size > 0 &&
-    item.ranges.some(
-      (range) => paragraphs.has(range.start.paragraphId) || paragraphs.has(range.end.paragraphId)
-    )
+    (item.ranges.length === 0 ||
+      item.ranges.some(
+        (range) => paragraphs.has(range.start.paragraphId) || paragraphs.has(range.end.paragraphId)
+      ))
   );
 }
 

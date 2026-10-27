@@ -1641,6 +1641,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const locked = reviewChangesLocked(surface);
     return keepPlacements(
       items,
+      anchors !== null,
       order.map((position) => {
         const item = items[position]!;
         return reviewItemPlacement(item, {

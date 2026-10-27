@@ -277,33 +277,39 @@ export function ordinaryMoveInsertionSites(root: OoxmlNode): ReadonlySet<string>
   );
 }
 
-const moveParagraphs = new WeakMap<OoxmlNode, ReadonlySet<string>>();
+const moveParagraphs = new WeakMap<OoxmlNode, ReadonlySet<string> | 'everywhere'>();
 
 /**
- * Ids of the paragraphs that hold an ordinary move range. Ordinary ranges are paragraph-local,
- * so a change in any other paragraph cannot be decided as part of a move.
+ * Ids of the paragraphs that hold an ordinary move range, or `'everywhere'` when a range sits
+ * between blocks (a body or cell child) and any card may decide with it. A range inside a
+ * paragraph is local to it, so a change in any other paragraph cannot be decided as part of it.
  */
-export function paragraphsWithOrdinaryMoves(root: OoxmlNode): ReadonlySet<string> {
+export function paragraphsWithOrdinaryMoves(root: OoxmlNode): ReadonlySet<string> | 'everywhere' {
   const cached = moveParagraphs.get(root);
   if (cached) return cached;
   const ids = new Set<string>();
-  const ranges = ordinaryMoveRanges(root);
-  // A range lives in one paragraph, usually as its direct children. One nested in an inline
-  // container (a hyperlink, a control) is found by a walk.
+  // Usually the paragraph itself holds the range. One nested in an inline container (a
+  // hyperlink, a control) is placed by a walk; one with no paragraph above it is everywhere.
   const nested = new Set<OoxmlNode>();
-  for (const range of ranges) {
+  for (const range of ordinaryMoveRanges(root)) {
     if (range.parent.kind === 'paragraph') ids.add(range.parent.id);
     else nested.add(range.parent);
   }
+  let answer: ReadonlySet<string> | 'everywhere' = ids;
   if (nested.size > 0) {
+    let placed = 0;
     const visit = (node: OoxmlNode, paragraph: string | null): void => {
       if (node.kind === 'textValue') return;
       const here = node.kind === 'paragraph' ? node.id : paragraph;
-      if (nested.has(node) && here) ids.add(here);
+      if (nested.has(node) && here) {
+        ids.add(here);
+        placed += 1;
+      }
       for (const child of node.children) visit(child, here);
     };
     visit(root, null);
+    if (placed < nested.size) answer = 'everywhere';
   }
-  moveParagraphs.set(root, ids);
-  return ids;
+  moveParagraphs.set(root, answer);
+  return answer;
 }

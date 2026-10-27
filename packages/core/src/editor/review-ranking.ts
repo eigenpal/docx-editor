@@ -19,7 +19,7 @@ export interface ReviewRanking {
 
 /**
  * Rank a queue, per narrowed queue and weakly: the rail's and the commands' queries keep
- * separate ranks. Geometry and rank depend on the queue, the layout and the package alone, so a
+ * separate ranks, and so do a placed and an unplaced read of one queue. Geometry and rank depend on the queue, the layout and the package alone, so a
  * commit's several reads (rail, commands, highlights) share them instead of sorting every card.
  *
  * A keystroke brings a new layout and revision for the same queue. When every card keeps its
@@ -31,8 +31,10 @@ export function createReviewRanker(): (
   revision: number,
   groupOf: (item: ReviewItem) => number
 ) => ReviewRanking {
-  const rankings = new WeakMap<readonly ReviewItem[], ReviewRanking>();
+  const placed = new WeakMap<readonly ReviewItem[], ReviewRanking>();
+  const unplaced = new WeakMap<readonly ReviewItem[], ReviewRanking>();
   return (items, anchors, revision, groupOf) => {
+    const rankings = anchors ? placed : unplaced;
     const previous = rankings.get(items);
     if (previous && previous.anchors === anchors && previous.revision === revision) return previous;
     const geometries = items.map((item) => (anchors ? reviewItemGeometry(item, anchors) : null));
@@ -66,14 +68,18 @@ export function createReviewRanker(): (
 /**
  * Hand back the previous placement list when every placement in `next` is the object it was.
  * A keystroke that moves no card then gives the rail the same list, and its memos skip the
- * work that compares thousands of cards.
+ * work that compares thousands of cards. A placed and an unplaced read of one queue keep
+ * separate lists.
  */
 export function createPlacementKeeper<T>(): (
   items: readonly ReviewItem[],
+  placed: boolean,
   next: readonly T[]
 ) => readonly T[] {
-  const previous = new WeakMap<readonly ReviewItem[], readonly T[]>();
-  return (items, next) => {
+  const placedLists = new WeakMap<readonly ReviewItem[], readonly T[]>();
+  const unplacedLists = new WeakMap<readonly ReviewItem[], readonly T[]>();
+  return (items, placed, next) => {
+    const previous = placed ? placedLists : unplacedLists;
     const last = previous.get(items);
     if (
       last &&

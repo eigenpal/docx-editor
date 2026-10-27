@@ -10,6 +10,7 @@ import {
   parseTocInstruction,
   type TocInstruction,
 } from './toc-instruction.ts';
+import { weakRefOf, type WeakRefOf } from './weak-ref.ts';
 
 /** A table of contents found in a document, whether wrapped in an SDT or a bare field. */
 export interface DetectedToc {
@@ -50,8 +51,12 @@ function bodyOf(part: OoxmlPart): OoxmlElement | null {
 const fieldTokensByParagraph = new WeakMap<OoxmlElement, readonly OoxmlNode[]>();
 const fieldBoundaries = new WeakMap<OoxmlElement, boolean>();
 
-/** Whether a paragraph holds a field character or instruction, not only text and tabs. */
-function holdsFieldBoundary(paragraph: OoxmlElement): boolean {
+/**
+ * Whether a paragraph holds a field character or instruction, not only text and tabs.
+ *
+ * @internal
+ */
+export function holdsFieldBoundary(paragraph: OoxmlElement): boolean {
   let holds = fieldBoundaries.get(paragraph);
   if (holds === undefined) {
     holds = fieldTokens(paragraph).some((token) => token.kind !== 'text' && token.kind !== 'tab');
@@ -263,24 +268,15 @@ function detectTocsInContainer(
 }
 
 /** A container's last detection per id: an edit makes a new container that keeps its id. */
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface ChildrenWeakRef {
-  deref(): readonly OoxmlNode[] | undefined;
-}
-declare const WeakRef: new (target: readonly OoxmlNode[]) => ChildrenWeakRef;
-
 const lastDetections = new Map<
   string,
-  { children: ChildrenWeakRef; tocs: readonly DetectedToc[] }
+  { children: WeakRefOf<readonly OoxmlNode[]>; tocs: readonly DetectedToc[] }
 >();
 const MAX_LAST_DETECTIONS = 32;
 
 function rememberDetection(container: OoxmlElement, tocs: readonly DetectedToc[]): void {
   lastDetections.delete(container.id);
-  lastDetections.set(container.id, { children: new WeakRef(container.children), tocs });
+  lastDetections.set(container.id, { children: weakRefOf(container.children), tocs });
   if (lastDetections.size > MAX_LAST_DETECTIONS)
     lastDetections.delete(lastDetections.keys().next().value!);
 }
@@ -317,6 +313,20 @@ export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
   const result = body ? detectTocsInContainer(body, undefined, 0) : EMPTY_TOCS;
   detectBodyTocsCache.set(part, result);
   return result;
+}
+
+/**
+ * Whether a paragraph opens, closes or holds the result of a body TOC.
+ *
+ * @internal
+ */
+export function inBodyToc(part: OoxmlPart, paragraphId: string): boolean {
+  return detectBodyTocs(part).some(
+    (toc) =>
+      toc.beginParagraphId === paragraphId ||
+      toc.endParagraphId === paragraphId ||
+      toc.resultParagraphIds.includes(paragraphId)
+  );
 }
 
 /** Locate the table of contents containing a position, or null. */

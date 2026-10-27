@@ -217,3 +217,20 @@ export function withoutHiddenMarkParagraphs(
 export function numberingFlowBlocks(blocks: readonly OoxmlElement[]): readonly OoxmlElement[] {
   return numberingFlows.get(blocks) ?? blocks;
 }
+
+/**
+ * Give `to`, a copy of `from` with some blocks swapped (see `replaced`), the numbering list of
+ * `from` with the same blocks swapped, so the paragraphs a hidden mark removed stay counted.
+ */
+export function carryNumberingFlow(
+  from: readonly OoxmlElement[],
+  to: readonly OoxmlElement[],
+  replaced: ReadonlyMap<OoxmlElement, OoxmlElement>
+): void {
+  const flow = numberingFlows.get(from);
+  if (flow)
+    numberingFlows.set(
+      to,
+      flow.map((block) => replaced.get(block) ?? block)
+    );
+}

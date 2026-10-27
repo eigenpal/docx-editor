@@ -51,7 +51,7 @@ const NUMBERING_PART = '/word/numbering.xml';
  * before: every part but `storyPartName` and the numbering part, and the relationships and
  * content types that resolve headers, footers, notes, and comments.
  */
-function reviewInputsUnchanged(
+export function reviewInputsUnchanged(
   before: OoxmlPackage,
   after: OoxmlPackage,
   storyPartName: string
@@ -314,7 +314,7 @@ function absorbedIntoGroups(
   return { groups, absorbed };
 }
 
-function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
+export function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
   if (!item.range) return false;
   return item.range.start.paragraphId === paragraphId || item.range.end.paragraphId === paragraphId;
 }
@@ -329,7 +329,10 @@ function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): 
  * markers. So typing in that first cell dropped the row's card while the row stayed painted
  * as a proposal: a change on screen with nothing left to accept it by.
  */
-function revisionAnchoredOutsideParagraph(item: ReviewRevisionItem, paragraphId: string): boolean {
+export function revisionAnchoredOutsideParagraph(
+  item: ReviewRevisionItem,
+  paragraphId: string
+): boolean {
   return (
     item.revisionKind === 'structural' &&
     item.ranges.some(
@@ -338,7 +341,10 @@ function revisionAnchoredOutsideParagraph(item: ReviewRevisionItem, paragraphId:
   );
 }
 
-function revisionCrossesParagraphBoundary(item: ReviewRevisionItem, paragraphId: string): boolean {
+export function revisionCrossesParagraphBoundary(
+  item: ReviewRevisionItem,
+  paragraphId: string
+): boolean {
   if (item.ranges.length === 0) return false;
   const touches = item.ranges.some(
     (range) => range.start.paragraphId === paragraphId || range.end.paragraphId === paragraphId
@@ -360,7 +366,7 @@ export interface ReviewPatchInputs {
 }
 
 /** Whether `change` is one body commit after `cache`, with every other queue input unchanged. */
-function onlyBodyChanged(
+export function onlyBodyChanged(
   change: TreeModelChange,
   cache: LocalReviewPatchCache,
   inputs: ReviewPatchInputs
@@ -432,7 +438,7 @@ const isBlockChild = (node: OoxmlNode): boolean =>
   (node.kind === 'generic' && (node.localName === 'sdt' || node.localName === 'customXml'));
 
 /** Whether the paragraph a formatting change in `paragraphId` continues from holds a mark revision. */
-function previousHoldsMarkRevision(part: OoxmlPart, paragraphId: string): boolean {
+export function previousHoldsMarkRevision(part: OoxmlPart, paragraphId: string): boolean {
   const previous = formattingPredecessor(part, paragraphId);
   return (
     previous !== undefined &&
@@ -487,7 +493,11 @@ export function reviewQueueKeptByStructure(
 }
 
 /** Whether the paragraph holds a control that is not the same object it was in `before`. */
-function controlsChangedIn(before: OoxmlPackage, part: OoxmlPart, paragraph: OoxmlNode): boolean {
+export function controlsChangedIn(
+  before: OoxmlPackage,
+  part: OoxmlPart,
+  paragraph: OoxmlNode
+): boolean {
   const now = contentControlsIn(paragraph);
   if (now.length === 0) return false;
   const previousPart = before.parts.get(part.name);
@@ -498,7 +508,7 @@ function controlsChangedIn(before: OoxmlPackage, part: OoxmlPart, paragraph: Oox
 }
 
 /** Whether a control the queue lists as a custom node encloses the paragraph. */
-function insideCustomNode(
+export function insideCustomNode(
   part: OoxmlPart,
   paragraphId: string,
   items: readonly ReviewItem[]

@@ -45,6 +45,7 @@ import {
   FORMAT_DEFAULT_EAST_ASIAN_FAMILY,
   FORMAT_DEFAULT_LATIN_FAMILY,
 } from './default-font-faces.ts';
+import { weakRefOf, type WeakRefOf } from './weak-ref.ts';
 
 /** `basedOn` walk cap, matching `run-defaults`. */
 const CHAIN_CAP = 16;
@@ -450,18 +451,9 @@ function summaryOf(
 }
 
 /** One wide container's composition, kept for its next revision; see {@link composedSummary}. */
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface ChildrenWeakRef {
-  deref(): readonly OoxmlNode[] | undefined;
-}
-declare const WeakRef: new (target: readonly OoxmlNode[]) => ChildrenWeakRef;
-
 interface Composition {
   /** Weakly: a kept composition must not keep a closed document's tree alive. */
-  readonly children: ChildrenWeakRef;
+  readonly children: WeakRefOf<readonly OoxmlNode[]>;
   readonly parts: readonly (RenderedFontsSummary | null)[];
   readonly summary: MutableSummary;
   readonly themeFonts: DocumentThemeFonts;
@@ -528,7 +520,7 @@ function composedSummary(
   }
   if (neutral) {
     compositions.delete(subtree.id);
-    compositions.set(subtree.id, { children: new WeakRef(children), parts, summary, themeFonts });
+    compositions.set(subtree.id, { children: weakRefOf(children), parts, summary, themeFonts });
     if (compositions.size > MAX_COMPOSITIONS)
       compositions.delete(compositions.keys().next().value!);
   }

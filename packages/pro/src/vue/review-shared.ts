@@ -22,7 +22,7 @@ export const selectDocumentReadOnly = (snapshot: EditorSnapshot) =>
 
 export { COMPACT_CARD_WIDTH } from '../review/rail-metrics.ts';
 export const COMPOSE_KEY = '\u0000compose';
-export { RAIL_OVERSCAN, UNMEASURED_RAIL_WINDOW } from '../review/rail-window.ts';
+export { RAIL_OVERSCAN } from '../review/rail-window.ts';
 export const AUTHOR_SLOTS = 8;
 export const DEFAULT_CARD_HEIGHT = 72;
 export const COLLAPSED_CARD_HEIGHT = 64;

@@ -17,8 +17,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // rather than from measuring painted DOM, which would put the sidebar a repaint behind the
 // document and break outright during pagination.
 
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useDeferredValue, useMemo, useRef, useSyncExternalStore } from 'react';
 import type {
+  DocumentChange,
   Editor,
   ReviewActivationOptions,
   ScrollPlacement,
@@ -118,6 +119,14 @@ export type { ReviewActivationOptions, ScrollPlacement };
 /** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
 export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 
+/**
+ * An edit in one paragraph, as typing is: one paragraph changed in place, none made or removed.
+ * A decision reports no dirty paragraph, and a load or a structural edit reports more.
+ */
+function isTypingChange(change: DocumentChange): boolean {
+  return change.dirty?.length === 1 && !change.created?.length && !change.deleted?.length;
+}
+
 /** What the review state depends on: the queue, the editing mode and the author filter. */
 function reviewVersionOf(editor: Editor): string {
   return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
@@ -129,7 +138,23 @@ function reviewVersionOf(editor: Editor): string {
  * @public
  */
 export interface UseReviewReturn {
-  /** Every pending decision in the document, in reading order. */
+  /**
+   * Every pending decision in the document, in reading order.
+   *
+   * Follows an edit in one paragraph, such as typing, at background priority. The document
+   * paints first, and the cards follow in the next render, which a further keystroke can
+   * interrupt. These update the cards at once:
+   *
+   * - the actions below
+   * - a decision made elsewhere, such as from the toolbar or the editor API
+   * - a new document
+   * - a structural edit
+   * - a selection change on its own
+   *
+   * A comment added another way, through `editor.addComment` or by a remote peer, changes one
+   * paragraph. Its card follows at background priority too. The actions always act on the
+   * document as it is.
+   */
   readonly items: readonly ReviewItemView[];
   /** The CARET-ACTIVE item: the one the caret is in, or null. */
   readonly activeKey: string | null;
@@ -303,6 +328,8 @@ export function useReview(query?: ReviewItemQuery): UseReviewReturn {
 
 /** The same hook against an explicit editor, for hosts that hold their own. */
 export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn {
+  // Whether the last document change was typing in one paragraph; see `cardsVersion` below.
+  const typing = useRef(false);
   const subscribe = useCallback(
     (onChange: () => void) => {
       if (!editor) return () => undefined;
@@ -310,8 +337,19 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       const notify = deferredReviewNotifier(() => {
         if (!disposed) onChange();
       });
-      const offDocument = editor.on('change', notify);
-      const offSelection = editor.on('selectionChange', notify);
+      // A keystroke moves the caret in the same task as its change; a selection change on its
+      // own (a click, an arrow key) is not typing, and the active card follows it at once.
+      let changedThisTask = false;
+      const offDocument = editor.on('change', (change) => {
+        typing.current = isTypingChange(change);
+        changedThisTask = true;
+        queueMicrotask(() => (changedThisTask = false));
+        notify();
+      });
+      const offSelection = editor.on('selectionChange', () => {
+        if (!changedThisTask) typing.current = false;
+        notify();
+      });
       // `error` too: a load that fails to parse tears the surface down and emits ONLY an
       // error — no `change` fires for it. Without this, a surface built on the raw hook
       // kept the previous document's cards (and `ready: true`) over a document that never
@@ -349,12 +387,22 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
   const settle = useCallback(
     (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
+      // A card action's change can look like typing (a comment changes one paragraph), but
+      // the card it adds or removes shows at once.
+      typing.current = false;
       if (editor) reviewRefusalStore(editor).record(action, key, result);
       return result.ok;
     },
     [editor]
   );
 
+  // While typing, the cards follow at background priority, as the Vue adapter's do on the next
+  // task: a keystroke paints first, and the rail places its cards in a render after it that the
+  // next keystroke can interrupt, so a burst of keys shares one placement. Any other change (a
+  // decision, a new document) places them at once, so no card outlives its change and no earlier
+  // document stays alive behind a deferred render. A test inside `act()` sees them either way.
+  const deferredVersion = useDeferredValue(version);
+  const cardsVersion = typing.current ? deferredVersion : version;
   const items = useMemo<readonly ReviewItemView[]>(
     () =>
       editor
@@ -366,9 +414,10 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
             .getReviewItems(query)
             .filter((entry) => entry.item.kind !== 'custom' || entry.item.carded)
         : [],
-    // `version` is the dependency: it changes exactly when the document or selection does.
+    // `cardsVersion` is the dependency: it follows the document and selection at background
+    // priority.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor, version, query]
+    [editor, cardsVersion, query]
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);

@@ -40,7 +40,8 @@ const PROMPT_KINDS: ReadonlySet<ContentControlKind> = new Set<ContentControlKind
   'docPartList',
 ]);
 
-function holdsContent(node: OoxmlNode, depth: number): boolean {
+/** @internal Exported for the restore order oracle test. */
+export function holdsContent(node: OoxmlNode, depth: number): boolean {
   if (node.kind === 'textValue' || depth > MAX_INLINE_CONTAINER_DEPTH) return false;
   if (node.kind === 'run') return node.children.some((child) => !isRunPropertiesNode(child));
   if (node.localName === 'sdtPr' || node.localName === 'pPr') return false;
@@ -131,27 +132,36 @@ export function restoreDecisionEmptiedControls(
   // `before` that enters only subtrees holding a control, and that keeps each control and
   // whether it sits in run content: looking each change and control up instead indexed the
   // whole part, and each decision makes a new part.
-  const decided = new Set(decidedIds);
-  const controls = new Map<string, Control>();
-  const add = (control: Control): void => {
-    if (!controls.has(control.node.id)) controls.set(control.node.id, control);
-  };
+  const order = [...decidedIds];
+  const decided = new Set(order);
+  /** Per decided id: the controls around it, innermost first, as a walk up meets them. */
+  const enclosingOf = new Map<string, readonly Control[]>();
+  /** Per decided id: the controls it holds, in document order, within the depth limit. */
+  const insideOf = new Map<string, Control[]>();
+  type Holder = { readonly id: string; readonly depth: number };
+  const noHolders: readonly Holder[] = [];
   const visit = (
     node: OoxmlNode,
     enclosing: readonly Control[],
-    below: number | null,
+    holders: readonly Holder[],
     inline: boolean
   ): void => {
     if (node.kind === 'textValue') return;
-    if (decided.has(node.id)) {
-      // Innermost first, as a walk up from the change meets them.
-      for (let index = enclosing.length - 1; index >= 0; index -= 1) add(enclosing[index]!);
-      below = 0;
-    } else if (below !== null) below += 1;
+    let within =
+      holders.length === 0
+        ? noHolders
+        : holders.map((holder) => ({ id: holder.id, depth: holder.depth + 1 }));
+    // A repeated id counts where it first appears, as a lookup by id finds it.
+    if (decided.has(node.id) && !enclosingOf.has(node.id)) {
+      enclosingOf.set(node.id, [...enclosing].reverse());
+      insideOf.set(node.id, []);
+      within = [...within, { id: node.id, depth: 0 }];
+    }
     let around = enclosing;
     if (node.kind === 'contentControl') {
       const control = { node, inline };
-      if (below !== null && below <= MAX_INLINE_CONTAINER_DEPTH) add(control);
+      for (const holder of within)
+        if (holder.depth <= MAX_INLINE_CONTAINER_DEPTH) insideOf.get(holder.id)!.push(control);
       around = [...enclosing, control];
     }
     // What sits below this node is in run content when the nearest block above it is a
@@ -159,9 +169,16 @@ export function restoreDecisionEmptiedControls(
     const childInline =
       node.kind === 'paragraph' || isWml(node, 'p') ? true : BLOCKS.has(node.kind) ? false : inline;
     for (const child of node.children)
-      if (around.length > 0 || holdsContentControl(child)) visit(child, around, below, childInline);
+      if (around.length > 0 || holdsContentControl(child))
+        visit(child, around, within, childInline);
   };
-  visit(before.root, [], null, false);
+  visit(before.root, [], [], false);
+  // In the order of the decided ids, each one's enclosing controls and then the ones it held:
+  // the order the restore allocates node ids in, which every peer must share.
+  const controls = new Map<string, Control>();
+  for (const id of order)
+    for (const control of [...(enclosingOf.get(id) ?? []), ...(insideOf.get(id) ?? [])])
+      if (!controls.has(control.node.id)) controls.set(control.node.id, control);
   let result: TreeOpResult = { ok: true, part: after, effect: NO_EFFECT };
   for (const { node, inline } of controls.values()) {
     if (!inline) continue;

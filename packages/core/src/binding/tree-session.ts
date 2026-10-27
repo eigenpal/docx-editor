@@ -12,6 +12,7 @@ import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts'
 import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
+import { patchDecidedReviewItems as patchDecided } from './review-decision-patch.ts';
 import {
   canApplyLocalReviewPatch,
   localReviewPatchParagraphId,
@@ -1085,8 +1086,10 @@ export function openTreeSessionFromPackage(
             if (!patched) paragraphOrder = paragraphOrderOfPart(store.part);
             items = patched ?? derived();
           } else {
-            paragraphOrder = paragraphOrderOfPart(store.part);
-            items = derived();
+            // A decision that changed a few paragraphs in place patches each of them.
+            const decided = patchDecided(lastChange, reviewCache, inputs, filtering, derive);
+            paragraphOrder = decided?.paragraphOrder ?? paragraphOrderOfPart(store.part);
+            items = decided?.items ?? derived();
           }
         }
 

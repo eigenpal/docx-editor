@@ -8,6 +8,7 @@
 import { logicalLineSegments } from './line-segments.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type { BlockFragmentRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
+import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 // Memoized PER LAYOUT, which is sound because a published layout is immutable: a new revision
 // is a new object. Without this every selection walk recomputed the order — and `lineOverlap`
@@ -64,18 +65,9 @@ function pageOrder(page: PageRecord): readonly string[] {
  * whose pages are the previous objects but the one it landed on, and that page usually lists
  * the same paragraphs; the order, and its index, then stand.
  */
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface PagesWeakRef {
-  deref(): readonly PageRecord[] | undefined;
-}
-declare const WeakRef: new (target: readonly PageRecord[]) => PagesWeakRef;
-
 let lastOrder: {
   /** Weakly: the order must not keep a closed document's layout alive. */
-  readonly pages: PagesWeakRef;
+  readonly pages: WeakRefOf<readonly PageRecord[]>;
   readonly orders: readonly (readonly string[])[];
   readonly order: string[];
   index?: Map<string, number>;
@@ -103,7 +95,7 @@ function carriedOrder(layout: SemanticLayout): string[] | null {
     if (!sameIds(order, last.orders[index]!)) return null;
     orders.push(order);
   }
-  lastOrder = { pages: new WeakRef(layout.pages), orders, order: last.order, index: last.index };
+  lastOrder = { pages: weakRefOf(layout.pages), orders, order: last.order, index: last.index };
   return last.order;
 }
 
@@ -128,7 +120,7 @@ export function documentOrder(layout: SemanticLayout): string[] {
     }
   }
   documentOrderCache.set(layout, order);
-  lastOrder = { pages: new WeakRef(layout.pages), orders: layout.pages.map(pageOrder), order };
+  lastOrder = { pages: weakRefOf(layout.pages), orders: layout.pages.map(pageOrder), order };
   return order;
 }
 

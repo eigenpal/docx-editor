@@ -1,6 +1,7 @@
 import { isUnsupportedLayoutParagraph, unsupportedBlockParagraph } from './unsupported-content.ts';
 import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
+import { holdsFieldBoundary, inBodyToc } from '../store/package/toc-detect.ts';
 import { tocFieldChromeParagraphIds, emptyTocSuppressedResultParagraphIds } from './toc-layout.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { withStyleSeparatorParagraphs } from './style-separator-flow.ts';
@@ -39,8 +40,9 @@ import {
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
-import { withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
+import { carryNumberingFlow, withoutHiddenMarkParagraphs } from './hidden-paragraph-mark.ts';
 import { projectRevisionFormatting } from './revision-formatting-projection.ts';
+import { weakRefOf, type WeakRefOf } from '../store/package/weak-ref.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
 
@@ -439,26 +441,12 @@ function numberingIdentity(index?: NumberingIndex): number {
   }
   return id;
 }
-/**
- * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
- * declared here, as `recent-root-cache.ts` does.
- */
-interface ChildrenWeakRef {
-  deref(): readonly OoxmlNode[] | undefined;
-}
-interface BlocksWeakRef {
-  deref(): OoxmlElement[] | undefined;
-}
-declare const WeakRef: {
-  new (target: OoxmlElement[]): BlocksWeakRef;
-  new (target: readonly OoxmlNode[]): ChildrenWeakRef;
-};
 
 /** A story's last block list, with the children it came from (weakly) and block positions. */
 interface LastBlocks {
   /** Both weakly: a kept list must not keep a closed or reloaded document's tree alive. */
-  readonly children: ChildrenWeakRef;
-  readonly blocks: BlocksWeakRef;
+  readonly children: WeakRefOf<readonly OoxmlNode[]>;
+  readonly blocks: WeakRefOf<OoxmlElement[]>;
   positions?: Map<string, number>;
 }
 const lastBlocks = new Map<string, LastBlocks>();
@@ -472,8 +460,8 @@ function rememberBlocks(
 ): void {
   lastBlocks.delete(key);
   lastBlocks.set(key, {
-    children: new WeakRef(children),
-    blocks: new WeakRef(blocks),
+    children: weakRefOf(children),
+    blocks: weakRefOf(blocks),
     ...(positions ? { positions } : {}),
   });
   if (lastBlocks.size > MAX_LAST_BLOCKS) lastBlocks.delete(lastBlocks.keys().next().value!);
@@ -527,14 +515,16 @@ const MAX_CARRIED_CHANGES = 8;
  * Every rule that reaches past one paragraph (a removed mark merging into the next, a style
  * separator, a hidden mark leaving the flow when a block follows) reads the paragraph's mark
  * from its `w:pPr`. An edited paragraph qualifies only with the same `w:pPr` object and a mark
- * that carries none of those rules. Its old and new block must each be what the paragraph
+ * that carries none of those rules. A table of contents hides paragraphs by what its field
+ * holds, so a paragraph that holds a field character or sits in one does not qualify either. Its old and new block must each be what the paragraph
  * produces on its own, and the old one must stand unmerged in the previous list. Anything
  * else builds the list again.
  */
 function carriedBlocks(
   key: string,
   children: readonly OoxmlNode[],
-  flow: (children: readonly OoxmlNode[]) => OoxmlElement[]
+  flow: (children: readonly OoxmlNode[]) => OoxmlElement[],
+  reachesFields: (before: OoxmlElement, after: OoxmlElement) => boolean
 ): OoxmlElement[] | undefined {
   const last = lastBlocks.get(key);
   const previous = last?.children.deref();
@@ -554,6 +544,7 @@ function carriedBlocks(
     last.positions = positions;
   }
   const blocks = [...lastList];
+  const replaced = new Map<OoxmlElement, OoxmlElement>();
   for (const index of changed) {
     const before = previous[index]!;
     const after = children[index]!;
@@ -562,7 +553,8 @@ function carriedBlocks(
       after.kind !== 'paragraph' ||
       before.id !== after.id ||
       paragraphProperties(before) !== paragraphProperties(after) ||
-      markReachesNeighbours(paragraphProperties(after))
+      markReachesNeighbours(paragraphProperties(after)) ||
+      reachesFields(before, after)
     )
       return undefined;
     const position = positions.get(before.id);
@@ -571,8 +563,10 @@ function carriedBlocks(
     if (alone.length !== 1 || alone[0] !== lastList[position]) return undefined;
     const replacement = flow([after]);
     if (replacement.length !== 1 || replacement[0]!.id !== after.id) return undefined;
+    replaced.set(lastList[position]!, replacement[0]!);
     blocks[position] = replacement[0]!;
   }
+  carryNumberingFlow(lastList, blocks, replaced);
   // The ids stand at the same places, so the positions carry over.
   rememberBlocks(key, children, blocks, positions);
   return blocks;
@@ -615,7 +609,11 @@ export function storyBlocks(
           ])
       );
     const lastKey = `${part.name}\u0000${key}`;
-    const carried = carriedBlocks(lastKey, root.children, flow);
+    const reachesFields = (before: OoxmlElement, after: OoxmlElement) =>
+      holdsFieldBoundary(before) ||
+      holdsFieldBoundary(after) ||
+      (root.kind === 'body' && inBodyToc(part, after.id));
+    const carried = carriedBlocks(lastKey, root.children, flow, reachesFields);
     blocks = carried ?? flow(root.children);
     if (!carried) rememberBlocks(lastKey, root.children, blocks);
   }

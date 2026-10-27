@@ -90,4 +90,57 @@ describe('reviewItemFiltering', () => {
     expect([...hiddenReviewSitesOf(published).sites]).toEqual(['node-a']);
     expect(hiddenReviewSitesOf(again)).toBe(hiddenReviewSitesOf(published));
   });
+
+  describe('publish after a patch', () => {
+    const hidesFormat = withReviewItemFilter(model(), (list) =>
+      list.filter((item) => item.kind !== 'revision' || item.revisionKind !== 'format')
+    );
+    const inputs = { stylesPart: styles, numberingRoot: numbering };
+    const revision = (id: string, paragraphId: string, revisionKind: string) =>
+      registerRevisionSiteNodeIds(
+        {
+          kind: 'revision',
+          id,
+          revisionKind,
+          formattingKind: 'rPrChange',
+          ranges: [{ start: { paragraphId, offset: 0 }, end: { paragraphId, offset: 1 } }],
+        } as never,
+        [`node-${id}`]
+      ) as ReviewItem;
+    const start = () => {
+      const one = reviewItemFiltering(hidesFormat, pkg, inputs, null);
+      return one.publish(one.filtered([revision('i1', 'p1', 'insertion')]));
+    };
+
+    test('records what every patched paragraph leaves out', () => {
+      const published = start();
+      const two = reviewItemFiltering(hidesFormat, pkg, inputs, { ...inputs, items: published });
+      two.filtered([revision('f1', 'p1', 'format')]);
+      two.filtered([revision('f2', 'p2', 'format')]);
+      const patched = two.publish([...published]);
+      expect([...hiddenReviewSitesOf(patched).sites].sort()).toEqual(['node-f1', 'node-f2']);
+      expect([...hiddenReviewSitesOf(patched).paragraphs.keys()].sort()).toEqual(['p1', 'p2']);
+    });
+
+    test('records a new left-out record when no card changed', () => {
+      const published = start();
+      const two = reviewItemFiltering(hidesFormat, pkg, inputs, { ...inputs, items: published });
+      two.filtered([revision('f1', 'p2', 'format')]);
+      expect(two.publish(published)).toBe(published);
+      expect([...hiddenReviewSitesOf(published).sites]).toEqual(['node-f1']);
+    });
+
+    test('leaves an earlier queue its own record when a memo hands it back', () => {
+      const earlier = start();
+      const record = hiddenReviewSitesOf(earlier);
+      const two = reviewItemFiltering(hidesFormat, pkg, inputs, { ...inputs, items: earlier });
+      two.filtered([revision('f1', 'p2', 'format')]);
+      const later = two.publish([...earlier]);
+      // A patch filtered one paragraph, failed, and the memo answered with the earlier queue.
+      const three = reviewItemFiltering(hidesFormat, pkg, inputs, { ...inputs, items: later });
+      three.filtered([revision('f2', 'p3', 'format')]);
+      expect(three.publish(earlier)).toBe(earlier);
+      expect(hiddenReviewSitesOf(earlier)).toBe(record);
+    });
+  });
 });

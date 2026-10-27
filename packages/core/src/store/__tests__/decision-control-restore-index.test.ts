@@ -6,9 +6,17 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
-import { nodeIndexTestRecorder } from '../package/ooxml-edit.ts';
+import { findNode, nodeIndexTestRecorder, parentNodeOf } from '../package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { restoreDecisionEmptiedControls } from '../store/content-control-prompt-restore.ts';
+import {
+  holdsContent,
+  restoreDecisionEmptiedControls,
+  restoreEmptiedPlaceholder,
+} from '../store/content-control-prompt-restore.ts';
+import { isInlineControl } from '../store/content-control-checkbox.ts';
+import { contentControlContentOf, findContentControl } from '../store/tree-op-nodes.ts';
+import type { TreeOpEffect, TreeOpResult } from '../store/tree-op-types.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -103,4 +111,67 @@ describe('restoring controls after a decision', () => {
       nodesOf(restored).some((n) => n.kind !== 'textValue' && n.localName === 'showingPlcHdr')
     ).toBe(true);
   });
+});
+
+/**
+ * The restore as it was before the single walk: the controls around each decided change and the
+ * ones it held, looked up by id, in the order of the decided ids. The order decides which node
+ * ids the placeholders get, and collaborating peers on either version must agree on them.
+ */
+function restoredBefore(before: OoxmlPart, decidedIds: readonly string[], after: OoxmlPart) {
+  const controls = new Set<string>();
+  const inside = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > MAX_INLINE_CONTAINER_DEPTH) return;
+    if (node.kind === 'contentControl') controls.add(node.id);
+    for (const child of node.children) inside(child, depth + 1);
+  };
+  for (const id of decidedIds) {
+    for (let node = parentNodeOf(before, id); node; node = parentNodeOf(before, node.id))
+      if (node.kind === 'contentControl') controls.add(node.id);
+    const decided = findNode(before, id);
+    if (decided) inside(decided, 0);
+  }
+  let result: TreeOpResult = { ok: true, part: after, effect: {} as TreeOpEffect };
+  for (const id of controls) {
+    if (!isInlineControl(before, id)) continue;
+    const control = findContentControl(before, id);
+    const content = control && contentControlContentOf(control);
+    if (!content || !holdsContent(content, 0)) continue;
+    result = restoreEmptiedPlaceholder(result, id, undefined, '     ');
+  }
+  return result.ok ? result.part : after;
+}
+
+/** Every `w:ins` id of the part, in document order. */
+function insertionIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.localName === 'ins') ids.push(node.id);
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
+}
+
+describe('the order controls are restored in', () => {
+  const nested = control(`<w:r><w:t>a</w:t></w:r>${control(inserted)}`);
+  const body =
+    `<w:p>${control(inserted)}<w:r><w:t> between </w:t></w:r>${nested}</w:p>` +
+    `<w:p>${control(inserted)}</w:p>`;
+  const before = partOf(body);
+  // A fresh part per restore: the id allocator counts on from its part's earlier allocations.
+  const after = () =>
+    partOf(
+      `<w:p>${control('')}<w:r><w:t> between </w:t></w:r>${control(`<w:r><w:t>a</w:t></w:r>${control('')}`)}</w:p>` +
+        `<w:p>${control('')}</w:p>`
+    );
+  const ids = insertionIds(before);
+  const orders = [ids, [...ids].reverse(), [ids[1]!, ids[2]!, ids[0]!]];
+  for (const order of orders)
+    test(`matches the lookup by id for decisions in order ${order.map((id) => ids.indexOf(id)).join(',')}`, () => {
+      expect(JSON.stringify(restoreDecisionEmptiedControls(before, order, after()).root)).toBe(
+        JSON.stringify(restoredBefore(before, order, after()).root)
+      );
+    });
 });

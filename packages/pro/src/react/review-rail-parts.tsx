@@ -83,9 +83,15 @@ export interface ReviewListProps {
   scale?: number;
   offset?: number;
   /**
-   * Visible band of the scroller; cards outside it are not mounted. Null renders all. Before
-   * the rail measures its scroller the band is empty (`top` above `bottom`, both infinite), so
-   * no positioned card renders.
+   * Visible band of the scroller, in the rail's coordinates; cards outside it are not mounted.
+   * Before the rail measures its scroller the band is empty (`top` greater than `bottom`, both
+   * infinite), so no positioned card renders.
+   *
+   * Null, or leaving it out, mounts every card. That is correct but costs one card per pending
+   * change on each render. Inside the packaged review rail the band arrives on its own, including
+   * for a `List` override. A list mounted elsewhere measures its own scroller and passes the
+   * part of it in view, widened by a margin above and below (the rail uses 600 px) so cards
+   * mount before they scroll into view.
    */
   window?: { top: number; bottom: number } | null;
   /**
