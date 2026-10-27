@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The loading overlay faded in again when a new document arrived during an open.",
+  "after": "The loading overlay stays the same element while a new editor attaches, so it does not fade in again.",
+  "reason": "The change only keeps the local loading overlay mounted for one render while the editor instance changes. It reads the existing snapshot flags and does not change shared state, operations, or synchronization.",
+  "tests": [
+    "packages/react/test/loading-part.test.tsx",
+    "packages/vue/test/loading-continued.test.ts"
+  ],
+  "changeset": "loading-overlay-continuity",
+  "migration": null
+}

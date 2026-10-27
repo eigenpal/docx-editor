@@ -337,6 +337,89 @@ describe('DocxEditor.Loading', () => {
     });
   });
 
+  test('the overlay stays the same element when a LARGE document arrives', async () => {
+    // The Root builds a new instance for the bytes and attaches it one commit later. A new
+    // overlay element would replay its appearance delay, and the workspace would show
+    // through.
+    const tree = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})}>
+        <DocxEditorLoading overlay />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree());
+    await act(async () => {});
+    const overlay = view.container.querySelector(LOADING);
+    expect(overlay).not.toBeNull();
+    const removed: Node[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) removed.push(...record.removedNodes);
+    });
+    observer.observe(view.container, { childList: true, subtree: true });
+
+    view.rerender(tree(LARGE_SOURCE));
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).toBe(overlay);
+    await waitFor(() => expect(view.container.textContent).toContain('large body'));
+    await waitFor(() => expect(view.container.querySelector(LOADING)).toBeNull());
+    observer.disconnect();
+    // Removed once, when the pages arrive, and never replaced on the way.
+    expect(removed.filter((node) => node === overlay)).toHaveLength(1);
+  });
+
+  test('the in-flow screen also stays the same element, so its spinner keeps turning', async () => {
+    const tree = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})}>
+        <DocxEditorLoading />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree());
+    await act(async () => {});
+    const screen = view.container.querySelector(LOADING);
+    expect(screen).not.toBeNull();
+    view.rerender(tree(LARGE_SOURCE));
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).toBe(screen);
+    await waitFor(() => expect(view.container.textContent).toContain('large body'));
+  });
+
+  test('a SMALL document arriving under the overlay still removes it', async () => {
+    const tree = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})}>
+        <DocxEditorLoading overlay />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree());
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).not.toBeNull();
+    view.rerender(tree(docx('<w:p><w:r><w:t>small body</w:t></w:r></w:p>')));
+    await act(async () => {});
+    expect(view.container.textContent).toContain('small body');
+    expect(view.container.querySelector(LOADING)).toBeNull();
+  });
+
+  test('an editor that is never attached does not keep the overlay up', async () => {
+    const tree = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})}>
+        <DocxEditorLoading overlay />
+      </DocxEditorRoot>
+    );
+    const view = render(tree());
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).not.toBeNull();
+    view.rerender(tree(LARGE_SOURCE));
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).toBeNull();
+  });
+
   test('the menu bar is disabled and closed while the next document opens', async () => {
     // The previous document stays mounted under the overlay, so a menu command in that
     // window would act on the document about to be replaced. The toolbar already refuses.

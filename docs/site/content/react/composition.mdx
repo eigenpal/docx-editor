@@ -423,6 +423,16 @@ Children replace the whole first screen. While the remaining pages lay out, the 
 
 Use `DocxEditor.Loading.Spinner` with `className` to style the packaged spinner. If you conditionally mount content, use `snapshot().isLoading`. Do not use `isOpening` for that condition. `DocxEditor.Content` must remain mounted while the scheduled open completes.
 
+To animate your own loading screen, render it in the children of `DocxEditor.Loading`. The part keeps your screen mounted from the first loading state until the first pages show, so its animation runs once:
+
+```tsx
+<DocxEditor.Loading overlay>
+  <MyAnimatedLoadingScreen />
+</DocxEditor.Loading>
+```
+
+If you build the screen from `isLoading || isOpening` instead, both flags can read `false` while the new editor waits to attach. `DocxEditor.Root` creates that editor in the render after the new bytes arrive and attaches it in the next one, and the browser does not paint between them. If your element unmounts in that gap, its entry animation starts again.
+
 ## Custom link popover
 
 `DocxEditor.HyperLink` provides the hyperlink popover. It includes the URL, edit fields, apply, copy, and unlink actions. Its parts accept `className`, `asChild`, and `hidden`. Action parts also accept `icon`:

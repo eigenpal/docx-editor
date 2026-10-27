@@ -29,7 +29,14 @@ import type { ReactNode } from 'react';
 // token scope and paint an unresolved, contrast-free ring. This emits `docx-editor` itself,
 // exactly as `DocxEditorViewport` does, so it looks right wherever it is composed.
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
@@ -170,6 +177,24 @@ function DocxEditorLoadingImpl({
   const showLoading = useEditorState(selectShowLoading);
   const pageSize = useEditorState(selectLoadingPageSize, sameLoadingPageSize);
   const below = useOpeningIndicator(overlay);
+  const editor = useDocxEditor();
+  // What the last committed render showed, and for which editor.
+  const shown = useRef<{ visible: boolean; editor: object | null }>({
+    visible: false,
+    editor: null,
+  });
+  const [, recheck] = useReducer((count: number) => count + 1, 0);
+  // `Root` replaces the editor when new bytes arrive and attaches it one commit later, so
+  // for that commit neither flag holds. The screen stays through it: a new element would
+  // replay the overlay's appearance delay, and restart the spinner and any host indicator.
+  const bridging = shown.current.visible && shown.current.editor !== editor;
+  const visible = below === null && (when || showLoading || bridging);
+  useLayoutEffect(() => {
+    shown.current = { visible, editor };
+    // Read the flags again after this commit's attach, before paint: the hold never
+    // outlasts the commit, so an editor that is never attached cannot keep it up.
+    if (bridging) recheck();
+  }, [visible, editor, bridging]);
   const { t } = useTranslation();
   const status = indicator ?? (
     <>
@@ -180,7 +205,7 @@ function DocxEditorLoadingImpl({
   // The first pages show and take input, so the opening state is over; the indicator moves
   // below the laid-out pages until the last one is laid out.
   if (below) return createPortal(status, below);
-  if (!when && !showLoading) return null;
+  if (!visible) return null;
 
   const classes = `docx-editor docx-editor__loading${
     overlay ? ' docx-editor__loading--overlay' : ''

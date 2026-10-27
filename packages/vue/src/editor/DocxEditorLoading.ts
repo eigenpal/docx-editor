@@ -2,6 +2,8 @@ import {
   defineComponent,
   h,
   onBeforeUnmount,
+  onMounted,
+  onUpdated,
   shallowRef,
   Teleport,
   watch,
@@ -14,6 +16,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { isDevelopment } from '../lib/is-development';
 import { useDocxEditor } from './context';
+import { yieldTask } from './deferred-notifier';
 import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
 
@@ -119,9 +122,45 @@ const DocxEditorLoadingImpl = defineComponent({
     const showLoading = useEditorState(selectShowLoading);
     const pageSize = useEditorState(selectLoadingPageSize);
     const below = useOpeningIndicator(() => props.overlay);
+    const editor = useDocxEditor();
+    // Whether the last render in the document showed the screen. Recorded after the render
+    // lands: a render under a pending `Suspense` is not on screen yet.
+    let shown = false;
+    let rendered = false;
+    const commit = () => {
+      shown = rendered;
+    };
+    onMounted(commit);
+    onUpdated(commit);
+    // `Root` replaces the editor when new bytes arrive, attaches it one update later, and
+    // publishes the new state a microtask after that. Until then neither flag holds. The
+    // screen stays through it: a new element would replay the overlay's appearance delay,
+    // and restart the spinner and any host indicator. The hold ends two tasks later, after
+    // the root's own notification, so an editor that is never attached cannot keep it up.
+    const holding = shallowRef(false);
+    let hold = 0;
+    watch(
+      editor,
+      () => {
+        if (!shown) return;
+        const current = ++hold;
+        holding.value = true;
+        yieldTask(() =>
+          yieldTask(() => {
+            if (hold === current) holding.value = false;
+          })
+        );
+      },
+      { flush: 'sync' }
+    );
+    onBeforeUnmount(() => {
+      hold += 1;
+    });
     const { t } = useTranslation();
 
     return () => {
+      const visible = !below.value && (props.when || showLoading.value || holding.value);
+      rendered = visible;
       const status = () =>
         slots.indicator?.() ?? [
           h(DocxEditorLoadingSpinner),
@@ -130,7 +169,7 @@ const DocxEditorLoadingImpl = defineComponent({
       // The first pages show and take input, so the opening state is over; the indicator moves
       // below the laid-out pages until the last one is laid out.
       if (below.value) return h(Teleport, { to: below.value }, status());
-      if (!props.when && !showLoading.value) return null;
+      if (!visible) return null;
       const classes = `docx-editor docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
