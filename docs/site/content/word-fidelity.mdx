@@ -301,6 +301,12 @@ A table row that closes a page reserves space for its bottom border. A following
 
 A table row starts below other content only when the remaining space holds its minimum height, plus the rule that closes the page where the row splits. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. When a row with a minimum height splits, the part on the next page is at least as tall as that minimum. Positioned tables that break across pages apply the same rules to their rows.
 
+Supported terminal fixed-height rows place their bottom rule outside the authored content height. Following text starts below that rule. Center-aligned and bottom-aligned cell text uses the authored bottom and cell margins. The outer rule reserves no space inside that content box.
+
+This adjustment applies to top-level tables with collapsed borders and complete horizontal-text rows. The bottom rules must be equal-width single rules, no wider than 12pt. Repeated headers and merged cells use the same rule. The top rule can have a different width. Eighth-point widths, including 0.625pt, retain their authored size.
+
+If the authored row height fits the page, the row keeps its page. Its bottom rule can extend past the bottom margin. Floating tables, nested content, supported bottom-to-top cells, compound bottom rules, unequal bottom-cell rules, and cell spacing retain their existing geometry.
+
 A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its border and content stop at the bottom margin. The row does not paint past the margin, with or without `w:cantSplit`. The next block starts on the next page.
 
 Keep-with-next table groups include closed vertical merges. Their merged content contributes its height once across the covered rows. Table decisions measure at most 256 kept rows and the next row. Longer groups use that measured prefix as a lower bound. Paragraph keep lookahead remains unchanged.

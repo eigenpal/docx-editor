@@ -23,6 +23,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
+import { exactTerminalBorderPt } from './table-exact-terminal-border.ts';
 import {
   moveRowToTop,
   moveRowToWidths,
@@ -47,6 +48,7 @@ interface RowPlacement {
   /** Per cell: insets top and bottom, minimum insets top and bottom, vertical alignment. */
   readonly vertical: readonly (number | string)[];
   readonly heightRule: SemanticTableRow['height'];
+  readonly terminalBorderPt: number;
 }
 
 const placements = new WeakMap<object, RowPlacement>();
@@ -116,6 +118,7 @@ export function rememberRowPlacement(
     fitted: result.fitted,
     vertical: verticalInputs(row, deps),
     heightRule: row.height,
+    terminalBorderPt: exactTerminalBorderPt(row, deps),
   });
 }
 
@@ -147,6 +150,7 @@ export function placementFromPrevious(
     !known ||
     previous.box.y !== known.top ||
     previous.box.height !== known.height ||
+    exactTerminalBorderPt(row, deps) !== known.terminalBorderPt ||
     row.height.rule !== known.heightRule.rule ||
     (row.height.rule !== 'auto' &&
       (known.heightRule.rule === 'auto' || row.height.valuePt !== known.heightRule.valuePt)) ||
