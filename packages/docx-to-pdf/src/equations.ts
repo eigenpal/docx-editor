@@ -53,10 +53,15 @@ export function paintEquation(
                 // The face layout measured: the math face, or an authored text face.
                 style: {
                   ...visit.span.style,
-                  ...(g.runStyle ?? {
-                    fontFamily: 'Cambria Math',
-                    fontFamilyEastAsia: 'Cambria Math',
-                  }),
+                  ...(g.runStyle
+                    ? {
+                        fontFamily: g.runStyle.fontFamily,
+                        fontFamilyEastAsia: g.runStyle.fontFamilyEastAsia,
+                        bold: g.runStyle.bold,
+                        italic: g.runStyle.italic,
+                        characterSpacingPt: g.runStyle.characterSpacingPt,
+                      }
+                    : { fontFamily: 'Cambria Math', fontFamilyEastAsia: 'Cambria Math' }),
                   fontSizePt: g.fontSizePt,
                   verticalAlign: 'baseline',
                   baselineShiftPt: 0,
