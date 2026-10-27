@@ -71,6 +71,7 @@ export interface DrawingSupportEntry {
  * without a layout position. The scan is bounded. @public
  */
 export interface DrawingSupportReport {
+  /** One entry for each drawing, in document order within each part. */
   readonly entries: readonly DrawingSupportEntry[];
   /** False when a scan budget prevented a complete inventory. */
   readonly complete: boolean;

@@ -11,8 +11,8 @@ import type { DocxEditorInstance } from './docx-editor-types.ts';
  * edits, and the parts it needs, for an external renderer. Pass an occurrence that an
  * `UnsupportedElement` component receives. The result equals `createDrawingPreviewPackage`
  * on the document as a save would write it now. The call is synchronous, so make it in an
- * effect keyed on `element.source`, not during render. Get the editor with `useDocxEditor()`:
- * a component that receives an occurrence always has an attached editor. Each call serializes
+ * effect keyed on `element.source`, not during render. Get the editor with `useDocxEditor()`
+ * and return early on `null`; inside a component that receives an occurrence, it is set. Each call serializes
  * the drawing's parts, so with many drawings, spread the calls out or queue them. By default
  * a package copies at most 64 parts and 64 MiB; pass `limits` to change that.
  *

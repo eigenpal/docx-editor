@@ -49,8 +49,11 @@ export interface UnsupportedElement {
    * object, including a replaced picture, which gets a new relationship. The editor does not
    * edit chart data, diagram data, or the theme, so `source` alone tells you when to ask for a
    * new preview. A component usually stays mounted when its occurrence changes and receives
-   * the new element; it remounts when the occurrence moves to another page. Either way, clear
-   * an old image in the effect cleanup.
+   * the new element; it remounts when the occurrence moves to another page or scrolls back
+   * into view. Keep previews outside the component, for example in a `WeakMap` keyed on
+   * `source`, so a remount reuses them, and clear an old image in the effect cleanup. Never
+   * `null` for an occurrence in the editor; only a standalone painter without a source lookup
+   * gives `null`.
    */
   readonly source: OoxmlElement | null;
   /** `inline` inside a line of text, or `block` between paragraphs. */

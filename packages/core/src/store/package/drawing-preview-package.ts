@@ -358,7 +358,9 @@ function relsPartName(partName: string): string {
 /**
  * Build a small DOCX that holds one drawing and the parts it needs: chart and diagram parts,
  * images, styles, theme, settings, and fonts. Send it to a rendering service that draws the
- * first page as an image. The page has the drawing's size, including its effect extent, so it
+ * first page as an image. Use a different renderer from this library: its own exporters show
+ * the same placeholder. The bytes come from the document, so treat them as untrusted: run the
+ * renderer in a sandbox without network access, with time and memory limits. The page has the drawing's size, including its effect extent, so it
  * matches the occurrence's `bounds`. It has no margins, and a floating drawing is placed on the
  * line, so the first page is the preview. A legacy VML drawing takes
  * its size from its style. When the size is unknown, the page has the document's page size and

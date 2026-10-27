@@ -1518,7 +1518,6 @@ export interface DrawingSupportIssue {
 export interface DrawingSupportReport {
     readonly complete: boolean;
     readonly coverage: 'explicit-source-effects';
-    // (undocumented)
     readonly entries: readonly DrawingSupportEntry[];
 }
 

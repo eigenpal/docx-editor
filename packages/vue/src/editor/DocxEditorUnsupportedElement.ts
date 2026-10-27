@@ -17,8 +17,9 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
   /**
    * Also offer drawings that render without some features (`element.support` is `partial`),
-   * not only placeholders. Default `false`. Fully supported drawings are never offered, and neither are shapes
-   * whose text the editor edits.
+   * not only placeholders. Default `false`. Fully supported drawings are never offered, and
+   * neither are shapes whose text the editor edits, hidden drawings, or drawings without a
+   * layout position.
    */
   includePartial?: UnsupportedElementRule['includePartial'];
 }
