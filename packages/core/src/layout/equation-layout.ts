@@ -272,7 +272,7 @@ function layoutExpression(
       const authoredFamily = expression.format?.fontFamily;
       const textFace = authoredFamily && authoredFamily.trim().toLowerCase() !== 'cambria math';
       const digitParts =
-        textFace && !expression.format?.normalText && expression.format?.mathStyle !== 'p'
+        textFace && !expression.format?.normalText && (expression.format?.mathStyle ?? 'i') === 'i'
           ? expression.value.match(/(?:[0-9]\p{M}*)+|[^0-9]+/gu)
           : null;
       if (digitParts && digitParts.length > 1) {

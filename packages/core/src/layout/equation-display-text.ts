@@ -56,9 +56,12 @@ export function equationDisplayText(
     const mathFace = fontFamily?.trim().toLowerCase() === 'cambria math';
     return { text: expression.value, mathStyle: mathFace ? 'p' : null, mathematicalGlyphs: false };
   }
-  // Text faces supply ordinary digits and their styled font programs. Mathematical
-  // alphanumeric letters still use the math face, including beside these digits.
+  // Text faces supply ordinary digits and their styled font programs in the
+  // default italic style. Mathematical alphanumeric letters still use the math
+  // face, including beside these digits. Bold math styles keep mathematical bold
+  // digits from the math face.
   if (
+    mathStyle === 'i' &&
     fontFamily &&
     fontFamily.trim().toLowerCase() !== 'cambria math' &&
     /^(?:[0-9]\p{M}*)+$/u.test(expression.value)

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Digits in bold or bold italic math styles used an authored text font.",
+  "after": "Digits in bold or bold italic math styles use mathematical bold digits from the math font.",
+  "reason": "Only local equation geometry and font selection change. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-authored-run-font.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-authored-run-fonts.test.ts"
+  ],
+  "changeset": "equation-bold-math-digits",
+  "migration": null
+}

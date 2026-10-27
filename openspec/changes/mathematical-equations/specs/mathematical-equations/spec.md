@@ -41,8 +41,14 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 #### Scenario: Authored text fonts in equation runs
 
 - **WHEN** an equation run specifies a text font and contains ASCII digits
-- **THEN** the digits use that font with the run's mathematical and Word style
+- **THEN** the digits use that font in italic, with run bold, unless `m:sty` selects plain or a bold math style
 - **AND** mathematical letters and symbols retain the math face
+
+#### Scenario: Bold math style digits in authored text fonts
+
+- **WHEN** an equation run with `m:sty` `b` or `bi` specifies a text font and contains ASCII digits
+- **THEN** the digits use mathematical bold digits from the math face
+- **AND** letters in the same run stay in the same math-face text node
 
 #### Scenario: Normal text without a run font
 
