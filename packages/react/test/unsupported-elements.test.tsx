@@ -412,3 +412,35 @@ test('unsupported drawing alternatives expose one source and preserve both branc
   expect(xml).not.toContain('/preview.png');
   view.unmount();
 });
+
+test('rendered drawing previews require explicit opt-in and restore native rendering', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../core/src/store/__tests__/drawing-support-fixtures.ts');
+  const { DocxEditor } = await import('../src/index.ts');
+  const bytes = previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>'));
+  const ui = (include: boolean, show: boolean) => (
+    <DocxEditor document={bytes} chrome={false}>
+      <DocxEditor.UnsupportedElement>{() => <b>Placeholder only</b>}</DocxEditor.UnsupportedElement>
+      <DocxEditor.UnsupportedElement
+        includeRenderedDrawings={include}
+        match={(element) => !!element.drawingIssues?.length}
+      >
+        {() => (show ? <img alt="External preview" src="/preview.png" /> : null)}
+      </DocxEditor.UnsupportedElement>
+    </DocxEditor>
+  );
+  const view = render(ui(false, true));
+  await waitFor(() => expect(view.container.querySelector('svg')).not.toBeNull());
+  expect(view.queryByAltText('External preview')).toBeNull();
+  view.rerender(ui(true, true));
+  await waitFor(() => expect(view.queryByAltText('External preview')).not.toBeNull());
+  expect(view.queryByText('Placeholder only')).toBeNull();
+  expect(view.container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(true);
+  view.rerender(ui(true, false));
+  await waitFor(() =>
+    expect(view.container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(false)
+  );
+  view.rerender(ui(false, false));
+  await waitFor(() => expect(view.container.querySelector('[data-docx-unsupported]')).toBeNull());
+  expect(view.container.querySelector('svg')).not.toBeNull();
+});

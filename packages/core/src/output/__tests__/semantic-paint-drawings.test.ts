@@ -915,3 +915,45 @@ describe('drawing membership belongs to the immutable layout', () => {
     expect(revoked).toEqual([url!, url!, url!]);
   });
 });
+
+test('a rebuilt image removes its custom preview registration when previews are disabled', async () => {
+  const { observeUnsupportedElements } = await import('../unsupported-elements.ts');
+  const container = document.createElement('div');
+  const { port } = fakeUrlPort();
+  const registry = drawingUrlRegistryFor(container, port);
+  const xml = inlinePictureXml();
+  const drawing = readyRecordFromXml(xml);
+  const source = drawingOf(load(xml));
+  const ctx = {
+    scale: 1,
+    strings: DEFAULT_DRAWING_PAINT_STRINGS,
+    imageUrlPort: port,
+    includeRenderedDrawings: true,
+    unsupportedSource: () => source,
+  };
+  const first = paintDrawingRecord(document, drawing, ctx, registry)!;
+  container.append(first);
+  let hosts: readonly import('../unsupported-elements.ts').UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    expect(hosts).toHaveLength(1);
+    hosts[0]!.setCustomized(true);
+    expect(first.getAttribute('aria-hidden')).toBeNull();
+    const next = paintDrawingRecord(
+      document,
+      drawing,
+      { ...ctx, scale: 2, includeRenderedDrawings: false },
+      registry
+    )!;
+    expect(next).toBe(first);
+    expect(next.hasAttribute('data-docx-unsupported')).toBe(false);
+    expect(next.hasAttribute('data-docx-customized')).toBe(false);
+    expect(next.getAttribute('aria-hidden')).toBe('true');
+    expect(next.querySelector('img')).not.toBeNull();
+  } finally {
+    stop();
+    detachDrawingUrlRegistry(container);
+  }
+});

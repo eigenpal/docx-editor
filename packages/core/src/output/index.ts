@@ -58,3 +58,5 @@ export {
  * @internal
  */
 export { lumTransfer, type LumTransfer } from './drawing-lum-filter.ts';
+
+export type { DrawingSupportIssue } from '../store/package/drawing-support-issues.ts';

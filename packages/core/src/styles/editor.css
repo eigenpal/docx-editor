@@ -9038,3 +9038,12 @@ p.docx-review__refused {
     flex-wrap: wrap;
   }
 }
+
+.docx-drawing[data-docx-customized] > .docx-unsupported-slot {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}

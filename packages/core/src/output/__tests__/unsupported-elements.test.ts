@@ -12,6 +12,8 @@ import {
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
   observeUnsupportedElements,
+  markUnsupportedElement,
+  clearUnsupportedElement,
   type UnsupportedElementHost,
 } from '../unsupported-elements.ts';
 
@@ -120,4 +122,53 @@ test('generic opaque source reserves its box and exposes source metadata safely'
     expect(host.fallback.hidden).toBe(true);
   }
   stop();
+});
+
+test('stale preview cleanup cannot restore old accessibility on a reused image', () => {
+  const container = document.createElement('div');
+  const element = document.createElement('div');
+  container.append(element);
+  element.setAttribute('role', 'presentation');
+  element.setAttribute('aria-hidden', 'true');
+  const metadata = {
+    ownerPartName: '/word/document.xml',
+    nodeId: 'drawing',
+    namespaceUri: null,
+    localName: 'drawing',
+    source: null,
+    placement: 'inline' as const,
+    label: '',
+  };
+  const firstFallback = document.createElement('div');
+  element.append(firstFallback);
+  markUnsupportedElement(element, firstFallback, metadata, element);
+  let hosts: readonly UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  const old = hosts[0]!;
+  old.setCustomized(true);
+  clearUnsupportedElement(element);
+  element.replaceChildren();
+  element.setAttribute('role', 'img');
+  element.removeAttribute('aria-hidden');
+  const nextFallback = document.createElement('div');
+  element.append(nextFallback);
+  markUnsupportedElement(element, nextFallback, metadata, element);
+  const stopNext = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    hosts[0]!.setCustomized(true);
+    old.setCustomized(false);
+    expect(element.getAttribute('role')).toBe('group');
+    expect(element.getAttribute('aria-hidden')).toBeNull();
+    expect(element.hasAttribute('data-docx-customized')).toBe(true);
+    hosts[0]!.setCustomized(false);
+    expect(element.getAttribute('role')).toBe('img');
+    expect(element.getAttribute('aria-hidden')).toBeNull();
+  } finally {
+    stop();
+    stopNext();
+  }
 });

@@ -32,6 +32,19 @@ export function collectPageChangeBars(page: PageRecord, scale: number, mode: Cha
 export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 
 // @public
+export interface DrawingSupportIssue {
+    // (undocumented)
+    readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
+    readonly detail: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string;
+    // (undocumented)
+    readonly nodeId: string;
+}
+
+// @public
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
@@ -106,6 +119,8 @@ export interface PaintOptions {
     readonly fontAlias?: (family: string) => string | undefined;
     // (undocumented)
     readonly imageUrlPort?: PaintImageUrlPort;
+    // (undocumented)
+    readonly includeRenderedDrawings?: boolean;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
     // (undocumented)
@@ -120,6 +135,7 @@ export interface PaintOptions {
     readonly unsupportedOwnerPartName?: (nodeId: string) => string;
     // (undocumented)
     readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
+    readonly unsupportedSourceRevision?: number;
 }
 
 // @public
@@ -166,6 +182,7 @@ export interface SelectionOverlayOptions {
 export interface UnsupportedElement {
     readonly bounds?: LayoutBox;
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+    readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly label: string;
     // (undocumented)
@@ -178,6 +195,7 @@ export interface UnsupportedElement {
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';
+    readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
 }
 
@@ -205,6 +223,7 @@ export interface UnsupportedElementLayout {
 
 // @public
 export interface UnsupportedElementRule {
+    readonly includeRenderedDrawings?: boolean;
     // (undocumented)
     readonly layout?: UnsupportedElementLayout;
     // (undocumented)

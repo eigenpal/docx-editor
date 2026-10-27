@@ -1,3 +1,5 @@
+import type { HeadlessDocumentView } from '@docx-editor.dev/core/store';
+import { partOfNodeId } from './surface-scope.ts';
 import { findNode, parentNodeOf, type OoxmlPart } from '@docx-editor.dev/core/store';
 
 /** Include both compatibility branches when a drawing needs a custom preview. */
@@ -29,6 +31,12 @@ export function validateUnsupportedElementRules(
   return rules.map((rule) => {
     if (rule.match !== undefined && typeof rule.match !== 'function') {
       throw new TypeError('UnsupportedElement match must be a function.');
+    }
+    if (
+      rule.includeRenderedDrawings !== undefined &&
+      typeof rule.includeRenderedDrawings !== 'boolean'
+    ) {
+      throw new TypeError('UnsupportedElement includeRenderedDrawings must be a boolean.');
     }
     const layout = rule.layout;
     if (
@@ -63,6 +71,7 @@ export function createUnsupportedElementProjection(rules: readonly UnsupportedEl
   });
   return {
     ...projector,
+    includeRenderedDrawings: rules.some((rule) => rule.includeRenderedDrawings === true),
     geometryKey: () => JSON.stringify([...geometry].sort(([a], [b]) => a.localeCompare(b))),
   };
 }
@@ -81,6 +90,25 @@ export function createUnsupportedElementState(
       const validated = validateUnsupportedElementRules(next);
       surface()?.setUnsupportedElementRules(validated);
       rules = validated;
+    },
+  };
+}
+
+/** Resolve source metadata at paint time, including revisions without geometry changes. */
+export function unsupportedElementPaintOptions(
+  projection: ReturnType<typeof createUnsupportedElementProjection>,
+  session: HeadlessDocumentView
+) {
+  return {
+    includeRenderedDrawings: projection.includeRenderedDrawings,
+    unsupportedSourceRevision: projection.includeRenderedDrawings ? session.packageRevision() : 0,
+    unsupportedOwnerPartName: (nodeId: string) =>
+      partOfNodeId(session, nodeId)?.name ?? session.part().name,
+    unsupportedSource: (nodeId: string, ownerPartName?: string) => {
+      const part = ownerPartName
+        ? session.currentPackage().parts.get(ownerPartName)
+        : partOfNodeId(session, nodeId);
+      return part ? unsupportedSourceInPart(part, nodeId) : null;
     },
   };
 }

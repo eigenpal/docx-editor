@@ -1461,6 +1461,40 @@ export interface DrawingRenderers {
     readonly textArtLayout?: TextArtLayoutRenderer;
 }
 
+// @public
+export interface DrawingSupportEntry {
+    readonly drawingNodeId: string | null;
+    // (undocumented)
+    readonly issues: readonly DrawingSupportIssue[];
+    readonly nodeId: string;
+    // (undocumented)
+    readonly ownerPartName: string;
+    readonly source: OoxmlElement;
+    // (undocumented)
+    readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';
+}
+
+// @public
+export interface DrawingSupportIssue {
+    // (undocumented)
+    readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
+    readonly detail: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string;
+    // (undocumented)
+    readonly nodeId: string;
+}
+
+// @public
+export interface DrawingSupportReport {
+    readonly complete: boolean;
+    readonly coverage: 'explicit-source-effects';
+    // (undocumented)
+    readonly entries: readonly DrawingSupportEntry[];
+}
+
 // @internal
 export interface DrawingTextDefaults {
     // (undocumented)
@@ -2372,6 +2406,9 @@ export type InsertTextOp = {
     readonly text: string;
     readonly textFormFieldId?: string;
 };
+
+// @public
+export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport;
 
 // @internal
 export function installDrawingRenderers(renderers: DrawingRenderers): void;

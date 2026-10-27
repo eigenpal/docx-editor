@@ -1,3 +1,5 @@
+import { customDrawingPreview } from './drawing-custom-preview.ts';
+import { drawingSourceIssues } from '../store/package/drawing-support-issues.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // Drawing paint dispatch (typed-drawings-and-images task 10).
 //
@@ -5,7 +7,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // DOM is built with createElement/setAttribute/textContent only; styles use validated numbers
 // or fixed tokens — never raw authored markup or unescaped file-derived CSS.
 
-import { markUnsupportedElement } from './unsupported-elements.ts';
+import { clearUnsupportedElement, markUnsupportedElement } from './unsupported-elements.ts';
 import type {
   RenderableImageMime,
   ValidatedImageBytesHandle,
@@ -65,6 +67,7 @@ export {
 } from './drawing-paint-strings.ts';
 
 export interface DrawingPaintContext {
+  readonly includeRenderedDrawings?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
   readonly strings: DrawingPaintStrings;
@@ -398,6 +401,7 @@ function paintPlaceholderCard(
         source?.namespaceUri ?? 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       localName: source?.localName ?? 'drawing',
       source,
+      ...(source ? { drawingIssues: drawingSourceIssues(source, drawing.drawingNodeId) } : {}),
       placement: 'inline',
       bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,
@@ -547,6 +551,7 @@ function paintReadyImage(
   // A group's vector members are rebuilt on every paint; only a lone image is reused.
   const reusable = !drawing.vectorShape && !drawing.frameEffects && !drawing.groupPictureLayers;
   if (reusable && readyImagePaintSignatures.get(outer) === paintSignature) return outer;
+  if (outer.hasAttribute('data-docx-unsupported')) clearUnsupportedElement(outer);
   outer.className = 'docx-drawing docx-drawing-ready';
   outer.style.cssText = '';
   if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
@@ -718,7 +723,17 @@ export function paintDrawingRecord(
   origin?: LayoutBox
 ): HTMLElement | null {
   const element = paintDrawingRecordElement(document, drawing, ctx, urlRegistry, origin);
-  if (element) applyDrawingRevisionPresentation(element, drawing, ctx);
+  if (element) {
+    customDrawingPreview(
+      element,
+      drawing,
+      ctx.includeRenderedDrawings === true,
+      ctx.includeRenderedDrawings
+        ? (ctx.unsupportedSource?.(drawing.drawingNodeId, drawing.ownerPartName) ?? null)
+        : null
+    );
+    applyDrawingRevisionPresentation(element, drawing, ctx);
+  }
   return element;
 }
 

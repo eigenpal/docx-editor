@@ -661,6 +661,7 @@ export {
 } from './editor/DocxEditorRevisionMarkupDialog';
 
 export type {
+  DrawingSupportIssue,
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,

@@ -650,6 +650,7 @@ export type {
 } from '@docx-editor.dev/core/editor';
 
 export type {
+  DrawingSupportIssue,
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,

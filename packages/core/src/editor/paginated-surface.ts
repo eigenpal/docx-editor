@@ -1,6 +1,6 @@
 import {
   createUnsupportedElementProjection,
-  unsupportedSourceInPart,
+  unsupportedElementPaintOptions,
   validateUnsupportedElementRules,
 } from './unsupported-element-state.ts';
 import { DocumentSelectionHistory } from './document-selection-history.ts';
@@ -2746,14 +2746,7 @@ export function mountPaginatedSurface(
         materialize: materializedSet,
         ariaHidden: false,
         drawingStrings,
-        unsupportedOwnerPartName: (nodeId) =>
-          partOfNodeId(session, nodeId)?.name ?? session.part().name,
-        unsupportedSource: (nodeId, ownerPartName) => {
-          const part = ownerPartName
-            ? session.currentPackage().parts.get(ownerPartName)
-            : partOfNodeId(session, nodeId);
-          return part ? unsupportedSourceInPart(part, nodeId) : null;
-        },
+        ...unsupportedElementPaintOptions(unsupportedProjection, session),
         breakMarkStrings,
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
@@ -5428,8 +5421,11 @@ export function mountPaginatedSurface(
       unsupportedProjection.view(session).currentPackage();
       const geometryUnchanged = projection.geometryKey() === unsupportedProjection.geometryKey();
       if (geometryUnchanged) {
+        const paintChanged =
+          projection.includeRenderedDrawings !== unsupportedProjection.includeRenderedDrawings;
         unsupportedProjection = projection;
         furnitureSource = createCurrentFurnitureSource(revisionFilter());
+        if (paintChanged) render(false);
         return;
       }
       flushPendingInputAndLayout();

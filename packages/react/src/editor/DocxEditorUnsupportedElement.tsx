@@ -5,6 +5,8 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 
 /** Props for a registered unsupported-content renderer. @public */
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
+  /** Offer rendered graphics as well as placeholders. */
+  includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
   /**
    * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
    * keep the default placeholder.
@@ -24,6 +26,7 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
 export function DocxEditorUnsupportedElement({
   match,
   layout,
+  includeRenderedDrawings,
   children,
 }: DocxEditorUnsupportedElementProps) {
   const registry = useContext(UnsupportedElementRegistryContext);
@@ -32,8 +35,12 @@ export function DocxEditorUnsupportedElement({
   const id = useRef(Symbol('unsupported-element-declaration')).current;
   useSyncExternalStore(registry.subscribe, registry.snapshot, registry.snapshot);
   useLayoutEffect(() => {
-    registry.register(id, { ...(match ? { match } : {}), ...(layout ? { layout } : {}) });
-  }, [registry, id, match, layout]);
+    registry.register(id, {
+      includeRenderedDrawings,
+      ...(match ? { match } : {}),
+      ...(layout ? { layout } : {}),
+    });
+  }, [registry, id, match, layout, includeRenderedDrawings]);
   useLayoutEffect(() => () => registry.unregister(id), [registry, id]);
   return registry.hosts(id).map((host) => (
     <UnsupportedElementPlaceholder key={host.key} host={host}>

@@ -83,3 +83,54 @@ test('invalid dimensions fail before replacing active registrations', () => {
     editor.destroy();
   }
 });
+
+test('rendered graphics opt into preview slots without changing layout, source, or selection', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../store/__tests__/drawing-support-fixtures.ts');
+  const { observeUnsupportedElements, unsupportedElementRuleMatches } = await import('../index.ts');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>')),
+  });
+  let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    expect(container.querySelector('svg')).not.toBeNull();
+    expect(hosts).toHaveLength(0);
+    const selection = editor.surface!.state().selection;
+    const before = editor.surface!.layout();
+    editor.setUnsupportedElementRules([{ includeRenderedDrawings: true }]);
+    expect(hosts).toHaveLength(1);
+    const host = hosts[0]!;
+    expect(host.unsupported.presentation).toBe('drawing');
+    expect(host.unsupported.drawingIssues).toContainEqual(
+      expect.objectContaining({ detail: 'a:blur' })
+    );
+    expect(unsupportedElementRuleMatches({}, host.unsupported)).toBe(false);
+    expect(unsupportedElementRuleMatches({ includeRenderedDrawings: true }, host.unsupported)).toBe(
+      true
+    );
+    expect(host.fallback.hidden).toBe(false);
+    host.setCustomized(true);
+    expect(host.fallback.hidden).toBe(true);
+    host.setCustomized(false);
+    expect(host.fallback.hidden).toBe(false);
+    expect(editor.surface!.layout()).toBe(before);
+    expect(editor.surface!.state().selection).toEqual(selection);
+    const saved = await editor.save();
+    const xml = strFromU8(unzipSync(new Uint8Array(saved!))['word/document.xml']!);
+    expect(xml).toContain('a:blur');
+    expect(xml).not.toContain('docx-drawing-native');
+    editor.setUnsupportedElementRules([]);
+    expect(container.querySelector('[data-docx-unsupported]')).toBeNull();
+    expect(container.querySelector('svg')).not.toBeNull();
+  } finally {
+    stop();
+    editor.destroy();
+    container.remove();
+  }
+});

@@ -61,6 +61,7 @@ import * as _docx_editor_dev_core_editor from '@docx-editor.dev/core/editor';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { DrawingSupportIssue } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommandExecute } from '@docx-editor.dev/core/editor';
@@ -4952,6 +4953,10 @@ export interface DocxEditorToolbarSlotProps {
 
 // @public
 export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTypes<{
+    includeRenderedDrawings: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     layout: {
         default: undefined;
         type: PropType<UnsupportedElementRule['layout']>;
@@ -4963,6 +4968,10 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    includeRenderedDrawings: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
     layout: {
         default: undefined;
         type: PropType<UnsupportedElementRule['layout']>;
@@ -4972,6 +4981,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
         type: PropType<UnsupportedElementRule['match']>;
     };
 }>> & Readonly<{}>, {
+    includeRenderedDrawings: boolean;
     layout: _docx_editor_dev_core_editor.UnsupportedElementLayout | undefined;
     match: ((element: UnsupportedElement) => boolean) | undefined;
 }, SlotsType<{
@@ -4982,6 +4992,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
 
 // @public
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
+    includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
 }
 
 // @public (undocumented)
@@ -5270,6 +5281,8 @@ export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 
 // @public (undocumented)
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
+
+export { DrawingSupportIssue }
 
 export { Editor }
 

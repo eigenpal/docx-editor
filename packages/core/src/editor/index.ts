@@ -668,3 +668,7 @@ export {
   type GoToBookmarkGroup,
   type BookmarkSortOrder,
 } from './bookmark-dialog-model.ts';
+
+export { unsupportedElementRuleMatches } from '../layout/unsupported-content-types.ts';
+
+export type { DrawingSupportIssue } from '../store/package/drawing-support-issues.ts';

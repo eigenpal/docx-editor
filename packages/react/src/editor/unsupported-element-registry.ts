@@ -2,7 +2,7 @@ import { createContext } from 'react';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   observeUnsupportedElements,
-  type UnsupportedElement,
+  unsupportedElementRuleMatches,
   type UnsupportedElementHost,
   type UnsupportedElementRule,
 } from '@docx-editor.dev/core/editor';
@@ -42,8 +42,6 @@ export function createUnsupportedElementRegistry(): UnsupportedElementRegistry {
       editor?.setUnsupportedElementRules(ordered().map(([, rule]) => rule));
     });
   };
-  const matches = (rule: UnsupportedElementRule, element: UnsupportedElement) =>
-    rule.match?.(element) ?? true;
   return {
     register(id, rule) {
       if (!ranks.has(id)) ranks.set(id, nextRank++);
@@ -78,7 +76,9 @@ export function createUnsupportedElementRegistry(): UnsupportedElementRegistry {
     hosts(id) {
       const rules = ordered();
       return hosts.filter(
-        (host) => rules.find(([, rule]) => matches(rule, host.unsupported))?.[0] === id
+        (host) =>
+          rules.find(([, rule]) => unsupportedElementRuleMatches(rule, host.unsupported))?.[0] ===
+          id
       );
     },
   };

@@ -452,3 +452,56 @@ test('Vue exposes one unsupported drawing alternative and restores its fallback'
     container.remove();
   }
 });
+
+test('Vue rendered drawing previews opt in and restore the native graphic', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../core/src/store/__tests__/drawing-support-fixtures.ts');
+  const { DocxEditor } = await import('../src/index.ts');
+  const bytes = previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>'));
+  const include = ref(false);
+  const show = ref(true);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp({
+    render: () =>
+      h(
+        DocxEditor,
+        { document: bytes, chrome: false },
+        {
+          default: () => [
+            h(DocxEditor.UnsupportedElement, {}, { default: () => h('b', 'Placeholder only') }),
+            h(
+              DocxEditor.UnsupportedElement,
+              {
+                includeRenderedDrawings: include.value,
+                match: (element: UnsupportedElement) => !!element.drawingIssues?.length,
+              },
+              {
+                default: () =>
+                  show.value ? h('img', { alt: 'External preview', src: '/preview.png' }) : null,
+              }
+            ),
+          ],
+        }
+      ),
+  });
+  app.mount(container);
+  try {
+    await waitForElement(container, 'svg');
+    expect(container.querySelector('img[alt="External preview"]')).toBeNull();
+    include.value = true;
+    await waitForElement(container, 'img[alt="External preview"]');
+    expect(container.textContent).not.toContain('Placeholder only');
+    expect(container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(true);
+    show.value = false;
+    await tick();
+    expect(container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(false);
+    include.value = false;
+    await tick();
+    expect(container.querySelector('[data-docx-unsupported]')).toBeNull();
+    expect(container.querySelector('svg')).not.toBeNull();
+  } finally {
+    app.unmount();
+    container.remove();
+  }
+});

@@ -250,7 +250,7 @@ Both packages export `UnsupportedElement` with these fields:
 - Optional `drawing` and `equation` records provide engine metadata.
 - `drawing.placeholderGraphicKind` identifies the graphic type. For its values, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
 - `drawing.accessibility.label` contains the drawing's alternative text.
-- `drawing.chart` provides `title`, `plotTypes`, and `shownAs` when the chart part can be read. Inside a chart placeholder declaration, `shownAs` is `placeholder`.
+- `drawing.chart` provides `title`, `plotTypes`, and `shownAs` when the chart part can be read. Inside a chart placeholder declaration, `shownAs` is `placeholder`. Opt-in rendered graphics keep their native chart state.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 To inspect charts rendered directly or through saved fallbacks, read the layout records. For an example, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
@@ -261,7 +261,7 @@ Omit `match` for a catch-all. The first mounted matching declaration wins. Prop 
 
 Components retain declaration-local framework context and local state across same-page repaints. They can unmount when an occurrence leaves its page, is virtualized, or the document or registration changes. Keep durable annotations in application state. Controls own their keyboard, clipboard, context-menu, and drop events. Fit controls within the reserved box, or use scrolling or an external panel.
 
-Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. These declarations replace placeholders only; they do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
+Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. Declarations replace placeholders by default. They do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
 
 ### Alternative drawing content
 
@@ -273,9 +273,58 @@ The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. 
 
 If a header or footer placeholder blocks the entire body, layout retries without that placeholder's wrap exclusion. The placeholder stays visible at its authored position. Smaller placeholders and supported drawings keep their wrapping.
 
+### Inspect drawings before rendering
+
+Use `inspectDrawingSupport` to inspect a saved DOCX snapshot without a browser or image decoding. The report includes drawings that have no layout geometry.
+
+```ts
+import { inspectDrawingSupport, readOoxmlPackage } from '@docx-editor.dev/core/store';
+
+const parsed = readOoxmlPackage(new Uint8Array(snapshot));
+if (!parsed.ok) throw new Error(parsed.reason);
+
+const report = inspectDrawingSupport(parsed.package);
+for (const entry of report.entries) {
+  console.log(entry.ownerPartName, entry.nodeId, entry.state, entry.issues);
+}
+```
+
+Each entry includes its canonical `source` and selected `drawingNodeId`, when available. Session node identifiers do not persist across saved snapshots. Use the report and source from the snapshot you send to your rendering service.
+
+| State | Meaning |
+| --- | --- |
+| `projected` | The engine has drawing content. Image decoding and full fidelity remain unverified. |
+| `fallback` | The selected content comes from a saved fallback. |
+| `placeholder` | The engine has geometry but cannot project the drawing content. |
+| `hidden` | The projection does not paint the drawing. |
+| `unplaced` | The engine has no layout projection. Use the source in an external preview panel. |
+
+`complete` reports whether the scan stayed within its budgets. It does not certify full DrawingML support. `coverage` is `explicit-source-effects`. The report checks explicit picture effects, effect containers, optional effects, and 3-D properties. It reports ignored effects, missing effect renderers, unverified 3-D properties, saved fallbacks, and projection diagnostics. Issue records identify the affected node, namespace, element name, and feature.
+
+The report does not assess every attribute. It excludes inherited theme effects, related chart and diagram contents, and final image decoding. An empty issue list does not prove that the drawing renders completely. Install the drawing module before opening documents or inspecting them when your application uses that module.
+
+### Replace a rendered graphic
+
+Set `includeRenderedDrawings` to offer rendered graphics and saved drawing fallbacks to your declaration. The default remains placeholder-only. Existing catch-all declarations do not claim rendered graphics.
+
+```tsx
+<DocxEditor.UnsupportedElement
+  includeRenderedDrawings
+  match={(element) => !!element.drawing && !!element.drawingIssues?.length}
+>
+  {({ element }) => <DrawingPreview element={element} />}
+</DocxEditor.UnsupportedElement>
+```
+
+In Vue, use `:include-rendered-drawings="true"` with the equivalent default slot. `DrawingPreview` is your application component.
+
+`element.presentation === 'drawing'` identifies a rendered graphic. Placeholder occurrences omit this field. `element.drawingIssues` contains the explicit source findings for the selected drawing. `element.drawing.chart.shownAs` retains the native chart state, including `fallback` and `chart`. Omit the issue check when your service must preview all offered graphics.
+
+Returning an empty result directly from the render function restores the native graphic or placeholder. The custom component uses the existing drawing bounds and does not change pagination. Text-box stories remain editable and are excluded from rendered-graphic replacement. Hidden drawings and drawings without geometry have no canvas slot. Inspect them through the source report instead.
+
 ### Preview with your rendering service
 
-You can replace a drawing placeholder with an image from your rendering service. The editor does not upload documents or call a rendering service. Your application owns the request, authentication, image cache, and error state. Custom previews do not change the saved DOCX or PDF export.
+You can replace a drawing placeholder or an opted-in rendered graphic with an image from your rendering service. The editor does not upload documents or call a rendering service. Your application owns the request, authentication, image cache, and error state. Custom previews do not change the saved DOCX or PDF export.
 
 Pass the canonical `source` and `ownerPartName` to your service with the corresponding DOCX snapshot. The source fragment can refer to chart, diagram, image, theme, or relationship parts. A fragment alone does not contain those dependencies. Use the original DOCX only when the source and dependencies remain unchanged. After edits, use a saved snapshot that matches the preview request.
 

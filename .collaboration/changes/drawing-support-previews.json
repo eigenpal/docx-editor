@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Only drawing placeholders support custom previews.",
+  "after": "Source reports include unplaced drawings and rendered graphics accept optional previews.",
+  "reason": "Source inspection and custom previews do not modify shared document state or operations.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts"
+  ],
+  "changeset": "drawing-support-previews",
+  "migration": null
+}

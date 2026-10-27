@@ -56,6 +56,7 @@ import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { DrawingSupportIssue } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommandExecute } from '@docx-editor.dev/core/editor';
@@ -1799,6 +1800,7 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
     children: (props: {
         element: UnsupportedElement;
     }) => ReactNode;
+    includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
 }
 
 // @public
@@ -1878,6 +1880,8 @@ export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 
 // @public
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
+
+export { DrawingSupportIssue }
 
 export { Editor }
 

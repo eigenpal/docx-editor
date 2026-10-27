@@ -199,3 +199,93 @@ test('opaque content and drawing alternatives retain source through concurrent e
   );
   expect(containers.at(-1)!.querySelectorAll('[data-docx-unsupported]')).toHaveLength(4);
 });
+
+test('rendered preview registrations stay local through concurrent edits and drawing deletion', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../../../core/src/store/__tests__/drawing-support-fixtures.ts');
+  const { inspectDrawingSupport } = await import('@docx-editor.dev/core/store');
+  const peers = await harness.pair(
+    previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>'))
+  );
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+  }) as [Editor, Editor];
+  const session = (editor: Editor) => editor.surface!.session;
+  const paragraph = session(alice).paragraphIds()[0]!;
+  const select = (editor: Editor, offset: number, end = offset) =>
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraph, offset },
+      head: { paragraphId: paragraph, offset: end },
+    });
+  const flush = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  const converge = () => {
+    flush();
+    expect(packageFingerprint(session(alice).currentPackage())).toBe(
+      packageFingerprint(session(bob).currentPackage())
+    );
+    expect(saveReopenDigest(session(alice).currentPackage())).toEqual(
+      saveReopenDigest(session(bob).currentPackage())
+    );
+  };
+  const fingerprint = packageFingerprint(session(alice).currentPackage());
+  alice.setUnsupportedElementRules([{ includeRenderedDrawings: true }]);
+  expect(packageFingerprint(session(alice).currentPackage())).toBe(fingerprint);
+  expect(containers[0]!.querySelectorAll('[data-docx-unsupported]')).toHaveLength(1);
+  expect(containers[1]!.querySelectorAll('[data-docx-unsupported]')).toHaveLength(0);
+  select(alice, 0, 2);
+  applyAwarenessUpdate(
+    peers.bob.awareness,
+    encodeAwarenessUpdate(peers.alice.awareness, [peers.alice.awareness.clientID]),
+    'test'
+  );
+  const remote = peers.bob.room.session.remoteSelections()[0]!;
+  expect(
+    caretAt(bob.surface!.layout(), {
+      paragraphId: remote.anchor.nodeId,
+      offset: remote.anchor.offset,
+    })
+  ).toEqual(caretAt(alice.surface!.layout(), alice.surface!.state().selection.anchor));
+  peers.pause();
+  select(alice, 0);
+  select(bob, 0);
+  expect(alice.exec({ type: 'insertText', text: 'A' }).ok).toBe(true);
+  expect(bob.exec({ type: 'insertText', text: 'B' }).ok).toBe(true);
+  flush();
+  peers.resume();
+  converge();
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  const report = inspectDrawingSupport(session(alice).currentPackage());
+  expect(report.entries[0]!.issues).toContainEqual(expect.objectContaining({ detail: 'a:blur' }));
+  const saved = await alice.save();
+  const reopened = mount({
+    document: saved!,
+    unsupportedElementRules: [{ includeRenderedDrawings: true }],
+  });
+  expect(
+    inspectDrawingSupport(session(reopened).currentPackage()).entries[0]!.issues
+  ).toContainEqual(expect.objectContaining({ detail: 'a:blur' }));
+  // Both inserted letters precede the original six-character prefix.
+  peers.pause();
+  select(alice, 8, 9);
+  select(bob, 0);
+  expect(alice.surface!.deleteSelection()).toBe(true);
+  expect(bob.exec({ type: 'insertText', text: 'C' }).ok).toBe(true);
+  flush();
+  peers.resume();
+  converge();
+  expect(inspectDrawingSupport(session(alice).currentPackage()).entries).toHaveLength(0);
+  expect(session(bob).bodyText()).toContain('C');
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(inspectDrawingSupport(session(bob).currentPackage()).entries).toHaveLength(1);
+});

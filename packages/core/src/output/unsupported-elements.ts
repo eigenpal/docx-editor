@@ -135,6 +135,8 @@ export function markUnsupportedElement(
     slot,
     unsupported,
     setCustomized(custom) {
+      // A stale component cleanup must not change a replacement on reused drawing DOM.
+      if (hostOf(element)?.fallback !== fallback) return;
       fallback.hidden = custom;
       element.toggleAttribute('data-docx-customized', custom);
       if (!accessibilityElement) return;
@@ -232,6 +234,16 @@ export function observeUnsupportedElements(
     listeners.delete(publish);
     if (listeners.size === 0) delete observed[listenersSymbol];
   };
+}
+
+/** Remove a rendered-graphic registration while restoring native accessibility. @internal */
+export function clearUnsupportedElement(element: HTMLElement): void {
+  const host = hostOf(element);
+  host?.setCustomized(false);
+  host?.slot.remove();
+  delete element.dataset.docxUnsupported;
+  delete element.dataset.docxCustomized;
+  Reflect.deleteProperty(element, hostSymbol);
 }
 
 /** Keep capture-phase object selection away from host-owned controls. */

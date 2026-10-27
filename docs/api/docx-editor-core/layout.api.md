@@ -937,6 +937,19 @@ export interface DrawingPoint {
     readonly y: number;
 }
 
+// @public
+export interface DrawingSupportIssue {
+    // (undocumented)
+    readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
+    readonly detail: string;
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string;
+    // (undocumented)
+    readonly nodeId: string;
+}
+
 // @public (undocumented)
 export interface DrawingTextArtRecord {
     // (undocumented)
@@ -4916,6 +4929,7 @@ export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null;
 export interface UnsupportedElement {
     readonly bounds?: LayoutBox;
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
+    readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly label: string;
     // (undocumented)
@@ -4928,6 +4942,7 @@ export interface UnsupportedElement {
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';
+    readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
 }
 
@@ -4941,11 +4956,15 @@ export interface UnsupportedElementLayout {
 
 // @public
 export interface UnsupportedElementRule {
+    readonly includeRenderedDrawings?: boolean;
     // (undocumented)
     readonly layout?: UnsupportedElementLayout;
     // (undocumented)
     readonly match?: (element: UnsupportedElement) => boolean;
 }
+
+// @public
+export function unsupportedElementRuleMatches(rule: UnsupportedElementRule, element: UnsupportedElement): boolean;
 
 // @public
 export class UnsupportedScriptError extends Error {

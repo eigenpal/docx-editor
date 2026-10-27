@@ -14,7 +14,10 @@ import { UnsupportedElementRegistryContext } from './unsupported-element-registr
 import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 
 /** Props for a registered unsupported-content renderer. @public */
-export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {}
+export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
+  /** Offer rendered graphics as well as placeholders. */
+  includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
+}
 
 /**
  * Register a renderer under DocxEditor or DocxEditor.Root.
@@ -27,6 +30,7 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
 export const DocxEditorUnsupportedElement = defineComponent({
   name: 'DocxEditorUnsupportedElement',
   props: {
+    includeRenderedDrawings: { type: Boolean, default: false },
     match: { type: Function as PropType<UnsupportedElementRule['match']>, default: undefined },
     layout: { type: Object as PropType<UnsupportedElementRule['layout']>, default: undefined },
   },
@@ -41,9 +45,17 @@ export const DocxEditorUnsupportedElement = defineComponent({
       version.value = registry.snapshot();
     });
     watch(
-      () => [props.match, props.layout, props.layout?.width, props.layout?.height] as const,
-      ([match, layout, width, height]) => {
+      () =>
+        [
+          props.match,
+          props.layout,
+          props.layout?.width,
+          props.layout?.height,
+          props.includeRenderedDrawings,
+        ] as const,
+      ([match, layout, width, height, includeRenderedDrawings]) => {
         registry.register(id, {
+          includeRenderedDrawings,
           ...(match ? { match } : {}),
           ...(layout ? { layout: { width: width!, height: height! } } : {}),
         });
