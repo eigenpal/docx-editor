@@ -49,6 +49,13 @@ interface PublishKeys {
    * reader, or a notice waiting for the session, slept through it until something else moved.
    */
   collaborationStatus: PaginatedSurfaceState['collaborationStatus'];
+  /**
+   * How many pages the layout has.
+   *
+   * Pages laid out after an edit or an open, in background tasks, move no revision and no
+   * caret, so a page counter kept the partial total until something else moved.
+   */
+  pageCount: number;
 }
 
 const EMPTY: PublishKeys = {
@@ -58,6 +65,7 @@ const EMPTY: PublishKeys = {
   drawingIntent: 'none',
   formatPainter: 'off/none',
   collaborationStatus: 'inactive',
+  pageCount: 0,
 };
 
 function keysOf(state: PaginatedSurfaceState, surface: PaginatedSurface): PublishKeys {
@@ -69,8 +77,12 @@ function keysOf(state: PaginatedSurfaceState, surface: PaginatedSurface): Publis
     drawingIntent: drawingSelectionIntentKey(surface.drawingSelectionIntent()),
     formatPainter: `${state.formatPainter.mode}/${state.formatPainter.level}`,
     collaborationStatus: state.collaborationStatus,
+    pageCount: state.pageCount,
   };
 }
+
+/** What a publish moved. @internal */
+export type PublishMove = 'nothing' | 'pages' | 'state';
 
 /**
  * Tracks what the last emitted tick reported, and answers whether this one differs.
@@ -79,11 +91,12 @@ function keysOf(state: PaginatedSurfaceState, surface: PaginatedSurface): Publis
  */
 export interface PublishSignal {
   /**
-   * Whether this publish moved observable state, and adopt it as the new baseline either
-   * way — a publish that is not emitted is still the most recent truth, so the NEXT one must
-   * be compared against it rather than against the last one a host happened to hear.
+   * What this publish moved — nothing, only the page count, or other observable state — and
+   * adopt it as the new baseline either way: a publish that is not emitted is still the most
+   * recent truth, so the NEXT one must be compared against it rather than against the last
+   * one a host happened to hear.
    */
-  moved(state: PaginatedSurfaceState, surface: PaginatedSurface): boolean;
+  moved(state: PaginatedSurfaceState, surface: PaginatedSurface): PublishMove;
   /** Adopt a freshly mounted surface as the baseline, without emitting. */
   adopt(surface: PaginatedSurface): void;
   /** Forget everything — the surface it described is gone. */
@@ -102,8 +115,9 @@ export function createPublishSignal(): PublishSignal {
         next.drawingIntent === last.drawingIntent &&
         next.formatPainter === last.formatPainter &&
         next.collaborationStatus === last.collaborationStatus;
+      const pages = next.pageCount !== last.pageCount;
       last = next;
-      return !quiet;
+      return !quiet ? 'state' : pages ? 'pages' : 'nothing';
     },
     adopt(surface) {
       last = keysOf(surface.state(), surface);

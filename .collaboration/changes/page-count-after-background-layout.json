@@ -1,0 +1,17 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The page total in the snapshot kept the count of the first pages until another change, when the remaining pages of a large document or of an edit were laid out in the background.",
+  "after": "The editor tells subscribers when the page count changes, including after background layout.",
+  "reason": "The change adds the local page count to the keys that decide when the editor notifies its own subscribers. It does not change the document, shared state, operations, or synchronization.",
+  "tests": [
+    "packages/core/src/editor/__tests__/surface-publish-signal.test.ts",
+    "packages/core/src/editor/__tests__/progressive-open.test.ts",
+    "packages/core/src/editor/__tests__/deferred-layout.test.ts",
+    "packages/react/test/page-number.test.tsx",
+    "packages/vue/test/page-number-opening.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-page-count-editors.test.ts"
+  ],
+  "changeset": "page-count-after-background-layout",
+  "migration": null
+}

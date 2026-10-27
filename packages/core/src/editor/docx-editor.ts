@@ -397,6 +397,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
+  /** One page-count notice per task, after the render that moved it. */
+  let pagesNoticeQueued = false;
+  const pagesNotice = (): void => {
+    if (pagesNoticeQueued) return;
+    pagesNoticeQueued = true;
+    globalThis.queueMicrotask(() => {
+      pagesNoticeQueued = false;
+      if (!destroyed) emitSelectionChange();
+    });
+  };
   /** The revision the last surface publish showed; see the idle anchor warm-up. */
   let lastPublishedRevision: number | undefined;
   const views = createEditorViews({
@@ -762,8 +772,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // The caret is not the only observable thing that moves: an armed typing format, an
         // open furniture story, how a drawing came to be selected and the format painter's
         // arming all move without it, and each has no other channel to a host.
-        if (!reviewVisibilityMoved && !publishSignal.moved(state, surface)) return;
-        emitSelectionChange();
+        const moved = publishSignal.moved(state, surface);
+        if (!reviewVisibilityMoved && moved === 'nothing') return;
+        // Only the page count: a background layout, still inside its render. Heard after it,
+        // so a host reading the snapshot cannot commit buffered typing in the middle of one.
+        if (!reviewVisibilityMoved && moved === 'pages') pagesNotice();
+        else emitSelectionChange();
       },
     } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
     if (!result.ok) {

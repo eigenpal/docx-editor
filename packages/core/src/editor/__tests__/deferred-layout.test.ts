@@ -12,6 +12,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import type { BlockFragmentRecord } from '../../layout/semantic-records.ts';
+import { createDocxEditor } from '../docx-editor.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createDeferredLayout, setDeferredLayoutForTest } from '../surface-deferred-layout.ts';
 import type { SemanticLayout } from '../../layout/semantic-records.ts';
@@ -170,6 +171,33 @@ describe('pages after the screen finish in the background', () => {
       expect(await settled(surface, cold)).toEqual(cold);
     } finally {
       dispose();
+    }
+  });
+
+  test('a host hears the page total the background pass moves', async () => {
+    // The commit reports its own layout. The later pages the pass adds move no revision and
+    // no caret, so without their own signal a page counter kept the earlier total.
+    const editor = createDocxEditor({ document: docx() });
+    const container = document.createElement('div');
+    document.body.append(container);
+    editor.attach(container);
+    const surface = editor.surface!;
+    const before = surface.layout().pages.length;
+    const totals: number[] = [];
+    const record = () => totals.push(editor.snapshot().page.total);
+    const offs = [editor.on('change', record), editor.on('selectionChange', record)];
+    try {
+      // Enough new paragraphs at the top to push the last page over.
+      for (let i = 0; i < 60; i += 1) splitFirst(surface, 1);
+      await settled(surface, coldLines(surface));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const after = surface.layout().pages.length;
+      expect(after).not.toBe(before);
+      expect(totals.at(-1)).toBe(after);
+    } finally {
+      for (const off of offs) off();
+      editor.destroy();
+      container.remove();
     }
   });
 

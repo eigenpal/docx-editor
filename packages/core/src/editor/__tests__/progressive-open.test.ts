@@ -188,6 +188,63 @@ describe('a large open laid out in slices', () => {
     editor.destroy();
   }, 60_000);
 
+  /** The page totals a host hears, read at each emit, as a page counter does. */
+  function heardTotals(editor: ReturnType<typeof createDocxEditor>): {
+    totals: number[];
+    stop(): void;
+  } {
+    const totals: number[] = [];
+    const record = () => totals.push(editor.snapshot().page.total);
+    const offs = [editor.on('change', record), editor.on('selectionChange', record)];
+    return { totals, stop: () => offs.forEach((off) => off()) };
+  }
+
+  test('a host hears the final page total once the last page is laid out', async () => {
+    // The open ends at the mount, so a page counter first reads the partial total. The pages
+    // the slices add move no revision and no caret; without their own signal the counter kept
+    // the partial total until something unrelated moved.
+    const editor = createDocxEditor({ document: docx() });
+    const heard = heardTotals(editor);
+    editor.attach(document.createElement('div'));
+    await until(() => editor.surface !== null && !progressiveOpenPending(editor.surface));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    heard.stop();
+    const final = editor.surface!.layout().pages.length;
+    // The first total heard with a document mounted is the partial one.
+    expect(heard.totals.find((total) => total > 0)).toBeLessThan(final);
+    expect(heard.totals.at(-1)).toBe(final);
+    editor.destroy();
+  }, 60_000);
+
+  test('a host hears the final page total when a reader finishes the open early', async () => {
+    // A reader of the whole pagination (a field update, Ctrl+End, an export) finishes the
+    // slices at once. That reader emits nothing itself, so the page signal must.
+    const editor = createDocxEditor({ document: docx() });
+    const heard = heardTotals(editor);
+    let forced = false;
+    let heardDuringFinish = -1;
+    const off = editor.on('change', () => {
+      const surface = editor.surface;
+      if (forced || !surface || !progressiveOpenPending(surface)) return;
+      forced = true;
+      const before = heard.totals.length;
+      completeProgressiveOpen(surface);
+      // Not from inside the finishing render: a host reading the snapshot there could
+      // commit buffered typing in the middle of it.
+      heardDuringFinish = heard.totals.length - before;
+    });
+    editor.attach(document.createElement('div'));
+    await until(() => forced);
+    // The finish is synchronous; the notice follows in a microtask.
+    expect(progressiveOpenPending(editor.surface!)).toBe(false);
+    expect(heardDuringFinish).toBe(0);
+    await Promise.resolve();
+    off();
+    heard.stop();
+    expect(heard.totals.at(-1)).toBe(editor.surface!.layout().pages.length);
+    editor.destroy();
+  }, 60_000);
+
   test('a save during the slices finishes the layout at once', async () => {
     const bytes = docx();
     const editor = createDocxEditor({ document: bytes });

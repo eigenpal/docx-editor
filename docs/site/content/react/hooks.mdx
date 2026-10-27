@@ -168,7 +168,7 @@ import { useEditorEvent } from '@docx-editor.dev/react';
 
 const lastSelection = useRef<unknown>(null);
 // `selectionChange` also fires for other state that moves without a document change, such
-// as the collaboration status, so compare the selection itself.
+// as the collaboration status or the page count, so compare the selection itself.
 useEditorEvent('selectionChange', (snapshot) => {
   if (snapshot.selection !== lastSelection.current) setPanelOpen(false);
   lastSelection.current = snapshot.selection;

@@ -18,8 +18,8 @@ export interface EditorEvents {
   change: (change: DocumentChange) => void;
   /**
    * Observable editor state moved without a document change: the selection or its derived
-   * formatting, the armed typing format, the open header or footer, or the collaboration
-   * session's status.
+   * formatting, the armed typing format, the open header or footer, the collaboration
+   * session's status, or the page count when pages finish laying out in the background.
    */
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;

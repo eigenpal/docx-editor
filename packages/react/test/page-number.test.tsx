@@ -11,6 +11,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorPageNumber } from '../src/editor/DocxEditorPageNumber.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
+import { useEditorState } from '../src/editor/useEditorState.ts';
 import {
   InsideViewportContext,
   useViewportOverlayHost,
@@ -66,6 +67,23 @@ function largeThreePages(): Uint8Array {
     ),
     'customXml/item1.xml': strToU8(`<filler>${lines.join('')}</filler>`),
   });
+}
+
+/** Many pages of real text, past the open-yield threshold, so the open lays out in slices. */
+function manyPages(): Uint8Array {
+  const body: string[] = [];
+  for (let index = 0; index < 6000; index += 1) {
+    body.push(paragraph(`Paragraph ${index} of a long document with ordinary sentence text.`));
+  }
+  return docx(body.join(''));
+}
+
+/** Every total a page counter renders, from the published page total. */
+const rendered: number[] = [];
+function PageTotal() {
+  const total = useEditorState((snapshot) => snapshot.page.total);
+  rendered.push(total);
+  return <span data-testid="page-total">{total}</span>;
 }
 
 afterEach(cleanup);
@@ -263,4 +281,37 @@ describe('DocxEditor.PageNumber', () => {
       expect(view.container.querySelector('.docx-editor__page-number')).not.toBeNull()
     );
   });
+
+  test('a counter shows the final page total once the last page is laid out', async () => {
+    rendered.length = 0;
+    // The open ends at the mount with a partial layout. The pages laid out after it move no
+    // revision and no caret; the counter must still hear the final total.
+    let editor: (Editor & { surface: object | null }) | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={manyPages()}
+        onReady={(ready) => {
+          editor = ready as typeof editor;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <PageTotal />
+      </DocxEditorRoot>
+    );
+    await waitFor(
+      () => {
+        const opening = view.container.querySelector('[data-docx-opening-preview]') !== null;
+        // `snapshot()` reads the live total without forcing the remaining pages.
+        const final = editor!.snapshot().page.total;
+        expect(editor?.surface).toBeTruthy();
+        expect(opening).toBe(false);
+        expect(rendered.at(-1)).toBe(final);
+      },
+      { timeout: 20_000 }
+    );
+    // The first total rendered with a document mounted is the partial one.
+    expect(rendered.find((total) => total > 0)).toBeLessThan(editor!.snapshot().page.total);
+  }, 60_000);
 });
