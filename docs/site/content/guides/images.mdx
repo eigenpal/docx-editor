@@ -299,7 +299,7 @@ The verdict can be wrong in these cases:
 - A picture that fails to decode later, such as a damaged EMF file, shows a placeholder in the editor. A server report does not decode images, so it reports the picture as `native`.
 - The verdict depends on the installed renderers. Without the drawing module, a chart shows a placeholder or its saved fallback. With the module, it renders. Install the same modules on your server as in your editor.
 
-`graphicKind` names the graphic that a drawing holds, whether or not it renders:
+`graphicKind` names the graphic that a drawing holds, whether or not it renders. **`textbox` covers every DrawingML shape, and `shape` covers only legacy VML drawings.**
 
 | Value     | Graphic                                 |
 | --------- | --------------------------------------- |
@@ -328,7 +328,7 @@ An occurrence's `drawingIssues` and a report entry's `issues` use these codes. O
 
 ### Show previews in the editor
 
-Add `DocxEditor.DrawingPreview` and pass a `render` function that calls your service. The function receives a small DOCX that holds only the drawing. Return an image `Blob`, an image URL, or `null` to keep the editor's drawing.
+Add `DocxEditor.DrawingPreview` and pass a `render` function that calls your service. The function receives a small DOCX that holds only the drawing. Return an image `Blob` or an image URL. Return `null` when the drawing has no preview, and throw when the request fails, so the preview reports `error` and can retry.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -342,7 +342,8 @@ const renderOnServer: DrawingPreviewRender = async ({ docx, signal }) => {
     body: docx,
     signal,
   });
-  return response.ok ? await response.blob() : null;
+  if (!response.ok) throw new Error(`Preview failed: ${response.status}`);
+  return await response.blob();
 };
 
 export function Editor({ bytes }: { bytes: ArrayBuffer }) {
@@ -369,7 +370,8 @@ const renderOnServer: DrawingPreviewRender = async ({ docx, signal }) => {
     body: docx,
     signal,
   });
-  return response.ok ? await response.blob() : null;
+  if (!response.ok) throw new Error(`Preview failed: ${response.status}`);
+  return await response.blob();
 };
 </script>
 
@@ -389,7 +391,7 @@ The component behaves as follows:
 - Users can still select, move, resize, and delete a drawing that shows a preview.
 - Shapes with editable text stay editable, so they are never offered. Hidden drawings and drawings without a layout position have no preview area.
 - `match` receives drawings only.
-- `DocxEditor.DrawingPreview` is a declaration like `DocxEditor.UnsupportedElement`: the first mounted declaration that matches an occurrence wins. A catch-all `DocxEditor.UnsupportedElement` without `includeRenderedDrawings` never claims a drawing that renders. Mounted first, it does claim placeholders, so give it a `match` that leaves drawings to the preview component, such as `match={(element) => element.drawing === undefined}`.
+- `DocxEditor.DrawingPreview` is a declaration like `DocxEditor.UnsupportedElement`: the first mounted declaration that matches an occurrence wins. A catch-all `DocxEditor.UnsupportedElement` without `includeRenderedDrawings` never claims a drawing that renders. Mounted first, it does claim placeholders, so give it a `match` that leaves drawings to the preview component, such as `match={(element) => element.drawing === undefined}`. Order follows mounting, not source order, so a declaration that mounts later, such as after loading data, has a lower priority.
 
 ### Choose drawings and draw the preview
 
@@ -492,7 +494,7 @@ For a fully custom component, use `useDrawingPreview(element, render)` inside `D
 - When a drawing changes, the editor requests a new image and shows the previous one until it is ready. `signal` aborts a request when a newer one replaces it, or when the cache clears.
 - At most four requests run at a time per editor. Only drawings on pages that the editor shows are requested.
 - The editor makes an object URL for each returned `Blob` and revokes it when the image leaves the cache. The cache keeps 64 images and clears 30 seconds after the last preview component unmounts.
-- The editor puts a returned URL into an `img` element as is. Return a `blob:`, `data:image/`, or `https:` URL that you trust.
+- The editor puts a returned URL into an `img` element as is, without checking it. Return a `blob:`, `data:image/`, or `https:` URL that you trust.
 
 ### Render previews on a server
 
@@ -531,12 +533,12 @@ Without the drawing module, the report sees charts as their saved fallback or as
 The preview package has these properties:
 
 - It holds one paragraph with the drawing, and the chart parts, diagram parts, images, styles, theme, settings, and font table that the drawing needs.
-- The page has the drawing's size and no margins, and a floating drawing is placed on the line. So the first page is the preview image, and `pageFitsDrawing` is `true`. A legacy VML drawing keeps the document's page size and margins, and `pageFitsDrawing` is `false`.
+- The page has the drawing's size and no margins, and a floating drawing is placed on the line. So the first page is the preview image, and `pageFitsDrawing` is `true`. A legacy VML drawing takes its size from its style. When the size is unknown, the page keeps the document's size and margins, and `pageFitsDrawing` is `false`. The editor passes the same value to `render` as `pageFitsDrawing`.
 - The same drawing and document parts always give the same bytes. A hash of `docx` works as a cache key on your server, for the editor and for server-side previews.
 - Relationships to external targets, embedded objects, macros, and templates are removed, so the package never points outside itself.
 - By default, a package copies at most 64 parts and 64 MiB. Otherwise, the result is `{ ok: false }` with the reason `too-many-parts` or `too-large`. A target that is not a drawing gives `drawing-not-found`.
 
-Any DOCX renderer can draw the first page. For example, LibreOffice converts the package to PDF, and `pdftoppm` turns the first page into a PNG at the resolution that you choose. When `pageFitsDrawing` is `true`, the page has the drawing's size, so 192 DPI gives an image at twice the drawing's size for sharp display. When it is `false`, the page has the document's size and margins, so trim the white space around the drawing.
+Any DOCX renderer can draw the first page. For example, LibreOffice converts the package to PDF, and `pdftoppm` turns the first page into a PNG at the resolution that you choose. When `pageFitsDrawing` is `true`, the page has the drawing's size, so 192 DPI gives an image at twice the drawing's size for sharp display. When it is `false`, the page has the document's size and margins, so trim the white space around the drawing. For example, send the value to your service in a request header.
 
 The following handler receives the preview package that `DocxEditor.DrawingPreview` posts and returns a PNG. It caches images by a hash of the package. So the editor and a server that prepares previews ahead of time share one cache. An edit to a drawing changes its package, so the edited drawing gets a new image.
 
@@ -549,6 +551,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
+// Keep this cache bounded in production, for example with an LRU cache.
 const cache = new Map<string, Uint8Array>();
 
 export async function renderFirstPage(docx: Uint8Array): Promise<Uint8Array> {
@@ -569,10 +572,18 @@ export async function renderFirstPage(docx: Uint8Array): Promise<Uint8Array> {
   }
 }
 
+const MAX_PACKAGE_BYTES = 20 * 1024 * 1024;
+
 // POST /render-drawing
 export async function POST(request: Request): Promise<Response> {
-  const png = await renderFirstPage(new Uint8Array(await request.arrayBuffer()));
-  return new Response(png, { headers: { 'Content-Type': 'image/png' } });
+  const docx = new Uint8Array(await request.arrayBuffer());
+  if (docx.byteLength > MAX_PACKAGE_BYTES) return new Response(null, { status: 413 });
+  try {
+    const png = await renderFirstPage(docx);
+    return new Response(png, { headers: { 'Content-Type': 'image/png' } });
+  } catch {
+    return new Response(null, { status: 502 });
+  }
 }
 ```
 
@@ -582,7 +593,7 @@ The preview components, the support verdict, and the package builder do not need
 
 ### Report drawing support
 
-`inspectDrawingSupport(pkg)` lists every drawing in the body, headers, footers, footnotes, and endnotes, including drawings that have no layout position. It does not need a browser and does not decode images. Each entry has `ownerPartName`, `nodeId`, `drawingNodeId`, `source`, `graphicKind`, `state`, `support`, `hasPreviewArea`, and `issues`. `hasPreviewArea` is `false` for hidden and unplaced drawings and for shapes with editable text. `graphicKind` uses the same names as `placeholderGraphicKind`, plus `picture`.
+`inspectDrawingSupport(pkg)` lists every drawing in the body, headers, footers, footnotes, and endnotes, including drawings that have no layout position. It does not need a browser and does not decode images. Each entry has `ownerPartName`, `nodeId`, `drawingNodeId`, `source`, `graphicKind`, `state`, `support`, `hasPreviewArea`, and `issues`. `hasPreviewArea` is `false` for hidden and unplaced drawings and for shapes with editable text. An entry's `nodeId` is the node of `source`, which can be an `mc:AlternateContent` wrapper, and `drawingNodeId` is the drawing inside it. An editor occurrence's `nodeId` is that drawing. Both identify the same drawing for `createDrawingPreviewPackage`. `graphicKind` uses the same names as `placeholderGraphicKind`, plus `picture`.
 
 | State         | Meaning                                               |
 | ------------- | ----------------------------------------------------- |
@@ -592,7 +603,7 @@ The preview components, the support verdict, and the package builder do not need
 | `hidden`      | The drawing is hidden in the document.                |
 | `unplaced`    | The drawing has no layout position, so nothing shows. |
 
-`complete` is `false` when a scan limit stopped the inventory. `coverage` is `explicit-source-effects`: the check covers effects, fallbacks, and 3-D properties written in each drawing's own XML. Install the drawing module before you inspect documents if your editor uses it, so the report matches what the editor shows. Node identifiers belong to the package that you inspected. Use the entry with that same package.
+`complete` is `false` when a scan limit stopped the inventory. The report then omits some drawings; the editor still offers them to its preview component. `coverage` is `explicit-source-effects`: the check covers effects, fallbacks, and 3-D properties written in each drawing's own XML. Install the drawing module before you inspect documents if your editor uses it, so the report matches what the editor shows. Node identifiers belong to the package that you inspected. Use the entry with that same package.
 
 ## Drawing limits
 

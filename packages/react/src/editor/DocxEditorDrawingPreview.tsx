@@ -46,6 +46,7 @@ const noSubscription = () => () => {};
  * function Preview({ element }: { element: UnsupportedElement }) {
  *   const preview = useDrawingPreview(element, renderOnServer);
  *   if (preview.status === 'error') return <button onClick={preview.retry}>Retry</button>;
+ *   if (preview.status === 'unavailable') return <span>No preview</span>;
  *   return preview.url ? <img src={preview.url} alt="" /> : <span>Loading</span>;
  * }
  * ```
@@ -150,7 +151,8 @@ function DrawingPreviewOccurrence({
  *   <DocxEditor.DrawingPreview
  *     render={async ({ docx, signal }) => {
  *       const response = await fetch('/render-drawing', { method: 'POST', body: docx, signal });
- *       return response.ok ? await response.blob() : null;
+ *       if (!response.ok) throw new Error(`Preview failed: ${response.status}`);
+ *       return await response.blob();
  *     }}
  *   />
  * </DocxEditor>

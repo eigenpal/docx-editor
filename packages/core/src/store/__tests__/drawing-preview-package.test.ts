@@ -188,7 +188,7 @@ test('a floating drawing is placed on the line of a page that fits it', async ()
   expect([reopened.graphicKind, reopened.state]).toEqual(['textbox', 'projected']);
 });
 
-test('package bytes are deterministic, and legacy VML keeps the document page', async () => {
+test('package bytes are deterministic, and legacy VML pages fit when its size is known', async () => {
   const { previewDocument } = await import('./drawing-support-fixtures.ts');
   const pkg = open(pictureDocx());
   const entry = inspectDrawingSupport(pkg).entries[0]!;
@@ -197,8 +197,38 @@ test('package bytes are deterministic, and legacy VML keeps the document page', 
   if (!first.ok || !second.ok) throw new Error('not packaged');
   expect(second.docx).toEqual(first.docx);
   expect(first.pageFitsDrawing).toBe(true);
-  const vml = open(previewDocument('<w:pict><v:rect style="width:100pt;height:50pt"/></w:pict>'));
+  // A floating legacy VML shape takes its size from its style and sits on the line.
+  const vml = open(
+    previewDocument(
+      '<w:pict><v:rect style="position:absolute;margin-left:300pt;margin-top:200pt;width:100pt;height:50pt;z-index:2"/></w:pict>'
+    )
+  );
   const legacy = createDrawingPreviewPackage(vml, inspectDrawingSupport(vml).entries[0]!);
   if (!legacy.ok) throw new Error(legacy.reason);
-  expect(legacy.pageFitsDrawing).toBe(false);
+  expect(legacy.pageFitsDrawing).toBe(true);
+  const legacyXml = strFromU8(unzipSync(legacy.docx)['word/document.xml']!);
+  expect(legacyXml).toContain('style="width:100pt;height:50pt"');
+  expect(legacyXml).toContain('<w:pgSz w:w="2000" w:h="1120"/>');
+  // Without a size in its style, the page keeps the document's size.
+  const unsized = open(previewDocument('<w:pict><v:rect fillcolor="red"/></w:pict>'));
+  const fallback = createDrawingPreviewPackage(unsized, inspectDrawingSupport(unsized).entries[0]!);
+  if (!fallback.ok) throw new Error(fallback.reason);
+  expect(fallback.pageFitsDrawing).toBe(false);
+});
+
+test('a VML shape after its shape type sizes the page to its rotated bounding box', async () => {
+  const { previewDocument } = await import('./drawing-support-fixtures.ts');
+  const pkg = open(
+    previewDocument(
+      '<w:pict><v:shapetype id="t1" coordsize="21600,21600"/>' +
+        '<v:shape type="#t1" style="position:absolute;width:100pt;height:100pt;rotation:45"/></w:pict>'
+    )
+  );
+  const result = createDrawingPreviewPackage(pkg, inspectDrawingSupport(pkg).entries[0]!);
+  if (!result.ok) throw new Error(result.reason);
+  expect(result.pageFitsDrawing).toBe(true);
+  // 100pt at 45 degrees spans about 141.4pt: 2829 twips, plus the room below the line.
+  expect(strFromU8(unzipSync(result.docx)['word/document.xml']!)).toContain(
+    '<w:pgSz w:w="2829" w:h="2949"/>'
+  );
 });

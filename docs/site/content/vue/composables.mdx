@@ -458,7 +458,11 @@ const { status, url, retry } = useDrawingPreview(() => props.element, props.rend
 </script>
 
 <template>
-  <img v-if="status === 'ready'" :src="url!" :alt="element.drawing?.accessibility.label ?? ''" />
+  <img
+    v-if="status === 'ready'"
+    :src="url ?? undefined"
+    :alt="element.drawing?.accessibility.label ?? ''"
+  />
   <button v-else-if="status === 'error'" @click="retry">Retry preview</button>
   <span v-else-if="status === 'unavailable'">No preview available</span>
   <span v-else role="status">Loading preview</span>

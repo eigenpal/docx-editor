@@ -1612,6 +1612,7 @@ export type DrawingPreviewRender = (request: DrawingPreviewRequest) => Promise<B
 export interface DrawingPreviewRequest {
     readonly docx: Uint8Array;
     readonly element: UnsupportedElement;
+    readonly pageFitsDrawing: boolean;
     readonly signal: AbortSignal;
 }
 

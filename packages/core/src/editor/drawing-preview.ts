@@ -17,6 +17,11 @@ import { editorHostWindow } from './host-realm.ts';
 export interface DrawingPreviewRequest {
   /** A small DOCX that holds only this drawing and the parts it needs. */
   readonly docx: Uint8Array;
+  /**
+   * True when the first page of `docx` has the drawing's size. False when the size is
+   * unknown; then trim the white space around the rendered drawing.
+   */
+  readonly pageFitsDrawing: boolean;
   /** The occurrence being previewed. */
   readonly element: UnsupportedElement;
   /**
@@ -247,7 +252,14 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
         if (abort.signal.aborted) return;
         active++;
         void Promise.resolve()
-          .then(() => render({ docx: packaged.docx, element, signal: abort.signal }))
+          .then(() =>
+            render({
+              docx: packaged.docx,
+              pageFitsDrawing: packaged.pageFitsDrawing,
+              element,
+              signal: abort.signal,
+            })
+          )
           .finally(() => {
             active--;
             startNext();

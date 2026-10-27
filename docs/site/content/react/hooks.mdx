@@ -507,7 +507,9 @@ function ServerPreview({
   const preview = useDrawingPreview(element, render);
   switch (preview.status) {
     case 'ready':
-      return <img src={preview.url!} alt={element.drawing?.accessibility.label ?? ''} />;
+      return preview.url ? (
+        <img src={preview.url} alt={element.drawing?.accessibility.label ?? ''} />
+      ) : null;
     case 'error':
       return <button onClick={preview.retry}>Retry preview</button>;
     case 'unavailable':

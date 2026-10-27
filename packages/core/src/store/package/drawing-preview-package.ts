@@ -65,7 +65,8 @@ export type DrawingPreviewPackageResult =
       readonly docx: Uint8Array;
       /**
        * True when the page has the drawing's size, so the first page is the preview image.
-       * False for a legacy VML drawing, which keeps the document's page size and margins.
+       * False when the size is unknown, such as a legacy VML drawing without a width and height
+       * in its style. Then the page keeps the document's size and margins.
        */
       readonly pageFitsDrawing: boolean;
       /** The package parts copied from the source document, for logging and caching. */
@@ -148,13 +149,22 @@ function serializeElement(element: OoxmlElement, partRoot: OoxmlElement): string
 
 const INLINE_CHILDREN = new Set(['extent', 'effectExtent', 'docPr', 'cNvGraphicFramePr']);
 const EMU_PER_TWIP = 635;
+const VML = 'urn:schemas-microsoft-com:vml';
 
 /**
  * A copy for serialization only that places floating drawings on the line, so the page can
  * fit the drawing exactly. The package itself is never changed.
  */
-function inlineDrawingCopy(node: OoxmlElement, depth = 0): OoxmlElement {
+function inlineDrawingCopy(node: OoxmlElement, depth = 0, inWrapper = false): OoxmlElement {
   if (depth > 32 || (node.namespaceUri === W && node.localName === 'txbxContent')) return node;
+  if (inWrapper && node.namespaceUri === VML) {
+    const attributes = node.attributes.map((item) =>
+      item.namespaceUri === '' && item.localName === 'style'
+        ? { ...item, value: inlineVmlStyle(item.value) }
+        : item
+    );
+    return { ...node, attributes } as OoxmlElement;
+  }
   if (node.namespaceUri === WP && node.localName === 'anchor') {
     return {
       id: node.id,
@@ -176,11 +186,79 @@ function inlineDrawingCopy(node: OoxmlElement, depth = 0): OoxmlElement {
   let changed = false;
   const children = (node.children as readonly OoxmlNode[]).map((child) => {
     if (child.kind === 'textValue') return child;
-    const copy = inlineDrawingCopy(child, depth + 1);
+    const wrapper =
+      node.namespaceUri === W && (node.localName === 'pict' || node.localName === 'object');
+    const copy = inlineDrawingCopy(child, depth + 1, wrapper);
     changed ||= copy !== child;
     return copy;
   });
   return changed ? ({ ...node, children } as OoxmlElement) : node;
+}
+
+// Style properties that float a legacy VML shape; without them it sits on the line.
+const VML_FLOAT_PROPERTIES =
+  /^(position|left|top|margin-(left|top|right|bottom)|z-index|mso-position-.*)$/;
+const POINTS_PER_UNIT: Readonly<Record<string, number>> = {
+  pt: 1,
+  in: 72,
+  cm: 72 / 2.54,
+  mm: 72 / 25.4,
+  pc: 12,
+  px: 0.75,
+  '': 0.75,
+};
+
+function inlineVmlStyle(style: string): string {
+  return style
+    .split(';')
+    .filter((entry) => !VML_FLOAT_PROPERTIES.test(entry.split(':')[0]!.trim().toLowerCase()))
+    .join(';');
+}
+
+/** A VML style length in twips, such as `width:100pt`, or null when it is not a length. */
+function vmlLengthTwips(style: string, property: string): number | null {
+  for (const entry of style.split(';')) {
+    const [name, raw] = entry.split(':');
+    if (name?.trim().toLowerCase() !== property || raw === undefined) continue;
+    const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s*(pt|in|cm|mm|pc|px|)\s*$/i.exec(raw);
+    if (!match) return null;
+    return Number(match[1]) * POINTS_PER_UNIT[match[2]!.toLowerCase()]! * 20;
+  }
+  return null;
+}
+
+/** The size of a legacy VML drawing from the style of its first shape, in twips. */
+function vmlSizeTwips(drawing: OoxmlElement): { width: number; height: number } | null {
+  const stack: { node: OoxmlElement; inWrapper: boolean }[] = [{ node: drawing, inWrapper: false }];
+  let visited = 0;
+  while (stack.length && ++visited <= MAX_NODES) {
+    const { node, inWrapper } = stack.shift()!;
+    // A shape type is a template without a size; the shape that uses it follows.
+    if (inWrapper && node.namespaceUri === VML && node.localName !== 'shapetype') {
+      const style = node.attributes.find(
+        (item) => item.namespaceUri === '' && item.localName === 'style'
+      )?.value;
+      const width = style ? vmlLengthTwips(style, 'width') : null;
+      const height = style ? vmlLengthTwips(style, 'height') : null;
+      if (width !== null && height !== null && (width > 0 || height > 0)) {
+        // A rotated shape needs the page of its rotated bounding box.
+        const degrees = Number(/(?:^|;)\s*rotation\s*:\s*(-?[0-9.]+)/i.exec(style!)?.[1] ?? 0);
+        const radians = ((Number.isFinite(degrees) ? degrees : 0) * Math.PI) / 180;
+        const cos = Math.abs(Math.cos(radians));
+        const sin = Math.abs(Math.sin(radians));
+        const twips = (value: number) => Math.min(31_680, Math.max(1, Math.ceil(value)));
+        return {
+          width: twips(width * cos + height * sin),
+          height: twips(width * sin + height * cos),
+        };
+      }
+    }
+    const wrapper =
+      node.namespaceUri === W && (node.localName === 'pict' || node.localName === 'object');
+    for (const child of node.children)
+      if (child.kind !== 'textValue') stack.push({ node: child, inWrapper: wrapper });
+  }
+  return null;
 }
 
 /** The drawing's size with its effect extent, in twips, from its first `wp:extent`. */
@@ -276,10 +354,10 @@ function relsPartName(partName: string): string {
  * Build a small DOCX that holds one drawing and the parts it needs: chart and diagram parts,
  * images, styles, theme, settings, and fonts. Send it to a rendering service that draws the
  * first page as an image. The page has the drawing's size and no margins, and a floating
- * drawing is placed on the line, so the first page is the preview. A legacy VML drawing keeps
- * the document's last page size and margins. Relationships to external targets and to
- * embedded objects, macros, or templates are dropped, so the package never points outside
- * itself.
+ * drawing is placed on the line, so the first page is the preview. A legacy VML drawing takes
+ * its size from its style. When the size is unknown, the page keeps the document's size and
+ * margins. Relationships to external targets and to embedded objects, macros, or templates
+ * are dropped, so the package never points outside itself.
  *
  * Pass the package that the target comes from: an `inspectDrawingSupport` entry with the
  * parsed package it inspected, or an editor occurrence with the editor's current package.
@@ -376,7 +454,7 @@ export function createDrawingPreviewPackage(
   }
   if (failure) return { ok: false, reason: failure };
 
-  const size = drawingSizeTwips(drawing);
+  const size = drawingSizeTwips(drawing) ?? vmlSizeTwips(drawing);
   const ignorable =
     'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
     'xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" ' +
