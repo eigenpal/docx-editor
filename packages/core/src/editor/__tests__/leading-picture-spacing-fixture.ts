@@ -22,7 +22,8 @@ const picture = (id: number) =>
 
 export function documentWithPicture(
   relativeFrom: 'paragraph' | 'line',
-  before: number
+  before: number,
+  anchorOnly = false
 ): Uint8Array {
   const anchor =
     '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" ' +
@@ -56,6 +57,9 @@ export function documentWithPicture(
         '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>Lead</w:t></w:r></w:p>' +
         `<w:p><w:pPr><w:spacing w:before="${before}" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr>` +
         anchor +
+        (anchorOnly
+          ? '</w:p><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="exact"/></w:pPr>'
+          : '') +
         '<w:r><w:t>First line beside the picture. More text follows beside the picture.</w:t></w:r></w:p>' +
         '<w:sectPr><w:pgSz w:w="8000" w:h="8000"/><w:pgMar w:top="0" w:left="0" w:right="0" w:bottom="0"/></w:sectPr></w:body></w:document>'
     ),
