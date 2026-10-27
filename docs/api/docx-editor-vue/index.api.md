@@ -66,6 +66,7 @@ import { drawingNeedsPreview } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewRender } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewRequest } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewState } from '@docx-editor.dev/core/editor';
+import { DrawingPreviewView } from '@docx-editor.dev/core/editor';
 import { DrawingSupport } from '@docx-editor.dev/core/store';
 import { DrawingSupportIssue } from '@docx-editor.dev/core/store';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -2945,7 +2946,7 @@ export const DocxEditorDrawingPreview: vue.DefineComponent<vue.ExtractPropTypes<
 }, SlotsType<{
     default: (props: {
         element: UnsupportedElement;
-        url: string;
+        preview: DrawingPreviewView;
     }) => VNodeChild;
 }>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -5334,6 +5335,8 @@ export { DrawingPreviewRender }
 export { DrawingPreviewRequest }
 
 export { DrawingPreviewState }
+
+export { DrawingPreviewView }
 
 export { DrawingSupport }
 

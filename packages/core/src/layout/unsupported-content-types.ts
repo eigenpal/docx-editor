@@ -23,7 +23,7 @@ export interface UnsupportedElement {
   readonly presentation?: 'drawing';
   /**
    * How completely the editor shows this drawing: `native`, `partial`, or `unrendered`.
-   * A placeholder is `unrendered`. Use it to decide whether to replace the drawing.
+   * A drawing placeholder is `unrendered`. Absent for content that is not a drawing.
    */
   readonly support?: DrawingSupport;
   /**
@@ -33,7 +33,9 @@ export interface UnsupportedElement {
   readonly drawingIssues?: readonly DrawingSupportIssue[];
   /** The graphic a drawing holds, such as `picture`, `chart`, or `diagram`, from its source. */
   readonly graphicKind?: DrawingGraphicKind;
+  /** The node the occurrence comes from, in the editor's current document. */
   readonly nodeId: string;
+  /** The part that holds it, such as `/word/document.xml` or `/word/header1.xml`. */
   readonly ownerPartName: string;
   readonly namespaceUri: string | null;
   readonly localName: string;

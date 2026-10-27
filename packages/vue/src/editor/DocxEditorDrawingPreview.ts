@@ -16,6 +16,7 @@ import {
   type DrawingPreviewController,
   type DrawingPreviewRender,
   type DrawingPreviewState,
+  type DrawingPreviewView,
   type UnsupportedElement,
   type UnsupportedElementHost,
 } from '@docx-editor.dev/core/editor';
@@ -96,9 +97,10 @@ const DrawingPreviewOccurrence = defineComponent({
   props: {
     host: { type: Object as PropType<UnsupportedElementHost>, required: true },
     renderPreview: { type: Function as PropType<DrawingPreviewRender>, required: true },
-    image: {
+    content: {
       type: Function as PropType<
-        ((props: { element: UnsupportedElement; url: string }) => VNodeChild) | undefined
+        | ((props: { element: UnsupportedElement; preview: DrawingPreviewView }) => VNodeChild)
+        | undefined
       >,
       default: undefined,
     },
@@ -114,18 +116,28 @@ const DrawingPreviewOccurrence = defineComponent({
       const label = element.drawing?.accessibility.label ?? element.label;
       return h(UnsupportedElementPlaceholder, {
         host: props.host,
-        // Until an image is ready, render nothing so the editor keeps its own drawing.
-        render: () =>
-          url === null
+        // Empty content keeps the editor's own drawing, so the default waits for an image.
+        render: () => {
+          if (props.content) {
+            return props.content({
+              element,
+              preview: {
+                status: preview.status.value,
+                url,
+                error: preview.error.value,
+                retry: preview.retry,
+              },
+            });
+          }
+          return url === null
             ? null
-            : props.image
-              ? props.image({ element, url })
-              : h('img', {
-                  src: url,
-                  alt: label,
-                  draggable: false,
-                  style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' },
-                }),
+            : h('img', {
+                src: url,
+                alt: label,
+                draggable: false,
+                style: { display: 'block', width: '100%', height: '100%', objectFit: 'contain' },
+              });
+        },
       });
     };
   },
@@ -138,7 +150,8 @@ const DrawingPreviewOccurrence = defineComponent({
  * still select, move, resize, and delete a previewed drawing. Previews change only the
  * editor display: saved DOCX files and PDF exports keep the original drawing.
  *
- * Use the default slot, which receives `element` and `url`, to draw the ready image yourself.
+ * Use the default slot, which receives `element` and `preview`, to draw the preview yourself
+ * for any `preview.status`. Empty slot content keeps the editor's drawing.
  *
  * @public
  */
@@ -154,7 +167,7 @@ export const DocxEditorDrawingPreview = defineComponent({
     },
   },
   slots: Object as SlotsType<{
-    default: (props: { element: UnsupportedElement; url: string }) => VNodeChild;
+    default: (props: { element: UnsupportedElement; preview: DrawingPreviewView }) => VNodeChild;
   }>,
   setup(props, { slots }) {
     // The registry evaluates the match while it lists occurrences, so read the prop live.
@@ -170,7 +183,7 @@ export const DocxEditorDrawingPreview = defineComponent({
           key: host.key,
           host,
           renderPreview: props.render,
-          image: slots.default,
+          content: slots.default,
         })
       );
     };

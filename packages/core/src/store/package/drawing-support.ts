@@ -21,12 +21,24 @@ import type { OoxmlElement } from './ooxml-tree.ts';
 export type { DrawingSupport, DrawingSupportIssue } from './drawing-support-issues.ts';
 export type { DrawingGraphicKind } from './drawing-graphic-kind.ts';
 
-/** Source inspection before image decoding or pagination. `projected` does not mean full fidelity. @public */
+/**
+ * One drawing in a {@link DrawingSupportReport}. Pass the entry to
+ * `createDrawingPreviewPackage` with the same package to build its preview DOCX.
+ *
+ * @public
+ */
 export interface DrawingSupportEntry {
+  /** The part that holds the drawing, such as `/word/document.xml` or `/word/header1.xml`. */
   readonly ownerPartName: string;
-  /** Source identity for this snapshot; not a persistent XML identifier. */
+  /**
+   * The node of `source` in the inspected package. Node identifiers belong to that package
+   * object; they do not persist in the saved XML.
+   */
   readonly nodeId: string;
-  /** Selected projection identity, when one exists. */
+  /**
+   * The node of the drawing that the editor shows, inside `source`: for `mc:AlternateContent`,
+   * the drawing in the selected branch. `null` when the drawing is `unplaced`.
+   */
   readonly drawingNodeId: string | null;
   /**
    * What the editor shows: `projected` (the drawing renders), `fallback` (a saved fallback
@@ -34,11 +46,18 @@ export interface DrawingSupportEntry {
    * `unplaced` (no layout position, nothing shows). Image decoding is not checked.
    */
   readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';
-  /** One verdict from `state` and `issues`. Use it to decide whether to replace the drawing. */
+  /**
+   * One verdict from `state` and `issues`: `projected` and `hidden` give `native` or
+   * `partial`, `fallback` gives `partial`, and `placeholder` and `unplaced` give `unrendered`.
+   * The editor offers a preview area only for `projected`, `fallback`, and `placeholder`.
+   */
   readonly support: DrawingSupport;
   /** The graphic the selected drawing holds, whether or not it renders. */
   readonly graphicKind: DrawingGraphicKind;
-  /** The original canonical drawing or enclosing compatibility wrapper. Never mutate this value. */
+  /**
+   * The drawing's source: its `w:drawing`, `w:pict`, or `w:object`, or the enclosing
+   * `mc:AlternateContent`. Treat it as read-only and untrusted.
+   */
   readonly source: OoxmlElement;
   /**
    * The features the editor does not show as authored. Projection diagnostics are included;
@@ -47,12 +66,19 @@ export interface DrawingSupportEntry {
   readonly issues: readonly DrawingSupportIssue[];
 }
 
-/** A bounded inventory of story drawings, including drawings without layout geometry. @public */
+/**
+ * Every drawing in the body, headers, footers, footnotes, and endnotes, including drawings
+ * without a layout position. The scan is bounded. @public
+ */
 export interface DrawingSupportReport {
   readonly entries: readonly DrawingSupportEntry[];
   /** False when a scan budget prevented a complete inventory. */
   readonly complete: boolean;
-  /** This report checks explicit source effects, not every DrawingML feature or related part. */
+  /**
+   * What the issue check covers: `explicit-source-effects`, the effects, fallbacks, and 3-D
+   * properties written in each drawing's own XML. Chart and diagram parts, inherited theme
+   * effects, and image bytes are not checked. A later version can widen this value.
+   */
   readonly coverage: 'explicit-source-effects';
 }
 

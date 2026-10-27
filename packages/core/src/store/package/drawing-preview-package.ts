@@ -49,8 +49,16 @@ export interface DrawingPreviewPackageLimits {
 export type DrawingPreviewPackageResult =
   | {
       readonly ok: true;
-      /** DOCX bytes with one paragraph that holds the drawing. */
+      /**
+       * DOCX bytes with one paragraph that holds the drawing. The same drawing and document
+       * parts always give the same bytes, so a hash of them works as a cache key.
+       */
       readonly docx: Uint8Array;
+      /**
+       * True when the page has the drawing's size, so the first page is the preview image.
+       * False for a legacy VML drawing, which keeps the document's page size and margins.
+       */
+      readonly pageFitsDrawing: boolean;
       /** The package parts copied from the source document, for logging and caching. */
       readonly copiedParts: readonly string[];
     }
@@ -393,5 +401,10 @@ export function createDrawingPreviewPackage(
     ['/_rels/.rels', encoder.encode(rootRels)],
   ]);
   for (const [name, data] of entries) zipEntries.set(name, data);
-  return { ok: true, docx: writeZip(zipEntries), copiedParts: Object.freeze(copied) };
+  return {
+    ok: true,
+    docx: writeZip(zipEntries),
+    pageFitsDrawing: size !== null,
+    copiedParts: Object.freeze(copied),
+  };
 }

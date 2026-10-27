@@ -187,3 +187,18 @@ test('a floating drawing is placed on the line of a page that fits it', async ()
   const reopened = inspectDrawingSupport(open(result.docx)).entries[0]!;
   expect([reopened.graphicKind, reopened.state]).toEqual(['textbox', 'projected']);
 });
+
+test('package bytes are deterministic, and legacy VML keeps the document page', async () => {
+  const { previewDocument } = await import('./drawing-support-fixtures.ts');
+  const pkg = open(pictureDocx());
+  const entry = inspectDrawingSupport(pkg).entries[0]!;
+  const first = createDrawingPreviewPackage(pkg, entry);
+  const second = createDrawingPreviewPackage(open(pictureDocx()), entry);
+  if (!first.ok || !second.ok) throw new Error('not packaged');
+  expect(second.docx).toEqual(first.docx);
+  expect(first.pageFitsDrawing).toBe(true);
+  const vml = open(previewDocument('<w:pict><v:rect style="width:100pt;height:50pt"/></w:pict>'));
+  const legacy = createDrawingPreviewPackage(vml, inspectDrawingSupport(vml).entries[0]!);
+  if (!legacy.ok) throw new Error(legacy.reason);
+  expect(legacy.pageFitsDrawing).toBe(false);
+});

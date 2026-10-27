@@ -1585,6 +1585,7 @@ export type DrawingPreviewPackageResult = {
     readonly copiedParts: readonly string[];
     readonly docx: Uint8Array;
     readonly ok: true;
+    readonly pageFitsDrawing: boolean;
 } | {
     readonly ok: false;
     readonly reason: 'drawing-not-found' | 'too-many-parts' | 'too-large';
@@ -1602,12 +1603,14 @@ export interface DrawingPreviewRequest {
 
 // @public
 export interface DrawingPreviewState {
-    // (undocumented)
     readonly error: unknown;
-    // (undocumented)
     readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
-    // (undocumented)
     readonly url: string | null;
+}
+
+// @public
+export interface DrawingPreviewView extends DrawingPreviewState {
+    retry(): void;
 }
 
 // @public
@@ -4408,9 +4411,7 @@ export interface UnsupportedElement {
     readonly localName: string;
     // (undocumented)
     readonly namespaceUri: string | null;
-    // (undocumented)
     readonly nodeId: string;
-    // (undocumented)
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';

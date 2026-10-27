@@ -79,21 +79,37 @@ test('DrawingPreview leaves native drawings alone by default and on failure', as
   expect(failing.container.querySelector('svg')).not.toBeNull();
 });
 
-test('a custom match and image renderer replace every offered drawing', async () => {
+test('children see every status, keep the native drawing with null, and can retry', async () => {
   const { DocxEditor } = await import('../src/index.ts');
+  let attempt = 0;
+  const statuses: string[] = [];
   const view = render(
     <DocxEditor document={await documentWith('')} chrome={false}>
       <DocxEditor.DrawingPreview
         match={(element) => element.graphicKind === 'textbox'}
-        render={async () => 'https://previews.example/custom.png'}
+        render={async () => {
+          attempt++;
+          if (attempt === 1) throw new Error('service down');
+          return 'https://previews.example/custom.png';
+        }}
       >
-        {({ url }) => <figure data-url={url}>Server preview</figure>}
+        {({ preview }) => {
+          statuses.push(preview.status);
+          if (preview.status === 'error')
+            return <button onClick={preview.retry}>Retry preview</button>;
+          if (preview.status !== 'ready') return null;
+          return <figure data-url={preview.url}>Server preview</figure>;
+        }}
       </DocxEditor.DrawingPreview>
     </DocxEditor>
   );
+  await waitFor(() => expect(view.getByText('Retry preview')).not.toBeNull());
+  expect(statuses).toContain('loading');
+  view.getByText('Retry preview').click();
   await waitFor(() =>
     expect(view.getByText('Server preview').getAttribute('data-url')).toBe(
       'https://previews.example/custom.png'
     )
   );
+  expect(attempt).toBe(2);
 });

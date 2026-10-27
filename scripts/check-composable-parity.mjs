@@ -36,7 +36,7 @@ const SLOT_RENDERERS = {
   },
   DocxEditorDrawingPreviewProps: {
     component: 'DocxEditorDrawingPreview',
-    props: String.raw`element: UnsupportedElement;\s*url: string;`,
+    props: String.raw`element: UnsupportedElement;\s*preview: DrawingPreviewView;`,
   },
 };
 

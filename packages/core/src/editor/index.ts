@@ -685,5 +685,6 @@ export {
   type DrawingPreviewRender,
   type DrawingPreviewRequest,
   type DrawingPreviewState,
+  type DrawingPreviewView,
 } from './drawing-preview.ts';
 export type { DrawingPreviewPackageResult } from '../store/package/drawing-preview-package.ts';

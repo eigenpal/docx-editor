@@ -11,6 +11,7 @@ import {
   drawingPreviewController,
   type DrawingPreviewRender,
   type DrawingPreviewState,
+  type DrawingPreviewView,
   type UnsupportedElement,
   type UnsupportedElementHost,
 } from '@docx-editor.dev/core/editor';
@@ -94,8 +95,12 @@ export interface DocxEditorDrawingPreviewProps {
    * The function receives drawings only.
    */
   match?: (element: UnsupportedElement) => boolean;
-  /** Draw the ready image yourself. The default is an `img` that fills the drawing's box. */
-  children?: (props: { element: UnsupportedElement; url: string }) => ReactNode;
+  /**
+   * Draw the preview yourself, for any `preview.status`. Return `null` to keep the editor's
+   * drawing, for example while the image loads or after an error. The default draws an `img`
+   * that fills the drawing's box once `preview.url` is set, and `null` before.
+   */
+  children?: (props: { element: UnsupportedElement; preview: DrawingPreviewView }) => ReactNode;
 }
 
 function DrawingPreviewOccurrence({
@@ -110,18 +115,17 @@ function DrawingPreviewOccurrence({
   const element = host.unsupported;
   const preview = useDrawingPreview(element, render);
   const label = element.drawing?.accessibility.label ?? element.label;
-  // Until an image is ready, render nothing so the editor keeps its own drawing.
-  const content =
-    preview.url === null ? null : children ? (
-      children({ element, url: preview.url })
-    ) : (
-      <img
-        src={preview.url}
-        alt={label}
-        draggable={false}
-        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-      />
-    );
+  // Empty content keeps the editor's own drawing, so the default waits for an image.
+  const content = children ? (
+    children({ element, preview })
+  ) : preview.url === null ? null : (
+    <img
+      src={preview.url}
+      alt={label}
+      draggable={false}
+      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+    />
+  );
   return <UnsupportedElementPlaceholder host={host}>{content}</UnsupportedElementPlaceholder>;
 }
 

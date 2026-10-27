@@ -1453,6 +1453,7 @@ export type DrawingPreviewPackageResult = {
     readonly copiedParts: readonly string[];
     readonly docx: Uint8Array;
     readonly ok: true;
+    readonly pageFitsDrawing: boolean;
 } | {
     readonly ok: false;
     readonly reason: 'drawing-not-found' | 'too-many-parts' | 'too-large';
@@ -1500,7 +1501,6 @@ export interface DrawingSupportEntry {
     readonly graphicKind: DrawingGraphicKind;
     readonly issues: readonly DrawingSupportIssue[];
     readonly nodeId: string;
-    // (undocumented)
     readonly ownerPartName: string;
     readonly source: OoxmlElement;
     readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';

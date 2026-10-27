@@ -7,6 +7,8 @@ import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tr
  * `diagram` (SmartArt), `textbox` (a DrawingML shape, with or without text), `group` (a shape
  * group), `canvas` (a drawing canvas), `shape` (a legacy VML drawing, such as WordArt), or
  * `graphic` (any other graphic). It does not say whether the engine renders the graphic.
+ * The names match `placeholderGraphicKind`, which adds no `picture` and is set only for
+ * placeholders.
  *
  * @public
  */

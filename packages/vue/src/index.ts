@@ -659,6 +659,7 @@ export {
   type DrawingPreviewRender,
   type DrawingPreviewRequest,
   type DrawingPreviewState,
+  type DrawingPreviewView,
 } from '@docx-editor.dev/core/editor';
 export {
   DocxEditorDrawingPreview,

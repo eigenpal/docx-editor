@@ -194,9 +194,7 @@ export interface UnsupportedElement {
     readonly localName: string;
     // (undocumented)
     readonly namespaceUri: string | null;
-    // (undocumented)
     readonly nodeId: string;
-    // (undocumented)
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';

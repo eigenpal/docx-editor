@@ -25,7 +25,9 @@ export interface DrawingPreviewRequest {
 
 /**
  * Your rendering service call. Resolve with an image `Blob`, an image URL, or `null` to keep
- * the native drawing. Reject to report an error; the native drawing stays visible.
+ * the editor's drawing. Reject to report an error. A returned URL goes into an `img` element
+ * as is, so return a `blob:`, `data:image/`, or `https:` URL that you trust. The editor
+ * creates an object URL for a `Blob` and revokes it when the image leaves its cache.
  *
  * @public
  */
@@ -36,18 +38,30 @@ export type DrawingPreviewRender = (
 /**
  * The preview for one occurrence.
  *
- * - `idle`: no request yet.
- * - `loading`: a request is running. `url` holds the previous image of this drawing, if any.
+ * - `idle`: no request yet. The request starts right after the first read.
+ * - `loading`: a request is running or waiting for a free slot. `url` holds the previous
+ *   image of this drawing, if any.
  * - `ready`: `url` holds the image.
- * - `unavailable`: the render function returned `null`, or the drawing cannot be packaged.
- * - `error`: the request failed. `error` holds the reason; `url` holds the previous image.
+ * - `unavailable`: no preview will come. The render function returned `null`, or the drawing
+ *   cannot be packaged, and then `error` holds the package refusal reason, such as `too-large`.
+ * - `error`: the render function rejected. `error` holds the reason, and `url` holds the
+ *   previous image, if any.
  *
  * @public
  */
 export interface DrawingPreviewState {
+  /** `idle`, `loading`, `ready`, `unavailable`, or `error`. */
   readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+  /** The image URL, or the previous image of this drawing while a new one loads. */
   readonly url: string | null;
+  /** Why the preview failed or is unavailable, or `null`. */
   readonly error: unknown;
+}
+
+/** A preview with its retry action, as preview components pass it to your content. @public */
+export interface DrawingPreviewView extends DrawingPreviewState {
+  /** Request the preview again after `error` or `unavailable`. */
+  retry(): void;
 }
 
 /** One preview cache for an editor. Adapters read it through their hook. @public */
@@ -76,6 +90,7 @@ const UNAVAILABLE: DrawingPreviewState = Object.freeze({
   error: null,
 });
 const MAX_READY = 64;
+const MAX_RUNNING = 4;
 const RELEASE_DELAY_MS = 30_000;
 const controllers = new WeakMap<DocxEditorInstance, DrawingPreviewController>();
 const fingerprints = new WeakMap<OoxmlElement, string>();
@@ -108,8 +123,10 @@ export function drawingPreviewDocx(
 
 /**
  * The shared preview cache of an editor. Every call with the same editor returns the same
- * controller. Images stay cached while any component shows a preview, and for 30 seconds
- * after the last one unmounts, so pagination does not request them again.
+ * controller, whichever render function you pass. Previews are keyed by the drawing's source,
+ * so typing elsewhere reuses them. At most 4 requests run at once; the rest wait their turn.
+ * The cache keeps the 64 most recent images while any component shows a preview, and releases
+ * everything 30 seconds after the last one unmounts, so pagination does not request again.
  *
  * @public
  */
@@ -122,6 +139,12 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
   const listeners = new Set<() => void>();
   const running = new Map<string, { key: string; entry: Entry }>();
   let releaseTimer: number | undefined;
+  // Requests beyond the running limit wait here, in the order they were made.
+  const waiting: (() => void)[] = [];
+  let active = 0;
+  const startNext = () => {
+    while (active < MAX_RUNNING && waiting.length) waiting.shift()!();
+  };
 
   const notify = () => {
     for (const listener of [...listeners]) listener();
@@ -148,6 +171,7 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
     entries.clear();
     latest.clear();
     running.clear();
+    waiting.length = 0;
     notify();
   };
   const set = (key: string, entry: Entry, state: DrawingPreviewState) => {
@@ -192,28 +216,38 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
         set(key, entry, state);
         return true;
       };
-      void Promise.resolve()
-        .then(() => render({ docx: packaged.docx, element, signal: abort.signal }))
-        .then(
-          (result) => {
-            if (result === null) {
-              settle({ status: 'unavailable', url: null, error: null });
-              return;
+      const run = () => {
+        if (abort.signal.aborted) return;
+        active++;
+        void Promise.resolve()
+          .then(() => render({ docx: packaged.docx, element, signal: abort.signal }))
+          .finally(() => {
+            active--;
+            startNext();
+          })
+          .then(
+            (result) => {
+              if (result === null) {
+                settle({ status: 'unavailable', url: null, error: null });
+                return;
+              }
+              if (abort.signal.aborted || entries.get(key) !== entry) return;
+              const url =
+                typeof result === 'string'
+                  ? result
+                  : editorHostWindow(editor).URL.createObjectURL(result);
+              entry.ownsUrl = typeof result !== 'string';
+              if (!settle({ status: 'ready', url, error: null })) return;
+              latest.set(place, url);
+              evict();
+            },
+            (error: unknown) => {
+              settle({ status: 'error', url: previous, error });
             }
-            if (abort.signal.aborted || entries.get(key) !== entry) return;
-            const url =
-              typeof result === 'string'
-                ? result
-                : editorHostWindow(editor).URL.createObjectURL(result);
-            entry.ownsUrl = typeof result !== 'string';
-            if (!settle({ status: 'ready', url, error: null })) return;
-            latest.set(place, url);
-            evict();
-          },
-          (error: unknown) => {
-            settle({ status: 'error', url: previous, error });
-          }
-        );
+          );
+      };
+      waiting.push(run);
+      startNext();
     },
     retry(element, render) {
       const key = sourceKey(element);

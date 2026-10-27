@@ -289,7 +289,7 @@ Each drawing occurrence has a `support` value:
 
 `drawingNeedsPreview(element)` returns `true` for `partial` and `unrendered` drawings. It is the default `match` of `DocxEditor.DrawingPreview`.
 
-The check reads the drawing's own XML. It does not read chart parts, diagram parts, inherited theme effects, or image bytes. So a chart or SmartArt diagram that the editor draws reports `native`, even if the editor skips one of its chart features. To send these graphics to your service as well, match on `graphicKind`. For an example, see [Choose drawings and draw the image](#choose-drawings-and-draw-the-image).
+The check reads the drawing's own XML. It does not read chart parts, diagram parts, inherited theme effects, or image bytes. So a chart or SmartArt diagram that the editor draws reports `native`, even if the editor skips one of its chart features. To send these graphics to your service as well, match on `graphicKind`. For an example, see [Choose drawings and draw the preview](#choose-drawings-and-draw-the-preview).
 
 `drawingIssues` uses these codes:
 
@@ -307,60 +307,114 @@ The check reads the drawing's own XML. It does not read chart parts, diagram par
 
 Add `DocxEditor.DrawingPreview` and pass a `render` function that calls your service. The function receives a small DOCX that holds only the drawing. Return an image `Blob`, an image URL, or `null` to keep the editor's drawing.
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
-<DocxEditor document={bytes}>
-  <DocxEditor.DrawingPreview
-    render={async ({ docx, signal }) => {
-      const response = await fetch('/render-drawing', {
-        method: 'POST',
-        body: docx,
-        signal,
-      });
-      return response.ok ? await response.blob() : null;
-    }}
-  />
-</DocxEditor>
+import { DocxEditor, type DrawingPreviewRender } from '@docx-editor.dev/react';
+
+const renderOnServer: DrawingPreviewRender = async ({ docx, signal }) => {
+  const response = await fetch('/render-drawing', {
+    method: 'POST',
+    body: docx,
+    signal,
+  });
+  return response.ok ? await response.blob() : null;
+};
+
+export function Editor({ bytes }: { bytes: ArrayBuffer }) {
+  return (
+    <DocxEditor document={bytes}>
+      <DocxEditor.DrawingPreview render={renderOnServer} />
+    </DocxEditor>
+  );
+}
 ```
 
-In Vue, use the same component with the `render` prop:
+</Framework>
+<Framework value="vue">
 
 ```vue
-<DocxEditor :document="bytes">
-  <DocxEditor.DrawingPreview :render="renderOnServer" />
-</DocxEditor>
+<script setup lang="ts">
+import { DocxEditor, type DrawingPreviewRender } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: ArrayBuffer }>();
+
+const renderOnServer: DrawingPreviewRender = async ({ docx, signal }) => {
+  const response = await fetch('/render-drawing', {
+    method: 'POST',
+    body: docx,
+    signal,
+  });
+  return response.ok ? await response.blob() : null;
+};
+</script>
+
+<template>
+  <DocxEditor :document="bytes">
+    <DocxEditor.DrawingPreview :render="renderOnServer" />
+  </DocxEditor>
+</template>
 ```
+
+</Framework>
+</FrameworkTabs>
 
 The component behaves as follows:
 
 - The editor shows its own drawing until the image is ready. If the request fails or returns `null`, the editor's drawing stays.
-- Each editor caches previews by drawing source. Typing elsewhere reuses them. When a drawing changes, the component requests a new image and shows the previous one until it is ready. `signal` aborts a request that a newer one replaces.
 - Users can still select, move, resize, and delete a drawing that shows a preview.
-- Text boxes stay editable and never show a preview. Hidden drawings and drawings without a layout position have no preview area.
+- Text boxes stay editable, so they are never offered. Hidden drawings and drawings without a layout position have no preview area.
+- `match` receives drawings only.
 
-### Choose drawings and draw the image
+### Choose drawings and draw the preview
 
-Use `match` to choose drawings, and a child function to draw the image yourself. The following example also sends every chart and SmartArt diagram to your service:
+Use `match` to choose drawings. To draw the preview yourself, pass a child function in React or use the default slot in Vue. It receives `element` and `preview`, for every `preview.status`. Return `null` to keep the editor's drawing.
+
+The following example sends every chart and SmartArt diagram to your service, shows a retry button after a failure, and keeps the editor's drawing while the image loads:
 
 ```tsx
-<DocxEditor.DrawingPreview
-  render={renderOnServer}
-  match={(element) =>
-    drawingNeedsPreview(element) ||
-    element.graphicKind === 'chart' ||
-    element.graphicKind === 'diagram'
-  }
->
-  {({ element, url }) => <img src={url} alt={element.drawing?.accessibility.label ?? ''} />}
-</DocxEditor.DrawingPreview>
+import { DocxEditor, drawingNeedsPreview, type UnsupportedElement } from '@docx-editor.dev/react';
+
+const chartsAndDiagrams = (element: UnsupportedElement) =>
+  drawingNeedsPreview(element) ||
+  element.graphicKind === 'chart' ||
+  element.graphicKind === 'diagram';
+
+<DocxEditor.DrawingPreview render={renderOnServer} match={chartsAndDiagrams}>
+  {({ element, preview }) => {
+    if (preview.status === 'error') {
+      return <button onClick={preview.retry}>Retry preview</button>;
+    }
+    if (!preview.url) return null;
+    return <img src={preview.url} alt={element.drawing?.accessibility.label ?? ''} />;
+  }}
+</DocxEditor.DrawingPreview>;
 ```
 
-In Vue, use the default slot, which receives `element` and `url`.
+`preview.status` has these values:
 
-To show your own loading or error state, call `useDrawingPreview(element, render)` in a component inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings`. The hook returns `status`, `url`, `error`, and `retry`. In Vue, the first three are refs. While your component renders content, the editor hides its own drawing. For more information, see [`useDrawingPreview` in React](/docs/2.x/react/hooks#usedrawingpreview) and [in Vue](/docs/2.x/vue/composables#usedrawingpreview).
+| Status | Meaning |
+| --- | --- |
+| `idle` | No request yet. The request starts right away. |
+| `loading` | A request is running or waiting. `url` holds the previous image of this drawing, if any. |
+| `ready` | `url` holds the image. |
+| `unavailable` | No preview will come. `render` returned `null`, or the drawing could not be packaged. Then `error` holds the reason, such as `too-large`. |
+| `error` | `render` rejected. `error` holds the reason. Call `retry()` to try again. |
+
+For a fully custom component, use `useDrawingPreview(element, render)` inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings`. It returns `status`, `url`, `error`, and `retry`; in Vue, the first three are refs. Your component then always replaces the editor's drawing, so it must draw its own loading state. For more information, see [`useDrawingPreview` in React](/docs/2.x/react/hooks#usedrawingpreview) and [in Vue](/docs/2.x/vue/composables#usedrawingpreview).
+
+### Caching and request limits
+
+- Each editor caches previews by drawing source, whichever `render` function you pass. Typing elsewhere reuses them. An inline `render` function does not clear the cache.
+- When a drawing changes, the editor requests a new image and shows the previous one until it is ready. `signal` aborts a request that a newer one replaces.
+- At most four requests run at a time per editor. Only drawings on pages that the editor shows are requested.
+- The editor makes an object URL for each returned `Blob` and revokes it when the image leaves the cache. The cache keeps 64 images and clears 30 seconds after the last preview component unmounts.
+- The editor puts a returned URL into an `img` element as is. Return a `blob:`, `data:image/`, or `https:` URL that you trust.
 
 ### Render previews on a server
 
-To prepare previews without an editor, inspect a saved DOCX file and build a preview package for each drawing:
+To prepare previews without an editor, inspect a saved DOCX file and build a preview package for each drawing that needs one:
 
 ```ts
 import {
@@ -368,31 +422,40 @@ import {
   inspectDrawingSupport,
   readOoxmlPackage,
 } from '@docx-editor.dev/core/store';
+import { installDrawing } from '@docx-editor.dev/pro/drawing';
+
+// Match the editor: install the drawing module if your editor uses it.
+installDrawing({ licenseKey: process.env.DOCX_EDITOR_LICENSE_KEY });
 
 const parsed = readOoxmlPackage(new Uint8Array(bytes));
 if (!parsed.ok) throw new Error(parsed.reason);
 
 for (const entry of inspectDrawingSupport(parsed.package).entries) {
-  if (entry.support === 'native') continue;
+  // The editor has no preview area for hidden or unplaced drawings.
+  if (entry.support === 'native' || entry.state === 'hidden') continue;
+  if (entry.state === 'unplaced') continue;
   const preview = createDrawingPreviewPackage(parsed.package, entry);
   if (preview.ok) await renderFirstPage(preview.docx);
 }
 ```
 
-`renderFirstPage` is your function. In the browser, `drawingPreviewDocx(editor, element)` builds the same package from the editor's current document.
+`renderFirstPage` is your function. Pass each entry with the package that you inspected, because node identifiers belong to that package. In the browser, `drawingPreviewDocx(editor, element)` builds the same package from the editor's current document.
 
 The preview package has these properties:
 
 - It holds one paragraph with the drawing, and the chart parts, diagram parts, images, styles, theme, settings, and font table that the drawing needs.
-- The page has the drawing's size and no margins. A floating drawing is placed on the line. So the first page is the preview image. A legacy VML drawing keeps the document's page size and margins.
+- The page has the drawing's size and no margins, and a floating drawing is placed on the line. So the first page is the preview image, and `pageFitsDrawing` is `true`. A legacy VML drawing keeps the document's page size and margins, and `pageFitsDrawing` is `false`.
+- The same drawing and document parts always give the same bytes. A hash of `docx` works as a cache key on your server, for the editor and for server-side previews.
 - Relationships to external targets, embedded objects, macros, and templates are removed, so the package never points outside itself.
-- By default, a package copies at most 64 parts and 64 MiB. Otherwise, the result is `{ ok: false }` with the reason `too-many-parts` or `too-large`. A target that is not a drawing returns `drawing-not-found`.
+- By default, a package copies at most 64 parts and 64 MiB. Otherwise, the result is `{ ok: false }` with the reason `too-many-parts` or `too-large`. A target that is not a drawing gives `drawing-not-found`.
 
 Any DOCX renderer can draw the first page. For example, LibreOffice converts it to PNG with `soffice --headless --convert-to png preview.docx`. The package comes from an untrusted document, so run your renderer without network access and with time and memory limits.
 
+The preview components, the support verdict, and the package builder do not need the EigenPal Pro License. The drawing module, which renders charts and SmartArt layouts, does.
+
 ### Report drawing support
 
-`inspectDrawingSupport(pkg)` lists every drawing in the body, headers, footers, footnotes, and endnotes, including drawings that have no layout position. It does not need a browser and does not decode images. Each entry has `ownerPartName`, `nodeId`, `source`, `graphicKind`, `state`, `support`, and `issues`.
+`inspectDrawingSupport(pkg)` lists every drawing in the body, headers, footers, footnotes, and endnotes, including drawings that have no layout position. It does not need a browser and does not decode images. Each entry has `ownerPartName`, `nodeId`, `drawingNodeId`, `source`, `graphicKind`, `state`, `support`, and `issues`. `graphicKind` uses the same names as `placeholderGraphicKind`, plus `picture`.
 
 | State         | Meaning                                               |
 | ------------- | ----------------------------------------------------- |

@@ -152,3 +152,38 @@ test('a null result leaves the drawing unavailable for preview', async () => {
     view.destroy();
   }
 });
+
+test('at most four requests run at once; the rest wait their turn', async () => {
+  const shapes = Array.from({ length: 6 }, (_, i) =>
+    previewShape(`<a:effectLst><a:blur rad="${1000 + i}"/></a:effectLst>`)
+  ).join('');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: previewDocument(shapes),
+    unsupportedElementRules: [{ includeRenderedDrawings: true }],
+  });
+  let elements: UnsupportedElement[] = [];
+  const stop = observeUnsupportedElements(container, (hosts) => {
+    elements = hosts.map((host) => host.unsupported);
+  });
+  const pending: (() => void)[] = [];
+  const render = () =>
+    new Promise<string>((resolve) => pending.push(() => resolve('https://previews.example/x.png')));
+  try {
+    expect(elements).toHaveLength(6);
+    const controller = drawingPreviewController(editor);
+    for (const element of elements) controller.request(element, render);
+    await settle();
+    expect(pending).toHaveLength(4);
+    expect(elements.every((element) => controller.state(element).status === 'loading')).toBe(true);
+    pending[0]!();
+    await settle();
+    expect(pending).toHaveLength(5);
+  } finally {
+    stop();
+    editor.destroy();
+    container.remove();
+  }
+});

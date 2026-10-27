@@ -215,7 +215,7 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 ## Replace a placeholder
 
-You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only placeholders by default. To replace drawings that render with images from your rendering service, use `DocxEditor.DrawingPreview`, and match charts and SmartArt diagrams by `graphicKind`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service). Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
+You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the occurrence's `graphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. `drawing.placeholderGraphicKind` uses the same names but is set only for placeholders. A declaration replaces only placeholders by default. To replace drawings that render with images from your rendering service, use `DocxEditor.DrawingPreview`, and match charts and SmartArt diagrams by `graphicKind`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service). Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
 
 Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
 
@@ -264,8 +264,7 @@ This example displays the title or the alternative text from `drawing.accessibil
 ```tsx
 import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/react';
 
-const isChartPlaceholder = (element: UnsupportedElement) =>
-  element.drawing?.placeholderGraphicKind === 'chart';
+const isChartPlaceholder = (element: UnsupportedElement) => element.graphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';
@@ -290,8 +289,7 @@ import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
 
-const isChartPlaceholder = (element: UnsupportedElement) =>
-  element.drawing?.placeholderGraphicKind === 'chart';
+const isChartPlaceholder = (element: UnsupportedElement) => element.graphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';

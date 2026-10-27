@@ -487,20 +487,45 @@ For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-t
 
 ## `useDrawingPreview`
 
-`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service and returns `{ status, url, error, retry }`. Call it in a component inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings` when you want your own loading or error state:
+`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service and returns `{ status, url, error, retry }`. Use it in your own component inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings`:
 
 ```tsx
-import { useDrawingPreview, type UnsupportedElement } from '@docx-editor.dev/react';
+import {
+  DocxEditor,
+  useDrawingPreview,
+  type DrawingPreviewRender,
+  type UnsupportedElement,
+} from '@docx-editor.dev/react';
 
-function ServerPreview({ element }: { element: UnsupportedElement }) {
-  const preview = useDrawingPreview(element, renderOnServer);
-  if (preview.status === 'error') return <button onClick={preview.retry}>Retry</button>;
-  if (!preview.url) return <span role="status">Loading preview</span>;
-  return <img src={preview.url} alt={element.drawing?.accessibility.label ?? ''} />;
+function ServerPreview({
+  element,
+  render,
+}: {
+  element: UnsupportedElement;
+  render: DrawingPreviewRender;
+}) {
+  const preview = useDrawingPreview(element, render);
+  switch (preview.status) {
+    case 'ready':
+      return <img src={preview.url!} alt={element.drawing?.accessibility.label ?? ''} />;
+    case 'error':
+      return <button onClick={preview.retry}>Retry preview</button>;
+    case 'unavailable':
+      return <span>No preview available</span>;
+    default:
+      return <span role="status">Loading preview</span>;
+  }
 }
+
+<DocxEditor.UnsupportedElement
+  includeRenderedDrawings
+  match={(element) => element.graphicKind === 'chart'}
+>
+  {({ element }) => <ServerPreview element={element} render={renderOnServer} />}
+</DocxEditor.UnsupportedElement>;
 ```
 
-To keep the editor's drawing visible until the image is ready, use `DocxEditor.DrawingPreview` instead. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
+A component that uses the hook always replaces the editor's drawing, so it draws every state itself. To keep the editor's drawing until the image is ready, use `DocxEditor.DrawingPreview`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
 
 ## `useHistoryGroup`
 
