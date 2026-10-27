@@ -1,5 +1,17 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.33.0
+
+### Minor Changes
+
+- 2b4c7b8: Render authored diagonal cell borders in the editor and PDF export.
+
+### Patch Changes
+
+- 0c90746: PDF export keeps an Arabic word when a symbol beside it in the same run, such as a checkbox, is missing from its font.
+- f85416f: GIF pictures and picture bullets now appear in PDF export, drawn from their first frame with transparency kept.
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/fonts-cjk@2.33.0, @docx-editor.dev/fonts@2.33.0, @docx-editor.dev/pro@2.33.0
+
 ## 2.32.0
 
 ### Patch Changes

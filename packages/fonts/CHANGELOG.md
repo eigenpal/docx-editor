@@ -1,5 +1,11 @@
 # @docx-editor.dev/fonts
 
+## 2.33.0
+
+### Minor Changes
+
+- 469350a: `googleFonts()` serves Roboto and Open Sans from pinned static faces, so the font picker lists them on every computer when you use it.
+
 ## 2.32.0
 
 ## 2.31.0

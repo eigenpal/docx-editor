@@ -1,5 +1,12 @@
 # @docx-editor.dev/docx-to-markdown
 
+## 2.33.0
+
+### Patch Changes
+
+- 86b3e88: Markdown export now exports a chart's saved fallback picture from any session, also when the chart is drawn, and a chart that exports no image gets a warning that says why.
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/fonts@2.33.0
+
 ## 2.32.0
 
 ### Patch Changes

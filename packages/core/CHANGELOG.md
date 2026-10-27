@@ -1,5 +1,161 @@
 # @docx-editor.dev/core
 
+## 2.33.0
+
+### Minor Changes
+
+- 0c90746: Add an Arabic interface translation, mirror the editor interface for Arabic and Hebrew, and export `localeDirection()` for composed hosts. Right-to-left text keeps its order beside floating objects and symbols, typed Arabic and Hebrew letters start a right-to-left run, and right-to-left sections place the first column at the right.
+- 86b3e88: Picture edits on a chart are now refused whether it is drawn, shows its saved fallback, or shows a placeholder, deleting a chart removes it with its fallback, and `drawing.chart` is present on every chart drawing when the chart part can be read, with a new `shownAs` field that says how the page shows it.
+- f85416f: A chart placeholder now carries the chart's title and plot types in `drawing.chart`, so a custom unsupported-content component can name the chart.
+- 0c90746: `useChromeDir` in both adapters and `chromeDirection` in `@docx-editor.dev/i18n` report the direction the editor interface renders in, and a review column that scrolls sideways in a right-to-left interface keeps the page in view as the content widens.
+- 22aee05: Large fonts can load after the document first paints: `cjkFonts()` does so by default, `googleFonts({ cjk: true })` serves regional Noto Sans faces for Chinese, Japanese, and Korean families, and `deferFonts()` moves any font origin to the background. Documents that use font resolvers also open sooner, because the text shaper downloads alongside the fonts.
+- e914152: Let custom `UnsupportedElement` components also cover drawings that render without some features, and report how completely each drawing renders. A custom component that renders nothing now keeps the built-in placeholder or drawing visible.
+- 469350a: The font picker lists a standard font that no font source serves only when the computer has it installed, and `packagedFonts()` serves Helvetica with the Liberation Sans faces of Arial. `PackagedFontsFragment.supportedFamilies` is now typed as `readonly string[]`, because it can list aliases such as Helvetica.
+- f85416f: A drawing group with more than one picture now renders every picture, in document order with its own crop, together with its shapes and text box text, on screen and in PDF export.
+- 26b5382: Edit text boxes in headers and footers: double-clicking one opens its header or footer, where you can type, format, paste, move, resize, and delete the box as in the body, including during collaboration. Legacy VML text boxes now move and resize, inline text boxes resize, and typing in a header or footer repaints only the header and footer of each page.
+- 1df327c: Honor the noColumnBalance compatibility option in documents saved in compatibility mode 14 or earlier, or with no declared mode, and keep continuous sections below all preceding columns.
+- f85416f: Glow, inner shadow, reflection, soft edge and bevel rim effects, WordArt outside watermarks, and EMF and WMF pictures in PDF export now render through `drawingModule()` from `@docx-editor.dev/pro/drawing`, which `reviewModule()` also installs. Without the module, shapes paint without these effects, WordArt keeps its placeholder, and the editor still rasterizes EMF and WMF pictures.
+- 2b4c7b8: Render authored diagonal cell borders in the editor and PDF export.
+- 0c90746: `useReviewRailMetrics` reports the page side of the review column as `side`, `LocaleProvider dir="ltr"` keeps a left-to-right interface on a right-to-left host page, and the review column and navigation pane follow an inherited host page direction.
+- 0c90746: `blankDocumentBytes({ direction: 'rtl', bidiLanguage })` starts a new document right to left, and the header and footer hover hints follow the interface language.
+- 0c90746: In a right-to-left interface, the comments and changes column sits on the left of the page, with its markers, add-comment button, and rulers mirrored to match.
+- 0c90746: Ruler numbers count from the margin where the paragraph starts, the right margin for right-to-left paragraphs, and a right-to-left interface shows the vertical ruler on the right.
+- f85416f: Render SmartArt diagrams, drawing canvases, legacy shape groups, all preset shapes, custom curves, gradient and pattern fills, shadows, glows, dashed and compound outlines, and all line-end types read-only in the editor and in PDF export, with pictures and text boxes in their own shapes and EMF and WMF pictures as PDF vectors. The new `drawingModule` from `@docx-editor.dev/pro/drawing` renders charts (including radar, bubble, stock, and of-pie charts with trendlines and error bars) and lays out SmartArt saved without its drawing, and PDF export includes it.
+- f85416f: Documents that set the option to move the paragraph mark after a page break onto the next page now keep that mark as a line at the top of the new page in older compatibility modes.
+- 241085f: Accepting and rejecting tracked changes now resolves formatting with its paragraph mark, nested changes, table and list changes, moves, content controls, fields, equations, and comment text as one decision, and counts changes the same way in every list. A change that stays pending reports why through the `reviewChangesResolved` event, `reviewCodeOfSkip`, and the new `review.locked-content` and `review.bound-content` codes. Fixes #1458, fixes #1459, fixes #1460
+
+### Patch Changes
+
+- ba742d7: Avoid duplicate export warnings for legacy drawings selected from alternative content while retaining page locations.
+- f85416f: A floating object anchored after a page break in its paragraph now appears on the page after the break.
+- f85416f: An empty paragraph that holds only one floating object now moves its paragraph mark below that object when the object leaves no room beside it, as a paragraph with several floating objects already did.
+- f85416f: ASK and SET fields no longer show their stored result in the document text.
+- b9cbb36: Table AutoFit now counts adjacent East Asian punctuation pairs at their compressed width when it sizes a column to its widest line.
+- f85416f: An AutoFit table column no longer widens for content that fits once a negative paragraph indent moves it into the cell margin.
+- 2677e94: Autofit table columns no longer widen for spaces that open a cell, keep `w:noWrap` cells at their preferred width, and size first-line indents by the document's compatibility mode. A top-level autofit table whose absolute width is past the text column is laid out at that width.
+- f85416f: An AutoFit table whose stated width already exceeds the text column now widens to keep a word that cannot break on one line, instead of splitting the word.
+- f85416f: Text with an automatic colour on dark character or paragraph shading now renders white in the editor and in PDF export.
+- 9b1cfbc: Speed up deleting many comment threads and replies in one batch.
+- 3933348: Inline pictures in the main document text that are wider than the text area extend into the left and right page margins instead of being cut at the text edge.
+- f85416f: A paragraph that holds only a page break stays at the end of the page when its line fits, so it no longer leaves a blank page.
+- de9e468: Make repeated text measurements in the browser faster.
+- f85416f: A wrapped picture in a table cell now stays inside its cell: a negative offset stops at the cell top, and the row grows to hold the whole picture.
+- b9cbb36: Inline pictures in table cells that are wider than the cell text extend over the cell margins and are cut at the cell edge instead of the text edge.
+- f85416f: Centered and right-aligned lines now ignore all of their trailing spaces when they align their text, at a line wrap and at the paragraph end.
+- 86b3e88: Chart data labels show their own saved text, wrap at a fifth of the chart width, keep labels moved by hand where they were placed, and use the theme's complex-script and East Asian fonts; 3-D pie charts size their pie and labels to match the saved layout more closely.
+- 86b3e88: A click now selects a chart as an object without handles in every state, so Delete removes it, a chart whose fallback picture does not load shows a chart placeholder that says the chart is not shown, and copy or cut of a selection that includes a chart is refused. The editor and PDF export no longer wait for a drawn chart's fallback picture, and Markdown export leaves out a chart whose fallback picture does not load in time instead of failing.
+- 41059e7: Use legal CJK paragraph breaks for table autofit minimum widths. Preserve contextual unwrapped maximum widths, paragraph-wide dash cuts, and zero-width-space handling.
+- cf213e9: Table AutoFit minimum widths use the compressed width of adjacent full-width punctuation that shares a line. Fixes #1468
+- d09efc6: Add automatic spacing between East Asian text and Latin letters or digits.
+- d19e13b: East Asian punctuation now compresses to fit a line only in justified paragraphs, so left-aligned, centered, and right-aligned paragraphs wrap instead.
+- 981b790: Add automatic spacing between Latin text and the East Asian text after it for common fonts that a substitute font draws.
+- 8b69cf0: Collaborators see the same document after concurrent decisions on tracked changes and concurrent typing near moved or repaired text, and an emoji that concurrent edits split no longer stops the document from saving.
+- f85416f: Text now wraps around the authored contour of a tight or through floating drawing that is stored with a compatibility fallback, instead of around its whole box.
+- f85416f: Triple and thin-thick paragraph and page borders now draw each stroke and gap at its authored width in the editor and in PDF export, instead of an even double line or a dashed line.
+- f85416f: A paragraph below one whose space after contextual spacing removes now keeps only the part of its space before that exceeds that space after.
+- 6a1464d: Keep the first line of a continued section inside its page content area.
+- f85416f: A continuous section now wraps its text around text frames from the earlier section on the same page instead of starting below them, and an empty section mark that anchors those frames keeps its line.
+- f85416f: Text that a tight or through wrapped object leaves no room beside now moves down one line at a time until it clears the object, never puts a character into a gap narrower than that character, and horizontal rules keep their line beside floating objects.
+- f85416f: Justified Cyrillic text now compresses its spaces to keep a word on the line, as justified Latin text already did.
+- f85416f: A tab on a line that ends short of the right edge now moves to the next line when its next default stop lies past that edge, instead of stacking at the edge.
+- f85416f: Charts now draw logarithmic value axes, PDF export keeps the opacity of each gradient stop, and EMF and WMF pictures over the image size limit stay refused in PDF export instead of replaying.
+- 175c654: Large documents with pictures, charts, and diagrams no longer block the page while they open: a picture that finishes loading during the open is shown when the open completes instead of laying the opened pages out again.
+- f85416f: Charts now format elapsed times, fractions of a second, and pie and legend category labels, and place monthly and yearly date axes at even steps. Malformed TIFF, EMF, WMF, and WordArt content can no longer stall or exhaust memory, and a filled shape with a double outline paints its fill once. A drawing record's `placeholderGraphicKind` is now typed as `DrawingPlaceholderKind`.
+- cdd42c3: Curly quotes in runs with the East Asian font hint now compress beside East Asian characters, so these lines no longer wrap early.
+- b9cbb36: Documents whose defaults name no East Asian font no longer compress East Asian punctuation to fit a justified line or hang punctuation past the margin.
+- f85416f: EMF pictures that map their own window and viewport now draw in place instead of shifted off their frame, and an EMF stored under a `.wmf` name draws by its contents.
+- 86b3e88: Exports no longer fail with a resource timeout when a slow layout pass uses up the resource time limit while shapes or charts are still settling.
+- f85416f: The document's first paragraph no longer takes automatic space before when a tall header pushes the body below the top margin.
+- f85416f: A floating table positioned relative to the text that comes directly before an ordinary table now stays at that table's place on the same page, and the ordinary table moves below it.
+- 2677e94: A floating table with no vertical anchor now measures its vertical offset from the top margin instead of from the text before it.
+- 2677e94: Floating tables no longer cover the text around them near page and column bottoms, adjacent floating tables with the same position stack into one table, and an edit near a page-positioned table or picture lays out the same as opening the document.
+- ba742d7: Prevent foreign XML properties from changing floating table placement and stacking.
+- 0c90746: Times New Roman version 7 lines take their legacy line spacing, plain characters in symbol fonts draw the symbol, and European digits in Arabic right-to-left text use the run's Latin font and line height.
+- 469350a: A Latin font picked for East Asian text no longer replaces its East Asian font, and the font picker shows the East Asian font of a selection that contains East Asian text. Background font loading keeps the configured default font and reports every failure.
+- fbc0d7e: The font picker shows and changes the font that East Asian text is drawn in, instead of the Latin font of its run.
+- f85416f: A text frame without a set width that holds one single-line paragraph now fits the width of that line, so text beside it wraps at the right place.
+- f85416f: A text frame with a negative vertical offset from its paragraph now sits above that paragraph, no higher than the page top, instead of flowing as ordinary text.
+- f85416f: Embedded object previews inside text frames now draw at the frame's position instead of disappearing and leaving an empty line in the text.
+- f85416f: Line ends of lines inside a scaled drawing group keep their own size instead of growing with the group.
+- f85416f: Outlines of shapes inside a drawing group keep their own line width when the group is scaled, instead of growing or shrinking with the group.
+- f85416f: Pictures inside a drawing group that have a solid outline now render with that outline, instead of the whole group being left out.
+- b9cbb36: A justified East Asian line can now hang its final punctuation mark past the margin and compress the punctuation before it in the same line.
+- b9cbb36: Line-end punctuation now hangs past the margin only in justified paragraphs, so Latin punctuation in East Asian language runs stays inside left-aligned, centered, and right-aligned lines.
+- b9cbb36: Inline pictures in headers and footers that are wider than the text area extend into the left and right page margins up to the paper edge instead of being cut at the text edge.
+- f85416f: A text frame with a set position and width in a header or footer now sits at its offset from the next paragraph or table, without taking room in the header or footer.
+- f85416f: A header text frame with the default wrap setting no longer pushes the page body down.
+- 86b3e88: Header picture watermarks whose picture frame template omits its formulas now render behind the text in the editor and in PDF export. Fixes #1001
+- ba742d7: Keep header and footer text boxes editable after document pagination changes.
+- f85416f: A table row marked hidden whose cells show nothing now takes no space on the page.
+- f85416f: A line that holds only a soft hyphen or a zero-width character now takes the paragraph mark's height, like an empty line.
+- f85416f: In documents saved in older compatibility modes, an inline picture that starts a line now stays on that line beside a floating table or picture even when it is wider than the space there, instead of moving below it.
+- 3933348: Reduce layout work on lines that contain no inline picture.
+- f85416f: A justified line that ends at a line break or a tab now compresses its spaces to keep its last word, instead of moving the word to a new line.
+- f85416f: A keep-with-next paragraph before a section's empty closing paragraph now stays on its page, so a new-page section no longer leaves a blank page before it.
+- b9cbb36: Text that East Asian line-break rules keep together now breaks at its last fitting character when it is wider than a whole line, instead of running past the margin.
+- f85416f: Text after a page or column break that opens its paragraph now takes the paragraph's first-line or hanging indent.
+- ba742d7: Keep text clear of leading paragraph-relative pictures after page breaks.
+- 7265b38: Fix text overlapping leading floating pictures when paragraphs have spacing before them.
+- f85416f: A custom left tab stop past the right indent now places the text after it on the same line, as in table-of-contents entries, instead of moving that text to a new line.
+- f85416f: In documents saved in older compatibility modes, a column break at the start of a paragraph no longer leaves an empty line at the bottom of the column it ends.
+- f85416f: More legacy shapes paint: paths with omitted coordinates, flat coordinate extents, explicit solid fills, through wrapping, shapes placed against their paragraph by name, and groups that hold a picture beside their text.
+- f85416f: List numbers no longer take the underline of their paragraph mark; only an underline set on the numbering level underlines the number.
+- 89b1ef0: Fit East Asian punctuation on lines that also contain Latin words or digits, without changing the widths of those words.
+- f85416f: Left-aligned tables whose vertical cell borders differ in width now center each border on its column line and measure the cell margin from it, and the widest top border in a table's first row moves the text of every cell in that row down.
+- f85416f: Paragraphs with a negative left or right indent now extend past the column edge also on pages that hold a wrapping picture or shape.
+- f85416f: A wrapping picture or text box that a negative offset lifts above its paragraph no longer starts above the top margin in documents saved in compatibility mode 15 or later, and a top-and-bottom box now moves the earlier lines it covers below it.
+- f85416f: A `num` tab stop in a paragraph without a list number now acts as an ordinary left tab stop.
+- b0c962c: Fix the menu bar, link popup, header and footer options, note options, content control inspector, and dropdown menus staying open when you press the document.
+- fc28dba: Open documents with large, markup-dense parts faster by reading their XML in one pass. Fixes #1464
+- c82ecbc: The page counter shows the full page count as soon as a large document finishes laying out, and after edits that move pages.
+- f85416f: A floating table positioned on the page or margin directly before an ordinary table moves the earlier text on its page below it, while a floating table positioned against the text takes the ordinary table's place.
+- f85416f: Text before a text frame positioned on the page or margin now wraps around that frame when both share a page.
+- f85416f: A page- or margin-anchored floating table that spans the text column now moves earlier lines on its page that it would cover below it, along with any text-anchored table that follows it.
+- f85416f: Paragraph borders with a shadow now draw the shadow bands on the right and bottom edges and take the extra height the shadow adds, and left and right paragraph rules sit at their measured distance from the text.
+- f85416f: PDF export now draws TIFF pictures, including black and white fax-compressed scans, and embeds grey and colour PNG pictures without decoding them, which makes exports with many scanned pages faster and smaller.
+- f85416f: PDF export draws the underline of an underlined tab, so form lines made of tabs appear.
+- f85416f: A line holding an inline picture under multiple line spacing no longer moves below a floating picture of the next paragraph that only touches it.
+- 86b3e88: Unsupported drawing placeholders take their label from one translation key per kind, `image.placeholder.<kind>`, which replaces `image.nonPictureGraphic`; move an override of the old key to the new keys.
+- b9cbb36: Justified East Asian lines now compress punctuation on every blank side, including both sides of adjacent marks, and can fit up to nearly one more full-width character.
+- f85416f: Text after a column break in a narrower column no longer moves to the next page early.
+- aaf6c34: Remote carets no longer slow the editor in long collaborative documents, and a collaborator's caret no longer lands on the later of two paragraphs that came to share an id. Fixes #1498
+- 0c90746: The review column moves with the page in the same frame when the pane opens or closes, and the add-comment button keeps clear of cards and markers, responds to a press, and keeps no hover color after a tap.
+- f85416f: Shape outlines without a join now draw round corners, and a miter join without a limit uses a limit of eight line widths, in the editor and in PDF export. Fixes #1321
+- 0c90746: In a right-to-left interface, document text in the navigation pane, review cards, and link popup keeps its own reading order, and review dates follow the interface language.
+- 0c90746: A justified right-to-left line with nothing to stretch, such as one word before a manual line break, stays at the right edge.
+- 0c90746: Match reference layout for synthesized bold widths, table rows under a larger end-of-cell mark, list numbers that hang into the margin or sit in narrow right-to-left cells, numbering across vertically merged cells, lines under reduced line spacing, and justified right-to-left lines. PDF export now draws the numbers of empty list paragraphs, Webdings and Wingdings 2 symbols, and compound borders as parallel lines.
+- 0c90746: In a right-to-left interface, submenus open to the left and take the left arrow key, the header, footer, and note bars mirror, and link address fields read left to right.
+- 0c90746: In a right-to-left interface, the navigation pane moves the page away from its own side instead of under itself, a review column that scrolls sideways opens with the page in view, and the Vue review rail detects its compact mode correctly.
+- c72b146: Document search no longer keeps a list of story paragraphs for every revision that the undo history holds.
+- e01c2d9: `findMatches` builds each paragraph's searchable text once per paragraph node instead of once per query, so a paragraph an edit did not touch keeps its text across revisions. A host asking many queries of one document paid a walk of every story and a rebuild of every paragraph's text for each one: about 33 ms a query on a 120-page document with footnotes, now under 1 ms. The answers are the same.
+- 2677e94: An empty paragraph that ends a section no longer pushes footnotes off its page, and before a section that starts on a new page it no longer draws borders or shading or adds a blank page.
+- f85416f: Synthesized small capitals now take 0.8 of the run size rounded to a whole half-point, so lines with small caps wrap where the source document wraps them.
+- f85416f: Spaces in synthesized small caps now take the small capital size, so small caps lines keep their source width.
+- 0c90746: Kerned text applies the font's kerning pair between a space and the next letter, so kerned headings break their lines where the source document does.
+- f85416f: Table rows now keep their correct heights when a vertically merged cell starts inside another merged cell and ends below it, and merged cells whose last row has an exact height are clipped at that row instead of growing an earlier row.
+- 57819e9: Indent, outdent, Tab, Enter on an empty item, and the Bullets and Numbering toggles now work on a list item numbered through its paragraph style, such as List Bullet. Fixes #1461, fixes #1462
+- f85416f: Text after a centered, right, or decimal tab now aligns together with the inline pictures in the same segment.
+- f85416f: An ordinary table whose top falls inside a page-positioned floating table that spans the column now starts below that floating table instead of under it.
+- ee62d4a: Tab and Shift+Tab in a table cell move to the next or previous cell and select its content, Tab in the last cell adds a row, and Option+Tab or Ctrl+Tab types a tab character in a cell.
+- f85416f: Percentage cell widths in a table that states no width of its own now share the text column, instead of being ignored in favor of equal columns.
+- f85416f: A horizontal border between two table rows now reserves the width of the rule it paints, also when one side of the boundary sets its border to none or authors a narrower rule.
+- f85416f: Every cell in a table row now starts its text below the row's largest top cell margin, so a cell with a smaller top margin no longer sits higher than its neighbors.
+- ba742d7: Prevent foreign XML properties from changing table widths, cell margins, and row geometry.
+- 2677e94: Text-anchored floating tables break across pages, and split table rows keep their minimum height on the next page. Fixes #1489
+- 2a72389: A drawing wrapped top and bottom and offset from its paragraph keeps its band where the drawing is painted when its anchor sits on a later line of the paragraph, so the paragraph's own lines that the band crosses move below it instead of running under the drawing.
+- 6691767: Lines before the anchor of a drawing wrapped top and bottom and positioned from its paragraph now move below the drawing when its band crosses them.
+- f85416f: An underline element without a style value no longer underlines text; it only recolours an inherited underline.
+- ba742d7: Show a replaceable placeholder when visible alternative drawing content cannot render, while preserving its source and layout.
+- ba742d7: Keep documents usable when unsupported header or footer drawings block the entire body area.
+- f85416f: A text box whose text does not wrap grows only to the column width, and a longer line wraps there.
+- f85416f: Paragraphs in a vertically merged continuation cell no longer take a list number.
+- f85416f: Legacy shapes filled with a picture now draw that picture, and legacy shape groups that hold a picture keep their other shapes in front of or behind it.
+- 24fdb13: Render legacy text boxes on ovals, rounded rectangles, and preset shapes, with turned boxes, vertical text, dashed outlines, shadows, and boxes that fit their text, in the editor and in PDF export.
+- f85416f: Left-aligned tables whose outer vertical border is wider than their inside borders now center every vertical border on its column line, so cell text no longer starts too far left.
+- f85416f: PDF export and the editor now draw the text of WMF pictures in the character set and face their fonts name, so Arabic, Hebrew, Cyrillic, and East Asian labels no longer turn into Latin letters.
+- f85416f: With 1.5 or double line spacing, a floating picture now moves a line only when it overlaps the line's text or picture, not the extra space the line spacing adds below it.
+- Updated dependencies: @docx-editor.dev/i18n@2.33.0
+
 ## 2.32.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @eigenpal/docx-js-editor
 
+## 2.33.0
+
+### Patch Changes
+
+- c82ecbc: The loading overlay no longer fades in a second time when a large document finishes downloading.
+- b0c962c: Fix the menu bar, link popup, header and footer options, note options, content control inspector, and dropdown menus staying open when you press the document.
+- ba742d7: Fix menu bar arrow navigation in right-to-left interfaces in React and Vue.
+- 5fc61e9: Fix toolbar popups staying open when the document surface cancels mouse events. Outside pointer presses now close the popup in React and Vue.
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/i18n@2.33.0
+
 ## 2.32.0
 
 ### Minor Changes

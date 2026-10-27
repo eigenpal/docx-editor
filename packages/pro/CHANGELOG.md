@@ -1,5 +1,27 @@
 # @docx-editor.dev/pro
 
+## 2.33.0
+
+### Minor Changes
+
+- 86b3e88: The `drawingModule` now renders waterfall, funnel, histogram, Pareto, and box and whisker charts read-only in the editor and in PDF export, and a chart that does not render shows its saved fallback picture, or else a labeled chart placeholder whose `drawing.chart` names its title and plot type.
+- f85416f: WordArt drawn along arches, triangles and the other legacy text path shapes now renders in the editor and in PDF export, with gradient fills, shadows and 3-D extrusion, and right-to-left WordArt text now joins and orders its letters correctly.
+
+### Patch Changes
+
+- ba742d7: Show placeholders for charts with invalid caches or numeric overflow instead of rendering incomplete data.
+- ba742d7: Preserve chart series colors when individual data points override their outlines.
+- f85416f: 3-D, series-axis, surface, and contour charts now render with shaded faces, walls, and axis labels instead of a placeholder or a flat chart, and crowded pie labels spread around the pie on bent leader lines.
+- 9b1cfbc: Fix comment and reply deletion in large documents and prevent partial deletion after scan exhaustion. Fixes #1509
+- fdeee55: Long documents with many tracked changes or comments open faster, typing in them responds sooner, and accepting or rejecting a change updates the review cards faster.
+- f85416f: SmartArt diagrams saved without a drawing now size their text and boxes to fit the diagram, show the fills and lines set on their data points, and lay out pyramids instead of keeping a placeholder.
+- f85416f: SmartArt diagrams saved without their drawing now give text that the layout keeps at one size the same font size in every shape.
+- f85416f: SmartArt hierarchies saved without their drawing now keep a shape the user moved sideways in a vertical branch where the user put it.
+- f85416f: SmartArt organization charts saved without their drawing now indent stacked leaf branches, keep shapes that move with a moved shape together, and place short connectors under their source.
+- f85416f: SmartArt hierarchies saved without their drawing now nest smaller branches beside deeper ones, and lists with custom text sizes give each box the room its text needs.
+- d00c1a4: Keep tracked changes and formatting when you paste rich text, including in suggesting mode, where the paste becomes one proposed insertion. Deleting a field in suggesting mode proposes the deletion, and copied plain text leaves out deleted text. Fixes #1475. Fixes #1397.
+- Updated dependencies: @docx-editor.dev/core@2.33.0, @docx-editor.dev/react@2.33.0, @docx-editor.dev/vue@2.33.0
+
 ## 2.32.0
 
 ### Minor Changes
