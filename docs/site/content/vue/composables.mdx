@@ -440,6 +440,10 @@ useHighlights('glossary', (editor) => editor.findMatches(terms.value, { wholeWor
 
 For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
+## `useDrawingPreview`
+
+`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service. It returns `status`, `url`, and `error` as refs, and a `retry` function. Call it in a component inside `DocxEditorUnsupportedElement` with `include-rendered-drawings` when you want your own loading or error state. To keep the editor's drawing visible until the image is ready, use `DocxEditor.DrawingPreview` instead. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
+
 ## `useHighlightAt`
 
 `useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).

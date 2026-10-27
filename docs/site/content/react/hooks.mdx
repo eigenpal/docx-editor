@@ -485,6 +485,23 @@ For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-t
 
 `useHighlightAt(name)` returns the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
+## `useDrawingPreview`
+
+`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service and returns `{ status, url, error, retry }`. Call it in a component inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings` when you want your own loading or error state:
+
+```tsx
+import { useDrawingPreview, type UnsupportedElement } from '@docx-editor.dev/react';
+
+function ServerPreview({ element }: { element: UnsupportedElement }) {
+  const preview = useDrawingPreview(element, renderOnServer);
+  if (preview.status === 'error') return <button onClick={preview.retry}>Retry</button>;
+  if (!preview.url) return <span role="status">Loading preview</span>;
+  return <img src={preview.url} alt={element.drawing?.accessibility.label ?? ''} />;
+}
+```
+
+To keep the editor's drawing visible until the image is ready, use `DocxEditor.DrawingPreview` instead. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
+
 ## `useHistoryGroup`
 
 Use `useHistoryGroup` when your app applies formatting continuously, such as a font-size slider or color picker. The document updates on every input event, and one undo action restores the state before the gesture. A redo action restores the final value.

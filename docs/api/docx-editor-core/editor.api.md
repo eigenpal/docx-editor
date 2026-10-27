@@ -1551,6 +1551,9 @@ export const DRAWING_REL_FROM_V: readonly string[];
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public
+export function drawingNeedsPreview(element: UnsupportedElement): boolean;
+
+// @public
 export interface DrawingPositionInput {
     // (undocumented)
     readonly horizontalEmu?: number;
@@ -1564,6 +1567,50 @@ export interface DrawingPositionInput {
 }
 
 // @public
+export interface DrawingPreviewController {
+    request(element: UnsupportedElement, render: DrawingPreviewRender): void;
+    retry(element: UnsupportedElement, render: DrawingPreviewRender): void;
+    state(element: UnsupportedElement): DrawingPreviewState;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public
+export function drawingPreviewController(editor: DocxEditorInstance): DrawingPreviewController;
+
+// @public
+export function drawingPreviewDocx(editor: DocxEditorInstance, element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>): DrawingPreviewPackageResult;
+
+// @public
+export type DrawingPreviewPackageResult = {
+    readonly copiedParts: readonly string[];
+    readonly docx: Uint8Array;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: 'drawing-not-found' | 'too-many-parts' | 'too-large';
+};
+
+// @public
+export type DrawingPreviewRender = (request: DrawingPreviewRequest) => Promise<Blob | string | null>;
+
+// @public
+export interface DrawingPreviewRequest {
+    readonly docx: Uint8Array;
+    readonly element: UnsupportedElement;
+    readonly signal: AbortSignal;
+}
+
+// @public
+export interface DrawingPreviewState {
+    // (undocumented)
+    readonly error: unknown;
+    // (undocumented)
+    readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+    // (undocumented)
+    readonly url: string | null;
+}
+
+// @public
 export type DrawingSelectionIntent = {
     readonly kind: 'none';
 } | {
@@ -1574,6 +1621,9 @@ export type DrawingSelectionIntent = {
 };
 
 // @public
+export type DrawingSupport = 'native' | 'partial' | 'unrendered';
+
+// @public
 export interface DrawingSupportIssue {
     // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
@@ -1582,7 +1632,6 @@ export interface DrawingSupportIssue {
     readonly localName: string;
     // (undocumented)
     readonly namespaceUri: string;
-    // (undocumented)
     readonly nodeId: string;
 }
 
@@ -4367,6 +4416,7 @@ export interface UnsupportedElement {
     readonly placement: 'inline' | 'block';
     readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
+    readonly support?: DrawingSupport;
 }
 
 // @public
@@ -4394,9 +4444,7 @@ export interface UnsupportedElementLayout {
 // @public
 export interface UnsupportedElementRule {
     readonly includeRenderedDrawings?: boolean;
-    // (undocumented)
     readonly layout?: UnsupportedElementLayout;
-    // (undocumented)
     readonly match?: (element: UnsupportedElement) => boolean;
 }
 

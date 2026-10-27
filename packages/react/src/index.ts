@@ -660,7 +660,23 @@ export {
   type UseRevisionMarkupDialogReturn,
 } from './editor/DocxEditorRevisionMarkupDialog';
 
-export type { DrawingGraphicKind, DrawingSupportIssue } from '@docx-editor.dev/core/store';
+export type {
+  DrawingGraphicKind,
+  DrawingSupport,
+  DrawingSupportIssue,
+} from '@docx-editor.dev/core/store';
+export {
+  drawingNeedsPreview,
+  type DrawingPreviewRender,
+  type DrawingPreviewRequest,
+  type DrawingPreviewState,
+} from '@docx-editor.dev/core/editor';
+export {
+  DocxEditorDrawingPreview,
+  useDrawingPreview,
+  type DocxEditorDrawingPreviewProps,
+  type UseDrawingPreviewReturn,
+} from './editor/DocxEditorDrawingPreview';
 export type {
   UnsupportedElement,
   UnsupportedElementLayout,

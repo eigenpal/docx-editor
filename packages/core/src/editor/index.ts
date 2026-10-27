@@ -671,4 +671,19 @@ export {
 
 export { unsupportedElementRuleMatches } from '../layout/unsupported-content-types.ts';
 
-export type { DrawingGraphicKind, DrawingSupportIssue } from '../store/package/drawing-support.ts';
+export type {
+  DrawingGraphicKind,
+  DrawingSupport,
+  DrawingSupportIssue,
+} from '../store/package/drawing-support.ts';
+
+export {
+  drawingNeedsPreview,
+  drawingPreviewController,
+  drawingPreviewDocx,
+  type DrawingPreviewController,
+  type DrawingPreviewRender,
+  type DrawingPreviewRequest,
+  type DrawingPreviewState,
+} from './drawing-preview.ts';
+export type { DrawingPreviewPackageResult } from '../store/package/drawing-preview-package.ts';

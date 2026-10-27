@@ -2,10 +2,11 @@
   "impact": "no-impact",
   "fields": [],
   "before": "Only drawing placeholders support custom previews.",
-  "after": "Source reports include unplaced drawings and rendered graphics accept optional previews.",
-  "reason": "Source inspection and custom previews do not modify shared document state or operations.",
+  "after": "Drawings report a support verdict, and rendered drawings can show cached previews from a host rendering service.",
+  "reason": "Support verdicts, preview packages, and preview images are local derived state. They do not modify shared document state or operations.",
   "tests": [
-    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts",
+    "packages/core/src/editor/__tests__/drawing-preview.test.ts"
   ],
   "changeset": "drawing-support-previews",
   "migration": null

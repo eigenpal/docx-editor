@@ -919,6 +919,9 @@ export interface Contribution {
 }
 
 // @public
+export function createDrawingPreviewPackage(pkg: OoxmlPackage, target: DrawingPreviewTarget, limits?: DrawingPreviewPackageLimits): DrawingPreviewPackageResult;
+
+// @public
 export function createImageResourceCache(initialPkg: OoxmlPackage, options: CreateImageResourceCacheOptions): ImageResourceLookup;
 
 // @public
@@ -1440,6 +1443,30 @@ export interface DrawingPositionInput {
 }
 
 // @public
+export interface DrawingPreviewPackageLimits {
+    readonly maxBytes?: number;
+    readonly maxParts?: number;
+}
+
+// @public
+export type DrawingPreviewPackageResult = {
+    readonly copiedParts: readonly string[];
+    readonly docx: Uint8Array;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: 'drawing-not-found' | 'too-many-parts' | 'too-large';
+};
+
+// @public
+export interface DrawingPreviewTarget {
+    // (undocumented)
+    readonly nodeId: string;
+    // (undocumented)
+    readonly ownerPartName: string;
+}
+
+// @public
 export type DrawingPropertyIdResult = {
     readonly id: number;
     readonly ok: true;
@@ -1465,17 +1492,19 @@ export interface DrawingRenderers {
 }
 
 // @public
+export type DrawingSupport = 'native' | 'partial' | 'unrendered';
+
+// @public
 export interface DrawingSupportEntry {
     readonly drawingNodeId: string | null;
     readonly graphicKind: DrawingGraphicKind;
-    // (undocumented)
     readonly issues: readonly DrawingSupportIssue[];
     readonly nodeId: string;
     // (undocumented)
     readonly ownerPartName: string;
     readonly source: OoxmlElement;
-    // (undocumented)
     readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';
+    readonly support: DrawingSupport;
 }
 
 // @public
@@ -1487,7 +1516,6 @@ export interface DrawingSupportIssue {
     readonly localName: string;
     // (undocumented)
     readonly namespaceUri: string;
-    // (undocumented)
     readonly nodeId: string;
 }
 

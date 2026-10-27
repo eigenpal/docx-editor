@@ -1,5 +1,6 @@
 import type {
   DrawingGraphicKind,
+  DrawingSupport,
   DrawingSupportIssue,
   OoxmlElement,
 } from '@docx-editor.dev/core/store';
@@ -7,13 +8,30 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layou
 import type { EquationSpanRecord } from './equation-layout.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
-/** Source metadata for placeholders and opt-in drawing previews. @public */
+/**
+ * One occurrence that a custom component can replace: a placeholder for content the editor
+ * cannot render, or, with `includeRenderedDrawings`, a drawing that the editor renders.
+ * The drawing fields are present only for drawings.
+ *
+ * @public
+ */
 export interface UnsupportedElement {
-  /** Absent for existing placeholders; `drawing` identifies an opt-in rendered graphic. */
+  /**
+   * `drawing` for a drawing that the editor renders, offered only to rules with
+   * `includeRenderedDrawings`. Absent for placeholders.
+   */
   readonly presentation?: 'drawing';
-  /** Known explicit source limitations; an empty list does not prove full fidelity. */
+  /**
+   * How completely the editor shows this drawing: `native`, `partial`, or `unrendered`.
+   * A placeholder is `unrendered`. Use it to decide whether to replace the drawing.
+   */
+  readonly support?: DrawingSupport;
+  /**
+   * The features of this drawing that the editor does not show as authored, read from its
+   * own XML. Chart and diagram parts are not read, so an empty list does not prove fidelity.
+   */
   readonly drawingIssues?: readonly DrawingSupportIssue[];
-  /** The graphic a drawing holds, read from its source, whether or not it renders. */
+  /** The graphic a drawing holds, such as `picture`, `chart`, or `diagram`, from its source. */
   readonly graphicKind?: DrawingGraphicKind;
   readonly nodeId: string;
   readonly ownerPartName: string;
@@ -27,10 +45,10 @@ export interface UnsupportedElement {
   /** Reserved geometry in document points, when the element has been laid out. */
   readonly bounds?: LayoutBox;
   /**
-   * The layout record of a drawing offered for custom presentation. Its
-   * `placeholderGraphicKind` names the kind of graphic, such as `chart` or `diagram`. A chart
-   * whose chart part can be read also carries `chart`. Its `shownAs` describes the native
-   * presentation, before customization. Absent for other content.
+   * The layout record of a drawing. Use `graphicKind` to identify the graphic: the record's
+   * `placeholderGraphicKind` names the graphic only for placeholders. A chart whose chart part
+   * can be read also carries `chart`, whose `shownAs` describes the native presentation.
+   * Absent for other content.
    */
   readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
   /** The layout record of an equation shown as the built-in placeholder. */
@@ -43,13 +61,23 @@ export interface UnsupportedElementLayout {
 }
 /** The first matching registration renders each unsupported element. @public */
 export interface UnsupportedElementRule {
-  /** Also offer rendered graphics. Text-box stories remain editable and are excluded. */
+  /**
+   * Also offer drawings that the editor renders, not only placeholders. Text boxes stay
+   * editable and are never offered.
+   */
   readonly includeRenderedDrawings?: boolean;
+  /** Return true to replace this occurrence. Omit to match every offered occurrence. */
   readonly match?: (element: UnsupportedElement) => boolean;
+  /** The box to reserve for content that has no layout box of its own, in points. */
   readonly layout?: UnsupportedElementLayout;
 }
 
-/** Match a custom presentation without changing the default placeholder-only scope. @public */
+/**
+ * Whether a rule claims an occurrence. Adapters use it to pick the first matching
+ * declaration; hosts with their own registration can use it the same way.
+ *
+ * @public
+ */
 export function unsupportedElementRuleMatches(
   rule: UnsupportedElementRule,
   element: UnsupportedElement

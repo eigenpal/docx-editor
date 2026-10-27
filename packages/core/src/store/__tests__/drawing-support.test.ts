@@ -134,3 +134,20 @@ test('a legacy horizontal rule reports as projected, not as a placeholder', () =
   expect(report.entries[0]!.state).toBe('projected');
   expect(report.entries[0]!.graphicKind).toBe('shape');
 });
+
+test('support gives one verdict: native, partial with issues, or unrendered', async () => {
+  const { previewPicture } = await import('./drawing-support-fixtures.ts');
+  expect(inspect(previewShape()).entries[0]!.support).toBe('native');
+  expect(inspect(previewPicture()).entries[0]!.support).toBe('native');
+  expect(
+    inspect(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>')).entries[0]!.support
+  ).toBe('partial');
+  expect(
+    inspect(previewShape('<a:scene3d><a:camera prst="orthographicFront"/></a:scene3d>')).entries[0]!
+      .support
+  ).toBe('partial');
+  const unplaced = inspect(
+    '<w:pict><v:arc style="position:absolute;width:100pt;height:50pt"/></w:pict>'
+  );
+  expect(unplaced.entries[0]!.support).toBe('unrendered');
+});

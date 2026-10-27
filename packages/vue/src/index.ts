@@ -649,7 +649,23 @@ export type {
   RevisionMarkupChromeHandlers,
 } from '@docx-editor.dev/core/editor';
 
-export type { DrawingGraphicKind, DrawingSupportIssue } from '@docx-editor.dev/core/store';
+export type {
+  DrawingGraphicKind,
+  DrawingSupport,
+  DrawingSupportIssue,
+} from '@docx-editor.dev/core/store';
+export {
+  drawingNeedsPreview,
+  type DrawingPreviewRender,
+  type DrawingPreviewRequest,
+  type DrawingPreviewState,
+} from '@docx-editor.dev/core/editor';
+export {
+  DocxEditorDrawingPreview,
+  useDrawingPreview,
+  type DocxEditorDrawingPreviewProps,
+  type UseDrawingPreviewReturn,
+} from './editor/DocxEditorDrawingPreview';
 export type {
   UnsupportedElement,
   UnsupportedElementLayout,

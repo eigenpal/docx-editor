@@ -1,6 +1,6 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { selectedDrawingGraphicKind } from '../store/package/drawing-graphic-kind.ts';
-import { drawingSourceIssues } from '../store/package/drawing-support-issues.ts';
+import { drawingSourceIssues, drawingSupport } from '../store/package/drawing-support-issues.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { clearUnsupportedElement, markUnsupportedElement } from './unsupported-elements.ts';
 
@@ -23,6 +23,7 @@ export function customDrawingPreview(
   // Text-box stories keep their caret and selection behavior. Their drawings remain inspectable.
   if (drawing.textboxStory || drawing.groupTextboxStories || !source) return;
   if (element.querySelector('[data-docx-unsupported]')) return;
+  const issues = drawingSourceIssues(source, drawing.drawingNodeId);
   const fallback = element.ownerDocument.createElement('div');
   fallback.className = 'docx-drawing-native';
   fallback.style.width = '100%';
@@ -43,7 +44,11 @@ export function customDrawingPreview(
       bounds: drawing.paintBounds,
       label: drawing.accessibility.label ?? '',
       drawing,
-      drawingIssues: drawingSourceIssues(source, drawing.drawingNodeId),
+      drawingIssues: issues,
+      support: drawingSupport(
+        drawing.chart?.shownAs === 'fallback' ? 'fallback' : 'rendered',
+        issues
+      ),
       graphicKind: selectedDrawingGraphicKind(source, drawing.drawingNodeId),
     },
     element

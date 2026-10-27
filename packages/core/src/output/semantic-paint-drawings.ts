@@ -408,6 +408,7 @@ function paintPlaceholderCard(
             graphicKind: selectedDrawingGraphicKind(source, drawing.drawingNodeId),
           }
         : {}),
+      support: 'unrendered',
       placement: 'inline',
       bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,

@@ -1,28 +1,22 @@
-import {
-  defineComponent,
-  h,
-  inject,
-  onBeforeUnmount,
-  shallowRef,
-  watch,
-  type PropType,
-  type SlotsType,
-  type VNodeChild,
-} from 'vue';
+import { defineComponent, h, type PropType, type SlotsType, type VNodeChild } from 'vue';
 import type { UnsupportedElement, UnsupportedElementRule } from '@docx-editor.dev/core/editor';
-import { UnsupportedElementRegistryContext } from './unsupported-element-registry';
+import { useUnsupportedElementDeclaration } from './unsupported-element-declaration';
 import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 
 /** Props for a registered unsupported-content renderer. @public */
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
-  /** Offer rendered graphics as well as placeholders. */
+  /**
+   * Also offer drawings that the editor renders, not only placeholders. To replace drawings
+   * with images from a rendering service, `DocxEditor.DrawingPreview` is simpler.
+   */
   includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
 }
 
 /**
  * Register a renderer under DocxEditor or DocxEditor.Root.
  * The first mounted matching declaration wins. Prop updates retain its priority.
- * Omit match for a catch-all. Empty slot content retains the default placeholder.
+ * Omit match for a catch-all. Empty slot content keeps what the editor shows: the placeholder,
+ * or the rendered drawing.
  * Layout uses points and only sizes content without an existing layout box.
  * Components can remount when pagination or virtualization removes an occurrence.
  * @public
@@ -36,45 +30,21 @@ export const DocxEditorUnsupportedElement = defineComponent({
   },
   slots: Object as SlotsType<{ default: (props: { element: UnsupportedElement }) => VNodeChild }>,
   setup(props, { slots }) {
-    const registry = inject(UnsupportedElementRegistryContext, null);
-    if (!registry)
-      throw new Error('DocxEditor.UnsupportedElement must render inside DocxEditor.Root.');
-    const id = Symbol('unsupported-element-declaration');
-    const version = shallowRef(registry.snapshot());
-    const stop = registry.subscribe(() => {
-      version.value = registry.snapshot();
-    });
-    watch(
-      () =>
-        [
-          props.match,
-          props.layout,
-          props.layout?.width,
-          props.layout?.height,
-          props.includeRenderedDrawings,
-        ] as const,
-      ([match, layout, width, height, includeRenderedDrawings]) => {
-        registry.register(id, {
-          includeRenderedDrawings,
-          ...(match ? { match } : {}),
-          ...(layout ? { layout: { width: width!, height: height! } } : {}),
-        });
-      },
-      { immediate: true }
+    const hosts = useUnsupportedElementDeclaration(
+      () => ({
+        includeRenderedDrawings: props.includeRenderedDrawings,
+        match: props.match,
+        layout: props.layout,
+      }),
+      'DocxEditor.UnsupportedElement'
     );
-    onBeforeUnmount(() => {
-      stop();
-      registry.unregister(id);
-    });
-    return () => {
-      void version.value;
-      return registry.hosts(id).map((host) =>
+    return () =>
+      hosts().map((host) =>
         h(UnsupportedElementPlaceholder, {
           key: host.key,
           host,
           render: (element: UnsupportedElement) => slots.default?.({ element }),
         })
       );
-    };
   },
 });

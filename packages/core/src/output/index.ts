@@ -59,4 +59,8 @@ export {
  */
 export { lumTransfer, type LumTransfer } from './drawing-lum-filter.ts';
 
-export type { DrawingGraphicKind, DrawingSupportIssue } from '../store/package/drawing-support.ts';
+export type {
+  DrawingGraphicKind,
+  DrawingSupport,
+  DrawingSupportIssue,
+} from '../store/package/drawing-support.ts';

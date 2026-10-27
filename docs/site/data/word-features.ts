@@ -706,7 +706,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. Source inspection reports explicit ignored picture effects. Optional custom previews can replace rendered graphics without changing the saved drawing. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. Each drawing reports whether the editor renders it in full, and a host rendering service can supply preview images for the rest without changing the saved drawing. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
   },
   {
     id: 'images.effects',

@@ -289,3 +289,76 @@ test('rendered preview registrations stay local through concurrent edits and dra
   converge();
   expect(inspectDrawingSupport(session(bob).currentPackage()).entries).toHaveLength(1);
 });
+
+test('drawing previews stay local, survive remote edits elsewhere, and leave with the drawing', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../../../core/src/store/__tests__/drawing-support-fixtures.ts');
+  const { drawingPreviewController, observeUnsupportedElements } =
+    await import('@docx-editor.dev/core/editor');
+  const peers = await harness.pair(
+    previewDocument(
+      `${previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>')}</w:r></w:p><w:p><w:r><w:t>Second paragraph</w:t>`
+    )
+  );
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    return mount({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+      unsupportedElementRules: [{ includeRenderedDrawings: true }],
+    });
+  }) as [Editor, Editor];
+  const flush = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  let elements: import('@docx-editor.dev/core/editor').UnsupportedElement[] = [];
+  const stop = observeUnsupportedElements(containers[0]!, (hosts) => {
+    elements = hosts.map((host) => host.unsupported);
+  });
+  const controller = drawingPreviewController(alice);
+  const unsubscribe = controller.subscribe(() => {});
+  let calls = 0;
+  const render = async () => {
+    calls++;
+    return 'https://previews.example/shape.png';
+  };
+  try {
+    const fingerprint = packageFingerprint(alice.surface!.session.currentPackage());
+    controller.request(elements[0]!, render);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(controller.state(elements[0]!).status).toBe('ready');
+    expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(fingerprint);
+
+    // A remote edit in another paragraph keeps the cached preview.
+    const second = bob.surface!.session.paragraphIds()[1]!;
+    bob.surface!.setSelection({
+      anchor: { paragraphId: second, offset: 0 },
+      head: { paragraphId: second, offset: 0 },
+    });
+    expect(bob.exec({ type: 'insertText', text: 'Remote ' }).ok).toBe(true);
+    flush();
+    expect(alice.surface!.session.bodyText()).toContain('Remote Second');
+    controller.request(elements[0]!, render);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toBe(1);
+    expect(controller.state(elements[0]!).status).toBe('ready');
+
+    // A remote delete of the drawing removes its occurrence.
+    const first = bob.surface!.session.paragraphIds()[0]!;
+    bob.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 'Before'.length + 1 },
+    });
+    expect(bob.surface!.deleteSelection()).toBe(true);
+    flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(elements).toHaveLength(0);
+    expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.surface!.session.currentPackage())
+    );
+  } finally {
+    unsubscribe();
+    stop();
+  }
+});

@@ -35,6 +35,9 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public
+export type DrawingSupport = 'native' | 'partial' | 'unrendered';
+
+// @public
 export interface DrawingSupportIssue {
     // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
@@ -43,7 +46,6 @@ export interface DrawingSupportIssue {
     readonly localName: string;
     // (undocumented)
     readonly namespaceUri: string;
-    // (undocumented)
     readonly nodeId: string;
 }
 
@@ -200,6 +202,7 @@ export interface UnsupportedElement {
     readonly placement: 'inline' | 'block';
     readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
+    readonly support?: DrawingSupport;
 }
 
 // @public
@@ -227,9 +230,7 @@ export interface UnsupportedElementLayout {
 // @public
 export interface UnsupportedElementRule {
     readonly includeRenderedDrawings?: boolean;
-    // (undocumented)
     readonly layout?: UnsupportedElementLayout;
-    // (undocumented)
     readonly match?: (element: UnsupportedElement) => boolean;
 }
 

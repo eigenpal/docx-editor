@@ -9,14 +9,16 @@ import {
 import {
   drawingSourceIssues,
   drawingSourceSelection,
+  drawingSupport,
   supportIssue,
+  type DrawingSupport,
   type DrawingSupportIssue,
 } from './drawing-support-issues.ts';
 import { drawingGraphicKind, type DrawingGraphicKind } from './drawing-graphic-kind.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
-export type { DrawingSupportIssue } from './drawing-support-issues.ts';
+export type { DrawingSupport, DrawingSupportIssue } from './drawing-support-issues.ts';
 export type { DrawingGraphicKind } from './drawing-graphic-kind.ts';
 
 /** Source inspection before image decoding or pagination. `projected` does not mean full fidelity. @public */
@@ -26,11 +28,22 @@ export interface DrawingSupportEntry {
   readonly nodeId: string;
   /** Selected projection identity, when one exists. */
   readonly drawingNodeId: string | null;
+  /**
+   * What the editor shows: `projected` (the drawing renders), `fallback` (a saved fallback
+   * renders), `placeholder` (a labeled box), `hidden` (the drawing is hidden by design), or
+   * `unplaced` (no layout position, nothing shows). Image decoding is not checked.
+   */
   readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';
+  /** One verdict from `state` and `issues`. Use it to decide whether to replace the drawing. */
+  readonly support: DrawingSupport;
   /** The graphic the selected drawing holds, whether or not it renders. */
   readonly graphicKind: DrawingGraphicKind;
   /** The original canonical drawing or enclosing compatibility wrapper. Never mutate this value. */
   readonly source: OoxmlElement;
+  /**
+   * The features the editor does not show as authored. Projection diagnostics are included;
+   * `unsupported-graphic` appears only for placeholders, where it names the graphic.
+   */
   readonly issues: readonly DrawingSupportIssue[];
 }
 
@@ -148,7 +161,10 @@ export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport {
       const issues = [...drawingSourceIssues(source, projection?.drawingNodeId ?? source.id)];
       if (!projection)
         issues.push(supportIssue(source, 'unplaced-drawing', 'no-layout-projection'));
+      const state = stateOf(projection, selected.fallback);
       for (const diagnostic of projection?.diagnostics ?? []) {
+        // A rendered drawing reports `unsupported-graphic` for a branch it did not need.
+        if (diagnostic.code === 'unsupported-graphic' && state !== 'placeholder') continue;
         issues.push(
           Object.freeze({
             ...supportIssue(selected.node, 'projection-diagnostic', diagnostic.code),
@@ -162,7 +178,15 @@ export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport {
           ownerPartName: part.name,
           nodeId: source.id,
           drawingNodeId: projection?.drawingNodeId ?? null,
-          state: stateOf(projection, selected.fallback),
+          state,
+          support: drawingSupport(
+            state === 'placeholder' || state === 'unplaced'
+              ? 'placeholder'
+              : state === 'fallback'
+                ? 'fallback'
+                : 'rendered',
+            issues
+          ),
           graphicKind: drawingGraphicKind(selected.node),
           source,
           issues: Object.freeze(issues),

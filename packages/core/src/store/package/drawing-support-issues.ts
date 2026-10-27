@@ -1,7 +1,24 @@
 import { drawingRenderers } from './drawing-renderers.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tree.ts';
 
-/** A source-addressed drawing limitation. This is not a complete fidelity assessment. @public */
+/**
+ * A drawing feature that the editor does not show as authored. Each code means:
+ *
+ * - `unsupported-effect`: the editor ignores an explicit effect, such as `a:blur`, `a:duotone`,
+ *   or `a14:imgProps`. The drawing renders without it.
+ * - `renderer-required`: an optional effect, such as `a:glow`, needs the drawing module.
+ * - `unverified-3d`: the drawing has 3-D properties (`a:scene3d`, `a:sp3d`), which render flat.
+ * - `saved-fallback`: the editor shows the saved `mc:Fallback` content, not the main content.
+ * - `unplaced-drawing`: the drawing has no layout position, so the editor does not show it.
+ * - `inspection-limit`: a scan budget stopped the check, so the result is incomplete.
+ * - `projection-diagnostic`: the source is malformed or partly unusable. `detail` holds the
+ *   diagnostic code, such as `invalid-geometry` or `resource-refused`.
+ *
+ * The check reads the drawing's own XML. It does not read chart or diagram parts, inherited
+ * theme effects, or image bytes, so an empty list does not prove full fidelity.
+ *
+ * @public
+ */
 export interface DrawingSupportIssue {
   readonly code:
     | 'unsupported-effect'
@@ -11,11 +28,51 @@ export interface DrawingSupportIssue {
     | 'unplaced-drawing'
     | 'inspection-limit'
     | 'projection-diagnostic';
+  /** The source node with the feature, in the package that was inspected. */
   readonly nodeId: string;
   readonly namespaceUri: string;
   readonly localName: string;
-  /** Stable feature identifier, or the projection diagnostic code. */
+  /** The feature, such as `a:blur` or `mc:Fallback`, or the projection diagnostic code. */
   readonly detail: string;
+}
+
+/**
+ * How completely the editor shows a drawing:
+ *
+ * - `native`: the editor renders the drawing and found no unsupported feature in its source.
+ * - `partial`: the editor renders the drawing, but without some features, or it shows a saved
+ *   fallback. The issue list names the features.
+ * - `unrendered`: the editor shows a placeholder or does not show the drawing.
+ *
+ * Charts and SmartArt diagrams that the editor draws report `native`, because the check does
+ * not read their chart or diagram parts.
+ *
+ * @public
+ */
+export type DrawingSupport = 'native' | 'partial' | 'unrendered';
+
+const PARTIAL_CODES: ReadonlySet<DrawingSupportIssue['code']> = new Set([
+  'unsupported-effect',
+  'renderer-required',
+  'unverified-3d',
+  'saved-fallback',
+  'inspection-limit',
+  'projection-diagnostic',
+]);
+
+/** One verdict for the editor and the source report, from what each knows about a drawing. */
+export function drawingSupport(
+  shown: 'placeholder' | 'fallback' | 'rendered',
+  issues: readonly DrawingSupportIssue[]
+): DrawingSupport {
+  if (shown === 'placeholder') return 'unrendered';
+  if (shown === 'fallback') return 'partial';
+  // A malformed wrap polygon changes text flow around the drawing, not the drawing itself.
+  return issues.some(
+    (issue) => PARTIAL_CODES.has(issue.code) && !issue.detail.startsWith('wrap-polygon')
+  )
+    ? 'partial'
+    : 'native';
 }
 
 const BLIP_EFFECTS = new Set(['alphaModFix', 'biLevel', 'grayscl', 'lum', 'extLst']);

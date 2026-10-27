@@ -61,4 +61,11 @@ export type {
   DrawingSupportReport,
   DrawingSupportIssue,
   DrawingGraphicKind,
+  DrawingSupport,
 } from './package/drawing-support.ts';
+export {
+  createDrawingPreviewPackage,
+  type DrawingPreviewPackageLimits,
+  type DrawingPreviewPackageResult,
+  type DrawingPreviewTarget,
+} from './package/drawing-preview-package.ts';
