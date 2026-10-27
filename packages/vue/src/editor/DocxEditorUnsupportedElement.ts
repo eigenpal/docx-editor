@@ -25,7 +25,10 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
 /**
  * Register a renderer under DocxEditor or DocxEditor.Root.
  * The first mounted matching declaration wins. Prop updates retain its priority.
- * Omit match for a catch-all. Empty slot content keeps what the editor shows.
+ * Omit match for a catch-all. Empty slot content keeps what the editor shows. The default slot
+ * renders once for each occurrence; put composables in a child component that it renders. To
+ * build a preview DOCX in that component, use `drawingPreviewDocx` from
+ * `@docx-editor.dev/core/editor`.
  * Layout uses points and only sizes content without an existing layout box. Custom content
  * gets the occurrence's box (`element.bounds`); size it to 100% of the width and height.
  * Components can remount when pagination or virtualization removes an occurrence.

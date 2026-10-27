@@ -42,7 +42,8 @@ export interface UnsupportedElement {
   /**
    * Lossless canonical source. Treat this value as read-only and untrusted. It stays the same
    * object until the content itself changes, so use it as the dependency of work you derive
-   * from the content, such as a preview request.
+   * from the content, such as a preview request. A change in a related part only, such as
+   * chart data, an image, or the theme, keeps the same object.
    */
   readonly source: OoxmlElement | null;
   readonly placement: 'inline' | 'block';

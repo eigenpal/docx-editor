@@ -10,7 +10,8 @@ import type { DocxEditorInstance } from './docx-editor-types.ts';
  * edits, and the parts it needs, for an external renderer. Pass an occurrence that an
  * `UnsupportedElement` component receives. The result equals `createDrawingPreviewPackage`
  * on the document as a save would write it now. The call is synchronous, so make it in an
- * effect keyed on `element.source`, not during render.
+ * effect keyed on `element.source`, not during render. Before the editor is attached, the
+ * result is `drawing-not-found`.
  *
  * @public
  */

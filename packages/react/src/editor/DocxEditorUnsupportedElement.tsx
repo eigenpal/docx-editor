@@ -12,7 +12,10 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
   includePartial?: UnsupportedElementRule['includePartial'];
   /**
    * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
-   * keep what the editor shows: the placeholder, or the partly rendered drawing.
+   * keep what the editor shows: the placeholder, or the partly rendered drawing. It is called
+   * as a function, once for each occurrence, not mounted as a component: put hooks in a child
+   * component that you return. To build a preview DOCX in that component, use
+   * `drawingPreviewDocx` from `@docx-editor.dev/core/editor`.
    */
   children: (props: { element: UnsupportedElement }) => ReactNode;
 }

@@ -214,6 +214,8 @@ test('package bytes are deterministic, and legacy VML pages fit when its size is
   const fallback = createDrawingPreviewPackage(unsized, inspectDrawingSupport(unsized).entries[0]!);
   if (!fallback.ok) throw new Error(fallback.reason);
   expect(fallback.pageFitsDrawing).toBe(false);
+  const fallbackXml = strFromU8(unzipSync(fallback.docx)['word/document.xml']!);
+  expect(fallbackXml).toContain('w:top="0" w:right="0" w:bottom="0" w:left="0"');
 });
 
 test('a VML shape after its shape type sizes the page to its rotated bounding box', async () => {

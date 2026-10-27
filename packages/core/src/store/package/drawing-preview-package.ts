@@ -66,8 +66,9 @@ export type DrawingPreviewPackageResult =
       /**
        * True when the page has the drawing's size, so the first page is the preview image.
        * False when the size is unknown, such as a legacy VML drawing without a width and height
-       * in its style. Then the page keeps the document's size and margins, and the drawing
-       * sits at the top left of the content area.
+       * in its style. Then the page has the document's page size and no margins, and the
+       * drawing starts at its top left corner: crop the image to the occurrence's `bounds`.
+       * Send this flag to your renderer with the bytes.
        */
       readonly pageFitsDrawing: boolean;
       /** The package parts copied from the source document, for logging and caching. */
@@ -311,22 +312,24 @@ function lastChild(parent: OoxmlElement | undefined, localName: string): OoxmlEl
   return found;
 }
 
-/** Page size and margins from the document's last section, as whole twips only. */
+/**
+ * The document's last page size, as whole twips only, with no margins: a drawing of unknown
+ * size starts at the top left corner, so a renderer can crop it to the drawing's box.
+ */
 function sectionProperties(pkg: OoxmlPackage): string {
   const body = lastChild(pkg.parts.get(pkg.mainDocumentPart)?.root, 'body');
   const sectPr = lastChild(body, 'sectPr');
-  const read = (name: string, attribute: string, fallback: number): number => {
-    const raw = lastChild(sectPr, name)?.attributes.find(
+  const read = (attribute: string, fallback: number): number => {
+    const raw = lastChild(sectPr, 'pgSz')?.attributes.find(
       (item) => item.localName === attribute
     )?.value;
     const value = raw === undefined ? NaN : Number(raw);
-    return Number.isInteger(value) && Math.abs(value) <= 31_680 ? value : fallback;
+    return Number.isInteger(value) && value > 0 && value <= 31_680 ? value : fallback;
   };
-  const size = `<w:pgSz w:w="${read('pgSz', 'w', 12_240)}" w:h="${read('pgSz', 'h', 15_840)}"/>`;
-  const margins = ['top', 'right', 'bottom', 'left']
-    .map((side) => `w:${side}="${read('pgMar', side, 1440)}"`)
-    .join(' ');
-  return `<w:sectPr>${size}<w:pgMar ${margins} w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>`;
+  return (
+    `<w:sectPr><w:pgSz w:w="${read('w', 12_240)}" w:h="${read('h', 15_840)}"/>` +
+    '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>'
+  );
 }
 
 function relationshipsXml(
@@ -357,8 +360,8 @@ function relsPartName(partName: string): string {
  * first page as an image. The page has the drawing's size, including its effect extent, so it
  * matches the occurrence's `bounds`. It has no margins, and a floating drawing is placed on the
  * line, so the first page is the preview. A legacy VML drawing takes
- * its size from its style. When the size is unknown, the page keeps the document's size and
- * margins. Relationships to external targets and to embedded objects, macros, or templates
+ * its size from its style. When the size is unknown, the page has the document's page size and
+ * no margins, with the drawing at its top left corner. Relationships to external targets and to embedded objects, macros, or templates
  * are dropped, so the package never points outside itself.
  *
  * Pass the package that the target comes from: an `inspectDrawingSupport` entry with the
