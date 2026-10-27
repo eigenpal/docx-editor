@@ -83,8 +83,15 @@ export function exactTerminalBorderPt(row: SemanticTableRow, deps: TableFlowDeps
 
 // The room the terminal rule needs when deciding whether the row starts here. A row that does
 // not fit with its rule moves to the next page. At a page start (or below repeated headers
-// only) moving cannot help, so the row stays and its rule crosses the bottom margin.
-export function admissionExtentPt(row: SemanticTableRow, deps: TableFlowDeps): number {
+// only) moving cannot help, so the row stays and its rule crosses the bottom margin. Only the
+// table's terminal row can need room, so other rows never build their row deps here.
+export function ruleRoomPt(
+  row: SemanticTableRow,
+  tableDeps: TableFlowDeps,
+  rowDeps: () => TableFlowDeps
+): number {
+  if (exactTerminalBorderPt(row, tableDeps) === 0) return 0;
+  const deps = rowDeps();
   return deps.rowAtPageStart ? 0 : exactTerminalBorderPt(row, deps);
 }
 

@@ -750,7 +750,7 @@ export function* paginateTableInFlowSteps(
         })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
-        flow.cursorY + naturalHeight + closingEdge + terminal.admissionExtentPt(row, rowDeps()) >
+        flow.cursorY + naturalHeight + closingEdge + terminal.ruleRoomPt(row, tableDeps, rowDeps) >
           contentHeight() + 0.001 &&
         flow.cursorY > bandTop &&
         (keepsWholeAt(flow.cursorY) ||
