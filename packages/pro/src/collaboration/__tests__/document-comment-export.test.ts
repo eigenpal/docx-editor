@@ -4,13 +4,19 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { afterEach, expect, test } from 'bun:test';
-import { strFromU8, unzipSync } from 'fflate';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { collaborationModule } from '../collaboration-module.ts';
+import { reviewModule } from '../../review/review-module.ts';
 import {
   addPackageComment,
   deletePackageComments,
   writeOoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import { createPeerHarness, zipDocument, W, R, REL } from './document-peer-support.ts';
+
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 const peers = createPeerHarness('comment-export');
 afterEach(() => peers.cleanup());
@@ -27,6 +33,60 @@ const bytes = zipDocument(
     },
   }
 );
+
+test('mounted editors remove the card and record across a large package', async () => {
+  const files = unzipSync(bytes);
+  files['word/padding.xml'] = strToU8(
+    '<padding>' +
+      Array.from(
+        { length: 500 },
+        (_, index) => `<group id="${index}">${'<item/>'.repeat(100)}</group>`
+      ).join('') +
+      '</padding>'
+  );
+  const { alice, bob } = await peers.pair(zipSync(files));
+  const editors: ReturnType<typeof createDocxEditor>[] = [];
+  const containers: HTMLElement[] = [];
+  try {
+    for (const peer of [alice, bob]) {
+      peer.detach();
+      const container = document.createElement('div');
+      document.body.append(container);
+      containers.push(container);
+      editors.push(
+        createDocxEditor({
+          container,
+          document: peer.room.document,
+          modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
+        })
+      );
+    }
+    const [left, right] = editors;
+    expect(right!.getReviewItems()).toHaveLength(1);
+    expect(left!.deleteReviewItem(left!.getReviewItems()[0]!.key)).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+    alice.room.session.flushPendingJournals();
+    for (const editor of editors) expect(editor.getReviewItems()).toHaveLength(0);
+    expect(left!.exec({ type: 'undo' }).ok).toBe(true);
+    alice.room.session.flushPendingJournals();
+    for (const editor of editors) expect(editor.getReviewItems()).toHaveLength(1);
+    expect(left!.exec({ type: 'redo' }).ok).toBe(true);
+    alice.room.session.flushPendingJournals();
+    for (const editor of editors) {
+      expect(editor.getReviewItems()).toHaveLength(0);
+      const saved = unzipSync(new Uint8Array(await editor.save()));
+      expect(strFromU8(saved['word/comments.xml'] ?? new Uint8Array())).not.toContain(
+        'Original comment'
+      );
+      expect(saved['word/padding.xml']).toBeDefined();
+    }
+  } finally {
+    for (const editor of editors) editor.destroy();
+    for (const container of containers) container.remove();
+  }
+}, 30_000);
 
 test('export cleanup preserves concurrent comments, undo, redo, and reconnect', async () => {
   const { alice, bob, pause, resume } = await peers.pair(bytes);

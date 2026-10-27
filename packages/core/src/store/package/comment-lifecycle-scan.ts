@@ -52,7 +52,7 @@ export interface CommentScanBudget {
   truncated: boolean;
 }
 
-/** A fresh budget. Tests pass tighter caps; production uses the module defaults. */
+/** A fresh budget. Callers can supply operation-specific caps; tests can inject tighter limits. */
 export function createCommentScanBudget(
   maxVisited: number = MAX_COMMENT_SCAN_VISITED,
   maxParts: number = MAX_COMMENT_SCAN_PARTS

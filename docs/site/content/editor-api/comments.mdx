@@ -95,6 +95,8 @@ await runtime.run(async (context) => {
 
 You can undo a browser deletion batch in one step. Server writes use the same object-model methods without a browser module. Deleted targets become invalid, and stale reads require fresh selection and reconsideration.
 
+Thread and reply deletion size their scan budgets from the loaded document, including edits since import. Documents above 50,000 nodes need no separate deletion setting. Import resource limits and comment nesting guards still apply. An incomplete deletion scan leaves the entire thread unchanged.
+
 Saving removes recognized empty comment parts when no comment markers or retained relationship dependencies remain. This normalization also applies to empty comment parts in the source file. The live document retains those parts for undo and concurrent edits. Unknown extension content and relationships prevent removal. This cleanup does not remove other document metadata.
 
 ## Next steps

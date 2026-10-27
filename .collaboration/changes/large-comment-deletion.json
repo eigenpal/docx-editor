@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Comment deletion refused above a fixed node budget or removed only markers.",
+  "after": "Deletion uses a document-sized budget and preserves the whole thread on scan exhaustion.",
+  "reason": "Existing package edits and journals carry the same marker, record, and metadata removals. No shared format changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-comments.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-comment-export.test.ts",
+    "packages/core/src/store/__tests__/comment-lifecycle-scan.test.ts"
+  ],
+  "changeset": "large-comment-deletion",
+  "migration": null
+}

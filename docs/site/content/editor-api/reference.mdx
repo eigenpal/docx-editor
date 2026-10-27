@@ -97,6 +97,8 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 ## Comments and revisions
 
+`Comment.delete()` and `CommentReply.delete()` use scan budgets that scale with the loaded document. See [Delete threads or replies](/docs/2.x/editor-api/comments#delete-threads-or-replies) for deletion guarantees and limits.
+
 `Document.changeTrackingMode = 'TrackMineOnly'` tracks supported text, font, paragraph, list, table, and content control edits. Column changes require an eligible complete proposed table. Page setup refuses while tracking. For supported operations and collaboration limits, see [Tracked changes](/docs/2.x/editor-api/revisions#supported-tracked-edits).
 
 | Object or type | Public members beyond inherited members | Guide |

@@ -25,6 +25,7 @@
 // are still there.
 
 import { findNode, removeNode, replaceNode } from './ooxml-edit.ts';
+import { commentDeletionBudget } from './comment-deletion-budget.ts';
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { noteIdOf, notesOf } from './note-nodes.ts';
 import { type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
@@ -310,15 +311,15 @@ function applyThreadDeletion(
   if (stripped.truncated) return pkg;
   let next = stripped.pkg;
 
-  // Records stay when another story still names the id, or when the remaining-marker scan
-  // cannot finish: overflow cannot prove the id is unused, so metadata is preserved.
+  // Records stay when another story still names the id. An incomplete scan cancels
+  // the whole deletion because it cannot prove which records are unused.
   const remaining = idsStillMarked(
     next,
     thread,
     commentsPartNameForStory(pkg, owner.storyPartName),
     budget
   );
-  if (remaining.truncated) return next;
+  if (remaining.truncated) return pkg;
   const doomedIds = new Set([...thread].filter((id) => !remaining.marked.has(id)));
 
   const paraIds = new Set<string>();
@@ -339,7 +340,8 @@ function applyThreadDeletion(
     next = removed;
   }
 
-  return removeKeyedParaIdEntries(next, paraIds, owner, budget);
+  const cleaned = removeKeyedParaIdEntries(next, paraIds, owner, budget);
+  return budget.truncated ? pkg : cleaned;
 }
 
 /**
@@ -358,7 +360,9 @@ export function deleteCommentThread(
   commentId: string,
   owner?: CommentDeletionOwner
 ): OoxmlPackage | null {
-  return applyThreadDeletion(pkg, commentId, owner ?? defaultOwner(pkg), createCommentScanBudget());
+  const budget = commentDeletionBudget(pkg);
+  const result = applyThreadDeletion(pkg, commentId, owner ?? defaultOwner(pkg), budget);
+  return budget.truncated ? null : result;
 }
 
 /**
@@ -370,7 +374,7 @@ export function deleteCommentThreadInStory(
   commentId: string,
   owner: CommentDeletionOwner
 ): OoxmlPackage | null {
-  return applyThreadDeletion(pkg, commentId, owner, createCommentScanBudget());
+  return deleteCommentThread(pkg, commentId, owner);
 }
 
 /** Test seam: inject a scan budget. Not re-exported from the package barrel. */
@@ -405,13 +409,9 @@ export function deleteCommentReply(
   parentCommentId: string,
   owner: CommentDeletionOwner
 ): OoxmlPackage | null {
-  return deleteCommentReplyWithBudget(
-    pkg,
-    commentId,
-    parentCommentId,
-    owner,
-    createCommentScanBudget()
-  );
+  const budget = commentDeletionBudget(pkg);
+  const result = deleteCommentReplyWithBudget(pkg, commentId, parentCommentId, owner, budget);
+  return budget.truncated ? null : result;
 }
 
 /** Test seam: inject a scan budget. Not re-exported from the package barrel. */

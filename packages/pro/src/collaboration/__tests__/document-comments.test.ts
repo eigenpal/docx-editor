@@ -546,6 +546,34 @@ describe('resolving a comment replicates commentsExtended.xml, not only the stor
 });
 
 describe('deleting a comment replicates the stripped markers and the comments part', () => {
+  test('large-document deletion survives concurrent text, reconnect, undo, redo, and reopen', async () => {
+    const bytes = documentBytes(
+      '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>' + '<w:p><w:r><w:t>x</w:t></w:r></w:p>'.repeat(12_500)
+    );
+    const { alice, bob } = await pair(bytes);
+    const commentId = addCommentOn(alice, 0, 'remark', 'Alice');
+    const wire = wires.get(bob)!;
+    wire.pause();
+    expect(deletePackageComments(alice.store, [{ commentId }])).toBe(true);
+    alice.port.flushPendingJournals();
+    apply(bob, [{ op: 'insertText', paragraphId: paragraphIdAt(bob, 0), offset: 5, text: '!' }]);
+    wire.resume();
+    alice.port.flushPendingJournals();
+    bob.port.flushPendingJournals();
+    expectConverged(alice, bob);
+    expect(commentTextOf(packageOf(bob), commentId)).toBeNull();
+    expect(findText(packageOf(bob), 'Alpha!').value).toBe('Alpha!');
+    expect(alice.room.session.undo()).toBe(true);
+    expectCommentOnPeer(bob, commentId, 'remark');
+    expectConverged(alice, bob);
+    expect(alice.room.session.redo()).toBe(true);
+    expect(commentTextOf(packageOf(bob), commentId)).toBeNull();
+    expectConverged(alice, bob);
+    const joined = await joinPeer(alice, 'carol');
+    expect(commentTextOf(packageOf(joined), commentId)).toBeNull();
+    expectConverged(alice, joined);
+  }, 30_000);
+
   test('deleting a thread removes markers and the comment record on the peer', async () => {
     const { alice, bob } = await pair(EMPTY);
     const commentId = addCommentOn(alice, 0, 'alice remark', 'Alice');

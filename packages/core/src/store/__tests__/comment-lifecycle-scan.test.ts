@@ -14,6 +14,7 @@ import {
 import {
   cascadeEmptiedComments,
   deleteCommentReply,
+  deleteCommentReplyWithBudget,
   deleteCommentThread,
   deleteCommentThreadInStory,
   deleteCommentThreadWithBudget,
@@ -42,13 +43,41 @@ import {
 } from './comment-lifecycle-test-support.ts';
 
 describe('comment deletion scans fail closed and stay owner-scoped', () => {
-  test('a marker behind more than 512 padding parts preserves comments.xml', () => {
+  test('every truncation point preserves markers, records, and extension metadata together', () => {
+    const pkg = loadNestedReplyComments();
+    let completed = false;
+    for (let limit = 0; limit <= 256; limit += 1) {
+      const budget = createCommentScanBudget(limit);
+      const result = deleteCommentThreadWithBudget(pkg, '1', undefined, budget);
+      if (budget.truncated) {
+        expect(result).toBe(pkg);
+      } else {
+        expect(result).not.toBeNull();
+        expect(commentIds(result!, pkg.mainDocumentPart)).toEqual([]);
+        expect(keyedLocalNames(result!.parts.get('/word/commentsExtended.xml'))).toEqual([]);
+        expect(keyedLocalNames(result!.parts.get('/word/commentsIds.xml'))).toEqual([]);
+        completed = true;
+      }
+    }
+    expect(completed).toBe(true);
+  });
+
+  test('production deletion scans all admitted parts', () => {
+    const pkg = prependXmlPadding(loadUniqueBodyComment(), MAX_COMMENT_SCAN_PARTS);
+    const result = deleteCommentThread(pkg, '1');
+    expect(result).not.toBeNull();
+    expect(markersFor(result!.parts.get(pkg.mainDocumentPart)!, '1')).toEqual([]);
+    expect(commentIds(result!, pkg.mainDocumentPart)).toEqual([]);
+  });
+
+  test('part-budget exhaustion preserves the whole thread', () => {
     const base = loadUniqueBodyComment();
     const pkg = prependXmlPadding(base, MAX_COMMENT_SCAN_PARTS);
     const main = pkg.mainDocumentPart;
-    const stripped = deleteCommentThread(pkg, '1');
+    const stripped = deleteCommentThreadWithBudget(pkg, '1', undefined, createCommentScanBudget());
     if (stripped === null) throw new Error('deletion refused');
-    expect(markersFor(stripped.parts.get(main)!, '1')).toEqual([]);
+    expect(stripped).toBe(pkg);
+    expect(markersFor(stripped.parts.get(main)!, '1')).toHaveLength(3);
     expect(textOf(stripped.parts.get('/word/comments.xml')!.root)).toContain('only');
   });
 
@@ -169,11 +198,38 @@ function paraIdParentOf(pkg: OoxmlPackage, paraId: string): string | undefined {
 }
 
 describe('reply deletion is atomic under truncation and reparents when complete', () => {
+  test('large stories retain nested descendants when deleting one reply', () => {
+    const base = loadNestedReplyComments();
+    const main = base.parts.get(base.mainDocumentPart)!;
+    const parsed = readOoxmlPart(
+      serializeOoxmlPart(main).replace(
+        '</w:body>',
+        '<w:p><w:r><w:t>x</w:t></w:r></w:p>'.repeat(12_500) + '</w:body>'
+      ),
+      { name: main.name, contentType: main.contentType }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const pkg = withPart(base, parsed.part);
+    const result = deleteCommentReply(pkg, '2', '1', { storyPartName: main.name });
+    expect(result).not.toBeNull();
+    expect(commentIds(result!, main.name)).toEqual(['1', '4']);
+    expect(markersFor(result!.parts.get(main.name)!, '2')).toEqual([]);
+    expect(parentIdOf(result!, '4')).toBe('1');
+    expect(paraIdParentOf(result!, '44444444')).toBe('11111111');
+    expect(commentIds(pkg, main.name)).toEqual(['1', '2', '4']);
+  });
+
   test('remaining-marker overflow leaves the nested thread untouched', () => {
     const base = loadNestedReplyComments();
     const pkg = prependXmlPadding(base, MAX_COMMENT_SCAN_PARTS);
     const main = pkg.mainDocumentPart;
-    const result = deleteCommentReply(pkg, '2', '1', { storyPartName: main });
+    const result = deleteCommentReplyWithBudget(
+      pkg,
+      '2',
+      '1',
+      { storyPartName: main },
+      createCommentScanBudget()
+    );
     if (result === null) throw new Error('deletion refused');
     expect(result).toBe(pkg);
     expect(commentIds(result, main)).toEqual(['1', '2', '4']);
@@ -240,6 +296,23 @@ describe('reply deletion is atomic under truncation and reparents when complete'
 });
 
 describe('walkCharged depth overflow is fail-closed', () => {
+  test('production deletions return a refusal when the depth guard stops the scan', () => {
+    const base = loadNestedReplyComments();
+    const main = base.parts.get(base.mainDocumentPart)!;
+    const parsed = readOoxmlPart(
+      serializeOoxmlPart(main)
+        .replace('<w:body>', '<w:body>' + '<w:customXml>'.repeat(65))
+        .replace('</w:body>', '</w:customXml>'.repeat(65) + '</w:body>'),
+      { name: main.name, contentType: main.contentType }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const pkg = withPart(base, parsed.part);
+    expect(deleteCommentThread(pkg, '1')).toBeNull();
+    expect(deleteCommentReply(pkg, '2', '1', { storyPartName: main.name })).toBeNull();
+    expect(commentIds(pkg, main.name)).toEqual(['1', '2', '4']);
+    expect(markersFor(pkg.parts.get(main.name)!, '1')).toHaveLength(3);
+  });
+
   function nest(depth: number): ReturnType<typeof readOoxmlPart> {
     const xml =
       `<w:document xmlns:w="${W}"><w:body>` +
