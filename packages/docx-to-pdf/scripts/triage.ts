@@ -71,6 +71,7 @@ export const HINTS: Readonly<Record<string, string>> = {
   drawing: 'The drawing kind or image format in the message is not painted (charts, TIFF, EMF).',
   textbox: 'A textbox story Core did not lay out; the reason is in the message.',
   'equation-fallback': 'Core laid an equation out as fallback text; a Core layout gap.',
+  'equation-unsupported': 'An equation node kind the PDF writer does not paint; a writer gap.',
   'cell-text-direction': 'A cell text direction other than btLr.',
   'underline-metrics': 'The face has no post metrics; the underline used a default (information).',
   'image-effects': 'Brightness, contrast, grayscale or bilevel adjustments are not encoded.',
