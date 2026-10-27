@@ -81,6 +81,13 @@ export function exactTerminalBorderPt(row: SemanticTableRow, deps: TableFlowDeps
   return deps.exactTerminalBorder?.row === row ? deps.exactTerminalBorder.widthPt : 0;
 }
 
+// The room the terminal rule needs when deciding whether the row starts here. A row that does
+// not fit with its rule moves to the next page. At a page start (or below repeated headers
+// only) moving cannot help, so the row stays and its rule crosses the bottom margin.
+export function admissionExtentPt(row: SemanticTableRow, deps: TableFlowDeps): number {
+  return deps.rowAtPageStart ? 0 : exactTerminalBorderPt(row, deps);
+}
+
 export function endRowInsets(
   cell: SemanticTableCell,
   deps: TableFlowDeps,

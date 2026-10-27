@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { initialCellCursors, layoutRowFragmentBounded } from '../semantic-table-layout.ts';
@@ -35,7 +35,7 @@ for (const [name, options] of [
     const structure = readTableStructure(tableNode(part.root), 464, 0);
     if (!structure) throw new Error('The table is missing');
     const original = deps();
-    const actual = tableTerminalDeps(structure, original, undefined, false);
+    const actual = tableTerminalDeps(structure, original);
     expect(actual.exactTerminalBorder?.widthPt).toBe(options.width ?? 1.5);
     const result = layoutSemanticDocument(part, 0, { measurer: original.measurer });
     const tables = result.pages.flatMap((page) =>
@@ -61,7 +61,7 @@ for (const align of ['center', 'bottom'] as const) {
       const structure = readTableStructure(tableNode(part.root), 464, 0);
       if (!structure) throw new Error('The table is missing');
       const row = structure.rows.at(-1)!;
-      const actual = tableTerminalDeps(structure, deps(), undefined, false);
+      const actual = tableTerminalDeps(structure, deps());
       const placed = layoutRowFragmentBounded(
         row,
         structure.columnWidthsPt,
@@ -87,25 +87,129 @@ for (const align of ['center', 'bottom'] as const) {
   }
 }
 
-test('a fitting authored last row keeps its page when only the closing rule overflows', () => {
+test('an authored last row that fits only without its closing rule moves to the next page', () => {
   const part = exactTerminalFixture({ pageHeight: 1800, align: 'bottom' });
   const source = serializeOoxmlPart(part);
   const result = layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer(5, 12) });
-  const first = result.pages[0]!;
-  const table = first.fragments.find((fragment) => fragment.kind === 'table');
-  if (!table || table.kind !== 'table') throw new Error('The table is missing');
-  expect(table.rows).toHaveLength(2);
-  const last = table.rows.at(-1)!;
-  const authoredBottom = last.box.y + 19.85;
-  expect(authoredBottom).toBeLessThanOrEqual(54.001);
-  expect(last.box.y + last.box.height).toBeCloseTo(authoredBottom + 1.5, 6);
-  expect(last.box.y + last.box.height).toBeGreaterThan(54);
-  expect(
-    result.pages[1]!.fragments.some(
+  const [first, second] = tablesOnPages(result);
+  // 14pt + 19.85pt + 19.85pt = 53.7pt fits the 54pt band. The 1.5pt rule does not.
+  expect(first!.page).toBe(0);
+  expect(first!.table.rows).toHaveLength(1);
+  expect(second!.page).toBe(1);
+  const last = second!.table.rows.at(-1)!;
+  expect(last.box.y).toBe(0);
+  expect(last.box.height).toBeCloseTo(19.85 + 1.5, 6);
+  expect(pageOf(result, 'AFTER')).toBe(1);
+  expect(serializeOoxmlPart(part)).toBe(source);
+});
+
+// Letter page, 1in margins: a 648pt band. A 12pt line and one 19.85pt row come first.
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const line = (text: string) =>
+  `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+function letterTable(rows: readonly number[], options: { lead?: boolean; header?: boolean } = {}) {
+  const side = (name: string, size: number) => `<w:${name} w:val="single" w:sz="${size}"/>`;
+  const borders = ['top', 'bottom', 'left', 'right'].map((name) => side(name, 12)).join('');
+  const margins = ['top', 'bottom', 'left', 'right']
+    .map((name) => `<w:${name} w:w="0" w:type="dxa"/>`)
+    .join('');
+  let table =
+    `<w:tbl><w:tblPr><w:tblW w:w="3600" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
+    `<w:tblBorders>${borders}${side('insideH', 4)}${side('insideV', 4)}</w:tblBorders>` +
+    `<w:tblCellMar>${margins}</w:tblCellMar></w:tblPr>` +
+    '<w:tblGrid><w:gridCol w:w="1800"/><w:gridCol w:w="1800"/></w:tblGrid>';
+  rows.forEach((twips, index) => {
+    const header = options.header && index === 0 ? '<w:tblHeader/>' : '';
+    table += `<w:tr><w:trPr><w:cantSplit/>${header}<w:trHeight w:val="${twips}" w:hRule="exact"/></w:trPr>`;
+    for (const column of [0, 1])
+      table += `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>${line(`R${index}C${column}`)}</w:tc>`;
+    table += '</w:tr>';
+  });
+  const section =
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" ' +
+    'w:bottom="1440" w:left="1440" w:header="0" w:footer="0"/></w:sectPr>';
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${options.lead === false ? '' : line('LEAD')}` +
+      `${table}</w:tbl>${line('AFTER')}${section}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  return read.part;
+}
+
+function tablesOnPages(result: ReturnType<typeof layoutSemanticDocument>) {
+  return result.pages.flatMap((page, index) =>
+    page.fragments.flatMap((table) => (table.kind === 'table' ? [{ page: index, table }] : []))
+  );
+}
+
+function pageOf(result: ReturnType<typeof layoutSemanticDocument>, text: string): number {
+  return result.pages.findIndex((page) =>
+    page.fragments.some(
       (fragment) =>
         fragment.kind === 'paragraph' &&
-        fragment.lines.some((line) => line.spans.some((span) => span.text === 'AFTER'))
+        fragment.lines.some((row) => row.spans.some((span) => span.text === text))
     )
-  ).toBe(true);
+  );
+}
+
+const layOut = (part: ReturnType<typeof letterTable>) =>
+  layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer(5, 12) });
+
+for (const [authoredBottom, movesPt] of [
+  [646.5, false],
+  [647, true],
+  [647.5, true],
+  [648, true],
+] as const) {
+  test(`a last row with its authored bottom at ${authoredBottom}pt ${movesPt ? 'moves' : 'stays'}`, () => {
+    const lastTwips = Math.round(authoredBottom * 20) - 240 - 397;
+    const part = letterTable([397, lastTwips]);
+    const source = serializeOoxmlPart(part);
+    const result = layOut(part);
+    const placed = tablesOnPages(result);
+    const lastPage = placed.at(-1)!;
+    const last = lastPage.table.rows.at(-1)!;
+    expect(last.box.height).toBeCloseTo(lastTwips / 20 + 1.5, 6);
+    if (movesPt) {
+      // The row with its rule ends past 648pt, so it starts page 2 instead.
+      expect(placed.map((entry) => entry.table.rows.length)).toEqual([1, 1]);
+      expect(lastPage.page).toBe(1);
+      expect(last.box.y).toBe(0);
+      expect(pageOf(result, 'AFTER')).toBe(1);
+    } else {
+      // The row and its rule end exactly at the bottom margin.
+      expect(placed).toHaveLength(1);
+      expect(last.box.y + last.box.height).toBeCloseTo(648, 6);
+      expect(pageOf(result, 'AFTER')).toBe(1);
+    }
+    expect(serializeOoxmlPart(part)).toBe(source);
+  });
+}
+
+test('a last row at the top of a page stays and its rule crosses the bottom margin', () => {
+  const result = layOut(letterTable([12950], { lead: false }));
+  const placed = tablesOnPages(result);
+  expect(placed).toHaveLength(1);
+  const last = placed[0]!.table.rows[0]!;
+  expect(last.box.y).toBe(0);
+  // Authored 647.5pt; moving cannot give the 1.5pt rule more room.
+  expect(last.box.y + last.box.height).toBeCloseTo(649, 6);
+  expect(pageOf(result, 'AFTER')).toBe(1);
+});
+
+test('a last row directly below repeated header rows stays on its continuation page', () => {
+  const part = letterTable([397, 12000, 12553], { header: true });
+  const source = serializeOoxmlPart(part);
+  const result = layOut(part);
+  const placed = tablesOnPages(result);
+  // Page 1: lead, header, and the 600pt row. Page 2: the repeated header and the last row.
+  expect(placed.map((entry) => entry.page)).toEqual([0, 1]);
+  const [header, last] = placed[1]!.table.rows;
+  expect(header!.isHeaderRepeat).toBe(true);
+  expect(last!.box.y).toBeCloseTo(19.85, 6);
+  // Authored bottom 647.5pt: the row stays below the headers and its rule ends at 649pt.
+  expect(last!.box.y + last!.box.height).toBeCloseTo(649, 6);
+  expect(pageOf(result, 'AFTER')).toBe(2);
   expect(serializeOoxmlPart(part)).toBe(source);
 });

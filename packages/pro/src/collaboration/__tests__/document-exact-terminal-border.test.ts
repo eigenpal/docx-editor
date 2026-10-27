@@ -47,7 +47,9 @@ function documentBody(options: ReferenceCase) {
 
 function geometry(editor: Editor, options: ReferenceCase) {
   const layout = editor.surface!.layout();
-  const table = layout.pages.flatMap((p) => p.fragments).find((f) => f.kind === 'table');
+  const tables = layout.pages.map((p) => p.fragments.filter((f) => f.kind === 'table'));
+  // The fragment that holds the terminal row is the table's last one.
+  const table = tables.flat().at(-1);
   if (!table || table.kind !== 'table') throw new Error('The table is missing');
   expect(table.box.height).toBeCloseTo(39.7 + options.width, 6);
   expect(table.rows).toHaveLength(2);
@@ -61,9 +63,14 @@ function geometry(editor: Editor, options: ReferenceCase) {
       (f) => f.kind === 'paragraph' && f.lines.some((l) => l.spans.some((s) => s.text === 'AFTER'))
     );
   if (options.tightPage) {
-    expect(last.box.y + 19.85).toBeLessThanOrEqual(52.001);
-    expect(table.box.y + table.box.height).toBeGreaterThan(52);
-    expect(layout.pages[1]!.fragments).toContain(after!);
+    // 12pt + 19.85pt + 19.85pt fits the 52pt band only without the 1.5pt rule. The terminal
+    // row moves; the authored header row stays on page 1 and repeats above it on page 2.
+    const first = tables[0]![0]!;
+    expect(first.kind === 'table' && first.rows.map((r) => r.isHeaderRow)).toEqual([true]);
+    expect(tables[1]).toEqual([table]);
+    expect(table.rows[0]!.isHeaderRepeat).toBe(true);
+    expect(table.box.y + table.box.height).toBeLessThanOrEqual(52.001);
+    expect(layout.pages[2]!.fragments).toContain(after!);
   } else expect(after?.box.y).toBeCloseTo(table.box.y + table.box.height, 6);
   return {
     box: table.box,

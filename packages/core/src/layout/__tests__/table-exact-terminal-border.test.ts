@@ -90,7 +90,7 @@ for (const [name, options] of [
     const { part, table } = structure(options);
     const before = serializeOoxmlPart(part);
     const original = deps();
-    expect(tableTerminalDeps(table, original, undefined, false)).toBe(original);
+    expect(tableTerminalDeps(table, original)).toBe(original);
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 }
@@ -172,10 +172,10 @@ for (const refused of [false, true])
       },
     };
     const original = deps();
-    const first = tableTerminalDeps(watched, original, undefined, false);
+    const first = tableTerminalDeps(watched, original);
     expect(reads).toBeGreaterThan(0);
     reads = 0;
-    const second = tableTerminalDeps(watched, original, undefined, false);
+    const second = tableTerminalDeps(watched, original);
     expect(reads).toBe(0);
     expect(second.exactTerminalBorder).toBe(first.exactTerminalBorder);
     expect(table.rows[1]!.cells[0]!.vMergeContinue).toBe(!refused);
@@ -193,6 +193,6 @@ test('nested and text-box dependencies refuse before scanning the structure', ()
     { ...deps(), tableNestingOffset: 1 as const },
     { ...deps(), textBoxStory: true as const },
   ]) {
-    expect(tableTerminalDeps(watched, original, undefined, false)).toBe(original);
+    expect(tableTerminalDeps(watched, original)).toBe(original);
   }
 });
