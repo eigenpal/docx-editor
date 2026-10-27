@@ -204,10 +204,10 @@ function pick<T>(section: T | undefined, document: T | undefined, fallback: T): 
 }
 
 /**
- * A section's note number format. Word numbers a section that authors note properties of its own in the default
- * format unless that section names one: the document-wide format (settings.xml) applies only to a section with none.
- * A document whose settings say `chicago` for a title-page star note, while the body's sectPr states only
- * `numRestart`, prints the body's notes 1, 2, 3 in Word, not ‡, §, **.
+ * A section's note number format. A section that authors note properties without `w:numFmt` uses the
+ * default format, not the document-wide one from settings.xml. A section with no note properties of its
+ * own falls back to the document-wide format. So a document whose settings say `chicago` for a title-page
+ * star note, while the body's sectPr states only `numRestart`, numbers the body's notes 1, 2, 3.
  */
 function sectionFormat(
   section: AuthoredNoteProperties | undefined,

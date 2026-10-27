@@ -17,7 +17,7 @@ describe('a section note number format', () => {
     );
   });
 
-  it('is the document format for a section with no note properties of its own', () => {
+  it('falls back to the document format for a section with no note properties of its own', () => {
     expect(resolveFootnoteProperties(undefined, { numFmt: 'chicago' }).numFmt).toBe('chicago');
     expect(resolveEndnoteProperties(undefined, undefined).numFmt).toBe('lowerRoman');
   });
