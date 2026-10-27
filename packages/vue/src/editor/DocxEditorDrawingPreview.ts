@@ -63,9 +63,19 @@ export function useDrawingPreview(
   element: MaybeRefOrGetter<UnsupportedElement>,
   render: DrawingPreviewRender
 ): UseDrawingPreviewReturn {
+  const { view: _view, ...preview } = useDrawingPreviewView(element, render);
+  return preview;
+}
+
+/** The composable, plus the preview as a union keyed on `status` for preview content. */
+function useDrawingPreviewView(
+  element: MaybeRefOrGetter<UnsupportedElement>,
+  render: DrawingPreviewRender
+): UseDrawingPreviewReturn & { readonly view: () => DrawingPreviewView } {
   const editor = useDocxEditor();
   const state = shallowRef<DrawingPreviewState>(IDLE);
   let controller: DrawingPreviewController | null = null;
+  const retry = () => controller?.retry(toValue(element), render);
   const read = () => {
     const current = toValue(element);
     const next = controller?.state(current) ?? IDLE;
@@ -86,10 +96,11 @@ export function useDrawingPreview(
     { immediate: true }
   );
   return {
+    view: () => ({ ...state.value, retry }),
     status: computed(() => state.value.status),
     url: computed(() => state.value.url),
     error: computed(() => state.value.error),
-    retry: () => controller?.retry(toValue(element), render),
+    retry,
   };
 }
 
@@ -106,7 +117,7 @@ const DrawingPreviewOccurrence = defineComponent({
     },
   },
   setup(props) {
-    const preview = useDrawingPreview(
+    const preview = useDrawingPreviewView(
       () => props.host.unsupported,
       (request) => props.renderPreview(request)
     );
@@ -119,15 +130,7 @@ const DrawingPreviewOccurrence = defineComponent({
         // Empty content keeps the editor's own drawing, so the default waits for an image.
         render: () => {
           if (props.content) {
-            return props.content({
-              element,
-              preview: {
-                status: preview.status.value,
-                url,
-                error: preview.error.value,
-                retry: preview.retry,
-              },
-            });
+            return props.content({ element, preview: preview.view() });
           }
           return url === null
             ? null

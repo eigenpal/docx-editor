@@ -1514,7 +1514,6 @@ export interface DrawingSupportEntry {
 
 // @public
 export interface DrawingSupportIssue {
-    // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
     readonly detail: string;
     // (undocumented)

@@ -54,7 +54,8 @@ export type DrawingPreviewError =
 /**
  * The preview for one occurrence.
  *
- * - `idle`: no request yet. Preview components and hooks start the request right away.
+ * - `idle`: no request yet. Preview components and hooks start the request as soon as the
+ *   drawing's page is shown.
  * - `loading`: a request is running or waiting for a free slot. `url` holds the previous
  *   image of this drawing, if any.
  * - `ready`: `url` holds the image.
@@ -67,20 +68,24 @@ export type DrawingPreviewError =
  *
  * @public
  */
-export interface DrawingPreviewState {
-  /** `idle`, `loading`, `ready`, `unavailable`, or `error`. */
-  readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
-  /** The image URL, or the previous image of this drawing while a new one loads. */
-  readonly url: string | null;
-  /** Why the preview failed or is unavailable, or `null`. */
-  readonly error: DrawingPreviewError | null;
-}
+export type DrawingPreviewState =
+  | { readonly status: 'idle'; readonly url: null; readonly error: null }
+  | { readonly status: 'loading'; readonly url: string | null; readonly error: null }
+  | { readonly status: 'ready'; readonly url: string; readonly error: null }
+  | {
+      readonly status: 'unavailable';
+      readonly url: null;
+      readonly error: DrawingPreviewError | null;
+    }
+  | { readonly status: 'error'; readonly url: string | null; readonly error: DrawingPreviewError };
 
-/** A preview with its retry action, as preview components pass it to your content. @public */
-export interface DrawingPreviewView extends DrawingPreviewState {
-  /** Request the preview again after `error` or `unavailable`. */
-  retry(): void;
-}
+/**
+ * A preview with its retry action, as preview components pass it to your content. `retry()`
+ * requests again after `error` or `unavailable`.
+ *
+ * @public
+ */
+export type DrawingPreviewView = DrawingPreviewState & { readonly retry: () => void };
 
 /** One preview cache for an editor. Adapters read it through their hook. @public */
 export interface DrawingPreviewController {

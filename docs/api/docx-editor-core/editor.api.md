@@ -1616,16 +1616,32 @@ export interface DrawingPreviewRequest {
 }
 
 // @public
-export interface DrawingPreviewState {
-    readonly error: DrawingPreviewError | null;
-    readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+export type DrawingPreviewState = {
+    readonly error: null;
+    readonly status: 'idle';
+    readonly url: null;
+} | {
+    readonly error: null;
+    readonly status: 'loading';
     readonly url: string | null;
-}
+} | {
+    readonly error: null;
+    readonly status: 'ready';
+    readonly url: string;
+} | {
+    readonly error: DrawingPreviewError | null;
+    readonly status: 'unavailable';
+    readonly url: null;
+} | {
+    readonly error: DrawingPreviewError;
+    readonly status: 'error';
+    readonly url: string | null;
+};
 
 // @public
-export interface DrawingPreviewView extends DrawingPreviewState {
-    retry(): void;
-}
+export type DrawingPreviewView = DrawingPreviewState & {
+    readonly retry: () => void;
+};
 
 // @public
 export type DrawingSelectionIntent = {
@@ -1642,7 +1658,6 @@ export type DrawingSupport = 'native' | 'partial' | 'unrendered';
 
 // @public
 export interface DrawingSupportIssue {
-    // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
     readonly detail: string;
     // (undocumented)
@@ -4420,6 +4435,7 @@ export interface UnsupportedElement {
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly graphicKind?: DrawingGraphicKind;
+    readonly hasPreviewArea?: boolean;
     readonly label: string;
     // (undocumented)
     readonly localName: string;

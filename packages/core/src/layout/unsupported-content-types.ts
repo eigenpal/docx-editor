@@ -17,10 +17,16 @@ import type { LayoutBox } from './semantic-records.ts';
  */
 export interface UnsupportedElement {
   /**
-   * `drawing` for a drawing that the editor renders, offered only to rules with
+   * `drawing` for a drawing that the editor renders itself, as opposed to a placeholder that
+   * stands in for content it cannot render. Offered only to rules with
    * `includeRenderedDrawings`. Absent for placeholders.
    */
   readonly presentation?: 'drawing';
+  /**
+   * True for every drawing occurrence: the editor offers it a preview area. It mirrors the
+   * field of an `inspectDrawingSupport` entry, so `drawingNeedsPreview` reads both alike.
+   */
+  readonly hasPreviewArea?: boolean;
   /**
    * How completely the editor shows this drawing: `native`, `partial`, or `unrendered`.
    * A drawing placeholder is `unrendered`. Absent for content that is not a drawing.
@@ -29,9 +35,13 @@ export interface UnsupportedElement {
   /**
    * The features of this drawing that the editor does not show as authored, read from its
    * own XML. Chart and diagram parts are not read, so an empty list does not prove fidelity.
+   * Never holds `unplaced-drawing` or `projection-diagnostic`, which only a report lists.
    */
   readonly drawingIssues?: readonly DrawingSupportIssue[];
-  /** The graphic a drawing holds, such as `picture`, `chart`, or `diagram`, from its source. */
+  /**
+   * The graphic a drawing holds, such as `picture`, `chart`, or `diagram`, from its source.
+   * `textbox` names any DrawingML shape, with or without text, after its markup.
+   */
   readonly graphicKind?: DrawingGraphicKind;
   /** The node the occurrence comes from, in the editor's current document. */
   readonly nodeId: string;

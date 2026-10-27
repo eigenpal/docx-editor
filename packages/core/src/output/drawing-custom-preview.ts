@@ -45,6 +45,7 @@ export function customDrawingPreview(
       label: drawing.accessibility.label ?? '',
       drawing,
       drawingIssues: issues,
+      hasPreviewArea: true,
       support: drawingSupport(
         drawing.chart?.shownAs === 'fallback' ? 'fallback' : 'rendered',
         issues

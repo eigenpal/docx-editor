@@ -409,6 +409,7 @@ function paintPlaceholderCard(
           }
         : {}),
       support: 'unrendered',
+      hasPreviewArea: true,
       placement: 'inline',
       bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,

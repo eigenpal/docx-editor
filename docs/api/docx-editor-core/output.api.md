@@ -39,7 +39,6 @@ export type DrawingSupport = 'native' | 'partial' | 'unrendered';
 
 // @public
 export interface DrawingSupportIssue {
-    // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
     readonly detail: string;
     // (undocumented)
@@ -189,6 +188,7 @@ export interface UnsupportedElement {
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly graphicKind?: DrawingGraphicKind;
+    readonly hasPreviewArea?: boolean;
     readonly label: string;
     // (undocumented)
     readonly localName: string;

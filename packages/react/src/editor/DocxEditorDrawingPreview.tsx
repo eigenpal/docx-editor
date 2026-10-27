@@ -23,7 +23,7 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 export interface UseDrawingPreviewReturn {
   /** `idle`, `loading`, `ready`, `unavailable`, or `error`. */
   readonly status: DrawingPreviewState['status'];
-  /** The image URL, or the previous image while a changed drawing loads. */
+  /** The image URL when `ready`, or the previous image while a changed drawing loads. */
   readonly url: string | null;
   /** Why the preview failed (`error`) or is unavailable (`unavailable`), or `null`. */
   readonly error: DrawingPreviewState['error'];
@@ -56,6 +56,14 @@ export function useDrawingPreview(
   element: UnsupportedElement,
   render: DrawingPreviewRender
 ): UseDrawingPreviewReturn {
+  return useDrawingPreviewView(element, render);
+}
+
+/** The same preview as a union keyed on `status`, for preview content. */
+function useDrawingPreviewView(
+  element: UnsupportedElement,
+  render: DrawingPreviewRender
+): DrawingPreviewView {
   const editor = useDocxEditor();
   const controller = editor ? drawingPreviewController(editor) : null;
   const renderRef = useRef(render);
@@ -82,7 +90,7 @@ export function useDrawingPreview(
     () => controller?.retry(element, latestRender),
     [controller, element, latestRender]
   );
-  return useMemo(() => ({ ...state, retry }), [state, retry]);
+  return useMemo<DrawingPreviewView>(() => ({ ...state, retry }), [state, retry]);
 }
 
 /** Props for {@link DocxEditorDrawingPreview}. @public */
@@ -113,7 +121,7 @@ function DrawingPreviewOccurrence({
   children: DocxEditorDrawingPreviewProps['children'];
 }) {
   const element = host.unsupported;
-  const preview = useDrawingPreview(element, render);
+  const preview = useDrawingPreviewView(element, render);
   const label = element.drawing?.accessibility.label ?? element.label;
   // Empty content keeps the editor's own drawing, so the default waits for an image.
   const content = children ? (

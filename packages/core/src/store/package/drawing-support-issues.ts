@@ -20,6 +20,7 @@ import { DRAWINGML_MAIN_NAMESPACE_URI as A, type OoxmlElement } from './ooxml-tr
  * @public
  */
 export interface DrawingSupportIssue {
+  /** The kind of limitation. The list in this type's description explains each code. */
   readonly code:
     | 'unsupported-effect'
     | 'renderer-required'
@@ -42,7 +43,10 @@ export interface DrawingSupportIssue {
  * - `native`: the editor renders the drawing and found no unsupported feature in its source.
  * - `partial`: the editor renders the drawing, but without some features, or it shows a saved
  *   fallback. The issue list names the features.
- * - `unrendered`: the editor shows a placeholder or does not show the drawing.
+ * - `unrendered`: the editor shows a placeholder, or the drawing has no layout position.
+ *
+ * A drawing that the document itself hides is `native` or `partial`: the editor shows it as
+ * authored, which is not at all.
  *
  * Charts and SmartArt diagrams that the editor draws report `native`, because the check does
  * not read their chart or diagram parts.
