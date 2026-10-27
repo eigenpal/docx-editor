@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A distributed line with nothing to stretch stays at its start edge.",
+  "after": "A distributed line with nothing to stretch, such as a single word, is centered. A line with a tab or a float advance keeps its reserved positions.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/distributed-last-line.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "distributed-single-word",
+  "migration": null
+}

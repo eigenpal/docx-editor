@@ -60,12 +60,11 @@ import {
   withDrawingContext,
 } from './layout-cache.ts';
 import {
-  alignSpans,
   lineAlignmentMeasure,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './paragraph-flow.ts';
-import { lineAlignOffset, setsLikeLastLine } from './paragraph-alignment.ts';
+import { alignBodyLineSpans, lineAlignOffset } from './paragraph-alignment.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -2675,18 +2674,16 @@ function* layoutBlocksPass(
         placedDrawings,
         rtl,
         (spans) =>
-          alignSpans(
+          alignBodyLineSpans(
             spans,
             measurer,
-            measure.indent,
-            measure.available,
+            measure,
             alignment,
-            setsLikeLastLine(entry.props, pendingLine, isLastLine, styleCascade),
-            alignment === 'center' || alignment === 'right' ? measure.used : undefined,
-            rtl,
-            false,
-            pendingLine.spaceShrink === true,
-            measure.passages
+            entry.props,
+            pendingLine,
+            isLastLine,
+            styleCascade,
+            rtl
           ),
         (aligned) =>
           lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)

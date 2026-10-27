@@ -11,6 +11,13 @@ The layout engine SHALL stretch the final line of a paragraph with `w:jc` set to
 - **THEN** text fills each passage without crossing the floating object
 - **AND** the source text, formatting, and source positions remain unchanged
 
+#### Scenario: Distributed line has nothing to stretch
+
+- **GIVEN** a distributed paragraph whose line holds a single word or a single character
+- **WHEN** layout aligns that line
+- **THEN** the line is centered in its measure
+- **AND** a justified paragraph with the same line keeps it at its start edge
+
 ### Requirement: Native semantic layout records
 
 The semantic layout engine SHALL produce revision-tagged page, paragraph-fragment, line, and style-span records directly from the committed canonical tree and derived style resources.
