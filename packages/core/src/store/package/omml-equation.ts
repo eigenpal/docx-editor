@@ -65,10 +65,30 @@ export type EquationExpression =
   | {
       readonly kind: 'text';
       readonly value: string;
-      /** Size inherited from uniform default properties that compact replacement preserves. */
+      /**
+       * Authored font size of the run, in points. The source is the `w:sz` value of the
+       * run properties (`w:rPr`), which counts half-points.
+       *
+       * Set only when every run of the equation holds the same default math formatting.
+       * Such an equation has no `format`, so the compact equation editor can replace it and
+       * writes the same run properties back. Otherwise the size is in `format.fontSizePt`.
+       * When neither field is set, the text takes the size of the surrounding text. To read
+       * the size of any text expression, use `format?.fontSizePt ?? fontSizePt`.
+       */
       readonly fontSizePt?: number;
+      /**
+       * Source formatting of the run. Present when the run carries formatting other than
+       * the default math formatting, or when the runs of the equation differ in formatting.
+       * The compact equation editor refuses to replace an equation that contains a text
+       * expression with a `format`, because it cannot write that formatting back.
+       */
       readonly format?: {
         readonly fontFamily?: string;
+        /**
+         * Authored font size of the run, in points. The source is the `w:sz` value of the
+         * run properties (`w:rPr`), which counts half-points. Set when the run has a
+         * `format` and a `w:sz`. The top-level `fontSizePt` is not set in that case.
+         */
         readonly fontSizePt?: number;
         readonly bold?: boolean;
         readonly italic?: boolean;
