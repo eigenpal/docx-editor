@@ -1509,9 +1509,7 @@ export interface DrawingSupportEntry {
 export interface DrawingSupportIssue {
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
     readonly detail: string;
-    // (undocumented)
     readonly localName: string;
-    // (undocumented)
     readonly namespaceUri: string;
     readonly nodeId: string;
 }

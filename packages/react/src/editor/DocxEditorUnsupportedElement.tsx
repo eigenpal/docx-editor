@@ -7,14 +7,16 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
   /**
    * Also offer drawings that render without some features (`element.support` is `partial`),
-   * not only placeholders. Fully supported drawings are never offered.
+   * not only placeholders. Fully supported drawings are never offered, and neither are shapes
+   * whose text the editor edits.
    */
   includePartial?: UnsupportedElementRule['includePartial'];
   /**
    * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
-   * keep what the editor shows: the placeholder, or the partly rendered drawing. It is called
-   * as a function, once for each occurrence, not mounted as a component: put hooks in a child
-   * component that you return. To build a preview DOCX in that component, use
+   * keep what the editor shows: the placeholder, or the partly rendered drawing. A child
+   * component that renders nothing keeps it too, so a component can wait for an image. It is
+   * called as a function, once for each occurrence, not mounted as a component: put hooks in
+   * a child component that you return. To build a preview DOCX in that component, use
    * `drawingPreviewDocx` from `@docx-editor.dev/core/editor`.
    */
   children: (props: { element: UnsupportedElement }) => ReactNode;

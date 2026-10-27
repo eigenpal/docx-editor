@@ -147,6 +147,7 @@ test('stale preview cleanup cannot restore old accessibility on a reused image',
     hosts = next;
   });
   const old = hosts[0]!;
+  old.slot.append(document.createElement('img'));
   old.setCustomized(true);
   clearUnsupportedElement(element);
   element.replaceChildren();
@@ -159,6 +160,7 @@ test('stale preview cleanup cannot restore old accessibility on a reused image',
     hosts = next;
   });
   try {
+    hosts[0]!.slot.append(document.createElement('img'));
     hosts[0]!.setCustomized(true);
     old.setCustomized(false);
     expect(element.getAttribute('role')).toBe('group');

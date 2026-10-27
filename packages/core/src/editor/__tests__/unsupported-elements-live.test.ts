@@ -113,6 +113,7 @@ test('rendered graphics opt into preview slots without changing layout, source, 
     expect(unsupportedElementRuleMatches({}, host.unsupported)).toBe(false);
     expect(unsupportedElementRuleMatches({ includePartial: true }, host.unsupported)).toBe(true);
     expect(host.fallback.hidden).toBe(false);
+    host.slot.append(document.createElement('img'));
     host.setCustomized(true);
     expect(host.fallback.hidden).toBe(true);
     host.setCustomized(false);

@@ -31,7 +31,9 @@ export interface DrawingSupportIssue {
     | 'projection-diagnostic';
   /** The source node with the feature, in the package that was inspected. */
   readonly nodeId: string;
+  /** The namespace of the node with the feature. */
   readonly namespaceUri: string;
+  /** The local name of the node with the feature, such as `blur`. */
   readonly localName: string;
   /** The feature, such as `a:blur` or `mc:Fallback`, or the projection diagnostic code. */
   readonly detail: string;

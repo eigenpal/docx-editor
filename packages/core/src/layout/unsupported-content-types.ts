@@ -37,15 +37,19 @@ export interface UnsupportedElement {
   readonly nodeId: string;
   /** The part that holds it, such as `/word/document.xml` or `/word/header1.xml`. */
   readonly ownerPartName: string;
+  /** The namespace of the source element, such as the WordprocessingML namespace. */
   readonly namespaceUri: string | null;
+  /** The local name of the source element, such as `drawing` or `AlternateContent`. */
   readonly localName: string;
   /**
    * Lossless canonical source. Treat this value as read-only and untrusted. It stays the same
    * object until the content itself changes, so use it as the dependency of work you derive
    * from the content, such as a preview request. A change in a related part only, such as
-   * chart data, an image, or the theme, keeps the same object.
+   * chart data, an image, or the theme, keeps the same object; to catch those too, compare a
+   * hash of the `drawingPreviewDocx` bytes.
    */
   readonly source: OoxmlElement | null;
+  /** `inline` inside a line of text, or `block` between paragraphs. */
   readonly placement: 'inline' | 'block';
   /** The text of the built-in placeholder. */
   readonly label: string;
@@ -66,7 +70,9 @@ export interface UnsupportedElement {
 }
 /** Dimensions reserved before pagination, in document points. @public */
 export interface UnsupportedElementLayout {
+  /** Width in points: finite, positive, and at most 100,000. */
   readonly width: number;
+  /** Height in points: finite, positive, and at most 100,000. */
   readonly height: number;
 }
 /** The first matching registration renders each unsupported element. @public */

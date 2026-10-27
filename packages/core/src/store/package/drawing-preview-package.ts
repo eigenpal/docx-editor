@@ -68,7 +68,8 @@ export type DrawingPreviewPackageResult =
        * False when the size is unknown, such as a legacy VML drawing without a width and height
        * in its style. Then the page has the document's page size and no margins, and the
        * drawing starts at its top left corner: crop the image to the occurrence's `bounds`.
-       * Send this flag to your renderer with the bytes.
+       * Send this flag and the `bounds` width and height to your renderer with the bytes.
+       * Without `bounds`, such as for a report entry, trim the white space instead.
        */
       readonly pageFitsDrawing: boolean;
       /** The package parts copied from the source document, for logging and caching. */

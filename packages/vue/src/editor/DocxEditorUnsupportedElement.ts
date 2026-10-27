@@ -17,7 +17,8 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
   /**
    * Also offer drawings that render without some features (`element.support` is `partial`),
-   * not only placeholders. Fully supported drawings are never offered.
+   * not only placeholders. Fully supported drawings are never offered, and neither are shapes
+   * whose text the editor edits.
    */
   includePartial?: UnsupportedElementRule['includePartial'];
 }
@@ -25,7 +26,8 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
 /**
  * Register a renderer under DocxEditor or DocxEditor.Root.
  * The first mounted matching declaration wins. Prop updates retain its priority.
- * Omit match for a catch-all. Empty slot content keeps what the editor shows. The default slot
+ * Omit match for a catch-all. Empty slot content, or a child component that renders nothing,
+ * keeps what the editor shows. The default slot
  * renders once for each occurrence; put composables in a child component that it renders. To
  * build a preview DOCX in that component, use `drawingPreviewDocx` from
  * `@docx-editor.dev/core/editor`.

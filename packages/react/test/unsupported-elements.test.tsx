@@ -445,3 +445,35 @@ test('rendered drawing previews require explicit opt-in and restore native rende
   await waitFor(() => expect(view.container.querySelector('[data-docx-unsupported]')).toBeNull());
   expect(view.container.querySelector('svg')).not.toBeNull();
 });
+
+test('a child component that renders nothing keeps the editor drawing until it has content', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../core/src/store/__tests__/drawing-support-fixtures.ts');
+  const { DocxEditor } = await import('../src/index.ts');
+  const bytes = previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>'));
+  let finish: () => void = () => {};
+  function LoadingPreview() {
+    const [ready, setReady] = useState(false);
+    useEffect(() => {
+      finish = () => setReady(true);
+    }, []);
+    return ready ? <img alt="Server preview" src="/preview.png" /> : null;
+  }
+  const view = render(
+    <DocxEditor document={bytes} chrome={false}>
+      <DocxEditor.UnsupportedElement includePartial match={(element) => !!element.drawing}>
+        {() => <LoadingPreview />}
+      </DocxEditor.UnsupportedElement>
+    </DocxEditor>
+  );
+  await waitFor(() => expect(view.container.querySelector('.docx-drawing-native')).not.toBeNull());
+  await tick();
+  expect(view.container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(false);
+  expect(view.container.querySelector('[data-docx-customized]')).toBeNull();
+  await act(async () => finish());
+  await waitFor(() => expect(view.queryByAltText('Server preview')).not.toBeNull());
+  await waitFor(() =>
+    expect(view.container.querySelector<HTMLElement>('.docx-drawing-native')!.hidden).toBe(true)
+  );
+  view.unmount();
+});

@@ -93,6 +93,15 @@ function restoreControlFocus(slot: FocusSlot): void {
   }
 }
 
+/** Whether a slot shows anything: an element, or text that is not blank. */
+function slotHasContent(slot: HTMLElement): boolean {
+  for (const node of slot.childNodes) {
+    if (node.nodeType === 1) return true;
+    if (node.nodeType === 3 && node.nodeValue?.trim()) return true;
+  }
+  return false;
+}
+
 /** Register engine-owned DOM without putting document data into HTML attributes. */
 export function markUnsupportedElement(
   element: HTMLElement,
@@ -128,6 +137,44 @@ export function markUnsupportedElement(
   }
   element.append(slot);
   let originalAccessibility: { role: string | null; hidden: string | null } | undefined;
+  // The component asks for the replacement; the slot decides it by showing something. A
+  // component that renders nothing, such as one still waiting for its image, keeps what the
+  // editor shows. Repaints can move an older slot into this host, so read the current one.
+  let requested = false;
+  let observed: HTMLElement | null = null;
+  const currentSlot = () => hostOf(element)?.slot ?? slot;
+  const observer = new element.ownerDocument.defaultView!.MutationObserver(() => apply());
+  const apply = () => {
+    // A stale component cleanup must not change a replacement on reused drawing DOM.
+    if (hostOf(element)?.fallback !== fallback) return;
+    const target = currentSlot();
+    if (observed !== target) {
+      observer.disconnect();
+      observer.observe(target, { childList: true, subtree: true, characterData: true });
+      observed = target;
+    }
+    const custom = requested && slotHasContent(target);
+    fallback.hidden = custom;
+    element.toggleAttribute('data-docx-customized', custom);
+    if (!accessibilityElement) return;
+    if (custom) {
+      originalAccessibility ??= {
+        role: accessibilityElement.getAttribute('role'),
+        hidden: accessibilityElement.getAttribute('aria-hidden'),
+      };
+      accessibilityElement.setAttribute('role', 'group');
+      accessibilityElement.removeAttribute('aria-hidden');
+    } else if (originalAccessibility) {
+      for (const [name, value] of [
+        ['role', originalAccessibility.role],
+        ['aria-hidden', originalAccessibility.hidden],
+      ]) {
+        if (value === null) accessibilityElement.removeAttribute(name!);
+        else accessibilityElement.setAttribute(name!, value!);
+      }
+      originalAccessibility = undefined;
+    }
+  };
   const host: UnsupportedElementHost = {
     key: `unsupported-${nextHost++}`,
     element,
@@ -135,28 +182,9 @@ export function markUnsupportedElement(
     slot,
     unsupported,
     setCustomized(custom) {
-      // A stale component cleanup must not change a replacement on reused drawing DOM.
       if (hostOf(element)?.fallback !== fallback) return;
-      fallback.hidden = custom;
-      element.toggleAttribute('data-docx-customized', custom);
-      if (!accessibilityElement) return;
-      if (custom) {
-        originalAccessibility ??= {
-          role: accessibilityElement.getAttribute('role'),
-          hidden: accessibilityElement.getAttribute('aria-hidden'),
-        };
-        accessibilityElement.setAttribute('role', 'group');
-        accessibilityElement.removeAttribute('aria-hidden');
-      } else if (originalAccessibility) {
-        for (const [name, value] of [
-          ['role', originalAccessibility.role],
-          ['aria-hidden', originalAccessibility.hidden],
-        ]) {
-          if (value === null) accessibilityElement.removeAttribute(name!);
-          else accessibilityElement.setAttribute(name!, value!);
-        }
-        originalAccessibility = undefined;
-      }
+      requested = custom;
+      apply();
     },
   };
   Object.defineProperty(element, hostSymbol, { value: host, configurable: true });
@@ -201,8 +229,9 @@ export function observeUnsupportedElements(
         // document owns a new pages layer and deliberately starts a new component.
         host.slot.replaceWith(old.host.slot);
         host = { ...host, key: old.host.key, slot: old.host.slot };
-        if (old.host.element.hasAttribute('data-docx-customized')) host.setCustomized(true);
+        // Register the moved slot first: the host reads it to decide whether it is customized.
         Object.defineProperty(element, hostSymbol, { value: host, configurable: true });
+        if (old.host.element.hasAttribute('data-docx-customized')) host.setCustomized(true);
       }
       next.push(host);
       nextOccurrences.set(occurrence, { host, scope });

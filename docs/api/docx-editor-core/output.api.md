@@ -41,9 +41,7 @@ export type DrawingSupport = 'native' | 'partial' | 'unrendered';
 export interface DrawingSupportIssue {
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
     readonly detail: string;
-    // (undocumented)
     readonly localName: string;
-    // (undocumented)
     readonly namespaceUri: string;
     readonly nodeId: string;
 }
@@ -189,13 +187,10 @@ export interface UnsupportedElement {
     readonly equation?: EquationSpanRecord;
     readonly graphicKind?: DrawingGraphicKind;
     readonly label: string;
-    // (undocumented)
     readonly localName: string;
-    // (undocumented)
     readonly namespaceUri: string | null;
     readonly nodeId: string;
     readonly ownerPartName: string;
-    // (undocumented)
     readonly placement: 'inline' | 'block';
     readonly source: OoxmlElement | null;
     readonly support?: Exclude<DrawingSupport, 'native'>;
@@ -217,9 +212,7 @@ export interface UnsupportedElementHost {
 
 // @public
 export interface UnsupportedElementLayout {
-    // (undocumented)
     readonly height: number;
-    // (undocumented)
     readonly width: number;
 }
 

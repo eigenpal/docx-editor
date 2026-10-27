@@ -942,6 +942,7 @@ test('a rebuilt image removes its custom preview registration when previews are 
   });
   try {
     expect(hosts).toHaveLength(1);
+    hosts[0]!.slot.append(document.createElement('img'));
     hosts[0]!.setCustomized(true);
     expect(first.getAttribute('aria-hidden')).toBeNull();
     const next = paintDrawingRecord(
