@@ -130,7 +130,7 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
  */
 export interface PaintContext {
   readonly unsupportedOwnerPartName?: (nodeId: string) => string;
-  readonly includeRenderedDrawings?: boolean;
+  readonly includePartial?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
   readonly paragraphFormatRevision?: import('../layout/revision-projection.ts').RevisionAttribution;
@@ -231,7 +231,7 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
  */
 export interface PaintOptions {
   readonly unsupportedOwnerPartName?: (nodeId: string) => string;
-  readonly includeRenderedDrawings?: boolean;
+  readonly includePartial?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
@@ -394,7 +394,7 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
   const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true, tabLeaderOriginXPt: 0 };
   return Object.freeze({
     scale: ctx.scale,
-    includeRenderedDrawings: ctx.includeRenderedDrawings,
+    includePartial: ctx.includePartial,
     ...(ctx.unsupportedSource ? { unsupportedSource: ctx.unsupportedSource } : {}),
     strings: ctx.drawingStrings,
     ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
@@ -2311,7 +2311,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     drawingStrings,
-    includeRenderedDrawings: options.includeRenderedDrawings,
+    includePartial: options.includePartial,
     ...(options.unsupportedOwnerPartName
       ? { unsupportedOwnerPartName: options.unsupportedOwnerPartName }
       : {}),
@@ -2356,7 +2356,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   // so show-all / caret chrome appear. Hover is the one other exception: it is applied
   // to the painted nodes in place, because a pointer crossing a region may not move it.
   const parameters =
-    `${resolved.scale}|${resolved.ariaHidden}|${options.includeRenderedDrawings ?? false}|` +
+    `${resolved.scale}|${resolved.ariaHidden}|${options.includePartial ?? false}|` +
     `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
     `${resolved.defaultFontFamily ?? ''}|` +
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +

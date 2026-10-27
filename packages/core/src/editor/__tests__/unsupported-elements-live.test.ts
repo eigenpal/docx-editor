@@ -103,17 +103,15 @@ test('rendered graphics opt into preview slots without changing layout, source, 
     expect(hosts).toHaveLength(0);
     const selection = editor.surface!.state().selection;
     const before = editor.surface!.layout();
-    editor.setUnsupportedElementRules([{ includeRenderedDrawings: true }]);
+    editor.setUnsupportedElementRules([{ includePartial: true }]);
     expect(hosts).toHaveLength(1);
     const host = hosts[0]!;
-    expect(host.unsupported.presentation).toBe('drawing');
+    expect(host.unsupported.support).toBe('partial');
     expect(host.unsupported.drawingIssues).toContainEqual(
       expect.objectContaining({ detail: 'a:blur' })
     );
     expect(unsupportedElementRuleMatches({}, host.unsupported)).toBe(false);
-    expect(unsupportedElementRuleMatches({ includeRenderedDrawings: true }, host.unsupported)).toBe(
-      true
-    );
+    expect(unsupportedElementRuleMatches({ includePartial: true }, host.unsupported)).toBe(true);
     expect(host.fallback.hidden).toBe(false);
     host.setCustomized(true);
     expect(host.fallback.hidden).toBe(true);
@@ -147,8 +145,10 @@ test('rendered-graphic opt-in keeps unchanged blocks when text elsewhere changes
   document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: previewDocument(`${previewShape()}</w:r></w:p>${paragraphs}<w:p><w:r>`),
-    unsupportedElementRules: [{ includeRenderedDrawings: true }],
+    document: previewDocument(
+      `${previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>')}</w:r></w:p>${paragraphs}<w:p><w:r>`
+    ),
+    unsupportedElementRules: [{ includePartial: true }],
   });
   let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
   const stop = observeUnsupportedElements(container, (next) => {
@@ -174,33 +174,44 @@ test('rendered-graphic opt-in keeps unchanged blocks when text elsewhere changes
   }
 });
 
-test('a rendered SmartArt diagram reaches an opted-in declaration as a diagram', async () => {
+test('includePartial offers partly rendered drawings only, never fully supported ones', async () => {
   const { smartArtDocx } = await import('../../store/__tests__/smartart-fixture.ts');
-  const { observeUnsupportedElements, unsupportedElementRuleMatches } = await import('../index.ts');
-  const container = document.createElement('div');
-  document.body.append(container);
-  const editor = createDocxEditor({
-    container,
-    document: smartArtDocx({ shapes: [{ preset: 'rect', off: [1000, 2000], ext: [3000, 4000] }] }),
-    unsupportedElementRules: [{ includeRenderedDrawings: true }],
-  });
-  let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
-  const stop = observeUnsupportedElements(container, (next) => {
-    hosts = next;
-  });
-  try {
-    expect(hosts).toHaveLength(1);
-    const element = hosts[0]!.unsupported;
-    expect(element.presentation).toBe('drawing');
-    expect(element.graphicKind).toBe('diagram');
-    const rule = {
-      includeRenderedDrawings: true,
-      match: (e: typeof element) => e.graphicKind === 'diagram',
-    };
-    expect(unsupportedElementRuleMatches(rule, element)).toBe(true);
-  } finally {
-    stop();
-    editor.destroy();
-    container.remove();
+  const { previewDocument, previewShape } =
+    await import('../../store/__tests__/drawing-support-fixtures.ts');
+  const { observeUnsupportedElements } = await import('../index.ts');
+  for (const [bytes, expected] of [
+    [smartArtDocx({ shapes: [{ preset: 'rect', off: [1000, 2000], ext: [3000, 4000] }] }), 0],
+    [previewDocument(previewShape()), 0],
+    [
+      previewDocument(previewShape('<a:scene3d><a:camera prst="orthographicFront"/></a:scene3d>')),
+      1,
+    ],
+  ] as const) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: bytes,
+      unsupportedElementRules: [{ includePartial: true }],
+    });
+    let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] =
+      [];
+    const stop = observeUnsupportedElements(container, (next) => {
+      hosts = next;
+    });
+    try {
+      expect(hosts).toHaveLength(expected);
+      for (const host of hosts) {
+        expect(host.unsupported.support).toBe('partial');
+        expect(host.unsupported.graphicKind).toBe('textbox');
+        expect(host.unsupported.drawingIssues).toContainEqual(
+          expect.objectContaining({ code: 'unverified-3d' })
+        );
+      }
+    } finally {
+      stop();
+      editor.destroy();
+      container.remove();
+    }
   }
 });

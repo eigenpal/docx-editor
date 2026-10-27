@@ -485,50 +485,6 @@ For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-t
 
 `useHighlightAt(name)` returns the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
-## `useDrawingPreview`
-
-`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service and returns `{ status, url, error, retry }`. Use it in your own component inside `DocxEditor.UnsupportedElement` with `includeRenderedDrawings`:
-
-```tsx
-import {
-  DocxEditor,
-  useDrawingPreview,
-  type DrawingPreviewRender,
-  type UnsupportedElement,
-} from '@docx-editor.dev/react';
-
-function ServerPreview({
-  element,
-  render,
-}: {
-  element: UnsupportedElement;
-  render: DrawingPreviewRender;
-}) {
-  const preview = useDrawingPreview(element, render);
-  switch (preview.status) {
-    case 'ready':
-      return preview.url ? (
-        <img src={preview.url} alt={element.drawing?.accessibility.label ?? ''} />
-      ) : null;
-    case 'error':
-      return <button onClick={preview.retry}>Retry preview</button>;
-    case 'unavailable':
-      return <span>No preview available</span>;
-    default:
-      return <span role="status">Loading preview</span>;
-  }
-}
-
-<DocxEditor.UnsupportedElement
-  includeRenderedDrawings
-  match={(element) => element.graphicKind === 'chart'}
->
-  {({ element }) => <ServerPreview element={element} render={renderOnServer} />}
-</DocxEditor.UnsupportedElement>;
-```
-
-A component that uses the hook always replaces the editor's drawing, so it draws every state itself. To keep the editor's drawing until the image is ready, use `DocxEditor.DrawingPreview`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
-
 ## `useHistoryGroup`
 
 Use `useHistoryGroup` when your app applies formatting continuously, such as a font-size slider or color picker. The document updates on every input event, and one undo action restores the state before the gesture. A redo action restores the final value.

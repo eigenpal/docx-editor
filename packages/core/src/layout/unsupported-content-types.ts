@@ -10,26 +10,16 @@ import type { LayoutBox } from './semantic-records.ts';
 
 /**
  * One occurrence that a custom component can replace: a placeholder for content the editor
- * cannot render, or, with `includeRenderedDrawings`, a drawing that the editor renders.
- * The drawing fields are present only for drawings.
+ * cannot render, or, with `includePartial`, a drawing that the editor renders without some
+ * features. The drawing fields are present only for drawings.
  *
  * @public
  */
 export interface UnsupportedElement {
   /**
-   * `drawing` for a drawing that the editor renders itself, as opposed to a placeholder that
-   * stands in for content it cannot render. Offered only to rules with
-   * `includeRenderedDrawings`. Absent for placeholders.
-   */
-  readonly presentation?: 'drawing';
-  /**
-   * True for every drawing occurrence: the editor offers it a preview area. It mirrors the
-   * field of an `inspectDrawingSupport` entry, so `drawingNeedsPreview` reads both alike.
-   */
-  readonly hasPreviewArea?: boolean;
-  /**
-   * How completely the editor shows this drawing: `native`, `partial`, or `unrendered`.
-   * A drawing placeholder is `unrendered`. Absent for content that is not a drawing.
+   * How completely the editor shows this drawing: `unrendered` for a placeholder, or
+   * `partial` for a drawing that renders without some features, offered only with
+   * `includePartial`. Absent for content that is not a drawing.
    */
   readonly support?: DrawingSupport;
   /**
@@ -74,10 +64,11 @@ export interface UnsupportedElementLayout {
 /** The first matching registration renders each unsupported element. @public */
 export interface UnsupportedElementRule {
   /**
-   * Also offer drawings that the editor renders, not only placeholders. Text boxes stay
-   * editable and are never offered.
+   * Also offer drawings that the editor renders without some features (`support` is
+   * `partial`), so a component can fill the gap, for example with an image from your own
+   * renderer. Fully supported drawings and text boxes are never offered.
    */
-  readonly includeRenderedDrawings?: boolean;
+  readonly includePartial?: boolean;
   /** Return true to replace this occurrence. Omit to match every offered occurrence. */
   readonly match?: (element: UnsupportedElement) => boolean;
   /** The box to reserve for content that has no layout box of its own, in points. */
@@ -95,7 +86,7 @@ export function unsupportedElementRuleMatches(
   element: UnsupportedElement
 ): boolean {
   return (
-    (element.presentation !== 'drawing' || rule.includeRenderedDrawings === true) &&
+    (element.support !== 'partial' || rule.includePartial === true) &&
     (rule.match?.(element) ?? true)
   );
 }

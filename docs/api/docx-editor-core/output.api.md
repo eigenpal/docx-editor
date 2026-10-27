@@ -124,7 +124,7 @@ export interface PaintOptions {
     // (undocumented)
     readonly imageUrlPort?: PaintImageUrlPort;
     // (undocumented)
-    readonly includeRenderedDrawings?: boolean;
+    readonly includePartial?: boolean;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
     // (undocumented)
@@ -188,7 +188,6 @@ export interface UnsupportedElement {
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly graphicKind?: DrawingGraphicKind;
-    readonly hasPreviewArea?: boolean;
     readonly label: string;
     // (undocumented)
     readonly localName: string;
@@ -198,7 +197,6 @@ export interface UnsupportedElement {
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';
-    readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
     readonly support?: DrawingSupport;
 }
@@ -227,7 +225,7 @@ export interface UnsupportedElementLayout {
 
 // @public
 export interface UnsupportedElementRule {
-    readonly includeRenderedDrawings?: boolean;
+    readonly includePartial?: boolean;
     readonly layout?: UnsupportedElementLayout;
     readonly match?: (element: UnsupportedElement) => boolean;
 }

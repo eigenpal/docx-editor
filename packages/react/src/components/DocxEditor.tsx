@@ -1,5 +1,4 @@
 import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
-import { DocxEditorDrawingPreview } from '../editor/DocxEditorDrawingPreview';
 import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
 import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
@@ -540,8 +539,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
   readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
-  /** Replace drawings with images from your rendering service. */
-  readonly DrawingPreview: typeof DocxEditorDrawingPreview;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
@@ -623,7 +620,6 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   RevisionMarkup: DocxEditorRevisionMarkup,
   RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
   UnsupportedElement: DocxEditorUnsupportedElement,
-  DrawingPreview: DocxEditorDrawingPreview,
   AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,

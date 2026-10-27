@@ -49,17 +49,10 @@ export interface DrawingSupportEntry {
   /**
    * One verdict from `state` and `issues`: `projected` and `hidden` give `native` or
    * `partial`, `fallback` gives `partial`, and `placeholder` and `unplaced` give `unrendered`.
-   * The editor offers a preview area only for `projected`, `fallback`, and `placeholder`.
    */
   readonly support: DrawingSupport;
   /** The graphic the selected drawing holds, whether or not it renders. */
   readonly graphicKind: DrawingGraphicKind;
-  /**
-   * Whether the editor offers this drawing to preview components: true for drawings that
-   * render, show a saved fallback, or show a placeholder. False for hidden and unplaced
-   * drawings, and for text boxes whose text the editor edits.
-   */
-  readonly hasPreviewArea: boolean;
   /**
    * The drawing's source: its `w:drawing`, `w:pict`, or `w:object`, or the enclosing
    * `mc:AlternateContent`. Treat it as read-only and untrusted.
@@ -221,11 +214,6 @@ export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport {
             issues
           ),
           graphicKind: drawingGraphicKind(selected.node),
-          hasPreviewArea:
-            state === 'placeholder' ||
-            ((state === 'projected' || state === 'fallback') &&
-              !projection?.textboxStory &&
-              !projection?.groupTextboxes?.length),
           source,
           issues: Object.freeze(issues),
         })
@@ -238,23 +226,4 @@ export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport {
     complete,
     coverage: 'explicit-source-effects',
   });
-}
-
-/**
- * Whether a drawing needs a preview from your rendering service: the editor offers it to
- * preview components, and its `support` is `partial` or `unrendered`. Takes an editor
- * occurrence or an `inspectDrawingSupport` entry, so a server and an editor choose the same
- * drawings. The default `match` of the drawing preview components.
- *
- * @public
- */
-export function drawingNeedsPreview(drawing: {
-  readonly support?: DrawingSupport;
-  readonly hasPreviewArea?: boolean;
-}): boolean {
-  return (
-    drawing.support !== undefined &&
-    drawing.support !== 'native' &&
-    drawing.hasPreviewArea !== false
-  );
 }

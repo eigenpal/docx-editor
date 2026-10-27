@@ -921,14 +921,17 @@ test('a rebuilt image removes its custom preview registration when previews are 
   const container = document.createElement('div');
   const { port } = fakeUrlPort();
   const registry = drawingUrlRegistryFor(container, port);
-  const xml = inlinePictureXml();
+  // A duotone effect does not render, so the picture is partly supported and offered.
+  const xml = inlinePictureXml({
+    lum: '<a:duotone><a:prstClr val="black"/><a:srgbClr val="FFFFFF"/></a:duotone>',
+  });
   const drawing = readyRecordFromXml(xml);
   const source = drawingOf(load(xml));
   const ctx = {
     scale: 1,
     strings: DEFAULT_DRAWING_PAINT_STRINGS,
     imageUrlPort: port,
-    includeRenderedDrawings: true,
+    includePartial: true,
     unsupportedSource: () => source,
   };
   const first = paintDrawingRecord(document, drawing, ctx, registry)!;
@@ -944,7 +947,7 @@ test('a rebuilt image removes its custom preview registration when previews are 
     const next = paintDrawingRecord(
       document,
       drawing,
-      { ...ctx, scale: 2, includeRenderedDrawings: false },
+      { ...ctx, scale: 2, includePartial: false },
       registry
     )!;
     expect(next).toBe(first);

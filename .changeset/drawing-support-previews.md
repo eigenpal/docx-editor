@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add `DocxEditor.DrawingPreview` to show images from your rendering service for drawings that the editor does not render in full, with a support verdict for each drawing and a preview DOCX builder for server-side rendering.
+Let custom `UnsupportedElement` components also cover drawings that render without some features, and report how completely each drawing renders.

@@ -57,12 +57,6 @@ import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DrawingGraphicKind } from '@docx-editor.dev/core/store';
-import { drawingNeedsPreview } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewError } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewRender } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewRequest } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewState } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewView } from '@docx-editor.dev/core/editor';
 import { DrawingSupport } from '@docx-editor.dev/core/store';
 import { DrawingSupportIssue } from '@docx-editor.dev/core/store';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -804,19 +798,6 @@ export interface DocxEditorDocumentOutlineProps {
 }
 
 // @public
-export function DocxEditorDrawingPreview(input: DocxEditorDrawingPreviewProps): react.JSX.Element[];
-
-// @public
-export interface DocxEditorDrawingPreviewProps {
-    children?: (props: {
-        element: UnsupportedElement;
-        preview: DrawingPreviewView;
-    }) => ReactNode;
-    match?: (element: UnsupportedElement) => boolean;
-    render: DrawingPreviewRender;
-}
-
-// @public
 export function DocxEditorEquation(): react.JSX.Element | null;
 
 // @public
@@ -1054,7 +1035,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-    readonly DrawingPreview: typeof DocxEditorDrawingPreview;
     readonly Equation: typeof DocxEditorEquation;
     readonly ExportDialog: typeof DocxEditorExportDialog;
     readonly FontNotice: typeof DocxEditorFontNotice;
@@ -1822,7 +1802,7 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
     children: (props: {
         element: UnsupportedElement;
     }) => ReactNode;
-    includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
+    includePartial?: UnsupportedElementRule['includePartial'];
 }
 
 // @public
@@ -1904,18 +1884,6 @@ export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 export { DrawingGraphicKind }
-
-export { drawingNeedsPreview }
-
-export { DrawingPreviewError }
-
-export { DrawingPreviewRender }
-
-export { DrawingPreviewRequest }
-
-export { DrawingPreviewState }
-
-export { DrawingPreviewView }
 
 export { DrawingSupport }
 
@@ -3435,17 +3403,6 @@ export interface UseDocxSourceResult {
     readonly error: Error | null;
     readonly fonts: FontConfiguration | FontResolver | undefined;
     readonly isLoading: boolean;
-}
-
-// @public
-export function useDrawingPreview(element: UnsupportedElement, render: DrawingPreviewRender): UseDrawingPreviewReturn;
-
-// @public
-export interface UseDrawingPreviewReturn {
-    readonly error: DrawingPreviewState['error'];
-    retry(): void;
-    readonly status: DrawingPreviewState['status'];
-    readonly url: string | null;
 }
 
 // @public

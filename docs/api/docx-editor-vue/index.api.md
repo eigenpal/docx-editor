@@ -62,12 +62,6 @@ import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DrawingGraphicKind } from '@docx-editor.dev/core/store';
-import { drawingNeedsPreview } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewError } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewRender } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewRequest } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewState } from '@docx-editor.dev/core/editor';
-import { DrawingPreviewView } from '@docx-editor.dev/core/editor';
 import { DrawingSupport } from '@docx-editor.dev/core/store';
 import { DrawingSupportIssue } from '@docx-editor.dev/core/store';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -2922,42 +2916,6 @@ export interface DocxEditorDocumentOutlineProps {
 }
 
 // @public
-export const DocxEditorDrawingPreview: vue.DefineComponent<vue.ExtractPropTypes<{
-    match: {
-        default: undefined;
-        type: PropType<(element: UnsupportedElement) => boolean>;
-    };
-    render: {
-        required: true;
-        type: PropType<DrawingPreviewRender>;
-    };
-}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
-    [key: string]: any;
-}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    match: {
-        default: undefined;
-        type: PropType<(element: UnsupportedElement) => boolean>;
-    };
-    render: {
-        required: true;
-        type: PropType<DrawingPreviewRender>;
-    };
-}>> & Readonly<{}>, {
-    match: (element: UnsupportedElement) => boolean;
-}, SlotsType<{
-    default: (props: {
-        element: UnsupportedElement;
-        preview: DrawingPreviewView;
-    }) => VNodeChild;
-}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-
-// @public
-export interface DocxEditorDrawingPreviewProps {
-    match?: (element: UnsupportedElement) => boolean;
-    render: DrawingPreviewRender;
-}
-
-// @public
 export const DocxEditorEquation: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -3505,7 +3463,6 @@ export interface DocxEditorNamespace {
     readonly ContextMenu: typeof ContextMenu;
     // (undocumented)
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-    readonly DrawingPreview: typeof DocxEditorDrawingPreview;
     readonly Equation: typeof DocxEditorEquation;
     readonly ExportDialog: typeof DocxEditorExportDialog;
     // (undocumented)
@@ -4998,7 +4955,7 @@ export interface DocxEditorToolbarSlotProps {
 
 // @public
 export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTypes<{
-    includeRenderedDrawings: {
+    includePartial: {
         default: boolean;
         type: BooleanConstructor;
     };
@@ -5013,7 +4970,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    includeRenderedDrawings: {
+    includePartial: {
         default: boolean;
         type: BooleanConstructor;
     };
@@ -5026,7 +4983,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
         type: PropType<UnsupportedElementRule['match']>;
     };
 }>> & Readonly<{}>, {
-    includeRenderedDrawings: boolean;
+    includePartial: boolean;
     layout: _docx_editor_dev_core_editor.UnsupportedElementLayout | undefined;
     match: ((element: UnsupportedElement) => boolean) | undefined;
 }, SlotsType<{
@@ -5037,7 +4994,7 @@ export const DocxEditorUnsupportedElement: vue.DefineComponent<vue.ExtractPropTy
 
 // @public
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
-    includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
+    includePartial?: UnsupportedElementRule['includePartial'];
 }
 
 // @public (undocumented)
@@ -5328,18 +5285,6 @@ export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 export { DrawingGraphicKind }
-
-export { drawingNeedsPreview }
-
-export { DrawingPreviewError }
-
-export { DrawingPreviewRender }
-
-export { DrawingPreviewRequest }
-
-export { DrawingPreviewState }
-
-export { DrawingPreviewView }
 
 export { DrawingSupport }
 
@@ -7787,17 +7732,6 @@ export interface UseDocxSourceResult {
     readonly fonts: ComputedRef<FontConfiguration | FontResolver | undefined>;
     // (undocumented)
     readonly isLoading: ComputedRef<boolean>;
-}
-
-// @public
-export function useDrawingPreview(element: MaybeRefOrGetter<UnsupportedElement>, render: DrawingPreviewRender): UseDrawingPreviewReturn;
-
-// @public
-export interface UseDrawingPreviewReturn {
-    readonly error: Readonly<Ref<DrawingPreviewState['error']>>;
-    retry(): void;
-    readonly status: Readonly<Ref<DrawingPreviewState['status']>>;
-    readonly url: Readonly<Ref<string | null>>;
 }
 
 // @public (undocumented)

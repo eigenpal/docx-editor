@@ -32,11 +32,8 @@ export function validateUnsupportedElementRules(
     if (rule.match !== undefined && typeof rule.match !== 'function') {
       throw new TypeError('UnsupportedElement match must be a function.');
     }
-    if (
-      rule.includeRenderedDrawings !== undefined &&
-      typeof rule.includeRenderedDrawings !== 'boolean'
-    ) {
-      throw new TypeError('UnsupportedElement includeRenderedDrawings must be a boolean.');
+    if (rule.includePartial !== undefined && typeof rule.includePartial !== 'boolean') {
+      throw new TypeError('UnsupportedElement includePartial must be a boolean.');
     }
     const layout = rule.layout;
     if (
@@ -71,7 +68,7 @@ export function createUnsupportedElementProjection(rules: readonly UnsupportedEl
   });
   return {
     ...projector,
-    includeRenderedDrawings: rules.some((rule) => rule.includeRenderedDrawings === true),
+    includePartial: rules.some((rule) => rule.includePartial === true),
     geometryKey: () => JSON.stringify([...geometry].sort(([a], [b]) => a.localeCompare(b))),
   };
 }
@@ -100,7 +97,7 @@ export function unsupportedElementPaintOptions(
   session: HeadlessDocumentView
 ) {
   return {
-    includeRenderedDrawings: projection.includeRenderedDrawings,
+    includePartial: projection.includePartial,
     unsupportedOwnerPartName: (nodeId: string) =>
       partOfNodeId(session, nodeId)?.name ?? session.part().name,
     unsupportedSource: (nodeId: string, ownerPartName?: string) => {

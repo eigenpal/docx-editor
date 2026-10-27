@@ -423,7 +423,7 @@ test('rendered drawing previews require explicit opt-in and restore native rende
     <DocxEditor document={bytes} chrome={false}>
       <DocxEditor.UnsupportedElement>{() => <b>Placeholder only</b>}</DocxEditor.UnsupportedElement>
       <DocxEditor.UnsupportedElement
-        includeRenderedDrawings={include}
+        includePartial={include}
         match={(element) => !!element.drawingIssues?.length}
       >
         {() => (show ? <img alt="External preview" src="/preview.png" /> : null)}

@@ -68,7 +68,7 @@ export {
 } from './drawing-paint-strings.ts';
 
 export interface DrawingPaintContext {
-  readonly includeRenderedDrawings?: boolean;
+  readonly includePartial?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
   readonly strings: DrawingPaintStrings;
@@ -409,7 +409,6 @@ function paintPlaceholderCard(
           }
         : {}),
       support: 'unrendered',
-      hasPreviewArea: true,
       placement: 'inline',
       bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,
@@ -735,8 +734,8 @@ export function paintDrawingRecord(
     customDrawingPreview(
       element,
       drawing,
-      ctx.includeRenderedDrawings === true,
-      ctx.includeRenderedDrawings
+      ctx.includePartial === true,
+      ctx.includePartial
         ? (ctx.unsupportedSource?.(drawing.drawingNodeId, drawing.ownerPartName) ?? null)
         : null
     );

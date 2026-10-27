@@ -215,11 +215,11 @@ For the chart types, labels, layouts, and effects that render, see [Word feature
 
 ## Replace a placeholder
 
-You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the occurrence's `graphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. `drawing.placeholderGraphicKind` uses the same names but is set only for placeholders. A declaration replaces only placeholders by default. To replace drawings that render with images from your rendering service, use `DocxEditor.DrawingPreview`, and match charts and SmartArt diagrams by `graphicKind`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service). Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
+You can replace a chart or SmartArt placeholder with your own component, with or without the module. Register an `UnsupportedElement` declaration that matches the placeholder's `drawing.placeholderGraphicKind`. The value is `chart` for a chart and `diagram` for a SmartArt diagram. A declaration replaces only a placeholder; a drawing that renders stays as it is. A chart that shows its fallback picture or drawing has no placeholder, so no declaration applies to it. Your component fills the drawing's box. The custom preview does not replace the drawing in the saved document.
 
 Every drawing that holds a chart carries `drawing.chart` when the chart part can be read (it is absent when the part is missing or damaged). This includes a chart that renders, a chart that shows its fallback, and a placeholder. To tell the three apart, read `drawing.chart.shownAs`: `chart` when the module draws the chart, `fallback` when the page shows the chart's saved fallback, and `placeholder` when the page shows the labeled placeholder. The value follows the renderers installed when the document opened.
 
-The editor exposes placeholders by default, with `drawing.chart.shownAs` set to `placeholder`. With `includeRenderedDrawings`, components also receive rendered graphics and their native chart state. To read every chart record, including drawn charts and charts shown by their fallback, open the document for export and walk its drawings. Install the module first, so that the records match what an editor with the module shows. If your host has no EigenPal Pro License, leave out the `installDrawing()` call; the records then show each chart as its fallback or as a placeholder. This example lists each chart with its page number, state, and title:
+The editor exposes only placeholders to your components, through `UnsupportedElement`, so inside a declaration `drawing.chart.shownAs` is always `placeholder`. To read every chart record, including drawn charts and charts shown by their fallback, open the document for export and walk its drawings. Install the module first, so that the records match what an editor with the module shows. If your host has no EigenPal Pro License, leave out the `installDrawing()` call; the records then show each chart as its fallback or as a placeholder. This example lists each chart with its page number, state, and title:
 
 ```ts
 import { openDocumentForExport } from '@docx-editor.dev/core/export';
@@ -264,8 +264,8 @@ This example displays the title or the alternative text from `drawing.accessibil
 ```tsx
 import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/react';
 
-// Without includeRenderedDrawings, a declaration receives chart placeholders only.
-const isChart = (element: UnsupportedElement) => element.graphicKind === 'chart';
+const isChartPlaceholder = (element: UnsupportedElement) =>
+  element.drawing?.placeholderGraphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';
@@ -273,7 +273,7 @@ const chartLabel = ({ drawing }: UnsupportedElement) =>
 export function Editor({ bytes }: { bytes: Uint8Array }) {
   return (
     <DocxEditor document={bytes}>
-      <DocxEditor.UnsupportedElement match={isChart}>
+      <DocxEditor.UnsupportedElement match={isChartPlaceholder}>
         {({ element }) => <div className="chart">{chartLabel(element)}</div>}
       </DocxEditor.UnsupportedElement>
     </DocxEditor>
@@ -290,8 +290,8 @@ import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
 
-// Without includeRenderedDrawings, a declaration receives chart placeholders only.
-const isChart = (element: UnsupportedElement) => element.graphicKind === 'chart';
+const isChartPlaceholder = (element: UnsupportedElement) =>
+  element.drawing?.placeholderGraphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';
@@ -299,7 +299,7 @@ const chartLabel = ({ drawing }: UnsupportedElement) =>
 
 <template>
   <DocxEditor :document="bytes">
-    <DocxEditor.UnsupportedElement :match="isChart">
+    <DocxEditor.UnsupportedElement :match="isChartPlaceholder">
       <template #default="{ element }">
         <div class="chart">
           {{ chartLabel(element) }}
@@ -332,4 +332,4 @@ Use `placeholderGraphicKind` to distinguish placeholders:
 
 Floating WordArt without the module has no placeholder, so no declaration applies to it. Declarations apply only in the editor. PDF export leaves an unrendered drawing out. For more information, see [Custom unsupported-content components](/docs/2.x/guides/images#custom-unsupported-content-components).
 
-For drawings stored in `mc:AlternateContent`, branch selection prefers supported modern markup, then supported fallback markup. Unsupported visible drawings keep one placeholder with their original bounds. A selected picture that later fails decoding also shows a placeholder without another branch selection. The same component API can show an image from your rendering service. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
+For drawings stored in `mc:AlternateContent`, branch selection prefers supported modern markup, then supported fallback markup. Unsupported visible drawings keep one placeholder with their original bounds. A selected picture that later fails decoding also shows a placeholder without another branch selection. The same component API can show an image from your rendering service. For source and resource handling, see [Preview with your rendering service](/docs/2.x/guides/images#preview-with-your-rendering-service).

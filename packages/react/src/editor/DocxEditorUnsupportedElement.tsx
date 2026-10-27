@@ -1,18 +1,18 @@
-import type { ReactNode } from 'react';
+import { useContext, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { UnsupportedElement, UnsupportedElementRule } from '@docx-editor.dev/core/editor';
-import { useUnsupportedElementDeclaration } from './unsupported-element-declaration';
+import { UnsupportedElementRegistryContext } from './unsupported-element-registry';
 import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 
 /** Props for a registered unsupported-content renderer. @public */
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
   /**
-   * Also offer drawings that the editor renders, not only placeholders. To replace drawings
-   * with images from a rendering service, `DocxEditor.DrawingPreview` is simpler.
+   * Also offer drawings that render without some features (`element.support` is `partial`),
+   * not only placeholders. Fully supported drawings are never offered.
    */
-  includeRenderedDrawings?: UnsupportedElementRule['includeRenderedDrawings'];
+  includePartial?: UnsupportedElementRule['includePartial'];
   /**
    * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
-   * keep what the editor shows: the placeholder, or the rendered drawing.
+   * keep what the editor shows: the placeholder, or the partly rendered drawing.
    */
   children: (props: { element: UnsupportedElement }) => ReactNode;
 }
@@ -29,14 +29,23 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
 export function DocxEditorUnsupportedElement({
   match,
   layout,
-  includeRenderedDrawings,
+  includePartial,
   children,
 }: DocxEditorUnsupportedElementProps) {
-  const hosts = useUnsupportedElementDeclaration(
-    { match, layout, includeRenderedDrawings },
-    'DocxEditor.UnsupportedElement'
-  );
-  return hosts.map((host) => (
+  const registry = useContext(UnsupportedElementRegistryContext);
+  if (!registry)
+    throw new Error('DocxEditor.UnsupportedElement must render inside DocxEditor.Root.');
+  const id = useRef(Symbol('unsupported-element-declaration')).current;
+  useSyncExternalStore(registry.subscribe, registry.snapshot, registry.snapshot);
+  useLayoutEffect(() => {
+    registry.register(id, {
+      includePartial,
+      ...(match ? { match } : {}),
+      ...(layout ? { layout } : {}),
+    });
+  }, [registry, id, match, layout, includePartial]);
+  useLayoutEffect(() => () => registry.unregister(id), [registry, id]);
+  return registry.hosts(id).map((host) => (
     <UnsupportedElementPlaceholder key={host.key} host={host}>
       {children({ element: host.unsupported })}
     </UnsupportedElementPlaceholder>

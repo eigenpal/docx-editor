@@ -1,5 +1,4 @@
 import { DocxEditorUnsupportedElement } from '../editor/DocxEditorUnsupportedElement';
-import { DocxEditorDrawingPreview } from '../editor/DocxEditorDrawingPreview';
 import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
 import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
 import type {
@@ -245,8 +244,6 @@ export interface DocxEditorNamespace {
   readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
   readonly UnsupportedElement: typeof DocxEditorUnsupportedElement;
-  /** Replace drawings with images from your rendering service. */
-  readonly DrawingPreview: typeof DocxEditorDrawingPreview;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
@@ -734,7 +731,6 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   RevisionMarkup: DocxEditorRevisionMarkup,
   RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
   UnsupportedElement: DocxEditorUnsupportedElement,
-  DrawingPreview: DocxEditorDrawingPreview,
   AuthorStyle: DocxEditorAuthorStyle,
   ColorByChangeType: DocxEditorColorByChangeType,
 }) as unknown as DocxEditorNamespace;

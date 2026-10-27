@@ -5421,8 +5421,7 @@ export function mountPaginatedSurface(
       unsupportedProjection.view(session).currentPackage();
       const geometryUnchanged = projection.geometryKey() === unsupportedProjection.geometryKey();
       if (geometryUnchanged) {
-        const paintChanged =
-          projection.includeRenderedDrawings !== unsupportedProjection.includeRenderedDrawings;
+        const paintChanged = projection.includePartial !== unsupportedProjection.includePartial;
         unsupportedProjection = projection;
         furnitureSource = createCurrentFurnitureSource(revisionFilter());
         if (paintChanged) render(false);

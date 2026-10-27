@@ -1,12 +1,12 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "Only drawing placeholders support custom previews.",
-  "after": "Drawings report a support verdict, and rendered drawings can show cached previews from a host rendering service.",
-  "reason": "Support verdicts, preview packages, and preview images are local derived state. They do not modify shared document state or operations.",
+  "before": "Only drawing placeholders support custom components.",
+  "after": "Drawings report how completely they render, and custom components can also cover drawings that render without some features.",
+  "reason": "Support verdicts, preview packages, and custom components are local derived state. They do not modify shared document state or operations.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-unsupported-elements.test.ts",
-    "packages/core/src/editor/__tests__/drawing-preview.test.ts"
+    "packages/core/src/editor/__tests__/unsupported-elements-live.test.ts"
   ],
   "changeset": "drawing-support-previews",
   "migration": null

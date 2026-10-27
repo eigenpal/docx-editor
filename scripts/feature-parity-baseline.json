@@ -214,12 +214,6 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "editor/DocxEditorDrawingPreview": {
-      "propsAddedInReact": ["children"],
-      "propsAddedInVue": [],
-      "emitsAddedInReact": [],
-      "emitsAddedInVue": []
-    },
     "editor/DocxEditorExportDialog": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["inheritAttrs", "name", "onClose", "props"],

@@ -28,18 +28,6 @@ const PARITY_CONTRACT = path.join(repoRoot, 'scripts/parity/parity.contract.json
 const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
 
 /** @returns {Record<string, { react: string, vue: string }>} */
-// Props interfaces whose React render-prop children match a typed Vue default scoped slot.
-const SLOT_RENDERERS = {
-  DocxEditorUnsupportedElementProps: {
-    component: 'DocxEditorUnsupportedElement',
-    props: String.raw`element: UnsupportedElement;`,
-  },
-  DocxEditorDrawingPreviewProps: {
-    component: 'DocxEditorDrawingPreview',
-    props: String.raw`element: UnsupportedElement;\s*preview: DrawingPreviewView;`,
-  },
-};
-
 function loadFrameworkSlotFormTypeAliases() {
   if (!fs.existsSync(PARITY_CONTRACT)) return {};
   const contract = JSON.parse(fs.readFileSync(PARITY_CONTRACT, 'utf8'));
@@ -93,21 +81,21 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
     return;
   }
   // React render children and Vue default scoped slots expose the same occurrence.
-  const slotRenderer = SLOT_RENDERERS[name];
-  const renderer = slotRenderer && extractInterfaceMemberTypes(reactSnap, name)?.get('children');
-  const declaration = slotRenderer
-    ? (vueSnap.match(
-        new RegExp(`export const ${slotRenderer.component}:[\\s\\S]*?(?=\\n\\/\\/ @|\\nexport |$)`)
-      )?.[0] ?? '')
-    : '';
+  const renderer =
+    name === 'DocxEditorUnsupportedElementProps' &&
+    extractInterfaceMemberTypes(reactSnap, name)?.get('children');
+  const declaration =
+    vueSnap.match(
+      /export const DocxEditorUnsupportedElement:[\s\S]*?(?=\n\/\/ @|\nexport |$)/
+    )?.[0] ?? '';
   const nativeRendererSlot =
     renderer &&
-    new RegExp(
-      `export interface ${name}[^\\{]*\\{(?:(?!\\nexport )[\\s\\S])*?children\\??: \\(props: \\{\\s*${slotRenderer.props}\\s*\\}\\) => (?:ReactNode|DocxEditorChildren);`
-    ).test(reactSnap) &&
-    new RegExp(
-      `SlotsType<\\{\\s*default: \\(props: \\{\\s*${slotRenderer.props}\\s*\\}\\) => VNodeChild;\\s*\\}>`
-    ).test(declaration);
+    /export interface DocxEditorUnsupportedElementProps[^\{]*\{\s*(?:\/\/[^\n]*\n\s*)*children: \(props: \{\s*element: UnsupportedElement;\s*\}\) => (?:ReactNode|DocxEditorChildren);/.test(
+      reactSnap
+    ) &&
+    /SlotsType<\{\s*default: \(props: \{\s*element: UnsupportedElement;\s*\}\) => VNodeChild;\s*\}>/.test(
+      declaration
+    );
   const comparedVueFields = new Set(vueFields);
   if (nativeRendererSlot) {
     comparedVueFields.add('children');

@@ -677,15 +677,5 @@ export type {
   DrawingSupportIssue,
 } from '../store/package/drawing-support.ts';
 
-export { drawingNeedsPreview } from '../store/package/drawing-support.ts';
-export {
-  drawingPreviewController,
-  drawingPreviewDocx,
-  type DrawingPreviewController,
-  type DrawingPreviewError,
-  type DrawingPreviewRender,
-  type DrawingPreviewRequest,
-  type DrawingPreviewState,
-  type DrawingPreviewView,
-} from './drawing-preview.ts';
+export { drawingPreviewDocx } from './drawing-preview.ts';
 export type { DrawingPreviewPackageResult } from '../store/package/drawing-preview-package.ts';

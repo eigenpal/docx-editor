@@ -440,47 +440,6 @@ useHighlights('glossary', (editor) => editor.findMatches(terms.value, { wholeWor
 
 For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
-## `useDrawingPreview`
-
-`useDrawingPreview(element, render)` requests a preview image of a drawing from your rendering service. It returns `status`, `url`, and `error` as refs, and a `retry` function. `element` can be a value, a ref, or a getter. Use it in your own component inside `DocxEditor.UnsupportedElement` with `include-rendered-drawings`:
-
-```vue
-<!-- ServerPreview.vue -->
-<script setup lang="ts">
-import {
-  useDrawingPreview,
-  type DrawingPreviewRender,
-  type UnsupportedElement,
-} from '@docx-editor.dev/vue';
-
-const props = defineProps<{ element: UnsupportedElement; render: DrawingPreviewRender }>();
-const { status, url, retry } = useDrawingPreview(() => props.element, props.render);
-</script>
-
-<template>
-  <img
-    v-if="status === 'ready'"
-    :src="url ?? undefined"
-    :alt="element.drawing?.accessibility.label ?? ''"
-  />
-  <button v-else-if="status === 'error'" @click="retry">Retry preview</button>
-  <span v-else-if="status === 'unavailable'">No preview available</span>
-  <span v-else role="status">Loading preview</span>
-</template>
-```
-
-```vue
-<DocxEditor.UnsupportedElement
-  include-rendered-drawings
-  :match="(element) => element.graphicKind === 'chart'"
-  v-slot="{ element }"
->
-  <ServerPreview :element="element" :render="renderOnServer" />
-</DocxEditor.UnsupportedElement>
-```
-
-A component that uses the composable always replaces the editor's drawing, so it draws every state itself. To keep the editor's drawing until the image is ready, use `DocxEditor.DrawingPreview`. For more information, see [Preview drawings with a rendering service](/docs/2.x/guides/images#preview-drawings-with-a-rendering-service).
-
 ## `useHighlightAt`
 
 `useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).

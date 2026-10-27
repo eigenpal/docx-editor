@@ -4,7 +4,7 @@ import { drawingSourceIssues, drawingSupport } from '../store/package/drawing-su
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { clearUnsupportedElement, markUnsupportedElement } from './unsupported-elements.ts';
 
-/** Add a host-owned preview slot without changing layout or the native drawing. */
+/** Offer a drawing that renders without some features to a host component, without changing layout. */
 export function customDrawingPreview(
   element: HTMLElement,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
@@ -24,6 +24,12 @@ export function customDrawingPreview(
   if (drawing.textboxStory || drawing.groupTextboxStories || !source) return;
   if (element.querySelector('[data-docx-unsupported]')) return;
   const issues = drawingSourceIssues(source, drawing.drawingNodeId);
+  const support = drawingSupport(
+    drawing.chart?.shownAs === 'fallback' ? 'fallback' : 'rendered',
+    issues
+  );
+  // A fully supported drawing has no gap to fill.
+  if (support !== 'partial') return;
   const fallback = element.ownerDocument.createElement('div');
   fallback.className = 'docx-drawing-native';
   fallback.style.width = '100%';
@@ -34,7 +40,6 @@ export function customDrawingPreview(
     element,
     fallback,
     {
-      presentation: 'drawing',
       ownerPartName: drawing.ownerPartName,
       nodeId: drawing.drawingNodeId,
       namespaceUri: source.namespaceUri,
@@ -45,11 +50,7 @@ export function customDrawingPreview(
       label: drawing.accessibility.label ?? '',
       drawing,
       drawingIssues: issues,
-      hasPreviewArea: true,
-      support: drawingSupport(
-        drawing.chart?.shownAs === 'fallback' ? 'fallback' : 'rendered',
-        issues
-      ),
+      support,
       graphicKind: selectedDrawingGraphicKind(source, drawing.drawingNodeId),
     },
     element

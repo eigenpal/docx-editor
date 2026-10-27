@@ -665,20 +665,6 @@ export type {
   DrawingSupport,
   DrawingSupportIssue,
 } from '@docx-editor.dev/core/store';
-export {
-  drawingNeedsPreview,
-  type DrawingPreviewError,
-  type DrawingPreviewRender,
-  type DrawingPreviewRequest,
-  type DrawingPreviewState,
-  type DrawingPreviewView,
-} from '@docx-editor.dev/core/editor';
-export {
-  DocxEditorDrawingPreview,
-  useDrawingPreview,
-  type DocxEditorDrawingPreviewProps,
-  type UseDrawingPreviewReturn,
-} from './editor/DocxEditorDrawingPreview';
 export type {
   UnsupportedElement,
   UnsupportedElementLayout,

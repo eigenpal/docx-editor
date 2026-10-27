@@ -34,14 +34,17 @@ for (const [name, bytes] of Object.entries(documents)) {
     const editor = createDocxEditor({
       container,
       document: bytes,
-      unsupportedElementRules: [{ includeRenderedDrawings: true }],
+      unsupportedElementRules: [{ includePartial: true }],
     });
     let elements: UnsupportedElement[] = [];
     const stop = observeUnsupportedElements(container, (hosts) => {
       elements = hosts.map((host) => host.unsupported);
     });
     try {
-      const fromEditor = drawingPreviewDocx(editor, elements[0]!);
+      // A placeholder, a partly rendered drawing, or a report entry from the live document.
+      const target =
+        elements[0] ?? inspectDrawingSupport(editor.surface!.session.currentPackage()).entries[0]!;
+      const fromEditor = drawingPreviewDocx(editor, target);
       const read = readOoxmlPackage(new Uint8Array((await editor.save())!));
       if (!read.ok) throw new Error(read.reason);
       const entry = inspectDrawingSupport(read.package).entries[0]!;

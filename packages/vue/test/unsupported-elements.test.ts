@@ -473,7 +473,7 @@ test('Vue rendered drawing previews opt in and restore the native graphic', asyn
             h(
               DocxEditor.UnsupportedElement,
               {
-                includeRenderedDrawings: include.value,
+                includePartial: include.value,
                 match: (element: UnsupportedElement) => !!element.drawingIssues?.length,
               },
               {

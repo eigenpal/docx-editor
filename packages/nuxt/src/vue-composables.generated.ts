@@ -13,7 +13,6 @@ export const VUE_COMPOSABLES = [
   'useDocumentSearch',
   'useDocxEditor',
   'useDocxSource',
-  'useDrawingPreview',
   'useEditorCaret',
   'useEditorCommand',
   'useEditorEvent',

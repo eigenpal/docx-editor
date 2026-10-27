@@ -1551,12 +1551,6 @@ export const DRAWING_REL_FROM_V: readonly string[];
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public
-export function drawingNeedsPreview(drawing: {
-    readonly hasPreviewArea?: boolean;
-    readonly support?: DrawingSupport;
-}): boolean;
-
-// @public
 export interface DrawingPositionInput {
     // (undocumented)
     readonly horizontalEmu?: number;
@@ -1570,29 +1564,7 @@ export interface DrawingPositionInput {
 }
 
 // @public
-export interface DrawingPreviewController {
-    request(element: UnsupportedElement, render: DrawingPreviewRender): void;
-    retry(element: UnsupportedElement, render: DrawingPreviewRender): void;
-    state(element: UnsupportedElement): DrawingPreviewState;
-    subscribe(listener: () => void): () => void;
-}
-
-// @public
-export function drawingPreviewController(editor: DocxEditorInstance): DrawingPreviewController;
-
-// @public
 export function drawingPreviewDocx(editor: DocxEditorInstance, element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>): DrawingPreviewPackageResult;
-
-// @public
-export type DrawingPreviewError = {
-    readonly kind: 'package';
-    readonly reason: Extract<DrawingPreviewPackageResult, {
-        ok: false;
-    }>['reason'];
-} | {
-    readonly cause: unknown;
-    readonly kind: 'render';
-};
 
 // @public
 export type DrawingPreviewPackageResult = {
@@ -1603,45 +1575,6 @@ export type DrawingPreviewPackageResult = {
 } | {
     readonly ok: false;
     readonly reason: 'drawing-not-found' | 'too-many-parts' | 'too-large';
-};
-
-// @public
-export type DrawingPreviewRender = (request: DrawingPreviewRequest) => Promise<Blob | string | null>;
-
-// @public
-export interface DrawingPreviewRequest {
-    readonly docx: Uint8Array;
-    readonly element: UnsupportedElement;
-    readonly pageFitsDrawing: boolean;
-    readonly signal: AbortSignal;
-}
-
-// @public
-export type DrawingPreviewState = {
-    readonly error: null;
-    readonly status: 'idle';
-    readonly url: null;
-} | {
-    readonly error: null;
-    readonly status: 'loading';
-    readonly url: string | null;
-} | {
-    readonly error: null;
-    readonly status: 'ready';
-    readonly url: string;
-} | {
-    readonly error: DrawingPreviewError | null;
-    readonly status: 'unavailable';
-    readonly url: null;
-} | {
-    readonly error: DrawingPreviewError;
-    readonly status: 'error';
-    readonly url: string | null;
-};
-
-// @public
-export type DrawingPreviewView = DrawingPreviewState & {
-    readonly retry: () => void;
 };
 
 // @public
@@ -4436,7 +4369,6 @@ export interface UnsupportedElement {
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
     readonly graphicKind?: DrawingGraphicKind;
-    readonly hasPreviewArea?: boolean;
     readonly label: string;
     // (undocumented)
     readonly localName: string;
@@ -4446,7 +4378,6 @@ export interface UnsupportedElement {
     readonly ownerPartName: string;
     // (undocumented)
     readonly placement: 'inline' | 'block';
-    readonly presentation?: 'drawing';
     readonly source: OoxmlElement | null;
     readonly support?: DrawingSupport;
 }
@@ -4475,7 +4406,7 @@ export interface UnsupportedElementLayout {
 
 // @public
 export interface UnsupportedElementRule {
-    readonly includeRenderedDrawings?: boolean;
+    readonly includePartial?: boolean;
     readonly layout?: UnsupportedElementLayout;
     readonly match?: (element: UnsupportedElement) => boolean;
 }
