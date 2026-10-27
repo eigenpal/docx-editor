@@ -111,6 +111,7 @@ export function createParagraphDrawingWrap(options: {
       left: number,
       right: number,
       startOffset: number,
+      paragraphSpaceBefore: number,
       omittedAnchor?: string
     ): readonly ExclusionZone[] {
       const all = entry.frame
@@ -125,6 +126,7 @@ export function createParagraphDrawingWrap(options: {
             right,
             columnIndex,
             startOffset,
+            paragraphSpaceBefore,
             options.compatibilityMode,
             options.displayMode ?? 'proposed',
             options.revisionAuthorFilter,

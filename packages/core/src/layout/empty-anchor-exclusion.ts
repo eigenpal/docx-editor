@@ -22,6 +22,7 @@ export function withOwnParagraphAnchorZones(
   right: number,
   columnIndex: number,
   startOffset: number,
+  paragraphSpaceBefore: number,
   compatibilityMode: number | undefined,
   displayMode: RevisionDisplayMode,
   revisionAuthorFilter?: RevisionAuthorFilter,
@@ -51,6 +52,11 @@ export function withOwnParagraphAnchorZones(
   });
   if (!anchorOnly && !leading) return zones;
   const ownStarts = anchorOnly ? [...offsets.values()] : [0];
+  const paragraphStarts = new Set(
+    atoms
+      .filter((atom) => atom.projection.position?.vertical.relativeFrom === 'paragraph')
+      .map((atom) => offsets.get(atom.atomId))
+  );
   const own = synthesizeParagraphWrapExclusionZones({
     paragraph,
     paragraphId: paragraph.id,
@@ -59,7 +65,10 @@ export function withOwnParagraphAnchorZones(
     contentLeft: left,
     contentRight: right,
     paragraphStartY: top,
-    anchorLineTopByModelStart: new Map(ownStarts.map((offset) => [offset, 0])),
+    // Paragraph anchors measure from above the applied spacing; line anchors do not.
+    anchorLineTopByModelStart: new Map(
+      ownStarts.map((offset) => [offset, paragraphStarts.has(offset) ? -paragraphSpaceBefore : 0])
+    ),
     displayMode,
     revisionAuthorFilter,
     ...(layoutTextboxStory ? { layoutTextboxStory } : {}),

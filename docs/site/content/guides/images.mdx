@@ -172,7 +172,7 @@ Wrap changes are **layout-structural**: exclusion zones feed line breaking befor
 
 Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
 
-In compatibility mode 15 and later, a leading paragraph-relative picture resolves its wrapping again when its paragraph changes pages. This applies to nonnegative vertical offsets and keeps the paragraph text clear of the picture.
+In compatibility mode 15 and later, a leading paragraph-relative picture resolves its wrapping again when its paragraph changes pages. This applies to nonnegative vertical offsets and keeps the paragraph text clear of the picture. Paragraph-relative pictures measure their vertical position from above the applied paragraph spacing. Line-relative pictures keep their line origin.
 
 When a floating picture splits a line into passages, each part of the line aligns inside its own passage. Centered text is centered on each side of the picture, right-aligned text ends at the right edge of each passage, and justified text fills each passage. This applies in the body, table cells, headers, footers, and text boxes. Right-to-left paragraphs align the line as a whole. A square wrap with `wrapText="largest"` keeps text on the wider side of the picture only.
 

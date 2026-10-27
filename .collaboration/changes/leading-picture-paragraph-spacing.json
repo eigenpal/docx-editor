@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Leading paragraph pictures could overlap the first line after paragraph spacing.",
+  "after": "Wrapping uses the paragraph origin above the applied spacing.",
+  "reason": "Only derived layout changes. Shared operations and saved collaboration data stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/leading-picture-space-before.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-picture-spacing.test.ts"
+  ],
+  "changeset": "leading-picture-paragraph-spacing",
+  "migration": null
+}

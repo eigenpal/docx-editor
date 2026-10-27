@@ -1,0 +1,31 @@
+import { expect, test } from 'bun:test';
+import { mountWithImages } from './image-decode-harness.ts';
+import { documentWithPicture } from './leading-picture-spacing-fixture.ts';
+
+for (const relativeFrom of ['paragraph', 'line'] as const) {
+  for (const before of [0, 240, 480]) {
+    test(`leading ${relativeFrom} picture respects ${before} twips of paragraph spacing`, async () => {
+      const { surface, container } = await mountWithImages(
+        documentWithPicture(relativeFrom, before)
+      );
+      try {
+        const page = surface.layout().pages[0]!;
+        const drawing = page.anchoredDrawings![0]!;
+        const paragraph = page.fragments.find(
+          (f) => f.kind === 'paragraph' && f.paragraphId === drawing.anchorParagraphId
+        )!;
+        if (paragraph.kind !== 'paragraph') throw Error('Missing paragraph');
+        const line = paragraph.lines[0]!;
+        const intersects =
+          line.box.y + line.box.height > drawing.y && line.box.y < drawing.y + drawing.height;
+        expect(intersects).toBe(relativeFrom === 'paragraph' && before > 0);
+        if (intersects)
+          expect(line.spans[0]!.box.x).toBeGreaterThanOrEqual(drawing.x + drawing.width);
+        else expect(line.spans[0]!.box.x).toBe(0);
+      } finally {
+        surface.destroy();
+        container.remove();
+      }
+    });
+  }
+}
