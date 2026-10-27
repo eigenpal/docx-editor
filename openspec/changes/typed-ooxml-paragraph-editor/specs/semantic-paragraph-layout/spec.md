@@ -524,7 +524,7 @@ The editor SHALL replace host font resources without replacing its document sess
 
 ### Requirement: Terminal exact-row outer rule extent
 
-Semantic layout SHALL place a supported terminal exact row's simple bottom rule outside its authored content height. Published boxes, painted borders, and following flow SHALL include that outer extent. Admission SHALL use the authored row height. Canonical source text and saved XML SHALL remain unchanged.
+Semantic layout SHALL place a supported terminal exact row's simple bottom rule outside its authored content height. Published boxes, painted borders, and following flow SHALL include that outer extent. Admission SHALL include that outer extent, except for a row that starts at the top of a page or directly below repeated header rows. Canonical source text and saved XML SHALL remain unchanged.
 
 #### Scenario: Outer rule preserves authored exact row pitch
 
@@ -535,6 +535,13 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 #### Scenario: Border room is insufficient
 
 - **WHEN** an authored exact row fits the remaining band but its complete outer rule does not
+- **AND** the row starts below other content on the page
+- **THEN** the row moves to the next page
+
+#### Scenario: Border room is insufficient at the top of a page
+
+- **WHEN** an authored exact row fits the page band but its complete outer rule does not
+- **AND** the row starts at the top of the page or directly below repeated header rows
 - **THEN** the row keeps its page and authored content height
 - **AND** only its outer bottom rule extends past the bottom margin
 

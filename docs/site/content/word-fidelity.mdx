@@ -305,7 +305,7 @@ Supported terminal fixed-height rows place their bottom rule outside the authore
 
 This adjustment applies to top-level tables with collapsed borders and complete horizontal-text rows. The bottom rules must be equal-width single rules, no wider than 12pt. Repeated headers and merged cells use the same rule. The top rule can have a different width. Eighth-point widths, including 0.625pt, retain their authored size.
 
-If the authored row height fits the page, the row keeps its page. Its bottom rule can extend past the bottom margin. Floating tables, nested content, supported bottom-to-top cells, compound bottom rules, unequal bottom-cell rules, and cell spacing retain their existing geometry.
+If the row does not fit the page together with its bottom rule, it moves to the next page. A row that starts at the top of a page, or directly below repeated header rows, stays. Its bottom rule can then extend past the bottom margin. Floating tables, nested content, supported bottom-to-top cells, compound bottom rules, unequal bottom-cell rules, and cell spacing retain their existing geometry.
 
 A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its border and content stop at the bottom margin. The row does not paint past the margin, with or without `w:cantSplit`. The next block starts on the next page.
 
