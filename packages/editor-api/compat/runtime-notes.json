@@ -581,11 +581,11 @@
   },
   "Word.Comment#delete": {
     "status": "partial",
-    "notes": "Updates the comment thread through canonical package review writes. Browser writes require the review module and an editable document; deleted or unsupported thread targets refuse. Unrelated threads survive. Scan budgets scale with the loaded canonical package, including edits since import. Nesting guards remain active. Incomplete scans refuse without partial deletion."
+    "notes": "Updates the comment thread through canonical package review writes. Browser writes require the review module and an editable document; deleted or unsupported thread targets refuse. Unrelated threads survive. Scan budgets scale with the loaded canonical package, including edits since import. A deletion batch shares marker scans and its scan budget. Each affected part rebuilds once. Mixed thread and reply deletions preserve their queue order. Nesting guards remain active. Incomplete scans refuse without partial deletion."
   },
   "Word.CommentReply#delete": {
     "status": "partial",
-    "notes": "Deletes the addressed reply through package review writes while preserving the parent thread. Browser writes require the review module and an editable document; stale targets refuse. Scan budgets scale with the loaded canonical package, including edits since import. Nesting guards remain active. Incomplete scans refuse without partial deletion."
+    "notes": "Deletes the addressed reply through package review writes while preserving the parent thread. Browser writes require the review module and an editable document; stale targets refuse. Scan budgets scale with the loaded canonical package, including edits since import. A deletion batch shares marker scans and its scan budget. Each affected part rebuilds once. Mixed thread and reply deletions preserve their queue order. Nesting guards remain active. Incomplete scans refuse without partial deletion."
   },
   "Word.Revision#accept": {
     "status": "partial",

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Each comment deletion scans and rebuilds document parts separately.",
+  "after": "A batch shares document scans and rebuilds each affected part once.",
+  "reason": "The batch emits existing removal and attribute primitives. The shared format does not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-comments.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-comment-export.test.ts",
+    "packages/core/src/store/__tests__/comment-batch-delete.test.ts"
+  ],
+  "changeset": "batch-comment-deletion",
+  "migration": null
+}
