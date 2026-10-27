@@ -48,7 +48,9 @@ export interface UnsupportedElement {
    * from the content, such as a preview request. Every editor edit to a drawing gives a new
    * object, including a replaced picture, which gets a new relationship. The editor does not
    * edit chart data, diagram data, or the theme, so `source` alone tells you when to ask for a
-   * new preview.
+   * new preview. A component usually stays mounted when its occurrence changes and receives
+   * the new element; it remounts when the occurrence moves to another page. Either way, clear
+   * an old image in the effect cleanup.
    */
   readonly source: OoxmlElement | null;
   /** `inline` inside a line of text, or `block` between paragraphs. */
@@ -56,8 +58,9 @@ export interface UnsupportedElement {
   /** The text of the built-in placeholder. */
   readonly label: string;
   /**
-   * Reserved geometry in document points, when the element has been laid out. For a drawing,
-   * it includes the effect extent, as the page of `createDrawingPreviewPackage` does.
+   * Reserved geometry in document points, when the element has been laid out. Always present
+   * for a drawing, and it includes the effect extent, as the page of
+   * `createDrawingPreviewPackage` does.
    */
   readonly bounds?: LayoutBox;
   /**
@@ -81,10 +84,10 @@ export interface UnsupportedElementLayout {
 export interface UnsupportedElementRule {
   /**
    * Also offer drawings that the editor renders without some features (`support` is
-   * `partial`), so a component can fill the gap, for example with an image from your own
-   * renderer. Fully supported drawings are never offered, and neither are shapes whose text
-   * the editor edits. Hidden drawings and drawings without a layout position have no box,
-   * so they are never offered either.
+   * `partial`). Default `false`. Use it so a component can fill the gap, for example with an
+   * image from your own renderer. Fully supported drawings are never offered, and neither are
+   * shapes whose text the editor edits. Hidden drawings and drawings without a layout position
+   * have no box, so they are never offered either.
    */
   readonly includePartial?: boolean;
   /**
