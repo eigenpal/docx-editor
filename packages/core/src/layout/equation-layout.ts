@@ -432,7 +432,14 @@ function layoutExpression(
       const superscriptY = 0;
       const baseY = superscript ? Math.max(0, superscript.box.height - base.baseline * 0.45) : 0;
       const baseline = baseY + base.baseline;
-      const subscriptY = baseline + resolved.fontSizePt * 0.08;
+      // The subscript's own baseline sits a fifth of an em below the base baseline, and its
+      // top stays clear of a superscript above it.
+      const subscriptY = subscript
+        ? Math.max(
+            baseline + resolved.fontSizePt * 0.2 - subscript.baseline,
+            superscript ? superscriptY + superscript.box.height + gap : 0
+          )
+        : baseline;
       const width =
         scriptX + Math.max(subscript?.box.width ?? 0, superscript?.box.width ?? 0, -gap);
       const height = Math.max(
