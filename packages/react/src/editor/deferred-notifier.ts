@@ -28,7 +28,7 @@ let streakResetArmed = false;
  */
 let pendingTasks: (() => void)[] = [];
 let taskChannel: MessageChannel | null = null;
-function yieldTask(task: () => void): void {
+export function yieldTask(task: () => void): void {
   if (typeof MessageChannel !== 'function') {
     // Same throttling caveat; only engines without channels take this path.
     globalThis.setTimeout(task, 0);
