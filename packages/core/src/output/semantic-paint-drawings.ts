@@ -1,5 +1,6 @@
 import { customDrawingPreview } from './drawing-custom-preview.ts';
 import { drawingSourceIssues } from '../store/package/drawing-support-issues.ts';
+import { selectedDrawingGraphicKind } from '../store/package/drawing-graphic-kind.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 // Drawing paint dispatch (typed-drawings-and-images task 10).
 //
@@ -401,7 +402,12 @@ function paintPlaceholderCard(
         source?.namespaceUri ?? 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       localName: source?.localName ?? 'drawing',
       source,
-      ...(source ? { drawingIssues: drawingSourceIssues(source, drawing.drawingNodeId) } : {}),
+      ...(source
+        ? {
+            drawingIssues: drawingSourceIssues(source, drawing.drawingNodeId),
+            graphicKind: selectedDrawingGraphicKind(source, drawing.drawingNodeId),
+          }
+        : {}),
       placement: 'inline',
       bounds: drawing.paintBounds,
       nodeId: drawing.drawingNodeId,

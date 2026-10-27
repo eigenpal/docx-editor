@@ -109,3 +109,28 @@ test('selection scan exhaustion cannot report an empty issue list', () => {
     expect.objectContaining({ code: 'inspection-limit', detail: 'drawing-selection-budget' })
   );
 });
+
+test('entries name the graphic their source holds, whether or not it renders', async () => {
+  const { previewPicture } = await import('./drawing-support-fixtures.ts');
+  const { smartArtPackage } = await import('./smartart-fixture.ts');
+  expect(inspect(previewShape()).entries[0]!.graphicKind).toBe('textbox');
+  expect(inspect(previewPicture()).entries[0]!.graphicKind).toBe('picture');
+  expect(
+    inspect('<w:pict><v:arc style="position:absolute;width:100pt;height:50pt"/></w:pict>')
+      .entries[0]!.graphicKind
+  ).toBe('shape');
+  const smartArt = inspectDrawingSupport(
+    smartArtPackage({ shapes: [{ preset: 'rect', off: [1000, 2000], ext: [3000, 4000] }] })
+  ).entries[0]!;
+  expect(smartArt.state).toBe('projected');
+  expect(smartArt.graphicKind).toBe('diagram');
+  expect(smartArt.issues).toEqual([]);
+});
+
+test('a legacy horizontal rule reports as projected, not as a placeholder', () => {
+  const report = inspect(
+    '<w:pict><v:rect xmlns:o="urn:schemas-microsoft-com:office:office" style="width:0;height:1.5pt" o:hralign="center" o:hrstd="t" o:hr="t" fillcolor="#a0a0a0" stroked="f"/></w:pict>'
+  );
+  expect(report.entries[0]!.state).toBe('projected');
+  expect(report.entries[0]!.graphicKind).toBe('shape');
+});

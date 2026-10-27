@@ -60,4 +60,5 @@ export type {
   DrawingSupportEntry,
   DrawingSupportReport,
   DrawingSupportIssue,
+  DrawingGraphicKind,
 } from './package/drawing-support.ts';

@@ -1548,6 +1548,9 @@ export const DRAWING_REL_FROM_H: readonly string[];
 export const DRAWING_REL_FROM_V: readonly string[];
 
 // @public
+export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
+// @public
 export interface DrawingPositionInput {
     // (undocumented)
     readonly horizontalEmu?: number;
@@ -4350,6 +4353,7 @@ export interface UnsupportedElement {
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
+    readonly graphicKind?: DrawingGraphicKind;
     readonly label: string;
     // (undocumented)
     readonly localName: string;

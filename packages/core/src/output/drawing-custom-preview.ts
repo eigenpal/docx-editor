@@ -1,4 +1,5 @@
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import { selectedDrawingGraphicKind } from '../store/package/drawing-graphic-kind.ts';
 import { drawingSourceIssues } from '../store/package/drawing-support-issues.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { clearUnsupportedElement, markUnsupportedElement } from './unsupported-elements.ts';
@@ -43,6 +44,7 @@ export function customDrawingPreview(
       label: drawing.accessibility.label ?? '',
       drawing,
       drawingIssues: drawingSourceIssues(source, drawing.drawingNodeId),
+      graphicKind: selectedDrawingGraphicKind(source, drawing.drawingNodeId),
     },
     element
   );

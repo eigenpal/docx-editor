@@ -32,6 +32,9 @@ export function collectPageChangeBars(page: PageRecord, scale: number, mode: Cha
 export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 
 // @public
+export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
+// @public
 export interface DrawingSupportIssue {
     // (undocumented)
     readonly code: 'unsupported-effect' | 'renderer-required' | 'unverified-3d' | 'saved-fallback' | 'unplaced-drawing' | 'inspection-limit' | 'projection-diagnostic';
@@ -135,7 +138,6 @@ export interface PaintOptions {
     readonly unsupportedOwnerPartName?: (nodeId: string) => string;
     // (undocumented)
     readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
-    readonly unsupportedSourceRevision?: number;
 }
 
 // @public
@@ -184,6 +186,7 @@ export interface UnsupportedElement {
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
+    readonly graphicKind?: DrawingGraphicKind;
     readonly label: string;
     // (undocumented)
     readonly localName: string;

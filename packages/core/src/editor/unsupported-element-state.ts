@@ -101,7 +101,6 @@ export function unsupportedElementPaintOptions(
 ) {
   return {
     includeRenderedDrawings: projection.includeRenderedDrawings,
-    unsupportedSourceRevision: projection.includeRenderedDrawings ? session.packageRevision() : 0,
     unsupportedOwnerPartName: (nodeId: string) =>
       partOfNodeId(session, nodeId)?.name ?? session.part().name,
     unsupportedSource: (nodeId: string, ownerPartName?: string) => {

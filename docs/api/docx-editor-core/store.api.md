@@ -1381,6 +1381,9 @@ export interface DrawingEffectsRenderer {
     }) => readonly VectorShapeComponent[];
 }
 
+// @public
+export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
 // @internal
 export interface DrawingGraphicProjection {
     // (undocumented)
@@ -1464,6 +1467,7 @@ export interface DrawingRenderers {
 // @public
 export interface DrawingSupportEntry {
     readonly drawingNodeId: string | null;
+    readonly graphicKind: DrawingGraphicKind;
     // (undocumented)
     readonly issues: readonly DrawingSupportIssue[];
     readonly nodeId: string;

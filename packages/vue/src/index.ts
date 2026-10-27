@@ -649,8 +649,8 @@ export type {
   RevisionMarkupChromeHandlers,
 } from '@docx-editor.dev/core/editor';
 
+export type { DrawingGraphicKind, DrawingSupportIssue } from '@docx-editor.dev/core/store';
 export type {
-  DrawingSupportIssue,
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,

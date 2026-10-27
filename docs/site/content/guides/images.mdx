@@ -289,7 +289,7 @@ for (const entry of report.entries) {
 }
 ```
 
-Each entry includes its canonical `source` and selected `drawingNodeId`, when available. Session node identifiers do not persist across saved snapshots. Use the report and source from the snapshot you send to your rendering service.
+Each entry includes its canonical `source`, its selected `drawingNodeId` when available, and its `graphicKind`. Session node identifiers do not persist across saved snapshots. Use the report and source from the snapshot you send to your rendering service.
 
 | State | Meaning |
 | --- | --- |
@@ -307,10 +307,16 @@ The report does not assess every attribute. It excludes inherited theme effects,
 
 Set `includeRenderedDrawings` to offer rendered graphics and saved drawing fallbacks to your declaration. The default remains placeholder-only. Existing catch-all declarations do not claim rendered graphics.
 
+The following example offers every chart and SmartArt diagram to your rendering service. It also offers other graphics that have explicit source issues:
+
 ```tsx
 <DocxEditor.UnsupportedElement
   includeRenderedDrawings
-  match={(element) => !!element.drawing && !!element.drawingIssues?.length}
+  match={(element) =>
+    element.graphicKind === 'chart' ||
+    element.graphicKind === 'diagram' ||
+    !!element.drawingIssues?.length
+  }
 >
   {({ element }) => <DrawingPreview element={element} />}
 </DocxEditor.UnsupportedElement>
@@ -318,9 +324,9 @@ Set `includeRenderedDrawings` to offer rendered graphics and saved drawing fallb
 
 In Vue, use `:include-rendered-drawings="true"` with the equivalent default slot. `DrawingPreview` is your application component.
 
-`element.presentation === 'drawing'` identifies a rendered graphic. Placeholder occurrences omit this field. `element.drawingIssues` contains the explicit source findings for the selected drawing. `element.drawing.chart.shownAs` retains the native chart state, including `fallback` and `chart`. Omit the issue check when your service must preview all offered graphics.
+`element.presentation === 'drawing'` identifies a rendered graphic. Placeholder occurrences omit this field. `element.graphicKind` names the graphic that the drawing source holds, such as `picture`, `chart`, `diagram`, or `textbox`. It is the same for a placeholder and a rendered graphic. `element.drawingIssues` contains the explicit source findings for the selected drawing. The issue scan excludes chart and diagram parts, so a rendered chart or SmartArt diagram usually has no issues. Match those graphics by `graphicKind`. `element.drawing.chart.shownAs` retains the native chart state, including `fallback` and `chart`.
 
-Returning an empty result directly from the render function restores the native graphic or placeholder. The custom component uses the existing drawing bounds and does not change pagination. Text-box stories remain editable and are excluded from rendered-graphic replacement. Hidden drawings and drawings without geometry have no canvas slot. Inspect them through the source report instead.
+Returning an empty result directly from the render function restores the native graphic or placeholder. The custom component uses the existing drawing bounds and does not change pagination. A rendered-graphic preview passes pointer presses to the drawing, so users can still select, move, resize, and delete it. Links, buttons, form fields, and elements with `tabindex` or `role="button"` inside the preview receive their own pointer input. Text-box stories remain editable and are excluded from rendered-graphic replacement. Hidden drawings and drawings without geometry have no canvas slot. Inspect them through the source report instead.
 
 ### Preview with your rendering service
 

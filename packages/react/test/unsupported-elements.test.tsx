@@ -402,6 +402,7 @@ test('unsupported drawing alternatives expose one source and preserve both branc
     captured?.source?.children.map((child) => (child.kind === 'textValue' ? '' : child.localName))
   ).toEqual(['Choice', 'Fallback']);
   expect(captured?.drawing?.placeholderGraphicKind).toBe('chart');
+  expect(captured?.graphicKind).toBe('chart');
   expect(captured?.bounds?.width).toBeGreaterThan(0);
   const saved = await editor!.save();
   const xml = strFromU8(unzipSync(new Uint8Array(saved!))['word/document.xml']!);

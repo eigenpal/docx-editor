@@ -134,3 +134,73 @@ test('rendered graphics opt into preview slots without changing layout, source, 
     container.remove();
   }
 });
+
+test('rendered-graphic opt-in keeps unchanged blocks when text elsewhere changes', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../store/__tests__/drawing-support-fixtures.ts');
+  const { observeUnsupportedElements } = await import('../index.ts');
+  const paragraphs = Array.from(
+    { length: 8 },
+    (_, i) => `<w:p><w:r><w:t>Paragraph ${i}</w:t></w:r></w:p>`
+  ).join('');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: previewDocument(`${previewShape()}</w:r></w:p>${paragraphs}<w:p><w:r>`),
+    unsupportedElementRules: [{ includeRenderedDrawings: true }],
+  });
+  let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    expect(hosts).toHaveLength(1);
+    const drawing = container.querySelector('svg');
+    const slot = hosts[0]!.slot;
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 2]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: target, offset: 2 },
+      head: { paragraphId: target, offset: 2 },
+    });
+    expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+    expect(container.querySelector('svg')).toBe(drawing);
+    expect(hosts[0]!.slot).toBe(slot);
+  } finally {
+    stop();
+    editor.destroy();
+    container.remove();
+  }
+});
+
+test('a rendered SmartArt diagram reaches an opted-in declaration as a diagram', async () => {
+  const { smartArtDocx } = await import('../../store/__tests__/smartart-fixture.ts');
+  const { observeUnsupportedElements, unsupportedElementRuleMatches } = await import('../index.ts');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: smartArtDocx({ shapes: [{ preset: 'rect', off: [1000, 2000], ext: [3000, 4000] }] }),
+    unsupportedElementRules: [{ includeRenderedDrawings: true }],
+  });
+  let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    expect(hosts).toHaveLength(1);
+    const element = hosts[0]!.unsupported;
+    expect(element.presentation).toBe('drawing');
+    expect(element.graphicKind).toBe('diagram');
+    const rule = {
+      includeRenderedDrawings: true,
+      match: (e: typeof element) => e.graphicKind === 'diagram',
+    };
+    expect(unsupportedElementRuleMatches(rule, element)).toBe(true);
+  } finally {
+    stop();
+    editor.destroy();
+    container.remove();
+  }
+});

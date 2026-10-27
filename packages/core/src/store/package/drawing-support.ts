@@ -12,10 +12,12 @@ import {
   supportIssue,
   type DrawingSupportIssue,
 } from './drawing-support-issues.ts';
+import { drawingGraphicKind, type DrawingGraphicKind } from './drawing-graphic-kind.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlElement } from './ooxml-tree.ts';
 
 export type { DrawingSupportIssue } from './drawing-support-issues.ts';
+export type { DrawingGraphicKind } from './drawing-graphic-kind.ts';
 
 /** Source inspection before image decoding or pagination. `projected` does not mean full fidelity. @public */
 export interface DrawingSupportEntry {
@@ -25,6 +27,8 @@ export interface DrawingSupportEntry {
   /** Selected projection identity, when one exists. */
   readonly drawingNodeId: string | null;
   readonly state: 'projected' | 'fallback' | 'placeholder' | 'hidden' | 'unplaced';
+  /** The graphic the selected drawing holds, whether or not it renders. */
+  readonly graphicKind: DrawingGraphicKind;
   /** The original canonical drawing or enclosing compatibility wrapper. Never mutate this value. */
   readonly source: OoxmlElement;
   readonly issues: readonly DrawingSupportIssue[];
@@ -58,6 +62,7 @@ function stateOf(
     projection.textboxStory ||
     projection.textArt ||
     projection.legacyGraphic ||
+    projection.horizontalRule ||
     projection.groupTextboxes?.length
   )
     return 'projected';
@@ -158,6 +163,7 @@ export function inspectDrawingSupport(pkg: OoxmlPackage): DrawingSupportReport {
           nodeId: source.id,
           drawingNodeId: projection?.drawingNodeId ?? null,
           state: stateOf(projection, selected.fallback),
+          graphicKind: drawingGraphicKind(selected.node),
           source,
           issues: Object.freeze(issues),
         })

@@ -867,6 +867,9 @@ export interface DrawingGeometry {
 }
 
 // @public
+export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
+
+// @public
 export interface DrawingGroupPictureLayerRecord {
     readonly crop: SourceCrop;
     readonly frameUnit: Readonly<{
@@ -4931,6 +4934,7 @@ export interface UnsupportedElement {
     readonly drawing?: InlineDrawingRecord | AnchoredDrawingRecord;
     readonly drawingIssues?: readonly DrawingSupportIssue[];
     readonly equation?: EquationSpanRecord;
+    readonly graphicKind?: DrawingGraphicKind;
     readonly label: string;
     // (undocumented)
     readonly localName: string;
@@ -4962,9 +4966,6 @@ export interface UnsupportedElementRule {
     // (undocumented)
     readonly match?: (element: UnsupportedElement) => boolean;
 }
-
-// @public
-export function unsupportedElementRuleMatches(rule: UnsupportedElementRule, element: UnsupportedElement): boolean;
 
 // @public
 export class UnsupportedScriptError extends Error {

@@ -787,6 +787,4 @@ export { noteSeparatorRuleBox } from './note-separator-rule.ts';
 export type { StrikeoutStrokePt } from './sfnt-strikeout-metrics.ts';
 export { shapedRunOutline } from './text-outline.ts';
 
-export { unsupportedElementRuleMatches } from '../layout/unsupported-content-types.ts';
-
-export type { DrawingSupportIssue } from '../store/package/drawing-support-issues.ts';
+export type { DrawingGraphicKind, DrawingSupportIssue } from '../store/package/drawing-support.ts';

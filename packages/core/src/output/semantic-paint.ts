@@ -130,8 +130,6 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
  */
 export interface PaintContext {
   readonly unsupportedOwnerPartName?: (nodeId: string) => string;
-  /** Revision token for source metadata that can change without changing geometry. */
-  readonly unsupportedSourceRevision?: number;
   readonly includeRenderedDrawings?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   readonly scale: number;
@@ -233,8 +231,6 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
  */
 export interface PaintOptions {
   readonly unsupportedOwnerPartName?: (nodeId: string) => string;
-  /** Revision token for source metadata that can change without changing geometry. */
-  readonly unsupportedSourceRevision?: number;
   readonly includeRenderedDrawings?: boolean;
   readonly unsupportedSource?: (nodeId: string, ownerPartName?: string) => OoxmlElement | null;
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
@@ -2360,7 +2356,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   // so show-all / caret chrome appear. Hover is the one other exception: it is applied
   // to the painted nodes in place, because a pointer crossing a region may not move it.
   const parameters =
-    `${resolved.scale}|${resolved.ariaHidden}|${options.includeRenderedDrawings ?? false}|${options.unsupportedSourceRevision ?? 0}|` +
+    `${resolved.scale}|${resolved.ariaHidden}|${options.includeRenderedDrawings ?? false}|` +
     `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
     `${resolved.defaultFontFamily ?? ''}|` +
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +

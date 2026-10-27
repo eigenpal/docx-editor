@@ -660,8 +660,8 @@ export {
   type UseRevisionMarkupDialogReturn,
 } from './editor/DocxEditorRevisionMarkupDialog';
 
+export type { DrawingGraphicKind, DrawingSupportIssue } from '@docx-editor.dev/core/store';
 export type {
-  DrawingSupportIssue,
   UnsupportedElement,
   UnsupportedElementLayout,
   UnsupportedElementRule,

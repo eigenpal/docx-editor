@@ -1,5 +1,8 @@
-import type { DrawingSupportIssue } from '../store/package/drawing-support-issues.ts';
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type {
+  DrawingGraphicKind,
+  DrawingSupportIssue,
+  OoxmlElement,
+} from '@docx-editor.dev/core/store';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
 import type { LayoutBox } from './semantic-records.ts';
@@ -10,6 +13,8 @@ export interface UnsupportedElement {
   readonly presentation?: 'drawing';
   /** Known explicit source limitations; an empty list does not prove full fidelity. */
   readonly drawingIssues?: readonly DrawingSupportIssue[];
+  /** The graphic a drawing holds, read from its source, whether or not it renders. */
+  readonly graphicKind?: DrawingGraphicKind;
   readonly nodeId: string;
   readonly ownerPartName: string;
   readonly namespaceUri: string | null;
