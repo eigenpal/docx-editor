@@ -6,19 +6,17 @@ import { UnsupportedElementPlaceholder } from './UnsupportedElements';
 /** Props for a registered unsupported-content renderer. @public */
 export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRule {
   /**
-   * Also offer drawings that render without some features (`element.support` is `partial`),
-   * not only placeholders. Default `false`. Fully supported drawings are never offered, and
-   * neither are shapes with text that the editor edits, hidden drawings, or drawings without
-   * a layout position. A partial shape without text is offered.
+   * Include partially rendered drawings (`support: 'partial'`). Defaults to `false`.
+   * Excludes fully supported drawings, hidden drawings, and drawings without a layout position.
+   * Excludes shapes with editable text. Partially rendered shapes without text remain eligible.
    */
   includePartial?: UnsupportedElementRule['includePartial'];
   /**
-   * Render this occurrence. Return `null`, `false`, an empty fragment or array, or whitespace to
-   * keep what the editor shows: the placeholder, or the partly rendered drawing. A child
-   * component that renders nothing keeps it too, so a component can wait for an image. It is
-   * called as a function, once for each occurrence, not mounted as a component: put hooks in
-   * a child component that you return. To build a preview DOCX in that component, use
-   * `drawingPreviewDocx` from `@docx-editor.dev/core/editor`.
+   * Render this occurrence. Empty content preserves the drawing or placeholder.
+   * Empty content includes `null`, `false`, empty fragments or arrays, and whitespace.
+   * Child components can return empty content while an image loads.
+   * The editor calls this function for each occurrence. Put hooks in a returned child component.
+   * Use `drawingPreviewDocx` from `@docx-editor.dev/core/editor` to create a preview DOCX.
    */
   children: (props: { element: UnsupportedElement }) => ReactNode;
 }
@@ -30,8 +28,8 @@ export interface DocxEditorUnsupportedElementProps extends UnsupportedElementRul
  * whitespace keeps what the editor shows.
  * Layout uses points and only sizes content without an existing layout box. Custom content
  * gets the occurrence's box (`element.bounds`); size it to 100% of the width and height.
- * Over a partly rendered drawing, presses on your content select the drawing below it, so
- * it can still be moved, resized, and deleted; links, buttons, and form fields keep theirs.
+ * Clicking a custom preview selects the underlying drawing for moving, resizing, or deletion.
+ * Links, buttons, and form fields retain their normal behavior.
  * Components can remount when pagination or virtualization removes an occurrence.
  * @public
  */

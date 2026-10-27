@@ -45,18 +45,11 @@ export interface UnsupportedElement {
   /** The local name of the source element, such as `drawing` or `AlternateContent`. */
   readonly localName: string;
   /**
-   * Lossless canonical source. Treat this value as read-only and untrusted. It stays the same
-   * object until the content itself changes, so use it as the dependency of work you derive
-   * from the content, such as a preview request. Every editor edit to a drawing gives a new
-   * object, including a replaced picture, which gets a new relationship. The editor does not
-   * edit chart data, diagram data, or the theme, so `source` alone tells you when to ask for a
-   * new preview. A component usually stays mounted when its occurrence changes and receives
-   * the new element; it remounts when the occurrence moves to another page or scrolls back
-   * into view. Keep previews outside the component, for example in a `WeakMap` keyed on
-   * `source`, so a remount reuses them. Cache the `Blob` or bytes rather than an object URL:
-   * create the URL in the effect, and revoke it and clear the image in the cleanup. Never
-   * `null` for an occurrence in the editor; only a standalone painter without a source lookup
-   * gives `null`.
+   * Lossless canonical source. Treat this value as read-only and untrusted.
+   * The object identity stays unchanged until the drawing content changes.
+   * Use `source` to identify cached previews across component remounts.
+   * Editor occurrences always provide a source. Standalone painters without a source lookup
+   * return `null`.
    */
   readonly source: OoxmlElement | null;
   /** `inline` inside a line of text, or `block` between paragraphs. */
@@ -89,12 +82,9 @@ export interface UnsupportedElementLayout {
 /** The first matching registration renders each unsupported element. @public */
 export interface UnsupportedElementRule {
   /**
-   * Also offer drawings that the editor renders without some features (`support` is
-   * `partial`). Default `false`. Use it so a component can fill the gap, for example with an
-   * image from your own renderer. Fully supported drawings are never offered, and neither are
-   * shapes with text that the editor edits; a partial shape without text is offered. Hidden
-   * drawings and drawings without a layout position have no box, so they are never offered
-   * either.
+   * Include partially rendered drawings (`support: 'partial'`). Defaults to `false`.
+   * Excludes fully supported drawings, hidden drawings, and drawings without a layout position.
+   * Excludes shapes with editable text. Partially rendered shapes without text remain eligible.
    */
   readonly includePartial?: boolean;
   /**

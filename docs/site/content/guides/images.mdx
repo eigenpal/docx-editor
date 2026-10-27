@@ -248,20 +248,21 @@ Both packages export `UnsupportedElement` with these fields:
 - `placement` is `inline` or `block`, as determined by the source position.
 - `label` contains the text of the built-in placeholder.
 - Optional `drawing` and `equation` records provide engine metadata.
-- `drawing.placeholderGraphicKind` identifies the graphic type. For its values, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
+- For drawings, `support` is `partial` or `unrendered`. `drawingIssues` lists detected rendering limitations.
+- `graphicKind` identifies the drawing type. `drawing.placeholderGraphicKind` identifies it only for placeholders. For its values, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
 - `drawing.accessibility.label` contains the drawing's alternative text.
 - `drawing.chart` provides `title`, `plotTypes`, and `shownAs` when the chart part can be read. Inside a chart placeholder declaration, `shownAs` is `placeholder`.
 - Optional `bounds` describes the box after layout. Use source metadata for matching before pagination.
 
 To inspect charts rendered directly or through saved fallbacks, read the layout records. For an example, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder).
 
-Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result keeps the built-in placeholder; it does not try the next declaration.
+Omit `match` for a catch-all. The first mounted matching declaration wins. Prop updates retain priority. Removing and remounting a declaration gives it a later priority. Use matchers that do not overlap, or keep declarations mounted and change their matchers to disable them temporarily. An empty result preserves the drawing or placeholder. The editor does not try the next declaration.
 
 `layout` reserves width and height in document points before pagination for opaque content. Defaults are 120 × 24 points for inline content and 240 × 96 points for blocks. Dimensions must be finite, positive, and at most 100,000 points. Drawing and equation placeholders retain their engine layout boxes. Unmatched opaque content retains its invisible behavior.
 
 Components retain declaration-local framework context and local state across same-page repaints. They can unmount when an occurrence leaves its page, is virtualized, or the document or registration changes. Keep durable annotations in application state. Controls own their keyboard, clipboard, context-menu, and drop events. Fit controls within the reserved box, or use scrolling or an external panel.
 
-Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. These declarations replace placeholders only; they do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
+Properties, metadata, and private payloads inside owning drawing, equation, and field projections are not independent content occurrences. Declarations replace placeholders by default. They do not render charts, SmartArt, or other DrawingML themselves. To show a chart's title in place of its placeholder, see [Replace a placeholder](/docs/2.x/pro/drawing#replace-a-placeholder); the recipe works without the EigenPal Pro License. Standalone low-level painters without a source lookup can expose `source: null`.
 
 ### Alternative drawing content
 
@@ -273,58 +274,68 @@ The same `DocxEditor.UnsupportedElement` declaration receives this placeholder. 
 
 If a header or footer placeholder blocks the entire body, layout retries without that placeholder's wrap exclusion. The placeholder stays visible at its authored position. Smaller placeholders and supported drawings keep their wrapping.
 
-### Preview with your rendering service
+### Replace a partially rendered drawing
 
-You can replace a drawing placeholder with an image from your rendering service. The editor does not upload documents or call a rendering service. Your application owns the request, authentication, image cache, and error state. Custom previews do not change the saved DOCX or PDF export.
+Set `includePartial` to provide custom previews for drawings that render without some features. The default is `false`. Fully supported drawings, hidden drawings, and drawings without a layout position remain excluded. Shapes with editable text remain excluded. Partially rendered shapes without text can receive previews.
 
-Pass the canonical `source` and `ownerPartName` to your service with the corresponding DOCX snapshot. The source fragment can refer to chart, diagram, image, theme, or relationship parts. A fragment alone does not contain those dependencies. Use the original DOCX only when the source and dependencies remain unchanged. After edits, use a saved snapshot that matches the preview request.
-
-Node identifiers belong to the editor session; they are not persistent XML identifiers. Your service must define how it locates the supplied fragment within that snapshot.
-
-Use these rules for asynchronous previews:
-
-1. Cache by document identity, snapshot revision, owner part, and source identity.
-2. Keep the cache outside the preview component because pagination can unmount it.
-3. Keep a labeled loading state inside the authored bounds.
-4. Cancel obsolete requests and ignore responses for an older snapshot.
-5. Show the fallback label and a retry control when rendering or image decoding fails.
-6. Release image object URLs when their cache entries expire.
-
-This React example reads application-owned preview state. `previewFor` and `requestPreview` are application functions, not editor methods. `requestPreview` manages cancellation and updates the cache for the supplied snapshot. Use an equivalent default slot in Vue.
+This React example uses an application component named `DrawingPreview`:
 
 ```tsx
 <DocxEditor document={bytes}>
-  <DocxEditor.UnsupportedElement match={(element) => !!element.drawing}>
-    {({ element }) => {
-      const preview = previewFor(snapshotRevision, element);
-      const label = element.drawing?.accessibility.label ?? element.label;
-      if (preview.status === 'ready') {
-        return (
-          <img
-            src={preview.objectUrl}
-            alt={label}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            onError={() => invalidatePreview(snapshotRevision, element)}
-          />
-        );
-      }
-      return (
-        <div aria-busy={preview.status === 'loading'}>
-          <p role="status">{element.label}</p>
-          <button
-            disabled={preview.status === 'loading'}
-            onClick={() => requestPreview(snapshotRevision, element)}
-          >
-            {preview.status === 'loading' ? 'Loading preview' : 'Load preview'}
-          </button>
-        </div>
-      );
-    }}
+  <DocxEditor.UnsupportedElement includePartial match={(element) => !!element.drawing}>
+    {({ element }) => <DrawingPreview element={element} />}
   </DocxEditor.UnsupportedElement>
 </DocxEditor>
 ```
 
-`invalidatePreview` marks a failed image as unavailable so the load control appears again. Localize the application controls and fit them within the drawing's box. Use a separate panel for controls that cannot fit small drawings. Render returned images as images; do not insert returned SVG or HTML strings into the document. Apply request limits and validate image types in your service. Do not resolve external document relationships automatically.
+In Vue, set `:include-partial="true"` and pass `element` from the default slot to your preview component. Place React hooks or Vue composables inside the child component. Return empty content while the preview loads to preserve the drawing or placeholder. Size the preview to 100% of the width and height of `element.bounds`. Clicking the preview selects the underlying drawing. Links, buttons, and form fields retain their normal behavior.
+
+Custom previews do not change the saved DOCX or PDF export.
+
+### Inspect drawing support
+
+Use `inspectDrawingSupport()` from `@docx-editor.dev/core/store` to inspect a parsed DOCX package without a browser. The report includes drawings in the body, headers, footers, footnotes, and endnotes. Check `report.complete` before treating the report as a complete inventory.
+
+Each entry includes `support`, `issues`, `graphicKind`, `ownerPartName`, and `nodeId`. The `support` values are `native`, `partial`, and `unrendered`. The check reads explicit effects, fallbacks, and 3-D properties in each drawing's XML. It does not inspect chart data, diagram data, inherited theme effects, or image bytes. An empty issue list does not guarantee complete rendering support.
+
+### Preview with your rendering service
+
+Use `drawingPreviewDocx()` to create a DOCX containing one drawing, including unsaved edits. The editor does not upload documents or call a rendering service. Your application controls requests, authentication, caching, and errors.
+
+Call `createPreview()` from your preview component's effect or event handler. Obtain `editor` from `useDocxEditor()` and `element` from the component's props:
+
+```ts
+import { drawingPreviewDocx } from '@docx-editor.dev/core/editor';
+
+function createPreview() {
+  if (!editor) return;
+  const result = drawingPreviewDocx(editor, element);
+  if (!result.ok) {
+    // Show an application error for result.reason.
+    return;
+  }
+  // Send result.docx, result.pageFitsDrawing, and element.bounds to your renderer.
+}
+```
+
+On the server, use `createDrawingPreviewPackage()` from `@docx-editor.dev/core/store`. Pass an `inspectDrawingSupport()` entry and the same package that you inspected. Node identifiers belong to that package and do not persist in saved XML.
+
+Both functions return `ok: false` when preview creation fails. The reason is `drawing-not-found`, `too-many-parts`, or `too-large`. The default limits are 64 copied parts and 64 MiB. Use the `limits` argument to change them. The preview includes the drawing's required document parts and excludes external relationships, embedded objects, macros, and templates.
+
+When `pageFitsDrawing` is `true`, render the first page as the preview image. The page includes the drawing's effect extent and has no margins. Otherwise, crop from `(0, 0)` using `bounds.width * dpi / 72` and `bounds.height * dpi / 72`. Do not use `bounds.x` or `bounds.y` as crop offsets. Without bounds, trim the white space around the drawing.
+
+Use an external renderer that supports the drawing features you need. Run it without network access and with time and memory limits. Treat DOCX bytes and returned images as untrusted data. Render returned images with an image element. Do not insert returned SVG or HTML strings into the document.
+
+For asynchronous previews:
+
+- Cache image bytes or `Blob` values outside the component, for example in a `WeakMap` keyed by `element.source`.
+- Start preview work when `element.source` changes. Its identity stays unchanged when unrelated content changes.
+- Queue preview creation when a document contains many drawings. The DOCX creation call is synchronous.
+- Cancel obsolete requests and ignore stale responses.
+- Create image object URLs in the component effect. Revoke them and clear the image during cleanup.
+- Preserve the drawing or placeholder on failure. Provide a retry control in your application.
+
+The editor does not edit chart data, diagram data, or themes. If your application changes those dependencies separately, invalidate the corresponding previews. Pagination can unmount preview components. An external cache lets a remounted component reuse its preview.
 
 ## Drawing limits
 

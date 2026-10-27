@@ -78,7 +78,7 @@ export interface DrawingSupportReport {
   /**
    * What the issue check covers: `explicit-source-effects`, the effects, fallbacks, and 3-D
    * properties written in each drawing's own XML. Chart and diagram parts, inherited theme
-   * effects, and image bytes are not checked. A later version can widen this value.
+   * effects, and image bytes are not checked.
    */
   readonly coverage: 'explicit-source-effects';
 }

@@ -706,7 +706,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. Source inspection reports explicit drawing limitations. Custom previews can replace eligible partially rendered drawings with includePartial. Previews do not change the saved drawing or PDF export. The PDF exporter applies fixed image opacity but reports unsupported color adjustments.',
   },
   {
     id: 'images.effects',

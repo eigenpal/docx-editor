@@ -41,9 +41,9 @@ export interface DrawingPreviewTarget {
 
 /** Caps for {@link createDrawingPreviewPackage}. @public */
 export interface DrawingPreviewPackageLimits {
-  /** Most parts copied into the preview package. Default 64. */
+  /** Maximum number of copied parts. Defaults to 64. */
   readonly maxParts?: number;
-  /** Most bytes copied into the preview package. Default 64 MiB. */
+  /** Maximum number of copied bytes. Defaults to 64 MiB. */
   readonly maxBytes?: number;
 }
 
