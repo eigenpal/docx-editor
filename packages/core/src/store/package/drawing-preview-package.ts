@@ -66,7 +66,8 @@ export type DrawingPreviewPackageResult =
       /**
        * True when the page has the drawing's size, so the first page is the preview image.
        * False when the size is unknown, such as a legacy VML drawing without a width and height
-       * in its style. Then the page keeps the document's size and margins.
+       * in its style. Then the page keeps the document's size and margins, and the drawing
+       * sits at the top left of the content area.
        */
       readonly pageFitsDrawing: boolean;
       /** The package parts copied from the source document, for logging and caching. */
@@ -353,8 +354,9 @@ function relsPartName(partName: string): string {
 /**
  * Build a small DOCX that holds one drawing and the parts it needs: chart and diagram parts,
  * images, styles, theme, settings, and fonts. Send it to a rendering service that draws the
- * first page as an image. The page has the drawing's size and no margins, and a floating
- * drawing is placed on the line, so the first page is the preview. A legacy VML drawing takes
+ * first page as an image. The page has the drawing's size, including its effect extent, so it
+ * matches the occurrence's `bounds`. It has no margins, and a floating drawing is placed on the
+ * line, so the first page is the preview. A legacy VML drawing takes
  * its size from its style. When the size is unknown, the page keeps the document's size and
  * margins. Relationships to external targets and to embedded objects, macros, or templates
  * are dropped, so the package never points outside itself.

@@ -198,7 +198,7 @@ export interface UnsupportedElement {
     // (undocumented)
     readonly placement: 'inline' | 'block';
     readonly source: OoxmlElement | null;
-    readonly support?: DrawingSupport;
+    readonly support?: Exclude<DrawingSupport, 'native'>;
 }
 
 // @public

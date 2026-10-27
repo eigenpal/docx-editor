@@ -215,3 +215,36 @@ test('includePartial offers partly rendered drawings only, never fully supported
     }
   }
 });
+
+test('an occurrence keeps its source object until the drawing itself changes', async () => {
+  const { previewDocument, previewShape } =
+    await import('../../store/__tests__/drawing-support-fixtures.ts');
+  const { observeUnsupportedElements } = await import('../index.ts');
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: previewDocument(previewShape('<a:effectLst><a:blur rad="127000"/></a:effectLst>')),
+    unsupportedElementRules: [{ includePartial: true }],
+  });
+  let hosts: readonly import('../../output/unsupported-elements.ts').UnsupportedElementHost[] = [];
+  const stop = observeUnsupportedElements(container, (next) => {
+    hosts = next;
+  });
+  try {
+    const source = hosts[0]!.unsupported.source;
+    // Typing in the drawing's own paragraph repaints it, but the drawing stays the same.
+    const paragraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraph, offset: 1 },
+      head: { paragraphId: paragraph, offset: 1 },
+    });
+    expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+    expect(hosts).toHaveLength(1);
+    expect(hosts[0]!.unsupported.source).toBe(source);
+  } finally {
+    stop();
+    editor.destroy();
+    container.remove();
+  }
+});

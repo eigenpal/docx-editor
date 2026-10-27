@@ -21,7 +21,7 @@ export interface UnsupportedElement {
    * `partial` for a drawing that renders without some features, offered only with
    * `includePartial`. Absent for content that is not a drawing.
    */
-  readonly support?: DrawingSupport;
+  readonly support?: Exclude<DrawingSupport, 'native'>;
   /**
    * The features of this drawing that the editor does not show as authored, read from its
    * own XML. Chart and diagram parts are not read, so an empty list does not prove fidelity.
@@ -39,12 +39,19 @@ export interface UnsupportedElement {
   readonly ownerPartName: string;
   readonly namespaceUri: string | null;
   readonly localName: string;
-  /** Lossless canonical source. Treat this value as read-only and untrusted. */
+  /**
+   * Lossless canonical source. Treat this value as read-only and untrusted. It stays the same
+   * object until the content itself changes, so use it as the dependency of work you derive
+   * from the content, such as a preview request.
+   */
   readonly source: OoxmlElement | null;
   readonly placement: 'inline' | 'block';
   /** The text of the built-in placeholder. */
   readonly label: string;
-  /** Reserved geometry in document points, when the element has been laid out. */
+  /**
+   * Reserved geometry in document points, when the element has been laid out. For a drawing,
+   * it includes the effect extent, as the page of `createDrawingPreviewPackage` does.
+   */
   readonly bounds?: LayoutBox;
   /**
    * The layout record of a drawing. Use `graphicKind` to identify the graphic: the record's
@@ -66,10 +73,15 @@ export interface UnsupportedElementRule {
   /**
    * Also offer drawings that the editor renders without some features (`support` is
    * `partial`), so a component can fill the gap, for example with an image from your own
-   * renderer. Fully supported drawings and text boxes are never offered.
+   * renderer. Fully supported drawings are never offered, and neither are shapes whose text
+   * the editor edits.
    */
   readonly includePartial?: boolean;
-  /** Return true to replace this occurrence. Omit to match every offered occurrence. */
+  /**
+   * Return true to replace this occurrence. Omit to match every offered occurrence. Offered
+   * occurrences also include equations and other content that is not a drawing; test
+   * `element.drawing` to match drawings only.
+   */
   readonly match?: (element: UnsupportedElement) => boolean;
   /** The box to reserve for content that has no layout box of its own, in points. */
   readonly layout?: UnsupportedElementLayout;

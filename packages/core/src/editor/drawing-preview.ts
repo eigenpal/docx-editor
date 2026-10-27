@@ -6,9 +6,11 @@ import {
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 /**
- * A small DOCX that holds one drawing from the editor's current document and the parts it
- * needs, for an external renderer. Pass an occurrence that an `UnsupportedElement` component
- * receives. The result is the same as `createDrawingPreviewPackage` on the saved document.
+ * A small DOCX that holds one drawing from the editor's current document, including unsaved
+ * edits, and the parts it needs, for an external renderer. Pass an occurrence that an
+ * `UnsupportedElement` component receives. The result equals `createDrawingPreviewPackage`
+ * on the document as a save would write it now. The call is synchronous, so make it in an
+ * effect keyed on `element.source`, not during render.
  *
  * @public
  */
