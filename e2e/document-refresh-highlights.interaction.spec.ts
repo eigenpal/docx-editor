@@ -163,7 +163,10 @@ test('highlights expire after three seconds, reset their timer, and support expl
 }) => {
   await open(page);
   await page.clock.install({ time: new Date(2026, 8, 23) });
-  await page.clock.pauseAt(new Date(2026, 8, 23, 0, 0, 1));
+  // The installed clock runs in real time until paused, so a fixed pause target can already
+  // be in the past on a slow runner. Pause one second after the clock's own current time.
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.pauseAt(now + 1000);
   const bands = page.locator('[data-docx-refresh-highlight]');
   await page.evaluate(() => window.__refreshMotion.refresh.highlightChanges({ animation: false }));
   await page.clock.fastForward(2999);
