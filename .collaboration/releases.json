@@ -612,6 +612,42 @@
         "package-lock.json": "f7be734d37c60be515e7c6f50d32fa3740c8227ccd339329984c069ec044f491",
         "fixture.json": "4c6b39727d34b9e8509ed52877aa6d99e879c5bda39740beb94bd8520e241e4a"
       }
+    },
+    {
+      "version": "2.33.0",
+      "commit": "3cc7bf5d38510940d6e88ffcec4ecff82fd6333e",
+      "sourceLockHash": "baf449b51f890149d08a3cbd5c79990a14e4db8acf8bec7f5926fce74cbadd59",
+      "format": "docx-collaboration:1.5.2.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 5,
+        "repairVersion": 2,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.33.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.33.0.tgz",
+          "integrity": "sha512-RdzvS03tf4X9gErM4Y9sTTgpqkvAHSh7Nu6qS+9jSVi4eO7o07zJjIMWmYchZgjPI7RuQWUgthCrR9rK1G1aZQ=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.33.0.tgz",
+          "integrity": "sha512-j0JxjG1rwFv0jyOQ8yy2UvYoLprlJHVUXygXe7U9v5ybZ34o4RcOnPNdOKjkUz5zBydyLnJs7oQBHqrcYAGu9Q=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.33.0.tgz",
+          "integrity": "sha512-ejmc+hx7sgAt4pD/Au+j6bk0hoDrXhTIEU0fjoj/kB31nfWZb/MWgK6OMxRH/+C/mhMYgq4lhQZRXLFiUu3ckw=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.33.0.tgz",
+          "integrity": "sha512-BqPXU5RD6/0fZI22vcE1ITInBFwGlbSe2ejHochJrfj/ESaSKmCW4frTN0apSeIlFECDFezl45EhiHWkkdrFAA=="
+        }
+      },
+      "hashes": {
+        "package.json": "52d268febb8465b7a1c53cada261d565a506bfa8941b13209135c181e7f57b41",
+        "package-lock.json": "dc56ff7c0c06e543ad06d26d0c2944a7b2498e6db21b799d96056b0cc64b9fa4",
+        "fixture.json": "34edd7efeacaa8d5cfbb768354f6b2b8679b29c83c0035d0a417e493c84f1011"
+      }
     }
   ]
 }
