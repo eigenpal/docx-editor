@@ -31,8 +31,8 @@ export interface UseDrawingPreviewReturn {
   readonly status: Readonly<Ref<DrawingPreviewState['status']>>;
   /** The image URL, or the previous image while a changed drawing loads. */
   readonly url: Readonly<Ref<string | null>>;
-  /** Why the last request failed, when `status` is `error`. */
-  readonly error: Readonly<Ref<unknown>>;
+  /** Why the preview failed (`error`) or is unavailable (`unavailable`), or `null`. */
+  readonly error: Readonly<Ref<DrawingPreviewState['error']>>;
   /** Request the preview again after `error` or `unavailable`. */
   retry(): void;
 }

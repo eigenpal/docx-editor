@@ -127,7 +127,9 @@ test('a changed drawing keeps its previous image while loading, and failures can
     const failed = controller.state(edited);
     expect(failed.status).toBe('error');
     expect(failed.url).toBe('https://previews.example/first.png');
-    expect((failed.error as Error).message).toBe('service down');
+    expect(failed.error?.kind === 'render' && (failed.error.cause as Error).message).toBe(
+      'service down'
+    );
     fail = false;
     controller.retry(edited, render);
     await settle();

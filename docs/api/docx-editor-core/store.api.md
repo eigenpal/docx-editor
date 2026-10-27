@@ -1426,6 +1426,12 @@ export interface DrawingLocks {
 // @internal (undocumented)
 export const DRAWINGML_MAIN_NAMESPACE_URI = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
+// @public
+export function drawingNeedsPreview(drawing: {
+    readonly hasPreviewArea?: boolean;
+    readonly support?: DrawingSupport;
+}): boolean;
+
 // @public (undocumented)
 export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass;
 
@@ -1461,9 +1467,7 @@ export type DrawingPreviewPackageResult = {
 
 // @public
 export interface DrawingPreviewTarget {
-    // (undocumented)
     readonly nodeId: string;
-    // (undocumented)
     readonly ownerPartName: string;
 }
 
@@ -1499,6 +1503,7 @@ export type DrawingSupport = 'native' | 'partial' | 'unrendered';
 export interface DrawingSupportEntry {
     readonly drawingNodeId: string | null;
     readonly graphicKind: DrawingGraphicKind;
+    readonly hasPreviewArea: boolean;
     readonly issues: readonly DrawingSupportIssue[];
     readonly nodeId: string;
     readonly ownerPartName: string;

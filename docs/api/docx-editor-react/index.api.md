@@ -58,6 +58,7 @@ import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DrawingGraphicKind } from '@docx-editor.dev/core/store';
 import { drawingNeedsPreview } from '@docx-editor.dev/core/editor';
+import { DrawingPreviewError } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewRender } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewRequest } from '@docx-editor.dev/core/editor';
 import { DrawingPreviewState } from '@docx-editor.dev/core/editor';
@@ -1906,6 +1907,8 @@ export { DrawingGraphicKind }
 
 export { drawingNeedsPreview }
 
+export { DrawingPreviewError }
+
 export { DrawingPreviewRender }
 
 export { DrawingPreviewRequest }
@@ -3439,7 +3442,7 @@ export function useDrawingPreview(element: UnsupportedElement, render: DrawingPr
 
 // @public
 export interface UseDrawingPreviewReturn {
-    readonly error: unknown;
+    readonly error: DrawingPreviewState['error'];
     retry(): void;
     readonly status: DrawingPreviewState['status'];
     readonly url: string | null;

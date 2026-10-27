@@ -656,6 +656,7 @@ export type {
 } from '@docx-editor.dev/core/store';
 export {
   drawingNeedsPreview,
+  type DrawingPreviewError,
   type DrawingPreviewRender,
   type DrawingPreviewRequest,
   type DrawingPreviewState,

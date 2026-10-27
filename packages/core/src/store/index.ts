@@ -55,7 +55,7 @@ export {
   type Twips,
 } from './units.ts';
 
-export { inspectDrawingSupport } from './package/drawing-support.ts';
+export { drawingNeedsPreview, inspectDrawingSupport } from './package/drawing-support.ts';
 export type {
   DrawingSupportEntry,
   DrawingSupportReport,

@@ -19,7 +19,10 @@ export interface DrawingPreviewRequest {
   readonly docx: Uint8Array;
   /** The occurrence being previewed. */
   readonly element: UnsupportedElement;
-  /** Aborted when the drawing changes or no component shows the preview any longer. */
+  /**
+   * Aborted when a newer request for a changed drawing replaces this one, or when the cache is
+   * released 30 seconds after the last preview component unmounts.
+   */
   readonly signal: AbortSignal;
 }
 
@@ -36,16 +39,31 @@ export type DrawingPreviewRender = (
 ) => Promise<Blob | string | null>;
 
 /**
+ * Why a preview is missing: the drawing could not be packaged (`package`, with the refusal
+ * reason), or the render function rejected (`render`, with what it rejected with).
+ *
+ * @public
+ */
+export type DrawingPreviewError =
+  | {
+      readonly kind: 'package';
+      readonly reason: Extract<DrawingPreviewPackageResult, { ok: false }>['reason'];
+    }
+  | { readonly kind: 'render'; readonly cause: unknown };
+
+/**
  * The preview for one occurrence.
  *
- * - `idle`: no request yet. The request starts right after the first read.
+ * - `idle`: no request yet. Preview components and hooks start the request right away.
  * - `loading`: a request is running or waiting for a free slot. `url` holds the previous
  *   image of this drawing, if any.
  * - `ready`: `url` holds the image.
- * - `unavailable`: no preview will come. The render function returned `null`, or the drawing
- *   cannot be packaged, and then `error` holds the package refusal reason, such as `too-large`.
- * - `error`: the render function rejected. `error` holds the reason, and `url` holds the
+ * - `unavailable`: no preview will come. The render function returned `null`, and `error` is
+ *   `null`; or the drawing cannot be packaged, and `error` is a `package` error.
+ * - `error`: the render function rejected. `error` is a `render` error, and `url` holds the
  *   previous image, if any.
+ *
+ * `retry()` requests again after `error` or `unavailable`.
  *
  * @public
  */
@@ -55,7 +73,7 @@ export interface DrawingPreviewState {
   /** The image URL, or the previous image of this drawing while a new one loads. */
   readonly url: string | null;
   /** Why the preview failed or is unavailable, or `null`. */
-  readonly error: unknown;
+  readonly error: DrawingPreviewError | null;
 }
 
 /** A preview with its retry action, as preview components pass it to your content. @public */
@@ -194,7 +212,11 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
       const packaged = drawingPreviewDocx(editor, element);
       const entry: Entry = { state: IDLE, controller: null, ownsUrl: false };
       if (!packaged.ok) {
-        set(key, entry, { status: 'unavailable', url: null, error: packaged.reason });
+        set(key, entry, {
+          status: 'unavailable',
+          url: null,
+          error: { kind: 'package', reason: packaged.reason },
+        });
         return;
       }
       // A changed drawing supersedes the request still running for its previous source.
@@ -242,7 +264,7 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
               evict();
             },
             (error: unknown) => {
-              settle({ status: 'error', url: previous, error });
+              settle({ status: 'error', url: previous, error: { kind: 'render', cause: error } });
             }
           );
       };
@@ -275,17 +297,4 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
   };
   controllers.set(editor, controller);
   return controller;
-}
-
-/**
- * Whether an occurrence is a drawing that the editor does not show in full: a placeholder, a
- * saved fallback, or a drawing with unsupported features. The default `match` of the drawing
- * preview components.
- *
- * @public
- */
-export function drawingNeedsPreview(element: UnsupportedElement): boolean {
-  return (
-    element.drawing !== undefined && element.support !== undefined && element.support !== 'native'
-  );
 }

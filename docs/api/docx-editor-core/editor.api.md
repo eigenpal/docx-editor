@@ -1551,7 +1551,10 @@ export const DRAWING_REL_FROM_V: readonly string[];
 export type DrawingGraphicKind = 'picture' | 'chart' | 'diagram' | 'shape' | 'group' | 'textbox' | 'canvas' | 'graphic';
 
 // @public
-export function drawingNeedsPreview(element: UnsupportedElement): boolean;
+export function drawingNeedsPreview(drawing: {
+    readonly hasPreviewArea?: boolean;
+    readonly support?: DrawingSupport;
+}): boolean;
 
 // @public
 export interface DrawingPositionInput {
@@ -1581,6 +1584,17 @@ export function drawingPreviewController(editor: DocxEditorInstance): DrawingPre
 export function drawingPreviewDocx(editor: DocxEditorInstance, element: Pick<UnsupportedElement, 'ownerPartName' | 'nodeId'>): DrawingPreviewPackageResult;
 
 // @public
+export type DrawingPreviewError = {
+    readonly kind: 'package';
+    readonly reason: Extract<DrawingPreviewPackageResult, {
+        ok: false;
+    }>['reason'];
+} | {
+    readonly cause: unknown;
+    readonly kind: 'render';
+};
+
+// @public
 export type DrawingPreviewPackageResult = {
     readonly copiedParts: readonly string[];
     readonly docx: Uint8Array;
@@ -1603,7 +1617,7 @@ export interface DrawingPreviewRequest {
 
 // @public
 export interface DrawingPreviewState {
-    readonly error: unknown;
+    readonly error: DrawingPreviewError | null;
     readonly status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
     readonly url: string | null;
 }

@@ -151,3 +151,27 @@ test('support gives one verdict: native, partial with issues, or unrendered', as
   );
   expect(unplaced.entries[0]!.support).toBe('unrendered');
 });
+
+test('a server picks the same drawings as the editor: no editable text boxes or hidden ones', async () => {
+  const { drawingNeedsPreview } = await import('../index.ts');
+  const blur = '<a:effectLst><a:blur rad="127000"/></a:effectLst>';
+  const shape = inspect(previewShape(blur)).entries[0]!;
+  expect([shape.hasPreviewArea, drawingNeedsPreview(shape)]).toEqual([true, true]);
+  const textBox = inspect(
+    previewShape(blur).replace(
+      '<wps:bodyPr/>',
+      '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Editable</w:t></w:r></w:p></w:txbxContent></wps:txbx><wps:bodyPr/>'
+    )
+  ).entries[0]!;
+  expect(textBox.graphicKind).toBe('textbox');
+  expect([textBox.hasPreviewArea, drawingNeedsPreview(textBox)]).toEqual([false, false]);
+  const unplaced = inspect(
+    '<w:pict><v:arc style="position:absolute;width:100pt;height:50pt"/></w:pict>'
+  ).entries[0]!;
+  expect([unplaced.support, unplaced.hasPreviewArea, drawingNeedsPreview(unplaced)]).toEqual([
+    'unrendered',
+    false,
+    false,
+  ]);
+  expect(drawingNeedsPreview(inspect(previewShape()).entries[0]!)).toBe(false);
+});

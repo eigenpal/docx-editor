@@ -24,9 +24,18 @@ import { resolveRelationship, type RelationshipRecord } from './relationships.ts
 import { escapeXml } from './sinks.ts';
 import { writeZip } from './zip.ts';
 
-/** Where a drawing is: an `inspectDrawingSupport` entry or an editor occurrence. @public */
+/**
+ * Where a drawing is. Pass an `inspectDrawingSupport` entry or an editor occurrence as is.
+ *
+ * @public
+ */
 export interface DrawingPreviewTarget {
+  /** The part that holds the drawing, such as `/word/document.xml`. */
   readonly ownerPartName: string;
+  /**
+   * The drawing, its compatibility wrapper, or any node inside them, in the package you pass.
+   * Every node of one drawing gives the same package.
+   */
   readonly nodeId: string;
 }
 

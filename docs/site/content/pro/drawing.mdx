@@ -264,7 +264,8 @@ This example displays the title or the alternative text from `drawing.accessibil
 ```tsx
 import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/react';
 
-const isChartPlaceholder = (element: UnsupportedElement) => element.graphicKind === 'chart';
+// Without includeRenderedDrawings, a declaration receives chart placeholders only.
+const isChart = (element: UnsupportedElement) => element.graphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';
@@ -272,7 +273,7 @@ const chartLabel = ({ drawing }: UnsupportedElement) =>
 export function Editor({ bytes }: { bytes: Uint8Array }) {
   return (
     <DocxEditor document={bytes}>
-      <DocxEditor.UnsupportedElement match={isChartPlaceholder}>
+      <DocxEditor.UnsupportedElement match={isChart}>
         {({ element }) => <div className="chart">{chartLabel(element)}</div>}
       </DocxEditor.UnsupportedElement>
     </DocxEditor>
@@ -289,7 +290,8 @@ import { DocxEditor, type UnsupportedElement } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
 
-const isChartPlaceholder = (element: UnsupportedElement) => element.graphicKind === 'chart';
+// Without includeRenderedDrawings, a declaration receives chart placeholders only.
+const isChart = (element: UnsupportedElement) => element.graphicKind === 'chart';
 
 const chartLabel = ({ drawing }: UnsupportedElement) =>
   drawing?.chart?.title ?? drawing?.accessibility.label ?? 'Chart';
@@ -297,7 +299,7 @@ const chartLabel = ({ drawing }: UnsupportedElement) =>
 
 <template>
   <DocxEditor :document="bytes">
-    <DocxEditor.UnsupportedElement :match="isChartPlaceholder">
+    <DocxEditor.UnsupportedElement :match="isChart">
       <template #default="{ element }">
         <div class="chart">
           {{ chartLabel(element) }}

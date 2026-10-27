@@ -677,11 +677,12 @@ export type {
   DrawingSupportIssue,
 } from '../store/package/drawing-support.ts';
 
+export { drawingNeedsPreview } from '../store/package/drawing-support.ts';
 export {
-  drawingNeedsPreview,
   drawingPreviewController,
   drawingPreviewDocx,
   type DrawingPreviewController,
+  type DrawingPreviewError,
   type DrawingPreviewRender,
   type DrawingPreviewRequest,
   type DrawingPreviewState,
