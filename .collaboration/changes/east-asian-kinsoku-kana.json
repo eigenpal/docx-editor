@@ -9,7 +9,7 @@
     "packages/core/src/layout/__tests__/hanging-punctuation-alignment.test.ts",
     "packages/core/src/layout/__tests__/kana-line-fit.test.ts",
     "packages/core/src/layout/__tests__/east-asian-kerning.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-kana-line-fit.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-line-end-hanging.test.ts"
   ],
   "changeset": "east-asian-kinsoku-kana",
   "migration": null

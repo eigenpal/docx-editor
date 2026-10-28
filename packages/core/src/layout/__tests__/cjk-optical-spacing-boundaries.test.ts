@@ -91,7 +91,10 @@ function setup(o: Options = {}) {
   };
   const original = snapshot(line),
     available = line.width + 10;
-  const fit = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), m, false, true);
+  const fit = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), m, {
+    hangingPunctuation: false,
+    requireLocalQualification: true,
+  });
   const run = () =>
     fit(
       line,

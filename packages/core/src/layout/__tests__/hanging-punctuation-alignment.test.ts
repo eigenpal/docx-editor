@@ -95,6 +95,36 @@ describe('legacy compatibility modes hang at every alignment', () => {
   });
 });
 
+describe('Korean paragraph-final marks in legacy modes', () => {
+  const K = '가'.repeat(19);
+  for (const compression of ['compressPunctuation', 'compressPunctuationAndJapaneseKana']) {
+    for (const jc of ['left', 'both']) {
+      test(`${compression}, ${jc}: a final ! starts the next line by itself`, () => {
+        const result = loadFixture({
+          text: K + '!',
+          available: 468,
+          language: 'ko-KR',
+          compatibility: 14,
+          compression,
+          paragraphProperties: `<w:jc w:val="${jc}"/>`,
+        });
+        expect(texts(result)).toEqual([K, '!']);
+      });
+    }
+  }
+
+  test('without compression a final ! hangs', () => {
+    const result = loadFixture({
+      text: K + '!',
+      available: 468,
+      language: 'ko-KR',
+      compatibility: 14,
+      paragraphProperties: '<w:jc w:val="left"/>',
+    });
+    expect(texts(result)).toEqual([K + '!']);
+  });
+});
+
 describe('distributed paragraphs hang without East Asian document defaults', () => {
   for (const compatibility of [14, 15] as const) {
     for (const mark of [...'。、）']) {

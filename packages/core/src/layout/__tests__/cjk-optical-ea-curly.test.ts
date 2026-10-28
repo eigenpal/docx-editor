@@ -82,8 +82,7 @@ function attempt(
     pieces,
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     m,
-    false,
-    options.localQualification ?? true
+    { hangingPunctuation: false, requireLocalQualification: options.localQualification ?? true }
   )(
     line,
     1,
@@ -183,8 +182,7 @@ test('an opening curly quote after a Latin word gives up its outer blank side', 
     pieces,
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     outlined,
-    false,
-    true
+    { hangingPunctuation: false, requireLocalQualification: true }
   )(
     line,
     spans.length,

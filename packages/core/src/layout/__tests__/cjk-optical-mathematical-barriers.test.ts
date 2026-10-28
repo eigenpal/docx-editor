@@ -94,8 +94,7 @@ function setup(o: Options = {}) {
     pieces,
     cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
     m,
-    false,
-    true
+    { hangingPunctuation: false, requireLocalQualification: true }
   );
   const before = snapshot(line),
     available = line.width + 10;

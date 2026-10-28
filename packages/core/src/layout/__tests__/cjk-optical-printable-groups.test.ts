@@ -113,13 +113,10 @@ function fit(
     width = measureDisplayText(p.text, styleForFontSlot(p.style, p.fontSlot), measure),
     available = x + width - 6;
   outlines.length = 0;
-  const result = createCjkOpticalFitter(
-    pieces,
-    cjkParagraphBreaks(pieces, policy),
-    measure,
-    false,
-    true
-  )(
+  const result = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), measure, {
+    hangingPunctuation: false,
+    requireLocalQualification: true,
+  })(
     line,
     pieces.length - 1,
     p.text,

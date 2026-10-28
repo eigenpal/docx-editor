@@ -44,7 +44,7 @@ export function rememberHangingPunctuation(
   // `hangs` already admitted the mark, so a Korean mark that hangs closes its paragraph.
   let advance =
     hangs && line.width + span.box.width > available + 0.001
-      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, true)
+      ? hangingCjkPunctuationAdvance(span.text, piece, measurer, { paragraphFinal: true })
       : undefined;
   if (
     advance !== undefined &&

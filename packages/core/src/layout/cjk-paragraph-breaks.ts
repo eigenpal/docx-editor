@@ -20,6 +20,7 @@ import {
 import {
   eastAsianLanguage,
   kinsokuCharacters,
+  koreanFinalMarkHangs,
   type CjkParagraphTypography,
 } from './cjk-typography.ts';
 
@@ -208,7 +209,9 @@ export function cjkParagraphBreaks(
           /^ko(?:-|$)/.test(language) &&
           (policy.hangingPunctuation ?? policy.overflowPunctuation) &&
           /^[\p{Pe}\p{Pf}\p{Po}]$/u.test(right.text) &&
-          (index < lastVisible || '。、'.includes(right.text));
+          (index < lastVisible ||
+            '。、'.includes(right.text) ||
+            !koreanFinalMarkHangs(policy.settings));
         forbidden =
           (!koreanOverflowMark &&
             (language

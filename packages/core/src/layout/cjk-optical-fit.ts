@@ -378,6 +378,8 @@ function expansionGate(
  */
 export interface KanaFitRules {
   readonly finalHalfFirst: boolean;
+  /** Skip the expansion gate: a legacy mode fits a lone mark after a full line. */
+  readonly ungated?: boolean;
 }
 // Hiragana and katakana, small ones included. The prolonged sound mark and iteration marks
 // keep their advances.
@@ -398,9 +400,13 @@ function kanaFitBound(line: PendingLine, candidates: readonly StyleSpanRecord[])
   for (const spans of [line.spans, candidates])
     for (const span of spans) {
       const em = span.style.fontSizePt;
-      for (const character of span.text) {
-        if (FULL_WIDTH_KANA.test(character)) bound += em / 16;
-        else if (PUNCTUATION.test(character) || curlyRole(character)) bound += em / 2;
+      const text = span.text;
+      for (let index = 0; index < text.length; index++) {
+        const unit = text.charCodeAt(index);
+        if ((unit >= 0x3041 && unit <= 0x3096) || (unit >= 0x30a1 && unit <= 0x30fa))
+          bound += em / 16;
+        else if (unit >= 0x2018 && (PUNCTUATION.test(text[index]!) || curlyRole(text[index]!)))
+          bound += em / 2;
       }
     }
   return bound;
@@ -421,17 +427,48 @@ function shareAmong(cells: readonly Cell[], amount: number): number {
 }
 
 /** Try a complete protected group without changing the line when it cannot fit. */
+interface FitContext {
+  readonly measurer: TextMeasurer;
+  readonly baselinePieces: readonly FieldAwarePiece[];
+  readonly requireLocalQualification: boolean;
+  readonly memo: ClusterMemo;
+  /**
+   * The cells of the current group's line, kept between its attempts: an attempt that fails
+   * leaves the line unchanged, so the next attempt starts from copies of the same cells.
+   */
+  readonly cells: { value?: readonly Cell[] | null };
+}
+interface FitAttempt {
+  /** The final mark may hang with this advance; the rest of the line fits without it. */
+  readonly hangAdvance?: number;
+  readonly kana?: KanaFitRules;
+}
+function lineCells(
+  context: FitContext,
+  line: PendingLine,
+  candidates: readonly StyleSpanRecord[]
+): Cell[] | undefined {
+  // The first attempt takes the cells as built; a later one copies them with no compression.
+  if (context.cells.value !== undefined)
+    return context.cells.value?.map((cell) => ({ ...cell, reduction: 0, shift: 0 }));
+  const cells = cellsOf(
+    [...line.spans, ...candidates],
+    context.measurer,
+    context.baselinePieces,
+    context.requireLocalQualification,
+    context.memo
+  );
+  context.cells.value = cells ?? null;
+  return cells;
+}
 function fitCjkOptically(
   line: PendingLine,
   candidates: readonly StyleSpanRecord[],
   available: number,
-  measurer: TextMeasurer,
-  baselinePieces: readonly FieldAwarePiece[],
-  requireLocalQualification: boolean,
-  memo: ClusterMemo,
-  hangAdvance: number | undefined,
-  kana?: KanaFitRules
+  context: FitContext,
+  { hangAdvance, kana }: FitAttempt
 ): CjkOpticalFit | undefined {
+  const { measurer } = context;
   const width = candidates.reduce((sum, candidate) => sum + candidate.box.width, 0);
   let deficit = line.width + width - available;
   if (deficit <= TOLERANCE || !measurer.inkBounds || line.drawings.length) return undefined;
@@ -443,7 +480,11 @@ function fitCjkOptically(
     return undefined;
   // A kana fit is gated, and the gate needs room left on the line. Check that and an upper
   // bound on the capacity before the line is split into cells and measured for ink.
-  if (kana && (available - line.width <= TOLERANCE || deficit > kanaFitBound(line, candidates)))
+  if (
+    kana &&
+    ((!kana.ungated && available - line.width <= TOLERANCE) ||
+      deficit > kanaFitBound(line, candidates))
+  )
     return undefined;
   // Do not redistribute spacing across separate float passages.
   for (let index = 1; index < line.spans.length; index++) {
@@ -458,13 +499,7 @@ function fitCjkOptically(
       return undefined;
   }
   const sourceCount = line.spans.length;
-  const cells = cellsOf(
-    [...line.spans, ...candidates],
-    measurer,
-    baselinePieces,
-    requireLocalQualification,
-    memo
-  );
+  const cells = lineCells(context, line, candidates);
   if (!cells) return undefined;
   const first = cells.find((cell) => cell.sourceIndex === sourceCount)!;
   const last = cells.at(-1)!;
@@ -505,7 +540,7 @@ function fitCjkOptically(
   const relief = fullDeficit - deficit;
   // A kana fit gates every group, a word that opens it included.
   const gate =
-    kana !== undefined ||
+    (kana !== undefined && !kana.ungated) ||
     (isCjk(first.span.text.codePointAt(0)!) && !PUNCTUATION.test(first.span.text)) ||
     OPENING.test(first.span.text)
       ? expansionGate(cells, sourceCount, available - line.width, fullDeficit)
@@ -610,12 +645,34 @@ function fitCjkOptically(
   const spanStarts: number[] = [];
   let x = line.spans[0]?.box.x ?? candidates[0]!.box.x;
   let candidateWidth = 0;
+  // A kana fit rejoins neighbouring cells of one source span that keep their advances, or
+  // that are kana with the same equal share: their letter spacing paints the same geometry,
+  // and later stages measure one span instead of one per character.
+  let previous: { span: StyleSpanRecord; cell: Cell } | undefined;
   for (const cell of cells) {
     const source = cell.span;
     // Preserve witnessed inter-script advances; they are not compression capacity.
     if (cell.sourceIndex > 0 && cell.sourceIndex < sourceCount)
       x += automaticTextSpacingBefore(source);
     const reduced = cell.reduction > 0;
+    const kanaShared = kana !== undefined && reduced && cell.shift === 0 && isFullWidthKana(cell);
+    const joinable =
+      kana !== undefined && source.glyphOffsetPt === undefined && (!reduced || kanaShared);
+    if (
+      joinable &&
+      previous &&
+      previous.cell.sourceIndex === cell.sourceIndex &&
+      previous.cell.reduction === cell.reduction &&
+      previous.span.range.end === source.range.start
+    ) {
+      const span = previous.span as { -readonly [K in keyof StyleSpanRecord]: StyleSpanRecord[K] };
+      span.text += source.text;
+      span.range = { ...span.range, end: source.range.end };
+      span.box = { ...span.box, width: span.box.width + source.box.width - cell.reduction };
+      x += source.box.width - cell.reduction;
+      if (cell.sourceIndex >= sourceCount) candidateWidth += source.box.width - cell.reduction;
+      continue;
+    }
     const span = {
       ...source,
       ...(reduced
@@ -624,11 +681,12 @@ function fitCjkOptically(
               source.style,
               source.style.characterSpacingPt - cell.reduction / source.text.length
             ),
-            glyphOffsetPt: (source.glyphOffsetPt ?? 0) + cell.shift,
+            ...(kanaShared ? {} : { glyphOffsetPt: (source.glyphOffsetPt ?? 0) + cell.shift }),
           }
         : {}),
       box: { ...source.box, x, width: source.box.width - cell.reduction },
     };
+    previous = joinable ? { span, cell } : undefined;
     x += span.box.width;
     if (cell.sourceIndex < sourceCount) {
       spanStarts[cell.sourceIndex] ??= spans.length;
@@ -682,17 +740,35 @@ export function createParagraphCjkOpticalFitter(
     opticalParagraph,
     opticalCompression:
       (opticalParagraph || kanaParagraph || localOpticalParagraph) && !preserveColonAdvances,
-    fitCjkOptically: createCjkOpticalFitter(
-      pieces,
-      breaks,
-      measurer,
-      typography.hangingPunctuation ?? typography.overflowPunctuation,
-      !(opticalParagraph || kanaParagraph),
-      typography,
-      kanaPolicy ? { finalHalfFirst: !typography.overflowPunctuation } : undefined,
-      !opticalPolicy
-    ),
+    fitCjkOptically: createCjkOpticalFitter(pieces, breaks, measurer, {
+      hangingPunctuation: typography.hangingPunctuation ?? typography.overflowPunctuation,
+      requireLocalQualification: !(opticalParagraph || kanaParagraph),
+      policy: typography,
+      ...(kanaPolicy
+        ? {
+            kana: {
+              rules: { finalHalfFirst: !typography.overflowPunctuation },
+              only: !opticalPolicy,
+            },
+          }
+        : {}),
+    }),
   };
+}
+
+/** How {@link createCjkOpticalFitter} fits a protected group. */
+export interface CjkOpticalFitterOptions {
+  /** A final mark that may hang past the margin needs no fit for itself. */
+  readonly hangingPunctuation: boolean;
+  /** Fit only text in qualified faces without authored tracking or scaling. */
+  readonly requireLocalQualification?: boolean;
+  /** The paragraph typography, for the line-start rules of hanging and kana fits. */
+  readonly policy?: CjkParagraphTypography;
+  /**
+   * Kana compression (`compressPunctuationAndJapaneseKana`). With `only`, the fitter tries
+   * kana fits alone, for a paragraph that fits no other punctuation.
+   */
+  readonly kana?: { readonly rules: KanaFitRules; readonly only: boolean };
 }
 
 /** Keep each protected group whole even when its source runs split its punctuation. */
@@ -700,39 +776,47 @@ export function createCjkOpticalFitter(
   pieces: readonly FieldAwarePiece[],
   breaks: CjkParagraphBreaks | null,
   measurer: TextMeasurer,
-  hangingPunctuation: boolean,
-  requireLocalQualification = false,
-  policy?: CjkParagraphTypography,
-  kanaRules?: KanaFitRules,
-  kanaOnly = false
+  {
+    hangingPunctuation,
+    requireLocalQualification = false,
+    policy,
+    kana: kanaFit,
+  }: CjkOpticalFitterOptions
 ) {
   const queued = new Map<number, CjkOpticalFit>();
   const memo: ClusterMemo = new Map();
+  const legacy = policy?.settings?.legacyLineEndPunctuation === true;
+  const languages = new WeakMap<FieldAwarePiece, string>();
+  const languageOf = (piece: FieldAwarePiece): string => {
+    let language = languages.get(piece);
+    if (language === undefined)
+      languages.set(piece, (language = eastAsianLanguage(piece.props) ?? 'ja-jp'));
+    return language;
+  };
   /**
-   * Whether the group ends with a character that cannot start a line, after one that can
-   * end it: a kana fit pulls only such a character onto a full line. Korean text and modern
-   * Traditional Chinese text keep their own punctuation rules.
+   * The kana rules for a group that ends with a character the line-start list forbids at a
+   * line start, whatever the paragraph kinsoku switch, or undefined. Korean text and modern
+   * Traditional Chinese text keep their own punctuation rules. A legacy mode fits a lone mark
+   * after a full line without the expansion gate.
    */
-  const endsLineStartProhibited = (
+  const kanaRulesFor = (
     candidates: readonly StyleSpanRecord[],
     piece: FieldAwarePiece
-  ): boolean => {
+  ): KanaFitRules | undefined => {
+    if (!kanaFit) return undefined;
     const last = candidates.at(-1)!;
-    const tail = segmentGraphemes(last.text).at(-1)?.text;
-    if (!tail || !breaks || (candidates.length === 1 && tail.length === last.text.length))
-      return false;
-    const language = eastAsianLanguage(piece.props) ?? 'ja-jp';
-    if (/^ko(?:-|$)/.test(language)) return false;
-    if (
-      /^zh-(tw|hk|mo|hant)(-|$)/.test(language) &&
-      policy?.settings?.legacyLineEndPunctuation !== true
-    )
-      return false;
-    const offset = last.range.end - piece.start - tail.length;
-    return (
-      breaks.decision(piece, offset, '', '') === 'kinsoku' &&
-      kinsokuCharacters(language, policy?.settings).before.includes(tail)
-    );
+    // A single code unit is its own grapheme unless a combining mark could follow it.
+    const tail =
+      last.text.length === 1 || !/[\p{M}\u200d\ud800-\udfff]/u.test(last.text)
+        ? last.text.at(-1)
+        : segmentGraphemes(last.text).at(-1)?.text;
+    if (!tail) return undefined;
+    const language = languageOf(piece);
+    if (/^ko(?:-|$)/.test(language)) return undefined;
+    if (/^zh-(tw|hk|mo|hant)(-|$)/.test(language) && !legacy) return undefined;
+    if (!kinsokuCharacters(language, policy?.settings).before.includes(tail)) return undefined;
+    const lone = candidates.length === 1 && tail.length === last.text.length;
+    return lone && legacy ? { ...kanaFit.rules, ungated: true } : kanaFit.rules;
   };
   return (
     line: PendingLine,
@@ -830,39 +914,28 @@ export function createCjkOpticalFitter(
           candidates.map((candidate) => candidate.text).join(''),
           pieces[currentIndex]!,
           measurer,
-          false,
-          policy
+          { policy }
         )
       : undefined;
     // Kana compress to pull a line-start-prohibited character onto the line before it may
     // hang. A group that hangs at its natural width needs no other fit; one that does not may
     // still hang its final mark once the rest of the line compresses.
-    const kana = kanaRules && endsLineStartProhibited(candidates, pieces[currentIndex]!);
-    let fitted = kana
-      ? fitCjkOptically(
-          line,
-          candidates,
-          available,
-          measurer,
-          pieces,
-          requireLocalQualification,
-          memo,
-          undefined,
-          kanaRules
-        )
-      : undefined;
-    if (!fitted && kanaOnly) return undefined;
-    if (!fitted && hangsWithin(hangAdvance, available - line.width, x - origin)) return undefined;
-    fitted ??= fitCjkOptically(
-      line,
-      candidates,
-      available,
+    const context: FitContext = {
       measurer,
-      pieces,
+      baselinePieces: pieces,
       requireLocalQualification,
       memo,
-      hangAdvance
-    );
+      cells: {},
+    };
+    const kanaRules = kanaRulesFor(candidates, pieces[currentIndex]!);
+    let fitted = kanaRules
+      ? fitCjkOptically(line, candidates, available, context, { kana: kanaRules })
+      : undefined;
+    if (!fitted && kanaFit?.only) return undefined;
+    if (!fitted && hangsWithin(hangAdvance, available - line.width, x - origin)) return undefined;
+    fitted ??= fitCjkOptically(line, candidates, available, context, {
+      ...(hangAdvance !== undefined ? { hangAdvance } : {}),
+    });
     if (!fitted) return undefined;
     let first: CjkOpticalFit | undefined;
     let offset = 0;

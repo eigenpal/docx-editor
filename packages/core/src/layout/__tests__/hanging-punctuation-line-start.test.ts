@@ -91,6 +91,18 @@ describe('line-start rules decide hanging', () => {
       expect(texts(result)).toEqual(wrapsWithIdeograph('､'));
     });
 
+    for (const mark of [...'.,']) {
+      test(`${jc}: a paragraph with kinsoku off still hangs half-width ${mark}`, () => {
+        const result = loadFixture({
+          text: H + mark + '国国',
+          available: 468,
+          language: 'ja-JP',
+          paragraphProperties: `<w:jc w:val="${jc}"/><w:kinsoku w:val="0"/>`,
+        });
+        expect(texts(result)[0]).toBe(H + mark);
+      });
+    }
+
     test(`${jc}: the default Japanese list still hangs 。`, () => {
       const result = loadFixture({
         text: H + '。国',

@@ -145,9 +145,9 @@ The document defaults decide whether East Asian spacing applies at all. A justif
 
 #### Line-end punctuation and kana
 
-With punctuation overflow on (`w:overflowPunct`), a line-end mark can hang past the right margin. It hangs only when the line-start list for its run language forbids it at a line start, and the paragraph keeps kinsoku on (`w:kinsoku`). The list is the custom one in `w:noLineBreaksBefore` for that language, or the default list. Otherwise the mark starts the next line. The run language also excludes some marks, such as Japanese `！` and `？`, which wrap with the character before them.
+With punctuation overflow on (`w:overflowPunct`), a line-end mark can hang past the right margin. It hangs only when the line-start list for its run language forbids it at a line start, and the paragraph keeps kinsoku on (`w:kinsoku`). The list is the custom one in `w:noLineBreaksBefore` for that language, or the default list. Otherwise the mark starts the next line. With kinsoku off, half-width marks such as `.` and `,` still hang. The run language also excludes some marks, such as Japanese `！` and `？`, which wrap with the character before them.
 
-Justified and distributed paragraphs hang marks in compatibility mode 15 and later. With no compatibility mode, or in mode 11, 12, or 14, paragraphs hang marks at every alignment, whatever the kinsoku switch, and the text before a hanging mark fills the measure. If the styles part names no East Asian font in `w:rPrDefault`, only distributed paragraphs hang marks.
+Justified and distributed paragraphs hang marks in compatibility mode 15 and later. With no compatibility mode, or in mode 11, 12, or 14, paragraphs hang marks at every alignment, whatever the kinsoku switch, and the text before a hanging mark fills the measure. If the styles part names no East Asian font in `w:rPrDefault`, only distributed paragraphs hang marks. In mode 14 and earlier, a Korean paragraph-final mark does not hang when `w:characterSpacingControl` compresses punctuation; it starts the next line.
 
 When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full line can pull a following line-start-prohibited character, such as `。` or `」`, onto itself. The line compresses in this order:
 
@@ -155,7 +155,7 @@ When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full
 1. Hiragana and katakana, each by at most one sixteenth of an em, in equal shares.
 1. The trailing half of a final closing mark, when the kana cannot take the rest.
 
-If the trailing half of the final mark alone fits the line, only that half compresses. Without punctuation overflow, the trailing half compresses before the kana. If the line still cannot fit the character, the mark hangs or the last character moves to the next line. Kanji, the prolonged sound mark `ー`, and half-width katakana keep their advances. Kana fitting applies where punctuation hangs, as the previous paragraph describes. It does not apply in Korean runs, or in Traditional Chinese runs in mode 15 and later.
+If the trailing half of the final mark alone fits the line, only that half compresses. Without punctuation overflow, the trailing half compresses before the kana. The line-start list decides the fit, whatever the kinsoku switch. If the line still cannot fit the character, the mark hangs or the last character moves to the next line. Kanji, the prolonged sound mark `ー`, and half-width katakana keep their advances. Kana fitting applies where punctuation hangs, as the previous paragraph describes. It does not apply in Korean runs, or in Traditional Chinese runs in mode 15 and later.
 
 Pair kerning (`w:kern`) leaves kana, ideographs, CJK punctuation, and full-width and half-width forms at their own advances. Latin letters in the same run still kern. A combining voiced or semi-voiced sound mark (U+3099 or U+309A) adds no width, also in faces that give the mark a full character cell.
 

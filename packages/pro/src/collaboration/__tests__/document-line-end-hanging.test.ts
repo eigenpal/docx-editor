@@ -14,7 +14,7 @@ import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
-const harness = createPeerHarness('kana-line-fit-room', { offlineEditing: true });
+const harness = createPeerHarness('line-end-hanging-room', { offlineEditing: true });
 type Editor = ReturnType<typeof createDocxEditor>;
 const editors: Editor[] = [];
 afterEach(() => {

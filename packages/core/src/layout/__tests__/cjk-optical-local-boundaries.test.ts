@@ -117,13 +117,10 @@ function fitWord(
     measure
   );
   const available = x + candidateWidth - 6;
-  const fit = createCjkOpticalFitter(
-    pieces,
-    cjkParagraphBreaks(pieces, policy),
-    measure,
-    false,
-    true
-  );
+  const fit = createCjkOpticalFitter(pieces, cjkParagraphBreaks(pieces, policy), measure, {
+    hangingPunctuation: false,
+    requireLocalQualification: true,
+  });
   shapeCalls.length = 0;
   const result = fit(
     line,

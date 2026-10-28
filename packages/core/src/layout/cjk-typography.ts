@@ -184,6 +184,14 @@ export function resolveCjkTypography(
   };
 }
 
+/**
+ * Whether a Korean paragraph-final mark other than `。` or `、` may hang. A legacy compatibility
+ * mode that compresses punctuation starts the next line with it instead.
+ */
+export function koreanFinalMarkHangs(settings: CjkTypographySettings | undefined): boolean {
+  return !(settings?.legacyLineEndPunctuation === true && settings.compression !== 'doNotCompress');
+}
+
 export function eastAsianLanguage(props: readonly OoxmlProperty[]): string | undefined {
   let language: string | undefined;
   for (const prop of props) {

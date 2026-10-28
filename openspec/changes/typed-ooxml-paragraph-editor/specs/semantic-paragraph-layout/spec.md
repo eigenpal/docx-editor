@@ -619,9 +619,9 @@ Justified East Asian lines SHALL distribute punctuation compression across avail
 - **WHEN** the line needs compression to fit
 - **THEN** both blank sides at that seam compress
 
-### Requirement: Hanging punctuation only on justified paragraphs
+### Requirement: Hanging punctuation by alignment
 
-With `w:overflowPunct` on, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. In compatibility mode 15 and later, left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin.
+With `w:overflowPunct` on, in compatibility mode 15 and later, the layout engine SHALL let line-end punctuation hang past the margin only when the paragraph alignment is justified or distributed. This SHALL apply to full-width punctuation and to Latin punctuation in a run with an East Asian language. Left-aligned, centered, and right-aligned lines SHALL keep line-end punctuation inside the margin there.
 
 #### Scenario: A closing quote stays inside a left-aligned line
 
@@ -688,7 +688,7 @@ When a justified paragraph enables hanging punctuation, the punctuation run's la
 
 ### Requirement: Line-start rules decide hanging
 
-A mark SHALL hang only when the custom or default line-start list for its run language forbids it at a line start and the paragraph keeps kinsoku on; otherwise the mark SHALL start the next line. A legacy compatibility mode SHALL hang a listed mark whatever the paragraph kinsoku switch.
+A mark SHALL hang only when the custom or default line-start list for its run language forbids it at a line start and the paragraph keeps kinsoku on; otherwise the mark SHALL start the next line. With kinsoku off, half-width marks SHALL still hang. A legacy compatibility mode SHALL hang a listed mark whatever the paragraph kinsoku switch.
 
 #### Scenario: The effective line-start list decides hanging
 
@@ -935,7 +935,7 @@ When `w:characterSpacingControl` is `compressPunctuationAndJapaneseKana`, a full
 
 ### Requirement: Kana fit scope
 
-Kanji, the prolonged sound mark, and half-width katakana SHALL keep their advances in a kana fit. Without punctuation overflow, the final trailing half SHALL compress before the kana. When compression cannot absorb the overflow, the line SHALL hang the mark or wrap as without kana compression. The fit SHALL apply where punctuation hangs, and SHALL NOT apply in Korean runs or in Traditional Chinese runs in mode 15 and later.
+Kanji, the prolonged sound mark, and half-width katakana SHALL keep their advances in a kana fit. Without punctuation overflow, the final trailing half SHALL compress before the kana. The line-start list SHALL decide the fit whatever the kinsoku switch. When compression cannot absorb the overflow, the line SHALL hang the mark or wrap as without kana compression. The fit SHALL apply where punctuation hangs, and SHALL NOT apply in Korean runs or in Traditional Chinese runs in mode 15 and later.
 
 #### Scenario: Paragraphs that fit kana
 

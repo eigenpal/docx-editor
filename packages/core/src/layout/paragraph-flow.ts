@@ -1355,15 +1355,10 @@ export function breakParagraph(
       const ends = paragraphFinal(pieceIndex, boundary);
       const hangsAtLineEnd = () =>
         (typography.hangingPunctuation ?? typography.overflowPunctuation) &&
-        canHangCjkPunctuation(
-          candidate,
-          piece,
-          lineAvailable() - line.width,
-          width,
-          measurer,
-          ends,
-          typography
-        );
+        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer, {
+          paragraphFinal: ends,
+          policy: typography,
+        });
       let hangs = hangsAtLineEnd();
       const applyOpticalFit =
         opticalCompression && sameParagraphAnchorStarts.length === 0

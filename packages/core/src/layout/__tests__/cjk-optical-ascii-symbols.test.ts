@@ -73,8 +73,7 @@ test('plain ASCII mathematical tokens retain their existing external-outline sea
       pieces,
       cjkParagraphBreaks(pieces, DEFAULT_CJK_TYPOGRAPHY),
       m,
-      false,
-      true
+      { hangingPunctuation: false, requireLocalQualification: true }
     )(
       line,
       3,

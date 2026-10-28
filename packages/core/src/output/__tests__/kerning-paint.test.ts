@@ -32,6 +32,18 @@ test('paint honors default, explicit-zero, and size-threshold kerning', () => {
   }
 });
 
+test('paint leaves full-width East Asian text unkerned in a kerned run', () => {
+  const spans = [
+    ...paint(
+      '<w:p><w:r><w:rPr><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>AVアイウエオ</w:t></w:r></w:p>'
+    ).querySelectorAll<HTMLElement>('.layout-run-text'),
+  ];
+  const kerning = Object.fromEntries(
+    spans.map((span) => [span.textContent, span.style.fontKerning])
+  );
+  expect(kerning).toEqual({ AV: 'normal', アイウエオ: 'none' });
+});
+
 test('browser paint retains native ligature behavior for its canvas fallback', () => {
   const span = paint(
     '<w:p><w:r><w:rPr><w14:ligatures xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:val="none"/></w:rPr><w:t>office</w:t></w:r></w:p>'

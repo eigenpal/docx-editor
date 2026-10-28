@@ -153,9 +153,35 @@ describe('which paragraphs fit kana', () => {
     );
   });
 
-  test('Korean text and a paragraph with kinsoku off do not fit kana', () => {
+  test('Korean text does not fit kana', () => {
     expect(compressed(lay(full, { language: 'ko-KR' }))).toBe(false);
-    const off = '<w:jc w:val="both"/><w:kinsoku w:val="0"/>';
-    expect(compressed(lay(full, { compatibility: 15, paragraphProperties: off }))).toBe(false);
+  });
+});
+
+describe('kinsoku off: the line-start list still decides the kana fit', () => {
+  const full = 'あ'.repeat(39) + '。あいう';
+  const off = '<w:jc w:val="both"/><w:kinsoku w:val="0"/>';
+  // 38 kana leave 8 pt of the measure, so 」 overflows by 16 pt and the kana take it.
+  const roomy = { available: 38 * EM + 8, paragraphProperties: off };
+
+  for (const compatibility of [14, 15] as const) {
+    test(`mode ${compatibility}: kana fit 」 on a line with room left`, () => {
+      const line = lay('あ'.repeat(38) + '」あいう', { ...roomy, compatibility });
+      expect(line.texts[0]).toBe('あ'.repeat(38) + '」');
+      for (const width of line.widths('あ')) expect(width).toBeCloseTo(EM - 16 / 38, 6);
+      expect(line.end).toBeCloseTo(38 * EM + 8, 6);
+    });
+  }
+
+  test('mode 15: a full line keeps its kana and 。 starts the next line', () => {
+    const line = lay(full, { compatibility: 15, paragraphProperties: off });
+    expect(line.texts.slice(0, 2)).toEqual(['あ'.repeat(39), '。あいう']);
+    for (const width of line.widths('あ')) expect(width).toBeCloseTo(EM, 6);
+  });
+
+  test('mode 14: a full line fits 。 whatever the switch', () => {
+    const line = lay(full, { compatibility: 14, paragraphProperties: off });
+    expect(line.texts[0]).toBe('あ'.repeat(39) + '。');
+    for (const width of line.widths('あ')) expect(width).toBeCloseTo(EM - EM / 39, 6);
   });
 });

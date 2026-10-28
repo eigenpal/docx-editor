@@ -555,4 +555,8 @@ test('canvas kerning uses authored thresholds and separates width-cache entries'
   expect(m.measure('AV', kerned)).toBeLessThan(plainWidth);
   expect(context.fontKerning).toBe('normal');
   expect(m.measure('AV', plain)).toBe(plainWidth);
+  // Full-width East Asian text keeps its advances in a kerned run.
+  const kana = m.measure('アイ', plain);
+  expect(m.measure('アイ', kerned)).toBe(kana);
+  expect(context.fontKerning).toBe('none');
 });

@@ -9,6 +9,7 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   eastAsianLanguage,
   kinsokuCharacters,
+  koreanFinalMarkHangs,
   type CjkParagraphTypography,
 } from './cjk-typography.ts';
 import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
@@ -340,34 +341,43 @@ const HANGING_CLASS = /^[\p{Pe}\p{Pf}\p{Po}°]$/u;
 const TRADITIONAL_CHINESE_NON_HANGING = '､';
 
 /**
- * Whether the paragraph's line-start rules forbid `mark` at a line start, so that it may hang.
- * The list is the custom or default one for the run language. A paragraph that turns kinsoku
- * off forbids nothing, except in a legacy compatibility mode, whose hanging ignores the switch.
- * Without a run language the list is unknown, and only the switch counts.
+ * Whether the paragraph's line-start rules let `mark` hang. The list is the custom or default
+ * one for the run language. A paragraph that turns kinsoku off hangs only half-width marks,
+ * except in a legacy compatibility mode, whose hanging ignores the switch. Without a run
+ * language the list is unknown, and only the switch counts.
  */
 function lineStartForbids(
   mark: string,
   language: string | undefined,
   policy: CjkParagraphTypography
 ): boolean {
-  if (!policy.kinsoku && policy.settings?.legacyLineEndPunctuation !== true) return false;
+  if (!policy.kinsoku && policy.settings?.legacyLineEndPunctuation !== true)
+    return !FULLWIDTH_PUNCTUATION.test(mark);
   return (
     language === undefined || kinsokuCharacters(language, policy.settings).before.includes(mark)
   );
 }
 
-/**
- * The advance of the final mark that may hang past the margin, or undefined when none may.
- * `paragraphFinal` says that only whitespace follows the text in its paragraph: Korean text
- * hangs a mark other than `。` or `、` only there. With `policy`, a mark hangs only when the
- * paragraph's line-start rules forbid it at a line start; otherwise it starts the next line.
- */
+/** How {@link hangingCjkPunctuationAdvance} decides a line-end mark. */
+export interface HangingMarkOptions {
+  /**
+   * Only whitespace follows the text in its paragraph. Korean text hangs a mark other than
+   * `。` or `、` only there.
+   */
+  readonly paragraphFinal?: boolean;
+  /**
+   * The paragraph typography. With it, a mark hangs only when the line-start rules forbid it
+   * at a line start; otherwise it starts the next line.
+   */
+  readonly policy?: CjkParagraphTypography;
+}
+
+/** The advance of the final mark that may hang past the margin, or undefined when none may. */
 export function hangingCjkPunctuationAdvance(
   text: string,
   piece: FieldAwarePiece,
   measurer: TextMeasurer,
-  paragraphFinal = false,
-  policy?: CjkParagraphTypography
+  { paragraphFinal = false, policy }: HangingMarkOptions = {}
 ): number | undefined {
   if (piece.projected || piece.measureText !== undefined) return undefined;
   // Callers check the paragraph's hanging policy first. Ordinary Latin words/spaces must not
@@ -375,7 +385,11 @@ export function hangingCjkPunctuationAdvance(
   const tail = text[text.length - 1];
   if (!tail || !HANGING_CLASS.test(tail)) return undefined;
   const language = eastAsianLanguage(piece.props);
-  if (language?.startsWith('ko') && (!paragraphFinal || '。、'.includes(tail))) return undefined;
+  if (
+    language?.startsWith('ko') &&
+    (!paragraphFinal || '。、'.includes(tail) || !koreanFinalMarkHangs(policy?.settings))
+  )
+    return undefined;
   if (language?.startsWith('ja') && JAPANESE_NON_HANGING.includes(tail)) return undefined;
   // Simplified Chinese keeps a full-width full stop inside the measure; Traditional hangs it.
   if (/^zh-cn$/i.test(language ?? '') && tail === '．') return undefined;
@@ -399,11 +413,10 @@ export function canHangCjkPunctuation(
   remaining: number,
   width: number,
   measurer: TextMeasurer,
-  paragraphFinal = false,
-  policy?: CjkParagraphTypography
+  options: HangingMarkOptions = {}
 ): boolean {
   return hangsWithin(
-    hangingCjkPunctuationAdvance(text, piece, measurer, paragraphFinal, policy),
+    hangingCjkPunctuationAdvance(text, piece, measurer, options),
     remaining,
     width
   );
