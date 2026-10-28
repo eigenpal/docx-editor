@@ -85,6 +85,14 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **AND** the rule strokes 0.055 em of the fraction size, inset 0.04 em on each side, with a 0.08 em gap above and below it
 - **AND** the fraction is as wide as its wider part plus 0.08 em on each side
 
+#### Scenario: Line extent of runs in different sizes
+
+- **WHEN** a later text atom of an equation has a larger font box than the first atom
+- **THEN** the first atom claims its full font box on the line
+- **AND** a later text atom claims its glyph ink, with 300/2048 em of the first atom size above the ink, and never more than its own font box
+- **AND** a first structure takes the leading from its `m:ctrlPr` size, or from the size of the text around the equation
+- **AND** later structures and text without measured ink keep their boxes, so an equation whose runs share one size and face keeps its extent
+
 #### Scenario: Run language
 
 - **WHEN** an equation run carries a bounded `w:lang` beside supported run properties

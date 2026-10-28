@@ -177,7 +177,7 @@ describe('document layout and preserved source', () => {
   if (!styles.ok) throw new Error(styles.reason);
   const options = { measurer, styleCascade: buildStyleCascadeTable(styles.part.root) };
 
-  test('the largest equation run sets the text line height', () => {
+  test('without glyph ink, the largest equation run sets the text line height', () => {
     const part = read(`<w:r><w:t>A</w:t></w:r>${equation(run('1', 8) + run('2', 24))}`);
     const [line] = linesOf(layoutSemanticDocument(part, 1, options));
     expect(line!.box.height).toBeCloseTo(27.6, 8);
