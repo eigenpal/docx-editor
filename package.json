@@ -136,6 +136,7 @@
     "release": "bun run build:packages && bun run notices:generate && bun run collaboration:check --release && node scripts/collaboration/cli.mjs pack && bun run collaboration:test --all --candidate .cache/collaboration/publish && node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish && changeset publish",
     "test": "node scripts/test/run-parallel.mjs",
     "test:serial": "bun test",
+    "test:changed": "node scripts/test/changed.mjs",
     "test:e2e:collab": "playwright test --config e2e/collaboration.config.ts",
     "test:e2e:collab:full": "playwright test --config e2e/collaboration.config.ts collaboration.fulldocument.spec.ts",
     "test:e2e:collab:load": "playwright test --config e2e/collaboration.documentload.config.ts",

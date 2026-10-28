@@ -21,6 +21,8 @@ export {
   type PaintOptions,
 } from './semantic-paint.ts';
 export type { BreakMarkStrings } from './semantic-break-marks.ts';
+// The PDF writer extends a span's marks over the same gaps screen paint draws inside it.
+export { followingGapPaint, type GapSpan } from './semantic-paint-letter-gap.ts';
 // TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
 // constant) are engine internals reached through `getReviewAuthors` on the editor; a
 // `@public` symbol is a breaking change to withdraw, so they stay off the barrel and the

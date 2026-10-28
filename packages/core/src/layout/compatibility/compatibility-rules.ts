@@ -67,6 +67,10 @@ export const MODE_RULES = {
     'Every anchored object in a table cell lays out in its cell; none is out of cell',
     'ECMA-376 Part 1 §20.4.2.3 anchor (layoutInCell)'
   ),
+  distributedLinesSpreadCharacters: legacy(
+    'A distributed paragraph spreads the slack of every line after every character, whatever the document defaults and run kerning. A space first takes up to its face average character width less its own advance',
+    'ECMA-376 Part 1 §17.18.44 ST_Jc'
+  ),
   fixedTableContentEdgeOrigin: legacy(
     'A collapsed fixed left table aligns its leading cell content edge with the text column',
     'ECMA-376 Part 1 §17.4.52 tblLayout'
@@ -131,6 +135,10 @@ export const MODE_RULES = {
     'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
+  largestWrapTieLeft: modern(
+    'Square wrapping on the largest side keeps text on the physical left when both sides are equally wide; earlier modes keep it on the right',
+    'ECMA-376 Part 1 §20.4.2.17 wrapSquare'
+  ),
   wrapIgnoresMultipleSpacingExtra: modern(
     'A wrap band moves a line only where it crosses the text or picture of the line, not the extra space an auto line-spacing multiple adds below it',
     'ECMA-376 Part 1 §17.3.1.33 spacing'
@@ -138,6 +146,10 @@ export const MODE_RULES = {
   positionedTableBreaksAtMargin: modern(
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
+  ),
+  omittedRepeatEndsPage: modern(
+    'Content after a table whose last page leaves out the repeated header rows starts on the next page',
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
   ),
   pageBreakBeforeKeepsSpace: legacy(
     'A paragraph with a page break before keeps its space before at the top of the new page. In modern modes only the first block of a section keeps it',
@@ -147,9 +159,25 @@ export const MODE_RULES = {
     'A justified line that ends in a page or column break stretches to the measure, unless it is the last line of its paragraph',
     'ECMA-376 Part 1 §17.3.3.1 br'
   ),
+  repeatBoundaryUsesHeaderRule: legacy(
+    "A complete body row directly below a repeated header row reserves the wider of its own top border and the header row's bottom border; modern modes keep the band of the row it follows in the table",
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
+  repeatKeepsWholeRow: legacy(
+    'Repeated header rows stay above a row that cannot split and does not fit below them; the row runs past the bottom margin',
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
+  repeatedHeaderYieldsToTerminalRule: modern(
+    'Repeated header rows are omitted when the last fixed-height row fits below them only without its bottom rule',
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
+  ),
   rowPageBreakYieldsToKeep: modern(
     'A row with a page break does not start a page when the row before it keeps with it',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
+  ),
+  tallRowStaysWhole: legacy(
+    'A row that cannot split and is taller than a page stays whole on its page and runs past the bottom margin',
+    'ECMA-376 Part 1 §17.4.6 cantSplit'
   ),
   tableParagraphWidowControl: modern(
     'Paragraphs that split inside table cells apply widow and orphan control',

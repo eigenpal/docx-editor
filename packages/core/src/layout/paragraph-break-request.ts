@@ -259,6 +259,7 @@ function breakPreparedParagraphLines(request: ParagraphBreakRequest): readonly P
         request.compatibilityMode,
         'inlineObjectStaysBesideFloat'
       ),
+      largestWrapTieLeft: hasCompatibilityRule(request.compatibilityMode, 'largestWrapTieLeft'),
       cjkPunctuationFit: paragraphAlignment(formatting.props) === 'both',
       lineSpacing:
         formatting.lineSpacing.rule === 'auto' &&

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "From compatibility mode 15, content after a table whose last page left out the repeated header rows stayed on that page when it fit.",
+  "after": "From compatibility mode 15, that content starts on the next page.",
+  "reason": "Only local layout geometry changes. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-omitted-repeat-ends-page.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "omitted-repeat-ends-page",
+  "migration": null
+}

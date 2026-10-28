@@ -4380,7 +4380,10 @@ export type ResolvedRelationship = {
 export function resolveEndnoteProperties(section?: AuthoredNoteProperties, document?: AuthoredNoteProperties): ResolvedEndnoteProperties;
 
 // @public
-export function resolveFootnoteProperties(section?: AuthoredNoteProperties, document?: AuthoredNoteProperties): ResolvedFootnoteProperties;
+export function resolveFootnoteProperties(section?: AuthoredNoteProperties): ResolvedFootnoteProperties;
+
+// @public @deprecated
+export function resolveFootnoteProperties(section: AuthoredNoteProperties | undefined, document: AuthoredNoteProperties | undefined): ResolvedFootnoteProperties;
 
 // @public
 export function resolveHeaderFooterParts(pkg: OoxmlPackage): HeaderFooterParts;

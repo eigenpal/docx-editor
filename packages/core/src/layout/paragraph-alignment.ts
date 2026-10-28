@@ -5,6 +5,8 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
+import { distributeLineCharacters, spacesAbsorbSlack } from './distributed-character-spacing.ts';
+import type { DistributedSpacing } from './distributed-spacing.ts';
 import {
   endsWithSpaceSlot,
   withoutLineEndWhitespace,
@@ -12,7 +14,14 @@ import {
   withoutTrailingZeroWidthSpaces,
 } from './trailing-spaces.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
-import { alignPassageSpans, partUsedWidth, type LinePassage } from './passage-alignment.ts';
+import {
+  alignBidiPassageSpans,
+  alignPassageSpans,
+  isMirroredPassageList,
+  partUsedWidth,
+  type LinePassage,
+  type MirroredLinePassage,
+} from './passage-alignment.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
 const SLACK_RESIDUE_PT = 1e-9;
@@ -124,7 +133,9 @@ function alignLogicalSpans(
   lineUsedWidth: number | undefined,
   paragraphRtl: boolean,
   pageBreaksIgnored: boolean,
-  lastLineShrinks: boolean
+  lastLineShrinks: boolean,
+  distributed: DistributedSpacing | undefined,
+  eastAsianSpacing: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -141,7 +152,9 @@ function alignLogicalSpans(
         lineUsedWidth,
         paragraphRtl,
         false,
-        lastLineShrinks
+        lastLineShrinks,
+        distributed,
+        eastAsianSpacing
       )
     );
     if (aligned) return aligned;
@@ -310,13 +323,6 @@ function alignLogicalSpans(
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
     if (isLastLine) return spans;
-    const justified = justifyCjkSpans(spans, measurer, slack);
-    if (justified) return justified;
-    // Only boundaries after an expandable space receive slack — the same slots paint stretches
-    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
-    // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
-    // slots either: a boundary between two of them took a share of the slack from the words.
-    const gapBefore: number[] = [];
     // Zero-width spaces closing the line take no room, so the boundary before them is no slot.
     let slotEnd = Math.min(trailingStart, contentLast + 1);
     while (
@@ -325,27 +331,120 @@ function alignLogicalSpans(
       withoutTrailingZeroWidthSpaces(spans[slotEnd - 1]!.text) === ''
     )
       slotEnd -= 1;
-    for (let index = 1; index < slotEnd; index += 1) {
-      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+    const centered = (): readonly StyleSpanRecord[] =>
+      spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + slack / 2 } }));
+    // Float advances hold their reserved positions, so a line with one never moves.
+    const floatReserved = spans.some((span) => (span.wrapAdvanceBefore ?? 0) > 0.001);
+    // A left-to-right distributed line with a tab stretches only the text after its last
+    // tab, from that tab's stop to the line end, when the stop is a left one. Otherwise, or
+    // when that text has nothing to stretch, the whole line centers with its tab positions.
+    const tabIndex =
+      distributed !== undefined && !paragraphRtl && !floatReserved
+        ? lastTabBefore(spans, slotEnd)
+        : -1;
+    if (tabIndex >= 0) {
+      const from = tabIndex + 1;
+      const stretched =
+        spans[tabIndex]!.tabAlignment === undefined && from < slotEnd
+          ? stretchJustifiedLine(
+              spans.slice(from),
+              measurer,
+              slack,
+              slotEnd - from,
+              distributed,
+              true
+            )
+          : null;
+      return stretched ? [...spans.slice(0, from), ...stretched] : centered();
     }
-    // Nothing to stretch, such as one word before a manual line break: the line stays at its
-    // start edge, which is the right one in a right-to-left paragraph.
-    if (gapBefore.length === 0) {
-      if (!paragraphRtl) return spans;
-      const start = slack - rtlTrailingAdvance;
-      return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
-    }
-    const step = slack / gapBefore.length;
-    const gapSet = new Set(gapBefore);
-    let shift = 0;
-    return spans.map((span, index) => {
-      if (gapSet.has(index)) shift += step;
-      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
-    });
+    // A distributed line with nothing to stretch, such as a single word or character, centers.
+    const centers =
+      distributed !== undefined &&
+      !floatReserved &&
+      !spans.some((span) => span.text.includes('\t'));
+    const stretched = stretchJustifiedLine(
+      spans,
+      measurer,
+      slack,
+      slotEnd,
+      distributed,
+      centers,
+      paragraphRtl,
+      eastAsianSpacing
+    );
+    if (stretched) return stretched;
+    // Nothing to stretch, such as one word before a manual line break: a distributed line
+    // centers; any other line stays at its start edge, the right one in a right-to-left paragraph.
+    if (centers) return centered();
+    if (!paragraphRtl) return spans;
+    const start = slack - rtlTrailingAdvance;
+    return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + start } }));
   }
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/** The index of the last tab span before `end`, or -1. */
+function lastTabBefore(spans: readonly StyleSpanRecord[], end: number): number {
+  for (let index = Math.min(end, spans.length) - 1; index >= 0; index -= 1) {
+    if (spans[index]!.text.includes('\t')) return index;
+  }
+  return -1;
+}
+
+/**
+ * Stretch a justified line, or the part of a distributed line after its last tab, by `slack`
+ * over `spans[0, slotEnd)`. `distributed` is the spacing of a distributed line, undefined for
+ * an ordinary justified line. `spreads` says whether the line may spread its characters or
+ * center: a distributed line with no reserved position. Returns null when nothing can
+ * stretch, so the caller decides where the line sits.
+ */
+function stretchJustifiedLine(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  slack: number,
+  slotEnd: number,
+  distributed: DistributedSpacing | undefined,
+  spreads: boolean,
+  paragraphRtl = false,
+  eastAsianSpacing = true
+): readonly StyleSpanRecord[] | null {
+  // Character distribution, unless the spaces can take all the slack: the line then sets
+  // as a justified line, and only its spaces stretch.
+  let spacesOnly = false;
+  if (spreads && distributed !== undefined && distributed !== 'spaces' && !paragraphRtl) {
+    spacesOnly = spacesAbsorbSlack(spans, measurer, slack, slotEnd, distributed);
+    if (!spacesOnly) return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed);
+  }
+  // Document defaults can turn East Asian justification off; a justified line then
+  // stretches only its spaces. Distributed lines keep their own rules.
+  const eastAsian = eastAsianSpacing || distributed !== undefined;
+  const justified =
+    spacesOnly || !eastAsian ? null : justifyCjkSpans(spans, measurer, slack, distributed);
+  if (justified) return justified === spans && spreads ? null : justified;
+  // Only boundaries after an expandable space receive slack — the same slots paint stretches
+  // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+  // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
+  // slots either: a boundary between two of them took a share of the slack from the words.
+  const gapBefore: number[] = [];
+  // Spaces before a distributed line's first character keep their advance.
+  let slotStart = 1;
+  if (distributed !== undefined) {
+    while (slotStart < slotEnd && withoutTrailingSpaces(spans[slotStart - 1]!.text) === '')
+      slotStart += 1;
+  }
+  for (let index = slotStart; index < slotEnd; index += 1) {
+    if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+  }
+  if (gapBefore.length === 0) return null;
+  const step = slack / gapBefore.length;
+  const gapSet = new Set(gapBefore);
+  let shift = 0;
+  return spans.map((span, index) => {
+    if (gapSet.has(index)) shift += step;
+    return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+  });
 }
 
 /**
@@ -368,20 +467,35 @@ export function setsLikeLastLine(
     readonly pageBreakLinesStretch?: true;
   }
 ): boolean {
-  let distributed = false;
-  for (const property of props) {
-    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
-  }
-  // Distributed paragraphs stretch their final line and every passage beside a float.
-  if (distributed) return false;
-  if (isLastLine) return true;
   const pageBreakSetsLast =
     (line.pageBreakAfter === true || line.columnBreakAfter === true) &&
     compatibility?.pageBreakLinesStretch !== true;
   const manualBreakSetsLast =
     line.manualBreakAfter === true && compatibility?.unstretchedManualBreakLines === true;
-  if (!pageBreakSetsLast && !manualBreakSetsLast) return false;
-  return true;
+  if (!isLastLine && !pageBreakSetsLast && !manualBreakSetsLast) return false;
+  // Distributed paragraphs stretch their final line and every passage beside a float.
+  return !isDistributedAlignment(props);
+}
+
+/** Whether the paragraph is distributed (`w:jc w:val="distribute"`); the last `w:jc` wins. */
+export function isDistributedAlignment(props: readonly OoxmlProperty[]): boolean {
+  let distributed = false;
+  for (const property of props) {
+    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
+  }
+  return distributed;
+}
+
+/**
+ * The {@link DistributedSpacing} of a paragraph's lines, or undefined when it is not
+ * distributed. `document` is the style cascade, which carries the document's choice.
+ */
+export function paragraphDistributedSpacing(
+  props: readonly OoxmlProperty[],
+  document: { readonly distributedSpacing?: DistributedSpacing } | undefined
+): DistributedSpacing | undefined {
+  if (!isDistributedAlignment(props)) return undefined;
+  return document?.distributedSpacing ?? 'spaces';
 }
 
 /**
@@ -410,6 +524,8 @@ export function boxLineSetsLikeLastLine(
  * Align one line. `lastLineShrinks` is the line's `PendingLine.spaceShrink`: without
  * it, a justified last line that overflows keeps its natural spacing. `passages` are the float
  * passages of a line that steps over a float; each part of the line aligns inside its own.
+ * `eastAsianSpacing` false (see `CjkTypographySettings.eastAsianSpacing`) keeps justified East
+ * Asian text from spreading between its characters.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -422,14 +538,17 @@ export function alignSpans(
   paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
   pageBreaksIgnored = false,
   lastLineShrinks = false,
-  passages?: readonly LinePassage[]
+  passages?: readonly LinePassage[],
+  distributed?: DistributedSpacing,
+  eastAsianSpacing = true
 ): readonly StyleSpanRecord[] {
   // A right-to-left last line aligns to the right, unless the flow kept its last word by
   // borrowing inter-word space: then it compresses as justified text does.
   const effective =
     alignment === 'both' && isLastLine && paragraphRtl && !lastLineShrinks ? 'right' : alignment;
   const split = splitBidiTrailingWhitespace(spans, measurer);
-  if (passages && passages.length > 1 && !paragraphRtl && !split.some(isRightToLeft)) {
+  const bidiLine = paragraphRtl || split.some(isRightToLeft);
+  if (passages && passages.length > 1 && !bidiLine) {
     const aligned = alignPassageSpans(split, passages, (part, passage, isLastPart) =>
       alignLogicalSpans(
         part,
@@ -441,10 +560,29 @@ export function alignSpans(
         effective === 'center' || effective === 'right' ? partUsedWidth(part, passage) : undefined,
         false,
         pageBreaksIgnored,
-        lastLineShrinks
+        lastLineShrinks,
+        distributed,
+        eastAsianSpacing
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
+  } else if (passages && (isMirroredPassageList(passages) || passages.length > 1)) {
+    // Each part aligns, and bidi reorders it, as a line of its own inside its passage.
+    const aligned = alignBidiPassageSpans(spans, passages, (part, passage, isLastPart) =>
+      alignSpans(
+        part,
+        measurer,
+        passage.start,
+        Math.max(1, passage.end - passage.start),
+        alignment,
+        isLastLine && isLastPart,
+        alignment === 'center' || alignment === 'right' ? partUsedWidth(part, passage) : undefined,
+        paragraphRtl,
+        pageBreaksIgnored,
+        lastLineShrinks
+      )
+    );
+    if (aligned) return aligned;
   }
   const align = (
     line: readonly StyleSpanRecord[],
@@ -461,7 +599,9 @@ export function alignSpans(
       usedWidth,
       paragraphRtl,
       pageBreaksIgnored,
-      lastLineShrinks
+      lastLineShrinks,
+      distributed,
+      eastAsianSpacing
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {
@@ -481,6 +621,43 @@ export function alignSpans(
 
 function isRightToLeft(span: StyleSpanRecord): boolean {
   return span.style.shaping?.direction === 'rtl';
+}
+
+/**
+ * {@link alignSpans} for a body line inside its {@link lineAlignmentMeasure}. The paragraph's
+ * `props` decide whether the line sets like a last line and whether it is distributed.
+ */
+export function alignBodyLineSpans(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  measure: ReturnType<typeof lineAlignmentMeasure>,
+  alignment: Alignment,
+  props: readonly OoxmlProperty[],
+  line: Parameters<typeof setsLikeLastLine>[1] & { readonly spaceShrink?: boolean },
+  isLastLine: boolean,
+  compatibility:
+    | (NonNullable<Parameters<typeof setsLikeLastLine>[3]> & {
+        readonly distributedSpacing?: DistributedSpacing;
+        readonly typography?: { readonly eastAsianSpacing?: false };
+      })
+    | undefined,
+  rtl: boolean
+): readonly StyleSpanRecord[] {
+  return alignSpans(
+    spans,
+    measurer,
+    measure.indent,
+    measure.available,
+    alignment,
+    setsLikeLastLine(props, line, isLastLine, compatibility),
+    alignment === 'center' || alignment === 'right' ? measure.used : undefined,
+    rtl,
+    false,
+    line.spaceShrink === true,
+    measure.passages,
+    paragraphDistributedSpacing(props, compatibility),
+    compatibility?.typography?.eastAsianSpacing !== false
+  );
 }
 
 /**
@@ -511,6 +688,11 @@ export function lineAlignOffset(
  * a float forced before the first glyph is not mistaken for content and does not push a
  * centred line off toward the far margin. A line that steps over a float also returns its
  * `passages` in the spans' x space, for {@link alignSpans} to align each part inside its own.
+ *
+ * `penX` is the offset placement adds to the line's pen x: the column's left edge, less the
+ * first-line indent of a right-to-left line. A right-to-left line breaks in mirrored x
+ * (`PendingLine.wrapMirrored`). Its passages come back physical, in the order the line fills
+ * them (rightmost first), each with the pen x it began at.
  */
 export function lineAlignmentMeasure(
   line: {
@@ -521,8 +703,9 @@ export function lineAlignmentMeasure(
       readonly contentEnd?: number;
     };
     readonly wrapPassages?: readonly LinePassage[];
+    readonly wrapMirrored?: true;
   },
-  columnX: number,
+  penX: number,
   lineIndent: number,
   lineAvailableWidth: number
 ): {
@@ -532,10 +715,29 @@ export function lineAlignmentMeasure(
   readonly passages?: readonly LinePassage[];
 } {
   const segment = line.wrapSegment;
+  if (line.wrapMirrored) {
+    // The line broke in x mirrored about its measure, which runs from `lineIndent` for
+    // `lineAvailableWidth`. Each passage maps back to its physical place, in break order.
+    const axis = 2 * lineIndent + lineAvailableWidth;
+    const broken = line.wrapPassages ?? (segment ? [segment] : []);
+    return {
+      indent: lineIndent,
+      available: lineAvailableWidth,
+      used: line.width,
+      passages: broken.map(
+        (passage): MirroredLinePassage => ({
+          start: axis - (passage.end + penX),
+          end: axis - (passage.start + penX),
+          mirrored: true,
+          breakStart: passage.start + penX,
+        })
+      ),
+    };
+  }
   if (!segment) {
     const passages = line.wrapPassages?.map((passage) => ({
-      start: columnX + passage.start,
-      end: columnX + passage.end,
+      start: penX + passage.start,
+      end: penX + passage.end,
     }));
     return {
       indent: lineIndent,
@@ -545,12 +747,12 @@ export function lineAlignmentMeasure(
     };
   }
   return {
-    indent: columnX + segment.start,
+    indent: penX + segment.start,
     available: Math.max(1, segment.end - segment.start),
     used:
       segment.contentEnd !== undefined
         ? segment.contentEnd - segment.start
-        : lineIndent - columnX + line.width - segment.start,
+        : lineIndent - penX + line.width - segment.start,
   };
 }
 

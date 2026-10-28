@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Before compatibility mode 15, every footnote referenced in a whole row taller than the page moved to the next page.",
+  "after": "The page of a whole row taller than the page keeps the first line of its first footnote at the page bottom, unless a footnote carried from an earlier page waits for room; the rest continues on the next page.",
+  "reason": "Only local layout geometry changes. Canonical XML, replicated operations, and saved rooms remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/footnote-table-row-bands.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-exact-terminal-border.test.ts"
+  ],
+  "changeset": "tall-row-footnotes",
+  "migration": null
+}

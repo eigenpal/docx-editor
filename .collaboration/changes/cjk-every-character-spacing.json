@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A justified or distributed line with East Asian text skips the gaps next to punctuation where a line cannot break, and every slot, including spaces and boundaries between scripts, takes the same step.",
+  "after": "A justified or distributed line with East Asian text gives every pair of East Asian characters the same gap, punctuation included. Spaces take up to their bounded share and automatic gaps between scripts grow up to twice their size before the equal steps. A boundary between scripts with no automatic gap does not stretch. A character in the East Asian font slot counts as East Asian, and a justified line keeps Korean syllables together.",
+  "reason": "Only layout geometry changes. Canonical OOXML, source positions, operations, and collaboration formats remain unchanged. Every peer derives the same geometry from the same document parts.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-every-character-justify.test.ts",
+    "packages/core/src/layout/__tests__/distributed-character-spacing.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-distributed-last-line.test.ts"
+  ],
+  "changeset": "cjk-every-character-spacing",
+  "migration": null
+}

@@ -69,6 +69,15 @@ export function rect(box: LayoutBox, x: number, y: number, height: number, grid 
   return `${number(onGrid(left))} ${number(onGrid(bottom))} ${number(extent(box.width))} ${number(extent(box.height))} re`;
 }
 /**
+ * `box` widened to `right`, both in the coordinates `x` offsets, so that {@link rect} with
+ * `grid` puts its right edge on the grid point nearest `right`. A band that runs on to the
+ * next span then shares that span's grid-rounded left edge, with no hairline between them.
+ */
+export function widenToGridEdge(box: LayoutBox, x: number, right: number): LayoutBox {
+  const width = onGrid(right + x) - onGrid(box.x + x);
+  return width > 0 ? { ...box, width: width + PAINT_GRID_PT / 2 } : box;
+}
+/**
  * A hyperlink target as the content of a PDF literal string, or `null` to write no link.
  *
  * `PDFString.of` writes `(value)` with no escaping at all, so a `)` inside a file-supplied

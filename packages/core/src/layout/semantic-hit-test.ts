@@ -999,10 +999,14 @@ export function caretBoxOnLine(
       // gap. That gap is what paint draws as `word-spacing`; sitting on the upstream end
       // lands inside the stretched space. With no gap (unjustified, or a mere run split
       // after a space), keep upstream affinity so typing continues the preceding run.
+      // Between other characters only alignment opens a gap (East Asian justification, or
+      // a distributed line spread per character), and the caret sits after it, before the
+      // next character, as it does after character spacing.
       if (next && next.range.start === offset) {
         const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
         const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
-        if ((endsWithSpaceSlot(span.text) && gap > 0.25) || (cjk && gap > 0.001)) {
+        const spaceSlot = endsWithSpaceSlot(span.text);
+        if ((spaceSlot && gap > 0.25) || ((cjk || !spaceSlot) && gap > 0.001)) {
           chosen = next;
           break;
         }

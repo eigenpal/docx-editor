@@ -24,7 +24,7 @@ import {
   type SemanticSpanVisit,
   type ShapedRun,
 } from '@docx-editor.dev/core/layout';
-import { underlineGap } from './underline-gap.ts';
+import { ownedGapAfter } from './owned-gap.ts';
 import { paragraphGridOffsetX } from './paragraph-grid-origin.ts';
 import { EmbeddedFace } from './fonts.ts';
 import { griddedBaselineInLine, PDF_PAINT_GRID_PT, snapToGrid } from './baseline-grid.ts';
@@ -578,11 +578,13 @@ export class TextWriter {
     // across runs stays continuous.
     const onGrid = (value: number): number =>
       Math.round(value / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
+    // Every line mark runs on across the gap the span owns, as screen paint draws it.
+    const markWidth = absoluteBox.width + ownedGapAfter(visit);
     const lineRule = (
       y: number,
       thickness: number,
       c: string | null = foreground,
-      width = absoluteBox.width
+      width = markWidth
     ): void => {
       const left = onGrid(x);
       const right = onGrid(x + width);
@@ -660,9 +662,9 @@ export class TextWriter {
             const period = Math.max(2, weight * 6),
               amplitude = Math.max(0.6, weight);
             const path = [`${n(x)} ${n(y)} m`];
-            for (let dx = 0; dx < absoluteBox.width; dx += period) {
+            for (let dx = 0; dx < markWidth; dx += period) {
               this.work.tick();
-              const end = Math.min(dx + period, absoluteBox.width),
+              const end = Math.min(dx + period, markWidth),
                 length = end - dx;
               path.push(
                 `${n(x + dx + length / 4)} ${n(y + amplitude)} ${n(x + dx + length / 4)} ${n(y + amplitude)} ${n(x + dx + length / 2)} ${n(y)} c`,
@@ -683,7 +685,7 @@ export class TextWriter {
                 ? [weight * 4, weight * 2, weight, weight * 2]
                 : [weight * (variant.includes('Long') ? 8 : 4), weight * 2];
           out.push(
-            `q ${color(c)} RG ${n(weight)} w [${pattern.map(n).join(' ')}] 0 d ${n(x)} ${n(position)} m ${n(x + absoluteBox.width)} ${n(position)} l S Q`
+            `q ${color(c)} RG ${n(weight)} w [${pattern.map(n).join(' ')}] 0 d ${n(x)} ${n(position)} m ${n(x + markWidth)} ${n(position)} l S Q`
           );
         } else if (variant === 'words') {
           for (const cluster of shaped.run.clusters) {
@@ -694,12 +696,7 @@ export class TextWriter {
             );
           }
         } else {
-          lineRule(
-            position,
-            weight,
-            c,
-            absoluteBox.width + (variant === 'single' ? underlineGap(visit) : 0)
-          );
+          lineRule(position, weight, c);
           if (variant === 'double') lineRule(position - thickness * 2, thickness, c);
         }
       }

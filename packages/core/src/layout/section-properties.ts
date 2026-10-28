@@ -453,6 +453,28 @@ export function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
 }
 
 /**
+ * Each section's own `w:sectPr`: the one in the paragraph that closes it, or the body-level
+ * one for the last section. A section closed by anything else has none.
+ */
+export function sectionPropertiesNodes(
+  part: OoxmlPart,
+  blocks: readonly OoxmlElement[],
+  sections: readonly { readonly blockStart: number; readonly blockEndExclusive: number }[]
+): readonly (OoxmlElement | undefined)[] {
+  const body = bodySectionNode(part);
+  const final =
+    body !== undefined && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined;
+  return sections.map((section, index) => {
+    const closing =
+      section.blockStart < section.blockEndExclusive
+        ? blocks[section.blockEndExclusive - 1]
+        : undefined;
+    const own = closing?.kind === 'paragraph' ? paragraphSectionNode(closing) : undefined;
+    return own ?? (index === sections.length - 1 ? final : undefined);
+  });
+}
+
+/**
  * Memoized on the immutable paragraph: an edit replaces the paragraph object, so the answer
  * holds for as long as the node does. Section enumeration asks this of EVERY body paragraph
  * on every fresh part, which made the per-keystroke scan O(document).
