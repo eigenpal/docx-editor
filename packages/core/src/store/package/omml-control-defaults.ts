@@ -49,6 +49,18 @@ function wordAttributes(
 }
 
 /**
+ * True for one `w:lang` that names only bounded language tags in its `w:val`, `w:eastAsia`,
+ * and `w:bidi` slots. Language does not change equation layout, and save keeps it verbatim.
+ */
+export function equationLanguagePropertyIsSupported(property: OoxmlElement): boolean {
+  return (
+    wordElement(property, 'lang') &&
+    property.children.length === 0 &&
+    wordAttributes(property, LANGUAGE_SLOTS, (value) => LANGUAGE_TAG.test(value))
+  );
+}
+
+/**
  * Default run properties, reduced to an order-insensitive signature of their properties and
  * values. Two property sets with the same signature write the same formatting.
  */

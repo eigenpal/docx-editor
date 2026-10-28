@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An equation run with w:lang fell back to flat text.",
+  "after": "An equation run with a bounded w:lang projects as math; the source keeps the language and compact replacement stays refused.",
+  "reason": "The projection reads more source as math. Canonical OMML, offsets, operations, and collaboration data remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/equation-run-language.test.ts",
+    "packages/core/src/store/__tests__/omml-run-defaults.test.ts"
+  ],
+  "changeset": "equation-run-language",
+  "migration": null
+}

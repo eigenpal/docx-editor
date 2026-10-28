@@ -42,6 +42,20 @@ The engine SHALL publish equation geometry from DOM-free layout. Paint SHALL use
 - **AND** the subscript baseline sits 0.2 em below the base baseline
 - **AND** the two scripts of one base keep a 300/2048 em gap between their glyphs
 
+#### Scenario: Fraction placement
+
+- **WHEN** an equation contains an inline `m:f` bar fraction
+- **THEN** the rule strokes 133/2048 em of the fraction size and centres on the math axis, 585/2048 em above the baseline
+- **AND** the numerator baseline rises at least 1200/2048 em, and further to keep a 133/2048 em gap between its ink and the rule
+- **AND** the denominator baseline drops at least 1030/2048 em, and further to keep a 133/2048 em gap between the rule and its ink
+- **AND** the fraction is as wide as its wider part, and its text parts reach the typographic ascender and descender of the math face
+
+#### Scenario: Run language
+
+- **WHEN** an equation run carries a bounded `w:lang` beside supported run properties
+- **THEN** the run lays out as math with its own size and style
+- **AND** save keeps the `w:lang` source, and compact replacement stays refused for the run
+
 #### Scenario: Bar placement
 
 - **WHEN** an equation contains `m:bar` with an upper or lower position
