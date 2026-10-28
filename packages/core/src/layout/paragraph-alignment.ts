@@ -127,7 +127,8 @@ function alignLogicalSpans(
   paragraphRtl: boolean,
   pageBreaksIgnored: boolean,
   lastLineShrinks: boolean,
-  distributed: DistributedSpacing | undefined
+  distributed: DistributedSpacing | undefined,
+  eastAsianSpacing: boolean
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   // An unbounded line (a measuring pass) has no far edge to align or justify against.
@@ -145,7 +146,8 @@ function alignLogicalSpans(
         paragraphRtl,
         false,
         lastLineShrinks,
-        distributed
+        distributed,
+        eastAsianSpacing
       )
     );
     if (aligned) return aligned;
@@ -338,7 +340,11 @@ function alignLogicalSpans(
       if (!spacesOnly)
         return distributeLineCharacters(spans, measurer, slack, slotEnd, distributed) ?? centered();
     }
-    const justified = spacesOnly ? null : justifyCjkSpans(spans, measurer, slack, distributed);
+    // Document defaults can turn East Asian justification off; a justified line then
+    // stretches only its spaces. Distributed lines keep their own rules.
+    const eastAsian = eastAsianSpacing || distributed !== undefined;
+    const justified =
+      spacesOnly || !eastAsian ? null : justifyCjkSpans(spans, measurer, slack, distributed);
     if (justified) return justified === spans && centers ? centered() : justified;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
@@ -452,6 +458,8 @@ export function boxLineSetsLikeLastLine(
  * Align one line. `lastLineShrinks` is the line's `PendingLine.spaceShrink`: without
  * it, a justified last line that overflows keeps its natural spacing. `passages` are the float
  * passages of a line that steps over a float; each part of the line aligns inside its own.
+ * `eastAsianSpacing` false (see `CjkTypographySettings.eastAsianSpacing`) keeps justified East
+ * Asian text from spreading between its characters.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -465,7 +473,8 @@ export function alignSpans(
   pageBreaksIgnored = false,
   lastLineShrinks = false,
   passages?: readonly LinePassage[],
-  distributed?: DistributedSpacing
+  distributed?: DistributedSpacing,
+  eastAsianSpacing = true
 ): readonly StyleSpanRecord[] {
   // A right-to-left last line aligns to the right, unless the flow kept its last word by
   // borrowing inter-word space: then it compresses as justified text does.
@@ -485,7 +494,8 @@ export function alignSpans(
         false,
         pageBreaksIgnored,
         lastLineShrinks,
-        distributed
+        distributed,
+        eastAsianSpacing
       )
     );
     if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
@@ -506,7 +516,8 @@ export function alignSpans(
       paragraphRtl,
       pageBreaksIgnored,
       lastLineShrinks,
-      distributed
+      distributed,
+      eastAsianSpacing
     );
   const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
   if (trailing) {
@@ -543,6 +554,7 @@ export function alignBodyLineSpans(
   compatibility:
     | (NonNullable<Parameters<typeof setsLikeLastLine>[3]> & {
         readonly distributedSpacing?: DistributedSpacing;
+        readonly typography?: { readonly eastAsianSpacing?: false };
       })
     | undefined,
   rtl: boolean
@@ -559,7 +571,8 @@ export function alignBodyLineSpans(
     false,
     line.spaceShrink === true,
     measure.passages,
-    paragraphDistributedSpacing(props, compatibility)
+    paragraphDistributedSpacing(props, compatibility),
+    compatibility?.typography?.eastAsianSpacing !== false
   );
 }
 

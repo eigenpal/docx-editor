@@ -35,7 +35,7 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import {
   cjkTypographyFromSettings,
-  defaultsSelectEastAsianFace,
+  defaultsTypography,
   type CjkTypographySettings,
 } from './cjk-typography.ts';
 import {
@@ -499,8 +499,10 @@ export function buildStyleCascadeTable(
   }
 
   const authoredDefaults = readDocDefaults(stylesRoot);
-  const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
-  typography = Object.freeze({ ...typography, sourceEastAsianFont });
+  typography = Object.freeze({
+    ...typography,
+    ...defaultsTypography(stylesRoot, authoredDefaults.run, themeFonts),
+  });
   const defaults = {
     ...authoredDefaults,
     run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],

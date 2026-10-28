@@ -135,6 +135,8 @@ A left-to-right distributed paragraph spreads each line across the measure chara
 
 A justified or distributed line that holds East Asian text gives every pair of East Asian characters the same gap, including the gaps next to punctuation and brackets where a line cannot break. A character set in the East Asian font slot counts as East Asian, so a symbol with an East Asian font hint takes the same gap. Text in other scripts keeps its letters together, unless the line spreads every character. Korean syllables stay together on a justified line, which stretches only its spaces, and spread on a distributed line. A space and an automatic gap between East Asian and other text first take part of the slack: a space up to its share, and an automatic gap up to twice its size. A boundary between East Asian and other text with no automatic gap does not stretch.
 
+The document defaults decide whether East Asian spacing applies at all. A justified line spreads East Asian text between its characters, and automatic spacing opens between East Asian and Latin text, only when the styles part omits `w:rPrDefault` or names an East Asian font in its `w:rFonts`. Any other `w:rPrDefault`, even an empty one, turns both off in every compatibility mode, and a justified East Asian line then stretches only its spaces. Fonts on styles or runs do not change this. A distributed paragraph still spreads every character, and keeps automatic spacing beside runs that name an East Asian font.
+
 ### Lists and numbering
 
 <FeatureMatrix category="lists" />
