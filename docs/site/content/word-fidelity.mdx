@@ -421,7 +421,7 @@ East Asian layout keeps punctuation, graphemes, and full-width number groups tog
 
 Justified lines compare space compression with the expansion needed for an earlier break. Hyphenated fragments and currency or math symbols participate in this fit calculation. Plain `REF` results can complete a word; changing `PAGEREF` and `NOTEREF` results cannot.
 
-In compatibility mode 15 and later, left-to-right justified text beside floating objects compresses spaces within each passage independently. Spaces never lend capacity across the object. Each passage keeps its own text and caret geometry. A left-to-right paragraph that contains right-to-left runs compresses its spaces in the same way. Right-to-left paragraphs retain their existing line-break behavior.
+In compatibility mode 15 and later, left-to-right justified text beside floating objects compresses spaces within each passage independently. Spaces never lend capacity across the object. Each passage keeps its own text and caret geometry. A left-to-right paragraph that contains right-to-left runs compresses its spaces in the same way. A right-to-left run sets its own final space at its left edge, inside the line. That space does not hang at the end of a passage or a line, and it does not widen or compress. A word that ends such a run needs room for that space, so the rest of the run continues in the next passage or on the next line when compression cannot make room. Right-to-left paragraphs retain their existing line-break behavior.
 
 Modern Latin justification includes terminal footnote and endnote citations when testing whether a complete word fits. Citations keep their formatting and model positions. Marks with reserved page-local widths retain their existing line-break behavior.
 

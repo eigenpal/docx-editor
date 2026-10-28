@@ -492,6 +492,15 @@ For modern left-to-right justified text beside floating objects, the layout engi
 - **AND** the paragraph contains a right-to-left run
 - **WHEN** a passage can keep one more word by compressing its spaces
 - **THEN** the passage keeps that word, also when the right-to-left run is on that line
+
+#### Scenario: The final space of a right-to-left run stays inside the line
+
+- **GIVEN** a justified left-to-right paragraph in compatibility mode 15 or later
+- **AND** a right-to-left run that ends with its own space reaches the end of a float passage or of the line
+- **WHEN** the layout engine tests whether the last word of the run fits by compressing spaces
+- **THEN** that word needs room for the final space, which does not hang
+- **AND** when compression cannot make that room, the word continues at the start of the next passage or line
+- **AND** a space in its own left-to-right run after the right-to-left run still hangs
 - **AND** a space after a right-to-left word that ends a passage stays at the end of that passage, so the next passage starts at the edge of the floating object
 
 #### Scenario: A compressed passage ends at the floating object

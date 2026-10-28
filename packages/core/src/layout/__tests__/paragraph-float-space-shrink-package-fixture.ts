@@ -14,8 +14,20 @@ export const floatSpaceMeasurer: TextMeasurer = {
   lineMetrics: () => ({ height: 14, baseline: 11 }),
 };
 
-/** Public synthetic package. The picture is 1.5 inches wide, 2.25 inches from the column left. */
-export function floatSpacePackage(alignment = 'both'): Uint8Array {
+/** One text run of {@link floatSpacePackage}; `rtl` adds `w:rtl`. */
+export interface FloatSpaceRun {
+  readonly text: string;
+  readonly rtl?: boolean;
+}
+
+/**
+ * Public synthetic package. The picture is 1.5 inches wide, 2.25 inches from the column left.
+ * `runs` replace the single run that holds {@link floatSpaceText}.
+ */
+export function floatSpacePackage(
+  alignment = 'both',
+  runs: readonly FloatSpaceRun[] = [{ text: floatSpaceText }]
+): Uint8Array {
   const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const r = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const relationships = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -38,9 +50,15 @@ export function floatSpacePackage(alignment = 'both'): Uint8Array {
     '<a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm>' +
     '<a:off x="0" y="0"/><a:ext cx="1371600" cy="914400"/></a:xfrm>' +
     '<a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
-    '</wp:anchor></w:drawing></w:r><w:r><w:rPr>' +
-    '<w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/></w:rPr>' +
-    `<w:t>${floatSpaceText}</w:t></w:r></w:p>` +
+    '</wp:anchor></w:drawing></w:r>' +
+    runs
+      .map(
+        (run) =>
+          '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/>' +
+          `${run.rtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${run.text}</w:t></w:r>`
+      )
+      .join('') +
+    '</w:p>' +
     '<w:sectPr><w:pgSz w:w="7120" w:h="6000"/>' +
     '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/>' +
     '</w:sectPr></w:body></w:document>';

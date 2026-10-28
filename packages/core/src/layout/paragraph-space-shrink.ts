@@ -29,6 +29,16 @@ const withoutSpaceSlot = (text: string): string =>
   withoutTrailingZeroWidthSpaces(text).slice(0, -1);
 
 /**
+ * Whether a span's final space stays inside a left-to-right line. A right-to-left run sets its
+ * own final space at its left edge, so that space never hangs at the end of the line or of a
+ * float passage: the word before it needs room for it, and the line without the word ends
+ * with a space that still widens.
+ */
+function spaceStaysInside(style: ResolvedRunStyle): boolean {
+  return style.shaping?.direction === 'rtl' && style.shaping.baseLevel % 2 === 0;
+}
+
+/**
  * Whether a candidate ends at the break after a hyphen inside a word ("well-" of
  * "well-known"). That fragment can borrow inter-word space as a whole word does.
  */
@@ -141,7 +151,7 @@ export function fitsWithSpaceShrink(
     return false;
   const first = Math.max(passageFirst, firstShrinkSlot(spans));
   const visible = measureDisplayText(
-    ownSpace ? withoutSpaceSlot(candidate) : candidate,
+    ownSpace && !spaceStaysInside(style) ? withoutSpaceSlot(candidate) : candidate,
     style,
     measurer
   );
@@ -164,6 +174,7 @@ export function fitsWithSpaceShrink(
   // Every space after the last word hangs there: a run of spaces as well as the word's own.
   let terminalSpace = 0;
   for (let index = beforeEnd - 1; index >= first; index -= 1) {
+    if (spaceStaysInside(spans[index]!.style)) break;
     terminalSpace += capacities[index - first]! * 4;
     if (!/^ +$/.test(spans[index]!.text)) break;
   }
