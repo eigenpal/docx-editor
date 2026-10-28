@@ -109,10 +109,21 @@ const line = (text: string, keepNext = false) =>
   `<w:p><w:pPr>${keepNext ? '<w:keepNext/>' : ''}<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="exact"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 function letterTable(
   rows: readonly number[],
-  options: { lead?: boolean; header?: boolean; keepFirst?: boolean } = {}
+  options: {
+    lead?: boolean;
+    header?: boolean;
+    headers?: number;
+    keepFirst?: boolean;
+    noBottomRule?: boolean;
+  } = {}
 ) {
+  const headers = options.headers ?? (options.header ? 1 : 0);
   const side = (name: string, size: number) => `<w:${name} w:val="single" w:sz="${size}"/>`;
-  const borders = ['top', 'bottom', 'left', 'right'].map((name) => side(name, 12)).join('');
+  const borders = ['top', 'bottom', 'left', 'right']
+    .map((name) =>
+      name === 'bottom' && options.noBottomRule ? '<w:bottom w:val="nil"/>' : side(name, 12)
+    )
+    .join('');
   const margins = ['top', 'bottom', 'left', 'right']
     .map((name) => `<w:${name} w:w="0" w:type="dxa"/>`)
     .join('');
@@ -122,7 +133,7 @@ function letterTable(
     `<w:tblCellMar>${margins}</w:tblCellMar></w:tblPr>` +
     '<w:tblGrid><w:gridCol w:w="1800"/><w:gridCol w:w="1800"/></w:tblGrid>';
   rows.forEach((twips, index) => {
-    const header = options.header && index === 0 ? '<w:tblHeader/>' : '';
+    const header = index < headers ? '<w:tblHeader/>' : '';
     table += `<w:tr><w:trPr><w:cantSplit/>${header}<w:trHeight w:val="${twips}" w:hRule="exact"/></w:trPr>`;
     for (const column of [0, 1])
       table += `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>${line(`R${index}C${column}`, options.keepFirst && index === 0)}</w:tc>`;
@@ -156,8 +167,8 @@ function pageOf(result: ReturnType<typeof layoutSemanticDocument>, text: string)
   );
 }
 
-const layOut = (part: ReturnType<typeof letterTable>) =>
-  layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer(5, 12) });
+const layOut = (part: ReturnType<typeof letterTable>, compatibilityMode?: number) =>
+  layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer(5, 12), compatibilityMode });
 
 for (const [authoredBottom, moves] of [
   [646.5, false],
@@ -201,21 +212,72 @@ test('a last row at the top of a page stays and its rule crosses the bottom marg
   expect(pageOf(result, 'AFTER')).toBe(1);
 });
 
-test('a last row directly below repeated header rows stays on its continuation page', () => {
-  const part = letterTable([397, 12000, 12553], { header: true });
-  const source = serializeOoxmlPart(part);
-  const result = layOut(part);
+for (const compatibilityMode of [undefined, 14]) {
+  test(`before mode 15, a last row directly below repeated headers stays (mode ${compatibilityMode})`, () => {
+    const part = letterTable([397, 12000, 12553], { header: true });
+    const source = serializeOoxmlPart(part);
+    const result = layOut(part, compatibilityMode);
+    const placed = tablesOnPages(result);
+    // Page 1: lead, header, and the 600pt row. Page 2: the repeated header and the last row.
+    expect(placed.map((entry) => entry.page)).toEqual([0, 1]);
+    const [header, last] = placed[1]!.table.rows;
+    expect(header!.isHeaderRepeat).toBe(true);
+    expect(last!.box.y).toBeCloseTo(19.85, 6);
+    // Authored bottom 647.5pt: the row stays below the headers and its rule ends at 649pt.
+    expect(last!.box.y + last!.box.height).toBeCloseTo(649, 6);
+    expect(pageOf(result, 'AFTER')).toBe(2);
+    expect(serializeOoxmlPart(part)).toBe(source);
+  });
+}
+
+for (const headers of [1, 2]) {
+  test(`mode 15 omits ${headers === 1 ? 'a repeated header row' : 'two repeated header rows'} that leave the last row's rule no room`, () => {
+    // Below the headers the 647.5pt bottom fits, but the 1.5pt rule ends at 649pt.
+    const rows = headers === 1 ? [397, 12000, 12553] : [397, 397, 11600, 12156];
+    const part = letterTable(rows, { headers });
+    const source = serializeOoxmlPart(part);
+    const result = layOut(part, 15);
+    const placed = tablesOnPages(result);
+    expect(placed.map((entry) => entry.page)).toEqual([0, 1]);
+    expect(placed[0]!.table.rows.filter((row) => row.isHeaderRow)).toHaveLength(headers);
+    // Page 2 holds only the last row. It starts the page and its rule fits there.
+    const [last, ...rest] = placed[1]!.table.rows;
+    expect(rest).toHaveLength(0);
+    expect(last!.isHeaderRepeat).toBeFalsy();
+    expect(last!.box.y).toBe(0);
+    expect(last!.box.height).toBeCloseTo(rows.at(-1)! / 20 + 1.5, 6);
+    expect(pageOf(result, 'AFTER')).toBe(1);
+    expect(serializeOoxmlPart(part)).toBe(source);
+  });
+}
+
+test('mode 15 keeps a repeated header when the last row and its rule end at the margin', () => {
+  // 19.85pt + 626.65pt + 1.5pt = 648.00pt: equality fits, so the repeat stays.
+  const result = layOut(letterTable([397, 12000, 12533], { header: true }), 15);
   const placed = tablesOnPages(result);
-  // Page 1: lead, header, and the 600pt row. Page 2: the repeated header and the last row.
   expect(placed.map((entry) => entry.page)).toEqual([0, 1]);
   const [header, last] = placed[1]!.table.rows;
   expect(header!.isHeaderRepeat).toBe(true);
   expect(last!.box.y).toBeCloseTo(19.85, 6);
-  // Authored bottom 647.5pt: the row stays below the headers and its rule ends at 649pt.
-  expect(last!.box.y + last!.box.height).toBeCloseTo(649, 6);
-  expect(pageOf(result, 'AFTER')).toBe(2);
-  expect(serializeOoxmlPart(part)).toBe(source);
+  expect(last!.box.y + last!.box.height).toBeCloseTo(648, 6);
 });
+
+test('mode 15 keeps a repeated header when the last row has no bottom rule', () => {
+  const part = letterTable([397, 12000, 12553], { header: true, noBottomRule: true });
+  const placed = tablesOnPages(layOut(part, 15));
+  expect(placed[1]!.table.rows.map((row) => !!row.isHeaderRepeat)).toEqual([true, false]);
+});
+
+for (const compatibilityMode of [14, 15]) {
+  test(`a last row whose rule ends at exactly 648.00pt stays (mode ${compatibilityMode})`, () => {
+    // 12pt + 19.85pt + 614.65pt = 646.5pt, and the 1.5pt rule ends exactly at the margin.
+    const result = layOut(letterTable([397, 12293]), compatibilityMode);
+    const placed = tablesOnPages(result);
+    expect(placed).toHaveLength(1);
+    const last = placed[0]!.table.rows.at(-1)!;
+    expect(last.box.y + last.box.height).toBeCloseTo(648, 6);
+  });
+}
 
 test('a row kept with the last row moves with it when only the rule overflows', () => {
   // Authored bottom 647.5pt: both rows fit the band, but the last row's rule does not.

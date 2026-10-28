@@ -12,6 +12,7 @@ import {
 } from './table-cell-geometry.ts';
 import { canProbeBorderRows, hasTableMerge, physicalCells } from './table-border-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { repeatYieldsToTerminalRule } from './table-exact-terminal-border.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
@@ -30,7 +31,8 @@ export interface RepeatedHeaderBorderPlan {
 }
 
 /**
- * Undefined retains the existing complex-row path. Null omits this repeat.
+ * Undefined retains the existing complex-row path. Null omits this repeat, also when the
+ * table's terminal exact row would fit below it only without its bottom rule.
  * A plan guarantees that the complete candidate fits before any live placement.
  */
 export function prepareRepeatedHeaderBorderPlan(
@@ -44,6 +46,7 @@ export function prepareRepeatedHeaderBorderPlan(
   baselineBodyHeight: number,
   deps: TableFlowDeps
 ): RepeatedHeaderBorderPlan | null | undefined {
+  if (repeatYieldsToTerminalRule(body, top + baselineHeaderHeight, bottom, deps)) return null;
   if (
     structure.cellSpacingPt > 0 ||
     structure.float ||

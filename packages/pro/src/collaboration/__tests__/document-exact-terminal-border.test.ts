@@ -28,7 +28,19 @@ interface ReferenceCase {
   align: 'center' | 'bottom';
   width: number;
   tightPage?: boolean;
+  /** Compatibility mode 15 with a 31pt terminal row: the repeated header yields to its rule. */
+  headerYields?: boolean;
 }
+const SETTINGS = 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml';
+const settingsPackage = {
+  overrides: `<Override PartName="/word/settings.xml" ContentType="${SETTINGS}"/>`,
+  documentRels:
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>',
+  extraXml: {
+    'word/settings.xml':
+      '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
+  },
+};
 function documentBody(options: ReferenceCase) {
   const borders = ['top', 'bottom', 'left', 'right']
     .map((s) => `<w:${s} w:val="single" w:sz="${s === 'top' ? 4 : options.width * 8}"/>`)
@@ -36,7 +48,7 @@ function documentBody(options: ReferenceCase) {
   const rows = ['First', 'Terminal']
     .map(
       (text, index) =>
-        `<w:tr><w:trPr>${index === 0 ? '<w:tblHeader/>' : ''}<w:trHeight w:val="397" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
+        `<w:tr><w:trPr>${index === 0 ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${index === 1 && options.headerYields ? 620 : 397}" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="${options.align}"/></w:tcPr>${paragraph(text)}</w:tc></w:tr>`
     )
     .join('');
   const section = options.tightPage
@@ -51,17 +63,31 @@ function geometry(editor: Editor, options: ReferenceCase) {
   // The fragment that holds the terminal row is the table's last one.
   const table = tables.flat().at(-1);
   if (!table || table.kind !== 'table') throw new Error('The table is missing');
+  const after = layout.pages
+    .flatMap((p) => p.fragments)
+    .find(
+      (f) => f.kind === 'paragraph' && f.lines.some((l) => l.spans.some((s) => s.text === 'AFTER'))
+    );
+  if (options.headerYields) {
+    // Page 2: 19.85pt + 31pt fits the 52pt band, but 1.5pt more does not. The repeat is
+    // omitted, so the terminal row starts the page and its rule fits there.
+    expect(tables[1]).toEqual([table]);
+    expect(table.rows).toHaveLength(1);
+    const only = table.rows[0]!;
+    expect(only.isHeaderRepeat).toBeFalsy();
+    expect(only.box.y).toBe(table.box.y);
+    expect(only.box.height).toBeCloseTo(31 + options.width, 6);
+    expect(only.cells[0]!.blocks[0]!.box.y - only.box.y).toBeCloseTo(19, 6);
+    expect(layout.pages[1]!.fragments).toContain(after!);
+    expect(after?.box.y).toBeCloseTo(table.box.y + table.box.height, 6);
+    return { box: table.box, rows: table.rows.map((r) => r.box), after: after?.box };
+  }
   expect(table.box.height).toBeCloseTo(39.7 + options.width, 6);
   expect(table.rows).toHaveLength(2);
   const last = table.rows.at(-1)!;
   expect(last.box.height).toBeCloseTo(19.85 + options.width, 6);
   const text = last.cells[0]!.blocks[0]!;
   expect(text.box.y - last.box.y).toBeCloseTo(options.align === 'center' ? 4.175 : 7.85, 6);
-  const after = layout.pages
-    .flatMap((p) => p.fragments)
-    .find(
-      (f) => f.kind === 'paragraph' && f.lines.some((l) => l.spans.some((s) => s.text === 'AFTER'))
-    );
   if (options.tightPage) {
     // 12pt + 19.85pt + 19.85pt fits the 52pt band only without the 1.5pt rule. The terminal
     // row moves; the authored header row stays on page 1 and repeats above it on page 2.
@@ -85,9 +111,13 @@ function geometry(editor: Editor, options: ReferenceCase) {
 for (const options of [
   { align: 'center', width: 0.625 },
   { align: 'bottom', width: 1.5, tightPage: true },
+  { align: 'bottom', width: 1.5, tightPage: true, headerYields: true },
 ] satisfies ReferenceCase[])
-  test(`the ${options.align} terminal rule converges through edits and cold reopen`, async () => {
-    const peers = await harness.pair(zipDocument(documentBody(options)));
+  test(`the ${options.align} terminal rule${options.headerYields ? ' that omits a repeated header' : ''} converges through edits and cold reopen`, async () => {
+    const source = documentBody(options);
+    const peers = await harness.pair(
+      options.headerYields ? zipDocument(source, settingsPackage) : zipDocument(source)
+    );
     const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
       peer.detach();
       const editor = createDocxEditor({

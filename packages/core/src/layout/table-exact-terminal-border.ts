@@ -1,4 +1,5 @@
 // Reserve the supported terminal exact row's outer rule outside its authored content box.
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { canProbeBorderRows } from './table-border-probe.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
@@ -91,8 +92,9 @@ export function withRule(
 
 // The room the terminal rule needs when deciding whether the row starts here. A row that does
 // not fit with its rule moves to the next page. At a page start (or below repeated headers
-// only) moving cannot help, so the row stays and its rule crosses the bottom margin. Only the
-// table's terminal row can need room, so other rows never build their row deps here.
+// only, which mode 15 omits first: `repeatYieldsToTerminalRule`) moving cannot help, so the
+// row stays and its rule crosses the bottom margin. Only the table's terminal row can need
+// room, so other rows never build their row deps here.
 export function ruleRoomPt(
   row: SemanticTableRow,
   tableDeps: TableFlowDeps,
@@ -101,6 +103,28 @@ export function ruleRoomPt(
   if (exactTerminalBorderPt(row, tableDeps) === 0) return 0;
   const deps = rowDeps();
   return deps.rowAtPageStart ? 0 : exactTerminalBorderPt(row, deps);
+}
+
+/**
+ * Whether a repeated header group yields to the table's terminal exact row on a continuation
+ * page: the row, placed at `bodyTop` below the group, would end past `bottom` with its rule.
+ * Equality fits. Mode 15 and later omit the repeat, so the row starts the page; earlier modes
+ * keep the repeat and the rule crosses the bottom margin (see `ruleRoomPt`). The omission
+ * applies even when the rule also crosses the margin without the repeat.
+ */
+export function repeatYieldsToTerminalRule(
+  row: SemanticTableRow,
+  bodyTop: number,
+  bottom: number,
+  deps: TableFlowDeps
+): boolean {
+  const rule = exactTerminalBorderPt(row, deps);
+  return (
+    rule > 0 &&
+    row.height.rule === 'exact' &&
+    hasCompatibilityRule(deps.compatibilityMode, 'repeatedHeaderYieldsToTerminalRule') &&
+    bodyTop + row.height.valuePt + rule > bottom + 0.001
+  );
 }
 
 export function endRowInsets(

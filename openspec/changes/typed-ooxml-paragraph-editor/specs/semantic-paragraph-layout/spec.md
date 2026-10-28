@@ -535,7 +535,7 @@ The editor SHALL replace host font resources without replacing its document sess
 
 ### Requirement: Terminal exact-row outer rule extent
 
-Semantic layout SHALL place a supported terminal exact row's simple bottom rule outside its authored content height. Published boxes, painted borders, and following flow SHALL include that outer extent. Admission SHALL include that outer extent, except for a row that starts at the top of a page or directly below repeated header rows. Canonical source text and saved XML SHALL remain unchanged.
+Semantic layout SHALL place a supported terminal exact row's simple bottom rule outside its authored content height. Published boxes, painted borders, following flow, and page admission SHALL include that outer extent, with the exceptions that the scenarios state. Canonical source text and saved XML SHALL remain unchanged.
 
 #### Scenario: Outer rule preserves authored exact row pitch
 
@@ -552,9 +552,21 @@ Semantic layout SHALL place a supported terminal exact row's simple bottom rule 
 #### Scenario: Border room is insufficient at the top of a page
 
 - **WHEN** an authored exact row fits the page band but its complete outer rule does not
-- **AND** the row starts at the top of the page or directly below repeated header rows
+- **AND** the row starts at the top of the page, or directly below repeated header rows before compatibility mode 15
 - **THEN** the row keeps its page and authored content height
 - **AND** only its outer bottom rule extends past the bottom margin
+
+#### Scenario: Outer rule ends exactly at the bottom margin
+
+- **WHEN** an authored exact row and its complete outer rule end exactly at the bottom of the band
+- **THEN** the row keeps its page
+
+#### Scenario: Repeated headers yield to the outer rule
+
+- **WHEN** compatibility mode is 15 or later
+- **AND** a continuation page can hold the repeated header group and the authored exact row, but not also its complete outer rule
+- **THEN** the repeated header group is omitted on that page
+- **AND** the row starts at the top of the page
 
 #### Scenario: Cell text uses the authored bottom
 
