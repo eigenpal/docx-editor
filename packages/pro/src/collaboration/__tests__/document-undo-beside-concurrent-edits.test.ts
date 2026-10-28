@@ -4,13 +4,27 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // An undo while a peer edits the same content at the same time: each participant's undo takes
-// back its own edit only, and text a peer deleted stays deleted.
+// back its own edit only, text a peer deleted stays deleted, and no text or caret goes missing.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { OoxmlNode, TreeDocOp } from '@docx-editor.dev/core/store';
+import * as Y from 'yjs';
+import { strToU8, zipSync } from 'fflate';
+import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import {
+  findNode,
+  replaceChildren,
+  withPart,
+  type OoxmlNode,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
+import {
+  BODY,
   createPeerHarness,
+  CT,
   nodeText,
+  OD,
+  REL,
+  W,
   walk,
   zipDocument,
   type Peer,
@@ -44,6 +58,8 @@ const TABLE_DOCUMENT = zipDocument(
   paragraph('Before') + TABLE + paragraph('After') + '<w:sectPr/>'
 );
 
+type Element = Exclude<OoxmlNode, { kind: 'textValue' }>;
+
 function texts(peer: Peer): string[] {
   const found: string[] = [];
   walk(peer.store.bodyStore().part.root, (node) => {
@@ -58,6 +74,40 @@ function elementIds(peer: Peer, localName: string): string[] {
     if (node.kind !== 'textValue' && node.localName === localName) found.push(node.id);
   });
   return found;
+}
+
+/** The paragraph identity (`w14:paraId`) a peer shows for a paragraph, or null. */
+function paraIdOf(peer: Peer, id: string): string | null {
+  const node = findNode(peer.store.bodyStore().part, id);
+  if (!node || node.kind === 'textValue') return null;
+  return node.attributes.find((attribute) => attribute.localName === 'paraId')?.value ?? null;
+}
+
+function bodyOf(peer: Peer): Element {
+  const root = peer.store.bodyStore().part.root;
+  const body = root.children.find((node) => node.kind !== 'textValue' && node.localName === 'body');
+  if (!body || body.kind === 'textValue') throw new Error('no body');
+  return body;
+}
+
+/** Move the body block `id` to child index `to`, in one transaction, as a block drag does. */
+function moveBlock(peer: Peer, id: string, to: number): void {
+  const result = peer.store.transact(BODY, (context) =>
+    context.applyPackage((pkg) => {
+      const part = pkg.parts.get(pkg.mainDocumentPart)!;
+      const body = findNode(part, bodyOf(peer).id);
+      if (!body || body.kind === 'textValue') throw new Error('no body');
+      const children = [...body.children];
+      const from = children.findIndex((child) => child.id === id);
+      const [block] = children.splice(from, 1);
+      children.splice(to, 0, block!);
+      const edited = replaceChildren(part, body.id, children);
+      if (!edited.ok) throw new Error('move refused');
+      return withPart(pkg, edited.part);
+    })
+  );
+  if (!result.ok) throw new Error(result.reason);
+  peer.port.flushPendingJournals();
 }
 
 describe('two peers delete the same table content and one undoes', () => {
@@ -144,4 +194,115 @@ describe('an undo of typing while a peer joins its paragraph', () => {
       expect(texts(bob)).toEqual(['FirstSecondXYZ']);
     });
   }
+});
+
+describe('an edit beside a split whose new paragraph is still arriving', () => {
+  test('waits until the new paragraph is listed, and loses no text', async () => {
+    const harness = harnessWith(CLIENT_ORDERS[0].ids);
+    const { alice, bob, pause, resume } = await harness.pair(
+      zipDocument(
+        ['Alpha beta', 'Second', 'Third', 'Fourth', 'Fifth'].map(paragraph).join('') + '<w:sectPr/>'
+      )
+    );
+    // Carol reads Alice's updates, and Bob reads Carol's, by hand.
+    const carol = await harness.joinDetached(alice, 'carol');
+    alice.ydoc.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin !== 'relay') Y.applyUpdate(carol.ydoc, update, 'relay');
+    });
+    const fromCarol: Uint8Array[] = [];
+    carol.ydoc.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin === 'relay') return;
+      fromCarol.push(update);
+      Y.applyUpdate(alice.ydoc, update, 'relay');
+    });
+    const alpha = harness.paragraphIdAt(alice, 0);
+    const fifth = harness.paragraphIdAt(alice, 4);
+    // Alice splits "Alpha beta", and every peer shows the split.
+    harness.apply(alice, [{ op: 'splitParagraph', paragraphId: alpha, offset: 6 }]);
+    expect(texts(bob)).toEqual(['Alpha ', 'beta', 'Second', 'Third', 'Fourth', 'Fifth']);
+    const tail = harness.paragraphIdAt(alice, 1);
+    pause();
+    // Alice moves "Fifth" above "Fourth", which Bob does not receive yet. Carol then moves the
+    // new paragraph right after it: Bob can apply that move's removal of the old place, and
+    // holds back its new place until Alice's move arrives.
+    moveBlock(alice, fifth, 4);
+    moveBlock(carol, tail, 4);
+    expect(texts(carol)).toEqual(['Alpha ', 'Second', 'Third', 'Fifth', 'beta', 'Fourth']);
+    for (const update of fromCarol) Y.applyUpdate(bob.ydoc, update, 'relay');
+    // Bob shows the moved text where it came from, so an edit there waits.
+    expect(texts(bob)).toEqual(['Alpha beta', 'Second', 'Third', 'Fourth', 'Fifth']);
+    const deleteWord: TreeDocOp = { op: 'deleteText', paragraphId: alpha, start: 6, end: 10 };
+    expect(bob.room.session.gateOperations([deleteWord], BODY)).not.toBeNull();
+    // Alice's move arrives, and with it the new paragraph's place: the edit no longer waits.
+    resume();
+    expect(texts(bob)).toEqual(['Alpha ', 'Second', 'Third', 'Fifth', 'beta', 'Fourth']);
+    expect(bob.room.session.gateOperations([deleteWord], BODY)).toBeNull();
+    harness.expectConverged(alice, bob);
+  });
+});
+
+describe('an undone table move whose separator a peer moved', () => {
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const identified = (id: string, text: string) =>
+    `<w:p w14:paraId="${id}" w14:textId="${id}"><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const smallTable = (id: string, text: string) =>
+    '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr><w:tc>${identified(id, text)}</w:tc></w:tr></w:tbl>`;
+  const DOCUMENT = zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>` +
+        identified('11111111', 'p0') +
+        smallTable('22222222', 'T1') +
+        identified('33333333', 'p1') +
+        smallTable('44444444', 'T2') +
+        '<w:sectPr/></w:body></w:document>'
+    ),
+  });
+
+  test('keeps its paragraph identity, so a caret in it shows to the peer', async () => {
+    const harness = harnessWith(CLIENT_ORDERS[0].ids);
+    const { alice, bob, pause, resume } = await harness.pair(DOCUMENT);
+    const [, second] = elementIds(bob, 'tbl');
+    const p1 = harness.paragraphIdAt(bob, 2);
+    // Bob moves the second table above "p1": it would touch the first, so a separator goes in.
+    harness.apply(bob, [{ op: 'moveTable', tableId: second!, beforeBlockId: p1 }]);
+    const separator = bodyOf(alice).children.find(
+      (node) => node.kind === 'paragraph' && nodeText(node) === ''
+    );
+    if (!separator) throw new Error('no separator');
+    const paraId = paraIdOf(alice, separator.id);
+    expect(paraId).not.toBeNull();
+    pause();
+    expect(bob.room.session.undo()).toBe(true);
+    // Alice, who has not seen the undo, moves the separator to the top.
+    moveBlock(alice, separator.id, 0);
+    resume();
+    harness.expectConverged(alice, bob);
+    const top = bodyOf(bob).children[0]!;
+    expect(top.id).toBe(separator.id);
+    for (const peer of [alice, bob]) expect(paraIdOf(peer, separator.id)).toBe(paraId);
+    // Alice types in it and puts her caret there; Bob shows the caret.
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: separator.id, offset: 0, text: 'typed' },
+    ]);
+    const point = { paragraphId: paraId!.toUpperCase(), offset: 5 };
+    alice.room.session.setLocalSelection({ anchor: point, head: point });
+    applyAwarenessUpdate(
+      bob.awareness,
+      encodeAwarenessUpdate(alice.awareness, [alice.awareness.clientID]),
+      'relay'
+    );
+    const shown = bob.room.session.remoteSelections().find((s) => s.actorId === 'alice');
+    expect(shown?.head).toMatchObject(point);
+  });
 });

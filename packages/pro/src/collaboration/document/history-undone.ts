@@ -22,6 +22,7 @@ import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts'
 import { deleteSetRuns, structAt } from './yjs-items.ts';
 import { textMarksOf } from './paragraph-text-marks.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
+import { whileUndoingCreations } from './undo-delete-filter.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -131,8 +132,9 @@ export function stepHistory(
   } else {
     const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
-      if (direction === 'undo') history.undo();
-      else history.redo();
+      if (direction === 'undo') {
+        whileUndoingCreations(registry.schema, createdBy(registry, popped), () => history.undo());
+      } else history.redo();
     } finally {
       if (below.length > 0) {
         const restored = below.concat(stack);
@@ -219,6 +221,23 @@ function hasShownCopy(
 ): boolean {
   for (let at = from; at < to; at += 1) if (follow.shownCopy(`${client}:${at}`)) return true;
   return false;
+}
+
+/** The nodes whose records a step created. */
+function createdBy(registry: DocumentRegistry, step: StackItemShape | undefined): Set<string> {
+  const created = new Set<string>();
+  const nodes = registry.schema.nodes as unknown;
+  for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
+    for (let clock = run.clock; clock < run.clock + run.length; ) {
+      const item = structAt(registry.doc, { client: run.client, clock });
+      if (!item) break;
+      if ((item.parent as unknown) === nodes && item.parentSub !== null) {
+        created.add(item.parentSub);
+      }
+      clock = item.id.clock + item.length;
+    }
+  }
+  return created;
 }
 
 /** Whether `item` is a character or inline element of a paragraph's shared text. */

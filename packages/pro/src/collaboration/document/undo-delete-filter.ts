@@ -5,7 +5,50 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
 import { holderItem } from './yjs-items.ts';
-import { NODE_INITIAL_SHELL_FIELD, NODE_SPLIT_LINEAGE_FIELD } from './schema.ts';
+import { FIELD_SEP, NODE_INITIAL_SHELL_FIELD, NODE_SPLIT_LINEAGE_FIELD } from './schema.ts';
+
+/** The shared maps that hold each element's attributes and namespace bindings by node ID. */
+export interface NodeDescriptorMaps {
+  readonly attributes: Y.Map<string>;
+  readonly bindings: Y.Map<string>;
+}
+
+/** The nodes the step being undone created, by the attribute map they describe. */
+const undoingCreations = new WeakMap<Y.Map<string>, ReadonlySet<string>>();
+
+/**
+ * Run an undo of a step that created the nodes `created`.
+ *
+ * The undo keeps each created node's record, so a peer that lists the node again at the same
+ * time, as a concurrent move does, shows it. The attributes and namespace bindings the step
+ * wrote for those nodes are part of that record: without them the node shows again with no
+ * paragraph identity, so no peer can place a caret in it. While `run` runs, the delete filter
+ * keeps them too.
+ */
+export function whileUndoingCreations<Result>(
+  maps: NodeDescriptorMaps,
+  created: ReadonlySet<string>,
+  run: () => Result
+): Result {
+  if (created.size === 0) return run();
+  undoingCreations.set(maps.attributes, created);
+  try {
+    return run();
+  } finally {
+    undoingCreations.delete(maps.attributes);
+  }
+}
+
+/** Whether `item` is an attribute or binding of a node the running undo un-creates. */
+function describesUndoneCreation(item: Y.Item, maps: NodeDescriptorMaps | undefined): boolean {
+  if (!maps || item.parentSub === null) return false;
+  const parent = item.parent as unknown;
+  if (parent !== maps.attributes && parent !== maps.bindings) return false;
+  const created = undoingCreations.get(maps.attributes);
+  if (!created) return false;
+  const cut = item.parentSub.indexOf(FIELD_SEP);
+  return cut > 0 && created.has(item.parentSub.slice(0, cut));
+}
 
 /** Whether an item carries a shared type, so deleting it takes a whole subtree along. */
 function carriesType(item: Y.Item): boolean {
@@ -45,12 +88,20 @@ function carriesType(item: Y.Item): boolean {
  * them. What stays behind is an unreferenced record holding the peer's text — reachable and
  * repairable, instead of destroyed.
  *
+ * The attributes and bindings a step wrote for a node it created stay as well, while an undo
+ * of that step runs ({@link whileUndoingCreations}).
+ *
  * @param nodes - the shared node map, `PackageSchema.nodes`.
+ * @param maps - the attribute and binding maps, `PackageSchema.attributes` and `.bindings`.
  */
-export function nodeRecordDeleteFilter(nodes: unknown): (item: Y.Item) => boolean {
+export function nodeRecordDeleteFilter(
+  nodes: unknown,
+  maps?: NodeDescriptorMaps
+): (item: Y.Item) => boolean {
   return (item: Y.Item): boolean => {
     const parent = item.parent;
     if (parent === null) return true;
+    if (describesUndoneCreation(item, maps)) return false;
     // The record entry itself.
     if ((parent as unknown) === nodes) return false;
     // A field of a record: its holder sits directly in `nodes`.

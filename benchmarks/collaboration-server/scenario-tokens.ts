@@ -169,7 +169,12 @@ export class TypedTokens {
   ): void {
     const still = this.ownInText(after, replica);
     for (const token of this.ownInText(before, replica)) {
-      if (!still.has(token)) this.excused.add(token);
+      if (still.has(token)) continue;
+      this.excused.add(token);
+      // The typist took the token back, as a deletion does. A copy a peer wrote at the same
+      // time can show it until the undo arrives there, and the peer's own undo of that copy
+      // then removes nothing the typist kept. It must not show again once updates settle.
+      this.deletedBy.set(token, replica);
     }
     // An undo of a replica's own deletion puts the token back. A deleted paragraph keeps its
     // text, so the undo shows in the view, not in the shared text.

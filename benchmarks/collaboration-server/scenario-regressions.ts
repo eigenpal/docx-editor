@@ -166,10 +166,13 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'reorderUndo', delivery: 'server', seed: 25 },
   { config: 'reorderEverything', delivery: 'server', seed: 52 },
   // Two replicas deleted one row or table at once and one undid its delete: the text the other
-  // deleted showed again.
+  // deleted showed again. An undo of a replica's own move, split, or edit beside a moved block
+  // took back a peer's text or left a moved separator with no paragraph identity.
   { config: 'reorderUndo', delivery: 'server', seed: 40 },
   { config: 'reorderUndo', delivery: 'server', seed: 1005 },
   { config: 'reorderEverything', delivery: 'server', seed: 1045 },
+  { config: 'reorderUndo', delivery: 'peer', seed: 95 },
+  { config: 'reorderUndo', delivery: 'peer', seed: 1058 },
 ];
 
 /**
@@ -178,31 +181,26 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
   [
-    // Undo and caret defects beside moved blocks. Every shrunk case below moves blocks or
-    // tables, and none of them loses or misplaces a block. The other cases in `replays/open/`
-    // were shrunk before the fuzzer moved tables with `moveTable`; they still fail, with the
-    // same kinds of defects and a join that refuses a later delete (`invalid-bound`).
-    //
-    // An undo beside moved tables removes text that another replica typed.
-    {
-      config: 'reorderUndo',
-      delivery: 'peer',
-      seed: 95,
-      case: 'undo-beside-moved-tables-removes-peer-text.json',
-    },
-    // Blocks moved, split, and deleted at once show one typed character twice.
+    // Blocks moved, split, and joined at once show one typed character twice. Every case in
+    // `replays/open/` moves blocks, and none of them loses or misplaces a block. The other
+    // cases there were shrunk before the fuzzer moved tables with `moveTable`; their seeds now
+    // run clean, but the cases still fail: text shows twice, a caret lands at the wrong
+    // offset after concurrent joins, and an edit after an undone join is refused
+    // (`invalid-bound`).
     {
       config: 'reorder',
       delivery: 'server',
       seed: 3057,
       case: 'moved-and-split-blocks-show-typed-text-twice.json',
     },
-    // An undone move leaves the peers without one replica's caret.
+    // Typing that its typist undoes, in a paragraph a peer deletes and another peer splits at
+    // the same time, shows again once updates settle. No block moves; the fuzzer reports it
+    // since it counts a typist's own undo as a deletion of the typing.
     {
       config: 'reorderUndo',
       delivery: 'peer',
-      seed: 1058,
-      case: 'undone-move-loses-remote-caret.json',
+      seed: 63,
+      case: 'undone-typing-shows-after-concurrent-delete-and-split.json',
     },
   ];
 

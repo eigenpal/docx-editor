@@ -221,7 +221,7 @@ At the end of each scenario, these checks run:
 
 During a scenario, these checks also run:
 
-- An undo or redo never removes what another participant typed, unless it removes the paragraph that holds it.
+- An undo or redo never removes what another participant typed, unless it removes the paragraph that holds it, or the typist already took the typing back with an undo of its own. A typist's undo counts as a deletion: the typing must not show again once updates settle, as in a copy that a peer's join made at the same time.
 - In the `undoGroups` shape, a replica opens and closes undo groups at random and waits past the undo capture window. A closed group adds at most one undo step.
 - A participant always sees what they typed: the replica an action touches still shows every character it typed, unless someone removed it or its paragraph is gone. Typing that vanishes for a moment and comes back fails this check. The check waits while the replica holds back an update whose dependencies have not arrived: Yjs applies that update's deletions at once and its inserts later, so moved text is missing until then. Hocuspocus and y-webrtc deliver every update after the updates it depends on, so only a lost message leaves such a gap.
 - After a replica types, its caret stays right after the typed character while remote updates arrive, as long as that character stays in the paragraph. The caret is carried across each update by the editor's own code.
